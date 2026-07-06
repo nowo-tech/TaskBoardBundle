@@ -61,7 +61,6 @@ jobs:
 
       - name: Install dependencies with Symfony ${{ matrix.symfony }}
         run: |
-          set -euo pipefail
           SYMFONY="${{ matrix.symfony }}"
           SYMFONY_MAJOR="${SYMFONY%%.*}"
           if [ "$SYMFONY_MAJOR" -ge 8 ]; then
@@ -69,23 +68,7 @@ jobs:
           else
             DOCTRINE_BUNDLE="^2.10"
           fi
-          echo "Using doctrine/doctrine-bundle ${DOCTRINE_BUNDLE} with Symfony ^${SYMFONY}"
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
-            .require["symfony/config"] = $symfony |
-            .require["symfony/dependency-injection"] = $symfony |
-            .require["symfony/form"] = $symfony |
-            .require["symfony/framework-bundle"] = $symfony |
-            .require["symfony/http-kernel"] = $symfony |
-            .require["symfony/routing"] = $symfony |
-            .require["symfony/security-bundle"] = $symfony |
-            .require["symfony/translation"] = $symfony |
-            .require["symfony/twig-bundle"] = $symfony |
-            .require["symfony/validator"] = $symfony |
-            .require["symfony/yaml"] = $symfony |
-            .require["doctrine/doctrine-bundle"] = $doctrine
-          ' composer.json > composer.json.tmp && mv composer.json.tmp composer.json
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+          bash .github/ci/composer-install.sh "${SYMFONY}" "${DOCTRINE_BUNDLE}"
 
       - name: Run tests
         run: |
@@ -132,9 +115,7 @@ jobs:
           tools: composer:v2, cs2pr
 
       - name: Install dependencies
-        run: |
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+        run: bash .github/ci/composer-install-default.sh
 
       - name: Fix code style
         run: composer cs-fix
@@ -176,9 +157,7 @@ jobs:
           tools: composer:v2, cs2pr
 
       - name: Install dependencies
-        run: |
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+        run: bash .github/ci/composer-install-default.sh
 
       - name: Check code style
         run: composer cs-check
@@ -203,24 +182,7 @@ jobs:
           tools: composer:v2
 
       - name: Install dependencies (Symfony 7.4)
-        run: |
-          set -euo pipefail
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          jq --arg symfony "^7.4" --arg doctrine "^2.10" '
-            .require["symfony/config"] = $symfony |
-            .require["symfony/dependency-injection"] = $symfony |
-            .require["symfony/form"] = $symfony |
-            .require["symfony/framework-bundle"] = $symfony |
-            .require["symfony/http-kernel"] = $symfony |
-            .require["symfony/routing"] = $symfony |
-            .require["symfony/security-bundle"] = $symfony |
-            .require["symfony/translation"] = $symfony |
-            .require["symfony/twig-bundle"] = $symfony |
-            .require["symfony/validator"] = $symfony |
-            .require["symfony/yaml"] = $symfony |
-            .require["doctrine/doctrine-bundle"] = $doctrine
-          ' composer.json > composer.json.tmp && mv composer.json.tmp composer.json
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+        run: bash .github/ci/composer-install.sh 7.4 '^2.10'
 
       - name: Run tests with coverage
         run: |
@@ -263,9 +225,7 @@ jobs:
           extensions: json
           tools: composer:v2
 
-      - run: |
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+      - run: bash .github/ci/composer-install-default.sh
       - run: composer phpstan
 
   typescript:
@@ -298,7 +258,5 @@ jobs:
           php-version: '8.2'
           tools: composer:v2
 
-      - run: |
-          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
-          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+      - run: bash .github/ci/composer-install-default.sh
       - run: composer audit
