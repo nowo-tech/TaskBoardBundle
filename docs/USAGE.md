@@ -14,6 +14,7 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 
 | Action | Route key | Description |
 |--------|-----------|-------------|
+| Import tasks | `board_import` | Upload CSV/JSON from ClickUp, Jira, Trello, etc. |
 | Move column | `task_move` | Drag task to another column (POST) |
 | Advance / regress | `task_advance` | Move to next/previous column |
 | Add link | `task_link` | Attach external URL (GitLab MR URLs are parsed) |
@@ -34,6 +35,21 @@ When TimeTrack is installed and configured with `nowo_task_board.task_provider`:
 Boards can be linked to a `Team`. Team members (manager/member roles) can track time on team tasks via `TaskAccessGuard`.
 
 Configure a custom `team_membership_resolver` for advanced team ACL — see [CONFIGURATION.md](CONFIGURATION.md).
+
+## Import tasks from ClickUp, Jira, or Trello
+
+1. Open a board → **Import tasks** (or `/tools/task-board/board/{boardId}/import`).
+2. Choose the source format and upload the export file.
+3. Enable **Create missing status columns** to map ClickUp/Jira statuses to new kanban columns.
+4. Enable **Skip already imported tasks** to avoid duplicates (matched by external task ID).
+
+CLI:
+
+```bash
+php bin/console nowo:task-board:import <board-uuid> /path/to/export.csv --source=clickup_csv
+```
+
+Supported `--source` values: `clickup_csv`, `clickup_json`, `jira_csv`, `trello_json`.
 
 ## Custom access control
 

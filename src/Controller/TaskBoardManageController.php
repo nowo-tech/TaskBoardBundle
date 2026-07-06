@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Controller;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -16,8 +17,11 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
+use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
+use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
+use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -31,6 +35,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use ValueError;
 
 use function is_object;
@@ -54,6 +59,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly TaskLinkAttacher $linkAttacher,
         private readonly TaskMemberAssigner $memberAssigner,
         private readonly TaskGanttBuilder $ganttBuilder,
+        private readonly TaskImportOrchestrator $importOrchestrator,
+        private readonly TranslatorInterface $translator,
         private readonly array $routes,
         private readonly array $templates,
         private readonly string $userClass,
@@ -186,6 +193,62 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    public function importBoard(string $boardId, Request $request): Response
+    {
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId);
+
+        $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var TaskImportFormData $data */
+            $data = $form->getData();
+            $file = $data->file;
+            if ($file === null) {
+                $this->addFlash('error', 'task_board.flash.import_file_required');
+
+                return $this->redirectToRoute($this->routes['board_import']['name'], ['boardId' => $boardId]);
+            }
+
+            $result = $this->importOrchestrator->import(
+                board: $board,
+                source: $data->source,
+                content: (string) file_get_contents($file->getPathname()),
+                filename: (string) $file->getClientOriginalName(),
+                actor: $user,
+                options: new TaskImportOptions(
+                    createMissingColumns: $data->createMissingColumns,
+                    skipExisting: $data->skipExisting,
+                ),
+            );
+
+            foreach ($result->errors as $error) {
+                $this->addFlash('error', $error);
+            }
+
+            foreach ($result->warnings as $warning) {
+                $this->addFlash('warning', $warning);
+            }
+
+            if (!$result->hasErrors()) {
+                $this->addFlash('success', $this->translator->trans('task_board.flash.import_summary', [
+                    '%created%' => (string) $result->created,
+                    '%skipped%' => (string) $result->skipped,
+                    '%columns%' => (string) $result->columnsCreated,
+                ], 'NowoTaskBoardBundle'));
+            }
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
+
+        return $this->render($this->templates['import'], [
+            'board'          => $board,
+            'importForm'     => $form,
+            'dashboardRoute' => $this->dashboardRoute,
+        ]);
     }
 
     public function listView(string $boardId): Response

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-07
+
+### Added
+
+- **Task import** — upload CSV/JSON exports from **ClickUp**, **Jira**, and **Trello** into an existing board (`board_import` route, manage UI, and `nowo:task-board:import` console command).
+- **Extensible importers** — `TaskImporterInterface` with tagged services (`nowo_task_board.task_importer`) for adding more sources.
+- **ClickUp** — CSV and JSON importers; maps status, priority, description, assignee, due date, time estimate, tags, parent ID, and task URL; auto-creates missing status columns.
+- **Jira CSV** — maps Summary, Status, Priority, Description, Assignee, Due Date, and Issue key.
+- **Trello JSON** — maps board export cards (name, list/status, description, due date, labels, short URL).
+- **Idempotent re-import** — skips tasks whose external ID was already imported (stored on `TaskLink.externalId`).
+- **Assignee mapping** — optional `TaskImportUserResolverInterface` service alias to resolve import emails to application users.
+- **Translations** — import UI strings in English and Spanish.
+
 ## [1.1.1] - 2026-07-07
 
 ### Fixed
@@ -67,7 +80,8 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.0.0...v1.0.1

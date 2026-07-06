@@ -63,6 +63,7 @@ Each route has `path` and `name`. Optional `route_prefix` is prepended to every 
 | `routes.column_create` | `/tools/task-board/board/{boardId}/column` | `nowo_task_board_column_create` |
 | `routes.column_update` | `/tools/task-board/board/{boardId}/column/{columnId}` | `nowo_task_board_column_update` |
 | `routes.column_reorder` | `/tools/task-board/board/{boardId}/columns/reorder` | `nowo_task_board_column_reorder` |
+| `routes.board_import` | `/tools/task-board/board/{boardId}/import` | `nowo_task_board_board_import` |
 
 Import routes:
 
@@ -179,6 +180,38 @@ When [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) is install
 Wire them in `nowo_time_track` config — see [INSTALLATION.md](INSTALLATION.md).
 
 If TimeTrack is not installed, no aliases or bridge services are registered.
+
+## Task import
+
+Import tasks from ClickUp, Jira, or Trello exports. Route defaults:
+
+| Key | Default path | Default name |
+|-----|--------------|--------------|
+| `routes.board_import` | `/tools/task-board/board/{boardId}/import` | `nowo_task_board_board_import` |
+
+Template override: `nowo_task_board.templates.import` (default `@NowoTaskBoardBundle/manage/import.html.twig`).
+
+### Assignee resolver
+
+By default, `NullTaskImportUserResolver` ignores assignee emails. Replace the alias to map emails to users:
+
+```yaml
+services:
+    App\TaskBoard\ImportUserResolver: ~
+
+    Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface:
+        alias: App\TaskBoard\ImportUserResolver
+```
+
+### Custom importers
+
+Implement `TaskImporterInterface` and tag the service:
+
+```yaml
+services:
+    App\TaskBoard\CustomImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+```
 
 ## Assets
 

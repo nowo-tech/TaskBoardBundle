@@ -1,0 +1,4 @@
+Task ID,Task Name,Status,Priority,Task Content,Assignee Email,Due Date,Time Estimate,Tags,Parent ID,Task URL
+1001,Setup project,To do,High,Initial board scaffold,dev@example.com,2026-08-01,2h,backend|setup,,https://app.clickup.com/t/1001
+1002,Import tasks,In progress,Urgent,Build CSV importer,dev@example.com,2026-08-05,90m,import,1001,https://app.clickup.com/t/1002
+1003,Write docs,Done,Normal,Document ClickUp flow,,2026-07-20,1h,documentation,,https://app.clickup.com/t/1003

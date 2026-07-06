@@ -14,6 +14,7 @@
 | Input | Description |
 |-------|-------------|
 | **Manage routes** | Authenticated CRUD for boards, columns, tasks, members, and links under `/tools/task-board`. |
+| **Task import** | Authenticated file upload (CSV/JSON) on `board_import`; parsed server-side by tagged importers. |
 | **Task forms** | Symfony forms for board/task creation and updates (title, description, links, members). |
 | **Configuration** | `nowo_task_board` YAML (routes, table prefix, access checker, team resolver). |
 | **TimeTrack bridge** | Optional. When TimeTrack is installed, task provider exposes trackable tasks; access gated by `TaskAccessGuard`. |
@@ -27,6 +28,7 @@
 | **Unauthorized time tracking** | User tracks time on tasks they cannot access. | `TaskAccessGuard::canTrack()` checks assignee and team membership before TimeTrack provider returns tasks. |
 | **XSS in task content** | Malicious HTML in task descriptions. | Twig auto-escaping; rich text via TiptapEditorBundle when configured. |
 | **CSRF on forms** | Cross-site form submission. | Symfony CSRF tokens on all manage forms. |
+| **Malicious import files** | Oversized or crafted CSV/JSON uploads. | Authenticated route only; Symfony file upload limits; parsers validate structure; import runs in orchestrator with explicit source selection. |
 
 ## Access control model
 
