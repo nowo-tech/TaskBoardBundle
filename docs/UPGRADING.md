@@ -2,6 +2,36 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.2.0 (2026-07-07)
+
+Minor release. **No breaking changes** for consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+No configuration or schema changes required. The import feature uses the existing `task_board_task_links.external_id` column.
+
+### New: task import
+
+- Manage UI: open a board → **Import tasks** (`/tools/task-board/board/{boardId}/import`).
+- CLI: `php bin/console nowo:task-board:import <board-uuid> /path/to/export.csv --source=clickup_csv`
+
+Supported `--source` values: `clickup_csv`, `clickup_json`, `jira_csv`, `trello_json`.
+
+To map assignee emails from exports to your User entity, register a service implementing `TaskImportUserResolverInterface` and alias it:
+
+```yaml
+services:
+    App\TaskBoard\ImportUserResolver: ~
+
+    Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface:
+        alias: App\TaskBoard\ImportUserResolver
+```
+
+See [USAGE.md](USAGE.md) for import options (create missing columns, skip duplicates).
+
 ## 1.1.1 (2026-07-07)
 
 Patch release. **No breaking changes** for consumers.

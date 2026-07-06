@@ -153,3 +153,25 @@ task_board.form.link.external_id: ID externo
 task_board.form.link.external_id_help: p.ej. IID del MR en GitLab o número de PR en GitHub.
 task_board.form.member.user: Usuario
 task_board.form.member.role: Rol
+task_board.import.action: Importar tareas
+task_board.import.title: Importar tareas
+task_board.import.subtitle: Trae tareas desde ClickUp, Jira, Trello u otros formatos compatibles a este tablero.
+task_board.import.form.title: Subir archivo de exportación
+task_board.import.form.source: Origen
+task_board.import.form.file: Archivo de exportación
+task_board.import.form.file_invalid: Sube un CSV o JSON válido (máx. 20 MB).
+task_board.import.form.create_columns: Crear columnas de estado que falten automáticamente
+task_board.import.form.skip_existing: Omitir tareas ya importadas
+task_board.import.form.submit: Importar al tablero
+task_board.import.source.clickup_csv: ClickUp (CSV)
+task_board.import.source.clickup_json: ClickUp (JSON)
+task_board.import.source.jira_csv: Jira (CSV)
+task_board.import.source.trello_json: Trello (JSON)
+task_board.import.help.title: Cómo exportar
+task_board.import.help.clickup_title: ClickUp
+task_board.import.help.clickup_step_1: En ClickUp, abre la vista Lista o Tabla (o Ajustes del espacio → Importaciones / Exportaciones).
+task_board.import.help.clickup_step_2: Exporta en CSV con columnas Task Name, Status, Priority, Assignee, Due Date y Task ID.
+task_board.import.help.clickup_step_3: Sube el archivo aquí y elige ClickUp (CSV).
+task_board.import.help.supported_title: Formatos compatibles
+task_board.flash.import_file_required: Elige un archivo para importar.
+task_board.flash.import_summary: 'Importadas %created% tarea(s), omitidas %skipped%, creadas %columns% columna(s).'

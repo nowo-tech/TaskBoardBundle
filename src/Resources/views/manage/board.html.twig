@@ -9,6 +9,9 @@
         breadcrumbRoute: 'nowo_task_board_index',
         breadcrumbLabel: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
         headerActions: '
+            <a href="' ~ path('nowo_task_board_board_import', { boardId: board.id }) ~ '" class="btn btn-outline-secondary">
+                <i class="ti ti-upload"></i> ' ~ ('task_board.import.action'|trans({}, 'NowoTaskBoardBundle')) ~ '
+            </a>
             <a href="' ~ path('nowo_task_board_list', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-list"></i> ' ~ ('task_board.view.list'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>

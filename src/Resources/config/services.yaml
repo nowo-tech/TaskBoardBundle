@@ -32,3 +32,27 @@ services:
             $templates: '%nowo_task_board.templates%'
             $userClass: '%nowo_task_board.user_class%'
             $dashboardRoute: '%nowo_task_board.dashboard_route%'
+
+    Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
+        class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver
+
+    Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface:
+        alias: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver
+
+    Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
+    Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
+    Nowo\TaskBoardBundle\Import\Jira\JiraCsvImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
+    Nowo\TaskBoardBundle\Import\Trello\TrelloJsonImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
+    Nowo\TaskBoardBundle\Import\TaskImportOrchestrator:
+        arguments:
+            $importers: !tagged_iterator nowo_task_board.task_importer
+
+    Nowo\TaskBoardBundle\Command\TaskBoardImportCommand: ~

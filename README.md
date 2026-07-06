@@ -9,6 +9,7 @@ Symfony bundle for **task boards, teams, and managers** (kanban, list, Gantt). O
 ## Features
 
 - Boards, columns, tasks, teams, and team members (manager/member roles)
+- **Task import** from ClickUp, Jira, and Trello (CSV/JSON) via manage UI or CLI
 - Web UI at `/tools/task-board` (kanban, list, Gantt, task detail)
 - Vite + Stimulus assets for board interactions
 - **Optional TimeTrack integration** — task provider, team context, and automatic `total_time_seconds` aggregation when TimeTrack is installed
