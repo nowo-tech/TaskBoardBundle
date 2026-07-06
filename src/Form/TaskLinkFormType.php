@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Form;
 
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -44,7 +45,8 @@ final class TaskLinkFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class' => TaskLinkFormData::class,
+            'data_class'         => TaskLinkFormData::class,
+            'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
     }
 }

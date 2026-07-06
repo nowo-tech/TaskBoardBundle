@@ -2,6 +2,24 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.1.1 (2026-07-07)
+
+Patch release. **No breaking changes** for consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+php bin/console assets:install
+```
+
+No configuration or schema changes required.
+
+### Notes
+
+- Fixes Symfony DI for placeholder Doctrine repositories when using path-mounted bundles (e.g. combined TimeTrack demo).
+- Corrects the `nowo_task_board` asset package base path; run `assets:install` so CSS/JS load correctly.
+- Manage form labels now use the `NowoTaskBoardBundle` translation domain consistently.
+
 ## 1.1.0 (2026-07-06)
 
 Minor release. TaskBoard is now **standalone** — TimeTrack is no longer pulled in automatically.

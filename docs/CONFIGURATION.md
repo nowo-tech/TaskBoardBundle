@@ -182,7 +182,7 @@ If TimeTrack is not installed, no aliases or bridge services are registered.
 
 ## Assets
 
-The bundle ships Stimulus controllers built to `src/Resources/public/js/task_board.js` (asset package `nowo_task_board`).
+The bundle ships Stimulus controllers built to `src/Resources/public/js/task-board.js` (asset package `nowo_task_board`, installed under `public/bundles/taskboard/`).
 
 Rebuild after changes:
 

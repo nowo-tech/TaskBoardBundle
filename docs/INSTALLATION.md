@@ -98,7 +98,7 @@ Install bundle public assets:
 php bin/console assets:install
 ```
 
-Templates load `asset('js/task_board.js', 'nowo_task_board')`. Rebuild with `pnpm run build` in the bundle repo if you fork it.
+Templates load `asset('js/task-board.js', 'nowo_task_board')`. After upgrading to 1.1.1+, run `php bin/console assets:install`. Rebuild with `pnpm run build` in the bundle repo if you fork it.
 
 ## Demo
 

@@ -9,8 +9,12 @@ return RectorConfig::configure()
     ->withSkip([
         __DIR__ . '/demo',
         __DIR__ . '/tests/App/var',
-        // Placeholder repository: EntityManager required for manual DI in TaskBoardExtension.
+        // Placeholder repositories: EntityManager required for manual DI in TaskBoardExtension.
         __DIR__ . '/src/Repository/DoctrineOrmTaskLinkRepository.php',
+        __DIR__ . '/src/Repository/DoctrineOrmTaskDependencyRepository.php',
+        __DIR__ . '/src/Repository/DoctrineOrmTaskDocumentRepository.php',
+        __DIR__ . '/src/Repository/DoctrineOrmTaskMemberRepository.php',
+        __DIR__ . '/src/Repository/DoctrineOrmTaskTimeEntryRepository.php',
     ])
     ->withPhpSets(php82: true)
     ->withPreparedSets(
