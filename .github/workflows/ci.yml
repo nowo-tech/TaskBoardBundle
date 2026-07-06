@@ -91,7 +91,7 @@ jobs:
             symfony/yaml:^${SYMFONY} \
             doctrine/doctrine-bundle:${DOCTRINE_BUNDLE} \
             --no-interaction --no-update
-          composer update symfony/* doctrine/* nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Run tests
         run: |
@@ -146,9 +146,7 @@ jobs:
         run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
 
       - name: Install dependencies
-        run: |
-          composer update nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
-          composer install --prefer-dist --no-progress --no-interaction
+        run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Fix code style
         run: composer cs-fix
@@ -198,9 +196,7 @@ jobs:
         run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
 
       - name: Install dependencies
-        run: |
-          composer update nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
-          composer install --prefer-dist --no-progress --no-interaction
+        run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Check code style
         run: composer cs-check
@@ -235,7 +231,7 @@ jobs:
       - name: Install dependencies (Symfony 7.0)
         run: |
           composer require symfony/config:^7.0 symfony/dependency-injection:^7.0 symfony/form:^7.0 symfony/framework-bundle:^7.0 symfony/http-foundation:^7.0 symfony/http-kernel:^7.0 symfony/routing:^7.0 symfony/twig-bundle:^7.0 symfony/web-profiler-bundle:^7.0 doctrine/doctrine-bundle:^2.10 --no-interaction --no-update
-          composer update symfony/* doctrine/* nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Run tests with coverage
         run: |
@@ -286,9 +282,7 @@ jobs:
       - name: Configure TimeTrackBundle path repository
         run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
 
-      - run: |
-          composer update nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
-          composer install --prefer-dist --no-progress --no-interaction
+      - run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
       - run: composer phpstan
 
   typescript:
@@ -329,7 +323,5 @@ jobs:
       - name: Configure TimeTrackBundle path repository
         run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
 
-      - run: |
-          composer update nowo-tech/time-track-bundle --with-all-dependencies --no-interaction --prefer-dist --no-progress
-          composer install --prefer-dist --no-progress --no-interaction
+      - run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
       - run: composer audit
