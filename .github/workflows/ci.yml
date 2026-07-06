@@ -134,7 +134,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -A
+          git add src tests .php-cs-fixer.dist.php
           git commit -m "Apply PHP CS Fixer fixes [skip ci]"
           git push
 

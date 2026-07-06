@@ -2,6 +2,22 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.0.1 (2026-07-06)
+
+Patch release. **No breaking changes** for consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+No configuration or schema changes required.
+
+### Notes
+
+- Internal fix: `DoctrineOrmTaskLinkRepository` DI (no action needed unless you extend that class).
+- Symfony 8.x requires PHP ≥ 8.4 and `doctrine/doctrine-bundle` ^3.0 (unchanged from 1.0.0).
+
 ## 1.0.0 (2026-07-06)
 
 First stable release. No upgrade steps when installing for the first time.

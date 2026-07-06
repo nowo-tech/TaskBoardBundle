@@ -17,6 +17,9 @@ coverage.xml
 
 composer.lock
 
+# CI clone (not part of the bundle)
+/time-track-bundle/
+
 # Node / build
 /dist/
 /build/
