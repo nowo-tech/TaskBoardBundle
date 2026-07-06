@@ -46,9 +46,6 @@ jobs:
       - name: Validate composer.json
         run: composer validate --strict
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
       - name: Get Composer cache directory
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
@@ -64,6 +61,7 @@ jobs:
 
       - name: Install dependencies with Symfony ${{ matrix.symfony }}
         run: |
+          set -euo pipefail
           SYMFONY="${{ matrix.symfony }}"
           SYMFONY_MAJOR="${SYMFONY%%.*}"
           if [ "$SYMFONY_MAJOR" -ge 8 ]; then
@@ -72,20 +70,21 @@ jobs:
             DOCTRINE_BUNDLE="^2.10"
           fi
           echo "Using doctrine/doctrine-bundle ${DOCTRINE_BUNDLE} with Symfony ^${SYMFONY}"
-          composer require \
-            symfony/config:^${SYMFONY} \
-            symfony/dependency-injection:^${SYMFONY} \
-            symfony/form:^${SYMFONY} \
-            symfony/framework-bundle:^${SYMFONY} \
-            symfony/http-kernel:^${SYMFONY} \
-            symfony/routing:^${SYMFONY} \
-            symfony/security-bundle:^${SYMFONY} \
-            symfony/translation:^${SYMFONY} \
-            symfony/twig-bundle:^${SYMFONY} \
-            symfony/validator:^${SYMFONY} \
-            symfony/yaml:^${SYMFONY} \
-            doctrine/doctrine-bundle:${DOCTRINE_BUNDLE} \
-            --no-interaction --no-update
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
+            .require["symfony/config"] = $symfony |
+            .require["symfony/dependency-injection"] = $symfony |
+            .require["symfony/form"] = $symfony |
+            .require["symfony/framework-bundle"] = $symfony |
+            .require["symfony/http-kernel"] = $symfony |
+            .require["symfony/routing"] = $symfony |
+            .require["symfony/security-bundle"] = $symfony |
+            .require["symfony/translation"] = $symfony |
+            .require["symfony/twig-bundle"] = $symfony |
+            .require["symfony/validator"] = $symfony |
+            .require["symfony/yaml"] = $symfony |
+            .require["doctrine/doctrine-bundle"] = $doctrine
+          ' composer.json > composer.json.tmp && mv composer.json.tmp composer.json
           composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Run tests
@@ -132,11 +131,10 @@ jobs:
           php-version: '8.2'
           tools: composer:v2, cs2pr
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
       - name: Install dependencies
-        run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+        run: |
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Fix code style
         run: composer cs-fix
@@ -177,11 +175,10 @@ jobs:
           php-version: '8.2'
           tools: composer:v2, cs2pr
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
       - name: Install dependencies
-        run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+        run: |
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Check code style
         run: composer cs-check
@@ -205,12 +202,24 @@ jobs:
           coverage: pcov
           tools: composer:v2
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
       - name: Install dependencies (Symfony 7.4)
         run: |
-          composer require symfony/config:^7.4 symfony/dependency-injection:^7.4 symfony/form:^7.4 symfony/framework-bundle:^7.4 symfony/http-foundation:^7.4 symfony/http-kernel:^7.4 symfony/routing:^7.4 symfony/twig-bundle:^7.4 symfony/web-profiler-bundle:^7.4 doctrine/doctrine-bundle:^2.10 --no-interaction --no-update
+          set -euo pipefail
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          jq --arg symfony "^7.4" --arg doctrine "^2.10" '
+            .require["symfony/config"] = $symfony |
+            .require["symfony/dependency-injection"] = $symfony |
+            .require["symfony/form"] = $symfony |
+            .require["symfony/framework-bundle"] = $symfony |
+            .require["symfony/http-kernel"] = $symfony |
+            .require["symfony/routing"] = $symfony |
+            .require["symfony/security-bundle"] = $symfony |
+            .require["symfony/translation"] = $symfony |
+            .require["symfony/twig-bundle"] = $symfony |
+            .require["symfony/validator"] = $symfony |
+            .require["symfony/yaml"] = $symfony |
+            .require["doctrine/doctrine-bundle"] = $doctrine
+          ' composer.json > composer.json.tmp && mv composer.json.tmp composer.json
           composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Run tests with coverage
@@ -254,10 +263,9 @@ jobs:
           extensions: json
           tools: composer:v2
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
-      - run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+      - run: |
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
       - run: composer phpstan
 
   typescript:
@@ -290,8 +298,7 @@ jobs:
           php-version: '8.2'
           tools: composer:v2
 
-      - name: Configure TimeTrackBundle path repository
-        run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
-
-      - run: composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
+      - run: |
+          composer config --json repositories '{"time-track-bundle":{"type":"path","url":"time-track-bundle","options":{"symlink":false}}}'
+          composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
       - run: composer audit
