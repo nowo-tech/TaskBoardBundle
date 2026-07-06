@@ -1,0 +1,15 @@
+TaskBoardBundle installed.
+
+Requires:
+  composer require nowo-tech/time-track-bundle
+  composer require nowo-tech/tag-input-bundle
+  composer require nowo-tech/tiptap-editor-bundle
+
+Next steps:
+  1. Configure nowo_time_track task_provider and team_context_provider
+  2. Configure security access_control for /tools/task-board → ROLE_USER
+  3. Run doctrine migrations or schema update for task_board_* tables
+  4. php bin/console assets:install public (TagInputBundle + TiptapEditorBundle assets)
+  5. Optional: implement TaskBoardAccessCheckerInterface or listen to TaskBoardEvents for team ACL
+
+See docs/INSTALLATION.md and docs/SPEC-DRIVEN-DEVELOPMENT.md.

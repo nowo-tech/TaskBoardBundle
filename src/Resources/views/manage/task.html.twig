@@ -1,0 +1,274 @@
+{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+{% import '@NowoTaskBoardBundle/manage/_task_priority_tag.html.twig' as priorityUi %}
+
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block container_class %}container container-narrow{% endblock %}
+
+{% block body %}
+    {% include '@NowoTaskBoardBundle/manage/_flashes.html.twig' %}
+
+    {% set subtaskTotal = subtaskTotal|default(task.subtasks|length) %}
+    {% set subtaskDone = subtaskDone|default(0) %}
+
+    <div class="card nowo-task-detail mb-4" data-controller="nowo-task-board-task-members-modal nowo-task-board-task-priority-modal">
+        <div class="nowo-task-detail__toolbar border-bottom px-4 py-3">
+            <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                <div>
+                    <div class="text-secondary small mb-1">
+                        <a href="{{ path('nowo_task_board_index') }}" class="text-reset">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                        <span class="mx-1">/</span>
+                        <a href="{{ path('nowo_task_board_board', { boardId: task.board.id }) }}" class="text-reset">{{ task.board.name }}</a>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ path('nowo_task_board_board', { boardId: task.board.id }) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="ti ti-layout-kanban me-1"></i>{{ 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle') }}
+                    </a>
+                    <button type="submit" form="nowo-task-edit-form" class="btn btn-primary btn-sm">
+                        <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body px-4 pb-4">
+            {{ form_start(taskForm, { attr: { id: 'nowo-task-edit-form', class: 'nowo-task-detail__form' } }) }}
+
+            <div class="nowo-task-detail__title mb-4">
+                {{ form_widget(taskForm.title, {
+                    label: false,
+                    attr: {
+                        class: 'form-control form-control-lg nowo-task-detail__title-input',
+                        placeholder: 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle'),
+                    },
+                }) }}
+            </div>
+
+            <div class="nowo-task-detail__meta row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label">
+                            <i class="ti ti-circle-dot"></i>
+                            <span>{{ 'task_board.task.status'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            {% include '@NowoTaskBoardBundle/manage/_task_status_field.html.twig' %}
+                            <div class="d-none">{{ form_widget(taskForm.columnId, { label: false }) }}</div>
+                        </div>
+                    </div>
+
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label">
+                            <i class="ti ti-calendar"></i>
+                            <span>{{ 'task_board.task.dates'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            <div class="nowo-task-detail__inline-label">{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                            {{ form_widget(taskForm.dueAt, { label: false }) }}
+                        </div>
+                    </div>
+
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label">
+                            <i class="ti ti-clock-play"></i>
+                            <span>{{ 'task_board.task.time'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <div>
+                                    <span class="nowo-task-detail__inline-label d-block">{{ 'task_board.time.logged'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    <strong>{{ task.loggedMinutes }} min</strong>
+                                </div>
+                                <div class="flex-grow-1" style="min-width: 140px;">
+                                    <span class="nowo-task-detail__inline-label d-block">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {{ form_widget(taskForm.estimatedMinutes, { label: false, attr: { class: 'form-control form-control-sm' } }) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label nowo-task-detail__field-label--with-action">
+                            <i class="ti ti-users"></i>
+                            <span>{{ 'task_board.task.people'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                            <button
+                                type="button"
+                                class="nowo-task-detail__field-edit"
+                                data-action="click->nowo-task-board-task-members-modal#open"
+                                title="{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}"
+                                aria-label="{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}"
+                            >
+                                <i class="ti ti-pencil" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            {% if task.members|length > 0 %}
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for member in task.members %}
+                                        <span class="nowo-task-detail__member-chip">
+                                            <span class="nowo-task-detail__member-chip-avatar" aria-hidden="true">{{ memberUi.member_label(member.user)|slice(0, 1)|upper }}</span>
+                                            <span>{{ memberUi.member_label(member.user) }}</span>
+                                            <span class="badge bg-green-lt">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-secondary small">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label">
+                            <i class="ti ti-flag"></i>
+                            <span>{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            {{ priorityUi.priority_tag(task.priority, true) }}
+                            <div class="d-none">{{ form_widget(taskForm.priority, { label: false }) }}</div>
+                        </div>
+                    </div>
+
+                    <div class="nowo-task-detail__field">
+                        <div class="nowo-task-detail__field-label">
+                            <i class="ti ti-tags"></i>
+                            <span>{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </div>
+                        <div class="nowo-task-detail__field-value">
+                            {{ form_widget(taskForm.tags, { label: false }) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nowo-task-detail__section mb-0 nowo-task-detail__description">
+                <h3 class="nowo-task-detail__section-title">{{ 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+                {{ form_widget(taskForm.description, { label: false }) }}
+            </div>
+
+            {{ form_end(taskForm) }}
+        </div>
+
+        {% include '@NowoTaskBoardBundle/manage/_task_members_modal.html.twig' %}
+        {% include '@NowoTaskBoardBundle/manage/_task_priority_modal.html.twig' %}
+    </div>
+
+    <div class="card nowo-task-detail mb-4" data-controller="nowo-task-board-subtask-tree">
+        <div class="card-header nowo-task-detail__section-header">
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap w-100">
+                <div>
+                    <h2 class="card-title mb-1">{{ 'task_board.task.subtasks'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                    {% if subtaskTotal > 0 %}
+                        <div class="text-secondary small">{{ 'task_board.task.subtasks_progress'|trans({'%done%': subtaskDone, '%total%': subtaskTotal}, 'NowoTaskBoardBundle') }}</div>
+                        <div class="progress progress-sm mt-2" style="max-width: 240px;">
+                            <div class="progress-bar" style="width: {{ subtaskTotal > 0 ? (subtaskDone / subtaskTotal * 100) : 0 }}%"></div>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if task.subtasks|length > 0 %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-board-subtask-tree__toggle" data-nowo-task-board-subtask-tree-target="toggle" data-action="nowo-task-board-subtask-tree#toggle" aria-expanded="true">
+                        <i class="ti ti-list-tree"></i> {{ 'task_board.task.toggle_subtasks'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush nowo-task-detail__subtask-list" data-nowo-task-board-subtask-tree-target="list">
+                {% for subtask in task.subtasks %}
+                    <li class="list-group-item nowo-task-detail__subtask-item">
+                        <div class="d-flex align-items-start gap-3">
+                            <span class="nowo-task-detail__subtask-check{% if subtask.completed %} is-done{% endif %}" aria-hidden="true">
+                                <i class="ti ti-{{ subtask.completed ? 'circle-check' : 'circle' }}"></i>
+                            </span>
+                            <div class="flex-grow-1">
+                                <a href="{{ path('nowo_task_board_task', { taskId: subtask.id }) }}" class="text-reset fw-semibold">{{ subtask.title }}</a>
+                                {% if subtask.column %}
+                                    <span class="badge bg-secondary-lt ms-1">{{ subtask.column.name }}</span>
+                                {% endif %}
+                                {% include '@NowoTaskBoardBundle/manage/_task_tags.html.twig' with { tags: subtask.tags, wrapper_class: 'mt-1' } %}
+                                {% if subtask.subtasks|length > 0 %}
+                                    <ul class="list-unstyled mt-2 ps-3 border-start">
+                                        {% for nested in subtask.subtasks %}
+                                            <li class="mb-1">
+                                                <a href="{{ path('nowo_task_board_task', { taskId: nested.id }) }}" class="text-reset">{{ nested.title }}</a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </li>
+                {% else %}
+                    <li class="list-group-item text-secondary">{{ 'task_board.task.no_subtasks'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                {% endfor %}
+            </ul>
+            <div class="p-3 border-top">
+                {{ form_start(subtaskForm, { action: path('nowo_task_board_task_subtask', { taskId: task.id }), method: 'POST', attr: { class: 'nowo-task-detail__inline-add' } }) }}
+                    <div class="input-group">
+                        {{ form_widget(subtaskForm.title, {
+                            label: false,
+                            attr: {
+                                class: 'form-control',
+                                placeholder: 'task_board.task.add_subtask_placeholder'|trans({}, 'NowoTaskBoardBundle'),
+                            },
+                        }) }}
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_subtask'|trans({}, 'NowoTaskBoardBundle') }}
+                        </button>
+                    </div>
+                {{ form_end(subtaskForm) }}
+            </div>
+        </div>
+    </div>
+
+    <div
+        class="nowo-task-detail__relations"
+        data-controller="nowo-task-board-task-links-modal"
+        data-nowo-task-board-task-links-modal-create-url-value="{{ path('nowo_task_board_task_link', { taskId: task.id }) }}"
+        data-nowo-task-board-task-links-modal-update-url-value="{{ path('nowo_task_board_task_link_update', { taskId: task.id, linkId: 'LINK_ID' }) }}"
+        data-nowo-task-board-task-links-modal-remove-url-value="{{ path('nowo_task_board_task_link_remove', { taskId: task.id, linkId: 'LINK_ID' }) }}"
+        data-nowo-task-board-task-links-modal-add-title-value="{{ 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        data-nowo-task-board-task-links-modal-edit-title-value="{{ 'task_board.task.links_modal_edit_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+    >
+        {% include '@NowoTaskBoardBundle/manage/_task_links_section.html.twig' %}
+        {% include '@NowoTaskBoardBundle/manage/_task_links_modal.html.twig' %}
+
+        {% include '@NowoTaskBoardBundle/manage/_task_history_section.html.twig' %}
+
+        <details class="card mb-3 nowo-task-detail__relation">
+            <summary class="card-header nowo-task-detail__relation-summary">
+                <span><i class="ti ti-git-branch me-2"></i>{{ 'task_board.task.dependencies'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            </summary>
+            <div class="list-group list-group-flush">
+                {% for dep in task.outgoingDependencies %}
+                    <div class="list-group-item">
+                        <span class="badge bg-secondary-lt me-1">{{ dep.dependencyType.value }}</span>
+                        <a href="{{ path('nowo_task_board_task', { taskId: dep.targetTask.id }) }}">{{ dep.targetTask.title }}</a>
+                    </div>
+                {% else %}
+                    <div class="list-group-item text-secondary">{{ 'task_board.task.no_dependencies'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                {% endfor %}
+            </div>
+        </details>
+
+        <details class="card mb-3 nowo-task-detail__relation">
+            <summary class="card-header nowo-task-detail__relation-summary">
+                <span><i class="ti ti-notes me-2"></i>{{ 'task_board.task.documentation'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            </summary>
+            <div class="card-body">
+                {% for doc in task.documents %}
+                    <article class="mb-3 pb-3 border-bottom">
+                        <h3 class="h5">{{ doc.title }}</h3>
+                        <div class="text-secondary">{{ doc.content|nl2br }}</div>
+                    </article>
+                {% else %}
+                    <p class="text-secondary mb-0">{{ 'task_board.task.no_docs'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                {% endfor %}
+            </div>
+        </details>
+    </div>
+{% endblock %}

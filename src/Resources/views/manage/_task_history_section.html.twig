@@ -1,0 +1,95 @@
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+
+<details class="card mb-3 nowo-task-detail__relation nowo-task-detail__history" open>
+    <summary class="card-header nowo-task-detail__relation-summary">
+        <span><i class="ti ti-history me-2"></i>{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
+    </summary>
+    <div class="list-group list-group-flush">
+        {% for entry in task.changeHistory %}
+            {% set changeKey = 'task_board.history.type.' ~ entry.changeType.value %}
+            <div class="list-group-item nowo-task-detail__history-item">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="nowo-task-detail__history-avatar" aria-hidden="true">
+                        {{ memberUi.member_label(entry.user)|slice(0, 1)|upper }}
+                    </span>
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="nowo-task-detail__history-summary">
+                            <strong>{{ memberUi.member_label(entry.user) }}</strong>
+                            <span class="text-secondary">
+                                {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
+                            </span>
+                        </div>
+                        {% if entry.oldValue is not null or entry.newValue is not null %}
+                            <div class="nowo-task-detail__history-values text-secondary small mt-1">
+                                {% if entry.changeType.value == 'priority' %}
+                                    {% if entry.oldValue %}
+                                        <span class="text-decoration-line-through">{{ ('task_board.priority.' ~ entry.oldValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {% endif %}
+                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.newValue %}
+                                        <span>{{ ('task_board.priority.' ~ entry.newValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {% endif %}
+                                {% elseif entry.changeType.value == 'completed' %}
+                                    {% if entry.oldValue == 'true' %}
+                                        {{ 'task_board.history.completed_yes'|trans({}, 'NowoTaskBoardBundle') }}
+                                    {% else %}
+                                        {{ 'task_board.history.completed_no'|trans({}, 'NowoTaskBoardBundle') }}
+                                    {% endif %}
+                                    <i class="ti ti-arrow-right mx-1"></i>
+                                    {% if entry.newValue == 'true' %}
+                                        {{ 'task_board.history.completed_yes'|trans({}, 'NowoTaskBoardBundle') }}
+                                    {% else %}
+                                        {{ 'task_board.history.completed_no'|trans({}, 'NowoTaskBoardBundle') }}
+                                    {% endif %}
+                                {% elseif entry.changeType.value == 'tags' %}
+                                    {% set oldTags = entry.oldValue ? entry.oldValue|json_decode(true) : [] %}
+                                    {% set newTags = entry.newValue ? entry.newValue|json_decode(true) : [] %}
+                                    {% if oldTags|length > 0 %}
+                                        <span class="text-decoration-line-through">{{ oldTags|join(', ') }}</span>
+                                    {% endif %}
+                                    {% if oldTags|length > 0 and newTags|length > 0 %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if newTags|length > 0 %}
+                                        <span>{{ newTags|join(', ') }}</span>
+                                    {% endif %}
+                                {% elseif entry.changeType.value in ['member_added', 'member_removed'] %}
+                                    {% if entry.oldValue %}
+                                        <span>{{ entry.oldValue }}</span>
+                                    {% endif %}
+                                    {% if entry.newValue %}
+                                        <span>{{ entry.newValue }}</span>
+                                    {% endif %}
+                                    {% if entry.context %}
+                                        <span class="badge bg-green-lt ms-1">{{ ('task_board.member.' ~ entry.context)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {% endif %}
+                                {% elseif entry.changeType.value in ['link_added', 'link_updated', 'link_removed'] %}
+                                    {% if entry.oldValue %}
+                                        <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
+                                    {% endif %}
+                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.newValue %}
+                                        <span>{{ entry.newValue }}</span>
+                                    {% elseif entry.oldValue and entry.changeType.value == 'link_removed' %}
+                                        <span>{{ entry.oldValue }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    {% if entry.oldValue %}
+                                        <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
+                                    {% endif %}
+                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.newValue %}
+                                        <span>{{ entry.newValue }}</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div class="text-secondary small mt-1">
+                            <time datetime="{{ entry.createdAt|date('c') }}">{{ entry.createdAt|date('Y-m-d H:i') }}</time>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="list-group-item text-secondary">{{ 'task_board.task.no_history'|trans({}, 'NowoTaskBoardBundle') }}</div>
+        {% endfor %}
+    </div>
+</details>

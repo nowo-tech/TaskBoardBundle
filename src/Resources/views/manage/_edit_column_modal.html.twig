@@ -1,0 +1,46 @@
+<div
+    class="modal modal-blur fade"
+    data-nowo-task-board-edit-column-modal-target="modal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
+    aria-labelledby="nowo-task-board-edit-column-modal-title"
+>
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nowo-task-board-edit-column-modal-title" data-nowo-task-board-edit-column-modal-target="title">
+                    {{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}
+                </h5>
+                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-edit-column-modal#close"></button>
+            </div>
+            {{ form_start(editColumnForm, {
+                attr: {
+                    'data-nowo-task-board-edit-column-modal-target': 'form',
+                },
+            }) }}
+                <div class="modal-body">
+                    {{ form_row(editColumnForm.name, {
+                        attr: { 'data-nowo-task-board-edit-column-modal-target': 'nameInput' },
+                    }) }}
+                    {{ form_row(editColumnForm.color, {
+                        attr: { 'data-nowo-task-board-edit-column-modal-target': 'colorInput' },
+                    }) }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-edit-column-modal#close">
+                        {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                </div>
+            {{ form_end(editColumnForm) }}
+        </div>
+    </div>
+</div>
+<div
+    class="modal-backdrop fade"
+    data-nowo-task-board-edit-column-modal-target="backdrop"
+    data-action="click->nowo-task-board-edit-column-modal#closeOnBackdrop"
+></div>

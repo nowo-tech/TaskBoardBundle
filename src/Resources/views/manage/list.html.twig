@@ -1,0 +1,92 @@
+{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+
+{% block title %}{{ board.name }} — {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+
+{% block container_class %}container container-wide{% endblock %}
+
+{% block body %}
+    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+        pageTitle: board.name ~ ' — ' ~ ('task_board.list.title'|trans({}, 'NowoTaskBoardBundle')),
+        breadcrumbRoute: 'nowo_task_board_board',
+        breadcrumbParams: { boardId: board.id },
+        breadcrumbLabel: board.name,
+        headerActions: '
+            <a href="' ~ path('nowo_task_board_board', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+                <i class="ti ti-layout-kanban"></i> ' ~ ('task_board.view.board'|trans({}, 'NowoTaskBoardBundle')) ~ '
+            </a>
+            <a href="' ~ path('nowo_task_board_gantt', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+                <i class="ti ti-chart-bar"></i> ' ~ ('task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')) ~ '
+            </a>
+        ',
+        dashboardRoute: dashboardRoute|default(null),
+    } %}
+
+    <div class="card" data-controller="nowo-task-board-list-filter">
+        <div class="card-header">
+            <h2 class="card-title">{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+        </div>
+        <div class="card-body border-bottom">
+            <div class="nowo-task-board-list-filters">
+                <label class="form-label mb-0">
+                    {{ 'task_board.list.filter_search'|trans({}, 'NowoTaskBoardBundle') }}
+                    <input type="search" class="form-control" data-nowo-task-board-list-filter-target="search" data-action="input->nowo-task-board-list-filter#filter">
+                </label>
+                <label class="form-label mb-0">
+                    {{ 'task_board.list.filter_priority'|trans({}, 'NowoTaskBoardBundle') }}
+                    <select class="form-select" data-nowo-task-board-list-filter-target="priority" data-action="change->nowo-task-board-list-filter#filter">
+                        <option value="">{{ 'task_board.list.filter_all'|trans({}, 'NowoTaskBoardBundle') }}</option>
+                        {% for priority in priorities %}
+                            <option value="{{ priority }}">{{ priority }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="form-label mb-0">
+                    {{ 'task_board.list.filter_column'|trans({}, 'NowoTaskBoardBundle') }}
+                    <select class="form-select" data-nowo-task-board-list-filter-target="column" data-action="change->nowo-task-board-list-filter#filter">
+                        <option value="">{{ 'task_board.list.filter_all'|trans({}, 'NowoTaskBoardBundle') }}</option>
+                        {% for name in columnNames %}
+                            <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th>{{ 'task_board.form.task.column'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th>{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th>{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th>{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th>{{ 'task_board.form.task.estimate'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                        <tr
+                            data-nowo-task-board-list-filter-target="row"
+                            data-title="{{ task.title }}"
+                            data-priority="{{ task.priority.value }}"
+                            data-column="{{ task.column ? task.column.name : '' }}"
+                        >
+                            <td>
+                                <a href="{{ path('nowo_task_board_task', { taskId: task.id }) }}" class="text-reset fw-semibold">{{ task.title }}</a>
+                            </td>
+                            <td class="text-secondary">{{ task.column ? task.column.name : '—' }}</td>
+                            <td>
+                                <span class="badge bg-blue-lt">{{ task.priority.value }}</span>
+                            </td>
+                            <td>{% include '@NowoTaskBoardBundle/manage/_task_tags.html.twig' with { tags: task.tags } %}</td>
+                            <td class="text-secondary">{{ task.dueAt ? task.dueAt|date('Y-m-d') : '—' }}</td>
+                            <td class="text-secondary">{{ task.estimatedMinutes ?? '—' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-secondary">{{ 'task_board.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

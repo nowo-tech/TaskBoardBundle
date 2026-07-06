@@ -1,0 +1,20 @@
+{% macro priority_label(priority) %}
+    {{ ('task_board.priority.' ~ priority.value)|trans({}, 'NowoTaskBoardBundle') }}
+{% endmacro %}
+
+{% macro priority_tag(priority, clickable) %}
+    {% if clickable %}
+        <button
+            type="button"
+            class="nowo-task-detail__priority-tag nowo-task-detail__priority-tag--{{ priority.value }}"
+            data-action="click->nowo-task-board-task-priority-modal#open"
+            title="{{ 'task_board.task.edit_priority'|trans({}, 'NowoTaskBoardBundle') }}"
+        >
+            <i class="ti ti-flag me-1"></i>{{ _self.priority_label(priority) }}
+        </button>
+    {% else %}
+        <span class="nowo-task-detail__priority-tag nowo-task-detail__priority-tag--{{ priority.value }}">
+            <i class="ti ti-flag me-1"></i>{{ _self.priority_label(priority) }}
+        </span>
+    {% endif %}
+{% endmacro %}

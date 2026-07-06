@@ -1,0 +1,69 @@
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+
+<div
+    class="modal modal-blur fade"
+    data-nowo-task-board-task-members-modal-target="modal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
+    aria-labelledby="nowo-task-board-task-members-modal-title"
+>
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nowo-task-board-task-members-modal-title">
+                    {{ 'task_board.task.members_modal_title'|trans({}, 'NowoTaskBoardBundle') }}
+                </h5>
+                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-members-modal#close"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-secondary text-uppercase fs-6 mb-3">{{ 'task_board.task.current_members'|trans({}, 'NowoTaskBoardBundle') }}</h6>
+                <div class="list-group list-group-flush nowo-task-detail__members-list mb-4">
+                    {% for member in task.members %}
+                        <div class="list-group-item nowo-task-detail__member-row">
+                            <div class="nowo-task-detail__member-info">
+                                <span class="nowo-task-detail__member-avatar" aria-hidden="true">
+                                    {{ memberUi.member_label(member.user)|slice(0, 1)|upper }}
+                                </span>
+                                <div>
+                                    <div class="fw-semibold">{{ memberUi.member_label(member.user) }}</div>
+                                    <span class="badge bg-green-lt">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                </div>
+                            </div>
+                            <form method="post" action="{{ path('nowo_task_board_task_member_remove', { taskId: task.id, memberId: member.id }) }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
+                                    <i class="ti ti-user-minus"></i>
+                                </button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <div class="list-group-item text-secondary">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                    {% endfor %}
+                </div>
+
+                <h6 class="text-secondary text-uppercase fs-6 mb-3">{{ 'task_board.task.add_member'|trans({}, 'NowoTaskBoardBundle') }}</h6>
+                {{ form_start(memberForm, { action: path('nowo_task_board_task_member', { taskId: task.id }), method: 'POST' }) }}
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-6">{{ form_row(memberForm.user, { attr: { 'data-nowo-task-board-task-members-modal-target': 'userField' } }) }}</div>
+                        <div class="col-md-4">{{ form_row(memberForm.memberRole) }}</div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="ti ti-user-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                {{ form_end(memberForm) }}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">
+                    {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<div
+    class="modal-backdrop fade"
+    data-nowo-task-board-task-members-modal-target="backdrop"
+    data-action="click->nowo-task-board-task-members-modal#closeOnBackdrop"
+></div>

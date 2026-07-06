@@ -1,0 +1,32 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\:
+        resource: '../../'
+        exclude:
+            - '../../DependencyInjection/'
+            - '../../TaskBoardBundle.php'
+            - '../../Repository/'
+            - '../../Doctrine/'
+
+    Nowo\TaskBoardBundle\Controller\:
+        resource: '../../Controller/'
+        public: true
+
+    Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $routePrefix: '%nowo_task_board.route_prefix%'
+        tags:
+            - { name: routing.loader }
+
+    Nowo\TaskBoardBundle\Controller\TaskBoardManageController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $userClass: '%nowo_task_board.user_class%'
+            $dashboardRoute: '%nowo_task_board.dashboard_route%'

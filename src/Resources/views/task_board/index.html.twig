@@ -1,0 +1,32 @@
+{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+
+{% block title %}{{ 'page.index'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+
+{% block body %}
+<h1>{{ 'page.index'|trans({}, 'NowoTaskBoardBundle') }}</h1>
+
+<div class="card">
+    <h2>{{ 'boards.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+    <ul>
+        {% for board in boards %}
+            <li>{{ board.name }}</li>
+        {% else %}
+            <li>{{ 'boards.empty'|trans({}, 'NowoTaskBoardBundle') }}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="card">
+    <h2>{{ 'tasks.trackable'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+    <ul>
+        {% for task in tasks %}
+            <li>
+                {{ task.title }}
+                <small>({{ task.totalTimeSeconds }}s)</small>
+            </li>
+        {% else %}
+            <li>{{ 'tasks.empty'|trans({}, 'NowoTaskBoardBundle') }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

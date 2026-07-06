@@ -1,0 +1,3 @@
+nowo_task_board:
+    user_class: App\Entity\User
+    table_prefix: task_board_

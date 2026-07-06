@@ -1,0 +1,35 @@
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+/vendor/
+/node_modules/
+/.pnpm-store/
+/coverage/
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/.phpstan.cache/
+coverage.xml
+
+composer.lock
+
+# Node / build
+/dist/
+/build/
+/.vite/
+
+# IDE / local
+/.cursor/
+/.idea/
+/.vscode/
+.env
+.env.*
+!.env.example
+
+# Secrets
+*.pem
+*.key

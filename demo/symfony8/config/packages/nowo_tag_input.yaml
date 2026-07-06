@@ -1,0 +1,5 @@
+nowo_tag_input:
+    form_theme: bootstrap_5_layout.html.twig
+    max_tags: 20
+    duplicates: false
+    placeholder: 'Add tags and press Enter'

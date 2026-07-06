@@ -1,0 +1,43 @@
+<div class="card mb-3 nowo-task-detail">
+    <div class="card-header nowo-task-detail__section-header">
+        <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap w-100">
+            <h2 class="card-title mb-0">
+                <i class="ti ti-link me-2"></i>{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
+            </h2>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-action="click->nowo-task-board-task-links-modal#openAdd">
+                <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        </div>
+    </div>
+    <div class="list-group list-group-flush nowo-task-detail__links-list">
+        {% for link in task.links %}
+            <button
+                type="button"
+                class="list-group-item list-group-item-action nowo-task-detail__link-row"
+                data-action="click->nowo-task-board-task-links-modal#openEdit"
+                data-link-id="{{ link.id }}"
+                data-link-type="{{ link.linkType.value }}"
+                data-link-url="{{ link.url }}"
+                data-link-label="{{ link.label ?? '' }}"
+                data-link-external-id="{{ link.externalId ?? '' }}"
+            >
+                <div class="d-flex align-items-start justify-content-between gap-3 w-100">
+                    <div class="min-width-0 flex-grow-1">
+                        <div class="nowo-task-detail__link-row-main">
+                            <span class="badge bg-blue-lt">{{ ('task_board.link.' ~ link.linkType.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                            <span class="fw-semibold text-truncate">{{ link.label ?? link.url }}</span>
+                        </div>
+                        <div class="nowo-task-detail__link-row-meta text-secondary small text-truncate">
+                            {{ link.url }}
+                        </div>
+                    </div>
+                    <a href="{{ link.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}" onclick="event.stopPropagation();">
+                        <i class="ti ti-external-link"></i>
+                    </a>
+                </div>
+            </button>
+        {% else %}
+            <div class="list-group-item text-secondary">{{ 'task_board.task.no_links'|trans({}, 'NowoTaskBoardBundle') }}</div>
+        {% endfor %}
+    </div>
+</div>

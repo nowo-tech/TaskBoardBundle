@@ -1,0 +1,100 @@
+{% set currentColumnId = task.column ? task.column.id : '' %}
+
+<div class="nowo-task-detail__status" data-controller="nowo-task-board-task-status">
+    <div class="nowo-task-detail__status-bar">
+        <button
+            type="submit"
+            form="nowo-task-edit-form"
+            formmethod="post"
+            formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+            name="action"
+            value="previous"
+            class="btn nowo-task-detail__status-nav"
+            {% if not columnNavigation.canPrevious %} disabled{% endif %}
+            title="{{ 'task_board.action.previous_column'|trans({}, 'NowoTaskBoardBundle') }}"
+        >
+            <i class="ti ti-chevron-left"></i>
+        </button>
+
+        <div class="nowo-task-detail__status-picker">
+            <button
+                type="button"
+                class="btn nowo-task-detail__status-current"
+                data-nowo-task-board-task-status-target="toggle"
+                data-action="nowo-task-board-task-status#toggle"
+                aria-haspopup="true"
+                aria-expanded="false"
+                title="{{ 'task_board.task.change_column'|trans({}, 'NowoTaskBoardBundle') }}"
+            >
+                {% if columnNavigation.currentColumnName %}
+                    <span class="nowo-task-detail__status-label">{{ columnNavigation.currentColumnName }}</span>
+                {% else %}
+                    <span class="text-secondary">{{ 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                {% endif %}
+                <i class="ti ti-chevron-down nowo-task-detail__status-caret"></i>
+                {% if columnNavigation.isCompleted %}
+                    <i class="ti ti-circle-check nowo-task-detail__status-done-icon" aria-hidden="true"></i>
+                {% endif %}
+            </button>
+
+            <div
+                class="dropdown-menu nowo-task-detail__status-menu"
+                data-nowo-task-board-task-status-target="menu"
+                role="menu"
+            >
+                {% for column in task.board.columns %}
+                    <button
+                        type="submit"
+                        form="nowo-task-edit-form"
+                        formmethod="post"
+                        formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+                        name="action"
+                        value="column:{{ column.id }}"
+                        class="dropdown-item nowo-task-detail__status-option{% if column.id == currentColumnId %} active{% endif %}"
+                        role="menuitem"
+                    >
+                        <span class="nowo-task-detail__status-option-label">
+                            {% if column.color %}
+                                <span class="nowo-task-detail__column-dot" style="--nowo-column-color: {{ column.color }}"></span>
+                            {% endif %}
+                            <span>{{ column.name }}</span>
+                        </span>
+                        {% if column.id == currentColumnId %}
+                            <i class="ti ti-check nowo-task-detail__status-option-check"></i>
+                        {% endif %}
+                    </button>
+                {% else %}
+                    <span class="dropdown-item-text text-secondary">{{ 'task_board.task.no_columns'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button
+            type="submit"
+            form="nowo-task-edit-form"
+            formmethod="post"
+            formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+            name="action"
+            value="next"
+            class="btn nowo-task-detail__status-nav"
+            {% if not columnNavigation.canNext %} disabled{% endif %}
+            title="{{ columnNavigation.nextColumnName ?? 'task_board.action.next_column'|trans({}, 'NowoTaskBoardBundle') }}"
+        >
+            <i class="ti ti-chevron-right"></i>
+        </button>
+
+        <button
+            type="submit"
+            form="nowo-task-edit-form"
+            formmethod="post"
+            formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+            name="action"
+            value="done"
+            class="btn nowo-task-detail__status-nav nowo-task-detail__status-nav--done"
+            {% if not columnNavigation.canDone %} disabled{% endif %}
+            title="{{ 'task_board.action.mark_done'|trans({}, 'NowoTaskBoardBundle') }}"
+        >
+            <i class="ti ti-circle-check"></i>
+        </button>
+    </div>
+</div>

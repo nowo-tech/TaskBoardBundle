@@ -1,0 +1,29 @@
+
+> @nowo/task-board-bundle@ test:coverage /app
+> vitest run --coverage
+
+
+ RUN  v3.2.6 /app
+      Coverage enabled with v8
+
+ ✓ src/Resources/assets/src/list-filter-utils.test.ts (3 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  18:01:21
+   Duration  956ms (transform 33ms, setup 0ms, collect 29ms, tests 3ms, environment 314ms, prepare 109ms)
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |     100 |      100 |     100 |     100 |                   
+ ...ilter-utils.ts |     100 |      100 |     100 |     100 |                   
+-------------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 100% ( 20/20 )
+Branches     : 100% ( 10/10 )
+Functions    : 100% ( 1/1 )
+Lines        : 100% ( 20/20 )
+================================================================================
