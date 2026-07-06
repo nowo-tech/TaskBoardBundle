@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\TagInputBundle\Form\TagType;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -89,9 +90,10 @@ final class TaskFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class'     => TaskFormData::class,
-            'column_choices' => [],
-            'compact'        => false,
+            'data_class'         => TaskFormData::class,
+            'column_choices'     => [],
+            'compact'            => false,
+            'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
     }
 }

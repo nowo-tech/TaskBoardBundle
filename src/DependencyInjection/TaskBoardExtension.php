@@ -100,7 +100,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 'assets' => [
                     'packages' => [
                         'nowo_task_board' => [
-                            'base_path' => '/bundles/nowotaskboard',
+                            'base_path' => '/bundles/taskboard',
                         ],
                     ],
                 ],

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Form;
 
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
@@ -37,8 +38,9 @@ final class TaskMemberFormType extends AbstractType
     {
         $resolver->setRequired(['user_class']);
         $resolver->setDefaults([
-            'data_class'        => TaskMemberFormData::class,
-            'user_choice_label' => 'email',
+            'data_class'         => TaskMemberFormData::class,
+            'user_choice_label'  => 'email',
+            'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
     }
 }

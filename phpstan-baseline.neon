@@ -175,6 +175,30 @@ parameters:
 			path: src/Repository/DoctrineOrmTaskLinkRepository.php
 
 		-
+			message: '#^Property Nowo\\TaskBoardBundle\\Repository\\DoctrineOrmTaskDependencyRepository\:\:\$entityManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Repository/DoctrineOrmTaskDependencyRepository.php
+
+		-
+			message: '#^Property Nowo\\TaskBoardBundle\\Repository\\DoctrineOrmTaskDocumentRepository\:\:\$entityManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Repository/DoctrineOrmTaskDocumentRepository.php
+
+		-
+			message: '#^Property Nowo\\TaskBoardBundle\\Repository\\DoctrineOrmTaskMemberRepository\:\:\$entityManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Repository/DoctrineOrmTaskMemberRepository.php
+
+		-
+			message: '#^Property Nowo\\TaskBoardBundle\\Repository\\DoctrineOrmTaskTimeEntryRepository\:\:\$entityManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Repository/DoctrineOrmTaskTimeEntryRepository.php
+
+		-
 			message: '#^Cannot call method modify\(\) on DateTimeImmutable\|null\.$#'
 			identifier: method.nonObject
 			count: 2
