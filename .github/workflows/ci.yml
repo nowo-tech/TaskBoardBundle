@@ -1,4 +1,4 @@
-# CI: tests on PHP 8.2–8.5 × Symfony 7.0, 7.4, 8.0, 8.1 (exclusions for incompatible pairs).
+# CI: tests on PHP 8.2–8.5 × Symfony 7.4, 8.0, 8.1 (exclusions for incompatible pairs).
 # Requires TimeTrackBundle (path repo) for integration tests.
 name: CI
 
@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.2', '8.3', '8.4', '8.5']
-        symfony: ['7.0', '7.4', '8.0', '8.1']
+        symfony: ['7.4', '8.0', '8.1']
         exclude:
           - php: '8.2'
             symfony: '8.0'
@@ -32,13 +32,8 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -103,8 +98,8 @@ jobs:
           fi
           echo "✅ All tests passed successfully"
 
-      - name: Run tests with coverage (PHP 8.2 + Symfony 7.0 only)
-        if: matrix.php == '8.2' && matrix.symfony == '7.0'
+      - name: Run tests with coverage (PHP 8.2 + Symfony 7.4 only)
+        if: matrix.php == '8.2' && matrix.symfony == '7.4'
         run: |
           echo "📊 Generating coverage report..."
           composer test-coverage
@@ -128,13 +123,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -178,13 +168,8 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -209,13 +194,8 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -228,9 +208,9 @@ jobs:
       - name: Configure TimeTrackBundle path repository
         run: composer config repositories.time-track-bundle '{"type":"path","url":"time-track-bundle"}' --json
 
-      - name: Install dependencies (Symfony 7.0)
+      - name: Install dependencies (Symfony 7.4)
         run: |
-          composer require symfony/config:^7.0 symfony/dependency-injection:^7.0 symfony/form:^7.0 symfony/framework-bundle:^7.0 symfony/http-foundation:^7.0 symfony/http-kernel:^7.0 symfony/routing:^7.0 symfony/twig-bundle:^7.0 symfony/web-profiler-bundle:^7.0 doctrine/doctrine-bundle:^2.10 --no-interaction --no-update
+          composer require symfony/config:^7.4 symfony/dependency-injection:^7.4 symfony/form:^7.4 symfony/framework-bundle:^7.4 symfony/http-foundation:^7.4 symfony/http-kernel:^7.4 symfony/routing:^7.4 symfony/twig-bundle:^7.4 symfony/web-profiler-bundle:^7.4 doctrine/doctrine-bundle:^2.10 --no-interaction --no-update
           composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress
 
       - name: Run tests with coverage
@@ -265,13 +245,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -307,13 +282,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Checkout TimeTrackBundle
-        uses: actions/checkout@v7
-        with:
-          repository: nowo-tech/TimeTrackBundle
-          ref: v1.0.0
-          path: time-track-bundle
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clone TimeTrackBundle (v1.0.0)
+        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - uses: shivammathur/setup-php@v2
         with:
