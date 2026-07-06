@@ -4,20 +4,25 @@
 
 > ⭐ **Found this useful?** Give it a **star** on [GitHub](https://github.com/nowo-tech/TaskBoardBundle) so more developers can find it.
 
-Symfony bundle for **task boards, teams, and managers** with native **TimeTrackBundle** integration (kanban, list, Gantt, time aggregation).
+Symfony bundle for **task boards, teams, and managers** (kanban, list, Gantt). Optional integration with [TimeTrackBundle](https://github.com/nowo-tech/TimeTrackBundle) for timers and time aggregation.
 
 ## Features
 
 - Boards, columns, tasks, teams, and team members (manager/member roles)
-- `TaskBoardTaskProvider` + `TaskBoardTeamContextProvider` bridges for TimeTrack
-- `TimeSpentAggregatorListener` updates `task.total_time_seconds` on timer stop
 - Web UI at `/tools/task-board` (kanban, list, Gantt, task detail)
 - Vite + Stimulus assets for board interactions
+- **Optional TimeTrack integration** — task provider, team context, and automatic `total_time_seconds` aggregation when TimeTrack is installed
 
 ## Installation
 
 ```bash
-composer require nowo-tech/task-board-bundle nowo-tech/time-track-bundle
+composer require nowo-tech/task-board-bundle
+```
+
+For time tracking, also install TimeTrack and wire the providers:
+
+```bash
+composer require nowo-tech/time-track-bundle
 ```
 
 ```yaml

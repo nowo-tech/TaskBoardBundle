@@ -20,6 +20,13 @@ use PHPUnit\Framework\TestCase;
 
 final class TimeTrackBridgeTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+            self::markTestSkipped('nowo-tech/time-track-bundle is not installed.');
+        }
+    }
+
     public function testTaskProviderFindsTrackableTask(): void
     {
         $user  = new TestUser('1', 'dev@example.com');

@@ -6,7 +6,8 @@ jq '
   .repositories = [
     {"type": "path", "url": "time-track-bundle", "options": {"symlink": false}}
   ] |
-  .require["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/config"] = "^7.4" |
   .require["symfony/dependency-injection"] = "^7.4" |
   .require["symfony/form"] = "^7.4" |

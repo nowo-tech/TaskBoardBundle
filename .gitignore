@@ -16,6 +16,10 @@
 coverage.xml
 
 composer.lock
+composer.dev.json
+composer.dev.lock
+composer.json.tmp
+.composer-file.env
 
 # CI clone (not part of the bundle)
 /time-track-bundle/

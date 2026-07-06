@@ -1,6 +1,6 @@
 {
     "name": "nowo-tech/task-board-bundle",
-    "description": "Symfony bundle for task boards, teams, and TimeTrackBundle integration",
+    "description": "Symfony bundle for task boards, teams, and optional TimeTrackBundle integration",
     "type": "symfony-bundle",
     "license": "MIT",
     "keywords": ["symfony", "symfony-bundle", "task-board", "kanban", "teams"],
@@ -24,7 +24,6 @@
         "php": ">=8.2 <8.6",
         "doctrine/doctrine-bundle": "^2.10 || ^3.0",
         "doctrine/orm": "^2.15 || ^3.0",
-        "nowo-tech/time-track-bundle": "^1.0",
         "symfony/config": "^7.4 || ^8.0",
         "symfony/dependency-injection": "^7.4 || ^8.0",
         "symfony/form": "^7.4 || ^8.0",
@@ -39,6 +38,7 @@
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.0",
+        "nowo-tech/time-track-bundle": "^1.0",
         "phpstan/extension-installer": "^1.0",
         "phpstan/phpstan": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
@@ -71,19 +71,10 @@
         }
     },
     "suggest": {
-        "nowo-tech/time-track-bundle": "Already required; wire task_provider in nowo_time_track config."
+        "nowo-tech/time-track-bundle": "Optional time tracking: task provider, team context, and automatic total_time_seconds aggregation."
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "path",
-            "url": "/var/time-track-bundle",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "scripts": {
         "test": "@php vendor/bin/phpunit --color=always",
         "test-coverage": "@php vendor/bin/phpunit --colors=always --coverage-html coverage --coverage-clover coverage.xml --coverage-text",

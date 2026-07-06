@@ -17,6 +17,13 @@ use PHPUnit\Framework\TestCase;
 
 final class TimeSpentAggregatorListenerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!class_exists(TimerStopEvent::class)) {
+            self::markTestSkipped('nowo-tech/time-track-bundle is not installed.');
+        }
+    }
+
     public function testAddsDurationToTask(): void
     {
         $user  = new TestUser('1', 'dev@example.com');
