@@ -1,5 +1,4 @@
-# CI: tests on PHP 8.2–8.5 × Symfony 7.4, 8.0, 8.1 (exclusions for incompatible pairs).
-# Requires TimeTrackBundle (path repo) for integration tests.
+# CI: tests on PHP 8.2–8.5 × Symfony 7.4, 8.0, 8.1. TimeTrackBundle is require-dev (integration tests).
 name: CI
 
 on:
@@ -123,7 +122,7 @@ jobs:
       - name: Check for changes
         id: verify-changed-files
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
+          if [ -n "$(git status --porcelain -- src tests .php-cs-fixer.dist.php)" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -135,7 +134,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add src tests .php-cs-fixer.dist.php
-          git commit -m "Apply PHP CS Fixer fixes [skip ci]"
+          git diff --staged --quiet || git commit -m "Apply PHP CS Fixer fixes [skip ci]"
           git push
 
   code-style-check:
