@@ -6,17 +6,26 @@
 - Symfony 7.4+ or 8.x
 - Doctrine ORM 2.15+ or 3.x
 - Doctrine Bundle 2.10+ (Symfony 7.x) or 3.0+ (Symfony 8.x)
-- [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) ^1.0 (required dependency)
 
 **Recommended** (installed by the Flex recipe for rich task descriptions):
 
 - `nowo-tech/tiptap-editor-bundle`
 - `nowo-tech/tag-input-bundle`
 
+**Optional** (time tracking integration):
+
+- [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) ^1.0 — task provider, team context, and automatic `total_time_seconds` aggregation
+
 ## Composer
 
 ```bash
-composer require nowo-tech/task-board-bundle nowo-tech/time-track-bundle
+composer require nowo-tech/task-board-bundle
+```
+
+TaskBoard works standalone. To enable TimeTrack integration:
+
+```bash
+composer require nowo-tech/time-track-bundle
 ```
 
 ## Symfony Flex recipe
@@ -40,9 +49,9 @@ nowo_task_board:
     type: nowo_task_board
 ```
 
-## TimeTrack integration
+## TimeTrack integration (optional)
 
-Wire the bundle bridges in your TimeTrack config:
+When TimeTrack is installed, TaskBoard registers `nowo_task_board.task_provider` and `nowo_task_board.team_context_provider` automatically. Wire them in your TimeTrack config:
 
 ```yaml
 # config/packages/nowo_time_track.yaml
@@ -50,6 +59,8 @@ nowo_time_track:
     task_provider: nowo_task_board.task_provider
     team_context_provider: nowo_task_board.team_context_provider
 ```
+
+Without TimeTrack, the bundle runs normally; time-tracking bridges and `TimeSpentAggregatorListener` are not loaded.
 
 ## Doctrine schema
 

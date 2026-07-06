@@ -16,7 +16,7 @@
 | **Manage routes** | Authenticated CRUD for boards, columns, tasks, members, and links under `/tools/task-board`. |
 | **Task forms** | Symfony forms for board/task creation and updates (title, description, links, members). |
 | **Configuration** | `nowo_task_board` YAML (routes, table prefix, access checker, team resolver). |
-| **TimeTrack bridge** | Task provider exposes trackable tasks to TimeTrack; access gated by `TaskAccessGuard`. |
+| **TimeTrack bridge** | Optional. When TimeTrack is installed, task provider exposes trackable tasks; access gated by `TaskAccessGuard`. |
 
 ## Threats and mitigations
 
@@ -32,13 +32,13 @@
 
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — optional event listeners on `TaskBoardEvents::*` for board/task list filtering and per-resource grants.
-3. **Time tracking** — `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+3. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
 
 ## Dependencies
 
 Run `composer audit` and Dependabot before releases.
 
-Required: `nowo-tech/time-track-bundle` ^1.0.
+TaskBoard has no required dependency on TimeTrack. Install `nowo-tech/time-track-bundle` only when you need timer integration.
 
 ## Reporting
 

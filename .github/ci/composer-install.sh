@@ -13,7 +13,8 @@ jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
   .repositories = [
     {"type": "path", "url": "time-track-bundle", "options": {"symlink": false}}
   ] |
-  .require["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/config"] = $symfony |
   .require["symfony/dependency-injection"] = $symfony |
   .require["symfony/form"] = $symfony |

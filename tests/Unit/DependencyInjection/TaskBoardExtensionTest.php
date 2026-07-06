@@ -29,10 +29,16 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertSame('App\\Entity\\User', $container->getParameter('nowo_task_board.user_class'));
         self::assertSame('task_board_tasks', $container->getParameter('nowo_task_board.tasks_table'));
-        self::assertTrue($container->hasAlias('nowo_task_board.task_provider'));
-        self::assertTrue($container->hasAlias('nowo_task_board.team_context_provider'));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
-        self::assertTrue($container->hasDefinition(TaskBoardTaskProvider::class));
+
+        if (interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+            self::assertTrue($container->hasAlias('nowo_task_board.task_provider'));
+            self::assertTrue($container->hasAlias('nowo_task_board.team_context_provider'));
+            self::assertTrue($container->hasDefinition(TaskBoardTaskProvider::class));
+        } else {
+            self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
+            self::assertFalse($container->hasAlias('nowo_task_board.team_context_provider'));
+        }
     }
 
     public function testPrependRegistersFrameworkAssetsAndDoctrineMapping(): void

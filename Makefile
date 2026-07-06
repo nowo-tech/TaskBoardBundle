@@ -1,10 +1,25 @@
 # TaskBoard Bundle - Development
-.PHONY: help up down build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check composer-sync update validate
+.PHONY: help up down build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check composer-sync update validate dev-composer-file resolve-composer-file
 
 COMPOSE_FILE ?= docker-compose.yml
 COMPOSE     ?= /usr/bin/docker compose -f $(COMPOSE_FILE)
 SERVICE_PHP ?= php
 BUNDLE_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
+dev-composer-file:
+	@if [ -d ../TimeTrackBundle ]; then \
+		$(COMPOSE) exec -T $(SERVICE_PHP) php -r '$$j=json_decode(file_get_contents("/app/composer.json"),true);$$j["repositories"]=[["type"=>"path","url"=>"/var/time-track-bundle","options"=>["symlink"=>true,"versions"=>["nowo-tech/time-track-bundle"=>"1.0.0"]]]];$$j["require-dev"]["nowo-tech/time-track-bundle"]="^1.0";file_put_contents("/app/composer.dev.json",json_encode($$j,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");'; \
+		echo "Using composer.dev.json (path repo → ../TimeTrackBundle)"; \
+	else \
+		rm -f composer.dev.json; \
+	fi
+
+resolve-composer-file: dev-composer-file
+	@if [ -f composer.dev.json ]; then \
+		echo "COMPOSER_FILE=composer.dev.json" > .composer-file.env; \
+	else \
+		echo "COMPOSER_FILE=composer.json" > .composer-file.env; \
+	fi
 
 help:
 	@echo "TaskBoard Bundle - Development Commands"
@@ -22,7 +37,8 @@ up:
 	$(COMPOSE) build
 	$(COMPOSE) up -d
 	@sleep 3
-	$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction
+	@$(MAKE) resolve-composer-file
+	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer update --no-interaction
 	@echo "Container ready."
 
 down:
@@ -30,15 +46,16 @@ down:
 
 ensure-up:
 	@if ! $(COMPOSE) exec -T $(SERVICE_PHP) true 2>/dev/null; then \
-		$(COMPOSE) up -d; sleep 3; \
-		$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction; \
+		$(MAKE) up; \
+	else \
+		$(MAKE) resolve-composer-file; \
 	fi
 
 shell:
 	$(COMPOSE) exec $(SERVICE_PHP) sh
 
 install: ensure-up
-	$(COMPOSE) exec -T $(SERVICE_PHP) composer install
+	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer install --no-interaction
 
 test: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) vendor/bin/phpunit
@@ -76,15 +93,15 @@ qa: cs-check test
 release-check: ensure-up composer-sync cs-check rector-dry phpstan test
 
 composer-sync: ensure-up
-	$(COMPOSE) exec -T $(SERVICE_PHP) composer validate --strict
-	$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction
+	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer validate --strict
+	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer install --no-interaction
 
 update: ensure-up
-	$(COMPOSE) exec -T $(SERVICE_PHP) composer update --no-interaction
+	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer update --no-interaction
 
 validate: composer-sync
 
 clean:
-	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache
+	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache composer.dev.json composer.json.tmp .composer-file.env
 
 include $(BUNDLE_ROOT)/../.scripts/Makefile.update-deps.mk

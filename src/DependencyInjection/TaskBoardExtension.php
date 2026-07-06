@@ -72,11 +72,20 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerAccessChecker($container, $config['security']);
         $this->registerTeamResolver($container, $config['team_membership_resolver'] ?? null);
 
-        $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskProvider::class);
-        $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
-
         $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . '/../Resources/config'));
         $loader->load('services.yaml');
+        $this->registerTimeTrackIntegration($container, $loader);
+    }
+
+    private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void
+    {
+        if (!interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+            return;
+        }
+
+        $loader->load('services_timetrack.yaml');
+        $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskProvider::class);
+        $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
     }
 
     public function getAlias(): string

@@ -167,9 +167,9 @@ nowo_task_board:
 | `dashboard_route` | `null` | Route name for "back" link in manage UI |
 | `firewall` | `main` | Documented firewall name for host apps |
 
-## TimeTrack integration
+## TimeTrack integration (optional)
 
-Service aliases registered by the bundle:
+When [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) is installed, the extension registers these service aliases:
 
 | Alias | Service |
 |-------|---------|
@@ -177,6 +177,8 @@ Service aliases registered by the bundle:
 | `nowo_task_board.team_context_provider` | `TaskBoardTeamContextProvider` |
 
 Wire them in `nowo_time_track` config — see [INSTALLATION.md](INSTALLATION.md).
+
+If TimeTrack is not installed, no aliases or bridge services are registered.
 
 ## Assets
 

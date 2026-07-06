@@ -21,9 +21,9 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Add subtask | `task_subtask` | Create child task |
 | Set priority | `task_priority` | Update task priority |
 
-## TimeTrack integration
+## TimeTrack integration (optional)
 
-When TimeTrack is configured with `nowo_task_board.task_provider`:
+When TimeTrack is installed and configured with `nowo_task_board.task_provider`:
 
 - Users can start/stop timers on trackable tasks (assignee or team member).
 - On timer stop, `TimeSpentAggregatorListener` adds duration to `task.total_time_seconds`.

@@ -11,6 +11,8 @@ services:
             - '../../TaskBoardBundle.php'
             - '../../Repository/'
             - '../../Doctrine/'
+            - '../../Bridge/TimeTrack/'
+            - '../../EventListener/TimeSpentAggregatorListener.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
