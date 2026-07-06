@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-06
+
+### Fixed
+
+- **`DoctrineOrmTaskLinkRepository`** — inject `EntityManagerInterface` so Symfony can autowire the repository.
+- **CI** — install dependencies without `composer.lock` via `.github/ci/composer-install.sh` (jq + full `composer update`).
+- **CI** — clone TimeTrackBundle by tag `v1.0.0` (matches `^1.0` constraint).
+- **CI** — stop PHP CS Fixer from reformatting `composer.json` (exclude from finder; code-style job commits `src/` and `tests/` only).
+
+### Changed
+
+- **CI matrix** — Symfony **7.4**, **8.0**, and **8.1** (PHP 8.2–8.5; Symfony 8 requires PHP ≥ 8.4).
+
 ## [1.0.0] - 2026-07-06
 
 First stable release of **TaskBoard Bundle**.
@@ -36,5 +49,6 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.0.0
