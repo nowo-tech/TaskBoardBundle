@@ -1,0 +1,66 @@
+{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+
+{% block title %}{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+
+{% block container_class %}container container-narrow{% endblock %}
+
+{% block body %}
+    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+        pageTitle: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
+        pageSubtitle: 'task_board.index.subtitle'|trans({}, 'NowoTaskBoardBundle'),
+        dashboardRoute: dashboardRoute|default(null),
+    } %}
+
+    {% include '@NowoTaskBoardBundle/manage/_flashes.html.twig' %}
+
+    <div class="row row-cards">
+        <div class="col-12 col-lg-5">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">{{ 'task_board.index.create_board'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                </div>
+                <div class="card-body">
+                    {{ form_start(boardForm, { action: path('nowo_task_board_board_create'), method: 'POST' }) }}
+                        {{ form_row(boardForm.name) }}
+                        {{ form_row(boardForm.slug) }}
+                        {{ form_row(boardForm.description) }}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ti ti-plus me-1"></i>{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+                        </button>
+                    {{ form_end(boardForm) }}
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-7">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">{{ 'task_board.index.your_boards'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for board in boards %}
+                        <div class="list-group-item">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <a href="{{ path('nowo_task_board_board', { boardId: board.id }) }}" class="text-reset fw-semibold">{{ board.name }}</a>
+                                    {% if board.description %}
+                                        <div class="text-secondary small">{{ board.description }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-auto btn-list">
+                                    <a href="{{ path('nowo_task_board_board', { boardId: board.id }) }}" class="btn btn-sm btn-primary">
+                                        <i class="ti ti-layout-kanban"></i> {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}
+                                    </a>
+                                    <a href="{{ path('nowo_task_board_list', { boardId: board.id }) }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="ti ti-list"></i> {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="list-group-item text-secondary">{{ 'task_board.index.no_boards'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

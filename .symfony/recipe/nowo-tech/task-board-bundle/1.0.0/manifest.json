@@ -1,0 +1,16 @@
+{
+    "version": "1.0.0",
+    "bundles": {
+        "Nowo\\TaskBoardBundle\\TaskBoardBundle": ["all"]
+    },
+    "copy": {
+        "config/packages/nowo_task_board.yaml": "%CONFIG_DIR%/packages/nowo_task_board.yaml",
+        "config/packages/nowo_tiptap_editor.yaml": "%CONFIG_DIR%/packages/nowo_tiptap_editor.yaml",
+        "config/routes/nowo_task_board.yaml": "%CONFIG_DIR%/routes/nowo_task_board.yaml"
+    },
+    "gitignore": [
+        "/config/packages/nowo_task_board.yaml",
+        "/config/packages/nowo_tiptap_editor.yaml",
+        "/config/routes/nowo_task_board.yaml"
+    ]
+}

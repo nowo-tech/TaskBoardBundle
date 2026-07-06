@@ -1,0 +1,93 @@
+{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+
+{% block title %}{{ board.name }} — {{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+
+{% block container_class %}container container-wide{% endblock %}
+
+{% block body %}
+    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+        pageTitle: board.name ~ ' — ' ~ ('task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle')),
+        breadcrumbRoute: 'nowo_task_board_board',
+        breadcrumbParams: { boardId: board.id },
+        breadcrumbLabel: board.name,
+        headerActions: '
+            <a href="' ~ path('nowo_task_board_board', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+                <i class="ti ti-layout-kanban"></i> ' ~ ('task_board.view.board'|trans({}, 'NowoTaskBoardBundle')) ~ '
+            </a>
+            <a href="' ~ path('nowo_task_board_list', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+                <i class="ti ti-list"></i> ' ~ ('task_board.view.list'|trans({}, 'NowoTaskBoardBundle')) ~ '
+            </a>
+        ',
+        dashboardRoute: dashboardRoute|default(null),
+    } %}
+
+    <div
+        class="card nowo-task-gantt"
+        data-controller="nowo-task-board-gantt"
+        data-nowo-task-board-gantt-links-value="{{ timeline.links|map(l => { from: l.fromId, to: l.toId })|json_encode|e('html_attr') }}"
+        data-nowo-task-board-gantt-day-count-value="{{ timeline.dayKeys|length }}"
+    >
+        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                <h2 class="card-title mb-0">{{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                <div class="text-secondary small">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 small text-secondary">
+                <span><i class="ti ti-line-dashed me-1"></i>{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <span><i class="ti ti-calendar-event me-1"></i>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            </div>
+        </div>
+
+        <div class="nowo-task-gantt__viewport">
+            <div
+                class="nowo-task-gantt__grid"
+                style="--gantt-days: {{ timeline.dayKeys|length }};"
+                data-nowo-task-board-gantt-target="grid"
+            >
+                <div class="nowo-task-gantt__corner">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                <div class="nowo-task-gantt__timeline-head">
+                    {% for day in timeline.dayKeys %}
+                        {% set isToday = day == timeline.today %}
+                        {% set isWeekend = day|date('N') in ['6', '7'] %}
+                        <div class="nowo-task-gantt__day{% if isToday %} is-today{% endif %}{% if isWeekend %} is-weekend{% endif %}">
+                            <span class="nowo-task-gantt__day-label">{{ day|date('d') }}</span>
+                            <span class="nowo-task-gantt__month-label">{{ day|date('M') }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                {% for item in timeline.items %}
+                    <div
+                        class="nowo-task-gantt__label-cell{% if item.completed %} is-completed{% endif %}"
+                        style="padding-left: {{ 0.75 + item.depth * 1.1 }}rem;"
+                        data-task-id="{{ item.id }}"
+                    >
+                        <a href="{{ path('nowo_task_board_task', { taskId: item.id }) }}" class="text-reset">{{ item.title }}</a>
+                        {% if item.columnName %}
+                            <span class="badge bg-secondary-lt ms-1">{{ item.columnName }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="nowo-task-gantt__track-row" data-nowo-task-board-gantt-target="row" data-task-id="{{ item.id }}">
+                        {% for day in timeline.dayKeys %}
+                            <div class="nowo-task-gantt__cell{% if day == timeline.today %} is-today{% endif %}{% if day|date('N') in ['6', '7'] %} is-weekend{% endif %}"></div>
+                        {% endfor %}
+                        <div
+                            class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.completed %} is-completed{% endif %}"
+                            data-nowo-task-board-gantt-target="bar"
+                            style="--gantt-start: {{ item.startIndex + 1 }}; --gantt-end: {{ item.endIndex + 2 }};"
+                            title="{{ item.startDate }} → {{ item.endDate }}"
+                        >
+                            {% if item.progress > 0 %}
+                                <span class="nowo-task-gantt__bar-progress" style="width: {{ item.progress }}%;"></span>
+                            {% endif %}
+                            <span class="nowo-task-gantt__bar-label">{{ item.title }}</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="nowo-task-gantt__empty">{{ 'task_board.gantt.empty'|trans({}, 'NowoTaskBoardBundle') }}</div>
+                {% endfor %}
+            </div>
+            <svg class="nowo-task-gantt__links" data-nowo-task-board-gantt-target="svg" aria-hidden="true"></svg>
+        </div>
+    </div>
+{% endblock %}

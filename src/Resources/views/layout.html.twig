@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="{{ app.request.locale|default('en') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Task Board{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+    {% block stylesheets %}{% endblock %}
+</head>
+<body>
+<div class="page">
+    <header class="navbar navbar-expand-md navbar-light d-print-none border-bottom mb-3">
+        <div class="container-xl">
+            <a class="navbar-brand" href="{{ path('nowo_task_board_index') }}">{{ 'nav.brand'|trans({}, 'NowoTaskBoardBundle') }}</a>
+            <div class="navbar-nav flex-row gap-2">
+                <a class="nav-link" href="{{ path('nowo_task_board_index') }}">{{ 'nav.board'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                {% if dashboardRoute is defined and dashboardRoute %}
+                    <a class="nav-link" href="{{ path(dashboardRoute) }}">{{ 'nav.timer'|trans({}, 'NowoTimeTrackBundle') }}</a>
+                {% else %}
+                    <a class="nav-link" href="{{ path('nowo_time_track_index') }}">{{ 'nav.timer'|trans({}, 'NowoTimeTrackBundle') }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <div class="{% block container_class %}container-xl{% endblock %} pb-4">
+        {% block body %}{% endblock %}
+    </div>
+</div>
+<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% block javascripts %}{% endblock %}
+</body>
+</html>

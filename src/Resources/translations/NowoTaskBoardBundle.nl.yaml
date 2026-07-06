@@ -1,0 +1,104 @@
+task_board.index.title: Task Boards
+task_board.index.subtitle: Organize work with kanban boards, lists, and task details.
+task_board.board.title: Board
+task_board.list.title: List
+task_board.task.title: Task
+task_board.index.create_board: Create board
+task_board.index.your_boards: Your boards
+task_board.index.no_boards: No boards yet.
+task_board.board.add_task: Add task
+task_board.board.add_column: Add column
+task_board.board.task_placeholder: New task title…
+task_board.board.add_task_modal_title: Add task to %column%
+task_board.action.cancel: Cancel
+task_board.action.close: Close
+task_board.board.reorder_hint: Drag column headers to reorder. Drag tasks between columns.
+task_board.board.drag_column: Drag to reorder column
+task_board.action.add_column: Add column
+task_board.form.column.name: Column name
+task_board.form.column.color: Color
+task_board.flash.column_added: Column added.
+task_board.view.list: List view
+task_board.view.board: Board view
+task_board.list.filter_search: Search
+task_board.list.filter_priority: Priority
+task_board.list.filter_column: Column
+task_board.list.filter_all: All
+ task_board.list.filters: Filters
+task_board.list.empty: No tasks yet.
+task_board.task.toggle_subtasks: Toggle subtasks
+task_board.view.all_boards: All boards
+task_board.view.back_board: Terug naar board
+task_board.task.status: Status
+task_board.task.dates: Datums
+task_board.task.description_section: Beschrijving
+task_board.task.description_placeholder: Beschrijving toevoegen…
+task_board.task.manage_people: Toegewezen beheren
+task_board.task.subtasks_progress: '%done% van %total% voltooid'
+task_board.task.add_subtask_placeholder: Subtaak toevoegen…
+task_board.task.edit: Taak bewerken
+task_board.task.workflow: Workflow
+task_board.task.current_column: Current column
+task_board.task.completed_badge: Completed
+task_board.action.previous_column: Move back
+task_board.action.previous_column_to: Move to %column%
+task_board.action.next_column: Move forward
+task_board.action.next_column_to: Move to %column%
+task_board.action.mark_done: Mark as done
+task_board.action.mark_done_column: Move to %column%
+task_board.flash.task_moved_previous: Task moved to the previous column.
+task_board.flash.task_moved_next: Task moved to the next column.
+task_board.flash.task_moved_done: Task marked as done.
+task_board.task.subtasks: Subtasks
+task_board.task.no_subtasks: No subtasks.
+task_board.task.links: Links
+task_board.task.no_links: No links yet.
+task_board.task.dependencies: Dependencies
+task_board.task.no_dependencies: No dependencies.
+task_board.task.people: People
+task_board.task.no_members: No members assigned.
+task_board.task.time: Time tracking
+task_board.task.documentation: Documentation
+task_board.task.no_docs: No documentation pages.
+task_board.action.create: Create
+task_board.action.back: Back
+task_board.action.add_task: Add task
+task_board.action.save: Save
+task_board.action.add_subtask: Add subtask
+task_board.action.add_link: Add link
+task_board.action.add_member: Add member
+task_board.link.url: URL
+task_board.link.merge_request: Merge request
+task_board.link.pull_request: Pull request
+task_board.link.issue: Issue
+task_board.link.documentation: Documentation
+task_board.link.other: Other
+task_board.member.assignee: Assignee
+task_board.member.reviewer: Reviewer
+task_board.member.stakeholder: Stakeholder
+task_board.member.watcher: Watcher
+task_board.time.estimate: Estimate
+task_board.time.logged: Logged
+task_board.flash.task_updated: Task updated.
+task_board.flash.link_added: Link added.
+task_board.flash.member_added: Member added.
+task_board.flash.subtask_created: Subtask created.
+task_board.form.board.name: Board name
+task_board.form.board.slug: Slug
+task_board.form.board.slug_help: Leave empty to auto-generate from name.
+task_board.form.board.description: Description
+task_board.form.task.title: Title
+task_board.form.task.description: Description
+task_board.form.task.priority: Priority
+task_board.form.task.column: Column ID
+task_board.form.task.estimate: Estimated minutes
+task_board.form.task.due: Due date
+task_board.form.task.tags: Tags
+ task_board.form.task.due_invalid: Invalid due date.
+task_board.form.link.type: Link type
+task_board.form.link.url: URL
+task_board.form.link.label: Label
+task_board.form.link.external_id: External ID
+task_board.form.link.external_id_help: e.g. GitLab MR IID or GitHub PR number.
+task_board.form.member.user: User
+task_board.form.member.role: Role

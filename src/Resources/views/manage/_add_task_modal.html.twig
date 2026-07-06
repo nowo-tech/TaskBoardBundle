@@ -1,0 +1,48 @@
+<div
+    class="modal modal-blur fade"
+    data-nowo-task-board-add-task-modal-target="modal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
+    aria-labelledby="nowo-task-board-add-task-modal-title"
+>
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nowo-task-board-add-task-modal-title" data-nowo-task-board-add-task-modal-target="title">
+                    {{ 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+                </h5>
+                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-task-modal#close"></button>
+            </div>
+            {{ form_start(taskForm, {
+                action: path('nowo_task_board_task_create', { boardId: board.id }),
+                method: 'POST',
+            }) }}
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">{{ form_row(taskForm.title, { attr: { 'data-nowo-task-board-add-task-modal-target': 'titleInput' } }) }}</div>
+                        <div class="col-md-6">{{ form_row(taskForm.priority) }}</div>
+                        <div class="col-md-6">{{ form_row(taskForm.columnId, { attr: { 'data-nowo-task-board-add-task-modal-target': 'columnField' } }) }}</div>
+                        <div class="col-12">{{ form_row(taskForm.description) }}</div>
+                        <div class="col-md-6">{{ form_row(taskForm.estimatedMinutes) }}</div>
+                        <div class="col-md-6">{{ form_row(taskForm.dueAt) }}</div>
+                        <div class="col-12">{{ form_row(taskForm.tags) }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-task-modal#close">
+                        {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                </div>
+            {{ form_end(taskForm) }}
+        </div>
+    </div>
+</div>
+<div
+    class="modal-backdrop fade"
+    data-nowo-task-board-add-task-modal-target="backdrop"
+    data-action="click->nowo-task-board-add-task-modal#closeOnBackdrop"
+></div>

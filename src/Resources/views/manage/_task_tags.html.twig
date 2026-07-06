@@ -1,0 +1,7 @@
+{% if tags is not empty %}
+    <div class="d-flex flex-wrap gap-1{% if wrapper_class|default('') %} {{ wrapper_class }}{% endif %}">
+        {% for tag in tags %}
+            <span class="badge bg-purple-lt text-purple">{{ tag }}</span>
+        {% endfor %}
+    </div>
+{% endif %}

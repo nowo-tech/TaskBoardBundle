@@ -1,0 +1,11 @@
+{% macro member_label(user) %}
+    {% if user.email is defined and user.email %}
+        {{ user.email }}
+    {% elseif user.username is defined and user.username %}
+        {{ user.username }}
+    {% elseif user.id is defined %}
+        #{{ user.id }}
+    {% else %}
+        {{ 'task_board.task.unknown_member'|trans({}, 'NowoTaskBoardBundle') }}
+    {% endif %}
+{% endmacro %}

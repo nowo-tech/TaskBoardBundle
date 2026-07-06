@@ -1,0 +1,74 @@
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">{{ 'task_board.task.workflow'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+            <span class="text-secondary">{{ 'task_board.task.current_column'|trans({}, 'NowoTaskBoardBundle') }}:</span>
+            {% if columnNavigation.currentColumnName %}
+                <span class="badge bg-blue-lt">{{ columnNavigation.currentColumnName }}</span>
+            {% else %}
+                <span class="text-secondary">—</span>
+            {% endif %}
+            {% if columnNavigation.isCompleted %}
+                <span class="badge bg-green-lt text-green">{{ 'task_board.task.completed_badge'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            {% endif %}
+        </div>
+
+        <div class="btn-list nowo-task-detail__status-actions">
+            <button
+                type="submit"
+                form="nowo-task-edit-form"
+                formmethod="post"
+                formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+                name="action"
+                value="previous"
+                class="btn btn-outline-secondary"
+                {% if not columnNavigation.canPrevious %} disabled{% endif %}
+            >
+                <i class="ti ti-arrow-left me-1"></i>
+                {% if columnNavigation.previousColumnName %}
+                    {{ 'task_board.action.previous_column_to'|trans({'%column%': columnNavigation.previousColumnName}, 'NowoTaskBoardBundle') }}
+                {% else %}
+                    {{ 'task_board.action.previous_column'|trans({}, 'NowoTaskBoardBundle') }}
+                {% endif %}
+            </button>
+
+            <button
+                type="submit"
+                form="nowo-task-edit-form"
+                formmethod="post"
+                formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+                name="action"
+                value="next"
+                class="btn btn-outline-primary"
+                {% if not columnNavigation.canNext %} disabled{% endif %}
+            >
+                {% if columnNavigation.nextColumnName %}
+                    {{ 'task_board.action.next_column_to'|trans({'%column%': columnNavigation.nextColumnName}, 'NowoTaskBoardBundle') }}
+                {% else %}
+                    {{ 'task_board.action.next_column'|trans({}, 'NowoTaskBoardBundle') }}
+                {% endif %}
+                <i class="ti ti-arrow-right ms-1"></i>
+            </button>
+
+            <button
+                type="submit"
+                form="nowo-task-edit-form"
+                formmethod="post"
+                formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
+                name="action"
+                value="done"
+                class="btn btn-success"
+                {% if not columnNavigation.canDone %} disabled{% endif %}
+            >
+                <i class="ti ti-circle-check me-1"></i>
+                {% if columnNavigation.doneColumnName %}
+                    {{ 'task_board.action.mark_done_column'|trans({'%column%': columnNavigation.doneColumnName}, 'NowoTaskBoardBundle') }}
+                {% else %}
+                    {{ 'task_board.action.mark_done'|trans({}, 'NowoTaskBoardBundle') }}
+                {% endif %}
+            </button>
+        </div>
+    </div>
+</div>

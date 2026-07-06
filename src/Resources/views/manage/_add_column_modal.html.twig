@@ -1,0 +1,41 @@
+<div
+    class="modal modal-blur fade"
+    data-nowo-task-board-add-column-modal-target="modal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
+    aria-labelledby="nowo-task-board-add-column-modal-title"
+>
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nowo-task-board-add-column-modal-title">
+                    {{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}
+                </h5>
+                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-column-modal#close"></button>
+            </div>
+            {{ form_start(columnForm, {
+                action: path('nowo_task_board_column_create', { boardId: board.id }),
+                method: 'POST',
+            }) }}
+                <div class="modal-body">
+                    {{ form_row(columnForm.name, { attr: { 'data-nowo-task-board-add-column-modal-target': 'nameInput' } }) }}
+                    {{ form_row(columnForm.color) }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-column-modal#close">
+                        {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ti ti-layout-columns me-1"></i>{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                </div>
+            {{ form_end(columnForm) }}
+        </div>
+    </div>
+</div>
+<div
+    class="modal-backdrop fade"
+    data-nowo-task-board-add-column-modal-target="backdrop"
+    data-action="click->nowo-task-board-add-column-modal#closeOnBackdrop"
+></div>

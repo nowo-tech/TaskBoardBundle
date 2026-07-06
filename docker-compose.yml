@@ -1,0 +1,11 @@
+name: task-board-bundle
+
+services:
+  php:
+    build: .
+    volumes:
+      - .:/app
+      - ../TimeTrackBundle:/var/time-track-bundle
+    working_dir: /app
+    stdin_open: true
+    tty: true
