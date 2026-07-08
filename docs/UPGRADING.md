@@ -2,6 +2,21 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.2.1 (2026-07-08)
+
+Patch release. **No breaking changes** and **no runtime changes** for bundle consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No configuration, schema, or cache steps required unless you want the updated documentation in your vendor copy.
+
+### Notes
+
+- New **export guides** for task import: [docs/import/README.md](import/README.md) (ClickUp, Jira, Trello).
+- **GitHub Spec Kit** (`.specify/`, `docs/SPEC-KIT.md`) is maintainer tooling for this repository only.
+
 ## 1.2.0 (2026-07-07)
 
 Minor release. **No breaking changes** for consumers.
@@ -31,6 +46,8 @@ services:
 ```
 
 See [USAGE.md](USAGE.md) for import options (create missing columns, skip duplicates).
+
+Export step-by-step guides: [import/README.md](import/README.md).
 
 ## 1.1.1 (2026-07-07)
 
