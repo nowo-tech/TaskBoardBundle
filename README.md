@@ -50,6 +50,7 @@ Login: `demo@example.com` / `demo`
 - [Installation](docs/INSTALLATION.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage](docs/USAGE.md)
+- [Import export guides](docs/import/README.md) (ClickUp, Jira, Trello)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Upgrading](docs/UPGRADING.md)
@@ -57,7 +58,7 @@ Login: `demo@example.com` / `demo`
 - [Security](docs/SECURITY.md)
 - [Engram](docs/ENGRAM.md)
 - [Spec-driven development](docs/SPEC-DRIVEN-DEVELOPMENT.md)
-
+- [GitHub Spec Kit](docs/SPEC-KIT.md)
 ## Tests and coverage
 
 ```bash

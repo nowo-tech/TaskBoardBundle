@@ -181,6 +181,8 @@ Wire them in `nowo_time_track` config — see [INSTALLATION.md](INSTALLATION.md)
 
 If TimeTrack is not installed, no aliases or bridge services are registered.
 
+See [Import export guides](import/README.md) for step-by-step ClickUp, Jira, and Trello export instructions.
+
 ## Task import
 
 Import tasks from ClickUp, Jira, or Trello exports. Route defaults:
