@@ -51,6 +51,8 @@ php bin/console nowo:task-board:import <board-uuid> /path/to/export.csv --source
 
 Supported `--source` values: `clickup_csv`, `clickup_json`, `jira_csv`, `trello_json`.
 
+**Export guides (English):** [docs/import/](import/README.md) — step-by-step instructions for [ClickUp](import/clickup.md), [Jira](import/jira.md), and [Trello](import/trello.md).
+
 ## Custom access control
 
 Two layers:

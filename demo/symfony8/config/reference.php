@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 // This file is auto-generated and is for apps only. Bundles SHOULD NOT rely on its content.
 
 namespace Symfony\Component\DependencyInjection\Loader\Configurator;
@@ -1253,95 +1251,98 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  * }
  * @psalm-type NowoTaskBoardConfig = array{
- *     user_class?: scalar|Param|null, // FQCN of the application user entity (must implement UserInterface and expose getId()).
- *     table_prefix?: scalar|Param|null, // Prefix for task board tables. // Default: "task_board_"
- *     team_membership_resolver?: scalar|Param|null, // Service id implementing TaskBoardTeamMembershipResolverInterface. Null uses no teams. // Default: null
+ *     user_class?: scalar|Param|null,
+ *     table_prefix?: scalar|Param|null, // Default: "task_board_"
+ *     team_membership_resolver?: scalar|Param|null, // Default: null
  *     route_prefix?: scalar|Param|null, // Default: ""
  *     dashboard_route?: scalar|Param|null, // Default: null
  *     firewall?: scalar|Param|null, // Default: "main"
  *     security?: array{
  *         access_checker?: scalar|Param|null, // Default: null
- *         admin_roles?: list<scalar|Param|null>,
  *         access_roles?: list<scalar|Param|null>,
  *         create_roles?: list<scalar|Param|null>,
  *         list_roles?: list<scalar|Param|null>,
  *     },
  *     routes?: array{
  *         index?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_index"
  *         },
  *         board?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board"
  *         },
  *         list?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/list"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/list"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_list"
  *         },
  *         gantt?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/gantt"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/gantt"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_gantt"
  *         },
  *         task?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task"
  *         },
  *         board_create?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/create"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/create"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_create"
  *         },
  *         task_create?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/create"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/create"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_create"
  *         },
  *         task_move?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/move"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/move"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_move"
  *         },
  *         task_advance?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/advance"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/advance"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_advance"
  *         },
  *         task_link?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/link"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/link"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_link"
  *         },
  *         task_link_update?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/link/{linkId}"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/link/{linkId}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_link_update"
  *         },
  *         task_link_remove?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/link/{linkId}/remove"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/link/{linkId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_link_remove"
  *         },
  *         task_member?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/member"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/member"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_member"
  *         },
  *         task_member_remove?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/member/{memberId}/remove"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/member/{memberId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_member_remove"
  *         },
- *         task_priority?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/priority"
- *             name?: scalar|Param|null, // Default: "nowo_task_board_task_priority"
- *         },
  *         task_subtask?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/task/{taskId}/subtask"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/subtask"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_subtask"
  *         },
+ *         task_priority?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/priority"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_priority"
+ *         },
  *         column_create?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/column"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_column_create"
  *         },
  *         column_update?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/column/{columnId}"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column/{columnId}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_column_update"
  *         },
  *         column_reorder?: array{
- *             path?: scalar|Param|null, // Default: "/tools/tasks/board/{boardId}/columns/reorder"
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/columns/reorder"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_column_reorder"
+ *         },
+ *         board_import?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/import"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_import"
  *         },
  *     },
  *     templates?: array{
@@ -1351,6 +1352,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         list?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/list.html.twig"
  *         gantt?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/gantt.html.twig"
  *         task?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task.html.twig"
+ *         import?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import.html.twig"
  *     },
  *     database?: array{
  *         entity_manager?: scalar|Param|null, // Default: "default"
