@@ -57,5 +57,4 @@ The importers normalize common column names. Missing columns are skipped; only *
 ## Further reading
 
 - [Usage — import tasks](../USAGE.md#import-tasks-from-clickup-jira-or-trello)
-- [Export guides (ClickUp, Jira, Trello)](../import/README.md)
 - [Configuration — import routes and custom importers](../CONFIGURATION.md#task-import)
