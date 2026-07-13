@@ -2,6 +2,20 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.2.2 (2026-07-13)
+
+Patch release. **No breaking changes** and **no runtime changes** for bundle consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No configuration or schema changes required.
+
+### Notes
+
+- Maintainer-only: improved `make test-coverage` output, Docker coverage volume, and `.cursorignore` (see [CHANGELOG](CHANGELOG.md#122---2026-07-13)).
+
 ## 1.2.1 (2026-07-08)
 
 Patch release. **No breaking changes** and **no runtime changes** for bundle consumers.

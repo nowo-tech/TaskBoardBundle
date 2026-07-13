@@ -40,3 +40,7 @@ composer.json.tmp
 # Secrets
 *.pem
 *.key
+# Cursor local sandbox (machine-specific; REQ-IDE-005)
+.cursor/sandbox.json
+
+/coverage-php.txt
