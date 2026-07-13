@@ -6,6 +6,11 @@ services:
     volumes:
       - .:/app
       - ../TimeTrackBundle:/var/time-track-bundle
+      - coverage-data:/app/coverage
     working_dir: /app
     stdin_open: true
     tty: true
+
+volumes:
+  coverage-data:
+    driver: local

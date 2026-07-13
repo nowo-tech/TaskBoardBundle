@@ -94,5 +94,6 @@ return (new Config())
         (new Finder())
             ->in(__DIR__)
             ->exclude(['vendor', 'var', 'coverage', '.phpunit.cache'])
+            ->notPath('demo/symfony8/config/reference.php')
             ->notName('composer.json')
     );

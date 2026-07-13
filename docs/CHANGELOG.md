@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-13
+
+### Changed
+
+- **Development** — `make test-coverage` writes `coverage-php.txt` and prints the PHP Lines % via `.scripts/php-coverage-percent.sh` (REQ-TEST-008 contract).
+- **Docker** — named volume `coverage-data` for `/app/coverage` in `docker-compose.yml` (avoids host permission issues).
+- **`.gitignore`** — ignore `.cursor/sandbox.json` and `coverage-php.txt`.
+
+### Added
+
+- **`.cursorignore`** — excludes vendor, caches, build outputs, and heavy binaries from Cursor indexing.
+- **PHP CS Fixer** — exclude auto-generated `demo/symfony8/config/reference.php` from the finder.
+
 ## [1.2.1] - 2026-07-08
 
 ### Added
@@ -91,7 +104,8 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.1.0...v1.1.1
