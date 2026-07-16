@@ -1,3 +1,6 @@
+nav:
+  brand: Task Board
+  board: Task board
 task_board.index.title: Tableros de tareas
 task_board.index.subtitle: Organiza el trabajo con tableros kanban, listas y detalle de tareas.
 task_board.board.title: Tablero
@@ -8,26 +11,17 @@ task_board.index.your_boards: Tus tableros
 task_board.index.no_boards: Aún no hay tableros.
 task_board.board.add_task: Añadir tarea
 task_board.board.add_column: Añadir columna
-task_board.board.edit_column: Editar columna
-task_board.board.edit_column_title: Editar columna "%column%"
+task_board.board.task_placeholder: Título de la nueva tarea…
 task_board.board.add_task_modal_title: Añadir tarea a %column%
 task_board.action.cancel: Cancelar
 task_board.action.close: Cerrar
 task_board.board.reorder_hint: Arrastra las cabeceras de columna para reordenar. Arrastra tareas entre columnas.
-task_board.board.column_task_count: '%count% tareas'
 task_board.board.drag_column: Arrastrar para reordenar columna
 task_board.action.add_column: Añadir columna
 task_board.form.column.name: Nombre de la columna
 task_board.form.column.color: Color
 task_board.flash.column_added: Columna añadida.
-task_board.flash.column_updated: Columna actualizada.
 task_board.view.list: Vista lista
-task_board.view.gantt: Vista Gantt
-task_board.gantt.title: Gantt
-task_board.gantt.subtitle: Cronograma según fecha de creación, límite y estimación.
-task_board.gantt.empty: No hay tareas para mostrar en el cronograma.
-task_board.gantt.legend_dependency: Flechas de dependencia
-task_board.gantt.legend_today: Hoy
 task_board.view.board: Vista tablero
 task_board.list.filter_search: Buscar
 task_board.list.filter_priority: Prioridad
@@ -43,22 +37,9 @@ task_board.task.dates: Fechas
 task_board.task.description_section: Descripción
 task_board.task.description_placeholder: Añade una descripción…
 task_board.task.manage_people: Gestionar asignados
-task_board.task.members_modal_title: Gestionar asignados
-task_board.task.current_members: Miembros actuales
-task_board.task.add_member: Añadir miembro
-task_board.task.unknown_member: Usuario desconocido
-task_board.action.remove_member: Quitar miembro
-task_board.flash.member_removed: Miembro eliminado.
-task_board.flash.priority_updated: Prioridad actualizada.
-task_board.priority.low: Baja
-task_board.priority.normal: Normal
-task_board.priority.high: Alta
-task_board.priority.urgent: Urgente
-task_board.task.edit_priority: Editar prioridad
-task_board.task.priority_modal_title: Editar prioridad
-task_board.task.priority_modal_help: Selecciona la prioridad de esta tarea.
 task_board.task.subtasks_progress: '%done% de %total% completadas'
 task_board.task.add_subtask_placeholder: Añadir subtarea…
+task_board.task.edit: Editar tarea
 task_board.task.workflow: Flujo de trabajo
 task_board.task.change_column: Cambiar columna
 task_board.task.no_column: Sin columna
@@ -81,24 +62,6 @@ task_board.task.links: Enlaces
 task_board.task.no_links: Sin enlaces.
 task_board.task.dependencies: Dependencias
 task_board.task.no_dependencies: Sin dependencias.
-task_board.task.history: Historial de cambios
-task_board.task.no_history: Aún no hay cambios registrados.
-task_board.history.completed_yes: Completada
-task_board.history.completed_no: No completada
-task_board.history.type.created: creó la tarea
-task_board.history.type.title: cambió el título
-task_board.history.type.description: cambió la descripción
-task_board.history.type.priority: cambió la prioridad
-task_board.history.type.column: movió la tarea
-task_board.history.type.due_date: cambió la fecha límite
-task_board.history.type.estimated_minutes: cambió la estimación
-task_board.history.type.tags: cambió las etiquetas
-task_board.history.type.completed: cambió el estado de completado
-task_board.history.type.link_added: añadió un enlace
-task_board.history.type.link_updated: actualizó un enlace
-task_board.history.type.link_removed: eliminó un enlace
-task_board.history.type.member_added: añadió un miembro
-task_board.history.type.member_removed: eliminó un miembro
 task_board.task.people: Implicados
 task_board.task.no_members: Sin implicados.
 task_board.task.time: Tiempo
@@ -125,13 +88,6 @@ task_board.time.estimate: Estimación
 task_board.time.logged: Registrado
 task_board.flash.task_updated: Tarea actualizada.
 task_board.flash.link_added: Enlace añadido.
-task_board.flash.link_updated: Enlace actualizado.
-task_board.flash.link_removed: Enlace eliminado.
-task_board.task.links_modal_add_title: Añadir enlace
-task_board.task.links_modal_edit_title: Editar enlace
-task_board.task.link_delete_confirm: ¿Eliminar este enlace de la tarea?
-task_board.action.remove_link: Eliminar enlace
-task_board.action.open_link: Abrir enlace
 task_board.flash.member_added: Implicado añadido.
 task_board.flash.subtask_created: Subtarea creada.
 task_board.form.board.name: Nombre del tablero
@@ -144,8 +100,8 @@ task_board.form.task.priority: Prioridad
 task_board.form.task.column: ID de columna
 task_board.form.task.estimate: Minutos estimados
 task_board.form.task.due: Fecha límite
-task_board.form.task.due_invalid: Fecha límite no válida.
 task_board.form.task.tags: Etiquetas
+task_board.form.task.due_invalid: Fecha límite no válida.
 task_board.form.link.type: Tipo de enlace
 task_board.form.link.url: URL
 task_board.form.link.label: Etiqueta

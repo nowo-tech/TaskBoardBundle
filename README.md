@@ -47,11 +47,13 @@ Login: `demo@example.com` / `demo`
 
 ## Documentation
 
+- [GitHub Actions CI requirements](docs/GITHUB_CI.md)
 - [Installation](docs/INSTALLATION.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage](docs/USAGE.md)
 - [Import export guides](docs/import/README.md) (ClickUp, Jira, Trello)
 - [Contributing](docs/CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Upgrading](docs/UPGRADING.md)
 - [Release process](docs/RELEASE.md)

@@ -1,3 +1,6 @@
+nav:
+  brand: Task Board
+  board: Task board
 task_board.index.title: Task Boards
 task_board.index.subtitle: Organize work with kanban boards, lists, and task details.
 task_board.board.title: Board
@@ -8,7 +11,7 @@ task_board.index.your_boards: Your boards
 task_board.index.no_boards: No boards yet.
 task_board.board.add_task: Add task
 task_board.board.add_column: Add column
-task_board.board.task_placeholder: New task title…
+task_board.board.task_placeholder: Titolo della nuova attività…
 task_board.board.add_task_modal_title: Add task to %column%
 task_board.action.cancel: Cancel
 task_board.action.close: Close
@@ -24,7 +27,7 @@ task_board.list.filter_search: Search
 task_board.list.filter_priority: Priority
 task_board.list.filter_column: Column
 task_board.list.filter_all: All
- task_board.list.filters: Filters
+task_board.list.filters: Filters
 task_board.list.empty: No tasks yet.
 task_board.task.toggle_subtasks: Toggle subtasks
 task_board.view.all_boards: All boards
@@ -38,6 +41,10 @@ task_board.task.subtasks_progress: '%done% di %total% completate'
 task_board.task.add_subtask_placeholder: Aggiungi sottoattività…
 task_board.task.edit: Modifica attività
 task_board.task.workflow: Workflow
+task_board.task.change_column: Change column
+task_board.task.no_column: No column
+task_board.task.no_columns: No columns configured.
+task_board.flash.task_moved_column: Task moved to the selected column.
 task_board.task.current_column: Current column
 task_board.task.completed_badge: Completed
 task_board.action.previous_column: Move back
@@ -94,7 +101,7 @@ task_board.form.task.column: Column ID
 task_board.form.task.estimate: Estimated minutes
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
- task_board.form.task.due_invalid: Invalid due date.
+task_board.form.task.due_invalid: Invalid due date.
 task_board.form.link.type: Link type
 task_board.form.link.url: URL
 task_board.form.link.label: Label
@@ -102,3 +109,25 @@ task_board.form.link.external_id: External ID
 task_board.form.link.external_id_help: e.g. GitLab MR IID or GitHub PR number.
 task_board.form.member.user: User
 task_board.form.member.role: Role
+task_board.import.action: Import tasks
+task_board.import.title: Import tasks
+task_board.import.subtitle: Bring tasks from ClickUp, Jira, Trello, or other supported exports into this board.
+task_board.import.form.title: Upload export file
+task_board.import.form.source: Source
+task_board.import.form.file: Export file
+task_board.import.form.file_invalid: Upload a valid CSV or JSON export (max 20 MB).
+task_board.import.form.create_columns: Create missing status columns automatically
+task_board.import.form.skip_existing: Skip tasks that were already imported
+task_board.import.form.submit: Import into board
+task_board.import.source.clickup_csv: ClickUp (CSV)
+task_board.import.source.clickup_json: ClickUp (JSON)
+task_board.import.source.jira_csv: Jira (CSV)
+task_board.import.source.trello_json: Trello (JSON)
+task_board.import.help.title: How to export
+task_board.import.help.clickup_title: ClickUp
+task_board.import.help.clickup_step_1: In ClickUp, open your List or Table view (or Workspace Settings → Imports / Exports).
+task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Priority, Assignee, Due Date, and Task ID columns.
+task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
+task_board.import.help.supported_title: Supported formats
+task_board.flash.import_file_required: Please choose a file to import.
+task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'

@@ -31,15 +31,15 @@ task_board.list.filters: Filters
 task_board.list.empty: No tasks yet.
 task_board.task.toggle_subtasks: Toggle subtasks
 task_board.view.all_boards: All boards
-task_board.view.back_board: Zurück zum Board
+task_board.view.back_board: Back to board
 task_board.task.status: Status
-task_board.task.dates: Termine
-task_board.task.description_section: Beschreibung
-task_board.task.description_placeholder: Beschreibung hinzufügen…
-task_board.task.manage_people: Zugewiesene verwalten
-task_board.task.subtasks_progress: '%done% von %total% erledigt'
-task_board.task.add_subtask_placeholder: Unteraufgabe hinzufügen…
-task_board.task.edit: Aufgabe bearbeiten
+task_board.task.dates: Dates
+task_board.task.description_section: Description
+task_board.task.description_placeholder: Add a description…
+task_board.task.manage_people: Manage assignees
+task_board.task.subtasks_progress: '%done% of %total% done'
+task_board.task.add_subtask_placeholder: Add subtask…
+task_board.task.edit: Edit task
 task_board.task.workflow: Workflow
 task_board.task.change_column: Change column
 task_board.task.no_column: No column

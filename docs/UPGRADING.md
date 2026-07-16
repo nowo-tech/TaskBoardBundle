@@ -2,6 +2,22 @@
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
+## 1.2.3 (2026-07-16)
+
+Patch release. **No breaking changes** for bundle consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+No configuration or schema changes required.
+
+### Notes
+
+- Updated translations (import UI in all locales; EN German leftovers fixed). Clear the translation cache if you override `NowoTaskBoardBundle` strings.
+- Maintainer-only: REQ-GIT-001 git hygiene (hooks, CI job, `docs/GITHUB_CI.md`) and Code of Conduct — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 1.2.2 (2026-07-13)
 
 Patch release. **No breaking changes** and **no runtime changes** for bundle consumers.

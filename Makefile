@@ -1,5 +1,5 @@
 # TaskBoard Bundle - Development
-.PHONY: help up down build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check composer-sync update validate dev-composer-file resolve-composer-file
+.PHONY: help up down build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check composer-sync update validate dev-composer-file resolve-composer-file check-no-cursor-coauthor strip-cursor-coauthor-from-history
 
 COMPOSE_FILE ?= docker-compose.yml
 COMPOSE     ?= /usr/bin/docker compose -f $(COMPOSE_FILE)
@@ -87,7 +87,7 @@ phpstan: ensure-up
 
 qa: cs-check test
 
-release-check: ensure-up composer-sync cs-check rector-dry phpstan test
+release-check: check-no-cursor-coauthor ensure-up composer-sync cs-check rector-dry phpstan test
 
 composer-sync: ensure-up
 	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer validate --strict
@@ -102,3 +102,15 @@ clean:
 	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache composer.dev.json composer.json.tmp .composer-file.env
 
 include $(BUNDLE_ROOT)/../.scripts/Makefile.update-deps.mk
+check-no-cursor-coauthor:
+	@chmod +x .scripts/check-no-cursor-coauthor.sh
+	@./.scripts/check-no-cursor-coauthor.sh HEAD
+setup-hooks:
+	@chmod +x .githooks/pre-commit 2>/dev/null || true
+	@chmod +x .githooks/commit-msg 2>/dev/null || true
+	@git config core.hooksPath .githooks
+	@echo "✅ Git hooks installed (.githooks — includes commit-msg for REQ-GIT-001)."
+
+strip-cursor-coauthor-from-history:
+	@chmod +x .scripts/strip-cursor-coauthor-from-history.sh
+	@./.scripts/strip-cursor-coauthor-from-history.sh main
