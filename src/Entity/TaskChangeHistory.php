@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Entity;
 
+use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -25,7 +26,7 @@ class TaskChangeHistory
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'changeHistory')]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private Task $task,
-        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
+        #[ORM\ManyToOne(targetEntity: User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $user,
         #[ORM\Column(name: 'change_type', type: 'string', length: 32, enumType: TaskChangeType::class)]

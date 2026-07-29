@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Entity;
 
+use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -41,7 +42,7 @@ class TaskBoard
         private string $name,
         #[ORM\Column(type: 'string', length: 255, unique: true)]
         private string $slug,
-        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
+        #[ORM\ManyToOne(targetEntity: User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $creator,
         #[ORM\Column(type: 'text', nullable: true)]

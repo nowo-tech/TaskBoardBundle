@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Entity;
 
+use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TeamRole;
@@ -25,7 +26,7 @@ class TeamMember
         #[ORM\ManyToOne(targetEntity: Team::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private Team $team,
-        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
+        #[ORM\ManyToOne(targetEntity: User::class)]
         #[ORM\JoinColumn(name: 'user_id', nullable: false, onDelete: 'CASCADE')]
         private object $user,
         #[ORM\Column(type: 'string', length: 16, enumType: TeamRole::class)]
