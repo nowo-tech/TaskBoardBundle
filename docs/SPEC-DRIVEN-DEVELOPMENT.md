@@ -1,5 +1,23 @@
 # Spec-driven development — TaskBoardBundle
 
+## Table of contents
+
+- [Bundle functional scope](#bundle-functional-scope)
+- [User stories](#user-stories)
+- [Domain model](#domain-model)
+  - [Enumerations](#enumerations)
+  - [Views](#views)
+- [Integration strategy (Vault / Yopass pattern)](#integration-strategy-vault-yopass-pattern)
+  - [Symfony events (`TaskBoardEvents`)](#symfony-events-taskboardevents)
+- [Implementation phases](#implementation-phases)
+- [Validating the functional spec](#validating-the-functional-spec)
+- [REQ traceability](#req-traceability)
+- [Validation](#validation)
+- [Engram](#engram)
+- [Suggested workflow for contributors](#suggested-workflow-for-contributors)
+- [GitHub Spec Kit (summary)](#github-spec-kit-summary)
+- [See also](#see-also)
+
 In this repository, **spec-driven development** has three layers that stay in sync:
 
 1. **GitHub Spec Kit baseline** — [`specs/001-baseline/`](../specs/001-baseline/) ([`spec.md`](../specs/001-baseline/spec.md), [`code-inventory.md`](../specs/001-baseline/code-inventory.md)), initialized with [GitHub Spec Kit](https://github.com/github/spec-kit) (`.specify/`, **Cursor Agent** skills in `.cursor/skills/speckit-*`). The inventory maps **100%** of production code in `src/`. **How to install, initialize, and use Spec Kit:** [`SPEC-KIT.md`](SPEC-KIT.md).

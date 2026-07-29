@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Integration;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use PHPUnit\Framework\TestCase;
@@ -26,7 +27,7 @@ final class TaskBoardBundleIntegrationTest extends TestCase
         (new TaskBoardExtension())->load([['user_class' => 'App\\Entity\\User']], $container);
 
         self::assertTrue($container->hasAlias(TaskBoardAccessCheckerInterface::class));
-        self::assertTrue($container->hasDefinition(\Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader::class));
+        self::assertTrue($container->hasDefinition(TaskBoardRouteLoader::class));
         self::assertTrue($container->hasAlias(TaskBoardRepositoryInterface::class));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
     }

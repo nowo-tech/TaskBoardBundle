@@ -6,10 +6,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTeamRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_teams')]
 class Team
 {
@@ -31,6 +30,11 @@ class Team
     public function getId(): string
     {
         return $this->id;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function getName(): string

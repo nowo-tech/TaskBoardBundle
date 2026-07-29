@@ -7,10 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDependencyRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskDependencyRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_dependencies')]
 #[ORM\UniqueConstraint(name: 'task_board_dep_unique', columns: ['source_task_id', 'target_task_id', 'dependency_type'])]
 class TaskDependency
@@ -39,6 +38,11 @@ class TaskDependency
     public function getId(): string
     {
         return $this->id;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function getSourceTask(): Task

@@ -52,3 +52,6 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
 - [ ] `composer audit` clean
 - [ ] Manage routes documented in INSTALLATION
 - [ ] Access checker and events documented for integrators
+- [ ] Input/output validation + Twig escaping for task content
+- [ ] No secrets in logs
+- [ ] AI security audit grade recorded (see `BUNDLES_SECURITY_ANALYSIS.md` — REQ-SEC-004)

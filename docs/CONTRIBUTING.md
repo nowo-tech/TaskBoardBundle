@@ -1,5 +1,16 @@
 # Contributing
 
+## Table of contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Development setup](#development-setup)
+- [Quality checks](#quality-checks)
+- [Pull requests](#pull-requests)
+- [Documentation](#documentation)
+- [Code style](#code-style)
+- [License](#license)
+- [Git hooks (REQ-GIT-001)](#git-hooks-req-git-001)
+
 Thank you for contributing to TaskBoard Bundle.
 
 

@@ -1,5 +1,18 @@
 # Usage
 
+## Table of contents
+
+- [Manage UI](#manage-ui)
+- [Task operations](#task-operations)
+- [TimeTrack integration (optional)](#timetrack-integration-optional)
+- [Teams](#teams)
+- [Import tasks from ClickUp, Jira, or Trello](#import-tasks-from-clickup-jira-or-trello)
+- [Custom access control](#custom-access-control)
+  - [Route-level checker](#route-level-checker)
+  - [Event listeners](#event-listeners)
+- [Twig overrides](#twig-overrides)
+- [Translations](#translations)
+
 ## Manage UI
 
 Authenticated users open the manage UI (default `/tools/task-board`):

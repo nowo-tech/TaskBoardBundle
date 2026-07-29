@@ -6,10 +6,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDocumentRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskDocumentRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_documents')]
 class TaskDocument
 {
@@ -31,7 +30,7 @@ class TaskDocument
         private string $title,
         #[ORM\Column(type: 'text')]
         private string $content,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $creator,
         #[ORM\Column(type: 'integer')]

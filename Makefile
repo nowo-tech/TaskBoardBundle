@@ -1,8 +1,15 @@
 # TaskBoard Bundle - Development
-.PHONY: help up down build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check composer-sync update validate dev-composer-file resolve-composer-file check-no-cursor-coauthor strip-cursor-coauthor-from-history
+.PHONY: help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history
 
 COMPOSE_FILE ?= docker-compose.yml
-COMPOSE     ?= /usr/bin/docker compose -f $(COMPOSE_FILE)
+# Prefer Compose V2; absolute docker path avoids shadowing by local docker/ when PATH has "." (REQ-MAKE-010).
+DOCKER_BIN := $(shell PATH="/usr/local/bin:/usr/bin:/bin:$$PATH" command -v docker 2>/dev/null)
+ifeq ($(DOCKER_BIN),)
+COMPOSE_BIN ?= docker-compose
+else
+COMPOSE_BIN ?= $(shell $(DOCKER_BIN) compose version >/dev/null 2>&1 && echo "$(DOCKER_BIN) compose" || echo "docker-compose")
+endif
+COMPOSE     ?= $(COMPOSE_BIN) -f $(COMPOSE_FILE)
 SERVICE_PHP ?= php
 BUNDLE_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
@@ -24,11 +31,11 @@ resolve-composer-file: dev-composer-file
 help:
 	@echo "TaskBoard Bundle - Development Commands"
 	@echo ""
-	@echo "  up / down / build / shell / install"
+	@echo "  up / down / down-dev / build / shell / install"
 	@echo "  test / test-coverage / test-ts / cs-check / cs-fix / phpstan / qa"
-	@echo "  release-check / composer-sync"
+	@echo "  demo-smoke / validate-translations / check-open-prs / release-check"
 	@echo ""
-	@echo "Demo (with TimeTrack): make -C TimeTrackBundle/demo up-symfony8"
+	@echo "Demo: make -C demo up-symfony8 | make demo-smoke"
 
 build:
 	$(COMPOSE) build --no-cache
@@ -43,6 +50,9 @@ up:
 
 down:
 	$(COMPOSE) down
+
+down-dev:
+	$(COMPOSE) down --remove-orphans
 
 ensure-up:
 	@if ! $(COMPOSE) exec -T $(SERVICE_PHP) true 2>/dev/null; then \
@@ -87,7 +97,16 @@ phpstan: ensure-up
 
 qa: cs-check test
 
-release-check: check-no-cursor-coauthor ensure-up composer-sync cs-check rector-dry phpstan test
+validate-translations: ensure-up
+	$(COMPOSE) exec -T $(SERVICE_PHP) php -r 'require "vendor/autoload.php"; foreach (glob("src/Resources/translations/*.yaml") as $$f) { Symfony\Component\Yaml\Yaml::parseFile($$f); } echo "OK\n";'
+
+release-check-demos:
+	@if [ -d demo ]; then $(MAKE) -C demo release-check; fi
+
+demo-smoke:
+	@$(MAKE) -C demo demo-smoke
+
+release-check: check-no-cursor-coauthor check-open-prs ensure-up composer-sync cs-check rector-dry phpstan validate-translations test
 
 composer-sync: ensure-up
 	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer validate --strict
@@ -101,10 +120,16 @@ validate: composer-sync
 clean:
 	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache composer.dev.json composer.json.tmp .composer-file.env
 
-include $(BUNDLE_ROOT)/../.scripts/Makefile.update-deps.mk
+# Optional: monorepo helper absent on standalone GitHub Actions checkout (REQ-MAKE-009).
+-include $(BUNDLE_ROOT)/../.scripts/Makefile.update-deps.mk
 check-no-cursor-coauthor:
 	@chmod +x .scripts/check-no-cursor-coauthor.sh
 	@./.scripts/check-no-cursor-coauthor.sh HEAD
+
+check-open-prs:
+	@chmod +x .scripts/check-open-prs.sh
+	@bash .scripts/check-open-prs.sh
+
 setup-hooks:
 	@chmod +x .githooks/pre-commit 2>/dev/null || true
 	@chmod +x .githooks/commit-msg 2>/dev/null || true

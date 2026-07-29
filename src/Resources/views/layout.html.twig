@@ -18,8 +18,6 @@
                 <a class="nav-link" href="{{ path('nowo_task_board_index') }}">{{ 'nav.board'|trans({}, 'NowoTaskBoardBundle') }}</a>
                 {% if dashboardRoute is defined and dashboardRoute %}
                     <a class="nav-link" href="{{ path(dashboardRoute) }}">{{ 'nav.timer'|trans({}, 'NowoTimeTrackBundle') }}</a>
-                {% else %}
-                    <a class="nav-link" href="{{ path('nowo_time_track_index') }}">{{ 'nav.timer'|trans({}, 'NowoTimeTrackBundle') }}</a>
                 {% endif %}
             </div>
         </div>

@@ -60,6 +60,7 @@ final readonly class TaskBoardMetadataListener
         }
     }
 
+    /** @param ClassMetadata<object> $metadata */
     private function remapUserAssociation(ClassMetadata $metadata, string $fieldName): void
     {
         $mapping = $metadata->associationMappings[$fieldName] ?? null;

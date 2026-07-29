@@ -6,10 +6,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskTimeEntryRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskTimeEntryRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_time_entries')]
 class TaskTimeEntry
 {
@@ -21,7 +20,7 @@ class TaskTimeEntry
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'timeEntries')]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private Task $task,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $user,
         #[ORM\Column(type: 'integer')]

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
+use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -21,6 +22,7 @@ use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -142,7 +144,7 @@ final class RemainingCoverageTest extends TestCase
     public function testBoardColumnManagerAcceptsNullColor(): void
     {
         $board = new TaskBoard('Demo', 'demo', new stdClass());
-        $repo  = $this->createMock(\Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface::class);
+        $repo  = $this->createMock(BoardColumnRepositoryInterface::class);
         $repo->expects(self::once())->method('save');
 
         $column = (new BoardColumnManager($repo))->add($board, new BoardColumnFormData(name: 'Ideas'));
@@ -249,7 +251,7 @@ final class RemainingCoverageTest extends TestCase
 
         (new TaskMemberAssigner($repo, new TaskChangeRecorder()))->assign(
             $task,
-            new \Nowo\TaskBoardBundle\Dto\TaskMemberFormData(user: $user, memberRole: TaskMemberRole::Watcher),
+            new TaskMemberFormData(user: $user, memberRole: TaskMemberRole::Watcher),
             $actor,
         );
 
@@ -266,7 +268,7 @@ final class RemainingCoverageTest extends TestCase
 
         (new TaskMemberAssigner($repo, new TaskChangeRecorder()))->assign(
             $task,
-            new \Nowo\TaskBoardBundle\Dto\TaskMemberFormData(user: $user),
+            new TaskMemberFormData(user: $user),
             new stdClass(),
         );
 

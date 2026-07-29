@@ -37,6 +37,16 @@ git push origin vX.Y.Z
 
 After creating the release commit and tag, run `make check-no-cursor-coauthor` again **before** `git push`. The release commit itself is not covered by an earlier `release-check` run.
 
+### Example for v1.2.4
+
+```bash
+git checkout main
+git pull origin main
+git tag -a v1.2.4 -m "Release v1.2.4 - FrankenPHP banner, demo PHP 8.5, PHPStan stubs"
+git push origin main
+git push origin v1.2.4
+```
+
 ### Example for v1.2.0
 
 After running `make release-check` and committing all changes:

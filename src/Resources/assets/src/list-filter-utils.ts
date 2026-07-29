@@ -1,5 +1,13 @@
 /**
  * Pure helpers for client-side list filtering (unit-tested).
+ *
+ * @param title - Task title text
+ * @param priority - Task priority value
+ * @param columnName - Column display name
+ * @param search - Free-text search filter
+ * @param priorityFilter - Selected priority filter (empty = any)
+ * @param columnFilter - Selected column filter (empty = any)
+ * @returns True when the row matches all active filters
  */
 export function matchesListFilter(
     title: string,

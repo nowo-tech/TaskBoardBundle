@@ -12,4 +12,12 @@ final readonly class DoctrineOrmTaskTimeEntryRepository implements TaskTimeEntry
         private EntityManagerInterface $entityManager,
     ) {
     }
+
+    /**
+     * Expose the manager for future persistence methods (keeps DI wiring valid).
+     */
+    public function getEntityManager(): EntityManagerInterface
+    {
+        return $this->entityManager;
+    }
 }

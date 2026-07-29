@@ -5,6 +5,10 @@
          colors="true"
          cacheDirectory=".phpunit.cache"
 >
+    <php>
+        <!-- REQ-SF-005: fail on direct Symfony deprecations -->
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="max[direct]=0"/>
+    </php>
     <testsuites>
         <testsuite name="unit">
             <directory>tests/Unit</directory>

@@ -7,10 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TeamRole;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTeamMemberRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_team_members')]
 #[ORM\UniqueConstraint(name: 'task_board_team_members_unique', columns: ['team_id', 'user_id'])]
 class TeamMember
@@ -26,7 +25,7 @@ class TeamMember
         #[ORM\ManyToOne(targetEntity: Team::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private Team $team,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(name: 'user_id', nullable: false, onDelete: 'CASCADE')]
         private object $user,
         #[ORM\Column(type: 'string', length: 16, enumType: TeamRole::class)]
@@ -39,6 +38,11 @@ class TeamMember
     public function getId(): string
     {
         return $this->id;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function getTeam(): Team

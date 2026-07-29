@@ -7,10 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskLinkRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskLinkRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_links')]
 class TaskLink
 {

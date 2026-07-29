@@ -19,7 +19,7 @@ security:
                 - App\Security\DemoAutoLoginAuthenticator
 
     access_control:
-        - { path: ^/tools/tasks, roles: ROLE_USER }
+        - { path: ^/tools/task-board, roles: ROLE_USER }
 
 when@test:
     security:

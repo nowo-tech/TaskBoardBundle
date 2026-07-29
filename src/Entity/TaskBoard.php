@@ -8,10 +8,9 @@ use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskBoardRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_boards')]
 class TaskBoard
 {
@@ -42,7 +41,7 @@ class TaskBoard
         private string $name,
         #[ORM\Column(type: 'string', length: 255, unique: true)]
         private string $slug,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $creator,
         #[ORM\Column(type: 'text', nullable: true)]

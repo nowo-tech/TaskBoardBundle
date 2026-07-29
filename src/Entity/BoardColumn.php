@@ -7,10 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmBoardColumnRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_columns')]
 class BoardColumn
 {

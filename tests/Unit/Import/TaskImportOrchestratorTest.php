@@ -6,12 +6,16 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -30,7 +34,7 @@ final class TaskImportOrchestratorTest extends TestCase
         $taskRepository->method('findByBoard')->willReturn([]);
         $taskRepository->expects(self::never())->method('save');
 
-        $columnRepository = $this->createMock(\Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface::class);
+        $columnRepository = $this->createMock(BoardColumnRepositoryInterface::class);
         $columnRepository->expects(self::exactly(2))->method('save');
 
         $entityManager = $this->createMock(EntityManagerInterface::class);
@@ -67,10 +71,10 @@ final class TaskImportOrchestratorTest extends TestCase
         $board = new TaskBoard('Demo', 'demo', $user);
         $board->addColumn(new BoardColumn($board, 'To do', 0));
 
-        $existing = new \Nowo\TaskBoardBundle\Entity\Task($board, 'Existing', $user);
-        $existing->addLink(new \Nowo\TaskBoardBundle\Entity\TaskLink(
+        $existing = new Task($board, 'Existing', $user);
+        $existing->addLink(new TaskLink(
             task: $existing,
-            linkType: \Nowo\TaskBoardBundle\Enum\TaskLinkType::Other,
+            linkType: TaskLinkType::Other,
             url: 'import://clickup_csv/1001',
             label: 'clickup_csv #1001',
             externalId: '1001',
@@ -79,7 +83,7 @@ final class TaskImportOrchestratorTest extends TestCase
         $taskRepository = $this->createMock(TaskRepositoryInterface::class);
         $taskRepository->method('findByBoard')->willReturn([$existing]);
 
-        $columnRepository = $this->createMock(\Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface::class);
+        $columnRepository = $this->createMock(BoardColumnRepositoryInterface::class);
         $entityManager    = $this->createMock(EntityManagerInterface::class);
         $entityManager->expects(self::exactly(2))->method('persist');
         $entityManager->expects(self::once())->method('flush');

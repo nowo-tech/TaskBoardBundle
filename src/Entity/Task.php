@@ -10,12 +10,11 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function in_array;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_tasks')]
 #[ORM\Index(name: 'task_board_tasks_board_idx', columns: ['board_id'])]
 class Task
@@ -75,7 +74,7 @@ class Task
         private TaskBoard $board,
         #[ORM\Column(type: 'string', length: 255)]
         private string $title,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $creator,
         #[ORM\ManyToOne(targetEntity: BoardColumn::class, inversedBy: 'tasks')]
@@ -391,9 +390,14 @@ class Task
         return $this->timeEntries;
     }
 
-    /** @param list<string> $tags */
+    /**
+     * @param list<string> $tags
+     *
+     * @return list<string>
+     */
     private function normalizeTags(array $tags): array
     {
+        /** @var list<string> $normalized */
         $normalized = [];
 
         foreach ($tags as $tag) {

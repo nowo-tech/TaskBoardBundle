@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Command;
 
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
@@ -50,7 +51,7 @@ final class TaskBoardImportCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         $board = $this->boardRepository->findById((string) $input->getArgument('board-id'));
-        if (!$board instanceof \Nowo\TaskBoardBundle\Entity\TaskBoard) {
+        if (!$board instanceof TaskBoard) {
             $io->error('Board not found.');
 
             return Command::FAILURE;

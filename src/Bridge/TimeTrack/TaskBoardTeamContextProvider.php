@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Bridge\TimeTrack;
 
+use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TimeTrackBundle\Integration\TeamContextProviderInterface;
@@ -21,7 +22,7 @@ final readonly class TaskBoardTeamContextProvider implements TeamContextProvider
         $userId = UserIdResolver::getId($user);
 
         return array_values(array_unique(array_map(
-            static fn (\Nowo\TaskBoardBundle\Entity\TeamMember $member): string => $member->getTeam()->getId(),
+            static fn (TeamMember $member): string => $member->getTeam()->getId(),
             $this->teamMemberRepository->findByUserId($userId),
         )));
     }

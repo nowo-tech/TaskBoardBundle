@@ -1,11 +1,67 @@
 # Changelog
 
+## Table of contents
+
+- [[Unreleased]](#unreleased)
+- [[1.2.4] - 2026-07-29](#124---2026-07-29)
+  - [Added](#added)
+  - [Changed](#changed)
+  - [Fixed](#fixed)
+- [[1.2.3] - 2026-07-16](#123---2026-07-16)
+  - [Added](#added-1)
+  - [Fixed](#fixed-1)
+  - [Changed](#changed-1)
+- [[1.2.2] - 2026-07-13](#122---2026-07-13)
+  - [Changed](#changed)
+  - [Added](#added)
+- [[1.2.1] - 2026-07-08](#121---2026-07-08)
+  - [Added](#added)
+  - [Changed](#changed)
+- [[1.2.0] - 2026-07-07](#120---2026-07-07)
+  - [Added](#added)
+- [[1.1.1] - 2026-07-07](#111---2026-07-07)
+  - [Fixed](#fixed)
+- [[1.1.0] - 2026-07-06](#110---2026-07-06)
+  - [Changed](#changed)
+- [[1.0.1] - 2026-07-06](#101---2026-07-06)
+  - [Fixed](#fixed)
+  - [Changed](#changed)
+- [[1.0.0] - 2026-07-06](#100---2026-07-06)
+  - [Added](#added)
+  - [Requirements](#requirements)
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.2.4] - 2026-07-29
+
+### Added
+
+- FrankenPHP-friendly banner + `docs/DEMO-FRANKENPHP.md`; `make demo-smoke` / `verify` + `.github/workflows/demo-smoke.yml` (REQ-DEMO-008/002, DOCS-017, TEST-011).
+- `make validate-translations`, `make check-open-prs`, `make down-dev` (REQ-MAKE-004 / REL-003 / MAKE-007).
+- PHPStan stubs for optional TipTap / TagInput form types; empty `ignoreErrors: []` (REQ-CS-006).
+- **REQ-CS-005:** `nowo-tech/phpstan-frankenphp` in `require-dev` with classic + worker rulesets.
+- GitHub About Website + Topics (REQ-DOCS-018).
+
+### Changed
+
+- `demo/symfony8` image: `dunglas/frankenphp:1-php8.5-bookworm`; `FRANKENPHP_MODE=worker` (REQ-DEMO-010).
+- PHPUnit / CI: `SYMFONY_DEPRECATIONS_HELPER=max[direct]=0` (REQ-SF-005).
+- Composer keywords: `php`, `frankenphp` (REQ-PKG-004).
+- README Documentation order; TOC on long docs (REQ-DOCS-002 / DOCS-005).
+- Entities: drop unused `repositoryClass`; host user via `\App\Entity\User::class`; `getCreatedAt()` where needed.
+- Demo `access_control` path aligned to `/tools/task-board`.
+- Removed `phpstan-baseline.neon` (findings fixed or stubbed).
+
+### Fixed
+
+- TaskGanttBuilder null-safe date range for PHPStan level 8.
+- Layout: do not link TimeTrack route when TimeTrack is not installed (demo smoke HTTP 500).
+- Demo: register DataFixtures services; recreate schema on `make up`.
 
 ## [1.2.3] - 2026-07-16
 

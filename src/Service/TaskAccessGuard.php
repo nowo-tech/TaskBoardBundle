@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -26,7 +27,7 @@ final readonly class TaskAccessGuard
         }
 
         $team = $task->getBoard()->getTeam();
-        if (!$team instanceof \Nowo\TaskBoardBundle\Entity\Team) {
+        if (!$team instanceof Team) {
             return $assignee === null;
         }
 

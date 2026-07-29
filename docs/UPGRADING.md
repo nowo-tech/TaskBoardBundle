@@ -1,6 +1,49 @@
 # Upgrading
 
+## Table of contents
+
+- [1.2.4 (2026-07-29)](#124-2026-07-29)
+  - [Notes](#notes)
+- [1.2.3 (2026-07-16)](#123-2026-07-16)
+  - [Notes](#notes-1)
+- [1.2.2 (2026-07-13)](#122-2026-07-13)
+  - [Notes](#notes)
+- [1.2.1 (2026-07-08)](#121-2026-07-08)
+  - [Notes](#notes)
+- [1.2.0 (2026-07-07)](#120-2026-07-07)
+  - [New: task import](#new-task-import)
+- [1.1.1 (2026-07-07)](#111-2026-07-07)
+  - [Notes](#notes)
+- [1.1.0 (2026-07-06)](#110-2026-07-06)
+  - [If you use time tracking](#if-you-use-time-tracking)
+  - [If you only use TaskBoard](#if-you-only-use-taskboard)
+  - [Notes](#notes)
+- [1.0.1 (2026-07-06)](#101-2026-07-06)
+  - [Notes](#notes)
+- [1.0.0 (2026-07-06)](#100-2026-07-06)
+  - [Requirements](#requirements)
+  - [Install](#install)
+- [Future 1.x releases](#future-1x-releases)
+
 This document describes how to upgrade between versions of TaskBoard Bundle.
+
+## 1.2.4 (2026-07-29)
+
+Patch release. **No breaking changes** for typical bundle consumers.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+No configuration or schema changes required for existing boards.
+
+### Notes
+
+- FrankenPHP worker mode declared friendly; demo uses PHP **8.5** and path `/tools/task-board`.
+- Layout no longer links TimeTrack when the optional bundle is absent (fixes demo HTTP 500).
+- Contributors: PHPStan stubs + `phpstan-frankenphp`; baseline removed — run `composer install` before `make phpstan`.
+- Entity metadata cleanup (`repositoryClass` removed; host user FQCN `\App\Entity\User::class`) — if you override user class via bundle config, keep your existing mapping.
 
 ## 1.2.3 (2026-07-16)
 

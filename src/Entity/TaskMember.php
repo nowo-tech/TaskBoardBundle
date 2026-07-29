@@ -7,10 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
-use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskMemberRepository;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-#[ORM\Entity(repositoryClass: DoctrineOrmTaskMemberRepository::class)]
+#[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_members')]
 #[ORM\UniqueConstraint(name: 'task_board_member_unique', columns: ['task_id', 'user_id', 'member_role'])]
 class TaskMember
@@ -26,7 +25,7 @@ class TaskMember
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'members')]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private Task $task,
-        #[ORM\ManyToOne(targetEntity: 'App\Entity\User')]
+        #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
         private object $user,
         #[ORM\Column(name: 'member_role', type: 'string', length: 32, enumType: TaskMemberRole::class)]
@@ -39,6 +38,11 @@ class TaskMember
     public function getId(): string
     {
         return $this->id;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function getTask(): Task

@@ -6,6 +6,10 @@
 
 Symfony bundle for **task boards, teams, and managers** (kanban, list, Gantt). Optional integration with [TimeTrackBundle](https://github.com/nowo-tech/TimeTrackBundle) for timers and time aggregation.
 
+![FrankenPHP Friendly Worker Mode](docs/images/frankenphp-friendly.png)
+
+This bundle is **FrankenPHP worker mode friendly**.
+
 ## Features
 
 - Boards, columns, tasks, teams, and team members (manager/member roles)
@@ -47,20 +51,25 @@ Login: `demo@example.com` / `demo`
 
 ## Documentation
 
-- [GitHub Actions CI requirements](docs/GITHUB_CI.md)
 - [Installation](docs/INSTALLATION.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage](docs/USAGE.md)
-- [Import export guides](docs/import/README.md) (ClickUp, Jira, Trello)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Upgrading](docs/UPGRADING.md)
-- [Release process](docs/RELEASE.md)
+- [Release](docs/RELEASE.md)
 - [Security](docs/SECURITY.md)
 - [Engram](docs/ENGRAM.md)
 - [Spec-driven development](docs/SPEC-DRIVEN-DEVELOPMENT.md)
 - [GitHub Spec Kit](docs/SPEC-KIT.md)
+
+### Additional documentation
+
+- [GitHub Actions CI requirements](docs/GITHUB_CI.md)
+- [Demo notes](docs/DEMO-FRANKENPHP.md)
+- [Import export guides](docs/import/README.md) (ClickUp, Jira, Trello)
+
 ## Tests and coverage
 
 ```bash

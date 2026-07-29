@@ -29,6 +29,7 @@ use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
@@ -79,7 +80,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void
     {
-        if (!interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+        if (!interface_exists(TaskProviderInterface::class)) {
             return;
         }
 

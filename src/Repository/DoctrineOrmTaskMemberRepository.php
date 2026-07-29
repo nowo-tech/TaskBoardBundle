@@ -12,4 +12,12 @@ final readonly class DoctrineOrmTaskMemberRepository implements TaskMemberReposi
         private EntityManagerInterface $entityManager,
     ) {
     }
+
+    /**
+     * Expose the manager for future persistence methods (keeps DI wiring valid).
+     */
+    public function getEntityManager(): EntityManagerInterface
+    {
+        return $this->entityManager;
+    }
 }

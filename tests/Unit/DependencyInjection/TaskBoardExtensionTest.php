@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
@@ -31,7 +32,7 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame('task_board_tasks', $container->getParameter('nowo_task_board.tasks_table'));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
 
-        if (interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+        if (interface_exists(TaskProviderInterface::class)) {
             self::assertTrue($container->hasAlias('nowo_task_board.task_provider'));
             self::assertTrue($container->hasAlias('nowo_task_board.team_context_provider'));
             self::assertTrue($container->hasDefinition(TaskBoardTaskProvider::class));

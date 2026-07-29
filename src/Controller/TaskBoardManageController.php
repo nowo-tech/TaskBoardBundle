@@ -32,9 +32,11 @@ use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use ValueError;
 
@@ -79,7 +81,7 @@ final class TaskBoardManageController extends AbstractController
         ]);
     }
 
-    public function createBoard(Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function createBoard(Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         if (!$this->accessChecker->canCreateBoard($user)) {
@@ -122,7 +124,7 @@ final class TaskBoardManageController extends AbstractController
         ]);
     }
 
-    public function createColumn(string $boardId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function createColumn(string $boardId, Request $request): RedirectResponse
     {
         $this->requireUser();
         $board = $this->findBoard($boardId);
@@ -140,7 +142,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
-    public function updateColumn(string $boardId, string $columnId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $this->requireUser();
         $board  = $this->findBoard($boardId);
@@ -162,7 +164,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
-    public function reorderColumns(string $boardId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function reorderColumns(string $boardId, Request $request): RedirectResponse
     {
         $this->requireUser();
         $board = $this->findBoard($boardId);
@@ -176,7 +178,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
-    public function createTask(string $boardId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function createTask(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId);
@@ -350,7 +352,7 @@ final class TaskBoardManageController extends AbstractController
         ]);
     }
 
-    public function advanceTask(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function advanceTask(string $taskId, Request $request): RedirectResponse
     {
         $user     = $this->requireUser();
         $task     = $this->findTask($taskId);
@@ -378,7 +380,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function moveTask(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function moveTask(string $taskId, Request $request): RedirectResponse
     {
         $user     = $this->requireUser();
         $task     = $this->findTask($taskId);
@@ -390,7 +392,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
-    public function attachLink(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function attachLink(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -408,7 +410,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function updateLink(string $taskId, string $linkId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function updateLink(string $taskId, string $linkId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -427,7 +429,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function removeLink(string $taskId, string $linkId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function removeLink(string $taskId, string $linkId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -439,7 +441,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function addMember(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function addMember(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -460,7 +462,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function removeMember(string $taskId, string $memberId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function removeMember(string $taskId, string $memberId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -472,7 +474,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function updatePriority(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function updatePriority(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -489,7 +491,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    public function createSubtask(string $taskId, Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
+    public function createSubtask(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId);
@@ -509,7 +511,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
     }
 
-    private function requireUser(): \Symfony\Component\Security\Core\User\UserInterface
+    private function requireUser(): UserInterface
     {
         $user = $this->getUser();
         if (!is_object($user) || !$this->accessChecker->canAccess($user)) {

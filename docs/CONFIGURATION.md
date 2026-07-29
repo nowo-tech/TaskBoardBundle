@@ -1,5 +1,23 @@
 # Configuration
 
+## Table of contents
+
+- [Required](#required)
+- [Database](#database)
+- [Routes](#routes)
+- [Security](#security)
+  - [Firewall](#firewall)
+  - [Access checker](#access-checker)
+  - [Team membership resolver](#team-membership-resolver)
+  - [Access events](#access-events)
+- [Templates](#templates)
+- [Other options](#other-options)
+- [TimeTrack integration (optional)](#timetrack-integration-optional)
+- [Task import](#task-import)
+  - [Assignee resolver](#assignee-resolver)
+  - [Custom importers](#custom-importers)
+- [Assets](#assets)
+
 All options live under the `nowo_task_board` root key in `config/packages/nowo_task_board.yaml`.
 
 ## Required

@@ -1,5 +1,17 @@
 # Installation
 
+## Table of contents
+
+- [Requirements](#requirements)
+- [Composer](#composer)
+- [Symfony Flex recipe](#symfony-flex-recipe)
+- [TimeTrack integration (optional)](#timetrack-integration-optional)
+- [Doctrine schema](#doctrine-schema)
+- [Security firewall](#security-firewall)
+- [Translations](#translations)
+- [Assets](#assets)
+- [Demo](#demo)
+
 ## Requirements
 
 - PHP 8.2+ (< 8.6)

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\EventListener;
 
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TimeTrackBundle\Event\TimerStopEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
@@ -23,7 +24,7 @@ final readonly class TimeSpentAggregatorListener
         $taskId = $entry->getTaskId();
         $task   = $this->taskRepository->findById($taskId);
 
-        if (!$task instanceof \Nowo\TaskBoardBundle\Entity\Task) {
+        if (!$task instanceof Task) {
             return;
         }
 

@@ -16,13 +16,14 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskAccessGuard;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TimeTrackBundle\Dto\TaskListQuery;
+use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 
 final class TimeTrackBridgeTest extends TestCase
 {
     protected function setUp(): void
     {
-        if (!interface_exists(\Nowo\TimeTrackBundle\Integration\TaskProviderInterface::class)) {
+        if (!interface_exists(TaskProviderInterface::class)) {
             self::markTestSkipped('nowo-tech/time-track-bundle is not installed.');
         }
     }

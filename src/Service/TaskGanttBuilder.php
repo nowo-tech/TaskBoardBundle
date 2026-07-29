@@ -76,8 +76,15 @@ final readonly class TaskGanttBuilder
             ];
         }
 
+        if (!$minDay instanceof DateTimeImmutable || !$maxDay instanceof DateTimeImmutable) {
+            return $this->emptyTimeline();
+        }
+
         $rangeStart = $minDay->modify('-' . self::RANGE_PADDING_DAYS . ' days');
         $rangeEnd   = $maxDay->modify('+' . self::RANGE_PADDING_DAYS . ' days');
+        if (!$rangeStart instanceof DateTimeImmutable || !$rangeEnd instanceof DateTimeImmutable) {
+            return $this->emptyTimeline();
+        }
         $dayKeys    = $this->dayKeysBetween($rangeStart, $rangeEnd);
         $indexByDay = array_flip($dayKeys);
 
@@ -137,11 +144,13 @@ final readonly class TaskGanttBuilder
 
         if ($end === null && $task->getEstimatedMinutes() !== null && $task->getEstimatedMinutes() > 0) {
             $durationDays = max(self::DEFAULT_BAR_DAYS, (int) ceil($task->getEstimatedMinutes() / self::MINUTES_PER_DAY));
-            $end          = $start->modify('+' . ($durationDays - 1) . ' days');
+            $modified     = $start->modify('+' . ($durationDays - 1) . ' days');
+            $end          = $modified instanceof DateTimeImmutable ? $modified : $start;
         }
 
         if ($end === null) {
-            $end = $start->modify('+' . (self::DEFAULT_BAR_DAYS - 1) . ' days');
+            $modified = $start->modify('+' . (self::DEFAULT_BAR_DAYS - 1) . ' days');
+            $end      = $modified instanceof DateTimeImmutable ? $modified : $start;
         }
 
         if ($task->isCompleted() && $task->getCompletedAt() instanceof DateTimeImmutable) {
