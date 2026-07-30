@@ -4,7 +4,7 @@
     <div class="nowo-task-detail__status-bar">
         <button
             type="submit"
-            form="nowo-task-edit-form"
+            form="nowo-task-advance-form"
             formmethod="post"
             formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
             name="action"
@@ -45,11 +45,11 @@
                 {% for column in task.board.columns %}
                     <button
                         type="submit"
-                        form="nowo-task-edit-form"
+                        form="nowo-task-advance-form"
                         formmethod="post"
                         formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
-                        name="action"
-                        value="column:{{ column.id }}"
+                        name="columnId"
+                        value="{{ column.id }}"
                         class="dropdown-item nowo-task-detail__status-option{% if column.id == currentColumnId %} active{% endif %}"
                         role="menuitem"
                     >
@@ -71,7 +71,7 @@
 
         <button
             type="submit"
-            form="nowo-task-edit-form"
+            form="nowo-task-advance-form"
             formmethod="post"
             formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
             name="action"
@@ -85,7 +85,7 @@
 
         <button
             type="submit"
-            form="nowo-task-edit-form"
+            form="nowo-task-advance-form"
             formmethod="post"
             formaction="{{ path('nowo_task_board_task_advance', { taskId: task.id }) }}"
             name="action"

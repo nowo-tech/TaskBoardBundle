@@ -27,7 +27,8 @@
 | **IDOR on tasks/boards** | User edits another user's board or task. | Default repository scoping; extend with `BoardAccessCheckEvent` / `TaskAccessCheckEvent` listeners. |
 | **Unauthorized time tracking** | User tracks time on tasks they cannot access. | `TaskAccessGuard::canTrack()` checks assignee and team membership before TimeTrack provider returns tasks. |
 | **XSS in task content** | Malicious HTML in task descriptions. | Twig auto-escaping; rich text via TiptapEditorBundle when configured. |
-| **CSRF on forms** | Cross-site form submission. | Symfony CSRF tokens on all manage forms. |
+| **CSRF on forms** | Cross-site form submission. | Symfony CSRF tokens on all manage forms (`form_start` / `form_end`). |
+| **CSRF on AJAX / bare POSTs** | Cross-site drag-and-drop move/reorder, advance, priority, remove link/member. | Explicit `isCsrfTokenValid` (fail-closed) on `reorderColumns`, `advanceTask`, `moveTask`, `removeLink`, `removeMember`, `updatePriority`. Twig/`fetch` send `_token` (REQ-SEC-005). Token ids: `task_board_column_reorder`, `task_board_task_move`, `task_board_task_advance`, `task_board_task_priority`, `task_board_task_link_remove`, `task_board_task_member_remove_{memberId}`. |
 | **Malicious import files** | Oversized or crafted CSV/JSON uploads. | Authenticated route only; Symfony file upload limits; parsers validate structure; import runs in orchestrator with explicit source selection. |
 
 ## Access control model
@@ -53,5 +54,6 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
 - [ ] Manage routes documented in INSTALLATION
 - [ ] Access checker and events documented for integrators
 - [ ] Input/output validation + Twig escaping for task content
+- [ ] CSRF on all session mutations (forms + bare POSTs / kanban `fetch`) — REQ-SEC-005
 - [ ] No secrets in logs
 - [ ] AI security audit grade recorded (see `BUNDLES_SECURITY_ANALYSIS.md` — REQ-SEC-004)

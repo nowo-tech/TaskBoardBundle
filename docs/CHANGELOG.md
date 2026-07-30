@@ -3,6 +3,8 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.3.1] - 2026-07-30](#131---2026-07-30)
+  - [Security](#security)
 - [[1.3.0] - 2026-07-30](#130---2026-07-30)
   - [Added](#added)
 - [[1.2.4] - 2026-07-29](#124---2026-07-29)
@@ -38,6 +40,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.3.1] - 2026-07-30
+
+### Security
+
+- **REQ-SEC-005** — CSRF on bare manage POSTs that previously lacked tokens: column reorder, task move (kanban drag), task advance, priority update, remove link, remove member. Invalid/missing `_token` → access denied (fail-closed). Bundle Twig and board Stimulus `fetch` now send matching tokens.
 
 ## [1.3.0] - 2026-07-30
 

@@ -48,6 +48,8 @@
             class="nowo-task-board"
             data-controller="nowo-task-board"
             data-nowo-task-board-reorder-url-value="{{ path('nowo_task_board_column_reorder', { boardId: board.id }) }}"
+            data-nowo-task-board-reorder-csrf-token-value="{{ csrf_token('task_board_column_reorder') }}"
+            data-nowo-task-board-move-csrf-token-value="{{ csrf_token('task_board_task_move') }}"
         >
             {% for column in board.columns %}
                 <section

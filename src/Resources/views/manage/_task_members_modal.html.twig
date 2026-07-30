@@ -31,6 +31,7 @@
                                 </div>
                             </div>
                             <form method="post" action="{{ path('nowo_task_board_task_member_remove', { taskId: task.id, memberId: member.id }) }}">
+                                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_member_remove_' ~ member.id) }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
                                     <i class="ti ti-user-minus"></i>
                                 </button>

@@ -167,6 +167,7 @@ final class TaskBoardManageController extends AbstractController
     public function reorderColumns(string $boardId, Request $request): RedirectResponse
     {
         $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_column_reorder');
         $board = $this->findBoard($boardId);
 
         /** @var list<string> $order */
@@ -354,7 +355,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function advanceTask(string $taskId, Request $request): RedirectResponse
     {
-        $user     = $this->requireUser();
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_task_advance');
         $task     = $this->findTask($taskId);
         $action   = $request->request->getString('action');
         $columnId = $request->request->getString('columnId');
@@ -382,7 +384,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function moveTask(string $taskId, Request $request): RedirectResponse
     {
-        $user     = $this->requireUser();
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_task_move');
         $task     = $this->findTask($taskId);
         $columnId = $request->request->getString('columnId');
         $position = $request->request->getInt('position', $task->getPosition());
@@ -432,6 +435,7 @@ final class TaskBoardManageController extends AbstractController
     public function removeLink(string $taskId, string $linkId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_task_link_remove');
         $task = $this->findTask($taskId);
 
         if ($this->linkAttacher->remove($task, $linkId, $user)) {
@@ -465,6 +469,7 @@ final class TaskBoardManageController extends AbstractController
     public function removeMember(string $taskId, string $memberId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_task_member_remove_' . $memberId);
         $task = $this->findTask($taskId);
 
         if ($this->memberAssigner->unassign($task, $memberId, $user)) {
@@ -477,6 +482,7 @@ final class TaskBoardManageController extends AbstractController
     public function updatePriority(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, 'task_board_task_priority');
         $task = $this->findTask($taskId);
 
         try {
@@ -519,6 +525,13 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $user;
+    }
+
+    private function denyUnlessValidCsrf(Request $request, string $tokenId): void
+    {
+        if (!$this->isCsrfTokenValid($tokenId, (string) $request->request->get('_token', ''))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
     }
 
     private function findBoard(string $boardId): TaskBoard

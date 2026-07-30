@@ -58,7 +58,9 @@
                 action="#"
                 class="d-none"
                 data-nowo-task-board-task-links-modal-target="deleteForm"
-            ></form>
+            >
+                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_link_remove') }}">
+            </form>
         </div>
     </div>
 </div>

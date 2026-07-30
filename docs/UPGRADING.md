@@ -2,6 +2,9 @@
 
 ## Table of contents
 
+- [Unreleased](#unreleased)
+- [1.3.1 (2026-07-30)](#131-2026-07-30)
+  - [CSRF on kanban / bare POSTs (REQ-SEC-005)](#csrf-on-kanban--bare-posts-req-sec-005)
 - [1.3.0 (2026-07-30)](#130-2026-07-30)
   - [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
 - [1.2.4 (2026-07-29)](#124-2026-07-29)
@@ -28,6 +31,26 @@
 - [Future 1.x releases](#future-1x-releases)
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
+
+## Unreleased
+
+## 1.3.1 (2026-07-30)
+
+### CSRF on kanban / bare POSTs (REQ-SEC-005)
+
+
+Session-authenticated POSTs that do **not** go through Symfony Forms now require a CSRF `_token`. If you override manage Twig or call these endpoints from custom JS, send the token:
+
+| Action | Token id (`csrf_token(...)`) |
+|--------|------------------------------|
+| Column reorder | `task_board_column_reorder` |
+| Task move (drag) | `task_board_task_move` |
+| Task advance / column jump | `task_board_task_advance` |
+| Update priority | `task_board_task_priority` |
+| Remove link | `task_board_task_link_remove` |
+| Remove member | `task_board_task_member_remove_{memberId}` |
+
+Board Stimulus values: `data-nowo-task-board-reorder-csrf-token-value` and `data-nowo-task-board-move-csrf-token-value`. Rebuild/install assets if you fork the bundle (`pnpm run build` + `assets:install`).
 
 ## 1.3.0 (2026-07-30)
 

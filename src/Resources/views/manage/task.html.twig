@@ -22,6 +22,10 @@
     {% set subtaskTotal = subtaskTotal|default(task.subtasks|length) %}
     {% set subtaskDone = subtaskDone|default(0) %}
 
+    <form id="nowo-task-advance-form" method="post" class="d-none" aria-hidden="true">
+        <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_advance') }}">
+    </form>
+
     <div class="card nowo-task-detail mb-4" data-controller="nowo-task-board-task-members-modal nowo-task-board-task-priority-modal">
         <div class="nowo-task-detail__toolbar border-bottom px-4 py-3">
             <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">

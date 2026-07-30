@@ -17,6 +17,7 @@
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-priority-modal#close"></button>
             </div>
             <form method="post" action="{{ path('nowo_task_board_task_priority', { taskId: task.id }) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_priority') }}">
                 <div class="modal-body">
                     <p class="text-secondary small mb-3">{{ 'task_board.task.priority_modal_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
                     <div class="nowo-task-detail__priority-options">

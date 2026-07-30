@@ -8,6 +8,8 @@ export default class BoardController extends Controller<HTMLElement> {
 
     static values = {
         reorderUrl: String,
+        reorderCsrfToken: String,
+        moveCsrfToken: String,
     };
 
     declare readonly columnTargets: HTMLElement[];
@@ -15,6 +17,10 @@ export default class BoardController extends Controller<HTMLElement> {
     declare readonly taskTargets: HTMLElement[];
 
     declare readonly reorderUrlValue: string;
+
+    declare readonly reorderCsrfTokenValue: string;
+
+    declare readonly moveCsrfTokenValue: string;
 
     private draggedTask: HTMLElement | null = null;
 
@@ -153,6 +159,9 @@ export default class BoardController extends Controller<HTMLElement> {
         const body = new URLSearchParams();
         body.set('columnId', columnId);
         body.set('position', String(position));
+        if (this.moveCsrfTokenValue !== '') {
+            body.set('_token', this.moveCsrfTokenValue);
+        }
 
         const response = await fetch(moveUrl, {
             method: 'POST',
@@ -196,6 +205,9 @@ export default class BoardController extends Controller<HTMLElement> {
                 body.append('columnOrder[]', columnId);
             }
         });
+        if (this.reorderCsrfTokenValue !== '') {
+            body.set('_token', this.reorderCsrfTokenValue);
+        }
 
         fetch(this.reorderUrlValue, {
             method: 'POST',
