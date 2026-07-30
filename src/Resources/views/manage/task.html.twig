@@ -1,6 +1,16 @@
-{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+{% extends nowo_task_board_layout %}
 {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
 {% import '@NowoTaskBoardBundle/manage/_task_priority_tag.html.twig' as priorityUi %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
 
 {% block title %}{{ task.title }}{% endblock %}
 

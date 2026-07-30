@@ -56,3 +56,9 @@ services:
             $importers: !tagged_iterator nowo_task_board.task_importer
 
     Nowo\TaskBoardBundle\Command\TaskBoardImportCommand: ~
+
+    # REQ-UI-001: Twig globals from templates.layout / templates.css_framework.
+    Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension:
+        arguments:
+            $layoutTemplate: '%nowo_task_board.templates.layout%'
+            $cssFramework: '%nowo_task_board.templates.css_framework%'

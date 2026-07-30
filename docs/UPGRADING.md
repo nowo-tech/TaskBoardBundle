@@ -2,6 +2,8 @@
 
 ## Table of contents
 
+- [1.3.0 (2026-07-30)](#130-2026-07-30)
+  - [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
 - [1.2.4 (2026-07-29)](#124-2026-07-29)
   - [Notes](#notes)
 - [1.2.3 (2026-07-16)](#123-2026-07-16)
@@ -26,6 +28,32 @@
 - [Future 1.x releases](#future-1x-releases)
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
+
+## 1.3.0 (2026-07-30)
+
+Host layout / CSS stack integration without forking manage pages (REQ-UI-001).
+
+```bash
+composer require nowo-tech/task-board-bundle:^1.3.0
+php bin/console cache:clear
+```
+
+### Layout integration (REQ-UI-001)
+
+Manage pages no longer hard-extend `@NowoTaskBoardBundle/layout.html.twig`. They extend the Twig global `nowo_task_board_layout` (`templates.layout`).
+
+To use your project chrome without forking pages:
+
+```yaml
+nowo_task_board:
+    templates:
+        layout: 'base.html.twig'   # or a one-file bridge
+        css_framework: bootstrap5  # default tabler; or custom | …
+```
+
+`templates.css_framework` (Twig global `nowo_task_board_css_framework`) defaults to **`tabler`**. With `custom`, style semantic `nowo-ui-*` classes from the host.
+
+If you overrode manage Twig templates, switch `{% extends '@NowoTaskBoardBundle/layout.html.twig' %}` to `{% extends nowo_task_board_layout %}` and call `{{ parent() }}` in `stylesheets` / `javascripts`. See [CONFIGURATION.md — Layout integration](CONFIGURATION.md#layout-integration-req-ui-001).
 
 ## 1.2.4 (2026-07-29)
 

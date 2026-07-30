@@ -11,6 +11,7 @@
   - [Route-level checker](#route-level-checker)
   - [Event listeners](#event-listeners)
 - [Twig overrides](#twig-overrides)
+- [Layout without forking pages](#layout-without-forking-pages)
 - [Translations](#translations)
 
 ## Manage UI
@@ -98,10 +99,28 @@ templates/bundles/NowoTaskBoardBundle/
 ├── manage/list.html.twig
 ├── manage/gantt.html.twig
 ├── manage/task.html.twig
+├── manage/import.html.twig
 └── layout.html.twig
 ```
 
 Or configure paths in `nowo_task_board.templates.*`.
+
+**Prefer config over full-file overrides** for chrome: set `templates.layout` to your project layout so you keep receiving UI fixes on package upgrades. A full copy of a manage page hides vendor updates for that file until you merge them.
+
+## Layout without forking pages
+
+1. Set `nowo_task_board.templates.layout` to your project layout (e.g. `base.html.twig`) or a one-file bridge — see [CONFIGURATION.md — Layout integration](CONFIGURATION.md#layout-integration-req-ui-001).
+2. Set `nowo_task_board.templates.css_framework` to match your stack (`tabler` default, or `bootstrap5` / `custom` / …). Twig global: `nowo_task_board_css_framework`.
+3. Manage pages `{% extends nowo_task_board_layout %}` and call `{{ parent() }}` in `stylesheets` / `javascripts` so host and bundle assets (`task-board.css` / `task-board.js`) stack.
+4. Default `@NowoTaskBoardBundle/layout.html.twig` is a **demo** full HTML document (Tabler CDN when `css_framework` is Tabler/Bootstrap). Host apps should not rely on forking it for production chrome.
+5. Manage markup ships Tabler / Bootstrap 5-compatible classes. With `custom`, style semantic `nowo-ui-*` classes from the host — you do not need to fork every page.
+
+```yaml
+nowo_task_board:
+    templates:
+        layout: 'base.html.twig'
+        css_framework: bootstrap5   # or tabler | custom
+```
 
 ## Translations
 

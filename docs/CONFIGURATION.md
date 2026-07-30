@@ -11,6 +11,7 @@
   - [Team membership resolver](#team-membership-resolver)
   - [Access events](#access-events)
 - [Templates](#templates)
+- [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
 - [Other options](#other-options)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
@@ -170,12 +171,83 @@ Override via `templates/bundles/NowoTaskBoardBundle/` or config:
 ```yaml
 nowo_task_board:
     templates:
-        layout: '@NowoTaskBoardBundle/layout.html.twig'
+        layout: '@NowoTaskBoardBundle/layout.html.twig'  # see Layout integration below
+        css_framework: tabler                            # see CSS framework below
         index: '@NowoTaskBoardBundle/manage/index.html.twig'
         board: '@NowoTaskBoardBundle/manage/board.html.twig'
         list: '@NowoTaskBoardBundle/manage/list.html.twig'
         gantt: '@NowoTaskBoardBundle/manage/gantt.html.twig'
         task: '@NowoTaskBoardBundle/manage/task.html.twig'
+        import: '@NowoTaskBoardBundle/manage/import.html.twig'
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `templates.layout` | `@NowoTaskBoardBundle/layout.html.twig` | Twig layout extended by manage pages (Twig global `nowo_task_board_layout`). **Host apps set this to the project layout** (or a one-file bridge). Default is the bundle demo layout only. |
+| `templates.css_framework` | `tabler` | Host CSS stack hint (Twig global `nowo_task_board_css_framework`). Values: `bootstrap5`, `bootstrap` (alias), `bootstrap4`, `tabler` (Bootstrap-compatible), `tailwind`, `foundation`, `custom`, `none`. Default matches the demo Tabler CDN. Invalid values are rejected. |
+| `templates.index` | `@NowoTaskBoardBundle/manage/index.html.twig` | Boards index page. |
+| `templates.board` | `@NowoTaskBoardBundle/manage/board.html.twig` | Kanban board page. |
+| `templates.list` | `@NowoTaskBoardBundle/manage/list.html.twig` | List view page. |
+| `templates.gantt` | `@NowoTaskBoardBundle/manage/gantt.html.twig` | Gantt view page. |
+| `templates.task` | `@NowoTaskBoardBundle/manage/task.html.twig` | Task detail page. |
+| `templates.import` | `@NowoTaskBoardBundle/manage/import.html.twig` | Import page. |
+
+## Layout integration (REQ-UI-001)
+
+Manage pages `{% extends nowo_task_board_layout %}` (Twig global from `templates.layout`) and call `{{ parent() }}` in `stylesheets` / `javascripts` so host and bundle assets stack.
+
+**Set `templates.layout` and `templates.css_framework`** so TaskBoard renders inside your admin shell with the right CSS stack — do not fork every manage page:
+
+```yaml
+nowo_task_board:
+    templates:
+        layout: 'base.html.twig'   # project chrome (header, sidebar, flash area)
+        css_framework: bootstrap5  # or tabler | custom | …
+```
+
+| Piece | Role |
+|-------|------|
+| Twig global `nowo_task_board_layout` | Value of `templates.layout` |
+| Twig global `nowo_task_board_css_framework` | Value of `templates.css_framework` |
+| `@NowoTaskBoardBundle/layout.html.twig` | Demo full-HTML layout (Tabler CDN + navbar when `css_framework` is `tabler` / Bootstrap). Used only when `templates.layout` keeps the default. |
+
+### CSS framework
+
+| Value | Behaviour |
+|-------|-----------|
+| `tabler` (default) | Same look as the demo. Manage markup uses Tabler / Bootstrap 5-compatible classes and Tabler Icons (`ti ti-*`). |
+| `bootstrap5` / `bootstrap` / `bootstrap4` | Treat like Bootstrap; existing page classes remain compatible. Host (or demo layout) provides Bootstrap/Tabler CSS. |
+| `tailwind` / `foundation` | Accepted for host alignment; pages still emit Bootstrap/Tabler classes until macros exist — provide compatible CSS or map via your layout. |
+| `custom` / `none` | Rely on semantic `nowo-ui-*` classes and **host CSS**. Do not expect Bootstrap utility classes to style the UI. |
+
+When you point `templates.layout` at the project, the demo Tabler CDN is skipped; your stack must provide styles matching `css_framework`. Bundle CSS/JS (`task-board.css` / `task-board.js`) are always loaded from manage pages via `parent()` stacking.
+
+Your project layout (or bridge) **must define** `stylesheets` and `javascripts` blocks so `{{ parent() }}` can stack assets.
+
+**Content blocks:** pages fill `body`. The demo layout also exposes `nowo_ui_content` nested under `body` for bridges. If your project layout uses a different content block name, add a thin bridge (see `@NowoTaskBoardBundle/layout_integrate_host.html.twig`) and set `templates.layout` to that bridge:
+
+```yaml
+nowo_task_board:
+    templates:
+        layout: 'platform/admin/task_board_bridge.html.twig'
+```
+
+Example bridge:
+
+```twig
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    {% block nowo_ui_content %}{% endblock %}
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+{% endblock %}
 ```
 
 ## Other options

@@ -1,0 +1,22 @@
+{#
+    Bridge template for host layout integration (REQ-UI-001).
+
+    Copy or adapt in your application and set:
+    nowo_task_board.templates.layout: 'platform/admin/task_board_bridge.html.twig'
+
+    Map nowo_ui_content / body to whatever content block your project layout exposes.
+    Manage pages already stack TaskBoard CSS/JS with {{ parent() }}.
+#}
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    {% block nowo_ui_content %}{% endblock %}
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+{% endblock %}

@@ -1,16 +1,32 @@
+{#
+    Default demo layout (full HTML + Tabler CDN).
+
+    Host apps should set nowo_task_board.templates.layout to their project layout
+    (or a bridge such as layout_integrate_host.html.twig) so manage pages render
+    inside host chrome. This file is for demos and standalone use only.
+
+    templates.css_framework (Twig global nowo_task_board_css_framework) defaults to
+    tabler. Manage markup ships Tabler / Bootstrap 5-compatible classes; with custom,
+    style semantic nowo-ui-* classes from the host. Bundle CSS/JS are loaded by
+    manage pages (with {{ parent() }}) so they stack when templates.layout points
+    at the project layout.
+#}
+{% set _tb_fw = nowo_task_board_css_framework|default('tabler') %}
 <!DOCTYPE html>
-<html lang="{{ app.request.locale|default('en') }}">
+<html lang="{{ app.request.locale|default('en') }}" class="nowo-ui-root nowo-ui-css-{{ _tb_fw }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Task Board{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
-    {% block stylesheets %}{% endblock %}
+    {% block stylesheets %}
+        {% if _tb_fw in ['tabler', 'bootstrap', 'bootstrap5', 'bootstrap4'] %}
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+        {% endif %}
+    {% endblock %}
 </head>
 <body>
-<div class="page">
+<div class="page nowo-ui-page">
     <header class="navbar navbar-expand-md navbar-light d-print-none border-bottom mb-3">
         <div class="container-xl">
             <a class="navbar-brand" href="{{ path('nowo_task_board_index') }}">{{ 'nav.brand'|trans({}, 'NowoTaskBoardBundle') }}</a>
@@ -23,11 +39,12 @@
         </div>
     </header>
 
-    <div class="{% block container_class %}container-xl{% endblock %} pb-4">
-        {% block body %}{% endblock %}
+    <div class="{% block container_class %}container-xl{% endblock %} pb-4 nowo-ui-page-inner">
+        {% block body %}
+            {% block nowo_ui_content %}{% endblock %}
+        {% endblock %}
     </div>
 </div>
-<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% block javascripts %}{% endblock %}
 </body>
 </html>

@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -30,6 +31,12 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertSame('App\\Entity\\User', $container->getParameter('nowo_task_board.user_class'));
         self::assertSame('task_board_tasks', $container->getParameter('nowo_task_board.tasks_table'));
+        self::assertSame('@NowoTaskBoardBundle/layout.html.twig', $container->getParameter('nowo_task_board.templates.layout'));
+        self::assertSame('tabler', $container->getParameter('nowo_task_board.templates.css_framework'));
+        self::assertTrue($container->hasDefinition(TaskBoardTwigExtension::class));
+        $twigDefinition = $container->getDefinition(TaskBoardTwigExtension::class);
+        self::assertSame('%nowo_task_board.templates.layout%', $twigDefinition->getArgument('$layoutTemplate'));
+        self::assertSame('%nowo_task_board.templates.css_framework%', $twigDefinition->getArgument('$cssFramework'));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
 
         if (interface_exists(TaskProviderInterface::class)) {
@@ -95,5 +102,33 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertTrue($container->hasDefinition('nowo_task_board.access_checker.default'));
         self::assertTrue($container->hasDefinition('nowo_task_board.team_resolver.null'));
+    }
+
+    public function testLoadHonoursCustomTemplatesLayout(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => 'App\\Entity\\User',
+            'templates'  => ['layout' => 'base.html.twig'],
+        ]], $container);
+
+        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.templates.layout'));
+        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.templates')['layout']);
+    }
+
+    public function testLoadHonoursCustomCssFramework(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => 'App\\Entity\\User',
+            'templates'  => ['css_framework' => 'bootstrap5'],
+        ]], $container);
+
+        self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates.css_framework'));
+        self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates')['css_framework']);
     }
 }

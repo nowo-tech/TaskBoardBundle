@@ -1,4 +1,14 @@
-{% extends '@NowoTaskBoardBundle/layout.html.twig' %}
+{% extends nowo_task_board_layout %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
 
 {% block title %}{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
