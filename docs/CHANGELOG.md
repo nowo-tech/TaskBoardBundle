@@ -3,10 +3,14 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.4.0] - 2026-08-03](#140---2026-08-03)
+  - [Added](#added)
+  - [Changed](#changed)
+  - [Compatibility](#compatibility)
 - [[1.3.1] - 2026-07-30](#131---2026-07-30)
   - [Security](#security)
 - [[1.3.0] - 2026-07-30](#130---2026-07-30)
-  - [Added](#added)
+  - [Added](#added-1)
 - [[1.2.4] - 2026-07-29](#124---2026-07-29)
   - [Added](#added-1)
   - [Changed](#changed)
@@ -40,6 +44,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-08-03
+
+### Added
+
+- **REQ-UI-002** — `security.allow_unauthenticated` (default `false`) and `AllowAllTaskBoardAccessChecker` for trusted demos/dev only.
+- Compile-time guard: when `allow_unauthenticated` is `false`, `symfony/security-bundle` is required (`LogicException` otherwise).
+- GitHub hygiene workflows: Dependabot, stale issues/PRs (`actions/stale` v11), semantic PR title lint, Copilot instructions.
+
+### Changed
+
+- CI / local Compose no longer clone or path-mount sibling TimeTrack / TagInput / TipTap repos; TimeTrack comes from Packagist (`^1.0`).
+- Demo `composer.json` pins `nowo-tech/twig-inspector-bundle` to `^1.0`.
+- Docs: CONFIGURATION / SECURITY document `allow_unauthenticated` and the SecurityBundle requirement.
+
+### Compatibility
+
+- PHP `>=8.2`, `<8.6`; Symfony `^7.4 || ^8.0`.
+- Manage UI with default security settings requires **SecurityBundle** (or set `allow_unauthenticated: true` for trusted local demos).
 
 ## [1.3.1] - 2026-07-30
 
@@ -195,7 +218,9 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.4...v1.3.0
 [1.2.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.2...v1.2.3

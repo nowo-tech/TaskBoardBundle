@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI helper: patch composer.json (path repo + constraints) then full update.
+# CI helper: patch composer.json constraints then full update (TimeTrack via Packagist require-dev).
 # Usage: composer-install.sh <symfony-minor> <doctrine-bundle-constraint>
 # Example: composer-install.sh 7.4 '^2.10'
 set -euo pipefail
@@ -10,10 +10,7 @@ DOCTRINE_BUNDLE="${2:?Doctrine bundle constraint required (e.g. ^2.10)}"
 echo "Using doctrine/doctrine-bundle ${DOCTRINE_BUNDLE} with Symfony ^${SYMFONY}"
 
 jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
-  .repositories = [
-    {"type": "path", "url": "time-track-bundle", "options": {"symlink": false}}
-  ] |
-  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0" |
   del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/config"] = $symfony |
   .require["symfony/dependency-injection"] = $symfony |

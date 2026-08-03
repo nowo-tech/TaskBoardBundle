@@ -45,8 +45,6 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -122,8 +120,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -164,8 +160,6 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -187,8 +181,6 @@ jobs:
       - name: Checkout TaskBoardBundle
         uses: actions/checkout@v7
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -233,8 +225,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -267,8 +257,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Clone TimeTrackBundle (v1.0.0)
-        run: git clone --depth 1 --branch v1.0.0 https://github.com/nowo-tech/TimeTrackBundle.git time-track-bundle
 
       - uses: shivammathur/setup-php@v2
         with:

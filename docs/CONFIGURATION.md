@@ -120,9 +120,13 @@ Default role configuration:
 
 | Option | Default | Purpose |
 |--------|---------|---------|
-| `security.access_roles` | `[ROLE_USER]` | Open manage UI |
+| `security.access_checker` | `null` | Custom `TaskBoardAccessCheckerInterface` service id |
+| `security.access_roles` | `[ROLE_USER]` | Open manage UI (hosts may set `ROLE_ADMIN` for admin-only) |
 | `security.create_roles` | `[ROLE_USER]` | Create boards |
 | `security.list_roles` | `[ROLE_USER]` | List boards |
+| `security.allow_unauthenticated` | `false` | DEV/DEMO only — wires AllowAll checker; production MUST keep `false` |
+
+When `allow_unauthenticated` is `false`, `symfony/security-bundle` is required (compile-time `LogicException` otherwise).
 
 ### Team membership resolver
 

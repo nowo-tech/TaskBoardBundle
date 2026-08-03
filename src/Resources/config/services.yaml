@@ -13,6 +13,11 @@ services:
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
             - '../../EventListener/TimeSpentAggregatorListener.php'
+            - '../../Security/TaskBoardAccessCheckerInterface.php'
+            - '../../Security/ConfigurableTaskBoardAccessChecker.php'
+            - '../../Security/AllowAllTaskBoardAccessChecker.php'
+            - '../../Security/TaskBoardTeamMembershipResolverInterface.php'
+            - '../../Security/NullTaskBoardTeamMembershipResolver.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'

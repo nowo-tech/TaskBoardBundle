@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
+use LogicException;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
@@ -25,6 +26,7 @@ use Nowo\TaskBoardBundle\Repository\TaskMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -69,6 +71,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.templates.css_framework', $config['templates']['css_framework']);
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
+        $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);
+
+        if (
+            !$config['security']['allow_unauthenticated']
+            && !$this->isSecurityBundleAvailable($container)
+        ) {
+            throw new LogicException('TaskBoardBundle manage UI requires symfony/security-bundle when security.allow_unauthenticated is false.');
+        }
 
         $this->registerRepositories($container, $emName);
         $this->registerMetadataListener($container, $prefix, $config['user_class']);
@@ -163,6 +173,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     /** @param array<string, mixed> $security */
     private function registerAccessChecker(ContainerBuilder $container, array $security): void
     {
+        if ($security['allow_unauthenticated']) {
+            $accessCheckerId = 'nowo_task_board.access_checker.allow_all';
+            $container->setDefinition($accessCheckerId, new Definition(AllowAllTaskBoardAccessChecker::class));
+            $container->setAlias(TaskBoardAccessCheckerInterface::class, $accessCheckerId);
+
+            return;
+        }
+
         $accessCheckerId = $security['access_checker'] ?? null;
         if (!is_string($accessCheckerId) || $accessCheckerId === '') {
             $accessCheckerId = 'nowo_task_board.access_checker.default';
@@ -174,6 +192,26 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         $container->setAlias(TaskBoardAccessCheckerInterface::class, $accessCheckerId);
+    }
+
+    /**
+     * Prefer kernel.bundles: ContainerBuilder::hasExtension() can be false while SecurityBundle
+     * is already registered (e.g. during early Flex cache:clear boots).
+     */
+    private function isSecurityBundleAvailable(ContainerBuilder $container): bool
+    {
+        if ($container->hasExtension('security')) {
+            return true;
+        }
+
+        if (!$container->hasParameter('kernel.bundles')) {
+            return false;
+        }
+
+        /** @var array<string, class-string> $bundles */
+        $bundles = $container->getParameter('kernel.bundles');
+
+        return isset($bundles['SecurityBundle']);
     }
 
     private function registerTeamResolver(ContainerBuilder $container, mixed $resolverId): void

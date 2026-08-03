@@ -37,6 +37,17 @@ git push origin vX.Y.Z
 
 After creating the release commit and tag, run `make check-no-cursor-coauthor` again **before** `git push`. The release commit itself is not covered by an earlier `release-check` run.
 
+### Example for v1.4.0
+
+```bash
+make release-check
+git add -A
+git commit -m "chore(release): prepare 1.4.0"
+git tag -a v1.4.0 -m "Release v1.4.0 - REQ-UI-002 allow_unauthenticated + Packagist TimeTrack"
+git push origin main
+git push origin v1.4.0
+```
+
 ### Example for v1.3.0
 
 ```bash

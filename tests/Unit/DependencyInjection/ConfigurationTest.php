@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\DependencyInjection;
 
+use App\Entity\User;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
@@ -14,19 +15,21 @@ final class ConfigurationTest extends TestCase
     public function testDefaults(): void
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
         ]]);
 
         self::assertSame('task_board_', $config['table_prefix']);
         self::assertSame('/tools/task-board', $config['routes']['index']['path']);
         self::assertSame('@NowoTaskBoardBundle/layout.html.twig', $config['templates']['layout']);
         self::assertSame('tabler', $config['templates']['css_framework']);
+        self::assertFalse($config['security']['allow_unauthenticated']);
+        self::assertSame(['ROLE_USER'], $config['security']['access_roles']);
     }
 
     public function testCustomLayoutTemplate(): void
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
             'templates'  => ['layout' => 'platform/admin/layout.html.twig'],
         ]]);
 
@@ -37,7 +40,7 @@ final class ConfigurationTest extends TestCase
     {
         foreach (Configuration::CSS_FRAMEWORKS as $framework) {
             $config = (new Processor())->processConfiguration(new Configuration(), [[
-                'user_class' => 'App\\Entity\\User',
+                'user_class' => User::class,
                 'templates'  => ['css_framework' => $framework],
             ]]);
 
@@ -50,7 +53,7 @@ final class ConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         (new Processor())->processConfiguration(new Configuration(), [[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
             'templates'  => ['css_framework' => 'invalid_framework'],
         ]]);
     }

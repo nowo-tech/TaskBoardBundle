@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Security;
 
+use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use PHPUnit\Framework\TestCase;
@@ -22,6 +23,16 @@ final class SecurityComponentsTest extends TestCase
 
         self::assertTrue($checker->canAccess($user));
         self::assertFalse($checker->canCreateBoard($user));
+        self::assertTrue($checker->canListBoards($user));
+    }
+
+    public function testAllowAllAccessChecker(): void
+    {
+        $checker = new AllowAllTaskBoardAccessChecker();
+        $user    = new stdClass();
+
+        self::assertTrue($checker->canAccess($user));
+        self::assertTrue($checker->canCreateBoard($user));
         self::assertTrue($checker->canListBoards($user));
     }
 

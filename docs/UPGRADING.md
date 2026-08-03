@@ -3,6 +3,8 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [1.4.0 (2026-08-03)](#140-2026-08-03)
+  - [REQ-UI-002 allow_unauthenticated](#req-ui-002-allow_unauthenticated)
 - [1.3.1 (2026-07-30)](#131-2026-07-30)
   - [CSRF on kanban / bare POSTs (REQ-SEC-005)](#csrf-on-kanban--bare-posts-req-sec-005)
 - [1.3.0 (2026-07-30)](#130-2026-07-30)
@@ -33,6 +35,38 @@
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
+
+## 1.4.0 (2026-08-03)
+
+Minor release: REQ-UI-002 `security.allow_unauthenticated` + `AllowAllTaskBoardAccessChecker`, and SecurityBundle compile-time guard. CI/demo no longer path-mount sibling optional bundles.
+
+### Install / update
+
+```bash
+composer require nowo-tech/task-board-bundle:^1.4
+php bin/console cache:clear
+```
+
+### REQ-UI-002 allow_unauthenticated
+
+| Topic | Before | 1.4.0 |
+| --- | --- | --- |
+| Default | Roles via `access_roles` / custom `access_checker` | Same, plus explicit `allow_unauthenticated: false` |
+| Apps without SecurityBundle | Could boot if DI happened to work | Boot fails with `LogicException` unless `allow_unauthenticated: true` |
+
+**Demos / trusted local kernels** without SecurityBundle:
+
+```yaml
+nowo_task_board:
+    security:
+        allow_unauthenticated: true   # never in production
+```
+
+**Production** (recommended): keep `allow_unauthenticated: false`, ensure SecurityBundle is installed, and grant at least one of `access_roles` (default `[ROLE_USER]`; hosts may tighten to `ROLE_ADMIN`).
+
+### Breaking changes
+
+Apps that load the manage UI without SecurityBundle must either install/configure SecurityBundle or set `allow_unauthenticated: true` for non-production use.
 
 ## 1.3.1 (2026-07-30)
 

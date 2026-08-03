@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\DependencyInjection;
 
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
+use LogicException;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -15,6 +17,7 @@ use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
+use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 
@@ -24,12 +27,13 @@ final class TaskBoardExtensionTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
 
         (new TaskBoardExtension())->load([[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
         ]], $container);
 
-        self::assertSame('App\\Entity\\User', $container->getParameter('nowo_task_board.user_class'));
+        self::assertSame(User::class, $container->getParameter('nowo_task_board.user_class'));
         self::assertSame('task_board_tasks', $container->getParameter('nowo_task_board.tasks_table'));
         self::assertSame('@NowoTaskBoardBundle/layout.html.twig', $container->getParameter('nowo_task_board.templates.layout'));
         self::assertSame('tabler', $container->getParameter('nowo_task_board.templates.css_framework'));
@@ -80,11 +84,12 @@ final class TaskBoardExtensionTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
         $container->setDefinition('app.access_checker', new Definition(stdClass::class));
         $container->setDefinition('app.team_resolver', new Definition(stdClass::class));
 
         (new TaskBoardExtension())->load([[
-            'user_class'               => 'App\\Entity\\User',
+            'user_class'               => User::class,
             'team_membership_resolver' => 'app.team_resolver',
             'security'                 => ['access_checker' => 'app.access_checker'],
         ]], $container);
@@ -97,8 +102,9 @@ final class TaskBoardExtensionTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
 
-        (new TaskBoardExtension())->load([['user_class' => 'App\\Entity\\User']], $container);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
 
         self::assertTrue($container->hasDefinition('nowo_task_board.access_checker.default'));
         self::assertTrue($container->hasDefinition('nowo_task_board.team_resolver.null'));
@@ -108,9 +114,10 @@ final class TaskBoardExtensionTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
 
         (new TaskBoardExtension())->load([[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
             'templates'  => ['layout' => 'base.html.twig'],
         ]], $container);
 
@@ -122,13 +129,46 @@ final class TaskBoardExtensionTest extends TestCase
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
 
         (new TaskBoardExtension())->load([[
-            'user_class' => 'App\\Entity\\User',
+            'user_class' => User::class,
             'templates'  => ['css_framework' => 'bootstrap5'],
         ]], $container);
 
         self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates.css_framework'));
         self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates')['css_framework']);
+    }
+
+    public function testLoadThrowsWhenSecurityBundleMissingAndUnauthenticatedDisallowed(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('allow_unauthenticated');
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'security'   => ['allow_unauthenticated' => false],
+        ]], $container);
+    }
+
+    public function testLoadRegistersAllowAllAccessCheckerWhenUnauthenticatedAllowed(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'security'   => ['allow_unauthenticated' => true],
+        ]], $container);
+
+        self::assertTrue($container->hasDefinition('nowo_task_board.access_checker.allow_all'));
+        self::assertSame(
+            'nowo_task_board.access_checker.allow_all',
+            (string) $container->getAlias(TaskBoardAccessCheckerInterface::class),
+        );
+        self::assertTrue($container->getParameter('nowo_task_board.security.allow_unauthenticated'));
     }
 }

@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# CI helper: path repo for TimeTrack + full update (Symfony 7.4 via composer.json constraints).
+# CI helper: ensure TimeTrack from Packagist + full update (Symfony 7.4 via composer.json constraints).
 set -euo pipefail
 
 jq '
-  .repositories = [
-    {"type": "path", "url": "time-track-bundle", "options": {"symlink": false}}
-  ] |
-  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0@dev" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0" |
   del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/config"] = "^7.4" |
   .require["symfony/dependency-injection"] = "^7.4" |

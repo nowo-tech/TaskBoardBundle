@@ -1,3 +1,7 @@
 nowo_task_board:
     user_class: App\Entity\User
     table_prefix: task_board_
+    # security:
+    #     access_roles: [ROLE_USER]
+    #     access_checker: null
+    #     allow_unauthenticated: false   # default; never true in production

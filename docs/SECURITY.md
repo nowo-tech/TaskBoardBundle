@@ -23,7 +23,7 @@
 
 | Threat | Risk | Mitigation |
 |--------|------|------------|
-| **Unauthorized board access** | Anonymous users open manage UI. | Symfony firewall + `access_control` on `/tools/task-board`; `TaskBoardAccessCheckerInterface`. |
+| **Unauthorized board access** | Anonymous users open manage UI. | Symfony firewall + `access_control` on `/tools/task-board`; `TaskBoardAccessCheckerInterface`. Keep `security.allow_unauthenticated: false` in production (demo-only bypass). |
 | **IDOR on tasks/boards** | User edits another user's board or task. | Default repository scoping; extend with `BoardAccessCheckEvent` / `TaskAccessCheckEvent` listeners. |
 | **Unauthorized time tracking** | User tracks time on tasks they cannot access. | `TaskAccessGuard::canTrack()` checks assignee and team membership before TimeTrack provider returns tasks. |
 | **XSS in task content** | Malicious HTML in task descriptions. | Twig auto-escaping; rich text via TiptapEditorBundle when configured. |

@@ -13,21 +13,6 @@ COMPOSE     ?= $(COMPOSE_BIN) -f $(COMPOSE_FILE)
 SERVICE_PHP ?= php
 BUNDLE_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-dev-composer-file:
-	@if [ -d ../TimeTrackBundle ]; then \
-		$(COMPOSE) exec -T $(SERVICE_PHP) php -r '$$j=json_decode(file_get_contents("/app/composer.json"),true);$$j["repositories"]=[["type"=>"path","url"=>"/var/time-track-bundle","options"=>["symlink"=>true,"versions"=>["nowo-tech/time-track-bundle"=>"1.0.0"]]]];$$j["require-dev"]["nowo-tech/time-track-bundle"]="^1.0";file_put_contents("/app/composer.dev.json",json_encode($$j,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");'; \
-		echo "Using composer.dev.json (path repo → ../TimeTrackBundle)"; \
-	else \
-		rm -f composer.dev.json; \
-	fi
-
-resolve-composer-file: dev-composer-file
-	@if [ -f composer.dev.json ]; then \
-		echo "COMPOSER_FILE=composer.dev.json" > .composer-file.env; \
-	else \
-		echo "COMPOSER_FILE=composer.json" > .composer-file.env; \
-	fi
-
 help:
 	@echo "TaskBoard Bundle - Development Commands"
 	@echo ""
@@ -44,8 +29,7 @@ up:
 	$(COMPOSE) build
 	$(COMPOSE) up -d
 	@sleep 3
-	@$(MAKE) resolve-composer-file
-	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer update --no-interaction
+	@$(COMPOSE) exec -T $(SERVICE_PHP) composer update --no-interaction
 	@echo "Container ready."
 
 down:
@@ -57,15 +41,13 @@ down-dev:
 ensure-up:
 	@if ! $(COMPOSE) exec -T $(SERVICE_PHP) true 2>/dev/null; then \
 		$(MAKE) up; \
-	else \
-		$(MAKE) resolve-composer-file; \
 	fi
 
 shell:
 	$(COMPOSE) exec $(SERVICE_PHP) sh
 
 install: ensure-up
-	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer install --no-interaction
+	@$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction
 
 test: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) vendor/bin/phpunit
@@ -109,16 +91,16 @@ demo-smoke:
 release-check: check-no-cursor-coauthor check-open-prs ensure-up composer-sync cs-check rector-dry phpstan validate-translations test
 
 composer-sync: ensure-up
-	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer validate --strict
-	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer install --no-interaction
+	@$(COMPOSE) exec -T $(SERVICE_PHP) composer validate --strict
+	@$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction
 
 update: ensure-up
-	@. ./.composer-file.env; $(COMPOSE) exec -T -e COMPOSER=/app/$$COMPOSER_FILE $(SERVICE_PHP) composer update --no-interaction
+	@$(COMPOSE) exec -T $(SERVICE_PHP) composer update --no-interaction
 
 validate: composer-sync
 
 clean:
-	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache composer.dev.json composer.json.tmp .composer-file.env
+	rm -rf vendor coverage .phpunit.cache .php-cs-fixer.cache composer.json.tmp
 
 # Optional: monorepo helper absent on standalone GitHub Actions checkout (REQ-MAKE-009).
 -include $(BUNDLE_ROOT)/../.scripts/Makefile.update-deps.mk
