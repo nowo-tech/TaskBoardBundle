@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
-use Nowo\FormKitBundle\Attribute\FormKitConfig;
-use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -29,31 +28,31 @@ final class TaskImportFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $this->addWithDefaults($builder, 'source', EnumType::class, [
-                'class'        => TaskImportSource::class,
-                'label'        => 'task_board.import.form.source',
-                'choice_label' => static fn (TaskImportSource $source): string => $source->labelKey(),
-            ]);
+            'class'        => TaskImportSource::class,
+            'label'        => 'task_board.import.form.source',
+            'choice_label' => static fn (TaskImportSource $source): string => $source->labelKey(),
+        ]);
         $this->addWithDefaults($builder, 'file', FileType::class, [
-                'label'       => 'task_board.import.form.file',
-                'constraints' => [
-                    new NotBlank(),
-                    new File(maxSize: '20M', mimeTypes: [
-                        'text/csv',
-                        'text/plain',
-                        'application/json',
-                        'application/vnd.ms-excel',
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    ], mimeTypesMessage: 'task_board.import.form.file_invalid'),
-                ],
-            ]);
+            'label'       => 'task_board.import.form.file',
+            'constraints' => [
+                new NotBlank(),
+                new File(maxSize: '20M', mimeTypes: [
+                    'text/csv',
+                    'text/plain',
+                    'application/json',
+                    'application/vnd.ms-excel',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ], mimeTypesMessage: 'task_board.import.form.file_invalid'),
+            ],
+        ]);
         $this->addCheckbox($builder, 'createMissingColumns', [
-                'label'    => 'task_board.import.form.create_columns',
-                'required' => false,
-            ]);
+            'label'    => 'task_board.import.form.create_columns',
+            'required' => false,
+        ]);
         $this->addCheckbox($builder, 'skipExisting', [
-                'label'    => 'task_board.import.form.skip_existing',
-                'required' => false,
-            ]);
+            'label'    => 'task_board.import.form.skip_existing',
+            'required' => false,
+        ]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
