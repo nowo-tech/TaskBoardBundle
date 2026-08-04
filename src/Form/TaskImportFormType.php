@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
@@ -19,17 +21,19 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 /**
  * @extends AbstractType<TaskImportFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskImportFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $builder
-            ->add('source', EnumType::class, [
+        $this->addWithDefaults($builder, 'source', EnumType::class, [
                 'class'        => TaskImportSource::class,
                 'label'        => 'task_board.import.form.source',
                 'choice_label' => static fn (TaskImportSource $source): string => $source->labelKey(),
-            ])
-            ->add('file', FileType::class, [
+            ]);
+        $this->addWithDefaults($builder, 'file', FileType::class, [
                 'label'       => 'task_board.import.form.file',
                 'constraints' => [
                     new NotBlank(),
@@ -41,12 +45,12 @@ final class TaskImportFormType extends AbstractType
                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     ], mimeTypesMessage: 'task_board.import.form.file_invalid'),
                 ],
-            ])
-            ->add('createMissingColumns', CheckboxType::class, [
+            ]);
+        $this->addCheckbox($builder, 'createMissingColumns', [
                 'label'    => 'task_board.import.form.create_columns',
                 'required' => false,
-            ])
-            ->add('skipExisting', CheckboxType::class, [
+            ]);
+        $this->addCheckbox($builder, 'skipExisting', [
                 'label'    => 'task_board.import.form.skip_existing',
                 'required' => false,
             ]);

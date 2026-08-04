@@ -9,6 +9,8 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -23,40 +25,41 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 /**
  * @extends AbstractType<TaskFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         /** @var array<string, string> $columnChoices */
         $columnChoices = $options['column_choices'];
         $compact       = (bool) $options['compact'];
 
-        $builder
-            ->add('title', TextType::class, [
+        $this->addText($builder, 'title', [
                 'label'       => 'task_board.form.task.title',
                 'constraints' => [new NotBlank()],
             ]);
 
         if (!$compact) {
-            $builder
-                ->add('description', TiptapEditorType::class, [
+            $this->addWithDefaults($builder, 'description', TiptapEditorType::class, [
                     'label'              => 'task_board.form.task.description',
                     'required'           => false,
                     'config'             => 'task',
                     'min_height'         => '220px',
                     'placeholder'        => 'task_board.task.description_placeholder',
                     'translation_domain' => 'NowoTaskBoardBundle',
-                ])
-                ->add('priority', EnumType::class, [
+                ]);
+        $this->addWithDefaults($builder, 'priority', EnumType::class, [
                     'class' => TaskPriority::class,
                     'label' => 'task_board.form.task.priority',
                 ]);
         }
 
         if ($compact) {
-            $builder->add('columnId', HiddenType::class);
+            $this->addWithDefaults($builder, 'columnId', HiddenType::class, []);
         } elseif ($columnChoices !== []) {
-            $builder->add('columnId', ChoiceType::class, [
+            $this->addChoice($builder, 'columnId', [
                 'label'    => 'task_board.form.task.column',
                 'choices'  => $columnChoices,
                 'required' => false,
@@ -64,19 +67,18 @@ final class TaskFormType extends AbstractType
         }
 
         if (!$compact) {
-            $builder
-                ->add('estimatedMinutes', IntegerType::class, [
+            $this->addInteger($builder, 'estimatedMinutes', [
                     'label'    => 'task_board.form.task.estimate',
                     'required' => false,
-                ])
-                ->add('dueAt', DateType::class, [
+                ]);
+        $this->addWithDefaults($builder, 'dueAt', DateType::class, [
                     'label'           => 'task_board.form.task.due',
                     'required'        => false,
                     'widget'          => 'single_text',
                     'input'           => 'datetime_immutable',
                     'invalid_message' => 'task_board.form.task.due_invalid',
-                ])
-                ->add('tags', TagType::class, [
+                ]);
+        $this->addWithDefaults($builder, 'tags', TagType::class, [
                     'label'              => 'task_board.form.task.tags',
                     'translation_domain' => 'NowoTaskBoardBundle',
                     'required'           => false,

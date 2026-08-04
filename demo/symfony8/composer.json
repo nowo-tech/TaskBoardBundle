@@ -13,15 +13,16 @@
         }
     ],
     "require": {
-        "php": ">=8.4,<8.6",
         "doctrine/doctrine-bundle": "^2.10 || ^3.0",
         "doctrine/doctrine-fixtures-bundle": "^4.0",
         "doctrine/doctrine-migrations-bundle": "^3.3 || ^4.0",
         "doctrine/migrations": "^3.8",
         "doctrine/orm": "^3.0",
+        "nowo-tech/form-kit-bundle": "^2.0",
         "nowo-tech/tag-input-bundle": "^1.0",
-        "nowo-tech/tiptap-editor-bundle": "^1.0",
         "nowo-tech/task-board-bundle": "*",
+        "nowo-tech/tiptap-editor-bundle": "^1.0",
+        "php": ">=8.4,<8.6",
         "symfony/asset": "8.1.*",
         "symfony/console": "8.1.*",
         "symfony/dotenv": "8.1.*",
@@ -34,7 +35,9 @@
         "symfony/translation": "8.1.*",
         "symfony/twig-bundle": "8.1.*",
         "symfony/validator": "8.1.*",
-        "symfony/yaml": "8.1.*"
+        "symfony/yaml": "8.1.*",
+        "twig/extra-bundle": "^3.12",
+        "twig/string-extra": "^3.12"
     },
     "require-dev": {
         "nowo-tech/twig-inspector-bundle": "^1.0",
@@ -71,8 +74,12 @@
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd"
         },
-        "post-install-cmd": ["@auto-scripts"],
-        "post-update-cmd": ["@auto-scripts"]
+        "post-install-cmd": [
+            "@auto-scripts"
+        ],
+        "post-update-cmd": [
+            "@auto-scripts"
+        ]
     },
     "conflict": {
         "symfony/symfony": "*"

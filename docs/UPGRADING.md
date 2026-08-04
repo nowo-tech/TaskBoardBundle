@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.5.0](#to-150)
 - [1.4.0 (2026-08-03)](#140-2026-08-03)
   - [REQ-UI-002 allow_unauthenticated](#req-ui-002-allow_unauthenticated)
 - [1.3.1 (2026-07-30)](#131-2026-07-30)
@@ -35,6 +36,30 @@
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
+
+## To 1.5.0
+
+From **1.4.0** — Adds FormKit and/or UiKit where applicable, Twig Extra (REQ-TWIG-004), and Twig-CS-Fixer. Register TwigExtraBundle, NowoFormKitBundle, and NowoUiKitBundle if Flex did not. See CHANGELOG.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+### Twig Extra Bundle (REQ-TWIG-004)
+
+Hosts that render this bundle's Twig templates must install:
+
+```bash
+composer require twig/extra-bundle twig/string-extra
+```
+
+and enable `Twig\Extra\TwigExtraBundle\TwigExtraBundle`. Flex recipes usually register it automatically.
+
+### Twig-CS-Fixer (maintainers)
+
+Package maintainers: `composer twig:lint` / `composer twig:fix` use `.twig-cs-fixer.php` over `src/` (and `templates/` when present).
+
 
 ## 1.4.0 (2026-08-03)
 
@@ -322,3 +347,6 @@ See [INSTALLATION.md](INSTALLATION.md) for the full setup.
 ## Future 1.x releases
 
 Breaking or other notable changes will be documented here.
+### FormKitBundle (admin forms)
+
+If you use admin/dashboard Symfony forms, ensure `nowo-tech/form-kit-bundle` ^2.0 is installed (pulled transitively) and `Nowo\FormKitBundle\NowoFormKitBundle` is registered. Form types use profile `task_board` via `#[FormKitConfig]`; the bundle prepends that profile when the host has not defined it.

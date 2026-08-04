@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Form;
 
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -16,21 +18,23 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 /**
  * @extends AbstractType<TaskBoardFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskBoardFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $builder
-            ->add('name', TextType::class, [
+        $this->addText($builder, 'name', [
                 'label'       => 'task_board.form.board.name',
                 'constraints' => [new NotBlank()],
-            ])
-            ->add('slug', TextType::class, [
+            ]);
+        $this->addText($builder, 'slug', [
                 'label'    => 'task_board.form.board.slug',
                 'required' => false,
                 'help'     => 'task_board.form.board.slug_help',
-            ])
-            ->add('description', TextareaType::class, [
+            ]);
+        $this->addTextarea($builder, 'description', [
                 'label'    => 'task_board.form.board.description',
                 'required' => false,
             ]);

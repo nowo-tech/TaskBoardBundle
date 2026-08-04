@@ -9,8 +9,9 @@
     tabler. Manage markup ships Tabler / Bootstrap 5-compatible classes; with custom,
     style semantic nowo-ui-* classes from the host. Bundle CSS/JS are loaded by
     manage pages (with {{ parent() }}) so they stack when templates.layout points
-    at the project layout.
+    at the project layout. UiKit CSS: asset('css/nowo-ui.css', 'nowo_ui_kit') (REQ-UI-001-kit).
 #}
+{% import '@NowoUiKitBundle/macros/ui.html.twig' as ui %}
 {% set _tb_fw = nowo_task_board_css_framework|default('tabler') %}
 <!DOCTYPE html>
 <html lang="{{ app.request.locale|default('en') }}" class="nowo-ui-root nowo-ui-css-{{ _tb_fw }}">
@@ -23,6 +24,7 @@
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
         {% endif %}
+        <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     {% endblock %}
 </head>
 <body>

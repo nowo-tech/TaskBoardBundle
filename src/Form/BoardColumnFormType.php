@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Form;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -16,16 +18,18 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 /**
  * @extends AbstractType<BoardColumnFormData>
  */
+#[FormKitConfig('task_board')]
 final class BoardColumnFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $builder
-            ->add('name', TextType::class, [
+        $this->addText($builder, 'name', [
                 'label'       => 'task_board.form.column.name',
                 'constraints' => [new NotBlank()],
-            ])
-            ->add('color', ColorType::class, [
+            ]);
+        $this->addWithDefaults($builder, 'color', ColorType::class, [
                 'label'    => 'task_board.form.column.color',
                 'required' => false,
             ]);

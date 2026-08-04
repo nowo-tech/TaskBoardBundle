@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -18,24 +20,26 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 /**
  * @extends AbstractType<TaskLinkFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskLinkFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $builder
-            ->add('linkType', EnumType::class, [
+        $this->addWithDefaults($builder, 'linkType', EnumType::class, [
                 'class' => TaskLinkType::class,
                 'label' => 'task_board.form.link.type',
-            ])
-            ->add('url', UrlType::class, [
+            ]);
+        $this->addUrl($builder, 'url', [
                 'label'       => 'task_board.form.link.url',
                 'constraints' => [new NotBlank()],
-            ])
-            ->add('label', TextType::class, [
+            ]);
+        $this->addText($builder, 'label', [
                 'label'    => 'task_board.form.link.label',
                 'required' => false,
-            ])
-            ->add('externalId', TextType::class, [
+            ]);
+        $this->addText($builder, 'externalId', [
                 'label'    => 'task_board.form.link.external_id',
                 'required' => false,
                 'help'     => 'task_board.form.link.external_id_help',
