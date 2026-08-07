@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.1] - 2026-08-07](#151---2026-08-07)
 - [[1.5.0] - 2026-08-04](#150---2026-08-04)
 - [[1.4.0] - 2026-08-03](#140---2026-08-03)
   - [Added](#added)
@@ -45,6 +46,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.5.1] - 2026-08-07
+
+### Fixed
+
+- **CI:** correct indentation in `src/Resources/config/services_timetrack.yaml` (YAML parse error broke container boot / PHPUnit).
+
+[1.5.1]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.1
+
 
 ## [1.5.0] - 2026-08-04
 

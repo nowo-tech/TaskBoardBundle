@@ -9,8 +9,8 @@ services:
 
     Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener: ~
 
-  # Form Kit injects FormOptionsMerger into tagged form types (FormOptionsMergerInjectorCompilerPass).
-  Nowo\TaskBoardBundle\Form\:
-    resource: '../../Form/'
-    exclude: '../../Form/DataTransformer/'
-    tags: ['form.type']
+    # Form Kit injects FormOptionsMerger into tagged form types (FormOptionsMergerInjectorCompilerPass).
+    Nowo\TaskBoardBundle\Form\:
+        resource: '../../Form/'
+        exclude: '../../Form/DataTransformer/'
+        tags: ['form.type']

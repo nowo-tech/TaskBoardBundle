@@ -1,5 +1,14 @@
 # Upgrading
 
+## To 1.5.1
+
+From **1.5.0** — YAML services_timetrack indentation fix only. No host migration.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+
 ## Table of contents
 
 - [Unreleased](#unreleased)
