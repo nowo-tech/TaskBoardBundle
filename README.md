@@ -13,7 +13,7 @@ This bundle is **FrankenPHP worker mode friendly**.
 ## Features
 
 - Boards, columns, tasks, teams, and team members (manager/member roles)
-- **Task import** from ClickUp, Jira, and Trello (CSV/JSON) via manage UI or CLI
+- **Task import** from ClickUp, Jira, and Trello (CSV/JSON) via manage UI or `nowo:task-board:import`
 - Web UI at `/tools/task-board` (kanban, list, Gantt, task detail)
 - Vite + Stimulus assets for board interactions
 - **Optional TimeTrack integration** — task provider, team context, and automatic `total_time_seconds` aggregation when TimeTrack is installed
