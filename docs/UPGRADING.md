@@ -12,6 +12,7 @@ composer update nowo-tech/task-board-bundle
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.5.2](#to-152)
 - [To 1.5.0](#to-150)
 - [1.4.0 (2026-08-03)](#140-2026-08-03)
   - [REQ-UI-002 allow_unauthenticated](#req-ui-002-allow_unauthenticated)
@@ -45,6 +46,14 @@ composer update nowo-tech/task-board-bundle
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
+
+## To 1.5.2
+
+From **1.5.1** — No application upgrade steps. **Demos only:** Hot Reload Bundle `^1.4` (FrankenPHP Mercure/`hot_reload`, `dev`/`test`).
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 ## To 1.5.0
 
