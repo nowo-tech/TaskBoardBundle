@@ -11,6 +11,7 @@ return [
     Nowo\UiKitBundle\NowoUiKitBundle::class => ['all' => true],
     Nowo\TagInputBundle\NowoTagInputBundle::class => ['all' => true],
     Nowo\TiptapEditorBundle\NowoTiptapEditorBundle::class => ['all' => true],
+    Nowo\HotReloadBundle\NowoHotReloadBundle::class => ['dev' => true, 'test' => true],
     Nowo\TwigInspectorBundle\NowoTwigInspectorBundle::class => ['dev' => true, 'test' => true],
     Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class => ['dev' => true, 'test' => true],
     Symfony\Bundle\DebugBundle\DebugBundle::class => ['dev' => true],
