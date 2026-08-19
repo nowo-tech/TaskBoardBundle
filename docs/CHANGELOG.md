@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-08-19
+
+### Security
+
+- **Flex recipe:** `security.access_control` for task board routes (REQ-SEC-004).
+
 ## [1.5.2] - 2026-08-18
 
 ### Changed

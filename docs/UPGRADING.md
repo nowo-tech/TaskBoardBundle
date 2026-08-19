@@ -47,6 +47,14 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
 
+## To 1.5.3
+
+From **1.5.2** — Review Flex recipe `security_nowo_task_board.yaml` access rules after install/update.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
 ## To 1.5.2
 
 From **1.5.1** — No application upgrade steps. **Demos only:** Hot Reload Bundle `^1.4` (FrankenPHP Mercure/`hot_reload`, `dev`/`test`).
