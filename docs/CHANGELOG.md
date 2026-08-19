@@ -3,6 +3,8 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.4] - 2026-08-19](#154---2026-08-19)
+- [[1.5.3] - 2026-08-19](#153---2026-08-19)
 - [[1.5.2] - 2026-08-18](#152---2026-08-18)
 - [[1.5.1] - 2026-08-07](#151---2026-08-07)
 - [[1.5.0] - 2026-08-04](#150---2026-08-04)
@@ -48,11 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-08-19
+
+### Security
+
+- **Flex recipe:** ship `security_nowo_task_board.yaml` access rules (REQ-SEC-004). Prefer **`^1.5.4`** over `v1.5.3`.
+
 ## [1.5.3] - 2026-08-19
 
 ### Security
 
-- **Flex recipe:** `security.access_control` for task board routes (REQ-SEC-004).
+- **Flex recipe:** `security.access_control` for task board routes (REQ-SEC-004) — release notes only; recipe files ship in **1.5.4**.
 
 ## [1.5.2] - 2026-08-18
 

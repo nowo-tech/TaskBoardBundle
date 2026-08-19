@@ -12,6 +12,8 @@ composer update nowo-tech/task-board-bundle
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.5.4](#to-154)
+- [To 1.5.3](#to-153)
 - [To 1.5.2](#to-152)
 - [To 1.5.0](#to-150)
 - [1.4.0 (2026-08-03)](#140-2026-08-03)
@@ -47,13 +49,17 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
 
-## To 1.5.3
+## To 1.5.4
 
-From **1.5.2** — Review Flex recipe `security_nowo_task_board.yaml` access rules after install/update.
+Review Flex recipe `security_nowo_task_board.yaml` after update.
 
 ```bash
 composer update nowo-tech/task-board-bundle
 ```
+
+## To 1.5.3
+
+From **1.5.2** — No application upgrade steps (release notes only; recipe files ship in **1.5.4**).
 
 ## To 1.5.2
 
