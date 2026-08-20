@@ -5,9 +5,10 @@ COMPOSE ?= docker-compose
 else
 COMPOSE ?= $(shell $(DOCKER_BIN) compose version >/dev/null 2>&1 && echo "$(DOCKER_BIN) compose" || echo "docker-compose")
 endif
+DC := :; $(COMPOSE)
 SERVICE_PHP = php
 
-.PHONY: help ensure-env up down build install database database-empty shell test update-bundle fixtures verify
+.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify
 
 help:
 	@echo "TaskBoard Bundle — Symfony 8.1 Demo"
@@ -20,14 +21,27 @@ ensure-env:
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 	@rm -f .env.dev
 
+composer-install:
+	@echo "Installing Composer dependencies (ephemeral container)..."
+	$(DC) run --rm --no-deps --entrypoint "" -e COMPOSER_MEMORY_LIMIT=-1 $(SERVICE_PHP) \
+		composer install --no-interaction --no-scripts
+
 up: ensure-env
 	@if [ ! -f .env ]; then cp .env.example .env; fi
 	@rm -f .env.dev
-	@$(COMPOSE) up -d
-	@echo "Waiting for container to be ready..."
-	@sleep 5
-	@echo "Installing dependencies..."
-	@$(COMPOSE) exec -T $(SERVICE_PHP) composer install --no-interaction --no-scripts
+	@$(MAKE) composer-install
+	@$(DC) up -d
+	@echo "Waiting for FrankenPHP to stay up..."
+	@ok=0; \
+	for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if $(COMPOSE) exec -T $(SERVICE_PHP) true 2>/dev/null; then ok=1; break; fi; \
+		sleep 2; \
+	done; \
+	if [ "$$ok" != "1" ]; then \
+		echo "Demo php container failed to stay up. Recent logs:"; \
+		$(COMPOSE) logs --tail=100 $(SERVICE_PHP) || true; \
+		exit 1; \
+	fi
 	@$(COMPOSE) exec -T $(SERVICE_PHP) rm -rf var/cache/* 2>/dev/null || true
 	@rm -f .env.dev
 	@$(COMPOSE) exec -T $(SERVICE_PHP) test -f bin/console && $(COMPOSE) exec -T $(SERVICE_PHP) composer run-script post-install-cmd || true
