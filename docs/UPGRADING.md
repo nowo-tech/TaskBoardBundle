@@ -11,6 +11,8 @@ composer update nowo-tech/task-board-bundle
 
 ## Table of contents
 
+
+- [From 1.5.4 to 1.5.5](#from-154-to-155)
 - [Unreleased](#unreleased)
 - [To 1.5.4](#to-154)
 - [To 1.5.3](#to-153)
