@@ -9,6 +9,8 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
@@ -19,7 +21,9 @@ use stdClass;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Reference;
 
 final class TaskBoardExtensionTest extends TestCase
 {
@@ -42,6 +46,12 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame('%nowo_task_board.templates.layout%', $twigDefinition->getArgument('$layoutTemplate'));
         self::assertSame('%nowo_task_board.templates.css_framework%', $twigDefinition->getArgument('$cssFramework'));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
+
+        $managerRegistry = $container->getDefinition(DoctrineOrmTaskRepository::class)->getArgument('$managerRegistry');
+        self::assertInstanceOf(Reference::class, $managerRegistry);
+        self::assertSame('doctrine', (string) $managerRegistry);
+        self::assertSame(ContainerInterface::NULL_ON_INVALID_REFERENCE, $managerRegistry->getInvalidBehavior());
+        self::assertArrayNotHasKey('$managerRegistry', $container->getDefinition(DoctrineOrmTeamMemberRepository::class)->getArguments());
 
         if (interface_exists(TaskProviderInterface::class)) {
             self::assertTrue($container->hasAlias('nowo_task_board.task_provider'));

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Repository;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 
@@ -12,13 +14,14 @@ final readonly class DoctrineOrmTaskChangeHistoryRepository implements TaskChang
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
     public function save(TaskChangeHistory $entry): void
     {
         $this->entityManager->persist($entry);
-        $this->entityManager->flush();
+        RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
     }
 
     public function findByTask(Task $task): array

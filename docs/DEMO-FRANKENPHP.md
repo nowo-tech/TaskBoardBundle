@@ -12,6 +12,15 @@ To run the demo: `make -C demo up-symfony8` (port **8024** by default).
 
 This bundle is **FrankenPHP worker mode friendly**. Demos default to `FRANKENPHP_MODE=worker`.
 
+Full audit (scenario B = kernel not reset between requests): [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md).
+
+### Host checklist for `reset_kernel: false`
+
+- Prefer keeping DoctrineBundle's `services_resetter` / `kernel.reset` when possible (scenario A).
+- If the kernel is never reset, clear the EntityManager between requests (e.g. `EntityManager::clear()` on `kernel.terminate`) so kanban/list pages do not serve a stale identity map, and set `max_requests` / `FRANKENPHP_LOOP_MAX` to bound memory.
+- Custom `access_checker`, `team_membership_resolver`, and `TaskImportUserResolverInterface` implementations must stay stateless (or implement `ResetInterface`).
+- Large imports: prefer `nowo:task-board:import` or async processing; set FrankenPHP `max_wait_time` if imports stay in HTTP.
+
 ## Demo smoke (REQ-TEST-011)
 
 From the repository root:

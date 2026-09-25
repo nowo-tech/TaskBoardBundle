@@ -31,6 +31,12 @@ final readonly class TaskMemberAssigner
             throw new InvalidArgumentException('User is required.');
         }
 
+        foreach ($task->getMembers() as $existing) {
+            if ($existing->getUser() === $data->user && $existing->getMemberRole() === $data->memberRole) {
+                return $existing;
+            }
+        }
+
         $member = new TaskMember(
             task: $task,
             user: $data->user,

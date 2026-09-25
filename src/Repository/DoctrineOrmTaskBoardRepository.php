@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Repository;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 
 /**
@@ -14,19 +16,20 @@ final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardReposito
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
     public function save(TaskBoard $board): void
     {
         $this->entityManager->persist($board);
-        $this->entityManager->flush();
+        RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
     }
 
     public function remove(TaskBoard $board): void
     {
         $this->entityManager->remove($board);
-        $this->entityManager->flush();
+        RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
     }
 
     public function findById(string $id): ?TaskBoard

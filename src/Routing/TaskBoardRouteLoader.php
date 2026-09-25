@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Routing;
 
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
-use RuntimeException;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
@@ -15,8 +14,6 @@ use Symfony\Component\Routing\RouteCollection;
  */
 final class TaskBoardRouteLoader extends Loader
 {
-    private bool $loaded = false;
-
     /**
      * @param array<string, array{path: string, name: string}> $routes
      */
@@ -28,12 +25,7 @@ final class TaskBoardRouteLoader extends Loader
 
     public function load(mixed $resource, ?string $type = null): RouteCollection
     {
-        if ($this->loaded) {
-            throw new RuntimeException('TaskBoard routes already loaded.');
-        }
-
-        $this->loaded = true;
-        $collection   = new RouteCollection();
+        $collection = new RouteCollection();
 
         $this->addRoute($collection, 'index', 'index', ['GET']);
         $this->addRoute($collection, 'board', 'board', ['GET']);

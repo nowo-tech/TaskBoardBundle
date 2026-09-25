@@ -23,6 +23,8 @@ use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
+use function in_array;
+
 final class TaskManagerCrudTest extends TestCase
 {
     public function testUpdatePriorityPersistsChange(): void
@@ -113,6 +115,45 @@ final class TaskManagerCrudTest extends TestCase
 
         self::assertSame('new-board', $board->getSlug());
         self::assertCount(3, $board->getColumns());
+    }
+
+    public function testTaskBoardCreatorSuffixesTakenSlugInsteadOfHittingTheUniqueIndex(): void
+    {
+        $owner    = new TestUser('1', 'owner@example.com');
+        $existing = new TaskBoard('New board', 'new-board', $owner);
+
+        $repo = $this->createMock(TaskBoardRepositoryInterface::class);
+        $repo->method('findBySlug')->willReturnCallback(
+            static fn (string $slug): ?TaskBoard => in_array($slug, ['new-board', 'new-board-2'], true) ? $existing : null,
+        );
+        $repo->expects(self::exactly(2))->method('save');
+
+        $creator = new TaskBoardCreator($repo);
+        $first   = $creator->create(new TaskBoardFormData(name: 'New board', slug: ''), $owner);
+        $second  = $creator->create(new TaskBoardFormData(name: 'Custom', slug: 'free-slug'), $owner);
+
+        self::assertSame('new-board-3', $first->getSlug());
+        self::assertSame('free-slug', $second->getSlug());
+    }
+
+    public function testMemberAssignerReturnsExistingMemberForSameUserAndRole(): void
+    {
+        $user  = new TestUser('1', 'dev@example.com');
+        $board = new TaskBoard('Demo', 'demo', $user);
+        $task  = new Task($board, 'Work', $user);
+        $actor = new TestUser('2', 'lead@example.com');
+
+        $repo = $this->createMock(TaskRepositoryInterface::class);
+        $repo->expects(self::exactly(2))->method('save');
+
+        $assigner = new TaskMemberAssigner($repo, new TaskChangeRecorder());
+        $first    = $assigner->assign($task, new TaskMemberFormData(user: $user, memberRole: TaskMemberRole::Assignee), $actor);
+        $again    = $assigner->assign($task, new TaskMemberFormData(user: $user, memberRole: TaskMemberRole::Assignee), $actor);
+        $watcher  = $assigner->assign($task, new TaskMemberFormData(user: $user, memberRole: TaskMemberRole::Watcher), $actor);
+
+        self::assertSame($first, $again);
+        self::assertNotSame($first, $watcher);
+        self::assertCount(2, $task->getMembers());
     }
 
     public function testMemberAssignerAssignsUser(): void

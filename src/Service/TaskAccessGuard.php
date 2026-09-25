@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -14,11 +16,14 @@ final readonly class TaskAccessGuard
 {
     public function __construct(
         private TeamMemberRepositoryInterface $teamMemberRepository,
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
     public function canTrack(UserInterface $user, Task $task): bool
     {
+        $this->refreshForDecision($task);
+
         $userId   = UserIdResolver::getId($user);
         $assignee = $task->getAssignee();
 
@@ -38,5 +43,24 @@ final readonly class TaskAccessGuard
         }
 
         return false;
+    }
+
+    /**
+     * The task may still be in the identity map from an earlier request of a long-running worker:
+     * reload its assignees and board team from the database before deciding.
+     */
+    private function refreshForDecision(Task $task): void
+    {
+        $entityManager = $this->managerRegistry?->getManagerForClass(Task::class);
+        if (!$entityManager instanceof EntityManagerInterface || !$entityManager->isOpen() || !$entityManager->contains($task)) {
+            return;
+        }
+
+        $entityManager->refresh($task);
+
+        $board = $task->getBoard();
+        if ($entityManager->contains($board)) {
+            $entityManager->refresh($board);
+        }
     }
 }

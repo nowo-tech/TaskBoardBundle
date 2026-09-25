@@ -74,7 +74,8 @@ final class DelimitedTableParser
             return "\t";
         }
 
-        $firstLine = strtok($content, "\r\n") ?: '';
+        $start     = strspn($content, "\r\n");
+        $firstLine = substr($content, $start, strcspn($content, "\r\n", $start));
         $comma     = substr_count($firstLine, ',');
         $tab       = substr_count($firstLine, "\t");
         $semi      = substr_count($firstLine, ';');

@@ -3,6 +3,8 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.6] - 2026-09-25](#156---2026-09-25)
+- [[1.5.5] - 2026-08-24](#155---2026-08-24)
 - [[1.5.4] - 2026-08-19](#154---2026-08-19)
 - [[1.5.3] - 2026-08-19](#153---2026-08-19)
 - [[1.5.2] - 2026-08-18](#152---2026-08-18)
@@ -50,6 +52,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-09-25
+
+### Fixed
+
+- **FrankenPHP worker mode (no kernel reset):** a failed `flush()` (unique slug, duplicate member, deadlock) no longer leaves the EntityManager closed for the rest of the worker's life: repositories and `TaskImportOrchestrator` reset the closed manager through `ManagerRegistry` before rethrowing (`Doctrine\RecoveringFlusher`).
+- `TaskBoardCreator` appends a numeric suffix (`-2`, `-3`, …) when the board slug is already taken instead of hitting the unique index.
+- `TaskMemberAssigner::assign()` returns the existing member when the same user already has that role on the task (no duplicate insert).
+- `TaskAccessGuard::canTrack()` refreshes the task and its board before deciding, so a stale identity map in a long-running worker cannot grant or deny time tracking on outdated assignee/team data.
+- `TimeSpentAggregatorListener` refreshes a managed task before adding timer duration (avoids overwriting concurrent `total_time_seconds` under worker mode).
+- `TaskBoardRouteLoader` can be loaded more than once per process (the "routes already loaded" guard broke router cache rebuilds in debug workers).
+- Imports compute task positions with one query per import instead of one per row; imported tasks in the same column now get consecutive positions.
+- `DelimitedTableParser` no longer uses `strtok()` (global state kept the last upload in memory).
+
+### Added
+
+- **Docs:** [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) (scenario B audit + remediation); host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md); README links.
+
+### Notes
+
+- New optional constructor arguments (`?ManagerRegistry`) on the Doctrine repositories that flush, `TaskImportOrchestrator`, `TaskAccessGuard`, and `TimeSpentAggregatorListener`; wired automatically. No configuration changes.
+- Under `reset_kernel: false`, hosts should still clear the Doctrine identity map between requests (or keep `services_resetter`) for rendered page freshness and memory — see the audit.
 
 ## [1.5.5] - 2026-08-24
 
@@ -283,7 +306,9 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.2...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.6...HEAD
+[1.5.6]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.6
+[1.5.5]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.5
 [1.4.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.2.4...v1.3.0

@@ -29,7 +29,7 @@ final readonly class TaskBoardCreator
 
     public function create(TaskBoardFormData $data, object $creator): TaskBoard
     {
-        $slug = trim($data->slug) !== '' ? trim($data->slug) : SlugGenerator::fromName($data->name);
+        $slug = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : SlugGenerator::fromName($data->name));
 
         $board = new TaskBoard(
             name: $data->name,
@@ -50,5 +50,20 @@ final readonly class TaskBoardCreator
         $this->boardRepository->save($board);
 
         return $board;
+    }
+
+    /**
+     * Appends a numeric suffix when the slug is taken, so the unique index never makes the flush fail.
+     */
+    private function uniqueSlug(string $slug): string
+    {
+        $candidate = $slug;
+        $suffix    = 2;
+
+        while ($this->boardRepository->findBySlug($candidate) instanceof TaskBoard) {
+            $candidate = $slug . '-' . $suffix++;
+        }
+
+        return $candidate;
     }
 }

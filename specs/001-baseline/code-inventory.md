@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-07-07
+**Last audited**: 2026-09-25
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -18,6 +18,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `DependencyInjection/Configuration.php` | Config tree | FR-CFG-001 |
 | `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002 |
 | `Doctrine/TaskBoardMetadataListener.php` | Table prefix | FR-DOCTRINE-001 |
+| `Doctrine/RecoveringFlusher.php` | FrankenPHP worker flush recovery | FR-DOCTRINE-002 |
 | `Dto/BoardColumnFormData.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/TaskBoardFormData.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/TaskColumnNavigation.php` | Form/API DTO | FR-DTO-001 |

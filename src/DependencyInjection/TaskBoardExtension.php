@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
@@ -41,6 +42,7 @@ use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 
 use function array_key_exists;
+use function in_array;
 use function is_array;
 use function is_string;
 use function rtrim;
@@ -266,10 +268,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             TeamMemberRepositoryInterface::class     => DoctrineOrmTeamMemberRepository::class,
         ];
 
+        $flushingRepos = [
+            DoctrineOrmTaskBoardRepository::class,
+            DoctrineOrmBoardColumnRepository::class,
+            DoctrineOrmTaskRepository::class,
+        ];
+
         foreach ($repos as $interface => $implementation) {
-            $container->setDefinition($implementation, (new Definition($implementation))
+            $definition = (new Definition($implementation))
                 ->setAutowired(false)
-                ->setArgument('$entityManager', $emRef));
+                ->setArgument('$entityManager', $emRef);
+
+            if (in_array($implementation, $flushingRepos, true)) {
+                $definition->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE));
+            }
+
+            $container->setDefinition($implementation, $definition);
             $container->setAlias($interface, $implementation);
         }
     }

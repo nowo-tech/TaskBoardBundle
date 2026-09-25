@@ -6,7 +6,6 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Routing;
 
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 final class TaskBoardRouteLoaderTest extends TestCase
 {
@@ -44,15 +43,17 @@ final class TaskBoardRouteLoaderTest extends TestCase
         self::assertNull($collection->get('nowo_task_board_board'));
     }
 
-    public function testCannotLoadRoutesTwice(): void
+    public function testCanLoadRoutesAgainInTheSameProcess(): void
     {
         $loader = new TaskBoardRouteLoader(
             ['index' => ['path' => '/tools/task-board', 'name' => 'nowo_task_board_index']],
             '',
         );
-        $loader->load('.');
+        $first = $loader->load('.');
 
-        $this->expectException(RuntimeException::class);
-        $loader->load('.');
+        $second = $loader->load('.');
+
+        self::assertNotSame($first, $second);
+        self::assertSame('/tools/task-board', $second->get('nowo_task_board_index')?->getPath());
     }
 }

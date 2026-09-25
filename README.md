@@ -8,7 +8,7 @@ Symfony bundle for **task boards, teams, and managers** (kanban, list, Gantt). O
 
 ![FrankenPHP Friendly Worker Mode](docs/images/frankenphp-friendly.png)
 
-This bundle is **FrankenPHP worker mode friendly**.
+This bundle is **FrankenPHP worker mode friendly** (worker mode with kernel not reset between requests — see [FRANKENPHP-WORKER-AUDIT.md](docs/FRANKENPHP-WORKER-AUDIT.md)).
 
 ## Features
 
@@ -69,6 +69,7 @@ Login: `demo@example.com` / `demo`
 
 - [GitHub Actions CI requirements](docs/GITHUB_CI.md)
 - [Demo notes](docs/DEMO-FRANKENPHP.md)
+- [FrankenPHP worker audit](docs/FRANKENPHP-WORKER-AUDIT.md)
 - [Import export guides](docs/import/README.md) (ClickUp, Jira, Trello)
 
 ## Tests and coverage

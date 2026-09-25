@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Import;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -40,6 +42,7 @@ final readonly class TaskImportOrchestrator
         private TaskChangeRecorder $changeRecorder,
         private TaskImportUserResolverInterface $userResolver,
         private EntityManagerInterface $entityManager,
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
@@ -59,7 +62,9 @@ final readonly class TaskImportOrchestrator
             return new TaskImportResult(errors: [$exception->getMessage()]);
         }
 
-        $existingExternalIds = $this->collectExistingExternalIds($board);
+        $existingTasks       = $this->taskRepository->findByBoard($board, true);
+        $existingExternalIds = $this->collectExistingExternalIds($existingTasks);
+        $maxPositions        = $this->collectMaxPositions($existingTasks);
         $columnsByName       = $this->indexColumnsByName($board);
         $columnsCreated      = 0;
         $warnings            = [];
@@ -117,7 +122,7 @@ final readonly class TaskImportOrchestrator
                 parent: $parent,
                 description: $row->description,
                 priority: $row->priority,
-                position: $this->nextPosition($board, $column),
+                position: $this->nextPosition($maxPositions, $column),
                 estimatedMinutes: $row->estimatedMinutes,
                 dueAt: $row->dueAt,
                 tags: $row->tags,
@@ -162,7 +167,7 @@ final readonly class TaskImportOrchestrator
         }
 
         if ($created > 0) {
-            $this->entityManager->flush();
+            RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
         }
 
         return new TaskImportResult(
@@ -186,12 +191,14 @@ final readonly class TaskImportOrchestrator
     }
 
     /**
+     * @param list<Task> $existingTasks
+     *
      * @return array<string, true>
      */
-    private function collectExistingExternalIds(TaskBoard $board): array
+    private function collectExistingExternalIds(array $existingTasks): array
     {
         $ids = [];
-        foreach ($this->taskRepository->findByBoard($board, true) as $task) {
+        foreach ($existingTasks as $task) {
             foreach ($task->getLinks() as $link) {
                 $externalId = $link->getExternalId();
                 if ($externalId !== null && $externalId !== '') {
@@ -299,16 +306,37 @@ final readonly class TaskImportOrchestrator
         return $board->getColumns()->first() ?: null;
     }
 
-    private function nextPosition(TaskBoard $board, ?BoardColumn $column): int
+    /**
+     * @param list<Task> $existingTasks
+     *
+     * @return array<string, int> highest position per column id; key '' holds the highest position on the board
+     */
+    private function collectMaxPositions(array $existingTasks): array
     {
-        $max = -1;
-        foreach ($this->taskRepository->findByBoard($board, true) as $task) {
-            if (!$column instanceof BoardColumn || ($task->getColumn()?->getId() === $column->getId())) {
-                $max = max($max, $task->getPosition());
+        $maxPositions = ['' => -1];
+        foreach ($existingTasks as $task) {
+            $position         = $task->getPosition();
+            $maxPositions[''] = max($maxPositions[''], $position);
+            $columnId         = $task->getColumn()?->getId();
+            if ($columnId !== null) {
+                $maxPositions[$columnId] = max($maxPositions[$columnId] ?? -1, $position);
             }
         }
 
-        return $max + 1;
+        return $maxPositions;
+    }
+
+    /**
+     * @param array<string, int> $maxPositions
+     */
+    private function nextPosition(array &$maxPositions, ?BoardColumn $column): int
+    {
+        $key                = $column instanceof BoardColumn ? $column->getId() : '';
+        $next               = ($maxPositions[$key] ?? -1) + 1;
+        $maxPositions[$key] = $next;
+        $maxPositions['']   = max($maxPositions[''] ?? -1, $next);
+
+        return $next;
     }
 
     private function syncCompletionForColumn(Task $task, ?BoardColumn $column, TaskBoard $board): void

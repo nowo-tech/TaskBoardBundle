@@ -72,6 +72,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 - **FR-TWIG-001**: `TwigPathsPass` registers `NowoTaskBoardBundle` view namespace with app override support.
 - **FR-ROUTE-001**: `TaskBoardRouteLoader` exposes index, board, list, gantt, task, import routes from config.
 - **FR-DOCTRINE-001**: `TaskBoardMetadataListener` applies configurable table prefix to all bundle entities.
+- **FR-DOCTRINE-002**: Flushing repositories and import orchestration recover a closed EntityManager via `RecoveringFlusher` / `ManagerRegistry` so FrankenPHP workers without kernel reset stay usable after a failed flush; security/timer paths refresh managed entities before deciding or mutating.
 
 ### Domain model
 
@@ -154,6 +155,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 - Native mobile clients.
 - Real-time multi-user cursors on kanban (server push).
 - Built-in email notifications (host app responsibility).
+- Clearing the Doctrine identity map on every request under FrankenPHP worker mode without `services_resetter` (host responsibility; see `docs/FRANKENPHP-WORKER-AUDIT.md`).
 
 ---
 
