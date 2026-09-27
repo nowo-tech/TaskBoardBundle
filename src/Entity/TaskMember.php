@@ -53,6 +53,7 @@ class TaskMember
 
     public function setTask(Task $task): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->task = $task;
 
         return $this;

@@ -15,7 +15,7 @@
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#close"></button>
             </div>
             {{ form_start(linkForm, {
-                action: path('nowo_task_board_task_link', { taskId: task.id }),
+                action: path('nowo_task_board_task_link', {taskId: task.id}),
                 method: 'POST',
                 attr: {
                     id: 'nowo-task-link-form',
@@ -24,10 +24,10 @@
             }) }}
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-4">{{ form_row(linkForm.linkType, { attr: { 'data-nowo-task-board-task-links-modal-target': 'linkType' } }) }}</div>
-                        <div class="col-md-8">{{ form_row(linkForm.url, { attr: { 'data-nowo-task-board-task-links-modal-target': 'url' } }) }}</div>
-                        <div class="col-md-6">{{ form_row(linkForm.label, { attr: { 'data-nowo-task-board-task-links-modal-target': 'label' } }) }}</div>
-                        <div class="col-md-6">{{ form_row(linkForm.externalId, { attr: { 'data-nowo-task-board-task-links-modal-target': 'externalId' } }) }}</div>
+                        <div class="col-md-4">{{ form_row(linkForm.linkType, {attr: {'data-nowo-task-board-task-links-modal-target': 'linkType'}}) }}</div>
+                        <div class="col-md-8">{{ form_row(linkForm.url, {attr: {'data-nowo-task-board-task-links-modal-target': 'url'}}) }}</div>
+                        <div class="col-md-6">{{ form_row(linkForm.label, {attr: {'data-nowo-task-board-task-links-modal-target': 'label'}}) }}</div>
+                        <div class="col-md-6">{{ form_row(linkForm.externalId, {attr: {'data-nowo-task-board-task-links-modal-target': 'externalId'}}) }}</div>
                     </div>
                 </div>
                 <div class="modal-footer justify-content-between">

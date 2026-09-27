@@ -15,6 +15,7 @@ composer update nowo-tech/task-board-bundle
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [From 1.5.4 to 1.5.5](#from-154-to-155)
 - [Unreleased](#unreleased)
+- [To 1.5.7](#to-157)
 - [To 1.5.4](#to-154)
 - [To 1.5.3](#to-153)
 - [To 1.5.2](#to-152)
@@ -67,7 +68,18 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+## To 1.5.7
+
+From **1.5.6** — REQ-CS-008 Igor FrankenPHP worker audit (igor-php require-dev, igor.json, make igor).
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
 _(empty)_
+- No application upgrade steps for require-dev Igor tooling (REQ-CS-008). Consumers do not pull `igor-php/igor-php` transitively.
+
 
 ## To 1.5.4
 

@@ -129,7 +129,9 @@ class Task
 
     public function setTitle(string $title): self
     {
-        $this->title     = $title;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->title = $title;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -147,7 +149,9 @@ class Task
 
     public function setColumn(?BoardColumn $column): self
     {
-        $this->column    = $column;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->column = $column;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -165,8 +169,10 @@ class Task
 
     public function setDescription(?string $description): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->description = $description;
-        $this->updatedAt   = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
@@ -178,7 +184,9 @@ class Task
 
     public function setPriority(TaskPriority $priority): self
     {
-        $this->priority  = $priority;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->priority = $priority;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -191,7 +199,9 @@ class Task
 
     public function setPosition(int $position): self
     {
-        $this->position  = $position;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->position = $position;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -204,8 +214,10 @@ class Task
 
     public function setEstimatedMinutes(?int $estimatedMinutes): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->estimatedMinutes = $estimatedMinutes;
-        $this->updatedAt        = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
@@ -217,7 +229,9 @@ class Task
 
     public function setDueAt(?DateTimeImmutable $dueAt): self
     {
-        $this->dueAt     = $dueAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->dueAt = $dueAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -232,7 +246,9 @@ class Task
     /** @param list<string> $tags */
     public function setTags(array $tags): self
     {
-        $this->tags      = $this->normalizeTags($tags);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->tags = $this->normalizeTags($tags);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -255,16 +271,20 @@ class Task
 
     public function markCompleted(): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->completedAt = new DateTimeImmutable();
-        $this->updatedAt   = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
 
     public function markIncomplete(): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->completedAt = null;
-        $this->updatedAt   = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
@@ -288,7 +308,9 @@ class Task
     public function addTimeSeconds(int $seconds): self
     {
         if ($seconds > 0) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->totalTimeSeconds += $seconds;
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->updatedAt = new DateTimeImmutable();
         }
 

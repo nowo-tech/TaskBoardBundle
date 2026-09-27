@@ -14,22 +14,22 @@
 {% block title %}{{ 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
 
 {% block body %}
-    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle'),
         pageSubtitle: 'task_board.import.subtitle'|trans({}, 'NowoTaskBoardBundle'),
         breadcrumbRoute: 'nowo_task_board_board',
-        breadcrumbRouteParams: { boardId: board.id },
-        breadcrumbParams: { boardId: board.id },
+        breadcrumbRouteParams: {boardId: board.id},
+        breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
         headerActions: '
-            <a href="' ~ path('nowo_task_board_board', { boardId: board.id }) ~ '" class="btn btn-outline-secondary">
+            <a href="' ~ path('nowo_task_board_board', {boardId: board.id}) ~ '" class="btn btn-outline-secondary">
                 <i class="ti ti-arrow-left"></i> ' ~ ('task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
         ',
         dashboardRoute: dashboardRoute|default(null),
-    } %}
+    }) }}
 
-    {% include '@NowoTaskBoardBundle/manage/_flashes.html.twig' %}
+    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
 
     <div class="row row-cards">
         <div class="col-12 col-lg-8">
@@ -39,9 +39,9 @@
                 </div>
                 <div class="card-body">
                     {{ form_start(importForm, {
-                        action: path('nowo_task_board_board_import', { boardId: board.id }),
+                        action: path('nowo_task_board_board_import', {boardId: board.id}),
                         method: 'POST',
-                        attr: { enctype: 'multipart/form-data' }
+                        attr: {enctype: 'multipart/form-data'},
                     }) }}
                         {{ form_row(importForm.source) }}
                         {{ form_row(importForm.file) }}

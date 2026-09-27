@@ -49,6 +49,7 @@ class TaskLink
 
     public function setTask(Task $task): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->task = $task;
 
         return $this;
@@ -61,6 +62,7 @@ class TaskLink
 
     public function setLinkType(TaskLinkType $linkType): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->linkType = $linkType;
 
         return $this;
@@ -73,6 +75,7 @@ class TaskLink
 
     public function setUrl(string $url): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->url = $url;
 
         return $this;
@@ -85,6 +88,7 @@ class TaskLink
 
     public function setLabel(?string $label): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->label = $label;
 
         return $this;
@@ -97,6 +101,7 @@ class TaskLink
 
     public function setExternalId(?string $externalId): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->externalId = $externalId;
 
         return $this;

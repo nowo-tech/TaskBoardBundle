@@ -70,7 +70,9 @@ class TaskBoard
 
     public function setName(string $name): self
     {
-        $this->name      = $name;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->name = $name;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -83,7 +85,9 @@ class TaskBoard
 
     public function setSlug(string $slug): self
     {
-        $this->slug      = $slug;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->slug = $slug;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -96,8 +100,10 @@ class TaskBoard
 
     public function setDescription(?string $description): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->description = $description;
-        $this->updatedAt   = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
@@ -114,7 +120,9 @@ class TaskBoard
 
     public function setTeam(?Team $team): self
     {
-        $this->team      = $team;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->team = $team;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -137,16 +145,20 @@ class TaskBoard
 
     public function archive(): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->archivedAt = new DateTimeImmutable();
-        $this->updatedAt  = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }
 
     public function restore(): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->archivedAt = null;
-        $this->updatedAt  = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }

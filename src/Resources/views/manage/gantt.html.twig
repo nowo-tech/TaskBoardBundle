@@ -16,26 +16,26 @@
 {% block container_class %}container container-wide{% endblock %}
 
 {% block body %}
-    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name ~ ' — ' ~ ('task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle')),
         breadcrumbRoute: 'nowo_task_board_board',
-        breadcrumbParams: { boardId: board.id },
+        breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
         headerActions: '
-            <a href="' ~ path('nowo_task_board_board', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path('nowo_task_board_board', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-layout-kanban"></i> ' ~ ('task_board.view.board'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
-            <a href="' ~ path('nowo_task_board_list', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path('nowo_task_board_list', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-list"></i> ' ~ ('task_board.view.list'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
         ',
         dashboardRoute: dashboardRoute|default(null),
-    } %}
+    }) }}
 
     <div
         class="card nowo-task-gantt"
         data-controller="nowo-task-board-gantt"
-        data-nowo-task-board-gantt-links-value="{{ timeline.links|map(l => { from: l.fromId, to: l.toId })|json_encode|e('html_attr') }}"
+        data-nowo-task-board-gantt-links-value="{{ timeline.links|map(l => {from: l.fromId, to: l.toId})|json_encode|e('html_attr') }}"
         data-nowo-task-board-gantt-day-count-value="{{ timeline.dayKeys|length }}"
     >
         <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -73,7 +73,7 @@
                         style="padding-left: {{ 0.75 + item.depth * 1.1 }}rem;"
                         data-task-id="{{ item.id }}"
                     >
-                        <a href="{{ path('nowo_task_board_task', { taskId: item.id }) }}" class="text-reset">{{ item.title }}</a>
+                        <a href="{{ path('nowo_task_board_task', {taskId: item.id}) }}" class="text-reset">{{ item.title }}</a>
                         {% if item.columnName %}
                             <span class="badge bg-secondary-lt ms-1">{{ item.columnName }}</span>
                         {% endif %}

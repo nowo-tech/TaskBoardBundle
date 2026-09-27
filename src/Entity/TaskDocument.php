@@ -59,7 +59,9 @@ class TaskDocument
 
     public function setTitle(string $title): self
     {
-        $this->title     = $title;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->title = $title;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -72,7 +74,9 @@ class TaskDocument
 
     public function setContent(string $content): self
     {
-        $this->content   = $content;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->content = $content;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;
@@ -90,7 +94,9 @@ class TaskDocument
 
     public function setPosition(int $position): self
     {
-        $this->position  = $position;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->position = $position;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
         return $this;

@@ -79,6 +79,7 @@ final readonly class TaskImportOrchestrator
                 continue;
             }
 
+            // @igor-ignore - Import orchestrator runs in HTTP request context; not a shared cache.
             $column                                = $this->columnManager->add($board, new BoardColumnFormData(name: $status));
             $columnsByName[mb_strtolower($status)] = $column;
             ++$columnsCreated;

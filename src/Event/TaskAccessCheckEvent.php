@@ -36,13 +36,17 @@ final class TaskAccessCheckEvent extends Event
 
     public function grant(): void
     {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->granted = true;
-        $this->denied  = false;
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
+        $this->denied = false;
     }
 
     public function deny(): void
     {
-        $this->denied  = true;
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
+        $this->denied = true;
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->granted = false;
     }
 
@@ -58,6 +62,7 @@ final class TaskAccessCheckEvent extends Event
 
     public function markReadOnly(): void
     {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->readOnly = true;
     }
 

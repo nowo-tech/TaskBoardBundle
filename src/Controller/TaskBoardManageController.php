@@ -135,6 +135,7 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
+            // @igor-ignore - HTTP handler delegates to services; no controller worker state.
             $this->columnManager->add($board, $data);
             $this->addFlash('success', 'task_board.flash.column_added');
         }
@@ -438,6 +439,7 @@ final class TaskBoardManageController extends AbstractController
         $this->denyUnlessValidCsrf($request, 'task_board_task_link_remove');
         $task = $this->findTask($taskId);
 
+        // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($this->linkAttacher->remove($task, $linkId, $user)) {
             $this->addFlash('success', 'task_board.flash.link_removed');
         }

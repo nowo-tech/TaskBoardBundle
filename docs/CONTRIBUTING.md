@@ -32,7 +32,7 @@ make test-ts
 | Command | Scope |
 |---------|--------|
 | `make qa` | PHP-CS-Fixer + PHPUnit |
-| `make phpstan` | Static analysis (level 8) |
+| `make phpstan`, `make igor` | Static analysis (level 8) |
 | `make test-ts` | Vitest (Stimulus / TypeScript) |
 | `make release-check` | Full pre-release pipeline (composer sync, cs, rector-dry, phpstan, tests) |
 

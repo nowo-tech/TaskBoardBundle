@@ -28,6 +28,7 @@ final class BoardListQueryEvent extends Event
     /** @param list<TaskBoard> $boards */
     public function overrideList(array $boards): void
     {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->overrideList = $boards;
     }
 

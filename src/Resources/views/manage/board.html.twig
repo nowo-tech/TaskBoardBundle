@@ -14,31 +14,31 @@
 {% block title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
 {% block body %}
-    {% include '@NowoTaskBoardBundle/manage/_page_header.html.twig' with {
+    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name,
         pageSubtitle: board.description,
         breadcrumbRoute: 'nowo_task_board_index',
         breadcrumbLabel: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
         headerActions: '
-            <a href="' ~ path('nowo_task_board_board_import', { boardId: board.id }) ~ '" class="btn btn-outline-secondary">
+            <a href="' ~ path('nowo_task_board_board_import', {boardId: board.id}) ~ '" class="btn btn-outline-secondary">
                 <i class="ti ti-upload"></i> ' ~ ('task_board.import.action'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
-            <a href="' ~ path('nowo_task_board_list', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path('nowo_task_board_list', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-list"></i> ' ~ ('task_board.view.list'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
-            <a href="' ~ path('nowo_task_board_gantt', { boardId: board.id }) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path('nowo_task_board_gantt', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-chart-bar"></i> ' ~ ('task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
         ',
         dashboardRoute: dashboardRoute|default(null),
-    } %}
+    }) }}
 
-    {% include '@NowoTaskBoardBundle/manage/_flashes.html.twig' %}
+    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
 
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
-        data-nowo-task-board-edit-column-modal-update-url-template-value="{{ path('nowo_task_board_column_update', { boardId: board.id, columnId: 'COLUMN_ID' })|e('html_attr') }}"
+        data-nowo-task-board-edit-column-modal-update-url-template-value="{{ path('nowo_task_board_column_update', {boardId: board.id, columnId: 'COLUMN_ID'})|e('html_attr') }}"
         data-nowo-task-board-edit-column-modal-title-template-value="{{ 'task_board.board.edit_column_title'|trans({'%column%': '%column%'}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
         <p class="text-secondary small mb-3">
@@ -48,7 +48,7 @@
         <div
             class="nowo-task-board"
             data-controller="nowo-task-board"
-            data-nowo-task-board-reorder-url-value="{{ path('nowo_task_board_column_reorder', { boardId: board.id }) }}"
+            data-nowo-task-board-reorder-url-value="{{ path('nowo_task_board_column_reorder', {boardId: board.id}) }}"
             data-nowo-task-board-reorder-csrf-token-value="{{ csrf_token('task_board_column_reorder') }}"
             data-nowo-task-board-move-csrf-token-value="{{ csrf_token('task_board_task_move') }}"
         >
@@ -97,9 +97,9 @@
                                 draggable="true"
                                 data-nowo-task-board-target="task"
                                 data-task-id="{{ task.id }}"
-                                data-move-url="{{ path('nowo_task_board_task_move', { taskId: task.id }) }}"
+                                data-move-url="{{ path('nowo_task_board_task_move', {taskId: task.id}) }}"
                             >
-                                <a href="{{ path('nowo_task_board_task', { taskId: task.id }) }}" class="nowo-task-board__task-title d-block mb-1">{{ task.title }}</a>
+                                <a href="{{ path('nowo_task_board_task', {taskId: task.id}) }}" class="nowo-task-board__task-title d-block mb-1">{{ task.title }}</a>
                             <div class="d-flex align-items-center gap-2 flex-wrap">
                                 <span class="badge bg-{{ task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) }}-lt text-{{ task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) }}">
                                     {{ task.priority.value }}
@@ -108,7 +108,7 @@
                                     <span class="text-secondary small"><i class="ti ti-clock"></i> {{ task.estimatedMinutes }}m</span>
                                 {% endif %}
                             </div>
-                            {% include '@NowoTaskBoardBundle/manage/_task_tags.html.twig' with { tags: task.tags, wrapper_class: 'mt-2' } %}
+                            {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'mt-2'}) }}
                             </li>
                             {% endif %}
                         {% endfor %}
@@ -139,8 +139,8 @@
             </div>
         </div>
 
-        {% include '@NowoTaskBoardBundle/manage/_add_task_modal.html.twig' %}
-        {% include '@NowoTaskBoardBundle/manage/_add_column_modal.html.twig' %}
-        {% include '@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig' %}
+        {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig') }}
+        {{ include('@NowoTaskBoardBundle/manage/_add_column_modal.html.twig') }}
+        {{ include('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig') }}
     </div>
 {% endblock %}

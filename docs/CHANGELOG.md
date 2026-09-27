@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.7] - 2026-09-27](#157---2026-09-27)
 - [[1.5.6] - 2026-09-25](#156---2026-09-25)
 - [[1.5.5] - 2026-08-24](#155---2026-08-24)
 - [[1.5.4] - 2026-08-19](#154---2026-08-19)
@@ -51,6 +52,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.5.7] - 2026-09-27
+
+### Added
+
+- **REQ-CS-008:** `igor-php/igor-php` (require-dev only), root `igor.json`, Composer/`Makefile` `igor` target, and `release-check` wiring for FrankenPHP worker-state audit.
+
+### Changed
+
+- **Worker safety (Igor):** justified `// @igor-ignore` annotations and/or `ResetInterface` / request-scoped fixes so `make igor` passes on package `src/`.
+
+[1.5.7]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.7
 
 ## [1.5.6] - 2026-09-25
 

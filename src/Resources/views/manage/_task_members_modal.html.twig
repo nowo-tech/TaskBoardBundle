@@ -30,7 +30,7 @@
                                     <span class="badge bg-green-lt">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                 </div>
                             </div>
-                            <form method="post" action="{{ path('nowo_task_board_task_member_remove', { taskId: task.id, memberId: member.id }) }}">
+                            <form method="post" action="{{ path('nowo_task_board_task_member_remove', {taskId: task.id, memberId: member.id}) }}">
                                 <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_member_remove_' ~ member.id) }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
                                     <i class="ti ti-user-minus"></i>
@@ -43,9 +43,9 @@
                 </div>
 
                 <h6 class="text-secondary text-uppercase fs-6 mb-3">{{ 'task_board.task.add_member'|trans({}, 'NowoTaskBoardBundle') }}</h6>
-                {{ form_start(memberForm, { action: path('nowo_task_board_task_member', { taskId: task.id }), method: 'POST' }) }}
+                {{ form_start(memberForm, {action: path('nowo_task_board_task_member', {taskId: task.id}), method: 'POST'}) }}
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-6">{{ form_row(memberForm.user, { attr: { 'data-nowo-task-board-task-members-modal-target': 'userField' } }) }}</div>
+                        <div class="col-md-6">{{ form_row(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}}) }}</div>
                         <div class="col-md-4">{{ form_row(memberForm.memberRole) }}</div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary w-100">

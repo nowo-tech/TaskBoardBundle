@@ -15,11 +15,11 @@
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-column-modal#close"></button>
             </div>
             {{ form_start(columnForm, {
-                action: path('nowo_task_board_column_create', { boardId: board.id }),
+                action: path('nowo_task_board_column_create', {boardId: board.id}),
                 method: 'POST',
             }) }}
                 <div class="modal-body">
-                    {{ form_row(columnForm.name, { attr: { 'data-nowo-task-board-add-column-modal-target': 'nameInput' } }) }}
+                    {{ form_row(columnForm.name, {attr: {'data-nowo-task-board-add-column-modal-target': 'nameInput'}}) }}
                     {{ form_row(columnForm.color) }}
                 </div>
                 <div class="modal-footer">

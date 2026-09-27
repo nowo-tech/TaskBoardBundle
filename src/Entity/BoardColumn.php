@@ -49,6 +49,7 @@ class BoardColumn
 
     public function setBoard(TaskBoard $board): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->board = $board;
 
         return $this;
@@ -61,6 +62,7 @@ class BoardColumn
 
     public function setName(string $name): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->name = $name;
 
         return $this;
@@ -73,6 +75,7 @@ class BoardColumn
 
     public function setPosition(int $position): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->position = $position;
 
         return $this;
@@ -85,6 +88,7 @@ class BoardColumn
 
     public function setColor(?string $color): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->color = $color;
 
         return $this;
