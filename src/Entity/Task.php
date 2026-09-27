@@ -12,9 +12,9 @@ use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
+use SortDirection;
 
 use function in_array;
-use SortDirection;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_tasks')]
