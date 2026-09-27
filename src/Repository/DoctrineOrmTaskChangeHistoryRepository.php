@@ -9,6 +9,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
+use SortDirection;
 
 final readonly class DoctrineOrmTaskChangeHistoryRepository implements TaskChangeHistoryRepositoryInterface
 {
@@ -32,7 +33,7 @@ final readonly class DoctrineOrmTaskChangeHistoryRepository implements TaskChang
             ->from(TaskChangeHistory::class, 'h')
             ->where('h.task = :task')
             ->setParameter('task', $task)
-            ->orderBy('h.createdAt', 'DESC')
+            ->orderBy('h.createdAt', SortDirection::Descending)
             ->getQuery()
             ->getResult();
 

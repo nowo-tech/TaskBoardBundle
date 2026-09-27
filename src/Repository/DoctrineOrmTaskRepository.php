@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use SortDirection;
 
 final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface
 {
@@ -38,7 +39,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->from(Task::class, 't')
             ->where('t.board = :board')
             ->setParameter('board', $board)
-            ->orderBy('t.position', 'ASC');
+            ->orderBy('t.position', SortDirection::Ascending);
 
         if (!$includeCompleted) {
             $qb->andWhere('t.completedAt IS NULL');
@@ -65,7 +66,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->andWhere('t.completedAt IS NULL')
             ->setParameter('assigneeRole', TaskMemberRole::Assignee)
             ->setParameter('userId', $userId)
-            ->orderBy('t.createdAt', 'DESC')
+            ->orderBy('t.createdAt', SortDirection::Descending)
             ->setMaxResults(max(1, $limit))
             ->setFirstResult(max(0, $offset));
 

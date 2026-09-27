@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function in_array;
+use SortDirection;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_tasks')]
@@ -38,7 +39,7 @@ class Task
 
     /** @var Collection<int, TaskChangeHistory> */
     #[ORM\OneToMany(targetEntity: TaskChangeHistory::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
-    #[ORM\OrderBy(['createdAt' => 'ASC'])]
+    #[ORM\OrderBy(['createdAt' => SortDirection::Ascending])]
     private Collection $changeHistory;
 
     /** @var Collection<int, TaskMember> */

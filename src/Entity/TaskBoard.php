@@ -10,6 +10,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
+use SortDirection;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_boards')]
@@ -30,7 +31,7 @@ class TaskBoard
 
     /** @var Collection<int, BoardColumn> */
     #[ORM\OneToMany(targetEntity: BoardColumn::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
-    #[ORM\OrderBy(['position' => 'ASC'])]
+    #[ORM\OrderBy(['position' => SortDirection::Ascending])]
     private Collection $columns;
 
     /** @var Collection<int, Task> */

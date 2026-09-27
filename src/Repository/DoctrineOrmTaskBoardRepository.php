@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use SortDirection;
 
 /**
  * Doctrine ORM implementation for task boards.
@@ -46,7 +47,7 @@ final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardReposito
             ->select('b')
             ->from(TaskBoard::class, 'b')
             ->where('b.archivedAt IS NULL')
-            ->orderBy('b.name', 'ASC')
+            ->orderBy('b.name', SortDirection::Ascending)
             ->getQuery()
             ->getResult();
 
