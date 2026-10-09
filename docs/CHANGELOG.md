@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.8] - 2026-10-09](#158---2026-10-09)
 - [[1.5.7] - 2026-09-27](#157---2026-09-27)
 - [[1.5.6] - 2026-09-25](#156---2026-09-25)
 - [[1.5.5] - 2026-08-24](#155---2026-08-24)
@@ -53,10 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-10-09
+
 ### Changed
 
 - **Doctrine ORM SortDirection:** replace string `'ASC'`/`'DESC'` in `#[ORM\OrderBy]` and QueryBuilder `orderBy`/`addOrderBy` with `SortDirection::Ascending`/`Descending` (doctrine/orm deprecation, https://github.com/doctrine/orm/issues/11313); require `doctrine/orm` `^3.7` where applicable.
 
+### Dependencies
+
+- `doctrine/orm` constraint raised to `^3.7` (drops ORM 2.x; required by `SortDirection`).
+- Dev: `igor-php/igor-php` `^0.10.0`.
+- Demo (`demo/symfony8`): regenerated `config/reference.php` for Symfony 8.1.8.
 
 ## [1.5.7] - 2026-09-27
 
@@ -324,7 +332,8 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.6...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.8...HEAD
+[1.5.8]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.7...v1.5.8
 [1.5.6]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.6
 [1.5.5]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.5
 [1.4.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.3.1...v1.4.0

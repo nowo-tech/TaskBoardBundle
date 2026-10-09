@@ -12,6 +12,7 @@ composer update nowo-tech/task-board-bundle
 ## Table of contents
 
 
+- [To 1.5.8](#to-158)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [From 1.5.4 to 1.5.5](#from-154-to-155)
 - [Unreleased](#unreleased)
@@ -67,6 +68,17 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.5.8
+
+From **1.5.7** — Doctrine ORM `SortDirection` mapping.
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+- No breaking changes for hosts already on Doctrine ORM 3. The bundle now requires `doctrine/orm` `^3.7` (ORM 2.x is no longer supported); mappings use the `SortDirection` enum (native on PHP 8.6, polyfilled by `symfony/polyfill-php86` on older PHP).
 
 ## To 1.5.7
 

@@ -18,7 +18,7 @@
 
 - PHP 8.2+ (< 8.6)
 - Symfony 7.4+ or 8.x
-- Doctrine ORM 2.15+ or 3.x
+- Doctrine ORM 3.7+
 - Doctrine Bundle 2.10+ (Symfony 7.x) or 3.0+ (Symfony 8.x)
 
 **Recommended** (installed by the Flex recipe for rich task descriptions):
