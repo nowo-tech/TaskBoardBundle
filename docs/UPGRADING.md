@@ -1,28 +1,24 @@
 # Upgrading
 
-## To 1.5.1
-
-From **1.5.0** — YAML services_timetrack indentation fix only. No host migration.
-
-```bash
-composer update nowo-tech/task-board-bundle
-```
-
 ## Table of contents
 
+- [To 1.5.1](#to-151)
+- [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [Unreleased](#unreleased)
 - [To 1.7.0](#to-170)
 - [To 1.6.0](#to-160)
 - [To 1.5.8](#to-158)
-- [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [From 1.5.4 to 1.5.5](#from-154-to-155)
-- [Unreleased](#unreleased)
 - [To 1.5.7](#to-157)
 - [To 1.5.4](#to-154)
 - [To 1.5.3](#to-153)
 - [To 1.5.2](#to-152)
 - [To 1.5.0](#to-150)
+  - [Twig Extra Bundle (REQ-TWIG-004)](#twig-extra-bundle-req-twig-004)
+  - [Twig-CS-Fixer (maintainers)](#twig-cs-fixer-maintainers)
 - [1.4.0 (2026-08-03)](#140-2026-08-03)
+  - [Install / update](#install--update)
   - [REQ-UI-002 allow_unauthenticated](#req-ui-002-allow_unauthenticated)
+  - [Breaking changes](#breaking-changes)
 - [1.3.1 (2026-07-30)](#131-2026-07-30)
   - [CSRF on kanban / bare POSTs (REQ-SEC-005)](#csrf-on-kanban--bare-posts-req-sec-005)
 - [1.3.0 (2026-07-30)](#130-2026-07-30)
@@ -32,23 +28,32 @@ composer update nowo-tech/task-board-bundle
 - [1.2.3 (2026-07-16)](#123-2026-07-16)
   - [Notes](#notes-1)
 - [1.2.2 (2026-07-13)](#122-2026-07-13)
-  - [Notes](#notes)
+  - [Notes](#notes-2)
 - [1.2.1 (2026-07-08)](#121-2026-07-08)
-  - [Notes](#notes)
+  - [Notes](#notes-3)
 - [1.2.0 (2026-07-07)](#120-2026-07-07)
   - [New: task import](#new-task-import)
 - [1.1.1 (2026-07-07)](#111-2026-07-07)
-  - [Notes](#notes)
+  - [Notes](#notes-4)
 - [1.1.0 (2026-07-06)](#110-2026-07-06)
   - [If you use time tracking](#if-you-use-time-tracking)
   - [If you only use TaskBoard](#if-you-only-use-taskboard)
-  - [Notes](#notes)
+  - [Notes](#notes-5)
 - [1.0.1 (2026-07-06)](#101-2026-07-06)
-  - [Notes](#notes)
+  - [Notes](#notes-6)
 - [1.0.0 (2026-07-06)](#100-2026-07-06)
   - [Requirements](#requirements)
   - [Install](#install)
 - [Future 1.x releases](#future-1x-releases)
+  - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
+
+## To 1.5.1
+
+From **1.5.0** — YAML services_timetrack indentation fix only. No host migration.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 This document describes how to upgrade between versions of TaskBoard Bundle.
 
