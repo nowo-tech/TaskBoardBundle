@@ -9,6 +9,16 @@ services:
         exclude:
             - '../../DependencyInjection/'
             - '../../TaskBoardBundle.php'
+            - '../../Resources/'
+            # Value objects / data carriers are not services (REQ: keep the container free of non-services).
+            - '../../Entity/'
+            - '../../Dto/'
+            - '../../Event/'
+            - '../../Enum/'
+            - '../../Exception/'
+            - '../../ValueObject/'
+            - '../../Import/Dto/'
+            - '../../Import/TaskImportSource.php'
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
@@ -68,6 +78,7 @@ services:
         arguments:
             $layoutTemplate: '%nowo_task_board.templates.layout%'
             $cssFramework: '%nowo_task_board.templates.css_framework%'
+            $routes: '%nowo_task_board.routes%'
 
     # Form Kit injects FormOptionsMerger into tagged form types (FormOptionsMergerInjectorCompilerPass).
     Nowo\TaskBoardBundle\Form\:

@@ -54,6 +54,14 @@ use function sprintf;
  */
 final class TaskBoardExtension extends Extension implements PrependExtensionInterface
 {
+    /**
+     * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
+     */
+    public function __construct(
+        private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
+    ) {
+    }
+
     public function load(array $configs, ContainerBuilder $container): void
     {
         $configuration = new Configuration();
@@ -98,7 +106,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void
     {
-        if (!interface_exists(TaskProviderInterface::class)) {
+        if (!interface_exists($this->timeTrackProviderInterface)) {
             return;
         }
 
@@ -142,11 +150,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
         $this->prependUiKitDefaults($container);
     }
-
-    /**
-     * When UiKit is installed, seed nowo_ui_kit.css_framework / icon_set from templates
-     * so kit macros resolve the same stack. Does not override keys the host already set.
-     */
 
     /**
      * When FormKit is installed, register the task_board profile. Forms select it via #[FormKitConfig].
@@ -212,6 +215,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
     }
 
+    /**
+     * When UiKit is installed, seed nowo_ui_kit.css_framework / icon_set from templates
+     * so kit macros resolve the same stack. Does not override keys the host already set.
+     */
     private function prependUiKitDefaults(ContainerBuilder $container): void
     {
         if (!$container->hasExtension('nowo_ui_kit')) {
@@ -221,9 +228,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $hostHasCssFramework = false;
         $hostHasIconSet      = false;
         foreach ($container->getExtensionConfig('nowo_ui_kit') as $cfg) {
-            if (!is_array($cfg)) {
-                continue;
-            }
             if (array_key_exists('css_framework', $cfg)) {
                 $hostHasCssFramework = true;
             }

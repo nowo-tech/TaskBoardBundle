@@ -25,14 +25,8 @@ final class DelimitedTableParser
     {
         $delimiter = $this->detectDelimiter($content, $filename);
         $lines     = preg_split("/\r\n|\r|\n/", trim($content)) ?: [];
-        if ($lines === []) {
-            return [];
-        }
-
-        $headers = $this->parseLine($lines[0], $delimiter);
-        if ($headers === []) {
-            return [];
-        }
+        // str_getcsv() always yields at least one field, so an empty file simply produces no data rows.
+        $headers = $this->parseLine($lines[0] ?? '', $delimiter);
 
         $rows = [];
         for ($i = 1, $max = count($lines); $i < $max; ++$i) {
@@ -41,11 +35,7 @@ final class DelimitedTableParser
                 continue;
             }
 
-            $values = $this->parseLine($line, $delimiter);
-            if ($values === []) {
-                continue;
-            }
-
+            $values     = $this->parseLine($line, $delimiter);
             $normalized = [];
             foreach ($headers as $index => $header) {
                 $normalized[trim($header)] = trim((string) ($values[$index] ?? ''));

@@ -43,8 +43,11 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use ValueError;
 
+use function array_key_exists;
 use function is_object;
 use function is_string;
+use function reset;
+use function sprintf;
 
 /**
  * Manage UI for task boards, kanban, list, and task detail.
@@ -119,7 +122,8 @@ final class TaskBoardManageController extends AbstractController
         $columnChoices = $this->buildColumnChoices($board);
 
         $taskForm = $this->createForm(TaskFormType::class, new TaskFormData(
-            columnId: array_key_first($columnChoices) ?: null,
+            // Choices are label => id: the default column is the first *value* (id), not the label.
+            columnId: $columnChoices === [] ? null : reset($columnChoices),
         ), ['column_choices' => $columnChoices]);
 
         return $this->render($this->templates['board'], [
@@ -272,7 +276,8 @@ final class TaskBoardManageController extends AbstractController
     {
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user);
-        $tasks = $this->taskRepository->findByBoard($board);
+        // Completed tasks (last column) stay visible so the column filter can show "Done" work.
+        $tasks = $this->taskRepository->findByBoard($board, true);
 
         $priorities = [];
         $columns    = [];
@@ -295,9 +300,10 @@ final class TaskBoardManageController extends AbstractController
 
     public function ganttView(string $boardId): Response
     {
-        $user     = $this->requireUser();
-        $board    = $this->findBoard($boardId, $user);
-        $tasks    = $this->taskRepository->findByBoard($board);
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId, $user);
+        // Completed tasks are drawn as finished bars (and keep their subtasks attached to the tree).
+        $tasks    = $this->taskRepository->findByBoard($board, true);
         $timeline = $this->ganttBuilder->build($tasks);
 
         return $this->render($this->templates['gantt'], [
@@ -605,12 +611,23 @@ final class TaskBoardManageController extends AbstractController
         return $task;
     }
 
-    /** @return array<string, string> */
+    /**
+     * Column choices as label => id. Duplicate column names get a " (2)", " (3)"… suffix so no column
+     * is silently dropped from the select (ChoiceType keys are labels).
+     *
+     * @return array<string, string>
+     */
     private function buildColumnChoices(TaskBoard $board): array
     {
         $choices = [];
         foreach ($board->getColumns() as $column) {
-            $choices[$column->getName()] = $column->getId();
+            $label  = $column->getName();
+            $suffix = 2;
+            while (array_key_exists($label, $choices)) {
+                $label = sprintf('%s (%d)', $column->getName(), $suffix++);
+            }
+
+            $choices[$label] = $column->getId();
         }
 
         return $choices;

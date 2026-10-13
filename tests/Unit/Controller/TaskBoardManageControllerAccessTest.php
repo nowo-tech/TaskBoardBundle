@@ -6,9 +6,11 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
@@ -61,6 +63,12 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
     /** @var array<string, mixed> */
     private array $rendered = [];
+
+    /** @var list<array{type: string, data: mixed, options: array<string, mixed>}> */
+    private array $createdForms = [];
+
+    /** @var list<bool> */
+    private array $findByBoardIncludeCompleted = [];
 
     protected function setUp(): void
     {
@@ -177,7 +185,53 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $response = $this->controller($this->owner)->moveTask($this->task->getId(), $request);
 
         self::assertSame(302, $response->getStatusCode());
-        self::assertSame(4, $this->task->getPosition());
+        // Positions are renumbered 0..n-1 inside the target column (the task is alone in it).
+        self::assertSame(0, $this->task->getPosition());
+    }
+
+    public function testBoardPreselectsFirstColumnIdForNewTasks(): void
+    {
+        $this->controller($this->owner)->board($this->board->getId());
+
+        $taskForm = $this->findCreatedForm(TaskFormType::class);
+        self::assertInstanceOf(TaskFormData::class, $taskForm['data']);
+        self::assertSame($this->column->getId(), $taskForm['data']->columnId);
+    }
+
+    public function testDuplicateColumnNamesKeepEveryColumnInChoices(): void
+    {
+        $second = new BoardColumn($this->board, 'Todo', 1);
+        $third  = new BoardColumn($this->board, 'Todo', 2);
+        $this->board->addColumn($second)->addColumn($third);
+
+        $this->controller($this->owner)->board($this->board->getId());
+
+        self::assertSame([
+            'Todo'     => $this->column->getId(),
+            'Todo (2)' => $second->getId(),
+            'Todo (3)' => $third->getId(),
+        ], $this->findCreatedForm(TaskFormType::class)['options']['column_choices']);
+    }
+
+    public function testListAndGanttIncludeCompletedTasks(): void
+    {
+        $controller = $this->controller($this->owner);
+        $controller->listView($this->board->getId());
+        $controller->ganttView($this->board->getId());
+
+        self::assertSame([true, true], $this->findByBoardIncludeCompleted);
+    }
+
+    /** @return array{type: string, data: mixed, options: array<string, mixed>} */
+    private function findCreatedForm(string $type): array
+    {
+        foreach ($this->createdForms as $created) {
+            if ($created['type'] === $type) {
+                return $created;
+            }
+        }
+
+        self::fail('Form ' . $type . ' was not created.');
     }
 
     public function testNestedColumnOrderIsBadRequest(): void
@@ -208,7 +262,11 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $taskRepository = $this->createMock(TaskRepositoryInterface::class);
         $taskRepository->method('findById')->willReturnCallback(fn (string $id): ?Task => $id === $this->task->getId() ? $this->task : null);
-        $taskRepository->method('findByBoard')->willReturn([$this->task]);
+        $taskRepository->method('findByBoard')->willReturnCallback(function (TaskBoard $board, bool $includeCompleted = false): array {
+            $this->findByBoardIncludeCompleted[] = $includeCompleted;
+
+            return [$this->task];
+        });
 
         $teamMembers = $this->createMock(TeamMemberRepositoryInterface::class);
         $teamMembers->method('findByUserId')->willReturn([]);
@@ -246,7 +304,11 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $form        = $this->createMock(FormInterface::class);
         $formFactory = $this->createMock(FormFactoryInterface::class);
-        $formFactory->method('create')->willReturn($form);
+        $formFactory->method('create')->willReturnCallback(function (string $type, mixed $data = null, array $options = []) use ($form): FormInterface {
+            $this->createdForms[] = ['type' => $type, 'data' => $data, 'options' => $options];
+
+            return $form;
+        });
 
         $twig = $this->createMock(Environment::class);
         $twig->method('render')->willReturnCallback(function (string $template, array $context): string {

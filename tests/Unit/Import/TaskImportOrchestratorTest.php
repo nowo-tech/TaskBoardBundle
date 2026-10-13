@@ -6,16 +6,20 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
+use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Import\Trello\TrelloJsonImporter;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -225,6 +229,105 @@ final class TaskImportOrchestratorTest extends TestCase
             content: "Task ID,Task Name\n1,First\n",
             filename: 'clickup.csv',
             actor: $user,
+        );
+    }
+
+    public function testParserErrorsBecomeResultErrors(): void
+    {
+        $user      = new TestUser('1', 'dev@example.com');
+        $persisted = [];
+        $result    = $this->orchestrator($persisted)->import(new TaskBoard('Demo', 'demo', $user), TaskImportSource::ClickUpJson, '{oops', 'x.json', $user);
+
+        self::assertTrue($result->hasErrors());
+        self::assertStringContainsString('Invalid ClickUp JSON', $result->errors[0]);
+    }
+
+    public function testUnknownSourceThrows(): void
+    {
+        $user      = new TestUser('1', 'dev@example.com');
+        $persisted = [];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('No importer registered for source "jira_csv"');
+        $this->orchestrator($persisted)->import(new TaskBoard('Demo', 'demo', $user), TaskImportSource::JiraCsv, '', 'x.csv', $user);
+    }
+
+    public function testUrlOnlyRowsGetUrlLinkAndResolvedAssigneesBecomeMembers(): void
+    {
+        $user     = new TestUser('1', 'dev@example.com');
+        $assignee = new TestUser('2', 'jane@example.com');
+        $board    = new TaskBoard('Demo', 'demo', $user);
+        $board->addColumn(new BoardColumn($board, 'To do', 0));
+
+        $resolver = $this->createMock(TaskImportUserResolverInterface::class);
+        $resolver->method('resolveByEmail')->willReturnCallback(static fn (string $email): ?object => $email === 'jane@example.com' ? $assignee : null);
+
+        $persisted = [];
+        $result    = $this->orchestrator($persisted, $resolver)->import(
+            $board,
+            TaskImportSource::TrelloJson,
+            '{"cards":[{"name":"Linked","shortUrl":"https://trello.com/c/1"}]}',
+            'b.json',
+            $user,
+        );
+        self::assertSame(1, $result->created);
+        $link = $persisted[0]->getLinks()->first();
+        self::assertInstanceOf(TaskLink::class, $link);
+        self::assertSame(TaskLinkType::Url, $link->getLinkType());
+        self::assertSame('https://trello.com/c/1', $link->getUrl());
+
+        $persisted = [];
+        $result    = $this->orchestrator($persisted, $resolver)->import(
+            $board,
+            TaskImportSource::ClickUpCsv,
+            "Task Name,Assignee Email\nMine,jane@example.com\nTheirs,ghost@example.com\n",
+            'c.csv',
+            $user,
+        );
+        self::assertSame(2, $result->created);
+        self::assertSame($assignee, $persisted[0]->getMembers()->first()->getUser());
+        self::assertCount(0, $persisted[1]->getMembers());
+        self::assertStringContainsString('ghost@example.com', $result->warnings[0]);
+    }
+
+    public function testCyclicParentsAreImportedWithoutInfiniteRecursion(): void
+    {
+        $user  = new TestUser('1', 'dev@example.com');
+        $board = new TaskBoard('Demo', 'demo', $user);
+
+        $persisted = [];
+        $result    = $this->orchestrator($persisted)->import(
+            $board,
+            TaskImportSource::ClickUpCsv,
+            "Task ID,Task Name,Parent ID\nA,Alpha,B\nB,Beta,A\n",
+            'c.csv',
+            $user,
+        );
+
+        self::assertSame(2, $result->created);
+        self::assertSame(['Alpha', 'Beta'], array_map(static fn (Task $task): string => $task->getTitle(), $persisted));
+    }
+
+    /**
+     * @param list<Task> $persisted
+     */
+    private function orchestrator(array &$persisted, ?TaskImportUserResolverInterface $resolver = null): TaskImportOrchestrator
+    {
+        $taskRepository = $this->createMock(TaskRepositoryInterface::class);
+        $taskRepository->method('findByBoard')->willReturn([]);
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->method('persist')->willReturnCallback(static function (object $task) use (&$persisted): void {
+            $persisted[] = $task;
+        });
+
+        return new TaskImportOrchestrator(
+            importers: [new ClickUpCsvImporter(), new ClickUpJsonImporter(), new TrelloJsonImporter()],
+            taskRepository: $taskRepository,
+            columnManager: new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class)),
+            changeRecorder: new TaskChangeRecorder(),
+            userResolver: $resolver ?? new NullTaskImportUserResolver(),
+            entityManager: $entityManager,
         );
     }
 }

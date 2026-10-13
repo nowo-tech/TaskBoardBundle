@@ -68,6 +68,13 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+- **List and Gantt views now include completed tasks** (tasks in the last column). Use the list's column filter to hide them.
+- **Task positions are renumbered on drag & drop:** `TaskManager::move($task, $columnId, $position, $user)` treats `$position` as the index inside the target column (clamped to its size) and rewrites the column's positions to `0..n-1`, saving siblings whose position changed. Code relying on arbitrary/gapped positions passed to `move()` should pass an index instead.
+- **Overridden templates:** if you renamed `routes.<key>.name`, use `path(nowo_task_board_route('<key>'), …)` in your own template overrides instead of the default `nowo_task_board_*` names.
+- **Column choices:** boards with duplicate column names now show `Name (2)`, `Name (3)`… in the task form's column select.
+- **Deprecated:** remove `nowo_task_board.firewall` from your configuration (it never had an effect).
+- `TaskBoardTwigExtension` gained an optional third constructor argument `$routes`; manual instantiations keep working.
+
 ## To 1.6.0
 
 From **1.5.8** — security: per-board authorization, safe link URLs and column colours, optional form types.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use DateInterval;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Dto\TaskGanttItem;
 use Nowo\TaskBoardBundle\Dto\TaskGanttLink;
@@ -35,9 +36,15 @@ final readonly class TaskGanttBuilder
         /** @var list<Task> $roots */
         $roots = [];
 
+        $taskIds = [];
+        foreach ($tasks as $task) {
+            $taskIds[$task->getId()] = true;
+        }
+
         foreach ($tasks as $task) {
             $parent = $task->getParent();
-            if ($parent === null) {
+            // Subtasks whose parent is not part of the timeline are drawn at root level instead of vanishing.
+            if ($parent === null || !isset($taskIds[$parent->getId()])) {
                 $roots[] = $task;
 
                 continue;
@@ -76,15 +83,14 @@ final readonly class TaskGanttBuilder
             ];
         }
 
+        // Only reachable with corrupted (cyclic) parent data: no task is a root, nothing can be drawn.
         if (!$minDay instanceof DateTimeImmutable || !$maxDay instanceof DateTimeImmutable) {
             return $this->emptyTimeline();
         }
 
-        $rangeStart = $minDay->modify('-' . self::RANGE_PADDING_DAYS . ' days');
-        $rangeEnd   = $maxDay->modify('+' . self::RANGE_PADDING_DAYS . ' days');
-        if (!$rangeStart instanceof DateTimeImmutable || !$rangeEnd instanceof DateTimeImmutable) {
-            return $this->emptyTimeline();
-        }
+        $padding    = new DateInterval('P' . self::RANGE_PADDING_DAYS . 'D');
+        $rangeStart = $minDay->sub($padding);
+        $rangeEnd   = $maxDay->add($padding);
         $dayKeys    = $this->dayKeysBetween($rangeStart, $rangeEnd);
         $indexByDay = array_flip($dayKeys);
 

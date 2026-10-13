@@ -55,6 +55,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Translations:** 48 keys used by the templates/controller were missing from all 7 locales (`task_board.gantt.*`, `task_board.flash.column_updated|link_updated|link_removed|member_removed`, `task_board.task.*_modal_*`, `task_board.history.completed_*`, `task_board.history.type.*`, `task_board.priority.*`, …) and rendered as raw keys; added real EN/ES/DE/FR/IT/NL/PT translations. New `TranslationKeysTest` fails when a literal or enum-driven key is missing from any locale or locales drift apart.
+- **Renamed routes:** manage templates hard-coded ~48 `nowo_task_board_*` route names, so changing `routes.<key>.name` broke every page. Templates now resolve names via the new Twig function `nowo_task_board_route('<key>')`, fed from the `routes` config (covered by a rendering test with renamed routes).
+- **Add-task modal default column:** the board page pre-selected the first column *name* instead of its id, so the default column never matched.
+- **Duplicate column names:** column choices were keyed by name, so columns sharing a name disappeared from the task form; duplicates are now labelled `Name (2)`, `Name (3)`…
+- **Drag & drop positions:** the client sends the target column's card count as position, which collided with existing (gapped) positions. `TaskManager::move()` now inserts the task at that index and renumbers the target column `0..n-1`.
+- **List and Gantt views** hid completed (last-column) tasks although the Gantt draws completed bars and the list filters by column; both now include them, and Gantt subtasks whose parent is not on the timeline are shown at root level instead of disappearing.
+- `services.yaml` no longer registers entities, DTOs, events, enums, exceptions and value objects as autowired services.
+- Docs: routes table now lists `task_link_update`, `task_link_remove` and `task_member_remove`; documented that `TaskBoard::team` is assigned programmatically (no UI picker).
+
+### Deprecated
+
+- `nowo_task_board.firewall` was never read by the bundle; setting it now triggers a deprecation. Protect the manage routes with your own `security.yaml` firewall/`access_control`.
+
+### Changed
+
+- Dev tooling: vitest/`@vitest/coverage-v8` `^4.1.11` (from `^3.0.0`), jsdom `^30.1.2`; CI TypeScript job runs on Node 22.
+- Test suite now covers importers (ClickUp JSON, Jira CSV, Trello JSON, parser/mapper helpers), the import command and the extension prepend logic; the 100% coverage gate passes again. Dead branches in `DelimitedTableParser::parse()` were removed.
+
 ## [1.6.0] - 2026-10-13
 
 ### Security

@@ -76,13 +76,18 @@ Each route has `path` and `name`. Optional `route_prefix` is prepended to every 
 | `routes.task_move` | `/tools/task-board/task/{taskId}/move` | `nowo_task_board_task_move` |
 | `routes.task_advance` | `/tools/task-board/task/{taskId}/advance` | `nowo_task_board_task_advance` |
 | `routes.task_link` | `/tools/task-board/task/{taskId}/link` | `nowo_task_board_task_link` |
+| `routes.task_link_update` | `/tools/task-board/task/{taskId}/link/{linkId}` | `nowo_task_board_task_link_update` |
+| `routes.task_link_remove` | `/tools/task-board/task/{taskId}/link/{linkId}/remove` | `nowo_task_board_task_link_remove` |
 | `routes.task_member` | `/tools/task-board/task/{taskId}/member` | `nowo_task_board_task_member` |
+| `routes.task_member_remove` | `/tools/task-board/task/{taskId}/member/{memberId}/remove` | `nowo_task_board_task_member_remove` |
 | `routes.task_subtask` | `/tools/task-board/task/{taskId}/subtask` | `nowo_task_board_task_subtask` |
 | `routes.task_priority` | `/tools/task-board/task/{taskId}/priority` | `nowo_task_board_task_priority` |
 | `routes.column_create` | `/tools/task-board/board/{boardId}/column` | `nowo_task_board_column_create` |
 | `routes.column_update` | `/tools/task-board/board/{boardId}/column/{columnId}` | `nowo_task_board_column_update` |
 | `routes.column_reorder` | `/tools/task-board/board/{boardId}/columns/reorder` | `nowo_task_board_column_reorder` |
 | `routes.board_import` | `/tools/task-board/board/{boardId}/import` | `nowo_task_board_board_import` |
+
+Renaming a route (`routes.<key>.name`) is fully supported: the bundle templates never hard-code route names, they resolve them with the Twig function `nowo_task_board_route('<key>')` (e.g. `path(nowo_task_board_route('board'), {boardId: board.id})`). Use the same function in overridden templates.
 
 Import routes:
 
@@ -151,6 +156,8 @@ nowo_task_board:
 ```
 
 When not configured, a null resolver is used and `TaskAccessGuard` falls back to assignee/team membership checks via repositories.
+
+A board's team (`TaskBoard::getTeam()`) is what both checks compare against. The manage UI has no team picker: assign it in your own code (`$board->setTeam($team)` and persist), e.g. from an admin form, a fixture or a listener on board creation. Boards without a team are only visible to their creator, task members and `security.manage_roles`.
 
 ### Access events
 
@@ -272,7 +279,7 @@ Example bridge:
 |--------|---------|-------------|
 | `route_prefix` | `''` | Prepended to all route paths |
 | `dashboard_route` | `null` | Route name for "back" link in manage UI |
-| `firewall` | `main` | Documented firewall name for host apps |
+| `firewall` | `main` | **Deprecated since 1.7, no effect.** Never read by the bundle; protect the manage routes in your `security.yaml` (see [Firewall](#firewall)). Remove the key |
 
 ## TimeTrack integration (optional)
 

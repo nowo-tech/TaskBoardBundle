@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Twig;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
+use Twig\TwigFunction;
 
 use function in_array;
 use function is_string;
@@ -21,10 +22,32 @@ use const PHP_URL_SCHEME;
  */
 final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsInterface
 {
+    /**
+     * @param array<string, array{path?: string, name?: string}> $routes Configured `routes` tree (logical key => path/name)
+     */
     public function __construct(
         private readonly string $layoutTemplate,
         private readonly string $cssFramework,
+        private readonly array $routes = [],
     ) {
+    }
+
+    public function getFunctions(): array
+    {
+        return [
+            new TwigFunction('nowo_task_board_route', $this->routeName(...)),
+        ];
+    }
+
+    /**
+     * Maps a logical route key (e.g. "board", "task_move") to the route name configured under
+     * `nowo_task_board.routes.<key>.name`, so templates keep working when hosts rename routes.
+     */
+    public function routeName(string $key): string
+    {
+        $name = $this->routes[$key]['name'] ?? null;
+
+        return is_string($name) && $name !== '' ? $name : 'nowo_task_board_' . $key;
     }
 
     public function getFilters(): array

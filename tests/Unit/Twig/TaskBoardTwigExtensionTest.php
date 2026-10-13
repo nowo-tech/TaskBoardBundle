@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
+use Twig\TwigFilter;
+use Twig\TwigFunction;
 
 final class TaskBoardTwigExtensionTest extends TestCase
 {
@@ -54,8 +56,21 @@ final class TaskBoardTwigExtensionTest extends TestCase
 
     public function testFiltersAreRegistered(): void
     {
-        $names = array_map(static fn ($filter): string => $filter->getName(), (new TaskBoardTwigExtension('base.html.twig', 'custom'))->getFilters());
+        $names = array_map(static fn (TwigFilter $filter): string => $filter->getName(), (new TaskBoardTwigExtension('base.html.twig', 'custom'))->getFilters());
 
         self::assertSame(['nowo_task_board_safe_url', 'nowo_task_board_safe_color'], $names);
+    }
+
+    public function testRouteFunctionMapsLogicalKeysToConfiguredNames(): void
+    {
+        $extension = new TaskBoardTwigExtension('base.html.twig', 'custom', [
+            'board' => ['path' => '/b/{boardId}', 'name' => 'app_board'],
+            'list'  => ['path' => '/l/{boardId}', 'name' => ''],
+        ]);
+
+        self::assertSame(['nowo_task_board_route'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
+        self::assertSame('app_board', $extension->routeName('board'));
+        self::assertSame('nowo_task_board_list', $extension->routeName('list'));
+        self::assertSame('nowo_task_board_task', $extension->routeName('task'));
     }
 }

@@ -94,7 +94,16 @@ final readonly class TaskManager
     /**
      * @throws ColumnNotFoundException when $columnId is not a column of the task's board
      */
+    /**
+     * Moves a task to a column at the given index and renumbers the target column (0..n-1) so
+     * client-computed positions (e.g. drag & drop card counts) never collide with existing ones.
+     */
     public function move(Task $task, ?string $columnId, int $position, object $user): void
+    {
+        $this->applyMove($task, $columnId, $position, $user, true);
+    }
+
+    private function applyMove(Task $task, ?string $columnId, int $position, object $user, bool $renumberSiblings): void
     {
         $columns      = $this->orderedColumns($task->getBoard());
         $oldColumn    = $task->getColumn();
@@ -108,6 +117,10 @@ final readonly class TaskManager
         $task
             ->setColumn($column)
             ->setPosition($position);
+
+        if ($renumberSiblings) {
+            $this->renumberColumn($task, $column, $position);
+        }
 
         $this->syncCompletionForColumn($task, $column, $columns);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $column);
@@ -152,7 +165,7 @@ final readonly class TaskManager
         }
 
         $target = $columns[$index - 1];
-        $this->move($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user);
+        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false);
 
         return true;
     }
@@ -167,7 +180,7 @@ final readonly class TaskManager
             return false;
         }
 
-        $this->move($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user);
+        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false);
 
         return true;
     }
@@ -180,7 +193,7 @@ final readonly class TaskManager
         }
 
         $done = $columns[array_key_last($columns)];
-        $this->move($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user);
+        $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false);
 
         return true;
     }
@@ -196,7 +209,7 @@ final readonly class TaskManager
             return false;
         }
 
-        $this->move($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user);
+        $this->applyMove($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user, false);
 
         return true;
     }
@@ -260,6 +273,40 @@ final readonly class TaskManager
         }
 
         return null;
+    }
+
+    /**
+     * Inserts $task at index $position among the other tasks of $column and rewrites positions as 0..n-1.
+     * Siblings whose position changes are saved; the moved task is saved by the caller.
+     */
+    private function renumberColumn(Task $task, ?BoardColumn $column, int $position): void
+    {
+        $siblings = [];
+        foreach ($this->taskRepository->findByBoard($task->getBoard(), true) as $candidate) {
+            if ($candidate->getId() === $task->getId()) {
+                continue;
+            }
+
+            if ($candidate->getColumn()?->getId() === $column?->getId()) {
+                $siblings[] = $candidate;
+            }
+        }
+
+        usort($siblings, static fn (Task $a, Task $b): int => $a->getPosition() <=> $b->getPosition());
+
+        $index = max(0, min($position, count($siblings)));
+        array_splice($siblings, $index, 0, [$task]);
+
+        foreach ($siblings as $newPosition => $sibling) {
+            if ($sibling->getPosition() === $newPosition) {
+                continue;
+            }
+
+            $sibling->setPosition($newPosition);
+            if ($sibling !== $task) {
+                $this->taskRepository->save($sibling);
+            }
+        }
     }
 
     private function nextPosition(TaskBoard $board, ?BoardColumn $column): int

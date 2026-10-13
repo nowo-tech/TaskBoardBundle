@@ -20,8 +20,8 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 
 - **Index** — list active boards and create new boards (default columns: To do, In progress, Done).
 - **Kanban board** — drag-and-drop tasks between columns; create tasks and columns.
-- **List view** — filterable task table with status, priority, assignee, and due date.
-- **Gantt view** — timeline with task bars and blocking dependencies.
+- **List view** — filterable task table with status, priority, assignee, and due date. Completed tasks (last column) are included; filter by column to hide them.
+- **Gantt view** — timeline with task bars and blocking dependencies. Completed tasks are drawn as finished bars; subtasks whose parent is not on the board's timeline appear at root level.
 - **Task detail** — description, subtasks, members, links, change history, and aggregated time.
 
 ## Task operations
@@ -29,10 +29,13 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Action | Route key | Description |
 |--------|-----------|-------------|
 | Import tasks | `board_import` | Upload CSV/JSON from ClickUp, Jira, Trello, etc. |
-| Move column | `task_move` | Drag task to another column (POST) |
+| Move column | `task_move` | Drag task to another column (POST); positions in the target column are renumbered 0..n-1 |
 | Advance / regress | `task_advance` | Move to next/previous column |
 | Add link | `task_link` | Attach external URL (GitLab MR URLs are parsed) |
+| Edit link | `task_link_update` | Change type, URL, label or external id of a link |
+| Remove link | `task_link_remove` | Delete a link (POST + CSRF) |
 | Add member | `task_member` | Assign team member with role |
+| Remove member | `task_member_remove` | Unassign a member (POST + CSRF) |
 | Add subtask | `task_subtask` | Create child task |
 | Set priority | `task_priority` | Update task priority |
 

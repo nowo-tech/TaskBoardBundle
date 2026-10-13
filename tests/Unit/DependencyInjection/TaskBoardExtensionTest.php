@@ -9,13 +9,23 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -24,6 +34,7 @@ use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
 
 final class TaskBoardExtensionTest extends TestCase
@@ -204,5 +215,124 @@ final class TaskBoardExtensionTest extends TestCase
         );
         self::assertTrue($container->getParameter('nowo_task_board.security.allow_unauthenticated'));
         self::assertFalse($container->getDefinition(TaskBoardResourceAccessChecker::class)->getArgument('$scopingEnabled'));
+    }
+
+    public function testLoadSkipsTimeTrackBridgeWhenInterfaceIsMissing(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension('Nowo\\Missing\\TaskProviderInterface'))->load([['user_class' => User::class]], $container);
+
+        self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
+        self::assertFalse($container->hasDefinition(TaskBoardTaskProvider::class));
+    }
+
+    public function testLoadAcceptsSecurityExtensionWithoutKernelBundles(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('security'));
+
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
+
+        self::assertTrue($container->hasDefinition('nowo_task_board.access_checker.default'));
+    }
+
+    public function testLoadPassesConfiguredRoutesToTwigExtension(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'routes'     => ['board' => ['name' => 'app_board']],
+        ]], $container);
+
+        self::assertSame('%nowo_task_board.routes%', $container->getDefinition(TaskBoardTwigExtension::class)->getArgument('$routes'));
+        self::assertSame('app_board', $container->getParameter('nowo_task_board.routes')['board']['name']);
+    }
+
+    public function testLoadDoesNotRegisterDataClassesAsServices(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
+
+        foreach ([Task::class, TaskBoard::class, TaskFormData::class, TaskImportResult::class, BoardAccessCheckEvent::class, TaskPriority::class, TaskImportSource::class, ColumnNotFoundException::class, Uuid::class] as $class) {
+            // Excluded single files are kept as "container.excluded" placeholders (removed at compile time).
+            self::assertTrue(
+                !$container->hasDefinition($class) || $container->getDefinition($class)->hasTag('container.excluded'),
+                $class . ' must not be a service',
+            );
+        }
+
+        self::assertTrue($container->hasDefinition(TaskManager::class));
+    }
+
+    public function testPrependSeedsFormKitAndUiKitDefaults(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_form_kit'));
+        $container->registerExtension($this->stubExtension('nowo_ui_kit'));
+        $container->prependExtensionConfig('nowo_task_board', ['user_class' => User::class, 'templates' => ['css_framework' => 'bootstrap']]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        $formKit = $container->getExtensionConfig('nowo_form_kit');
+        self::assertSame('bootstrap', $formKit[0]['css_framework']);
+        self::assertSame('NowoTaskBoardBundle', $formKit[0]['profiles']['task_board']['translation_domain']);
+
+        self::assertSame([['css_framework' => 'bootstrap5', 'icon_set' => 'bootstrap-icons']], $container->getExtensionConfig('nowo_ui_kit'));
+    }
+
+    public function testPrependUiKitUsesTablerIconsForTabler(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_ui_kit'));
+        $container->prependExtensionConfig('nowo_ui_kit', ['css_framework' => 'tabler']);
+        $container->prependExtensionConfig('nowo_task_board', ['user_class' => User::class]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertSame(['icon_set' => 'tabler-icons'], $container->getExtensionConfig('nowo_ui_kit')[0]);
+    }
+
+    public function testPrependKeepsHostFormKitAndUiKitSettings(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_form_kit'));
+        $container->registerExtension($this->stubExtension('nowo_ui_kit'));
+        $container->prependExtensionConfig('nowo_form_kit', ['css_framework' => 'tailwind', 'profiles' => ['task_board' => ['alias' => 'mine']]]);
+        $container->prependExtensionConfig('nowo_ui_kit', ['css_framework' => 'tailwind', 'icon_set' => 'none']);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertCount(1, $container->getExtensionConfig('nowo_form_kit'));
+        self::assertCount(1, $container->getExtensionConfig('nowo_ui_kit'));
+    }
+
+    private function securedContainer(): ContainerBuilder
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+
+        return $container;
+    }
+
+    private function stubExtension(string $alias): Extension
+    {
+        return new class($alias) extends Extension {
+            public function __construct(private readonly string $alias)
+            {
+            }
+
+            public function load(array $configs, ContainerBuilder $container): void
+            {
+            }
+
+            public function getAlias(): string
+            {
+                return $this->alias;
+            }
+        };
     }
 }

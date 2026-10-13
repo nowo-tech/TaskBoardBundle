@@ -31,9 +31,9 @@
 <div class="page nowo-ui-page">
     <header class="navbar navbar-expand-md navbar-light d-print-none border-bottom mb-3">
         <div class="container-xl">
-            <a class="navbar-brand" href="{{ path('nowo_task_board_index') }}">{{ 'nav.brand'|trans({}, 'NowoTaskBoardBundle') }}</a>
+            <a class="navbar-brand" href="{{ path(nowo_task_board_route('index')) }}">{{ 'nav.brand'|trans({}, 'NowoTaskBoardBundle') }}</a>
             <div class="navbar-nav flex-row gap-2">
-                <a class="nav-link" href="{{ path('nowo_task_board_index') }}">{{ 'nav.board'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                <a class="nav-link" href="{{ path(nowo_task_board_route('index')) }}">{{ 'nav.board'|trans({}, 'NowoTaskBoardBundle') }}</a>
                 {% if dashboardRoute is defined and dashboardRoute %}
                     <a class="nav-link" href="{{ path(dashboardRoute) }}">{{ 'nav.timer'|trans({}, 'NowoTimeTrackBundle') }}</a>
                 {% endif %}

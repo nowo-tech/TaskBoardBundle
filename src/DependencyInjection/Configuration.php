@@ -50,6 +50,8 @@ final class Configuration implements ConfigurationInterface
                     ->defaultNull()
                 ->end()
                 ->scalarNode('firewall')
+                    ->info('Deprecated: never read by the bundle. Protect the manage routes with your own security.yaml firewall/access_control.')
+                    ->setDeprecated('nowo-tech/task-board-bundle', '1.7', 'The "%node%" option at path "%path%" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead.')
                     ->defaultValue('main')
                 ->end()
                 ->arrayNode('security')

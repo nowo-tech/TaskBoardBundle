@@ -88,20 +88,55 @@ final class TaskManagerCrudTest extends TestCase
         self::assertSame('Done', $task->getColumn()?->getName());
     }
 
-    public function testMoveReordersTask(): void
+    public function testMoveClampsPositionToColumnSize(): void
     {
         $user  = new TestUser('1', 'dev@example.com');
         $board = new TaskBoard('Demo', 'demo', $user);
         $col   = new BoardColumn($board, 'Todo', 0);
         $board->addColumn($col);
-        $task = new Task($board, 'Move me', $user, column: $col);
+        $task = new Task($board, 'Move me', $user, column: $col, position: 3);
 
         $repo = $this->createMock(TaskRepositoryInterface::class);
         $repo->method('findByBoard')->willReturn([$task]);
-        $repo->expects(self::once())->method('save');
+        $repo->expects(self::once())->method('save')->with($task);
 
         (new TaskManager($repo, new TaskChangeRecorder()))->move($task, $col->getId(), 5, $user);
-        self::assertSame(5, $task->getPosition());
+        self::assertSame(0, $task->getPosition());
+    }
+
+    public function testMoveRenumbersTargetColumnSoPositionsNeverCollide(): void
+    {
+        $user  = new TestUser('1', 'dev@example.com');
+        $board = new TaskBoard('Demo', 'demo', $user);
+        $todo  = new BoardColumn($board, 'Todo', 0);
+        $doing = new BoardColumn($board, 'Doing', 1);
+        $board->addColumn($todo)->addColumn($doing);
+        // Target column has gaps (0, 4, 7): the client sends the visible card count (3) as position.
+        $a     = new Task($board, 'A', $user, column: $doing, position: 0);
+        $b     = new Task($board, 'B', $user, column: $doing, position: 7);
+        $c     = new Task($board, 'C', $user, column: $doing, position: 4);
+        $other = new Task($board, 'Other column', $user, column: $todo, position: 3);
+        $moved = new Task($board, 'Moved', $user, column: $todo, position: 0);
+
+        $saved = [];
+        $repo  = $this->createMock(TaskRepositoryInterface::class);
+        $repo->method('findByBoard')->willReturn([$a, $b, $c, $other, $moved]);
+        $repo->method('save')->willReturnCallback(static function (Task $task) use (&$saved): void {
+            $saved[] = $task->getTitle();
+        });
+
+        $manager = new TaskManager($repo, new TaskChangeRecorder());
+        $manager->move($moved, $doing->getId(), 3, $user);
+
+        self::assertSame([0, 1, 2, 3], [$a->getPosition(), $c->getPosition(), $b->getPosition(), $moved->getPosition()]);
+        self::assertSame(3, $other->getPosition());
+        self::assertSame(['C', 'B', 'Moved'], $saved);
+
+        // Dropping at the top shifts every sibling down by one.
+        $saved = [];
+        $manager->move($moved, $doing->getId(), 0, $user);
+        self::assertSame([0, 1, 2, 3], [$moved->getPosition(), $a->getPosition(), $c->getPosition(), $b->getPosition()]);
+        self::assertSame(['A', 'C', 'B', 'Moved'], $saved);
     }
 
     public function testMoveRejectsColumnFromAnotherBoardWithoutTouchingTheTask(): void

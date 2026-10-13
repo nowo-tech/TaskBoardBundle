@@ -33,13 +33,13 @@
             <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
                 <div>
                     <div class="text-secondary small mb-1">
-                        <a href="{{ path('nowo_task_board_index') }}" class="text-reset">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                        <a href="{{ path(nowo_task_board_route('index')) }}" class="text-reset">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</a>
                         <span class="mx-1">/</span>
-                        <a href="{{ path('nowo_task_board_board', {boardId: task.board.id}) }}" class="text-reset">{{ task.board.name }}</a>
+                        <a href="{{ path(nowo_task_board_route('board'), {boardId: task.board.id}) }}" class="text-reset">{{ task.board.name }}</a>
                     </div>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="{{ path('nowo_task_board_board', {boardId: task.board.id}) }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ path(nowo_task_board_route('board'), {boardId: task.board.id}) }}" class="btn btn-outline-secondary btn-sm">
                         <i class="ti ti-layout-kanban me-1"></i>{{ 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle') }}
                     </a>
                     <button type="submit" form="nowo-task-edit-form" class="btn btn-primary btn-sm">
@@ -201,7 +201,7 @@
                                 <i class="ti ti-{{ subtask.completed ? 'circle-check' : 'circle' }}"></i>
                             </span>
                             <div class="flex-grow-1">
-                                <a href="{{ path('nowo_task_board_task', {taskId: subtask.id}) }}" class="text-reset fw-semibold">{{ subtask.title }}</a>
+                                <a href="{{ path(nowo_task_board_route('task'), {taskId: subtask.id}) }}" class="text-reset fw-semibold">{{ subtask.title }}</a>
                                 {% if subtask.column %}
                                     <span class="badge bg-secondary-lt ms-1">{{ subtask.column.name }}</span>
                                 {% endif %}
@@ -210,7 +210,7 @@
                                     <ul class="list-unstyled mt-2 ps-3 border-start">
                                         {% for nested in subtask.subtasks %}
                                             <li class="mb-1">
-                                                <a href="{{ path('nowo_task_board_task', {taskId: nested.id}) }}" class="text-reset">{{ nested.title }}</a>
+                                                <a href="{{ path(nowo_task_board_route('task'), {taskId: nested.id}) }}" class="text-reset">{{ nested.title }}</a>
                                             </li>
                                         {% endfor %}
                                     </ul>
@@ -223,7 +223,7 @@
                 {% endfor %}
             </ul>
             <div class="p-3 border-top">
-                {{ form_start(subtaskForm, {action: path('nowo_task_board_task_subtask', {taskId: task.id}), method: 'POST', attr: {class: 'nowo-task-detail__inline-add'}}) }}
+                {{ form_start(subtaskForm, {action: path(nowo_task_board_route('task_subtask'), {taskId: task.id}), method: 'POST', attr: {class: 'nowo-task-detail__inline-add'}}) }}
                     <div class="input-group">
                         {{ form_widget(subtaskForm.title, {
                             label: false,
@@ -244,9 +244,9 @@
     <div
         class="nowo-task-detail__relations"
         data-controller="nowo-task-board-task-links-modal"
-        data-nowo-task-board-task-links-modal-create-url-value="{{ path('nowo_task_board_task_link', {taskId: task.id}) }}"
-        data-nowo-task-board-task-links-modal-update-url-value="{{ path('nowo_task_board_task_link_update', {taskId: task.id, linkId: 'LINK_ID'}) }}"
-        data-nowo-task-board-task-links-modal-remove-url-value="{{ path('nowo_task_board_task_link_remove', {taskId: task.id, linkId: 'LINK_ID'}) }}"
+        data-nowo-task-board-task-links-modal-create-url-value="{{ path(nowo_task_board_route('task_link'), {taskId: task.id}) }}"
+        data-nowo-task-board-task-links-modal-update-url-value="{{ path(nowo_task_board_route('task_link_update'), {taskId: task.id, linkId: 'LINK_ID'}) }}"
+        data-nowo-task-board-task-links-modal-remove-url-value="{{ path(nowo_task_board_route('task_link_remove'), {taskId: task.id, linkId: 'LINK_ID'}) }}"
         data-nowo-task-board-task-links-modal-add-title-value="{{ 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-task-links-modal-edit-title-value="{{ 'task_board.task.links_modal_edit_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
@@ -263,7 +263,7 @@
                 {% for dep in task.outgoingDependencies %}
                     <div class="list-group-item">
                         <span class="badge bg-secondary-lt me-1">{{ dep.dependencyType.value }}</span>
-                        <a href="{{ path('nowo_task_board_task', {taskId: dep.targetTask.id}) }}">{{ dep.targetTask.title }}</a>
+                        <a href="{{ path(nowo_task_board_route('task'), {taskId: dep.targetTask.id}) }}">{{ dep.targetTask.title }}</a>
                     </div>
                 {% else %}
                     <div class="list-group-item text-secondary">{{ 'task_board.task.no_dependencies'|trans({}, 'NowoTaskBoardBundle') }}</div>

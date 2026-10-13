@@ -15,7 +15,7 @@
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#close"></button>
             </div>
             {{ form_start(linkForm, {
-                action: path('nowo_task_board_task_link', {taskId: task.id}),
+                action: path(nowo_task_board_route('task_link'), {taskId: task.id}),
                 method: 'POST',
                 attr: {
                     id: 'nowo-task-link-form',

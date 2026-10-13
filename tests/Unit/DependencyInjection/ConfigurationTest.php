@@ -10,6 +10,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 
+use const E_USER_DEPRECATED;
+
 final class ConfigurationTest extends TestCase
 {
     public function testDefaults(): void
@@ -58,5 +60,29 @@ final class ConfigurationTest extends TestCase
             'user_class' => User::class,
             'templates'  => ['css_framework' => 'invalid_framework'],
         ]]);
+    }
+
+    public function testFirewallOptionIsDeprecated(): void
+    {
+        $deprecations = [];
+        set_error_handler(static function (int $level, string $message) use (&$deprecations): bool {
+            $deprecations[] = $message;
+
+            return true;
+        }, E_USER_DEPRECATED);
+
+        try {
+            $config = (new Processor())->processConfiguration(new Configuration(), [[
+                'user_class' => User::class,
+                'firewall'   => 'admin',
+            ]]);
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame('admin', $config['firewall']);
+        self::assertCount(1, $deprecations);
+        self::assertStringContainsString('"firewall"', $deprecations[0]);
+        self::assertStringContainsString('nowo-tech/task-board-bundle 1.7', $deprecations[0]);
     }
 }

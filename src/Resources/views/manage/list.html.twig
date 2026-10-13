@@ -18,14 +18,14 @@
 {% block body %}
     {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name ~ ' — ' ~ ('task_board.list.title'|trans({}, 'NowoTaskBoardBundle')),
-        breadcrumbRoute: 'nowo_task_board_board',
+        breadcrumbRoute: nowo_task_board_route('board'),
         breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
         headerActions: '
-            <a href="' ~ path('nowo_task_board_board', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path(nowo_task_board_route('board'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-layout-kanban"></i> ' ~ ('task_board.view.board'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
-            <a href="' ~ path('nowo_task_board_gantt', {boardId: board.id}) ~ '" class="btn btn-outline-primary">
+            <a href="' ~ path(nowo_task_board_route('gantt'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
                 <i class="ti ti-chart-bar"></i> ' ~ ('task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')) ~ '
             </a>
         ',
@@ -83,7 +83,7 @@
                             data-column="{{ task.column ? task.column.name : '' }}"
                         >
                             <td>
-                                <a href="{{ path('nowo_task_board_task', {taskId: task.id}) }}" class="text-reset fw-semibold">{{ task.title }}</a>
+                                <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="text-reset fw-semibold">{{ task.title }}</a>
                             </td>
                             <td class="text-secondary">{{ task.column ? task.column.name : '—' }}</td>
                             <td>
