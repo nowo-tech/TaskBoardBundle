@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TagInputBundle\Form\TagType;
+use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
@@ -48,7 +49,7 @@ final class TaskFormType extends AbstractType
                 $this->addWithDefaults($builder, 'description', TiptapEditorType::class, [
                     'label'              => 'task_board.form.task.description',
                     'required'           => false,
-                    'config'             => 'task',
+                    'config'             => TaskBoardExtension::TIPTAP_TASK_PROFILE,
                     'min_height'         => '220px',
                     'placeholder'        => 'task_board.task.description_placeholder',
                     'translation_domain' => 'NowoTaskBoardBundle',

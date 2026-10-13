@@ -1,10 +1,7 @@
+# The "task" profile used by TaskFormType is seeded by TaskBoardBundle (it reuses this
+# default profile's form_theme); define nowo_tiptap_editor.profiles.task here to override it.
 nowo_tiptap_editor:
-    default_config: task
-    configs:
-        task:
-            variant: simple
-            toolbar: true
-            min_height: 220px
+    default_profile: default
+    profiles:
+        default:
             form_theme: bootstrap_5_layout.html.twig
-            debug: false
-            theme: light

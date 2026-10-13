@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tiptap:** the task form no longer fails with `Unknown Tiptap config profile "task"` when `nowo-tech/tiptap-editor-bundle` is installed but the app did not define that profile. TaskBoardBundle now prepends a `nowo_tiptap_editor.profiles.task` profile (simple variant, toolbar, 220px; reuses the host default profile's `form_theme`) unless the host already defines `task`. Documented in CONFIGURATION.md / INSTALLATION.md; the demo now only configures its default profile.
+
 ## [1.7.2] - 2026-10-13
 
 ### Fixed

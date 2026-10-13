@@ -281,6 +281,36 @@ Example bridge:
 | `dashboard_route` | `null` | Route name for "back" link in manage UI |
 | `firewall` | `main` | **Deprecated since 1.7, no effect.** Never read by the bundle; protect the manage routes in your `security.yaml` (see [Firewall](#firewall)). Remove the key |
 
+### Rich description editor (Tiptap profile `task`)
+
+When `nowo-tech/tiptap-editor-bundle` is installed, `TaskFormType` renders the description with the Tiptap profile **`task`**. The bundle seeds that profile automatically (prepend) unless your app defines `nowo_tiptap_editor.profiles.task` itself:
+
+```yaml
+# Seeded by TaskBoardBundle — no host config needed
+nowo_tiptap_editor:
+    profiles:
+        task:
+            variant: simple
+            toolbar: true
+            min_height: 220px
+            form_theme: <your default profile's form_theme, when set>
+```
+
+To customise it, declare the profile in `config/packages/nowo_tiptap_editor.yaml` (your definition wins and nothing is seeded):
+
+```yaml
+nowo_tiptap_editor:
+    profiles:
+        default:
+            form_theme: bootstrap_5_layout.html.twig
+        task:
+            variant: notion
+            min_height: 320px
+            form_theme: bootstrap_5_layout.html.twig
+```
+
+Without the Tiptap bundle the description falls back to a plain `<textarea>`.
+
 ## TimeTrack integration (optional)
 
 When [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) is installed, the extension registers these service aliases:

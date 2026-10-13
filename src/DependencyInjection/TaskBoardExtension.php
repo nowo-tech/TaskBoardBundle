@@ -8,6 +8,7 @@ use LogicException;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
@@ -54,6 +55,11 @@ use function sprintf;
  */
 final class TaskBoardExtension extends Extension implements PrependExtensionInterface
 {
+    private const TIPTAP_EXTENSION = 'nowo_tiptap_editor';
+
+    /** Tiptap profile used by {@see TaskFormType} for the description. */
+    public const TIPTAP_TASK_PROFILE = 'task';
+
     /**
      * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
      */
@@ -149,6 +155,57 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         $this->prependUiKitDefaults($container);
+        $this->prependTiptapTaskProfile($container);
+    }
+
+    /**
+     * TaskFormType renders the description with the Tiptap profile "task". When
+     * nowo-tech/tiptap-editor-bundle is installed and the host did not define that profile, seed it
+     * (simple variant, toolbar, 220px) so the task form works without extra configuration.
+     * The host's default profile form_theme is reused so the editor matches the app's form layout.
+     */
+    private function prependTiptapTaskProfile(ContainerBuilder $container): void
+    {
+        if (!$container->hasExtension(self::TIPTAP_EXTENSION)) {
+            return;
+        }
+
+        $hostConfigs = $container->getExtensionConfig(self::TIPTAP_EXTENSION);
+        $formTheme   = null;
+        foreach ($hostConfigs as $hostConfig) {
+            $profiles = $hostConfig['profiles'] ?? $hostConfig['configs'] ?? null;
+            if (is_array($profiles)) {
+                if (array_key_exists(self::TIPTAP_TASK_PROFILE, $profiles)) {
+                    return;
+                }
+                $defaultName = $hostConfig['default_profile'] ?? $hostConfig['default_config'] ?? 'default';
+                $theme       = is_string($defaultName) && is_array($profiles[$defaultName] ?? null)
+                    ? ($profiles[$defaultName]['form_theme'] ?? null)
+                    : null;
+            } else {
+                $theme = $hostConfig['form_theme'] ?? null;
+            }
+            if (is_string($theme) && $theme !== '') {
+                $formTheme = $theme;
+            }
+        }
+
+        $taskProfile = [
+            'variant'    => 'simple',
+            'toolbar'    => true,
+            'min_height' => '220px',
+        ];
+        if ($formTheme !== null) {
+            $taskProfile['form_theme'] = $formTheme;
+        }
+
+        $profiles = [self::TIPTAP_TASK_PROFILE => $taskProfile];
+        if ($hostConfigs === []) {
+            // Without any host config the Tiptap bundle has no profile at all; keep its "default" valid.
+            $profiles['default'] = [];
+        }
+
+        $container->prependExtensionConfig(self::TIPTAP_EXTENSION, ['profiles' => $profiles]);
     }
 
     /**

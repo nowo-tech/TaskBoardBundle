@@ -309,6 +309,93 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertCount(1, $container->getExtensionConfig('nowo_ui_kit'));
     }
 
+    public function testPrependSeedsTiptapTaskProfileWithHostDefaultFormTheme(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_tiptap_editor'));
+        $container->prependExtensionConfig('nowo_tiptap_editor', [
+            'default_profile' => 'basic',
+            'profiles'        => ['basic' => ['form_theme' => 'bootstrap_5_layout.html.twig']],
+        ]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        $configs = $container->getExtensionConfig('nowo_tiptap_editor');
+        self::assertCount(2, $configs);
+        self::assertSame([
+            'profiles' => [
+                TaskBoardExtension::TIPTAP_TASK_PROFILE => [
+                    'variant'    => 'simple',
+                    'toolbar'    => true,
+                    'min_height' => '220px',
+                    'form_theme' => 'bootstrap_5_layout.html.twig',
+                ],
+            ],
+        ], $configs[0]);
+    }
+
+    public function testPrependTiptapTaskProfileReadsLegacyFlatFormTheme(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_tiptap_editor'));
+        $container->prependExtensionConfig('nowo_tiptap_editor', ['form_theme' => 'tailwind_2_layout.html.twig', 'toolbar' => false]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        $configs = $container->getExtensionConfig('nowo_tiptap_editor');
+        self::assertSame('tailwind_2_layout.html.twig', $configs[0]['profiles']['task']['form_theme']);
+        self::assertArrayNotHasKey('default', $configs[0]['profiles']);
+    }
+
+    public function testPrependTiptapTaskProfileWithoutHostConfigKeepsDefaultProfileValid(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_tiptap_editor'));
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertSame([[
+            'profiles' => [
+                'task'    => ['variant' => 'simple', 'toolbar' => true, 'min_height' => '220px'],
+                'default' => [],
+            ],
+        ]], $container->getExtensionConfig('nowo_tiptap_editor'));
+    }
+
+    public function testPrependTiptapTaskProfileOmitsFormThemeWhenDefaultProfileIsElsewhere(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_tiptap_editor'));
+        $container->prependExtensionConfig('nowo_tiptap_editor', ['profiles' => ['blog' => ['form_theme' => 'bootstrap_5_layout.html.twig']]]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertSame(
+            ['variant' => 'simple', 'toolbar' => true, 'min_height' => '220px'],
+            $container->getExtensionConfig('nowo_tiptap_editor')[0]['profiles']['task'],
+        );
+    }
+
+    public function testPrependKeepsHostTiptapTaskProfile(): void
+    {
+        $container = new ContainerBuilder();
+        $container->registerExtension($this->stubExtension('nowo_tiptap_editor'));
+        $container->prependExtensionConfig('nowo_tiptap_editor', ['default_config' => 'task', 'configs' => ['task' => ['variant' => 'notion']]]);
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertCount(1, $container->getExtensionConfig('nowo_tiptap_editor'));
+    }
+
+    public function testPrependSkipsTiptapWhenBundleMissing(): void
+    {
+        $container = new ContainerBuilder();
+
+        (new TaskBoardExtension())->prepend($container);
+
+        self::assertSame([], $container->getExtensionConfig('nowo_tiptap_editor'));
+    }
+
     private function securedContainer(): ContainerBuilder
     {
         $container = new ContainerBuilder();

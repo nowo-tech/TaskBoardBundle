@@ -26,7 +26,7 @@
 - `nowo-tech/tiptap-editor-bundle`
 - `nowo-tech/tag-input-bundle`
 
-Both are optional: without them the task form falls back to a plain `<textarea>` description and a comma-separated tags text field.
+Both are optional: without them the task form falls back to a plain `<textarea>` description and a comma-separated tags text field. With the Tiptap bundle installed, the `task` editor profile used by the task form is seeded automatically (see [CONFIGURATION.md](CONFIGURATION.md#rich-description-editor-tiptap-profile-task)); you do not need to define it.
 
 **Optional** (time tracking integration):
 
