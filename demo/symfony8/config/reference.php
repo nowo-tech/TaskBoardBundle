@@ -655,7 +655,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         uuid47_secret?: scalar|Param|null, // A high-entropy secret used by the "uuid47_transformer" service. Defaults to "kernel.secret". // Default: null
  *     },
  *     html_sanitizer?: bool|array{ // HtmlSanitizer configuration
- *         enabled?: bool|Param, // Default: false
+ *         enabled?: bool|Param, // Default: true
  *         sanitizers?: array<string, array{ // Default: []
  *             default_action?: "drop"|"block"|"allow"|Param, // Defines how the sanitizer must behave by default.
  *             allow_safe_elements?: bool|Param, // Allows "safe" elements and attributes. // Default: false
@@ -1263,13 +1263,15 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     team_membership_resolver?: scalar|Param|null, // Default: null
  *     route_prefix?: scalar|Param|null, // Default: ""
  *     dashboard_route?: scalar|Param|null, // Default: null
- *     firewall?: scalar|Param|null, // Default: "main"
+ *     firewall?: scalar|Param|null, // Deprecated: The "firewall" option at path "nowo_task_board.firewall" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead. // Deprecated: never read by the bundle. Protect the manage routes with your own security.yaml firewall/access_control. // Default: "main"
  *     security?: array{
  *         access_checker?: scalar|Param|null, // Default: null
  *         access_roles?: list<scalar|Param|null>,
  *         create_roles?: list<scalar|Param|null>,
  *         list_roles?: list<scalar|Param|null>,
  *         allow_unauthenticated?: bool|Param, // Default: false
+ *         resource_scoping?: bool|Param, // Restrict boards/tasks to their creator, team members, task members and manage_roles (IDOR protection). // Default: true
+ *         manage_roles?: list<scalar|Param|null>,
  *     },
  *     routes?: array{
  *         index?: array{
@@ -1372,17 +1374,25 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     icon_set?: "bootstrap-icons"|"tabler-icons"|"ux_icon"|"svg_inline"|"none"|Param, // Icon rendering: bootstrap-icons|tabler-icons|ux_icon|svg_inline|none. // Default: "bootstrap-icons"
  *     row_actions_display?: "icon"|"text"|"icon_text"|Param, // Table/list row actions: icon (glyph only) | text (label only) | icon_text (both). // Default: "icon"
  *     panel_path_rewrites?: array<string, scalar|Param|null>,
+ *     release_check?: array{ // Optional GitHub release-version checker (footer dialog + JSON endpoint). Off by default.
+ *         enabled?: bool|Param, // Register the checker service + controller. Also import @NowoUiKitBundle/Resources/config/routes/release_check.yaml. // Default: false
+ *         github_repo?: scalar|Param|null, // Public GitHub repository "owner/name" whose releases are compared (e.g. nowo-tech/my-app). // Default: ""
+ *         current_version?: scalar|Param|null, // Installed version label, clean semver x.y.z with optional "v" (e.g. "%app.version%"). Non-semver values skip the check. // Default: ""
+ *         cache_ttl?: int|Param, // Seconds to cache the GitHub answer (cache.app). Default 12h. // Default: 43200
+ *         default_branch?: scalar|Param|null, // Branch used as compare target when the installed version is already the latest. // Default: "main"
+ *         user_agent?: scalar|Param|null, // User-Agent sent to api.github.com. // Default: "nowo-ui-kit-release-check"
+ *     },
  * }
  * @psalm-type NowoTagInputConfig = array{
  *     value_format?: "array"|"string"|Param, // Default: "array"
  *     trim?: bool|Param, // Default: true
- *     pattern?: scalar|Param|null, // Default: null
+ *     pattern?: scalar|Param|null, // Regex source without delimiters (shared with the Tagify client); must compile. // Default: null
  *     whitelist?: list<scalar|Param|null>,
  *     duplicates?: bool|Param, // Default: false
  *     max_tags?: int|Param, // Maximum tags accepted from the client (fail-closed on overflow). // Default: 50
  *     dropdown_enabled?: bool|Param, // Default: true
  *     placeholder?: scalar|Param|null, // Default: ""
- *     form_theme?: scalar|Param|null, // Default: "form_div_layout.html.twig"
+ *     form_theme?: "form_div_layout.html.twig"|"form_table_layout.html.twig"|"bootstrap_5_layout.html.twig"|"bootstrap_5_horizontal_layout.html.twig"|"bootstrap_4_layout.html.twig"|"bootstrap_4_horizontal_layout.html.twig"|"bootstrap_3_layout.html.twig"|"bootstrap_3_horizontal_layout.html.twig"|"foundation_5_layout.html.twig"|"foundation_6_layout.html.twig"|"tailwind_2_layout.html.twig"|Param, // Default: "form_div_layout.html.twig"
  * }
  * @psalm-type NowoTiptapEditorConfig = array{
  *     default_profile?: scalar|Param|null, // Profile name used when the form field omits the "config" option (form option key remains "config" for BC). // Default: "default"
@@ -1496,6 +1506,15 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     type_map?: array<string, scalar|Param|null>,
  *     default_profile?: scalar|Param|null, // Name of the profile to use when no profile is specified (key in profiles) // Default: "default"
  *     css_framework?: scalar|Param|null, // CSS framework for CssClassUtilities (column merge + class ordering): bootstrap, tailwind, foundation, none. // Default: "bootstrap"
+ *     stateless_csrf?: array{ // Give selected (usually anonymous/public) form types a stateless CSRF token id so rendering them does not start a session. Off by default.
+ *         enabled?: bool|Param, // Default: false
+ *         token_id?: scalar|Param|null, // csrf_token_id default applied to the listed form types. Must be listed in framework.csrf_protection.stateless_token_ids. // Default: "submit"
+ *         form_types?: list<scalar|Param|null>,
+ *         register_stateless_token_id?: bool|Param, // Prepend token_id to framework.csrf_protection.stateless_token_ids (enables framework CSRF protection if it was not configured). // Default: true
+ *     },
+ *     accessibility?: array{ // Accessibility helpers applied by kit form type extensions.
+ *         unlabelled_choice_aria_label?: bool|Param, // When true (default), non-expanded ChoiceType fields (and subtypes such as EntityType) rendered with label: false and no aria-label/aria-labelledby get aria-label from their translated help, else their placeholder. // Default: true
+ *     },
  *     profiles?: array<string, array{ // Default: []
  *         alias?: scalar|Param|null, // Alias for this profile (e.g. for reference in form types)
  *         translation_domain?: scalar|Param|null, // Default: "messages"
