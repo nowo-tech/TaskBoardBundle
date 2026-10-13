@@ -42,8 +42,8 @@
                                         {{ 'task_board.history.completed_no'|trans({}, 'NowoTaskBoardBundle') }}
                                     {% endif %}
                                 {% elseif entry.changeType.value == 'tags' %}
-                                    {% set oldTags = entry.oldValue ? entry.oldValue|json_decode(true) : [] %}
-                                    {% set newTags = entry.newValue ? entry.newValue|json_decode(true) : [] %}
+                                    {% set oldTags = entry.oldValue|nowo_task_board_tag_list %}
+                                    {% set newTags = entry.newValue|nowo_task_board_tag_list %}
                                     {% if oldTags|length > 0 %}
                                         <span class="text-decoration-line-through">{{ oldTags|join(', ') }}</span>
                                     {% endif %}

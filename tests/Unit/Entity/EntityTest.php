@@ -146,4 +146,21 @@ final class EntityTest extends TestCase
         self::assertNotEmpty($tm->getId());
         self::assertSame($user, $tm->getUser());
     }
+
+    public function testLoggedMinutesCombinesTimerSecondsAndManualEntries(): void
+    {
+        $user  = new TestUser('1', 'owner@example.com');
+        $board = new TaskBoard('Sprint', 'sprint', $user);
+        $task  = new Task($board, 'Logged', $user);
+
+        self::assertSame(0, $task->getLoggedMinutes());
+
+        // Timer seconds are floored to whole minutes.
+        $task->addTimeSeconds(150);
+        self::assertSame(2, $task->getLoggedMinutes());
+
+        $task->getTimeEntries()->add(new TaskTimeEntry($task, $user, 30, new DateTimeImmutable()));
+        $task->getTimeEntries()->add(new TaskTimeEntry($task, $user, 15, new DateTimeImmutable()));
+        self::assertSame(47, $task->getLoggedMinutes());
+    }
 }

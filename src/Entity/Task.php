@@ -306,6 +306,20 @@ class Task
         return $this->totalTimeSeconds;
     }
 
+    /**
+     * Whole minutes logged on the task: time aggregated from TimeTrack timers (total_time_seconds,
+     * 0 when TimeTrackBundle is not installed) plus manual TaskTimeEntry rows.
+     */
+    public function getLoggedMinutes(): int
+    {
+        $minutes = intdiv($this->totalTimeSeconds, 60);
+        foreach ($this->timeEntries as $entry) {
+            $minutes += $entry->getMinutes();
+        }
+
+        return $minutes;
+    }
+
     public function addTimeSeconds(int $seconds): self
     {
         if ($seconds > 0) {

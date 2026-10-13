@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Task detail page returned HTTP 500** (since 1.0.0): `manage/task.html.twig` rendered `task.loggedMinutes`, which the `Task` entity did not expose. Added `Task::getLoggedMinutes()`: whole minutes from TimeTrack timers (`total_time_seconds`, 0 without TimeTrackBundle) plus manual `TaskTimeEntry` rows.
+- **Task history section failed to compile** (since 1.0.0): `_task_history_section.html.twig` used a non-existent `json_decode` Twig filter for tag changes. It now uses the new `nowo_task_board_tag_list` filter, which decodes the stored JSON list (invalid or empty values give an empty list).
+- Test coverage: the index, board, import and task detail manage pages are now rendered with real entities and `strict_variables` so missing entity properties or filters fail in CI.
+
 ## [1.7.1] - 2026-10-13
 
 ### Changed

@@ -10,7 +10,9 @@ use Twig\TwigFilter;
 use Twig\TwigFunction;
 
 use function in_array;
+use function is_array;
 use function is_string;
+use function json_decode;
 use function parse_url;
 use function preg_match;
 use function strtolower;
@@ -55,6 +57,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         return [
             new TwigFilter('nowo_task_board_safe_url', self::safeUrl(...)),
             new TwigFilter('nowo_task_board_safe_color', self::safeColor(...)),
+            new TwigFilter('nowo_task_board_tag_list', self::tagList(...)),
         ];
     }
 
@@ -83,6 +86,33 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         }
 
         return $color;
+    }
+
+    /**
+     * Decodes a tags change-history value (JSON list written by TaskChangeRecorder) into a list of
+     * strings; null, invalid JSON or non-list payloads yield an empty list.
+     *
+     * @return list<string>
+     */
+    public static function tagList(mixed $value): array
+    {
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $tags = [];
+        foreach ($decoded as $tag) {
+            if (is_string($tag) && $tag !== '') {
+                $tags[] = $tag;
+            }
+        }
+
+        return $tags;
     }
 
     public function getGlobals(): array

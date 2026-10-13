@@ -58,7 +58,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
     {
         $names = array_map(static fn (TwigFilter $filter): string => $filter->getName(), (new TaskBoardTwigExtension('base.html.twig', 'custom'))->getFilters());
 
-        self::assertSame(['nowo_task_board_safe_url', 'nowo_task_board_safe_color'], $names);
+        self::assertSame(['nowo_task_board_safe_url', 'nowo_task_board_safe_color', 'nowo_task_board_tag_list'], $names);
     }
 
     public function testRouteFunctionMapsLogicalKeysToConfiguredNames(): void
@@ -72,5 +72,15 @@ final class TaskBoardTwigExtensionTest extends TestCase
         self::assertSame('app_board', $extension->routeName('board'));
         self::assertSame('nowo_task_board_list', $extension->routeName('list'));
         self::assertSame('nowo_task_board_task', $extension->routeName('task'));
+    }
+
+    public function testTagListDecodesJsonListsOfStrings(): void
+    {
+        self::assertSame(['api', 'ui'], TaskBoardTwigExtension::tagList('["api","ui"]'));
+        self::assertSame(['api'], TaskBoardTwigExtension::tagList('["api", 3, "", null]'));
+        self::assertSame([], TaskBoardTwigExtension::tagList(null));
+        self::assertSame([], TaskBoardTwigExtension::tagList(''));
+        self::assertSame([], TaskBoardTwigExtension::tagList('not json'));
+        self::assertSame([], TaskBoardTwigExtension::tagList('"api"'));
     }
 }
