@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.6.0] - 2026-10-13](#160---2026-10-13)
 - [[1.5.8] - 2026-10-09](#158---2026-10-09)
 - [[1.5.7] - 2026-09-27](#157---2026-09-27)
 - [[1.5.6] - 2026-09-25](#156---2026-09-25)
@@ -54,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-13
+
 ### Security
 
 - **IDOR fix:** boards, tasks, columns, links and members are now authorized per resource. Only the board creator, members of the board's team, users attached to a task and holders of `security.manage_roles` (default `ROLE_ADMIN`) can open or modify them (403 otherwise); the board index lists accessible boards only. New options `security.resource_scoping` (default `true`) and `security.manage_roles`.
@@ -69,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` (new `BoardAccessCheckEvent`) and `TASK_ACCESS_CHECK` are now dispatched; `TaskAccessCheckEvent::markReadOnly()` blocks mutations. The other `TaskBoardEvents` constants are documented as reserved (not dispatched).
+- Repository: `.twig-cs-fixer.cache` is now git-ignored.
 
 ## [1.5.8] - 2026-10-09
 
@@ -157,7 +161,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI:** correct indentation in `src/Resources/config/services_timetrack.yaml` (YAML parse error broke container boot / PHPUnit).
 
 [1.5.1]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.1
-
 
 ## [1.5.0] - 2026-08-04
 
@@ -348,7 +351,8 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.8...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.8...v1.6.0
 [1.5.8]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.5.7...v1.5.8
 [1.5.6]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.6
 [1.5.5]: https://github.com/nowo-tech/TaskBoardBundle/releases/tag/v1.5.5

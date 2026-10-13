@@ -8,10 +8,9 @@ From **1.5.0** — YAML services_timetrack indentation fix only. No host migrati
 composer update nowo-tech/task-board-bundle
 ```
 
-
 ## Table of contents
 
-
+- [To 1.6.0](#to-160)
 - [To 1.5.8](#to-158)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [From 1.5.4 to 1.5.5](#from-154-to-155)
@@ -69,6 +68,14 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+## To 1.6.0
+
+From **1.5.8** — security: per-board authorization, safe link URLs and column colours, optional form types.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
 - **Per-board authorization (security fix):** boards/tasks are now restricted to the board creator, team members, task members and `security.manage_roles` (default `[ROLE_ADMIN]`). Users who previously opened other people's boards now get 403 and no longer see them on the index. Add team memberships, grant `manage_roles`, or listen to `TaskBoardEvents::BOARD_ACCESS_CHECK`; `security.resource_scoping: false` restores the old behaviour (not recommended).
 - Task links must be `http(s)` URLs and column colours hex colours; existing non-conforming values are not rendered as links/styles.
 
@@ -94,7 +101,6 @@ php bin/console cache:clear
 
 _(empty)_
 - No application upgrade steps for require-dev Igor tooling (REQ-CS-008). Consumers do not pull `igor-php/igor-php` transitively.
-
 
 ## To 1.5.4
 
@@ -139,7 +145,6 @@ and enable `Twig\Extra\TwigExtraBundle\TwigExtraBundle`. Flex recipes usually re
 
 Package maintainers: `composer twig:lint` / `composer twig:fix` use `.twig-cs-fixer.php` over `src/` (and `templates/` when present).
 
-
 ## 1.4.0 (2026-08-03)
 
 Minor release: REQ-UI-002 `security.allow_unauthenticated` + `AllowAllTaskBoardAccessChecker`, and SecurityBundle compile-time guard. CI/demo no longer path-mount sibling optional bundles.
@@ -175,7 +180,6 @@ Apps that load the manage UI without SecurityBundle must either install/configur
 ## 1.3.1 (2026-07-30)
 
 ### CSRF on kanban / bare POSTs (REQ-SEC-005)
-
 
 Session-authenticated POSTs that do **not** go through Symfony Forms now require a CSRF `_token`. If you override manage Twig or call these endpoints from custom JS, send the token:
 
