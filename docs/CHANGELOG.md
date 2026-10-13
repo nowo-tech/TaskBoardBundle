@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/CONFIGURATION.md`: boards without a team are visible to their creator and `security.manage_roles` only; task members reach their tasks, not the board (the doc listed task members as board viewers).
+
 ## [1.7.0] - 2026-10-13
 
 ### Fixed

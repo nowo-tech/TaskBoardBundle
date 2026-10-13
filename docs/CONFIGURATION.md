@@ -157,7 +157,7 @@ nowo_task_board:
 
 When not configured, a null resolver is used and `TaskAccessGuard` falls back to assignee/team membership checks via repositories.
 
-A board's team (`TaskBoard::getTeam()`) is what both checks compare against. The manage UI has no team picker: assign it in your own code (`$board->setTeam($team)` and persist), e.g. from an admin form, a fixture or a listener on board creation. Boards without a team are only visible to their creator, task members and `security.manage_roles`.
+A board's team (`TaskBoard::getTeam()`) is what both checks compare against. The manage UI has no team picker: assign it in your own code (`$board->setTeam($team)` and persist), e.g. from an admin form, a fixture or a listener on board creation. Boards without a team are only visible to their creator and `security.manage_roles`; task creators and task members can still open (and edit) their own tasks, but not the board.
 
 ### Access events
 
