@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.8.0](#to-180)
 - [To 1.7.2](#to-172)
 - [To 1.7.1](#to-171)
 - [To 1.7.0](#to-170)
@@ -75,6 +76,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.8.0
+
+From **1.7.2** — task form works without host Tiptap config (prepended task profile)
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 - With `nowo-tech/tiptap-editor-bundle` installed, the Tiptap profile `task` is now seeded by the bundle. If you only defined `nowo_tiptap_editor.profiles.task` to make the task form work, you may remove it; keeping it overrides the seeded profile.
 
