@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 
 use function count;
@@ -90,12 +91,19 @@ final readonly class TaskManager
         $this->taskRepository->save($task);
     }
 
+    /**
+     * @throws ColumnNotFoundException when $columnId is not a column of the task's board
+     */
     public function move(Task $task, ?string $columnId, int $position, object $user): void
     {
         $columns      = $this->orderedColumns($task->getBoard());
         $oldColumn    = $task->getColumn();
         $wasCompleted = $task->isCompleted();
         $column       = $this->resolveColumn($task->getBoard(), $columnId);
+
+        if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
+            throw ColumnNotFoundException::forBoard($columnId, $task->getBoard()->getId());
+        }
 
         $task
             ->setColumn($column)

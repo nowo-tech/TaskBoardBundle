@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
@@ -118,6 +119,28 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertTrue($container->hasDefinition('nowo_task_board.access_checker.default'));
         self::assertTrue($container->hasDefinition('nowo_task_board.team_resolver.null'));
+
+        $resource = $container->getDefinition(TaskBoardResourceAccessChecker::class);
+        self::assertSame(['ROLE_ADMIN'], $resource->getArgument('$manageRoles'));
+        self::assertTrue($resource->getArgument('$scopingEnabled'));
+        self::assertSame('security.authorization_checker', (string) $resource->getArgument('$authorizationChecker'));
+        self::assertSame('event_dispatcher', (string) $resource->getArgument('$eventDispatcher'));
+    }
+
+    public function testLoadHonoursResourceScopingConfig(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'security'   => ['resource_scoping' => false, 'manage_roles' => ['ROLE_TASK_ADMIN']],
+        ]], $container);
+
+        $resource = $container->getDefinition(TaskBoardResourceAccessChecker::class);
+        self::assertSame(['ROLE_TASK_ADMIN'], $resource->getArgument('$manageRoles'));
+        self::assertFalse($resource->getArgument('$scopingEnabled'));
     }
 
     public function testLoadHonoursCustomTemplatesLayout(): void
@@ -180,5 +203,6 @@ final class TaskBoardExtensionTest extends TestCase
             (string) $container->getAlias(TaskBoardAccessCheckerInterface::class),
         );
         self::assertTrue($container->getParameter('nowo_task_board.security.allow_unauthenticated'));
+        self::assertFalse($container->getDefinition(TaskBoardResourceAccessChecker::class)->getArgument('$scopingEnabled'));
     }
 }

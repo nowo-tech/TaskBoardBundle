@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -25,6 +26,7 @@ use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
@@ -35,12 +37,14 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use ValueError;
 
 use function is_object;
+use function is_string;
 
 /**
  * Manage UI for task boards, kanban, list, and task detail.
@@ -67,15 +71,19 @@ final class TaskBoardManageController extends AbstractController
         private readonly array $templates,
         private readonly string $userClass,
         private readonly ?string $dashboardRoute,
+        private readonly TaskBoardResourceAccessChecker $resourceAccessChecker,
     ) {
     }
 
     public function index(): Response
     {
-        $this->requireUser();
+        $user   = $this->requireUser();
+        $boards = $this->accessChecker->canListBoards($user)
+            ? $this->resourceAccessChecker->filterBoards($user, $this->boardRepository->findAllActive())
+            : [];
 
         return $this->render($this->templates['index'], [
-            'boards'         => $this->boardRepository->findAllActive(),
+            'boards'         => $boards,
             'boardForm'      => $this->createForm(TaskBoardFormType::class, new TaskBoardFormData()),
             'dashboardRoute' => $this->dashboardRoute,
         ]);
@@ -104,8 +112,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function board(string $boardId): Response
     {
-        $this->requireUser();
-        $board = $this->findBoard($boardId);
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId, $user);
 
         $columnForm    = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData());
         $columnChoices = $this->buildColumnChoices($board);
@@ -126,8 +134,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function createColumn(string $boardId, Request $request): RedirectResponse
     {
-        $this->requireUser();
-        $board = $this->findBoard($boardId);
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId, $user);
 
         $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData());
         $form->handleRequest($request);
@@ -145,8 +153,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
-        $this->requireUser();
-        $board  = $this->findBoard($boardId);
+        $user   = $this->requireUser();
+        $board  = $this->findBoard($boardId, $user);
         $column = $this->findColumn($board, $columnId);
 
         $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData(
@@ -167,12 +175,17 @@ final class TaskBoardManageController extends AbstractController
 
     public function reorderColumns(string $boardId, Request $request): RedirectResponse
     {
-        $this->requireUser();
+        $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_column_reorder');
-        $board = $this->findBoard($boardId);
+        $board = $this->findBoard($boardId, $user);
 
-        /** @var list<string> $order */
         $order = $request->request->all('columnOrder');
+        foreach ($order as $columnId) {
+            if (!is_string($columnId)) {
+                throw new BadRequestHttpException('columnOrder must be a list of column ids.');
+            }
+        }
+
         if ($order !== []) {
             $this->columnManager->reorder($board, $order);
         }
@@ -183,7 +196,7 @@ final class TaskBoardManageController extends AbstractController
     public function createTask(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId);
+        $board = $this->findBoard($boardId, $user);
 
         $form = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($board),
@@ -202,7 +215,7 @@ final class TaskBoardManageController extends AbstractController
     public function importBoard(string $boardId, Request $request): Response
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId);
+        $board = $this->findBoard($boardId, $user);
 
         $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
         $form->handleRequest($request);
@@ -257,8 +270,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function listView(string $boardId): Response
     {
-        $this->requireUser();
-        $board = $this->findBoard($boardId);
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId, $user);
         $tasks = $this->taskRepository->findByBoard($board);
 
         $priorities = [];
@@ -282,8 +295,8 @@ final class TaskBoardManageController extends AbstractController
 
     public function ganttView(string $boardId): Response
     {
-        $this->requireUser();
-        $board    = $this->findBoard($boardId);
+        $user     = $this->requireUser();
+        $board    = $this->findBoard($boardId, $user);
         $tasks    = $this->taskRepository->findByBoard($board);
         $timeline = $this->ganttBuilder->build($tasks);
 
@@ -297,7 +310,7 @@ final class TaskBoardManageController extends AbstractController
     public function task(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user);
 
         $taskData = new TaskFormData(
             title: $task->getTitle(),
@@ -313,6 +326,10 @@ final class TaskBoardManageController extends AbstractController
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
         ]);
         $taskForm->handleRequest($request);
+
+        if ($taskForm->isSubmitted() && !$this->resourceAccessChecker->canEditTask($user, $task)) {
+            throw $this->createAccessDeniedException();
+        }
 
         if ($taskForm->isSubmitted() && $taskForm->isValid()) {
             /** @var TaskFormData $data */
@@ -358,7 +375,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_advance');
-        $task     = $this->findTask($taskId);
+        $task     = $this->findTask($taskId, $user, true);
         $action   = $request->request->getString('action');
         $columnId = $request->request->getString('columnId');
 
@@ -387,11 +404,15 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_move');
-        $task     = $this->findTask($taskId);
+        $task     = $this->findTask($taskId, $user, true);
         $columnId = $request->request->getString('columnId');
         $position = $request->request->getInt('position', $task->getPosition());
 
-        $this->taskManager->move($task, $columnId !== '' ? $columnId : null, $position, $user);
+        try {
+            $this->taskManager->move($task, $columnId !== '' ? $columnId : null, $position, $user);
+        } catch (ColumnNotFoundException $exception) {
+            throw new BadRequestHttpException($exception->getMessage(), $exception);
+        }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
@@ -399,7 +420,7 @@ final class TaskBoardManageController extends AbstractController
     public function attachLink(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
         $form->handleRequest($request);
@@ -417,7 +438,7 @@ final class TaskBoardManageController extends AbstractController
     public function updateLink(string $taskId, string $linkId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
         $form->handleRequest($request);
@@ -437,7 +458,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_link_remove');
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($this->linkAttacher->remove($task, $linkId, $user)) {
@@ -450,7 +471,7 @@ final class TaskBoardManageController extends AbstractController
     public function addMember(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
             'user_class'        => $this->userClass,
@@ -472,7 +493,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_member_remove_' . $memberId);
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         if ($this->memberAssigner->unassign($task, $memberId, $user)) {
             $this->addFlash('success', 'task_board.flash.member_removed');
@@ -485,7 +506,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_priority');
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         try {
             $priority = TaskPriority::from($request->request->getString('priority'));
@@ -502,7 +523,7 @@ final class TaskBoardManageController extends AbstractController
     public function createSubtask(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId);
+        $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
@@ -536,11 +557,18 @@ final class TaskBoardManageController extends AbstractController
         }
     }
 
-    private function findBoard(string $boardId): TaskBoard
+    /**
+     * Loads a board and enforces per-board access (creator, team member, manage role or listener grant).
+     */
+    private function findBoard(string $boardId, UserInterface $user): TaskBoard
     {
         $board = $this->boardRepository->findById($boardId);
         if (!$board instanceof TaskBoard) {
             throw new NotFoundHttpException('Board not found.');
+        }
+
+        if (!$this->resourceAccessChecker->canViewBoard($user, $board)) {
+            throw $this->createAccessDeniedException('Board access denied.');
         }
 
         return $board;
@@ -557,11 +585,21 @@ final class TaskBoardManageController extends AbstractController
         throw new NotFoundHttpException('Column not found.');
     }
 
-    private function findTask(string $taskId): Task
+    /**
+     * Loads a task and enforces per-task access; $forWrite also rejects tasks marked read-only by listeners.
+     */
+    private function findTask(string $taskId, UserInterface $user, bool $forWrite = false): Task
     {
         $task = $this->taskRepository->findById($taskId);
         if (!$task instanceof Task) {
             throw new NotFoundHttpException('Task not found.');
+        }
+
+        $allowed = $forWrite
+            ? $this->resourceAccessChecker->canEditTask($user, $task)
+            : $this->resourceAccessChecker->canViewTask($user, $task);
+        if (!$allowed) {
+            throw $this->createAccessDeniedException('Task access denied.');
         }
 
         return $task;

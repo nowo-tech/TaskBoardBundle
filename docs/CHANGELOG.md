@@ -54,6 +54,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **IDOR fix:** boards, tasks, columns, links and members are now authorized per resource. Only the board creator, members of the board's team, users attached to a task and holders of `security.manage_roles` (default `ROLE_ADMIN`) can open or modify them (403 otherwise); the board index lists accessible boards only. New options `security.resource_scoping` (default `true`) and `security.manage_roles`.
+- Task link URLs must be `http`/`https` (`javascript:`, `data:`… rejected); links are also guarded at render time.
+- Column colours must be hex colours (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`); non-hex values stored earlier are not rendered into `style`.
+
+### Fixed
+
+- `TaskFormType` no longer fails with "Could not load type" when the optional `nowo-tech/tiptap-editor-bundle` / `nowo-tech/tag-input-bundle` are not installed: it falls back to a textarea and a comma-separated tags field.
+- Moving a task to a column of another board (or an unknown column) now returns 400 instead of silently detaching the task from every column.
+- Nested `columnOrder[]` input on column reorder now returns 400 instead of a 500 `TypeError`.
+
+### Changed
+
+- `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` (new `BoardAccessCheckEvent`) and `TASK_ACCESS_CHECK` are now dispatched; `TaskAccessCheckEvent::markReadOnly()` blocks mutations. The other `TaskBoardEvents` constants are documented as reserved (not dispatched).
+
 ## [1.5.8] - 2026-10-09
 
 ### Changed

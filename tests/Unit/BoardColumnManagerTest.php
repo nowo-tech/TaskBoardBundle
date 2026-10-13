@@ -105,4 +105,21 @@ final class BoardColumnManagerTest extends TestCase
         self::assertSame(0, $first->getPosition());
         self::assertSame(1, $second->getPosition());
     }
+
+    public function testReorderIgnoresNestedArrayEntries(): void
+    {
+        $board  = new TaskBoard('Demo', 'demo', new stdClass());
+        $first  = new BoardColumn($board, 'A', 0);
+        $second = new BoardColumn($board, 'B', 1);
+        $board->addColumn($first)->addColumn($second);
+
+        $repository = $this->createMock(BoardColumnRepositoryInterface::class);
+        $repository->expects(self::once())->method('saveAll');
+
+        // columnOrder[0][]=x&columnOrder[1]=<id> used to raise a TypeError (500).
+        (new BoardColumnManager($repository))->reorder($board, [['x'], $second->getId(), 42]);
+
+        self::assertSame(0, $second->getPosition());
+        self::assertSame(1, $first->getPosition());
+    }
 }

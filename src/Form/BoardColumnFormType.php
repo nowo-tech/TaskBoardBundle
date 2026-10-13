@@ -13,6 +13,7 @@ use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Regex;
 
 /**
  * @extends AbstractType<BoardColumnFormData>
@@ -21,6 +22,8 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 final class BoardColumnFormType extends AbstractType
 {
     use FormOptionsTrait;
+
+    public const COLOR_PATTERN = '/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/D';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -31,6 +34,8 @@ final class BoardColumnFormType extends AbstractType
         $this->addWithDefaults($builder, 'color', ColorType::class, [
             'label'    => 'task_board.form.column.color',
             'required' => false,
+            // Rendered inside style="…": hex colours only (#rgb, #rgba, #rrggbb, #rrggbbaa).
+            'constraints' => [new Regex(pattern: self::COLOR_PATTERN)],
         ]);
     }
 

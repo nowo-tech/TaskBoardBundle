@@ -18,6 +18,7 @@ services:
             - '../../Security/AllowAllTaskBoardAccessChecker.php'
             - '../../Security/TaskBoardTeamMembershipResolverInterface.php'
             - '../../Security/NullTaskBoardTeamMembershipResolver.php'
+            - '../../Security/TaskBoardResourceAccessChecker.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'

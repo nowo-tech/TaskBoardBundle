@@ -74,7 +74,7 @@ Two layers:
 | Layer | Interface / event | Question |
 |-------|-------------------|----------|
 | Route features | `TaskBoardAccessCheckerInterface` | Can the user open manage UI, create boards, or list boards? |
-| Per board/task | `BoardAccessCheckEvent`, `TaskAccessCheckEvent` | Can the user view or edit this board/task? |
+| Per board/task | `TaskBoardResourceAccessChecker` (`security.manage_roles`, `security.resource_scoping`) + `BoardAccessCheckEvent`, `TaskAccessCheckEvent` | Can the user view or edit this board/task? Default: board creator, team members, task members and `manage_roles`. |
 
 ### Route-level checker
 

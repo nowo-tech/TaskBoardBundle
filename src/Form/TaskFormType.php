@@ -9,15 +9,20 @@ use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TagInputBundle\Form\TagType;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
+
+use function class_exists;
 
 /**
  * @extends AbstractType<TaskFormData>
@@ -39,14 +44,23 @@ final class TaskFormType extends AbstractType
         ]);
 
         if (!$compact) {
-            $this->addWithDefaults($builder, 'description', TiptapEditorType::class, [
-                'label'              => 'task_board.form.task.description',
-                'required'           => false,
-                'config'             => 'task',
-                'min_height'         => '220px',
-                'placeholder'        => 'task_board.task.description_placeholder',
-                'translation_domain' => 'NowoTaskBoardBundle',
-            ]);
+            if ((bool) $options['rich_description']) {
+                $this->addWithDefaults($builder, 'description', TiptapEditorType::class, [
+                    'label'              => 'task_board.form.task.description',
+                    'required'           => false,
+                    'config'             => 'task',
+                    'min_height'         => '220px',
+                    'placeholder'        => 'task_board.task.description_placeholder',
+                    'translation_domain' => 'NowoTaskBoardBundle',
+                ]);
+            } else {
+                // nowo-tech/tiptap-editor-bundle is optional (composer "suggest"): plain textarea fallback.
+                $this->addWithDefaults($builder, 'description', TextareaType::class, [
+                    'label'    => 'task_board.form.task.description',
+                    'required' => false,
+                    'attr'     => ['rows' => 8],
+                ]);
+            }
             $this->addWithDefaults($builder, 'priority', EnumType::class, [
                 'class' => TaskPriority::class,
                 'label' => 'task_board.form.task.priority',
@@ -75,24 +89,38 @@ final class TaskFormType extends AbstractType
                 'input'           => 'datetime_immutable',
                 'invalid_message' => 'task_board.form.task.due_invalid',
             ]);
-            $this->addWithDefaults($builder, 'tags', TagType::class, [
-                'label'              => 'task_board.form.task.tags',
-                'translation_domain' => 'NowoTaskBoardBundle',
-                'required'           => false,
-                'input_class'        => 'form-control',
-                'max_tags'           => 20,
-                'duplicates'         => false,
-            ]);
+            if ((bool) $options['tag_input']) {
+                $this->addWithDefaults($builder, 'tags', TagType::class, [
+                    'label'              => 'task_board.form.task.tags',
+                    'translation_domain' => 'NowoTaskBoardBundle',
+                    'required'           => false,
+                    'input_class'        => 'form-control',
+                    'max_tags'           => 20,
+                    'duplicates'         => false,
+                ]);
+            } else {
+                // nowo-tech/tag-input-bundle is optional (composer "suggest"): comma-separated text fallback.
+                $this->addWithDefaults($builder, 'tags', TextType::class, [
+                    'label'    => 'task_board.form.task.tags',
+                    'required' => false,
+                ]);
+                $builder->get('tags')->addModelTransformer(new TagsToStringTransformer());
+            }
         }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class'         => TaskFormData::class,
-            'column_choices'     => [],
-            'compact'            => false,
+            'data_class'     => TaskFormData::class,
+            'column_choices' => [],
+            'compact'        => false,
+            // Rich widgets only when the optional bundles are installed (avoids "Could not load type").
+            'rich_description'   => class_exists(TiptapEditorType::class),
+            'tag_input'          => class_exists(TagType::class),
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
+        $resolver->setAllowedTypes('rich_description', 'bool');
+        $resolver->setAllowedTypes('tag_input', 'bool');
     }
 }

@@ -54,8 +54,8 @@
                         role="menuitem"
                     >
                         <span class="nowo-task-detail__status-option-label">
-                            {% if column.color %}
-                                <span class="nowo-task-detail__column-dot" style="--nowo-column-color: {{ column.color }}"></span>
+                            {% if column.color|nowo_task_board_safe_color %}
+                                <span class="nowo-task-detail__column-dot" style="--nowo-column-color: {{ column.color|nowo_task_board_safe_color }}"></span>
                             {% endif %}
                             <span>{{ column.name }}</span>
                         </span>

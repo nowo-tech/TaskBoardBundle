@@ -69,6 +69,9 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+- **Per-board authorization (security fix):** boards/tasks are now restricted to the board creator, team members, task members and `security.manage_roles` (default `[ROLE_ADMIN]`). Users who previously opened other people's boards now get 403 and no longer see them on the index. Add team memberships, grant `manage_roles`, or listen to `TaskBoardEvents::BOARD_ACCESS_CHECK`; `security.resource_scoping: false` restores the old behaviour (not recommended).
+- Task links must be `http(s)` URLs and column colours hex colours; existing non-conforming values are not rendered as links/styles.
+
 ## To 1.5.8
 
 From **1.5.7** — Doctrine ORM `SortDirection` mapping.

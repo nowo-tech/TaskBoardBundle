@@ -30,6 +30,7 @@ use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
@@ -87,6 +88,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerRepositories($container, $emName);
         $this->registerMetadataListener($container, $prefix, $config['user_class']);
         $this->registerAccessChecker($container, $config['security']);
+        $this->registerResourceAccessChecker($container, $config['security']);
         $this->registerTeamResolver($container, $config['team_membership_resolver'] ?? null);
 
         $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . '/../Resources/config'));
@@ -322,6 +324,19 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         $container->setAlias(TaskBoardAccessCheckerInterface::class, $accessCheckerId);
+    }
+
+    /** @param array<string, mixed> $security */
+    private function registerResourceAccessChecker(ContainerBuilder $container, array $security): void
+    {
+        $container->setDefinition(TaskBoardResourceAccessChecker::class, (new Definition(TaskBoardResourceAccessChecker::class))
+            ->setArgument('$teamMemberRepository', new Reference(TeamMemberRepositoryInterface::class))
+            ->setArgument('$teamMembershipResolver', new Reference(TaskBoardTeamMembershipResolverInterface::class))
+            ->setArgument('$authorizationChecker', new Reference('security.authorization_checker', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$eventDispatcher', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$manageRoles', $security['manage_roles'])
+            // Demo/dev mode (allow_unauthenticated) keeps the historical "every board visible" behaviour.
+            ->setArgument('$scopingEnabled', $security['resource_scoping'] && !$security['allow_unauthenticated']));
     }
 
     /**

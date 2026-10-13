@@ -24,6 +24,8 @@ final class ConfigurationTest extends TestCase
         self::assertSame('tabler', $config['templates']['css_framework']);
         self::assertFalse($config['security']['allow_unauthenticated']);
         self::assertSame(['ROLE_USER'], $config['security']['access_roles']);
+        self::assertTrue($config['security']['resource_scoping']);
+        self::assertSame(['ROLE_ADMIN'], $config['security']['manage_roles']);
     }
 
     public function testCustomLayoutTemplate(): void

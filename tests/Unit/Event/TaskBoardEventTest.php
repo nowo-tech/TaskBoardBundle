@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Event;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -49,6 +50,28 @@ final class TaskBoardEventTest extends TestCase
 
         $event->markReadOnly();
         self::assertTrue($event->isReadOnly());
+    }
+
+    public function testBoardAccessCheckEventGrantAndDeny(): void
+    {
+        $subject = new stdClass();
+        $board   = new TaskBoard('Demo', 'demo', new stdClass());
+        $event   = new BoardAccessCheckEvent($subject, $board, true);
+
+        self::assertSame($subject, $event->getSubject());
+        self::assertSame($board, $event->getBoard());
+        self::assertTrue($event->isDefaultGranted());
+        self::assertFalse($event->isGranted());
+        self::assertFalse($event->isDenied());
+        self::assertFalse((new BoardAccessCheckEvent($subject, $board))->isDefaultGranted());
+
+        $event->grant();
+        self::assertTrue($event->isGranted());
+        self::assertFalse($event->isDenied());
+
+        $event->deny();
+        self::assertTrue($event->isDenied());
+        self::assertFalse($event->isGranted());
     }
 
     public function testTaskBoardEventsConstantsAreStable(): void

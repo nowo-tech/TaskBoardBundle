@@ -14,6 +14,7 @@ use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Url;
 
 /**
  * @extends AbstractType<TaskLinkFormData>
@@ -31,7 +32,11 @@ final class TaskLinkFormType extends AbstractType
         ]);
         $this->addUrl($builder, 'url', [
             'label'       => 'task_board.form.link.url',
-            'constraints' => [new NotBlank()],
+            'constraints' => [
+                new NotBlank(),
+                // Rendered as href: only http(s) — rejects javascript:, data:, vbscript:…
+                new Url(protocols: ['http', 'https'], requireTld: false),
+            ],
         ]);
         $this->addText($builder, 'label', [
             'label'    => 'task_board.form.link.label',

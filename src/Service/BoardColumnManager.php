@@ -9,6 +9,8 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 
+use function is_string;
+
 /**
  * Adds and reorders kanban columns on a board.
  */
@@ -40,7 +42,9 @@ final readonly class BoardColumnManager
     }
 
     /**
-     * @param list<string> $orderedColumnIds
+     * Non-string entries (e.g. nested arrays from columnOrder[0][]=…) are ignored.
+     *
+     * @param array<mixed> $orderedColumnIds
      */
     public function reorder(TaskBoard $board, array $orderedColumnIds): void
     {
@@ -54,7 +58,7 @@ final readonly class BoardColumnManager
         $position = 0;
 
         foreach ($orderedColumnIds as $columnId) {
-            if (!isset($byId[$columnId])) {
+            if (!is_string($columnId) || !isset($byId[$columnId])) {
                 continue;
             }
 

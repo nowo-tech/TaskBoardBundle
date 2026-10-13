@@ -124,9 +124,22 @@ Default role configuration:
 | `security.access_roles` | `[ROLE_USER]` | Open manage UI (hosts may set `ROLE_ADMIN` for admin-only) |
 | `security.create_roles` | `[ROLE_USER]` | Create boards |
 | `security.list_roles` | `[ROLE_USER]` | List boards |
-| `security.allow_unauthenticated` | `false` | DEV/DEMO only — wires AllowAll checker; production MUST keep `false` |
+| `security.resource_scoping` | `true` | Per-board/per-task authorization (see below). `false` restores the legacy "every user sees every board" behaviour — not recommended |
+| `security.manage_roles` | `[ROLE_ADMIN]` | Roles that can view and edit **every** board regardless of ownership or team |
+| `security.allow_unauthenticated` | `false` | DEV/DEMO only — wires AllowAll checker and disables resource scoping; production MUST keep `false` |
 
 When `allow_unauthenticated` is `false`, `symfony/security-bundle` is required (compile-time `LogicException` otherwise).
+
+### Per-board / per-task authorization
+
+Every manage action that loads a board or task by id (board, list, Gantt, import, columns, tasks, links, members, subtasks) goes through `TaskBoardResourceAccessChecker`:
+
+- **Board** — visible/editable by its creator, by members of the board's team (`TeamMember` rows or the `team_membership_resolver`), and by users with one of `security.manage_roles`.
+- **Task** — board access as above, plus the task creator and any user attached to the task as a member (assignee, reviewer…).
+- The board index only lists boards the user can access (and is empty when the user lacks `security.list_roles`).
+- Unknown ids return **404**; existing boards/tasks the user cannot access return **403**.
+
+Listeners on `BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK` can override the default decision (see [Access events](#access-events)).
 
 ### Team membership resolver
 
@@ -141,18 +154,17 @@ When not configured, a null resolver is used and `TaskAccessGuard` falls back to
 
 ### Access events
 
-Extensibility hooks for board/task list filtering and per-task access:
+Events dispatched by `TaskBoardResourceAccessChecker` (requires the `event_dispatcher` service):
 
 | Event | Constant | Purpose |
 |-------|----------|---------|
-| `BoardListQueryEvent` | `TaskBoardEvents::BOARD_LIST_QUERY` | Override board list query |
-| `BoardListResultEvent` | `TaskBoardEvents::BOARD_LIST_RESULT` | Filter/reorder loaded boards |
-| `TaskListQueryEvent` | `TaskBoardEvents::TASK_LIST_QUERY` | Override task list query |
-| `TaskListResultEvent` | `TaskBoardEvents::TASK_LIST_RESULT` | Filter/reorder loaded tasks |
-| `BoardAccessCheckEvent` | `TaskBoardEvents::BOARD_ACCESS_CHECK` | Grant/deny board access |
-| `TaskAccessCheckEvent` | `TaskBoardEvents::TASK_ACCESS_CHECK` | Grant/deny task access |
-| `TaskReadOnlyResolveEvent` | `TaskBoardEvents::TASK_READ_ONLY_RESOLVE` | Mark task as read-only |
-| `MemberListQueryEvent` | `TaskBoardEvents::MEMBER_LIST_QUERY` | Override member list query |
+| `BoardListQueryEvent` | `TaskBoardEvents::BOARD_LIST_QUERY` | Replace the candidate board list on the index (`overrideList()`); the result is still filtered by board access |
+| `BoardAccessCheckEvent` | `TaskBoardEvents::BOARD_ACCESS_CHECK` | `grant()` / `deny()` board access; `isDefaultGranted()` exposes the built-in decision |
+| `TaskAccessCheckEvent` | `TaskBoardEvents::TASK_ACCESS_CHECK` | `grant()` / `deny()` task access; `markReadOnly()` blocks every mutation on the task (403) while keeping it viewable |
+
+`deny()` always wins over the built-in rules; `grant()` opens a board/task the built-in rules would refuse.
+
+The constants `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are **reserved** and not dispatched yet (no event classes exist for them); use `TaskAccessCheckEvent::markReadOnly()` for read-only tasks.
 
 ```php
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;

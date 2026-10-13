@@ -24,7 +24,10 @@
 | Threat | Risk | Mitigation |
 |--------|------|------------|
 | **Unauthorized board access** | Anonymous users open manage UI. | Symfony firewall + `access_control` on `/tools/task-board`; `TaskBoardAccessCheckerInterface`. Keep `security.allow_unauthenticated: false` in production (demo-only bypass). |
-| **IDOR on tasks/boards** | User edits another user's board or task. | Default repository scoping; extend with `BoardAccessCheckEvent` / `TaskAccessCheckEvent` listeners. |
+| **IDOR on tasks/boards** | User reads or edits another user's board, task, column, link or member by id. | `TaskBoardResourceAccessChecker` on every id-based action: creator, team members, task members and `security.manage_roles` only (403 otherwise, 404 for unknown ids); the index lists accessible boards only. Extend with `BoardAccessCheckEvent` / `TaskAccessCheckEvent` listeners. |
+| **Script URLs in task links** | `javascript:` / `data:` URL stored as a link and rendered in `href`. | `Url(protocols: [http, https])` on the link form; render-time `nowo_task_board_safe_url` filter outputs `#` for any other scheme. |
+| **CSS injection via column colour** | Arbitrary string rendered inside `style="…"`. | Hex-colour `Regex` on the column form; render-time `nowo_task_board_safe_color` filter drops non-hex values. |
+| **Malformed kanban input** | Column id of another board or nested `columnOrder[]` arrays. | `TaskManager::move()` throws `ColumnNotFoundException` (HTTP 400); non-string `columnOrder` entries → HTTP 400. |
 | **Unauthorized time tracking** | User tracks time on tasks they cannot access. | `TaskAccessGuard::canTrack()` checks assignee and team membership before TimeTrack provider returns tasks. |
 | **XSS in task content** | Malicious HTML in task descriptions. | Twig auto-escaping; rich text via TiptapEditorBundle when configured. |
 | **CSRF on forms** | Cross-site form submission. | Symfony CSRF tokens on all manage forms (`form_start` / `form_end`). |
@@ -34,7 +37,7 @@
 ## Access control model
 
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
-2. **Resource level** — optional event listeners on `TaskBoardEvents::*` for board/task list filtering and per-resource grants.
+2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
 3. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
 
 ## Dependencies

@@ -26,6 +26,8 @@
 - `nowo-tech/tiptap-editor-bundle`
 - `nowo-tech/tag-input-bundle`
 
+Both are optional: without them the task form falls back to a plain `<textarea>` description and a comma-separated tags text field.
+
 **Optional** (time tracking integration):
 
 - [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) ^1.0 — task provider, team context, and automatic `total_time_seconds` aggregation

@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
@@ -101,6 +102,34 @@ final class TaskManagerCrudTest extends TestCase
 
         (new TaskManager($repo, new TaskChangeRecorder()))->move($task, $col->getId(), 5, $user);
         self::assertSame(5, $task->getPosition());
+    }
+
+    public function testMoveRejectsColumnFromAnotherBoardWithoutTouchingTheTask(): void
+    {
+        $user  = new TestUser('1', 'dev@example.com');
+        $board = new TaskBoard('Demo', 'demo', $user);
+        $col   = new BoardColumn($board, 'Todo', 0);
+        $board->addColumn($col);
+        $otherBoard = new TaskBoard('Other', 'other', $user);
+        $foreignCol = new BoardColumn($otherBoard, 'Foreign', 0);
+        $otherBoard->addColumn($foreignCol);
+        $task = new Task($board, 'Move me', $user, column: $col, position: 3);
+
+        $repo = $this->createMock(TaskRepositoryInterface::class);
+        $repo->expects(self::never())->method('save');
+        $manager = new TaskManager($repo, new TaskChangeRecorder());
+
+        foreach ([$foreignCol->getId(), 'unknown-column'] as $columnId) {
+            try {
+                $manager->move($task, $columnId, 0, $user);
+                self::fail('ColumnNotFoundException expected for ' . $columnId);
+            } catch (ColumnNotFoundException $exception) {
+                self::assertStringContainsString($columnId, $exception->getMessage());
+            }
+        }
+
+        self::assertSame($col, $task->getColumn());
+        self::assertSame(3, $task->getPosition());
     }
 
     public function testTaskBoardCreatorAddsDefaultColumns(): void

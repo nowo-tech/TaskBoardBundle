@@ -31,7 +31,7 @@
                             {{ link.url }}
                         </div>
                     </div>
-                    <a href="{{ link.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}" onclick="event.stopPropagation();">
+                    <a href="{{ link.url|nowo_task_board_safe_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}" onclick="event.stopPropagation();">
                         <i class="ti ti-external-link"></i>
                     </a>
                 </div>

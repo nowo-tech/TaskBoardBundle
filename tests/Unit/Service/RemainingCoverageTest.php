@@ -193,7 +193,8 @@ final class RemainingCoverageTest extends TestCase
 
         $bareBoard = new TaskBoard('Bare', 'bare', $user);
         $bareTask  = new Task($bareBoard, 'Lonely', $user);
-        $manager->move($bareTask, 'missing-column', 0, $user);
+        $manager->move($bareTask, null, 0, $user);
+        self::assertNull($bareTask->getColumn());
 
         $emptyBoard = new TaskBoard('Empty', 'empty', $user);
         $created    = $manager->create($emptyBoard, new TaskFormData(title: 'First'), $user);
