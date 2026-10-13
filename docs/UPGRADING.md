@@ -10,6 +10,7 @@ composer update nowo-tech/task-board-bundle
 
 ## Table of contents
 
+- [To 1.7.0](#to-170)
 - [To 1.6.0](#to-160)
 - [To 1.5.8](#to-158)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
@@ -67,6 +68,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.7.0
+
+From **1.6.0** — fixes - complete translations, configurable route names in templates, column ordering, full test coverage.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 - **List and Gantt views now include completed tasks** (tasks in the last column). Use the list's column filter to hide them.
 - **Task positions are renumbered on drag & drop:** `TaskManager::move($task, $columnId, $position, $user)` treats `$position` as the index inside the target column (clamped to its size) and rewrites the column's positions to `0..n-1`, saving siblings whose position changed. Code relying on arbitrary/gapped positions passed to `move()` should pass an index instead.
