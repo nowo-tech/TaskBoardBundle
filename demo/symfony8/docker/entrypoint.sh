@@ -31,4 +31,5 @@ git config --global --add safe.directory /var/task-board-bundle 2>/dev/null || t
 mkdir -p /app/var/cache /app/var/log
 chmod -R 777 /app/var 2>/dev/null || true
 
+if [ ! -f /app/vendor/autoload_runtime.php ]; then composer install --no-interaction; fi
 exec docker-php-entrypoint frankenphp run --config /etc/caddy/Caddyfile
