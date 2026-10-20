@@ -9,6 +9,20 @@
 | Remediation (2026-09-25) | W-01, W-03 (positions), W-04, W-05 resolved; W-02 resolved for access decisions and timer aggregation (refresh) with identity-map clearing for rendered pages left to the host; closed EntityManagers are reset by the bundle after failed flushes (`Doctrine\RecoveringFlusher`); regression tests simulate consecutive requests without `reset()` |
 | **Verdict** | ✅ **Viable under scenario B** — bundle services hold no per-request state, a failed flush no longer leaves the worker with a closed EntityManager, time-tracking access and timer aggregation reload managed entities before deciding/mutating. Clearing Doctrine's identity map between requests (freshness of rendered HTML, memory) remains the application's responsibility |
 
+## Table of contents
+
+- [Execution model assumed](#execution-model-assumed)
+- [Summary](#summary)
+- [Services reviewed](#services-reviewed)
+- [Findings](#findings)
+  - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
+  - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
+  - [W-03 — Imports run synchronously inside the HTTP request (Low)](#w-03--imports-run-synchronously-inside-the-http-request-low)
+  - [W-04 — Route loader throws if it runs twice in the same process (Low)](#w-04--route-loader-throws-if-it-runs-twice-in-the-same-process-low)
+  - [W-05 — `strtok()` keeps global state (Low)](#w-05--strtok-keeps-global-state-low)
+- [Usage recommendations in worker mode](#usage-recommendations-in-worker-mode)
+- [Re-audit triggers](#re-audit-triggers)
+
 ## Execution model assumed
 
 FrankenPHP worker mode boots the Symfony kernel once per worker and serves many requests with the same container. This audit assumes the **strict** variant: the kernel is **not** rebooted between requests, so every shared service, static property and PHP global survives from one request to the next. Two scenarios are evaluated:

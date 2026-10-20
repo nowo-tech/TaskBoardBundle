@@ -8,18 +8,19 @@
 - [Security](#security)
   - [Firewall](#firewall)
   - [Access checker](#access-checker)
+  - [Per-board / per-task authorization](#per-board--per-task-authorization)
   - [Team membership resolver](#team-membership-resolver)
   - [Access events](#access-events)
 - [Templates](#templates)
 - [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
+  - [CSS framework](#css-framework)
 - [Other options](#other-options)
+  - [Rich description editor (Tiptap profile `task`)](#rich-description-editor-tiptap-profile-task)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
   - [Assignee resolver](#assignee-resolver)
   - [Custom importers](#custom-importers)
 - [Assets](#assets)
-
-All options live under the `nowo_task_board` root key in `config/packages/nowo_task_board.yaml`.
 
 ## Required
 

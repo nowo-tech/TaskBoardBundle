@@ -7,7 +7,7 @@
 - [Domain model](#domain-model)
   - [Enumerations](#enumerations)
   - [Views](#views)
-- [Integration strategy (Vault / Yopass pattern)](#integration-strategy-vault-yopass-pattern)
+- [Integration strategy (Vault / Yopass pattern)](#integration-strategy-vault--yopass-pattern)
   - [Symfony events (`TaskBoardEvents`)](#symfony-events-taskboardevents)
 - [Implementation phases](#implementation-phases)
 - [Validating the functional spec](#validating-the-functional-spec)
@@ -17,16 +17,6 @@
 - [Suggested workflow for contributors](#suggested-workflow-for-contributors)
 - [GitHub Spec Kit (summary)](#github-spec-kit-summary)
 - [See also](#see-also)
-
-In this repository, **spec-driven development** has three layers that stay in sync:
-
-1. **GitHub Spec Kit baseline** — [`specs/001-baseline/`](../specs/001-baseline/) ([`spec.md`](../specs/001-baseline/spec.md), [`code-inventory.md`](../specs/001-baseline/code-inventory.md)), initialized with [GitHub Spec Kit](https://github.com/github/spec-kit) (`.specify/`, **Cursor Agent** skills in `.cursor/skills/speckit-*`). The inventory maps **100%** of production code in `src/`. **How to install, initialize, and use Spec Kit:** [`SPEC-KIT.md`](SPEC-KIT.md).
-2. **Product behavior** — what **TaskBoardBundle** guarantees to applications that integrate it (see [`USAGE.md`](USAGE.md), [`CONFIGURATION.md`](CONFIGURATION.md), [`INSTALLATION.md`](INSTALLATION.md)). **PHPUnit** and **PHPStan** (and **Vitest** when applicable) enforce contracts in CI where applicable.
-3. **Traceability anchors** — stable **`REQ-*`** identifiers in Makefiles and demos (when present) so changes to scripts, ports, and demo workflows stay discoverable from issues and PRs.
-
-There is no separate executable spec language (for example Gherkin); Spec Kit specs, tests, and static analysis are the mechanical proof alongside this document.
-
----
 
 ## Bundle functional scope
 
@@ -142,7 +132,6 @@ TaskBoard (project / space)
 ## Engram
 
 See [ENGRAM.md](ENGRAM.md) for product memory in IDE workflows.
-
 
 ## Suggested workflow for contributors
 

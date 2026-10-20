@@ -11,6 +11,7 @@
 - [Translations](#translations)
 - [Assets](#assets)
 - [Demo](#demo)
+- [Twig Extra Bundle (REQ-TWIG-004)](#twig-extra-bundle-req-twig-004)
 
 ## Requirements
 

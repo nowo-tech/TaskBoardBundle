@@ -37,6 +37,8 @@ composer.json.tmp
 .env
 .env.*
 !.env.example
+# Demo test environment is committed on purpose (REQ-DEMO-003)
+!.env.test
 
 # Secrets
 *.pem

@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-09-25
+**Last audited**: 2026-10-20
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -47,11 +47,14 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Enum/TaskPriority.php` | Task/board enums | FR-ENUM-001 |
 | `Enum/TaskStatus.php` | Task/board enums | FR-ENUM-001 |
 | `Enum/TeamRole.php` | Task/board enums | FR-ENUM-001 |
+| `Event/BoardAccessCheckEvent.php` | Board access decision event (default decision overridable by listeners) | FR-EVT-002, FR-SEC-005 |
 | `Event/BoardListQueryEvent.php` | Domain event | FR-EVT-002 |
 | `Event/TaskAccessCheckEvent.php` | Domain event | FR-EVT-002 |
 | `Event/TaskBoardEvents.php` | Event names | FR-EVT-001 |
 | `EventListener/TimeSpentAggregatorListener.php` | TimeTrack aggregation | FR-BRIDGE-002 |
+| `Exception/ColumnNotFoundException.php` | Thrown by `TaskManager` when a column is not on the task's board | FR-SVC-007 |
 | `Form/BoardColumnFormType.php` | Form type | FR-FORM-001 |
+| `Form/DataTransformer/TagsToStringTransformer.php` | Tags list ↔ comma-separated string (plain-text fallback without TagInputBundle) | FR-FORM-001 |
 | `Form/TaskBoardFormType.php` | Form type | FR-FORM-001 |
 | `Form/TaskFormType.php` | Form type | FR-FORM-001 |
 | `Form/TaskImportFormType.php` | Form type | FR-FORM-001 |
@@ -93,9 +96,11 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Repository/TaskTimeEntryRepositoryInterface.php` | Repository interface | FR-REPO-001 |
 | `Repository/TeamMemberRepositoryInterface.php` | Repository interface | FR-REPO-001 |
 | `Routing/TaskBoardRouteLoader.php` | Route loader | FR-ROUTE-001 |
+| `Security/AllowAllTaskBoardAccessChecker.php` | Demo-only checker when `security.allow_unauthenticated` is true | FR-SEC-002 |
 | `Security/ConfigurableTaskBoardAccessChecker.php` | Access control | FR-SEC-002 |
 | `Security/NullTaskBoardTeamMembershipResolver.php` | Access control | FR-SEC-004 |
 | `Security/TaskBoardAccessCheckerInterface.php` | Access control | FR-SEC-001 |
+| `Security/TaskBoardResourceAccessChecker.php` | Per-board / per-task authorization (creator, team member, manage role; event-overridable) | FR-SEC-005 |
 | `Security/TaskBoardTeamMembershipResolverInterface.php` | Access control | FR-SEC-003 |
 | `Service/BoardColumnManager.php` | Domain service | FR-SVC-001 |
 | `Service/TaskAccessGuard.php` | Domain service | FR-SVC-002 |
@@ -109,6 +114,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Support/SlugGenerator.php` | Support utilities | FR-SUP-001 |
 | `Support/UserIdResolver.php` | Support utilities | FR-SUP-001 |
 | `TaskBoardBundle.php` | Bundle entry | FR-BUNDLE-001 |
+| `Twig/TaskBoardTwigExtension.php` | Twig globals for the manage Web UI (REQ-UI-001) | FR-TPL-001 |
 | `ValueObject/Uuid.php` | UUID helper | FR-VO-001 |
 
 ## TypeScript & CSS (`src/Resources/assets/src/`)
@@ -142,6 +148,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
 | `Resources/views/layout.html.twig` | Twig manage UI | FR-TPL-001 |
+| `Resources/views/layout_integrate_host.html.twig` | Bridge template for host layout integration (REQ-UI-001) | FR-TPL-001 |
 | `Resources/views/manage/_add_column_modal.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_add_task_modal.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_edit_column_modal.html.twig` | Twig manage UI | FR-TPL-001 |
@@ -183,11 +190,13 @@ Production scope excludes Vitest sources (`*.test.ts`).
 
 | Category | Files | Mapped |
 | --- | ---: | ---: |
-| PHP | 99 | 99 |
+| PHP | 106 | 106 |
 | Assets | 14 | 14 |
 | Legacy assets | 2 | 2 |
-| Twig | 23 | 23 |
+| Twig | 24 | 24 |
 | Config & i18n | 9 | 9 |
-| **Total production sources** | **147** | **147** |
+| **Total production sources** | **155** | **155** |
 
 Excluded: `Resources/assets/src/list-filter-utils.test.ts`.
+
+Audit command (production count): `git ls-files src | grep -v '\.test\.ts$' | wc -l` → **155** (2026-10-20).

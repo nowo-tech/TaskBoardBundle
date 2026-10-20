@@ -100,6 +100,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 ### Security & events
 
 - **FR-SEC-001 … FR-SEC-004**: Access checker and team membership resolver interfaces + default implementations.
+- **FR-SEC-005**: `TaskBoardResourceAccessChecker` authorizes per board / task in the manage UI (creator, team member or manage role by default); listeners on `BoardAccessCheckEvent` / `TaskAccessCheckEvent` may override the decision.
 - **FR-EVT-001**: `TaskBoardEvents` constants.
 - **FR-EVT-002**: Query/access events (`BoardListQueryEvent`, `TaskAccessCheckEvent`, etc.).
 
@@ -143,7 +144,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 
 ## Success Criteria
 
-- **SC-001**: 147/147 production files mapped (`*.test.ts` excluded).
+- **SC-001**: **155/155** production files mapped (audited 2026-10-20; `git ls-files src | grep -v '\.test\.ts$' | wc -l`; `*.test.ts` excluded).
 - **SC-002**: Config keys match `Configuration.php` and Flex recipe defaults.
 - **SC-003**: PHPUnit + Vitest + PHPStan pass in CI.
 - **SC-004**: Demo with TimeTrack: board + timer + aggregated time on task.
