@@ -20,7 +20,11 @@
             }) }}
                 <div class="modal-body">
                     {{ form_row(columnForm.name, {attr: {'data-nowo-task-board-add-column-modal-target': 'nameInput'}}) }}
-                    {{ form_row(columnForm.color) }}
+                    {% for child in columnForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-column-modal#close">

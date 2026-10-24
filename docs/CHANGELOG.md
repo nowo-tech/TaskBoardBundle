@@ -39,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Views: the board create (`manage/index.html.twig`) and import (`manage/import.html.twig`) forms render their body
+  through the child loop (`{% for child in form %}` + `not child.rendered` + `form_row(child)`), per REQ-TWIG-003.
+  The forms with an intentional custom layout (task detail and subtask forms in `manage/task.html.twig`, the add
+  task / add column / edit column / task links / task members modals) keep their explicit children (grid columns,
+  Stimulus targets; rule 3) and now end with the same loop, so fields added to the FormType are rendered
+  automatically.
+
 ## [1.8.2] - 2026-10-21
 
 Dependency refresh (bundle and demos), php-cs-fixer ParallelConfig(2). See [UPGRADING](UPGRADING.md#to-182).

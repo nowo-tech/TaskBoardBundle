@@ -26,6 +26,11 @@
                     {{ form_row(editColumnForm.color, {
                         attr: {'data-nowo-task-board-edit-column-modal-target': 'colorInput'},
                     }) }}
+                    {% for child in editColumnForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-edit-column-modal#close">

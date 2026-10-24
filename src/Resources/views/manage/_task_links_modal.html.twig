@@ -29,6 +29,11 @@
                         <div class="col-md-6">{{ form_row(linkForm.label, {attr: {'data-nowo-task-board-task-links-modal-target': 'label'}}) }}</div>
                         <div class="col-md-6">{{ form_row(linkForm.externalId, {attr: {'data-nowo-task-board-task-links-modal-target': 'externalId'}}) }}</div>
                     </div>
+                    {% for child in linkForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div class="modal-footer justify-content-between">
                     <div>

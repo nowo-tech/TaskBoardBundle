@@ -43,10 +43,11 @@
                         method: 'POST',
                         attr: {enctype: 'multipart/form-data'},
                     }) }}
-                        {{ form_row(importForm.source) }}
-                        {{ form_row(importForm.file) }}
-                        {{ form_row(importForm.createMissingColumns) }}
-                        {{ form_row(importForm.skipExisting) }}
+                        {% for child in importForm %}
+                            {% if not child.rendered %}
+                                {{ form_row(child) }}
+                            {% endif %}
+                        {% endfor %}
                         <button type="submit" class="btn btn-primary">
                             <i class="ti ti-upload me-1"></i>{{ 'task_board.import.form.submit'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>

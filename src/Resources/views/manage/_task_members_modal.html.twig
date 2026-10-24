@@ -53,6 +53,11 @@
                             </button>
                         </div>
                     </div>
+                    {% for child in memberForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 {{ form_end(memberForm) }}
             </div>
             <div class="modal-footer">

@@ -166,6 +166,12 @@
                 {{ form_widget(taskForm.description, {label: false}) }}
             </div>
 
+            {% for child in taskForm %}
+                {% if not child.rendered %}
+                    {{ form_row(child) }}
+                {% endif %}
+            {% endfor %}
+
             {{ form_end(taskForm) }}
         </div>
 
@@ -236,6 +242,11 @@
                             <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_subtask'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     </div>
+                    {% for child in subtaskForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 {{ form_end(subtaskForm) }}
             </div>
         </div>

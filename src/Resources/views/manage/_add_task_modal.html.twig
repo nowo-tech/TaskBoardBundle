@@ -28,6 +28,11 @@
                         <div class="col-md-6">{{ form_row(taskForm.dueAt) }}</div>
                         <div class="col-12">{{ form_row(taskForm.tags) }}</div>
                     </div>
+                    {% for child in taskForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-task-modal#close">
