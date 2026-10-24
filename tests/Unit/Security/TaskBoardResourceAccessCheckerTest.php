@@ -263,7 +263,7 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
         array $manageRoles = ['ROLE_ADMIN'],
         bool $scoping = true,
     ): TaskBoardResourceAccessChecker {
-        if ($repository === null) {
+        if (!$repository instanceof TeamMemberRepositoryInterface) {
             $repository = $this->createMock(TeamMemberRepositoryInterface::class);
             $repository->method('findByUserId')->willReturn([]);
         }

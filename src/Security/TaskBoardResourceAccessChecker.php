@@ -110,7 +110,7 @@ final readonly class TaskBoardResourceAccessChecker
             return true;
         }
 
-        if (self::sameUser($user, $board->getCreator())) {
+        if ($this->sameUser($user, $board->getCreator())) {
             return true;
         }
 
@@ -121,12 +121,12 @@ final readonly class TaskBoardResourceAccessChecker
 
     private function isTaskParticipant(object $user, Task $task): bool
     {
-        if (self::sameUser($user, $task->getCreator())) {
+        if ($this->sameUser($user, $task->getCreator())) {
             return true;
         }
 
         foreach ($task->getMembers() as $member) {
-            if (self::sameUser($user, $member->getUser())) {
+            if ($this->sameUser($user, $member->getUser())) {
                 return true;
             }
         }
@@ -144,7 +144,7 @@ final readonly class TaskBoardResourceAccessChecker
             }
         }
 
-        $userId = self::userId($user);
+        $userId = $this->userId($user);
         if ($userId === null) {
             return false;
         }
@@ -160,7 +160,7 @@ final readonly class TaskBoardResourceAccessChecker
 
     private function hasManageRole(): bool
     {
-        if ($this->authorizationChecker === null) {
+        if (!$this->authorizationChecker instanceof AuthorizationCheckerInterface) {
             return false;
         }
 
@@ -173,18 +173,18 @@ final readonly class TaskBoardResourceAccessChecker
         return false;
     }
 
-    private static function sameUser(object $a, object $b): bool
+    private function sameUser(object $a, object $b): bool
     {
         if ($a === $b) {
             return true;
         }
 
-        $idA = self::userId($a);
+        $idA = $this->userId($a);
 
-        return $idA !== null && $idA === self::userId($b);
+        return $idA !== null && $idA === $this->userId($b);
     }
 
-    private static function userId(object $user): ?string
+    private function userId(object $user): ?string
     {
         if (!method_exists($user, 'getId')) {
             return null;
