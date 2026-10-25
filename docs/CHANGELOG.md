@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.9.0] - 2026-10-26](#190---2026-10-26)
 - [[1.8.4] - 2026-10-25](#184---2026-10-25)
 - [[1.8.3] - 2026-10-24](#183---2026-10-24)
 - [[1.8.2] - 2026-10-21](#182---2026-10-21)
@@ -40,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.9.0] - 2026-10-26
+
+Forms in the bundle views are Symfony Form Types rendered with form_start / child loop / form_end, no raw form controls (REQ-TWIG-005). See [UPGRADING](UPGRADING.md#to-190).
 
 ### Added
 
@@ -429,7 +434,8 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.1...v1.8.2

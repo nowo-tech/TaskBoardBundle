@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.9.0](#to-190)
 - [To 1.8.4](#to-184)
 - [To 1.8.3](#to-183)
 - [To 1.8.2](#to-182)
@@ -80,6 +81,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.9.0
+
+From **1.8.4**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 - **Template overrides (REQ-TWIG-005):** `manage/list.html.twig`, `manage/task.html.twig`, `_task_links_modal`, `_task_members_modal` and `_task_priority_modal` no longer contain raw `<form>` / `<input>` / `<select>` markup. The controller now always passes `filterForm` (list) and `advanceForm`, `linkRemoveForm`, `memberRemoveForms`, `priorityForm` (task page). If you override those templates, render them with `form_start` / child loop / `form_end` (see [USAGE](USAGE.md#forms-req-twig-005)). Routes, posted field names (`_token`, `priority`, `action`, `columnId`) and CSRF ids are unchanged, so old overrides keep posting correctly until migrated. `updatePriority` now loads the task before validating the CSRF token (an unknown task answers 404 before a bad token answers 403).
 
