@@ -28,10 +28,12 @@ use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
+use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -141,9 +143,15 @@ final class ManageTemplatesRenderingTest extends TestCase
             'subtaskDone'      => 1,
             'priorities'       => TaskPriority::cases(),
             'dashboardRoute'   => null,
-        ]);
+        ] + $this->taskActionForms($task));
 
         self::assertStringContainsString('<strong>27 min</strong>', $html);
+        // REQ-TWIG-005: CSRF-only actions and the priority modal render from Form views.
+        self::assertStringContainsString('id="nowo-task-advance-form"', $html);
+        self::assertStringContainsString('id="nowo-task-link-delete-form"', $html);
+        self::assertStringContainsString('data-nowo-task-board-task-links-modal-target="deleteForm"', $html);
+        self::assertMatchesRegularExpression('/name="priority"[^>]*value="high" checked="checked"/', $html);
+        self::assertStringContainsString('data-nowo-task-board-task-priority-modal-target="firstOption"', $html);
         self::assertStringContainsString('Ship it', $html);
         self::assertStringContainsString('Write docs', $html);
         self::assertStringContainsString('Proofread', $html);
@@ -164,7 +172,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
             'priorities'       => TaskPriority::cases(),
             'dashboardRoute'   => null,
-        ]);
+        ] + $this->taskActionForms($this->task));
 
         self::assertStringContainsString('<strong>0 min</strong>', $html);
     }
@@ -233,6 +241,26 @@ final class ManageTemplatesRenderingTest extends TestCase
             'rich_description' => false,
             'tag_input'        => false,
         ]);
+    }
+
+    /**
+     * Form views the controller always passes to manage/task.html.twig (REQ-TWIG-005).
+     *
+     * @return array<string, mixed>
+     */
+    private function taskActionForms(Task $task): array
+    {
+        $memberRemoveForms = [];
+        foreach ($task->getMembers() as $member) {
+            $memberRemoveForms[$member->getId()] = $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'm' . $member->getId()])->createView();
+        }
+
+        return [
+            'advanceForm'       => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'a'])->createView(),
+            'linkRemoveForm'    => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'l'])->createView(),
+            'priorityForm'      => $this->factory()->createNamed('', TaskPriorityFormType::class, ['priority' => $task->getPriority()->value])->createView(),
+            'memberRemoveForms' => $memberRemoveForms,
+        ];
     }
 
     /**

@@ -1,5 +1,5 @@
 # TaskBoard Bundle - Development
-.PHONY: help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra
+.PHONY: help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra check-no-raw-html-form
 
 COMPOSE_FILE ?= docker-compose.yml
 # Prefer Compose V2; absolute docker path avoids shadowing by local docker/ when PATH has "." (REQ-MAKE-010).
@@ -19,6 +19,7 @@ help:
 	@echo "  up / down / down-dev / build / shell / install"
 	@echo "  test / test-coverage / test-ts / cs-check / cs-fix / phpstan / qa"
 	@echo "  demo-smoke / validate-translations / check-open-prs / release-check"
+	@echo "  check-no-raw-html-form   Fail on raw <form>/<input>/<textarea>/<select> in Twig (REQ-TWIG-005)"
 	@echo ""
 	@echo "Demo: make -C demo up-symfony8 | make demo-smoke"
 
@@ -98,8 +99,12 @@ igor: ensure-up
 	$(COMPOSE) exec -T php composer igor
 
 # REQ-MAKE-002 order (coverage gate: test-coverage-100).
-# check-no-raw-html-form (REQ-TWIG-005) is wired once the remaining raw form markup is migrated
-release-check: ensure-up check-no-cursor-coauthor check-open-prs check-twig-extra composer-sync cs-fix cs-check rector-dry phpstan igor validate-translations test-coverage-100 release-check-demos test-ts
+release-check: ensure-up check-no-cursor-coauthor check-open-prs check-twig-extra check-no-raw-html-form composer-sync cs-fix cs-check rector-dry phpstan igor validate-translations test-coverage-100 release-check-demos test-ts
+
+# REQ-TWIG-005 — no raw <form>/<input>/<textarea>/<select> in bundle views or demo templates.
+check-no-raw-html-form:
+	@chmod +x .scripts/check-no-raw-html-form.sh
+	@./.scripts/check-no-raw-html-form.sh
 
 composer-sync: ensure-up
 	@$(COMPOSE) exec -T $(SERVICE_PHP) composer validate --strict

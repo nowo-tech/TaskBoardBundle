@@ -57,15 +57,14 @@
                     </div>
                 </div>
             {{ form_end(linkForm) }}
-            <form
-                id="nowo-task-link-delete-form"
-                method="post"
-                action="#"
-                class="d-none"
-                data-nowo-task-board-task-links-modal-target="deleteForm"
-            >
-                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_link_remove') }}">
-            </form>
+            {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
+            {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', class: 'd-none', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
+                {% for child in linkRemoveForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(linkRemoveForm) }}
         </div>
     </div>
 </div>

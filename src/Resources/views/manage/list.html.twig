@@ -37,30 +37,14 @@
             <h2 class="card-title">{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</h2>
         </div>
         <div class="card-body border-bottom">
-            <div class="nowo-task-board-list-filters">
-                <label class="form-label mb-0">
-                    {{ 'task_board.list.filter_search'|trans({}, 'NowoTaskBoardBundle') }}
-                    <input type="search" class="form-control" data-nowo-task-board-list-filter-target="search" data-action="input->nowo-task-board-list-filter#filter">
-                </label>
-                <label class="form-label mb-0">
-                    {{ 'task_board.list.filter_priority'|trans({}, 'NowoTaskBoardBundle') }}
-                    <select class="form-select" data-nowo-task-board-list-filter-target="priority" data-action="change->nowo-task-board-list-filter#filter">
-                        <option value="">{{ 'task_board.list.filter_all'|trans({}, 'NowoTaskBoardBundle') }}</option>
-                        {% for priority in priorities %}
-                            <option value="{{ priority }}">{{ priority }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label class="form-label mb-0">
-                    {{ 'task_board.list.filter_column'|trans({}, 'NowoTaskBoardBundle') }}
-                    <select class="form-select" data-nowo-task-board-list-filter-target="column" data-action="change->nowo-task-board-list-filter#filter">
-                        <option value="">{{ 'task_board.list.filter_all'|trans({}, 'NowoTaskBoardBundle') }}</option>
-                        {% for name in columnNames %}
-                            <option value="{{ name }}">{{ name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-            </div>
+            {# REQ-TWIG-005: client-side filters (unmapped TaskListFilterType fields keep the Stimulus targets). #}
+            {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: 'nowo-task-board-list-filters'})}) }}
+                {% for child in filterForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(filterForm) }}
         </div>
         <div class="table-responsive">
             <table class="table table-vcenter card-table">

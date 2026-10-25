@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `make check-no-raw-html-form` (`.scripts/check-no-raw-html-form.sh`) fails on raw `<form>` / `<input>` / `<textarea>` / `<select>` in bundle views and demo templates, and runs in `release-check` (REQ-TWIG-005).
+
+### Changed
+
+- Manage UI (REQ-TWIG-005): the list filters (`TaskListFilterType`, unmapped, client-side), the task advance form, link remove form, member remove buttons (`CsrfActionType`) and the priority modal (`TaskPriorityFormType`) are Symfony Forms rendered with `form_start` / child loop / `form_end` instead of raw `<form>` / `<select>` / hand-rolled `_token` inputs. The controller validates them with `handleRequest` + `isSubmitted()` / `isValid()` and always passes the new form variables. Same routes, field names and CSRF ids; see [UPGRADING](UPGRADING.md#unreleased).
+
 ## [1.8.4] - 2026-10-25
 
 Reproducible JS bundle: the build stamp is a hash of the sources instead of the build time. See [UPGRADING](UPGRADING.md#to-184).

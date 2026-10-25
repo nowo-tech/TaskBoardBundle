@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -19,9 +20,13 @@ use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Symfony\Bridge\Twig\Extension\FormExtension;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
+use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\Form\FormRenderer;
+use Symfony\Component\Form\Forms;
 use Symfony\Component\Routing\Generator\UrlGenerator;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Translation\IdentityTranslator;
@@ -29,6 +34,7 @@ use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 use Twig\Loader\ChainLoader;
 use Twig\Loader\FilesystemLoader;
+use Twig\RuntimeLoader\FactoryRuntimeLoader;
 use Twig\TwigFunction;
 
 /**
@@ -37,6 +43,8 @@ use Twig\TwigFunction;
 final class RenamedRoutesRenderingTest extends TestCase
 {
     private const VIEWS = __DIR__ . '/../../../src/Resources/views';
+
+    private const VENDOR = __DIR__ . '/../../../vendor';
 
     private const ROUTE_KEYS = [
         'index', 'board', 'list', 'gantt', 'task', 'board_create', 'task_create', 'task_move', 'task_advance',
@@ -67,10 +75,13 @@ final class RenamedRoutesRenderingTest extends TestCase
             'tasks'          => [$this->task],
             'priorities'     => ['normal'],
             'columnNames'    => ['Todo'],
+            'filterForm'     => Forms::createFormFactory()->createNamed('', TaskListFilterType::class, null, ['priorities' => ['normal'], 'column_names' => ['Todo']])->createView(),
             'dashboardRoute' => null,
         ]);
 
         self::assertStringContainsString('/host/board/' . $this->board->getId() . '/gantt', $html);
+        self::assertStringContainsString('data-nowo-task-board-list-filter-target="priority"', $html);
+        self::assertStringContainsString('class="nowo-task-board-list-filters"', $html);
         self::assertStringContainsString('/host/task/' . $this->task->getId(), $html);
     }
 
@@ -143,14 +154,19 @@ final class RenamedRoutesRenderingTest extends TestCase
                 'layout.html.twig' => '<title>{% block title %}{% endblock %}</title>{% block stylesheets %}{% endblock %}{% block javascripts %}{% endblock %}<main class="{% block container_class %}{% endblock %}">{% block body %}{% endblock %}</main>',
             ]),
             (static function (): FilesystemLoader {
-                $filesystem = new FilesystemLoader();
+                $filesystem = new FilesystemLoader([self::VENDOR . '/symfony/twig-bridge/Resources/views/Form']);
                 $filesystem->addPath(self::VIEWS, 'NowoTaskBoardBundle');
 
                 return $filesystem;
             })(),
         ]);
 
-        $twig = new Environment($loader, ['strict_variables' => true]);
+        $twig   = new Environment($loader, ['strict_variables' => true]);
+        $engine = new TwigRendererEngine(['form_div_layout.html.twig'], $twig);
+        $twig->addRuntimeLoader(new FactoryRuntimeLoader([
+            FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
+        ]));
+        $twig->addExtension(new FormExtension());
         $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));

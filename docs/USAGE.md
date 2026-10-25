@@ -11,6 +11,7 @@
   - [Route-level checker](#route-level-checker)
   - [Event listeners](#event-listeners)
 - [Twig overrides](#twig-overrides)
+  - [Forms (REQ-TWIG-005)](#forms-req-twig-005)
 - [Layout without forking pages](#layout-without-forking-pages)
 - [Translations](#translations)
 
@@ -109,6 +110,30 @@ templates/bundles/NowoTaskBoardBundle/
 Or configure paths in `nowo_task_board.templates.*`.
 
 **Prefer config over full-file overrides** for chrome: set `templates.layout` to your project layout so you keep receiving UI fixes on package upgrades. A full copy of a manage page hides vendor updates for that file until you merge them.
+
+### Forms (REQ-TWIG-005)
+
+Every control of the manage UI is a Symfony Form (types under `Nowo\TaskBoardBundle\Form`, FormKit options on the editors) rendered with `form_start`, the child loop and `form_end`. Besides the editor forms, the controller always passes:
+
+| Template | Variable | Type |
+|----------|----------|------|
+| `manage/list.html.twig` | `filterForm` | `TaskListFilterType` — unmapped, client-side filters (Stimulus targets kept) |
+| `manage/task.html.twig` | `advanceForm` | `CsrfActionType` (`task_board_task_advance`; the status buttons post into `#nowo-task-advance-form`) |
+| `manage/_task_links_modal.html.twig` | `linkRemoveForm` | `CsrfActionType` (`task_board_task_link_remove`; the modal controller sets the action) |
+| `manage/_task_members_modal.html.twig` | `memberRemoveForms` (keyed by member id) | `CsrfActionType` (`task_board_task_member_remove_<id>`) |
+| `manage/_task_priority_modal.html.twig` | `priorityForm` | `TaskPriorityFormType` (flat `priority` radios + `_token`) |
+
+Overrides and demos must not reintroduce raw `<form>` / `<input>` / `<select>` / `<textarea>` markup (`make check-no-raw-html-form`, part of `release-check`). Pattern:
+
+```twig
+{{ form_start(advanceForm, {attr: {id: 'nowo-task-advance-form', class: 'd-none'}}) }}
+    {% for child in advanceForm %}
+        {% if not child.rendered %}
+            {{ form_row(child) }}
+        {% endif %}
+    {% endfor %}
+{{ form_end(advanceForm) }}
+```
 
 ## Layout without forking pages
 

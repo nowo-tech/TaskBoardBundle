@@ -10,6 +10,9 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
@@ -32,9 +35,18 @@ use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Extension\Csrf\CsrfExtension;
+use Symfony\Component\Form\Extension\HttpFoundation\HttpFoundationExtension;
+use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\Forms;
+use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -42,6 +54,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
@@ -234,6 +247,121 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::fail('Form ' . $type . ' was not created.');
     }
 
+    public function testTaskPagePassesCsrfActionAndPriorityForms(): void
+    {
+        $member = new TaskMember($this->task, $this->owner, TaskMemberRole::Assignee);
+        $this->task->addMember($member);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
+
+        self::assertInstanceOf(FormView::class, $this->rendered['advanceForm']);
+        self::assertSame('token-task_board_task_advance', $this->rendered['advanceForm']->children['_token']->vars['value']);
+        self::assertSame('_token', $this->rendered['linkRemoveForm']->children['_token']->vars['full_name']);
+        self::assertSame('priority', $this->rendered['priorityForm']->children['priority']->vars['full_name']);
+        self::assertSame($this->task->getPriority()->value, $this->rendered['priorityForm']->children['priority']->vars['value']);
+        self::assertSame('token-task_board_task_member_remove_' . $member->getId(), $this->rendered['memberRemoveForms'][$member->getId()]->children['_token']->vars['value']);
+    }
+
+    public function testListPassesClientSideFilterForm(): void
+    {
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->listView($this->board->getId());
+
+        $filter = $this->rendered['filterForm'];
+        self::assertInstanceOf(FormView::class, $filter);
+        self::assertSame('search', $filter->children['search']->vars['attr']['data-nowo-task-board-list-filter-target']);
+        self::assertSame('column', $filter->children['column']->vars['attr']['data-nowo-task-board-list-filter-target']);
+    }
+
+    public function testPriorityUpdateThroughForm(): void
+    {
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory())
+            ->updatePriority($this->task->getId(), Request::create('/', 'POST', ['_token' => 'ok', 'priority' => 'urgent']));
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(TaskPriority::Urgent, $this->task->getPriority());
+    }
+
+    public function testUnknownPriorityIsIgnored(): void
+    {
+        $before   = $this->task->getPriority();
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory())
+            ->updatePriority($this->task->getId(), Request::create('/', 'POST', ['_token' => 'ok', 'priority' => 'nope']));
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame($before, $this->task->getPriority());
+    }
+
+    public function testPriorityWithInvalidCsrfIsDenied(): void
+    {
+        $controller = $this->controller($this->owner, realFormFactory: $this->realFormFactory(false), csrfValid: false);
+
+        $this->expectException(AccessDeniedException::class);
+        $controller->updatePriority($this->task->getId(), Request::create('/', 'POST', ['_token' => 'bad', 'priority' => 'high']));
+    }
+
+    public function testAdvanceWithExtraButtonValuesIsAccepted(): void
+    {
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory())
+            ->advanceTask($this->task->getId(), Request::create('/', 'POST', ['_token' => 'ok', 'action' => 'done']));
+
+        self::assertSame(302, $response->getStatusCode());
+    }
+
+    /**
+     * Editor forms (Doctrine / FormKit types) stay mocked; the REQ-TWIG-005 root-less forms use the real factory.
+     */
+    private function hybridFormFactory(FormFactoryInterface $mocked, FormFactoryInterface $real): FormFactoryInterface
+    {
+        return new class($mocked, $real) implements FormFactoryInterface {
+            public function __construct(
+                private readonly FormFactoryInterface $mocked,
+                private readonly FormFactoryInterface $real,
+            ) {
+            }
+
+            public function create(string $type = FormType::class, mixed $data = null, array $options = []): FormInterface
+            {
+                return $this->mocked->create($type, $data, $options);
+            }
+
+            public function createNamed(string $name, string $type = FormType::class, mixed $data = null, array $options = []): FormInterface
+            {
+                return $this->real->createNamed($name, $type, $data, $options);
+            }
+
+            public function createForProperty(string $class, string $property, mixed $data = null, array $options = []): FormInterface
+            {
+                return $this->real->createForProperty($class, $property, $data, $options);
+            }
+
+            public function createBuilder(string $type = FormType::class, mixed $data = null, array $options = []): FormBuilderInterface
+            {
+                return $this->real->createBuilder($type, $data, $options);
+            }
+
+            public function createNamedBuilder(string $name, string $type = FormType::class, mixed $data = null, array $options = []): FormBuilderInterface
+            {
+                return $this->real->createNamedBuilder($name, $type, $data, $options);
+            }
+
+            public function createBuilderForProperty(string $class, string $property, mixed $data = null, array $options = []): FormBuilderInterface
+            {
+                return $this->real->createBuilderForProperty($class, $property, $data, $options);
+            }
+        };
+    }
+
+    private function realFormFactory(bool $csrfValid = true): FormFactoryInterface
+    {
+        $csrf = $this->createMock(CsrfTokenManagerInterface::class);
+        $csrf->method('isTokenValid')->willReturn($csrfValid);
+        $csrf->method('getToken')->willReturnCallback(static fn (string $id): CsrfToken => new CsrfToken($id, 'token-' . $id));
+
+        return Forms::createFormFactoryBuilder()
+            ->addExtension(new HttpFoundationExtension())
+            ->addExtension(new CsrfExtension($csrf))
+            ->getFormFactory();
+    }
+
     public function testNestedColumnOrderIsBadRequest(): void
     {
         $request = Request::create('/', 'POST', ['_token' => 'ok', 'columnOrder' => [['x'], $this->column->getId()]]);
@@ -254,7 +382,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER']): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -289,7 +417,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             ganttBuilder: new TaskGanttBuilder(),
             importOrchestrator: new TaskImportOrchestrator([], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
             translator: $this->createMock(TranslatorInterface::class),
-            routes: array_fill_keys(['index', 'board', 'task', 'board_import'], ['path' => '/', 'name' => 'route']),
+            routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,
             dashboardRoute: null,
@@ -300,7 +428,8 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $tokenStorage->setToken(new UsernamePasswordToken($user, 'main', $user->getRoles()));
 
         $csrf = $this->createMock(CsrfTokenManagerInterface::class);
-        $csrf->method('isTokenValid')->willReturn(true);
+        $csrf->method('isTokenValid')->willReturn($csrfValid);
+        $csrf->method('getToken')->willReturnCallback(static fn (string $id): CsrfToken => new CsrfToken($id, 'token-' . $id));
 
         $form        = $this->createMock(FormInterface::class);
         $formFactory = $this->createMock(FormFactoryInterface::class);
@@ -323,7 +452,12 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $container = new Container();
         $container->set('security.token_storage', $tokenStorage);
         $container->set('security.csrf.token_manager', $csrf);
-        $container->set('form.factory', $formFactory);
+        $container->set('form.factory', $realFormFactory instanceof FormFactoryInterface ? $this->hybridFormFactory($formFactory, $realFormFactory) : $formFactory);
+        $request = new Request();
+        $request->setSession(new Session(new MockArraySessionStorage()));
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+        $container->set('request_stack', $requestStack);
         $container->set('twig', $twig);
         $container->set('router', $router);
         $controller->setContainer($container);

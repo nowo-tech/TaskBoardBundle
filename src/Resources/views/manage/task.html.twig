@@ -24,9 +24,14 @@
     {% set subtaskTotal = subtaskTotal|default(task.subtasks|length) %}
     {% set subtaskDone = subtaskDone|default(0) %}
 
-    <form id="nowo-task-advance-form" method="post" class="d-none" aria-hidden="true">
-        <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_advance') }}">
-    </form>
+    {# REQ-TWIG-005: CSRF-only form; the status / column buttons post into it through form="nowo-task-advance-form". #}
+    {{ form_start(advanceForm, {attr: {id: 'nowo-task-advance-form', class: 'd-none', 'aria-hidden': 'true'}}) }}
+        {% for child in advanceForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+    {{ form_end(advanceForm) }}
 
     <div class="card nowo-task-detail mb-4" data-controller="nowo-task-board-task-members-modal nowo-task-board-task-priority-modal">
         <div class="nowo-task-detail__toolbar border-bottom px-4 py-3">

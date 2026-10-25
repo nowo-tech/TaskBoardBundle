@@ -16,27 +16,27 @@
                 </h5>
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-priority-modal#close"></button>
             </div>
-            <form method="post" action="{{ path(nowo_task_board_route('task_priority'), {taskId: task.id}) }}">
-                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_priority') }}">
+            {# Plain radio widgets: the option label is the custom priority tag below, not the theme's form-check label. #}
+            {% form_theme priorityForm 'form_div_layout.html.twig' %}
+            {{ form_start(priorityForm) }}
                 <div class="modal-body">
                     <p class="text-secondary small mb-3">{{ 'task_board.task.priority_modal_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
                     <div class="nowo-task-detail__priority-options">
                         {% for priority in priorities %}
                             <label class="nowo-task-detail__priority-option{% if task.priority == priority %} is-selected{% endif %}">
-                                <input
-                                    type="radio"
-                                    name="priority"
-                                    value="{{ priority.value }}"
-                                    class="form-check-input"
-                                    {% if task.priority == priority %}checked{% endif %}
-                                    {% if loop.first %}data-nowo-task-board-task-priority-modal-target="firstOption"{% endif %}
-                                >
+                                {{ form_widget(priorityForm.priority[loop.index0], {attr: loop.first ? {class: 'form-check-input', 'data-nowo-task-board-task-priority-modal-target': 'firstOption'} : {class: 'form-check-input'}}) }}
                                 <span class="nowo-task-detail__priority-option-content">
                                     {{ priorityUi.priority_tag(priority, false) }}
                                 </span>
                             </label>
                         {% endfor %}
                     </div>
+                    {# REQ-TWIG-005: remaining children (CSRF token) #}
+                    {% for child in priorityForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-priority-modal#close">
@@ -46,7 +46,7 @@
                         <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
                 </div>
-            </form>
+            {{ form_end(priorityForm) }}
         </div>
     </div>
 </div>

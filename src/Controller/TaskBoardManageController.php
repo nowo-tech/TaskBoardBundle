@@ -16,11 +16,14 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
+use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
+use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
@@ -34,6 +37,9 @@ use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -41,7 +47,6 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
-use ValueError;
 
 use function array_key_exists;
 use function is_object;
@@ -289,11 +294,18 @@ final class TaskBoardManageController extends AbstractController
             }
         }
 
+        $priorityNames = array_map(strval(...), array_keys($priorities));
+        $columnNames   = array_map(strval(...), array_keys($columns));
+
         return $this->render($this->templates['list'], [
-            'board'          => $board,
-            'tasks'          => $tasks,
-            'priorities'     => array_keys($priorities),
-            'columnNames'    => array_keys($columns),
+            'board'       => $board,
+            'tasks'       => $tasks,
+            'priorities'  => $priorityNames,
+            'columnNames' => $columnNames,
+            'filterForm'  => $this->formFactory()->createNamed('', TaskListFilterType::class, null, [
+                'priorities'   => $priorityNames,
+                'column_names' => $columnNames,
+            ])->createView(),
             'dashboardRoute' => $this->dashboardRoute,
         ]);
     }
@@ -356,6 +368,16 @@ final class TaskBoardManageController extends AbstractController
             'compact'        => true,
         ]);
 
+        /** @var array<string, FormView> $memberRemoveForms */
+        $memberRemoveForms = [];
+        foreach ($task->getMembers() as $member) {
+            $memberId                     = (string) $member->getId();
+            $memberRemoveForms[$memberId] = $this->csrfActionForm(
+                'task_board_task_member_remove_' . $memberId,
+                $this->generateUrl($this->routes['task_member_remove']['name'], ['taskId' => $taskId, 'memberId' => $memberId]),
+            )->createView();
+        }
+
         $subtaskDone = 0;
         foreach ($task->getSubtasks() as $subtask) {
             if ($subtask->isCompleted()) {
@@ -364,23 +386,27 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $this->render($this->templates['task'], [
-            'task'             => $task,
-            'taskForm'         => $taskForm,
-            'linkForm'         => $linkForm,
-            'memberForm'       => $memberForm,
-            'subtaskForm'      => $subtaskForm,
-            'columnNavigation' => $this->taskManager->getColumnNavigation($task),
-            'subtaskTotal'     => $task->getSubtasks()->count(),
-            'subtaskDone'      => $subtaskDone,
-            'priorities'       => TaskPriority::cases(),
-            'dashboardRoute'   => $this->dashboardRoute,
+            'task'              => $task,
+            'taskForm'          => $taskForm,
+            'linkForm'          => $linkForm,
+            'memberForm'        => $memberForm,
+            'subtaskForm'       => $subtaskForm,
+            'columnNavigation'  => $this->taskManager->getColumnNavigation($task),
+            'subtaskTotal'      => $task->getSubtasks()->count(),
+            'subtaskDone'       => $subtaskDone,
+            'priorities'        => TaskPriority::cases(),
+            'dashboardRoute'    => $this->dashboardRoute,
+            'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
+            'linkRemoveForm'    => $this->csrfActionForm('task_board_task_link_remove')->createView(),
+            'priorityForm'      => $this->createPriorityForm($task)->createView(),
+            'memberRemoveForms' => $memberRemoveForms,
         ]);
     }
 
     public function advanceTask(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $this->denyUnlessValidCsrf($request, 'task_board_task_advance');
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_advance'));
         $task     = $this->findTask($taskId, $user, true);
         $action   = $request->request->getString('action');
         $columnId = $request->request->getString('columnId');
@@ -463,7 +489,7 @@ final class TaskBoardManageController extends AbstractController
     public function removeLink(string $taskId, string $linkId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $this->denyUnlessValidCsrf($request, 'task_board_task_link_remove');
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_link_remove'));
         $task = $this->findTask($taskId, $user, true);
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
@@ -498,7 +524,7 @@ final class TaskBoardManageController extends AbstractController
     public function removeMember(string $taskId, string $memberId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $this->denyUnlessValidCsrf($request, 'task_board_task_member_remove_' . $memberId);
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_member_remove_' . $memberId));
         $task = $this->findTask($taskId, $user, true);
 
         if ($this->memberAssigner->unassign($task, $memberId, $user)) {
@@ -511,12 +537,16 @@ final class TaskBoardManageController extends AbstractController
     public function updatePriority(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
-        $this->denyUnlessValidCsrf($request, 'task_board_task_priority');
         $task = $this->findTask($taskId, $user, true);
+        $form = $this->createPriorityForm($task);
+        $form->submit($request->request->all());
+        if ($form->getErrors()->count() > 0) {
+            // Root errors are CSRF failures; an unknown priority is a field error and is ignored as before.
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
 
-        try {
-            $priority = TaskPriority::from($request->request->getString('priority'));
-        } catch (ValueError) {
+        $priority = $form->isValid() ? TaskPriority::tryFrom((string) $form->get('priority')->getData()) : null;
+        if (!$priority instanceof TaskPriority) {
             return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
         }
 
@@ -554,6 +584,50 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $user;
+    }
+
+    /**
+     * Flat CSRF-only form (`_token`) rendered with form_start/form_end — REQ-TWIG-005.
+     *
+     * @return FormInterface<mixed>
+     */
+    private function csrfActionForm(string $csrfTokenId, string $action = ''): FormInterface
+    {
+        return $this->formFactory()->createNamed('', CsrfActionType::class, null, [
+            'csrf_token_id' => $csrfTokenId,
+            'action'        => $action,
+        ]);
+    }
+
+    /**
+     * @return FormInterface<mixed>
+     */
+    private function createPriorityForm(Task $task): FormInterface
+    {
+        return $this->formFactory()->createNamed('', TaskPriorityFormType::class, ['priority' => $task->getPriority()->value], [
+            'action' => $this->generateUrl($this->routes['task_priority']['name'], ['taskId' => $task->getId()]),
+        ]);
+    }
+
+    /**
+     * @param FormInterface<mixed> $form
+     */
+    private function denyUnlessValidCsrfForm(Request $request, FormInterface $form): void
+    {
+        // Root-less form: submit the POST body explicitly (handleRequest() skips a root-less form whose payload has no
+        // child field, which is the case of the CSRF-only actions).
+        $form->submit($request->request->all());
+        if (!$form->isValid()) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+    }
+
+    private function formFactory(): FormFactoryInterface
+    {
+        /** @var FormFactoryInterface $factory */
+        $factory = $this->container->get('form.factory');
+
+        return $factory;
     }
 
     private function denyUnlessValidCsrf(Request $request, string $tokenId): void

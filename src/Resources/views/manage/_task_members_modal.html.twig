@@ -30,12 +30,17 @@
                                     <span class="badge bg-green-lt">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                 </div>
                             </div>
-                            <form method="post" action="{{ path(nowo_task_board_route('task_member_remove'), {taskId: task.id, memberId: member.id}) }}">
-                                <input type="hidden" name="_token" value="{{ csrf_token('task_board_task_member_remove_' ~ member.id) }}">
+                            {% set member_remove_form = memberRemoveForms[member.id] %}
+                            {{ form_start(member_remove_form) }}
+                                {% for child in member_remove_form %}
+                                    {% if not child.rendered %}
+                                        {{ form_row(child) }}
+                                    {% endif %}
+                                {% endfor %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
                                     <i class="ti ti-user-minus"></i>
                                 </button>
-                            </form>
+                            {{ form_end(member_remove_form) }}
                         </div>
                     {% else %}
                         <div class="list-group-item text-secondary">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</div>
