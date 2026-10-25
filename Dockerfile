@@ -1,6 +1,6 @@
 FROM php:8.2-cli-alpine
 
-RUN apk add --no-cache git unzip bash libzip-dev \
+RUN apk add --no-cache git unzip bash libzip-dev nodejs npm \
     && docker-php-ext-install -j$(nproc) zip
 
 RUN apk add --no-cache $PHPIZE_DEPS \
@@ -9,6 +9,8 @@ RUN apk add --no-cache $PHPIZE_DEPS \
     && apk del $PHPIZE_DEPS
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+RUN npm install -g pnpm@10
 
 WORKDIR /app
 

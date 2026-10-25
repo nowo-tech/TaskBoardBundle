@@ -60,7 +60,7 @@ test-coverage-100: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) composer test-coverage-100
 
 test-ts: ensure-up
-	$(COMPOSE) exec -T -e CI=true $(SERVICE_PHP) sh -c 'command -v pnpm >/dev/null && pnpm install && pnpm run test:coverage' || echo "Run pnpm test:coverage on the host if pnpm is not in the container."
+	$(COMPOSE) exec -T -e CI=true $(SERVICE_PHP) sh -c 'pnpm install --frozen-lockfile && pnpm run test:coverage'
 
 cs-check: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) vendor/bin/php-cs-fixer fix --dry-run --diff

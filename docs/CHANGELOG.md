@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Developer tooling: `make release-check` runs the full REQ-MAKE-002 chain with `ensure-up` first, then the Cursor co-author, open-PR and Twig `extra` gates, composer-sync, the new `cs-fix` step, cs-check, rector-dry, phpstan, igor, translations, the 100% coverage gate (`test-coverage-100` instead of plain `test`), the demo release-check and test-ts. `check-no-raw-html-form` (REQ-TWIG-005) is wired once the remaining raw form markup is migrated.
 - Internal: applied the pending Rector suggestions in `TaskBoardResourceAccessChecker` (private static helpers made non-static, nullable checks as `instanceof`) and its unit test; no behaviour change. `make rector-dry` is clean again.
+- Developer tooling: the PHP container now ships Node.js and pnpm 10, and `make test-ts` runs `pnpm install --frozen-lockfile` + `pnpm run test:coverage` and fails the build on errors (it used to print a hint and succeed when pnpm was missing, so `release-check` never ran the TypeScript tests).
 
 ## [1.8.3] - 2026-10-24
 
