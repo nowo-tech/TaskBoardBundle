@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.8.4](#to-184)
 - [To 1.8.3](#to-183)
 - [To 1.8.2](#to-182)
 - [To 1.8.1](#to-181)
@@ -79,6 +80,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.8.4
+
+From **1.8.3**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 ## To 1.8.3
 
