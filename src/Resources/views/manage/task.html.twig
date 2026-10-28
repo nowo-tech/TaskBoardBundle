@@ -49,9 +49,11 @@
                     <a href="{{ path(nowo_task_board_route('board'), {boardId: task.board.id}) }}" class="btn btn-outline-secondary btn-sm">
                         <i class="ti ti-layout-kanban me-1"></i>{{ 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle') }}
                     </a>
+                    {% if (canEditTask ?? true) %}
                     <button type="submit" form="nowo-task-edit-form" class="btn btn-primary btn-sm">
                         <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -216,6 +218,8 @@
                     depth: 0,
                 }) }}
             </div>
+            {# Read-only users (since 1.10) see the tree without the add form. #}
+            {% if (canEditTask ?? true) %}
             <div class="p-3 border-top">
                 {{ form_start(subtaskForm, {action: path(nowo_task_board_route('task_subtask'), {taskId: task.id}), method: 'POST', attr: {class: 'nowo-task-detail__inline-add'}}) }}
                     <div class="input-group">
@@ -237,6 +241,7 @@
                     {% endfor %}
                 {{ form_end(subtaskForm) }}
             </div>
+            {% endif %}
         </div>
     </div>
 

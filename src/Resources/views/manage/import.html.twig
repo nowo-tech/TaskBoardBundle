@@ -21,11 +21,9 @@
         breadcrumbRouteParams: {boardId: board.id},
         breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
-        headerActions: '
-            <a href="' ~ path(nowo_task_board_route('board'), {boardId: board.id}) ~ '" class="btn btn-outline-secondary">
-                <i class="ti ti-arrow-left"></i> ' ~ ('task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-        ',
+        headerActions: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+        ],
         dashboardRoute: dashboardRoute|default(null),
     }) }}
 

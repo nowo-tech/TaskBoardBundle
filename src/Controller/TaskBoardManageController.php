@@ -159,6 +159,7 @@ final class TaskBoardManageController extends AbstractController
             // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
             'tasks'          => $this->topLevelOnly ? $taskTree->roots() : $allTasks,
             'taskTree'       => $taskTree,
+            'canEditBoard'   => $this->resourceAccessChecker->canEditBoard($user, $board),
             'columnForm'     => $columnForm->createView(),
             'editColumnForm' => $this->createForm(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
             'taskForm'       => $taskForm->createView(),
@@ -169,7 +170,7 @@ final class TaskBoardManageController extends AbstractController
     public function createColumn(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId, $user);
+        $board = $this->findBoard($boardId, $user, true);
 
         $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData());
         $form->handleRequest($request);
@@ -188,7 +189,7 @@ final class TaskBoardManageController extends AbstractController
     public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user   = $this->requireUser();
-        $board  = $this->findBoard($boardId, $user);
+        $board  = $this->findBoard($boardId, $user, true);
         $column = $this->findColumn($board, $columnId);
 
         $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData(
@@ -211,7 +212,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_column_reorder');
-        $board = $this->findBoard($boardId, $user);
+        $board = $this->findBoard($boardId, $user, true);
 
         $order = $request->request->all('columnOrder');
         foreach ($order as $columnId) {
@@ -230,7 +231,7 @@ final class TaskBoardManageController extends AbstractController
     public function createTask(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId, $user);
+        $board = $this->findBoard($boardId, $user, true);
 
         $form = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($board),
@@ -249,7 +250,7 @@ final class TaskBoardManageController extends AbstractController
     public function importBoard(string $boardId, Request $request): Response
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId, $user);
+        $board = $this->findBoard($boardId, $user, true);
 
         $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
         $form->handleRequest($request);
@@ -416,6 +417,7 @@ final class TaskBoardManageController extends AbstractController
             'subtaskDone'       => $subtaskProgress->done,
             'subtaskProgress'   => $subtaskProgress,
             'taskTree'          => $taskTree,
+            'canEditTask'       => $this->resourceAccessChecker->canEditTask($user, $task),
             'priorities'        => TaskPriority::cases(),
             'dashboardRoute'    => $this->dashboardRoute,
             'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
@@ -675,9 +677,10 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
-     * Loads a board and enforces per-board access (creator, team member, manage role or listener grant).
+     * Loads a board and enforces per-board access (creator, team member, manage role or listener grant); $forWrite
+     * also rejects boards a listener marked read-only (403).
      */
-    private function findBoard(string $boardId, UserInterface $user): TaskBoard
+    private function findBoard(string $boardId, UserInterface $user, bool $forWrite = false): TaskBoard
     {
         $board = $this->boardRepository->findById($boardId);
         // A board of another tenant is not found (tenancy).
@@ -687,6 +690,10 @@ final class TaskBoardManageController extends AbstractController
 
         if (!$this->resourceAccessChecker->canViewBoard($user, $board)) {
             throw $this->createAccessDeniedException('Board access denied.');
+        }
+
+        if ($forWrite && !$this->resourceAccessChecker->canEditBoard($user, $board)) {
+            throw $this->createAccessDeniedException('Board is read-only.');
         }
 
         return $board;

@@ -1,5 +1,5 @@
 {#
-    Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree.
+    Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree, canEditBoard (default true).
 #}
 {% set columnTasks = tasks|filter(t => t.column and t.column.id == column.id) %}
 <section
@@ -24,6 +24,7 @@
                 aria-label="{{ 'task_board.board.column_task_count'|trans({'%count%': columnTasks|length}, 'NowoTaskBoardBundle') }}"
             >{{ columnTasks|length }}</span>
         </h3>
+        {% if (canEditBoard ?? true) %}
         <button
             type="button"
             class="nowo-task-board__column-edit"
@@ -36,6 +37,7 @@
         >
             <i class="ti ti-pencil" aria-hidden="true"></i>
         </button>
+        {% endif %}
     </div>
 
     <ul class="nowo-task-board__task-list" data-nowo-task-board-target="taskList">
@@ -44,6 +46,8 @@
         {% endfor %}
     </ul>
 
+    {# Write controls only for users who may edit the board (since 1.10). #}
+    {% if (canEditBoard ?? true) %}
     <button
         type="button"
         class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn"
@@ -53,4 +57,5 @@
     >
         <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
+    {% endif %}
 </section>

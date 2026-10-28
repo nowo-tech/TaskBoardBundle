@@ -188,6 +188,49 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
         self::assertSame([[$guest, $board, false], [$owner, $board, true]], $received);
     }
 
+    public function testBoardEditNeedsViewAccessThatIsNotReadOnly(): void
+    {
+        $owner    = new TestUser('1', 'owner@example.com');
+        $viewer   = new TestUser('2', 'viewer@example.com');
+        $stranger = new TestUser('3', 'stranger@example.com');
+        $board    = new TaskBoard('Board', 'board', $owner);
+        $task     = new Task($board, 'Task', $owner);
+        $assigned = new Task($board, 'Assigned', $owner);
+        $assigned->addMember(new TaskMember($assigned, $viewer, TaskMemberRole::Assignee));
+        $granted = new Task($board, 'Granted', $owner);
+
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($viewer): void {
+            if ($event->getSubject() === $viewer) {
+                $event->grant();
+                $event->markReadOnly();
+            }
+        });
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($viewer, $granted): void {
+            if ($event->getSubject() === $viewer && $event->getTask() === $granted) {
+                $event->grant();
+            }
+        });
+        $checker = $this->checker(dispatcher: $dispatcher);
+
+        self::assertTrue($checker->canEditBoard($owner, $board));
+        self::assertTrue($checker->canEditTask($owner, $task));
+        self::assertTrue($checker->canViewBoard($viewer, $board));
+        self::assertFalse($checker->canEditBoard($viewer, $board));
+        self::assertTrue($checker->canViewTask($viewer, $task));
+        self::assertFalse($checker->canEditTask($viewer, $task));
+        // A participant of a read-only board stays read-only; an explicit task grant is editable.
+        self::assertFalse($checker->canEditTask($viewer, $assigned));
+        self::assertTrue($checker->canEditTask($viewer, $granted));
+        self::assertFalse($checker->canEditBoard($stranger, $board));
+        self::assertFalse($checker->canViewTask($stranger, $task));
+
+        $event = new BoardAccessCheckEvent($viewer, $board);
+        self::assertFalse($event->isReadOnly());
+        $event->markReadOnly();
+        self::assertTrue($event->isReadOnly());
+    }
+
     public function testTaskAccessListenersCanGrantDenyAndMarkReadOnly(): void
     {
         $owner    = new TestUser('1', 'owner@example.com');

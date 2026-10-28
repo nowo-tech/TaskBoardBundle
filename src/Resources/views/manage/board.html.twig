@@ -20,17 +20,12 @@
         pageSubtitle: board.description,
         breadcrumbRoute: nowo_task_board_route('index'),
         breadcrumbLabel: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
-        headerActions: '
-            <a href="' ~ path(nowo_task_board_route('board_import'), {boardId: board.id}) ~ '" class="btn btn-outline-secondary">
-                <i class="ti ti-upload"></i> ' ~ ('task_board.import.action'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-            <a href="' ~ path(nowo_task_board_route('list'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
-                <i class="ti ti-list"></i> ' ~ ('task_board.view.list'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-            <a href="' ~ path(nowo_task_board_route('gantt'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
-                <i class="ti ti-chart-bar"></i> ' ~ ('task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-        ',
+        headerActions: ((canEditBoard ?? true) ? [
+            {href: path(nowo_task_board_route('board_import'), {boardId: board.id}), icon: 'upload', label: 'task_board.import.action'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+        ] : []) | merge([
+            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+        ]),
         dashboardRoute: dashboardRoute|default(null),
     }) }}
     {% endblock %}
@@ -64,6 +59,7 @@
                 {% endfor %}
             {% endblock %}
 
+            {% if (canEditBoard ?? true) %}
             <div class="nowo-task-board__add-column">
                 <button
                     type="button"
@@ -75,6 +71,7 @@
                     <i class="ti ti-plus"></i>
                 </button>
             </div>
+            {% endif %}
         </div>
 
         {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig') }}

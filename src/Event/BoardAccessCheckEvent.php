@@ -19,6 +19,8 @@ final class BoardAccessCheckEvent extends Event
 
     private bool $denied = false;
 
+    private bool $readOnly = false;
+
     public function __construct(
         private readonly object $subject,
         private readonly TaskBoard $board,
@@ -65,5 +67,20 @@ final class BoardAccessCheckEvent extends Event
     public function isDenied(): bool
     {
         return $this->denied;
+    }
+
+    /**
+     * Read-only access (since 1.10): the user may view the board but not change it (columns, new tasks, import) nor
+     * edit its tasks unless a TASK_ACCESS_CHECK listener grants the task explicitly.
+     */
+    public function markReadOnly(): void
+    {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
+        $this->readOnly = true;
+    }
+
+    public function isReadOnly(): bool
+    {
+        return $this->readOnly;
     }
 }

@@ -249,6 +249,48 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringNotContainsString('>Child<', $html);
     }
 
+    public function testPageHeaderActionsAreEscaped(): void
+    {
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
+            'pageTitle'     => 'Board',
+            'headerActions' => [['href' => '/x?a=1&b="2"', 'label' => '<b>List</b>', 'icon' => 'list']],
+        ]);
+
+        self::assertStringContainsString('href="/x?a=1&amp;b=&quot;2&quot;"', $html);
+        self::assertStringContainsString('&lt;b&gt;List&lt;/b&gt;', $html);
+        self::assertStringContainsString('class="btn btn-outline-primary"', $html);
+        self::assertStringNotContainsString('<b>List</b>', $html);
+
+        $legacy = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
+            'pageTitle'     => 'Board',
+            'headerActions' => '<a href="/x">Old</a>',
+        ]);
+        self::assertStringContainsString('&lt;a href=&quot;/x&quot;&gt;Old&lt;/a&gt;', $legacy);
+    }
+
+    public function testReadOnlyBoardHidesWriteControls(): void
+    {
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', [
+            'board'          => $this->board,
+            'tasks'          => [$this->task],
+            'canEditBoard'   => false,
+            'columnForm'     => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'taskForm'       => $this->factory()->create(TaskFormType::class, new TaskFormData(columnId: $this->todo->getId()), [
+                'column_choices'   => ['Todo' => $this->todo->getId()],
+                'rich_description' => false,
+                'tag_input'        => false,
+            ])->createView(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringContainsString('Ship it', $html);
+        self::assertStringNotContainsString('nowo-task-board__add-task-btn', $html);
+        self::assertStringNotContainsString('nowo-task-board__add-column-btn', $html);
+        self::assertStringNotContainsString('nowo-task-board__column-edit', $html);
+        self::assertStringNotContainsString('/import', $html);
+    }
+
     public function testTaskDetailPageShowsZeroWithoutLoggedTime(): void
     {
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [

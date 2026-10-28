@@ -12,8 +12,17 @@
             {% endif %}
         </div>
         <div class="col-auto d-flex gap-2 flex-wrap">
-            {% if headerActions is defined %}
-                {{ headerActions|raw }}
+            {# Since 1.10: a list of {href, label, icon?, class?} rendered with auto-escaping (no |raw). #}
+            {% if headerActions is defined and headerActions is iterable %}
+                {% for action in headerActions %}
+                    <a href="{{ action.href }}" class="btn {{ action.class|default('btn-outline-primary') }}">
+                        {%- if action.icon|default(null) %}<i class="ti ti-{{ action.icon }}" aria-hidden="true"></i> {% endif -%}
+                        {{ action.label }}
+                    </a>
+                {% endfor %}
+            {% elseif headerActions is defined %}
+                {# A string from an older override is printed escaped. #}
+                {{ headerActions }}
             {% endif %}
             {% if dashboardRoute|default(null) %}
                 <a href="{{ path(dashboardRoute) }}" class="btn btn-outline-secondary">{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</a>

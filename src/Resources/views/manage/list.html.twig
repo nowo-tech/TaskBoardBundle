@@ -22,14 +22,10 @@
         breadcrumbRoute: nowo_task_board_route('board'),
         breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
-        headerActions: '
-            <a href="' ~ path(nowo_task_board_route('board'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
-                <i class="ti ti-layout-kanban"></i> ' ~ ('task_board.view.board'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-            <a href="' ~ path(nowo_task_board_route('gantt'), {boardId: board.id}) ~ '" class="btn btn-outline-primary">
-                <i class="ti ti-chart-bar"></i> ' ~ ('task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')) ~ '
-            </a>
-        ',
+        headerActions: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+        ],
         dashboardRoute: dashboardRoute|default(null),
     }) }}
     {% endblock %}

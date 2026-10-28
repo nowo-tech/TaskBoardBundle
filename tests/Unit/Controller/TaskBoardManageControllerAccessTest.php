@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
@@ -35,6 +37,7 @@ use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Csrf\CsrfExtension;
 use Symfony\Component\Form\Extension\HttpFoundation\HttpFoundationExtension;
@@ -58,6 +61,8 @@ use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
+
+use function in_array;
 
 /**
  * IDOR regression: a ROLE_USER must not read or mutate boards/tasks they neither own nor share a team with.
@@ -135,6 +140,58 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $this->expectException(AccessDeniedException::class);
         $controller->{$action}(...$args);
+    }
+
+    /** @return iterable<string, array{string, list<string>, array<string, mixed>}> */
+    public static function writeActions(): iterable
+    {
+        foreach (self::foreignBoardActions() as $name => $case) {
+            if (!in_array($case[0], ['board', 'listView', 'ganttView', 'task'], true)) {
+                yield $name => $case;
+            }
+        }
+    }
+
+    /**
+     * A user with read-only access (BOARD_ACCESS_CHECK grant + markReadOnly) may open the board but gets 403 on
+     * every board and task write (spec 171 security fix).
+     *
+     * @param list<string> $arguments
+     * @param array<string, mixed> $post
+     */
+    #[DataProvider('writeActions')]
+    public function testReadOnlyViewerCannotWrite(string $action, array $arguments, array $post): void
+    {
+        $controller = $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher());
+        $request    = Request::create('/', 'POST', $post + ['_token' => 'ok']);
+        $args       = array_map(fn (string $argument): mixed => match ($argument) {
+            'board'   => $this->board->getId(),
+            'task'    => $this->task->getId(),
+            'column'  => $this->column->getId(),
+            'request' => $request,
+            default   => 'some-id',
+        }, $arguments);
+
+        $this->expectException(AccessDeniedException::class);
+        $controller->{$action}(...$args);
+    }
+
+    public function testReadOnlyViewerCanOpenTheBoardWithoutWriteControls(): void
+    {
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher())->board($this->board->getId());
+
+        self::assertFalse($this->rendered['canEditBoard']);
+    }
+
+    private function readOnlyDispatcher(): EventDispatcher
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            $event->grant();
+            $event->markReadOnly();
+        });
+
+        return $dispatcher;
     }
 
     public function testUnknownBoardAndTaskReturnNotFound(): void
@@ -382,7 +439,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -421,7 +478,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,
             dashboardRoute: null,
-            resourceAccessChecker: new TaskBoardResourceAccessChecker($teamMembers, new NullTaskBoardTeamMembershipResolver(), $authorization),
+            resourceAccessChecker: new TaskBoardResourceAccessChecker($teamMembers, new NullTaskBoardTeamMembershipResolver(), $authorization, $dispatcher),
         );
 
         $tokenStorage = new TokenStorage();

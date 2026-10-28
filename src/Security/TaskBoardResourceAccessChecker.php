@@ -25,6 +25,10 @@ use function is_scalar;
  * configured team_membership_resolver) and to users holding one of security.manage_roles. A task is
  * additionally visible to its creator and to users attached to it as members (assignee, reviewer…).
  * Listeners on TaskBoardEvents::BOARD_ACCESS_CHECK / TASK_ACCESS_CHECK may override the decision.
+ *
+ * Writes (since 1.10): changing a board (columns, new tasks, import) needs canEditBoard(): view access that no
+ * BOARD_ACCESS_CHECK listener marked read-only. Tasks of a read-only board are read-only too, unless a
+ * TASK_ACCESS_CHECK listener grants the task explicitly (and does not mark it read-only).
  */
 final readonly class TaskBoardResourceAccessChecker
 {
@@ -43,14 +47,18 @@ final readonly class TaskBoardResourceAccessChecker
 
     public function canViewBoard(object $user, TaskBoard $board): bool
     {
-        $event = new BoardAccessCheckEvent($user, $board, $this->defaultBoardDecision($user, $board));
-        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+        return $this->isBoardViewable($this->resolveBoardAccess($user, $board));
+    }
 
-        if ($event->isDenied()) {
-            return false;
-        }
+    /**
+     * Whether the user may change the board (add / edit / reorder columns, create tasks, import): view access that
+     * no BOARD_ACCESS_CHECK listener marked read-only (since 1.10).
+     */
+    public function canEditBoard(object $user, TaskBoard $board): bool
+    {
+        $event = $this->resolveBoardAccess($user, $board);
 
-        return $event->isGranted() || $event->isDefaultGranted();
+        return $this->isBoardViewable($event) && !$event->isReadOnly();
     }
 
     public function canViewTask(object $user, Task $task): bool
@@ -97,11 +105,36 @@ final readonly class TaskBoardResourceAccessChecker
             return $event;
         }
 
-        if (!$event->isGranted() && ($this->isTaskParticipant($user, $task) || $this->canViewBoard($user, $task->getBoard()))) {
+        if ($event->isGranted()) {
+            return $event;
+        }
+
+        $boardAccess = $this->resolveBoardAccess($user, $task->getBoard());
+        if ($this->isTaskParticipant($user, $task) || $this->isBoardViewable($boardAccess)) {
             $event->grant();
+            // A read-only board keeps its tasks read-only (participants included).
+            if ($boardAccess->isReadOnly()) {
+                $event->markReadOnly();
+            }
         }
 
         return $event;
+    }
+
+    /**
+     * Dispatches BOARD_ACCESS_CHECK with the default decision; the event carries grant / deny / read-only.
+     */
+    private function resolveBoardAccess(object $user, TaskBoard $board): BoardAccessCheckEvent
+    {
+        $event = new BoardAccessCheckEvent($user, $board, $this->defaultBoardDecision($user, $board));
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
+        return $event;
+    }
+
+    private function isBoardViewable(BoardAccessCheckEvent $event): bool
+    {
+        return !$event->isDenied() && ($event->isGranted() || $event->isDefaultGranted());
     }
 
     private function defaultBoardDecision(object $user, TaskBoard $board): bool
