@@ -254,6 +254,7 @@ class Task
 
     public function setStartAt(?DateTimeImmutable $startAt): self
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->startAt = $startAt;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();

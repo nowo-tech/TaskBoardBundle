@@ -741,6 +741,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         try {
+            // @igor-ignore - HTTP handler delegates to services; no controller worker state.
             $manager->add($task, $other, $data->type, $user);
             $this->addFlash('success', 'task_board.flash.dependency_added');
         } catch (InvalidTaskDependencyException $exception) {
@@ -760,6 +761,7 @@ final class TaskBoardManageController extends AbstractController
         $task    = $this->findTask($taskId, $user, true);
         $manager = $this->dependencyManager ?? throw new NotFoundHttpException('Dependencies are not available.');
 
+        // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($manager->remove($task, $dependencyId, $user)) {
             $this->addFlash('success', 'task_board.flash.dependency_removed');
         }
@@ -783,6 +785,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskTimeEntryFormData $data */
             $data = $form->getData();
             if ($form->isValid() && $data->minutes !== null && $data->loggedAt !== null) {
+                // @igor-ignore - HTTP handler delegates to services; no controller worker state.
                 $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note);
                 $this->addFlash('success', 'task_board.flash.time_logged');
             } else {
@@ -803,6 +806,7 @@ final class TaskBoardManageController extends AbstractController
         $task   = $this->findTask($taskId, $user, true);
         $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
 
+        // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($logger->remove($task, $entryId, $user)) {
             $this->addFlash('success', 'task_board.flash.time_removed');
         }
