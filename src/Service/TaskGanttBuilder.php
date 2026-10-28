@@ -132,8 +132,8 @@ final readonly class TaskGanttBuilder
         $visible      = $entry['end'] > $first && $entry['start'] < $end;
         $clippedStart = $visible && $entry['start'] < $first;
         $clippedEnd   = $visible && $entry['end'] > $end;
-        $startIndex   = $visible ? self::indexOf($starts, $clippedStart ? $first : $entry['start']) : 0;
-        $endIndex     = $visible ? self::indexOf($starts, ($clippedEnd ? $end : $entry['end'])->modify('-1 second')) : 0;
+        $startIndex   = $visible ? $this->indexOf($starts, $clippedStart ? $first : $entry['start']) : 0;
+        $endIndex     = $visible ? $this->indexOf($starts, ($clippedEnd ? $end : $entry['end'])->modify('-1 second')) : 0;
         $deviation    = TaskDeviation::of($task);
 
         return new TaskGanttItem(
@@ -167,7 +167,7 @@ final readonly class TaskGanttBuilder
      *
      * @param list<int> $starts
      */
-    private static function indexOf(array $starts, DateTimeImmutable $at): int
+    private function indexOf(array $starts, DateTimeImmutable $at): int
     {
         $timestamp = $at->getTimestamp();
         $low       = 0;

@@ -789,7 +789,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(45, $this->task->getLoggedMinutes());
 
         $request = Request::create('/', 'POST');
-        $this->controller($this->owner, formData: new TaskTimeEntryFormData(null, null), formValid: false, currentRequest: $request)->logTime($this->task->getId(), $request);
+        $this->controller($this->owner, formData: new TaskTimeEntryFormData(), formValid: false, currentRequest: $request)->logTime($this->task->getId(), $request);
         self::assertSame(['task_board.flash.time_invalid'], $request->getSession()->getFlashBag()->get('error'));
 
         $this->controller($this->owner)->logTime($this->task->getId(), Request::create('/', 'POST'));

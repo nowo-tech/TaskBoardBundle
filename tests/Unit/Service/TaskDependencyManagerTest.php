@@ -57,7 +57,7 @@ final class TaskDependencyManagerTest extends TestCase
     {
         [$a] = $this->tasks('A');
 
-        self::assertRefused(InvalidTaskDependencyException::REASON_SELF, fn (): mixed => $this->manager()->add($a, $a, TaskDependencyType::Blocks, $this->user));
+        $this->assertRefused(InvalidTaskDependencyException::REASON_SELF, fn (): mixed => $this->manager()->add($a, $a, TaskDependencyType::Blocks, $this->user));
     }
 
     public function testRefusesATaskOfAnotherBoard(): void
@@ -65,7 +65,7 @@ final class TaskDependencyManagerTest extends TestCase
         [$a]     = $this->tasks('A');
         $foreign = new Task(new TaskBoard('Other', 'other', $this->user), 'Foreign', $this->user);
 
-        self::assertRefused(InvalidTaskDependencyException::REASON_OTHER_BOARD, fn (): mixed => $this->manager()->add($a, $foreign, TaskDependencyType::Related, $this->user));
+        $this->assertRefused(InvalidTaskDependencyException::REASON_OTHER_BOARD, fn (): mixed => $this->manager()->add($a, $foreign, TaskDependencyType::Related, $this->user));
     }
 
     /** @return iterable<string, array{TaskDependencyType, TaskDependencyType, bool}> */
@@ -84,7 +84,7 @@ final class TaskDependencyManagerTest extends TestCase
         $manager = $this->manager();
         $manager->add($a, $b, $first, $this->user);
 
-        self::assertRefused(InvalidTaskDependencyException::REASON_DUPLICATE, fn (): mixed => $fromTheOtherTask ? $manager->add($b, $a, $second, $this->user) : $manager->add($a, $b, $second, $this->user));
+        $this->assertRefused(InvalidTaskDependencyException::REASON_DUPLICATE, fn (): mixed => $fromTheOtherTask ? $manager->add($b, $a, $second, $this->user) : $manager->add($a, $b, $second, $this->user));
     }
 
     public function testDuplicatesInTheOtherDirectionIsAnotherLink(): void
@@ -104,7 +104,7 @@ final class TaskDependencyManagerTest extends TestCase
         $manager = $this->manager();
         $manager->add($a, $b, TaskDependencyType::Blocks, $this->user);
 
-        self::assertRefused(InvalidTaskDependencyException::REASON_CYCLE, fn (): mixed => $manager->add($a, $b, TaskDependencyType::BlockedBy, $this->user));
+        $this->assertRefused(InvalidTaskDependencyException::REASON_CYCLE, fn (): mixed => $manager->add($a, $b, TaskDependencyType::BlockedBy, $this->user));
     }
 
     public function testRefusesALongerCycleButAcceptsAChain(): void
@@ -118,7 +118,7 @@ final class TaskDependencyManagerTest extends TestCase
         $manager->add($d, $c, TaskDependencyType::Blocks, $this->user);
         $manager->add($c, $a, TaskDependencyType::Related, $this->user);
 
-        self::assertRefused(InvalidTaskDependencyException::REASON_CYCLE, fn (): mixed => $manager->add($c, $a, TaskDependencyType::Blocks, $this->user));
+        $this->assertRefused(InvalidTaskDependencyException::REASON_CYCLE, fn (): mixed => $manager->add($c, $a, TaskDependencyType::Blocks, $this->user));
     }
 
     public function testRemovesAnOutgoingOrIncomingDependency(): void
@@ -152,7 +152,7 @@ final class TaskDependencyManagerTest extends TestCase
         self::assertSame(['duplicates', 'duplicated_by'], [TaskDependencyType::Duplicates->relation(), TaskDependencyType::Duplicates->relation(true)]);
     }
 
-    private static function assertRefused(string $reason, callable $add): void
+    private function assertRefused(string $reason, callable $add): void
     {
         try {
             $add();

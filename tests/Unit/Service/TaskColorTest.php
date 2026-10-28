@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
@@ -68,7 +69,7 @@ final class TaskColorTest extends TestCase
         $this->manager($dispatcher)->update($task, new TaskFormData(title: 'New', columnId: $this->todo->getId(), startAt: new DateTimeImmutable('2026-11-03')), $this->user);
 
         self::assertContains('startAt', $events[0]->getChangedFields());
-        $types = array_map(static fn ($entry): TaskChangeType => $entry->getChangeType(), $task->getChangeHistory()->toArray());
+        $types = array_map(static fn (TaskChangeHistory $entry): TaskChangeType => $entry->getChangeType(), $task->getChangeHistory()->toArray());
         self::assertContains(TaskChangeType::StartDate, $types);
     }
 

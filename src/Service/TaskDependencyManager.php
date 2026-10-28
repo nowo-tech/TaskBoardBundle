@@ -47,15 +47,15 @@ final readonly class TaskDependencyManager
         $boardTasks[] = $task;
         $boardTasks[] = $other;
         $existing     = $this->dependenciesOf($boardTasks);
-        $key          = self::identity($task, $other, $type);
+        $key          = $this->identity($task, $other, $type);
 
         foreach ($existing as $dependency) {
-            if (self::identity($dependency->getSourceTask(), $dependency->getTargetTask(), $dependency->getDependencyType()) === $key) {
+            if ($this->identity($dependency->getSourceTask(), $dependency->getTargetTask(), $dependency->getDependencyType()) === $key) {
                 throw InvalidTaskDependencyException::duplicate();
             }
         }
 
-        $edge = self::blockingEdge($task, $other, $type);
+        $edge = $this->blockingEdge($task, $other, $type);
         if ($edge !== null && $this->reaches($existing, $edge[1], $edge[0])) {
             throw InvalidTaskDependencyException::cycle();
         }
@@ -121,7 +121,7 @@ final readonly class TaskDependencyManager
         /** @var array<string, list<string>> $next */
         $next = [];
         foreach ($dependencies as $dependency) {
-            $edge = self::blockingEdge($dependency->getSourceTask(), $dependency->getTargetTask(), $dependency->getDependencyType());
+            $edge = $this->blockingEdge($dependency->getSourceTask(), $dependency->getTargetTask(), $dependency->getDependencyType());
             if ($edge !== null) {
                 $next[$edge[0]->getId()][] = $edge[1]->getId();
             }
@@ -153,7 +153,7 @@ final readonly class TaskDependencyManager
      *
      * @return array{0: Task, 1: Task}|null
      */
-    private static function blockingEdge(Task $source, Task $target, TaskDependencyType $type): ?array
+    private function blockingEdge(Task $source, Task $target, TaskDependencyType $type): ?array
     {
         return match ($type) {
             TaskDependencyType::Blocks    => [$source, $target],
@@ -166,9 +166,9 @@ final readonly class TaskDependencyManager
      * What makes two dependencies the same link: the blocker and the blocked task, the unordered pair of "related",
      * the ordered pair of "duplicates".
      */
-    private static function identity(Task $source, Task $target, TaskDependencyType $type): string
+    private function identity(Task $source, Task $target, TaskDependencyType $type): string
     {
-        $edge = self::blockingEdge($source, $target, $type);
+        $edge = $this->blockingEdge($source, $target, $type);
         if ($edge !== null) {
             return 'blocks:' . $edge[0]->getId() . '>' . $edge[1]->getId();
         }
