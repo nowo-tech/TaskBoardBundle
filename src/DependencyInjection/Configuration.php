@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
+use function is_string;
+use function preg_match;
 use function str_contains;
 
 /**
@@ -26,6 +28,43 @@ final class Configuration implements ConfigurationInterface
         'custom',
         'tabler',
         'none',
+    ];
+
+    /** Shape of a column icon name (`<set>:<name>`, since 1.11). */
+    public const ICON_PATTERN = '/^[a-z0-9-]+:[a-z0-9-]+$/D';
+
+    /** @var list<string> Curated Tabler icons of `board.column_icons` (since 1.11). */
+    public const DEFAULT_COLUMN_ICONS = [
+        'tabler:circle',
+        'tabler:circle-dashed',
+        'tabler:circle-check',
+        'tabler:check',
+        'tabler:x',
+        'tabler:inbox',
+        'tabler:list-check',
+        'tabler:player-play',
+        'tabler:progress',
+        'tabler:hourglass',
+        'tabler:clock',
+        'tabler:calendar',
+        'tabler:eye',
+        'tabler:message-circle',
+        'tabler:user',
+        'tabler:bug',
+        'tabler:flame',
+        'tabler:alert-triangle',
+        'tabler:flag',
+        'tabler:star',
+        'tabler:bulb',
+        'tabler:code',
+        'tabler:git-pull-request',
+        'tabler:git-merge',
+        'tabler:test-pipe',
+        'tabler:rocket',
+        'tabler:package',
+        'tabler:lock',
+        'tabler:ban',
+        'tabler:archive',
     ];
 
     public function getConfigTreeBuilder(): TreeBuilder
@@ -231,6 +270,42 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('name')->defaultValue('nowo_task_board_board_import')->end()
                             ->end()
                         ->end()
+                        // Since 1.11: column delete, column sets and the task panel fragment.
+                        ->arrayNode('column_delete')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column/{columnId}/delete')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_column_delete')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('column_set_create')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_create')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('column_set_apply')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/apply')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_apply')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('column_set_delete')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/{setId}/delete')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_delete')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('task_panel')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/panel')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_task_panel')->end()
+                            ->end()
+                        ->end()
                     ->end()
                 ->end()
                 ->arrayNode('templates')
@@ -252,6 +327,10 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('gantt')->defaultValue('@NowoTaskBoardBundle/manage/gantt.html.twig')->end()
                         ->scalarNode('task')->defaultValue('@NowoTaskBoardBundle/manage/task.html.twig')->end()
                         ->scalarNode('import')->defaultValue('@NowoTaskBoardBundle/manage/import.html.twig')->end()
+                        ->scalarNode('task_panel')
+                            ->defaultValue('@NowoTaskBoardBundle/manage/task_panel.html.twig')
+                            ->info('Task editing panel without layout (since 1.11), served by the task_panel route for side drawers.')
+                        ->end()
                     ->end()
                 ->end()
                 ->arrayNode('database')
@@ -312,6 +391,7 @@ final class Configuration implements ConfigurationInterface
                                 ->children()
                                     ->scalarNode('name')->isRequired()->cannotBeEmpty()->end()
                                     ->scalarNode('color')->defaultNull()->end()
+                                    ->scalarNode('icon')->defaultNull()->info('Icon name such as tabler:bug (since 1.11).')->end()
                                 ->end()
                             ->end()
                             ->requiresAtLeastOneElement()
@@ -320,6 +400,16 @@ final class Configuration implements ConfigurationInterface
                                 ['name' => 'In progress', 'color' => '#3b82f6'],
                                 ['name' => 'Done', 'color' => '#22c55e'],
                             ])
+                        ->end()
+                        ->arrayNode('column_icons')
+                            ->info('Icons offered in the add / edit column dialogs (since 1.11), as <set>:<name> (e.g. tabler:bug) for UiKit components/_icon (ux_icon) or the Tabler webfont. Empty: no icon field.')
+                            ->scalarPrototype()
+                                ->validate()
+                                    ->ifTrue(static fn (mixed $icon): bool => !is_string($icon) || preg_match(self::ICON_PATTERN, $icon) !== 1)
+                                    ->thenInvalid('A column icon is "<set>:<name>" in lowercase letters, digits and dashes, e.g. tabler:bug: %s')
+                                ->end()
+                            ->end()
+                            ->defaultValue(self::DEFAULT_COLUMN_ICONS)
                         ->end()
                         ->booleanNode('top_level_only')
                             ->defaultFalse()

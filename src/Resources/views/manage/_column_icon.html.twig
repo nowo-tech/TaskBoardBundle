@@ -1,0 +1,11 @@
+{#
+    Icon of a column header (since 1.11) through UiKit components/_icon: `icon` is "<set>:<name>" (e.g. tabler:bug);
+    with the ux_icon set the full name goes to ux_icon(), the webfont sets get the bare name (ti ti-bug). Decorative:
+    the column name is the accessible text.
+#}
+{% set icon_set = nowo_ui_kit_icon_set|default('tabler-icons') %}
+{% if icon|default(null) and icon_set != 'none' %}
+    <span class="nowo-task-column__icon" aria-hidden="true">
+        {{- include('@NowoUiKitBundle/components/_icon.html.twig', {name: icon_set == 'ux_icon' ? icon : icon|split(':')|last, nowo_ui_kit_icon_set: icon_set}, false) -}}
+    </span>
+{% endif %}

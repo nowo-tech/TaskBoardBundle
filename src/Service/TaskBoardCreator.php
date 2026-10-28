@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\SlugGenerator;
@@ -15,7 +16,7 @@ use Nowo\TaskBoardBundle\Support\SlugGenerator;
  */
 final readonly class TaskBoardCreator
 {
-    /** @var list<array{name: string, color: ?string}> */
+    /** @var list<array{name: string, color: ?string, icon?: ?string}> */
     public const DEFAULT_COLUMNS = [
         ['name' => 'To do', 'color' => '#94a3b8'],
         ['name' => 'In progress', 'color' => '#3b82f6'],
@@ -23,7 +24,7 @@ final readonly class TaskBoardCreator
     ];
 
     /**
-     * @param list<array{name: string, color: ?string}> $defaultColumns `board.default_columns` (since 1.10)
+     * @param list<array{name: string, color: ?string, icon?: ?string}> $defaultColumns `board.default_columns` (since 1.10; `icon` since 1.11)
      */
     public function __construct(
         private TaskBoardRepositoryInterface $boardRepository,
@@ -32,9 +33,10 @@ final readonly class TaskBoardCreator
     }
 
     /**
-     * Creates a board with the default columns; `$tenantKey` puts it in a host tenant (`tenancy`).
+     * Creates a board with the default columns, or the columns of `$columnSet` (since 1.11) when it has any;
+     * `$tenantKey` puts it in a host tenant (`tenancy`).
      */
-    public function create(TaskBoardFormData $data, object $creator, ?string $tenantKey = null): TaskBoard
+    public function create(TaskBoardFormData $data, object $creator, ?string $tenantKey = null, ?ColumnSet $columnSet = null): TaskBoard
     {
         $slug = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : SlugGenerator::fromName($data->name));
 
@@ -46,12 +48,14 @@ final readonly class TaskBoardCreator
         );
         $board->setTenantKey($tenantKey);
 
-        foreach ($this->defaultColumns as $position => $columnDef) {
+        $columns = $columnSet instanceof ColumnSet && $columnSet->getItems() !== [] ? $columnSet->getItems() : $this->defaultColumns;
+        foreach ($columns as $position => $columnDef) {
             $board->addColumn(new BoardColumn(
                 board: $board,
                 name: $columnDef['name'],
                 position: $position,
                 color: $columnDef['color'],
+                icon: $columnDef['icon'] ?? null,
             ));
         }
 

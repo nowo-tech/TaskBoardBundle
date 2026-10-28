@@ -40,7 +40,7 @@ final class TenancyConfigurationTest extends TestCase
         ]);
 
         self::assertSame([['path' => '/projects/{tenantSlug}/tasks', 'name_prefix' => 'app_project_', 'slug_requirement' => '\d+', 'slug_prefix' => '']], $config['tenancy']['tenant_paths']);
-        self::assertSame([['name' => 'Backlog', 'color' => null], ['name' => 'Done', 'color' => '#22c55e']], $config['board']['default_columns']);
+        self::assertSame([['name' => 'Backlog', 'color' => null, 'icon' => null], ['name' => 'Done', 'color' => '#22c55e', 'icon' => null]], $config['board']['default_columns']);
         self::assertSame('app.assignees', $config['assignee_provider']);
         self::assertTrue($config['board']['top_level_only']);
     }

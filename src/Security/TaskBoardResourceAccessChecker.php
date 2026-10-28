@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Security;
 
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
+use Nowo\TaskBoardBundle\Event\ColumnSetAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -81,16 +83,30 @@ final readonly class TaskBoardResourceAccessChecker
      * always filtered through canViewBoard().
      *
      * @param list<TaskBoard> $candidates
+     * @param string|null $tenantKey Tenant of the index (since 1.11), passed to the BOARD_LIST_QUERY listeners
      *
      * @return list<TaskBoard>
      */
-    public function filterBoards(object $user, array $candidates): array
+    public function filterBoards(object $user, array $candidates, ?string $tenantKey = null): array
     {
-        $event = new BoardListQueryEvent($user);
+        $event = new BoardListQueryEvent($user, $tenantKey);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_LIST_QUERY);
         $boards = $event->getOverrideList() ?? $candidates;
 
         return array_values(array_filter($boards, fn (TaskBoard $board): bool => $this->canViewBoard($user, $board)));
+    }
+
+    /**
+     * Whether the user may delete a column set (since 1.11): its creator or a manage role, unless a
+     * COLUMN_SET_ACCESS_CHECK listener decides otherwise.
+     */
+    public function canDeleteColumnSet(object $user, ColumnSet $set): bool
+    {
+        $creator = $set->getCreatedBy();
+        $event   = new ColumnSetAccessCheckEvent($user, $set, $this->hasManageRole() || ($creator !== null && $this->sameUser($user, $creator)));
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::COLUMN_SET_ACCESS_CHECK);
+
+        return $event->isGranted();
     }
 
     /**

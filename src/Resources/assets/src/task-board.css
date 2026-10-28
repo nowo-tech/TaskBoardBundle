@@ -864,3 +864,135 @@ button.nowo-task-detail__priority-tag:hover {
     text-align: center;
     color: var(--tblr-secondary, #626976);
 }
+
+/* ---- Since 1.11: no inline style (CSS custom properties from data-nowo-task-vars), column icons, column sets,
+   dialogs, task panel. ---- */
+
+.nowo-task-column--colored {
+    border-top: 3px solid var(--nowo-task-column-color, transparent);
+}
+
+.nowo-task-column__icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--nowo-task-column-color, currentColor);
+}
+
+.nowo-task-column__icon svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.nowo-task-column__empty {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.nowo-task-board__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.nowo-task-column-sets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.nowo-task-column-sets__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--tblr-border-color, #e6e7e9);
+}
+
+.nowo-task-column-sets__info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.nowo-task-column-sets__columns {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nowo-task-dialog--native {
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 0;
+    border: 1px solid var(--tblr-border-color, #e6e7e9);
+    border-radius: var(--tblr-border-radius, 8px);
+    background: var(--tblr-bg-surface, #fff);
+    color: inherit;
+}
+
+.nowo-task-dialog--native::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.nowo-task-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 1rem 1rem 0;
+}
+
+.nowo-task-dialog__title {
+    margin: 0;
+}
+
+.nowo-task-dialog__body {
+    padding: 1rem;
+}
+
+.nowo-task-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.nowo-task-dialog__danger {
+    display: block;
+    border-top: 1px solid var(--tblr-border-color, #e6e7e9);
+}
+
+.nowo-task-detail__estimate {
+    min-width: 140px;
+}
+
+.nowo-task-progress {
+    display: block;
+    width: 100%;
+    max-width: 240px;
+    height: 0.5rem;
+    accent-color: var(--tblr-primary, #206bc4);
+}
+
+.nowo-task-gantt__label-cell {
+    padding-left: calc(0.75rem + var(--nowo-task-depth, 0) * 1.1rem);
+}
+
+.nowo-task-gantt__bar-progress {
+    width: calc(var(--nowo-task-progress, 0) * 1%);
+}
+
+.nowo-task-panel-fragment {
+    min-width: 0;
+}
+
+.nowo-task-panel-fragment .nowo-task-detail__meta > [class*='col-'] {
+    flex: 0 0 100%;
+    max-width: 100%;
+}

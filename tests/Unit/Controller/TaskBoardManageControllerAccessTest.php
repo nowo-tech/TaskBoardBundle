@@ -6,8 +6,12 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
+use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
+use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
@@ -15,10 +19,14 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
+use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -26,6 +34,7 @@ use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
+use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
@@ -46,6 +55,7 @@ use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -81,6 +91,8 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
     /** @var array<string, mixed> */
     private array $rendered = [];
+
+    private string $renderedTemplate = '';
 
     /** @var list<array{type: string, data: mixed, options: array<string, mixed>}> */
     private array $createdForms = [];
@@ -119,6 +131,11 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         yield 'remove member' => ['removeMember', ['task', 'member', 'request'], []];
         yield 'priority' => ['updatePriority', ['task', 'request'], ['priority' => 'high']];
         yield 'subtask' => ['createSubtask', ['task', 'request'], []];
+        yield 'delete column' => ['deleteColumn', ['board', 'column', 'request'], []];
+        yield 'save column set' => ['createColumnSet', ['board', 'request'], []];
+        yield 'apply column set' => ['applyColumnSet', ['board', 'request'], []];
+        yield 'delete column set' => ['deleteColumnSet', ['board', 'set', 'request'], []];
+        yield 'task panel' => ['taskPanel', ['task', 'request'], []];
     }
 
     /**
@@ -146,7 +163,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     public static function writeActions(): iterable
     {
         foreach (self::foreignBoardActions() as $name => $case) {
-            if (!in_array($case[0], ['board', 'listView', 'ganttView', 'task'], true)) {
+            if (!in_array($case[0], ['board', 'listView', 'ganttView', 'task', 'taskPanel'], true)) {
                 yield $name => $case;
             }
         }
@@ -427,6 +444,211 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             ->getFormFactory();
     }
 
+    public function testDeletingAColumnRedirectsAndKeepsTheLastColumn(): void
+    {
+        $second = new BoardColumn($this->board, 'Done', 1);
+        $this->board->addColumn($second);
+        $controller = $this->controller($this->owner, realFormFactory: $this->realFormFactory());
+
+        $response = $controller->deleteColumn($this->board->getId(), $second->getId(), Request::create('/', 'POST', ['_token' => 'ok']));
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame([$this->column], array_values($this->board->getColumns()->toArray()));
+
+        $controller->deleteColumn($this->board->getId(), $this->column->getId(), Request::create('/', 'POST', ['_token' => 'ok']));
+        self::assertTrue($this->board->getColumns()->contains($this->column));
+
+        $this->expectException(NotFoundHttpException::class);
+        $controller->deleteColumn($this->board->getId(), 'missing', Request::create('/', 'POST', ['_token' => 'ok']));
+    }
+
+    public function testDeletingAColumnNeedsAValidToken(): void
+    {
+        $this->expectException(AccessDeniedException::class);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(false), csrfValid: false)
+            ->deleteColumn($this->board->getId(), $this->column->getId(), Request::create('/', 'POST', ['_token' => 'bad']));
+    }
+
+    public function testBoardPassesColumnIconsSetsAndThePanelTarget(): void
+    {
+        $set = new ColumnSet('Mine', $this->owner);
+        $this->controller($this->owner, columnSets: $this->columnSets([$set]), currentRequest: Request::create('/board?x=1'))->board($this->board->getId());
+
+        self::assertSame(['tabler:bug'], $this->rendered['columnIcons']);
+        self::assertNotNull($this->rendered['columnDeleteForm']);
+        self::assertSame('/board?x=1', $this->rendered['panelTargetPath']);
+        self::assertSame([$set], $this->rendered['columnSets']);
+        self::assertArrayHasKey($set->getId(), $this->rendered['columnSetDeleteForms']);
+        self::assertSame(['tabler:bug'], $this->findCreatedForm(BoardColumnFormType::class)['options']['icon_choices']);
+    }
+
+    public function testReadOnlyBoardHasNoColumnSetControls(): void
+    {
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), columnSets: $this->columnSets([new ColumnSet('Other')]))->board($this->board->getId());
+
+        self::assertNull($this->rendered['columnDeleteForm']);
+        self::assertArrayNotHasKey('columnSets', $this->rendered);
+    }
+
+    public function testOnlyTheCreatorSeesTheDeleteFormOfASet(): void
+    {
+        $theirs = new ColumnSet('Theirs', $this->attacker);
+        $this->controller($this->owner, columnSets: $this->columnSets([$theirs]))->board($this->board->getId());
+
+        self::assertSame([], $this->rendered['columnSetDeleteForms']);
+    }
+
+    public function testColumnSetRoutesAreNotFoundWithoutTheService(): void
+    {
+        $this->expectException(NotFoundHttpException::class);
+        $this->controller($this->owner)->createColumnSet($this->board->getId(), Request::create('/', 'POST'));
+    }
+
+    public function testSavingTheColumnsAsASet(): void
+    {
+        $repository = $this->createMock(ColumnSetRepositoryInterface::class);
+        $repository->expects(self::once())->method('save')->with(self::callback(static fn (ColumnSet $set): bool => $set->getName() === 'Flow' && $set->getItems() === [['name' => 'Todo', 'color' => null, 'icon' => null]]));
+
+        $response = $this->controller($this->owner, columnSets: new ColumnSetManager($repository, $this->createMock(BoardColumnRepositoryInterface::class)), formData: new ColumnSetFormData('Flow'))
+            ->createColumnSet($this->board->getId(), Request::create('/', 'POST'));
+
+        self::assertSame(302, $response->getStatusCode());
+    }
+
+    public function testApplyingASetAppendsItsColumns(): void
+    {
+        $set = (new ColumnSet('Bugs'))->addItem('Triage');
+
+        $this->controller($this->owner, columnSets: $this->columnSets([$set]), formData: new ColumnSetApplyFormData($set->getId()))
+            ->applyColumnSet($this->board->getId(), Request::create('/', 'POST'));
+        self::assertCount(2, $this->board->getColumns());
+        self::assertSame(['Bugs' => $set->getId()], $this->findCreatedForm(ColumnSetApplyFormType::class)['options']['column_set_choices']);
+
+        // A set outside the user's scope is ignored.
+        $this->controller($this->owner, columnSets: $this->columnSets([$set]), formData: new ColumnSetApplyFormData('other'))
+            ->applyColumnSet($this->board->getId(), Request::create('/', 'POST'));
+        self::assertCount(2, $this->board->getColumns());
+    }
+
+    public function testDeletingASetIsForItsCreator(): void
+    {
+        $mine       = new ColumnSet('Mine', $this->owner);
+        $theirs     = new ColumnSet('Theirs', $this->attacker);
+        $repository = $this->createMock(ColumnSetRepositoryInterface::class);
+        $repository->method('findByScope')->willReturn([$mine, $theirs]);
+        $repository->expects(self::once())->method('remove')->with($mine);
+        $controller = $this->controller($this->owner, realFormFactory: $this->realFormFactory(), columnSets: new ColumnSetManager($repository, $this->createMock(BoardColumnRepositoryInterface::class)));
+
+        self::assertSame(302, $controller->deleteColumnSet($this->board->getId(), $mine->getId(), Request::create('/', 'POST', ['_token' => 'ok']))->getStatusCode());
+
+        try {
+            $controller->deleteColumnSet($this->board->getId(), 'missing', Request::create('/', 'POST', ['_token' => 'ok']));
+            self::fail('NotFoundHttpException expected');
+        } catch (NotFoundHttpException) {
+        }
+
+        $this->expectException(AccessDeniedException::class);
+        $controller->deleteColumnSet($this->board->getId(), $theirs->getId(), Request::create('/', 'POST', ['_token' => 'ok']));
+    }
+
+    public function testNewBoardFromASetUsesItsColumns(): void
+    {
+        $set = (new ColumnSet('Bugs'))->addItem('Triage')->addItem('Fixed');
+
+        $this->controller($this->owner, columnSets: $this->columnSets([$set]))->index();
+        self::assertSame(['Bugs' => $set->getId()], $this->findCreatedForm(TaskBoardFormType::class)['options']['column_set_choices']);
+
+        $response = $this->controller($this->owner, columnSets: $this->columnSets([$set]), formData: new TaskBoardFormData(name: 'Bugs', columnSetId: $set->getId()))
+            ->createBoard(Request::create('/', 'POST'));
+        self::assertSame(302, $response->getStatusCode());
+
+        $response = $this->controller($this->owner, formData: new TaskBoardFormData(name: 'Plain'))->createBoard(Request::create('/', 'POST'));
+        self::assertSame(302, $response->getStatusCode());
+    }
+
+    public function testDuplicateSetNamesKeepEverySetInChoices(): void
+    {
+        $a = new ColumnSet('Kanban');
+        $b = new ColumnSet('Kanban');
+        $this->controller($this->owner, columnSets: $this->columnSets([$a, $b]))->index();
+
+        self::assertSame(['Kanban' => $a->getId(), 'Kanban (2)' => $b->getId()], $this->findCreatedForm(TaskBoardFormType::class)['options']['column_set_choices']);
+    }
+
+    public function testTaskPanelRendersTheFragmentWithASafeTarget(): void
+    {
+        $controller = $this->controller($this->owner, realFormFactory: $this->realFormFactory());
+
+        $controller->taskPanel($this->task->getId(), Request::create('/', 'GET', ['_target_path' => '/projects/1/tasks/board/2?view=list']));
+        self::assertSame('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->renderedTemplate);
+        self::assertTrue($this->rendered['panel']);
+        self::assertSame('/projects/1/tasks/board/2?view=list', $this->rendered['panelTargetPath']);
+        self::assertSame(['_target_path' => '/projects/1/tasks/board/2?view=list'], $this->rendered['taskRouteExtra']);
+
+        foreach (['//evil.example', 'https://evil.example', '/\\evil.example', "/a\nb", ''] as $unsafe) {
+            $controller->taskPanel($this->task->getId(), Request::create('/', 'GET', ['_target_path' => $unsafe]));
+            self::assertSame('/redirect', $this->rendered['panelTargetPath'], $unsafe);
+        }
+    }
+
+    public function testTaskWritesComeBackToTheirTarget(): void
+    {
+        $controller = $this->controller($this->owner, realFormFactory: $this->realFormFactory());
+
+        $response = $controller->createSubtask($this->task->getId(), Request::create('/?_target_path=/board/1', 'POST'));
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('/board/1', $response->getTargetUrl());
+
+        $response = $controller->createSubtask($this->task->getId(), Request::create('/?_target_path=//evil.example', 'POST'));
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('/redirect', $response->getTargetUrl());
+
+        $response = $controller->advanceTask($this->task->getId(), Request::create('/', 'POST', ['_token' => 'ok', 'action' => 'nope', '_target_path' => '/list']));
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('/list', $response->getTargetUrl());
+    }
+
+    public function testFetchedTaskWritesAnswerThePanel(): void
+    {
+        $request = Request::create('/?_target_path=/board/1', 'POST', ['_token' => 'ok', 'priority' => 'urgent']);
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory())->updatePriority($this->task->getId(), $request);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertNotInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('/board/1', $this->rendered['panelTargetPath']);
+        self::assertSame(TaskPriority::Urgent, $this->task->getPriority());
+    }
+
+    public function testFetchedTaskPageAnswersThePanelAndInvalidSavesAre422(): void
+    {
+        $get = Request::create('/');
+        $get->headers->set('Turbo-Frame', 'task-panel');
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), $get);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertTrue($this->rendered['panel']);
+
+        $post = Request::create('/', 'POST');
+        $post->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory(), formData: new TaskFormData(title: ''), formValid: false)->task($this->task->getId(), $post);
+        self::assertSame(422, $response->getStatusCode());
+
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory(), formData: new TaskFormData(title: 'Renamed'))->task($this->task->getId(), Request::create('/', 'POST'));
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('Renamed', $this->task->getTitle());
+    }
+
+    /**
+     * @param list<ColumnSet> $sets
+     */
+    private function columnSets(array $sets): ColumnSetManager
+    {
+        $repository = $this->createMock(ColumnSetRepositoryInterface::class);
+        $repository->method('findByScope')->willReturn($sets);
+
+        return new ColumnSetManager($repository, $this->createMock(BoardColumnRepositoryInterface::class));
+    }
+
     public function testNestedColumnOrderIsBadRequest(): void
     {
         $request = Request::create('/', 'POST', ['_token' => 'ok', 'columnOrder' => [['x'], $this->column->getId()]]);
@@ -447,7 +669,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -482,11 +704,13 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             ganttBuilder: new TaskGanttBuilder(),
             importOrchestrator: new TaskImportOrchestrator([], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
             translator: $this->createMock(TranslatorInterface::class),
-            routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority'], ['path' => '/', 'name' => 'route']),
+            routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,
             dashboardRoute: null,
             resourceAccessChecker: new TaskBoardResourceAccessChecker($teamMembers, new NullTaskBoardTeamMembershipResolver(), $authorization, $dispatcher),
+            columnSetManager: $columnSets,
+            columnIcons: ['tabler:bug'],
         );
 
         $tokenStorage = new TokenStorage();
@@ -496,7 +720,10 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $csrf->method('isTokenValid')->willReturn($csrfValid);
         $csrf->method('getToken')->willReturnCallback(static fn (string $id): CsrfToken => new CsrfToken($id, 'token-' . $id));
 
-        $form        = $this->createMock(FormInterface::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn($formData !== null);
+        $form->method('isValid')->willReturn($formValid);
+        $form->method('getData')->willReturn($formData);
         $formFactory = $this->createMock(FormFactoryInterface::class);
         $formFactory->method('create')->willReturnCallback(function (string $type, mixed $data = null, array $options = []) use ($form): FormInterface {
             $this->createdForms[] = ['type' => $type, 'data' => $data, 'options' => $options];
@@ -506,7 +733,8 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $twig = $this->createMock(Environment::class);
         $twig->method('render')->willReturnCallback(function (string $template, array $context): string {
-            $this->rendered = $context;
+            $this->rendered         = $context;
+            $this->renderedTemplate = $template;
 
             return '';
         });
@@ -518,7 +746,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $container->set('security.token_storage', $tokenStorage);
         $container->set('security.csrf.token_manager', $csrf);
         $container->set('form.factory', $realFormFactory instanceof FormFactoryInterface ? $this->hybridFormFactory($formFactory, $realFormFactory) : $formFactory);
-        $request = new Request();
+        $request = $currentRequest ?? new Request();
         $request->setSession(new Session(new MockArraySessionStorage()));
         $requestStack = new RequestStack();
         $requestStack->push($request);

@@ -6,7 +6,7 @@
             type="submit"
             form="nowo-task-advance-form"
             formmethod="post"
-            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}) }}"
+            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="previous"
             class="btn nowo-task-detail__status-nav"
@@ -47,7 +47,7 @@
                         type="submit"
                         form="nowo-task-advance-form"
                         formmethod="post"
-                        formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}) }}"
+                        formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
                         name="columnId"
                         value="{{ column.id }}"
                         class="dropdown-item nowo-task-detail__status-option{% if column.id == currentColumnId %} active{% endif %}"
@@ -55,7 +55,7 @@
                     >
                         <span class="nowo-task-detail__status-option-label">
                             {% if column.color|nowo_task_board_safe_color %}
-                                <span class="nowo-task-detail__column-dot" style="--nowo-column-color: {{ column.color|nowo_task_board_safe_color }}"></span>
+                                <span class="nowo-task-detail__column-dot" data-nowo-task-vars="{{ {'--nowo-column-color': column.color|nowo_task_board_safe_color}|json_encode }}"></span>
                             {% endif %}
                             <span>{{ column.name }}</span>
                         </span>
@@ -73,7 +73,7 @@
             type="submit"
             form="nowo-task-advance-form"
             formmethod="post"
-            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}) }}"
+            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="next"
             class="btn nowo-task-detail__status-nav"
@@ -87,7 +87,7 @@
             type="submit"
             form="nowo-task-advance-form"
             formmethod="post"
-            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}) }}"
+            formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="done"
             class="btn nowo-task-detail__status-nav nowo-task-detail__status-nav--done"

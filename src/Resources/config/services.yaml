@@ -57,6 +57,7 @@ services:
             $userClass: '%nowo_task_board.user_class%'
             $dashboardRoute: '%nowo_task_board.dashboard_route%'
             $topLevelOnly: '%nowo_task_board.board.top_level_only%'
+            $columnIcons: '%nowo_task_board.board.column_icons%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver

@@ -33,6 +33,9 @@ class BoardColumn
         private int $position = 0,
         #[ORM\Column(type: 'string', length: 32, nullable: true)]
         private ?string $color = null,
+        /** Icon name such as `tabler:bug` (since 1.11), rendered in the column header. */
+        #[ORM\Column(type: 'string', length: 64, nullable: true)]
+        private ?string $icon = null,
     ) {
         $this->id    = Uuid::generate()->toString();
         $this->tasks = new ArrayCollection();
@@ -91,6 +94,22 @@ class BoardColumn
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->color = $color;
+
+        return $this;
+    }
+
+    /**
+     * Icon of the column header, e.g. `tabler:bug` (since 1.11); null: no icon.
+     */
+    public function getIcon(): ?string
+    {
+        return $this->icon;
+    }
+
+    public function setIcon(?string $icon): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->icon = $icon;
 
         return $this;
     }

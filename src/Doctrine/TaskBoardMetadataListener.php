@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Doctrine;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Mapping\AssociationMapping;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -51,6 +52,7 @@ final readonly class TaskBoardMetadataListener
             TaskChangeHistory::class => ['user'],
             TaskDocument::class      => ['creator'],
             TaskTimeEntry::class     => ['user'],
+            ColumnSet::class         => ['createdBy'],
         ];
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {

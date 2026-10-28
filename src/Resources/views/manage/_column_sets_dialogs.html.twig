@@ -1,0 +1,85 @@
+{#
+    Column sets (since 1.11), for board editors: "Save columns as set" (columnSetForm) and "Add columns from set"
+    (columnSetApplyForm, the list of columnSets with their delete forms in columnSetDeleteForms). Native <dialog>
+    elements opened by the nowo-task-board-dialog controller (Escape closes them, focus returns to the button).
+#}
+{% set columnSets = columnSets|default([]) %}
+<div class="nowo-task-column-sets" data-controller="nowo-task-board-dialog">
+    <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-column-sets__save" data-action="nowo-task-board-dialog#open" data-dialog="save">
+        <i class="ti ti-device-floppy me-1" aria-hidden="true"></i>{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-column-sets__apply" data-action="nowo-task-board-dialog#open" data-dialog="apply">
+        <i class="ti ti-columns me-1" aria-hidden="true"></i>{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}
+    </button>
+
+    <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="save" aria-labelledby="nowo-task-column-set-save-title">
+        <div class="nowo-task-dialog__header">
+            <h2 class="nowo-task-dialog__title h5" id="nowo-task-column-set-save-title">{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close"></button>
+        </div>
+        {{ form_start(columnSetForm, {action: path(nowo_task_board_route('column_set_create'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+            <p class="text-secondary small">{{ 'task_board.column_set.save_help'|trans({'%count%': board.columns|length}, 'NowoTaskBoardBundle') }}</p>
+            {% for child in columnSetForm %}
+                {% if not child.rendered %}
+                    {{ form_row(child) }}
+                {% endif %}
+            {% endfor %}
+            <div class="nowo-task-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" class="btn btn-primary">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            </div>
+        {{ form_end(columnSetForm) }}
+    </dialog>
+
+    <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="apply" aria-labelledby="nowo-task-column-set-apply-title">
+        <div class="nowo-task-dialog__header">
+            <h2 class="nowo-task-dialog__title h5" id="nowo-task-column-set-apply-title">{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close"></button>
+        </div>
+        <div class="nowo-task-dialog__body">
+            {% if columnSets is empty %}
+                <p class="nowo-task-column-sets__empty text-secondary mb-0">{{ 'task_board.column_set.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {% else %}
+                {{ form_start(columnSetApplyForm, {action: path(nowo_task_board_route('column_set_apply'), {boardId: board.id}), method: 'POST'}) }}
+                    <p class="text-secondary small">{{ 'task_board.column_set.apply_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                    {% for child in columnSetApplyForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
+                    <div class="nowo-task-dialog__actions">
+                        <button type="submit" class="btn btn-primary">{{ 'task_board.column_set.apply_action'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    </div>
+                {{ form_end(columnSetApplyForm) }}
+
+                <ul class="nowo-task-column-sets__list list-unstyled mt-3 mb-0">
+                    {% for set in columnSets %}
+                        <li class="nowo-task-column-sets__item" data-column-set-id="{{ set.id }}">
+                            <div class="nowo-task-column-sets__info">
+                                <span class="nowo-task-column-sets__name fw-semibold">{{ set.name }}</span>
+                                <span class="nowo-task-column-sets__columns text-secondary small">{{ set.items|map(item => item.name)|join(', ') }}</span>
+                            </div>
+                            {% set deleteForm = columnSetDeleteForms[set.id] ?? null %}
+                            {% if deleteForm is not null %}
+                                {{ form_start(deleteForm, {attr: {
+                                    class: 'nowo-task-column-sets__delete',
+                                    'data-action': 'submit->nowo-task-board-dialog#confirm',
+                                    'data-confirm': 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle'),
+                                }}) }}
+                                    {% for child in deleteForm %}
+                                        {% if not child.rendered %}
+                                            {{ form_row(child) }}
+                                        {% endif %}
+                                    {% endfor %}
+                                    <button type="submit" class="btn btn-sm btn-ghost-danger" aria-label="{{ 'task_board.column_set.delete_named'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}">
+                                        <i class="ti ti-trash" aria-hidden="true"></i>
+                                    </button>
+                                {{ form_end(deleteForm) }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </dialog>
+</div>

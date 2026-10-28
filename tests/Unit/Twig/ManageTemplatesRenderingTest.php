@@ -9,11 +9,14 @@ use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
+use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -28,11 +31,14 @@ use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
+use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
+use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
@@ -40,6 +46,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
@@ -337,6 +344,165 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('Ship it', $html);
     }
 
+    public function testBoardShowsColumnIconsSetsAndDeleteWithoutInlineStyle(): void
+    {
+        $this->todo->setColor('#16a34a')->setIcon('tabler:inbox');
+        $set   = (new ColumnSet('Kanban', $this->user))->addItem('Todo')->addItem('Done');
+        $other = new ColumnSet('Shared');
+        $icons = ['tabler:inbox', 'tabler:bug'];
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext([
+            'columnForm'           => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
+            'editColumnForm'       => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
+            'columnIcons'          => $icons,
+            'columnDeleteForm'     => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
+            'panelTargetPath'      => '/tools/task-board/board/' . $this->board->getId(),
+            'columnSets'           => [$set, $other],
+            'columnSetForm'        => $this->factory()->create(ColumnSetFormType::class, new ColumnSetFormData())->createView(),
+            'columnSetApplyForm'   => $this->factory()->create(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), ['column_set_choices' => ['Kanban' => $set->getId(), 'Shared' => $other->getId()]])->createView(),
+            'columnSetDeleteForms' => [$set->getId() => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 's', 'action' => '/delete-set'])->createView()],
+        ]));
+
+        self::assertStringNotContainsString(' style="', $html);
+        self::assertStringContainsString('nowo-task-column--colored', $html);
+        self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-column-color&quot;:&quot;#16a34a&quot;}"', $html);
+        self::assertStringContainsString('<i class="ti ti-inbox" aria-hidden="true"></i>', $html);
+        self::assertStringContainsString('data-column-icon="tabler:inbox"', $html);
+        self::assertStringContainsString('<option value="tabler:bug">bug</option>', $html);
+        self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $this->task->getId() . '/panel?_target_path=/tools/task-board/board/' . $this->board->getId() . '"', $html);
+        self::assertStringContainsString('task_board.action.delete_column', $html);
+        self::assertStringContainsString('COLUMN_ID&#x2F;delete', $html);
+        self::assertStringContainsString('<dialog class="nowo-task-dialog nowo-task-dialog--native"', $html);
+        self::assertStringContainsString('/column-sets/apply', $html);
+        self::assertStringContainsString('action="/delete-set"', $html);
+        self::assertSame(1, substr_count($html, 'nowo-task-column-sets__delete'));
+        self::assertStringContainsString('Todo, Done', $html);
+    }
+
+    public function testBoardColumnSetsDialogHasAnEmptyState(): void
+    {
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext([
+            'columnSets'         => [],
+            'columnSetForm'      => $this->factory()->create(ColumnSetFormType::class, new ColumnSetFormData())->createView(),
+            'columnSetApplyForm' => $this->factory()->create(ColumnSetApplyFormType::class, new ColumnSetApplyFormData())->createView(),
+        ]));
+
+        self::assertStringContainsString('task_board.column_set.empty', $html);
+        self::assertStringNotContainsString('/column-sets/apply', $html);
+        // A two-column board without columnDeleteForm (older controllers) has no delete button.
+        self::assertStringNotContainsString('task_board.action.delete_column', $html);
+    }
+
+    public function testColumnIconFollowsTheUiKitIconSet(): void
+    {
+        $this->todo->setIcon('tabler:inbox');
+
+        $ux = $this->twig();
+        $ux->addGlobal('nowo_ui_kit_icon_set', 'ux_icon');
+        $ux->addFunction(new TwigFunction('ux_icon', static fn (string $name): string => '<svg data-icon="' . $name . '"></svg>', ['is_safe' => ['html']]));
+        self::assertStringContainsString('<svg data-icon="tabler:inbox"></svg>', $ux->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'tabler:inbox']));
+
+        $none = $this->twig();
+        $none->addGlobal('nowo_ui_kit_icon_set', 'none');
+        self::assertSame('', trim($none->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'tabler:inbox'])));
+        self::assertSame('', trim($this->twig()->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => null])));
+    }
+
+    public function testTaskPanelIsAFragmentWhoseFormsComeBackToTheBoard(): void
+    {
+        $member = new TaskMember($this->task, $this->user, TaskMemberRole::Assignee);
+        $this->task->addMember($member);
+        $extra = ['_target_path' => '/tools/task-board/board/' . $this->board->getId()];
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', [
+            'task'             => $this->task,
+            'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
+            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
+            'memberForm'       => $this->memberForm(),
+            'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
+            'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
+            'subtaskTotal'     => 2,
+            'subtaskDone'      => 1,
+            'priorities'       => TaskPriority::cases(),
+            'dashboardRoute'   => null,
+            'panel'            => true,
+            'panelTargetPath'  => $extra['_target_path'],
+            'taskRouteExtra'   => $extra,
+        ] + $this->taskActionForms($this->task));
+
+        $query = '?_target_path=/tools/task-board/board/' . $this->board->getId();
+        self::assertStringNotContainsString('<title>', $html);
+        self::assertStringNotContainsString(' style="', $html);
+        self::assertStringStartsWith('<div', trim($html));
+        self::assertStringContainsString('class="nowo-task-panel-fragment"', $html);
+        self::assertStringContainsString('action="/tools/task-board/task/' . $this->task->getId() . $query . '"', $html);
+        self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/subtask' . $query, $html);
+        self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/advance' . $query, $html);
+        self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/member' . $query, $html);
+        self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/link' . $query, $html);
+        self::assertStringContainsString('task_board.task.open_page', $html);
+        self::assertStringContainsString('<progress class="nowo-task-progress mt-2" max="2" value="1"', $html);
+    }
+
+    public function testListAndGanttCarryTaskPanelUrlsWithoutInlineStyle(): void
+    {
+        $context = [
+            'board'           => $this->board,
+            'tasks'           => [$this->task],
+            'priorities'      => ['high'],
+            'columnNames'     => ['Todo'],
+            'filterForm'      => Forms::createFormFactory()->createNamed('', TaskListFilterType::class, null, ['priorities' => ['high'], 'column_names' => ['Todo']])->createView(),
+            'dashboardRoute'  => null,
+            'panelTargetPath' => '/list',
+            'timeline'        => (new TaskGanttBuilder())->build([$this->task]),
+        ];
+        $panelUrl = 'data-task-panel-url="/tools/task-board/task/' . $this->task->getId() . '/panel?_target_path=/list"';
+
+        $list = $this->twig()->render('@NowoTaskBoardBundle/manage/list.html.twig', $context);
+        self::assertStringContainsString($panelUrl, $list);
+        self::assertStringNotContainsString(' style="', $list);
+
+        $gantt = $this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', $context);
+        self::assertStringContainsString($panelUrl, $gantt);
+        self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-depth&quot;:0}"', $gantt);
+        self::assertStringNotContainsString(' style="', $gantt);
+    }
+
+    public function testIndexOffersTheColumnSetsForANewBoard(): void
+    {
+        $set  = new ColumnSet('Kanban');
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
+            'boards'         => [],
+            'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), ['column_set_choices' => ['Kanban' => $set->getId()]])->createView(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringContainsString('name="task_board_form[columnSetId]"', $html);
+        self::assertStringContainsString('task_board.form.board.default_columns', $html);
+        self::assertStringContainsString('task_board.index.no_boards', $html);
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     *
+     * @return array<string, mixed>
+     */
+    private function boardContext(array $extra): array
+    {
+        return $extra + [
+            'board'          => $this->board,
+            'tasks'          => [$this->task],
+            'columnForm'     => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'taskForm'       => $this->factory()->create(TaskFormType::class, new TaskFormData(columnId: $this->todo->getId()), [
+                'column_choices'   => ['Todo' => $this->todo->getId()],
+                'rich_description' => false,
+                'tag_input'        => false,
+            ])->createView(),
+            'dashboardRoute' => null,
+        ];
+    }
+
     public function testImportPageRenders(): void
     {
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
@@ -413,7 +579,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             'field_types'        => [],
         ];
         $merger = new FormOptionsMerger(['default' => $profile, 'task_board' => $profile], 'default', new ConstraintDefinitionFactory());
-        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType(), new TaskImportFormType()];
+        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType(), new TaskImportFormType(), new ColumnSetFormType(), new ColumnSetApplyFormType()];
         foreach ($types as $type) {
             $type->setFormOptionsMerger($merger);
         }

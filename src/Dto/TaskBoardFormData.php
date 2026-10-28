@@ -13,6 +13,8 @@ final class TaskBoardFormData
         public string $name = '',
         public string $slug = '',
         public ?string $description = null,
+        /** Column set whose columns the new board gets instead of `board.default_columns` (since 1.11). */
+        public ?string $columnSetId = null,
     ) {
     }
 }

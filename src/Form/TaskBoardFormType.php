@@ -9,6 +9,7 @@ use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -36,6 +37,17 @@ final class TaskBoardFormType extends AbstractType
             'label'    => 'task_board.form.board.description',
             'required' => false,
         ]);
+
+        // Since 1.11: start from a column set instead of board.default_columns (no field without sets).
+        if ($options['column_set_choices'] !== []) {
+            $this->addWithDefaults($builder, 'columnSetId', ChoiceType::class, [
+                'label'                     => 'task_board.form.board.column_set',
+                'required'                  => false,
+                'choices'                   => $options['column_set_choices'],
+                'choice_translation_domain' => false,
+                'placeholder'               => 'task_board.form.board.default_columns',
+            ]);
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -43,6 +55,9 @@ final class TaskBoardFormType extends AbstractType
         $resolver->setDefaults([
             'data_class'         => TaskBoardFormData::class,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
+            // Since 1.11: column set name => id.
+            'column_set_choices' => [],
         ]);
+        $resolver->setAllowedTypes('column_set_choices', 'array');
     }
 }

@@ -48,7 +48,7 @@
         <div class="nowo-task-gantt__viewport">
             <div
                 class="nowo-task-gantt__grid"
-                style="--gantt-days: {{ timeline.dayKeys|length }};"
+                data-nowo-task-vars="{{ {'--gantt-days': timeline.dayKeys|length}|json_encode }}"
                 data-nowo-task-board-gantt-target="grid"
             >
                 <div class="nowo-task-gantt__corner">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</div>
@@ -66,7 +66,8 @@
                 {% for item in timeline.items %}
                     <div
                         class="nowo-task-gantt__label-cell{% if item.completed %} is-completed{% endif %}"
-                        style="padding-left: {{ 0.75 + item.depth * 1.1 }}rem;"
+                        data-depth="{{ item.depth }}"
+                        data-nowo-task-vars="{{ {'--nowo-task-depth': item.depth}|json_encode }}"
                         data-task-id="{{ item.id }}"
                     >
                         <a href="{{ path(nowo_task_board_route('task'), {taskId: item.id}) }}" class="text-reset">{{ item.title }}</a>
@@ -81,11 +82,13 @@
                         <div
                             class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.completed %} is-completed{% endif %}"
                             data-nowo-task-board-gantt-target="bar"
-                            style="--gantt-start: {{ item.startIndex + 1 }}; --gantt-end: {{ item.endIndex + 2 }};"
+                            data-task-id="{{ item.id }}"
+                            data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
+                            data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|json_encode }}"
                             title="{{ item.startDate }} → {{ item.endDate }}"
                         >
                             {% if item.progress > 0 %}
-                                <span class="nowo-task-gantt__bar-progress" style="width: {{ item.progress }}%;"></span>
+                                <span class="nowo-task-gantt__bar-progress" data-nowo-task-vars="{{ {'--nowo-task-progress': item.progress}|json_encode }}"></span>
                             {% endif %}
                             <span class="nowo-task-gantt__bar-label">{{ item.title }}</span>
                         </div>

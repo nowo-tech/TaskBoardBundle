@@ -1,15 +1,27 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * Opens the edit-column modal and posts the updated name/color.
+ * Opens the edit-column modal and posts the updated name / color / icon (since 1.11); the delete form (since 1.11)
+ * posts to the column's delete URL after a confirmation.
  */
 export default class EditColumnModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'backdrop', 'form', 'nameInput', 'colorInput', 'title'];
+    static targets = ['modal', 'backdrop', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'title'];
 
     static values = {
         updateUrlTemplate: String,
+        deleteUrlTemplate: String,
         titleTemplate: String,
     };
+
+    declare readonly iconInputTarget: HTMLSelectElement;
+
+    declare readonly hasIconInputTarget: boolean;
+
+    declare readonly deleteFormTarget: HTMLFormElement;
+
+    declare readonly hasDeleteFormTarget: boolean;
+
+    declare deleteUrlTemplateValue: string;
 
     declare readonly modalTarget: HTMLElement;
 
@@ -48,12 +60,27 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
             this.colorInputTarget.value = columnColor !== '' ? columnColor : '#206bc4';
         }
 
+        if (this.hasIconInputTarget) {
+            this.iconInputTarget.value = trigger.dataset.columnIcon ?? '';
+        }
+
+        if (this.hasDeleteFormTarget && this.deleteUrlTemplateValue !== '') {
+            this.deleteFormTarget.action = this.deleteUrlTemplateValue.replace('COLUMN_ID', columnId);
+        }
+
         if (this.hasTitleTarget && this.titleTemplateValue !== '') {
             this.titleTarget.textContent = this.titleTemplateValue.replace('%column%', columnName);
         }
 
         this.showModal();
         window.requestAnimationFrame(() => this.nameInputTarget.focus());
+    }
+
+    confirmDelete(event: Event): void {
+        const message = (event.currentTarget as HTMLElement).dataset.confirm ?? '';
+        if (message !== '' && !window.confirm(message)) {
+            event.preventDefault();
+        }
     }
 
     stopDrag(event: Event): void {

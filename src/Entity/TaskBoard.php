@@ -203,6 +203,16 @@ class TaskBoard
         return $this;
     }
 
+    /**
+     * Removes a column (orphan removal deletes it on the next flush); since 1.11.
+     */
+    public function removeColumn(BoardColumn $column): self
+    {
+        $this->columns->removeElement($column);
+
+        return $this;
+    }
+
     /** @return Collection<int, Task> */
     public function getTasks(): Collection
     {

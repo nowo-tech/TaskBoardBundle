@@ -50,6 +50,7 @@ final class RenamedRoutesRenderingTest extends TestCase
         'index', 'board', 'list', 'gantt', 'task', 'board_create', 'task_create', 'task_move', 'task_advance',
         'task_link', 'task_link_update', 'task_link_remove', 'task_member', 'task_member_remove', 'task_subtask',
         'task_priority', 'column_create', 'column_update', 'column_reorder', 'board_import',
+        'column_delete', 'column_set_create', 'column_set_apply', 'column_set_delete', 'task_panel',
     ];
 
     private TaskBoard $board;

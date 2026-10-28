@@ -9,10 +9,14 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 
+use function count;
 use function is_string;
+use function max;
+use function trim;
+use function usort;
 
 /**
- * Adds and reorders kanban columns on a board.
+ * Adds, edits, reorders and deletes kanban columns on a board.
  */
 final readonly class BoardColumnManager
 {
@@ -32,7 +36,8 @@ final readonly class BoardColumnManager
             board: $board,
             name: trim($data->name),
             position: $position + 1,
-            color: $this->normalizeColor($data->color),
+            color: $this->normalize($data->color),
+            icon: $this->normalize($data->icon),
         );
 
         $board->addColumn($column);
@@ -83,19 +88,72 @@ final readonly class BoardColumnManager
     {
         $column
             ->setName(trim($data->name))
-            ->setColor($this->normalizeColor($data->color));
+            ->setColor($this->normalize($data->color))
+            ->setIcon($this->normalize($data->icon));
 
         $this->columnRepository->save($column);
     }
 
-    private function normalizeColor(?string $color): ?string
+    /**
+     * Deletes a column (since 1.11): its tasks move to the end of the board's first remaining column (completed when
+     * that column is the last one, reopened otherwise); the last column of a board is never deleted (false).
+     */
+    public function delete(BoardColumn $column): bool
     {
-        if ($color === null) {
+        $board     = $column->getBoard();
+        $remaining = [];
+        foreach ($board->getColumns() as $candidate) {
+            if ($candidate !== $column) {
+                $remaining[] = $candidate;
+            }
+        }
+
+        if ($remaining === []) {
+            return false;
+        }
+
+        usort($remaining, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
+        $target   = $remaining[0];
+        $lastOne  = $remaining[count($remaining) - 1];
+        $position = 0;
+        foreach ($board->getTasks() as $task) {
+            if ($task->getColumn() === $target) {
+                $position = max($position, $task->getPosition() + 1);
+            }
+        }
+
+        foreach ($board->getTasks() as $task) {
+            if ($task->getColumn() !== $column) {
+                continue;
+            }
+
+            $task->setColumn($target)->setPosition($position++);
+            if ($target === $lastOne && !$task->isCompleted()) {
+                $task->markCompleted();
+            } elseif ($target !== $lastOne && $task->isCompleted()) {
+                $task->markIncomplete();
+            }
+        }
+
+        $board->removeColumn($column);
+        foreach ($remaining as $index => $candidate) {
+            $candidate->setPosition($index);
+        }
+
+        // The flush also deletes the removed column (orphan removal) and saves the moved tasks.
+        $this->columnRepository->saveAll($remaining);
+
+        return true;
+    }
+
+    private function normalize(?string $value): ?string
+    {
+        if ($value === null) {
             return null;
         }
 
-        $color = trim($color);
+        $value = trim($value);
 
-        return $color === '' ? null : $color;
+        return $value === '' ? null : $value;
     }
 }

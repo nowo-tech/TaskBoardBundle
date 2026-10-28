@@ -12,7 +12,9 @@ use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmColumnSetRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDependencyRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDocumentRepository;
@@ -103,6 +105,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.tenancy.tenant_paths', $config['tenancy']['tenant_paths']);
         $container->setParameter('nowo_task_board.board.default_columns', $config['board']['default_columns']);
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
+        $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
 
         if (
             !$config['security']['allow_unauthenticated']
@@ -373,12 +376,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             TaskDocumentRepositoryInterface::class   => DoctrineOrmTaskDocumentRepository::class,
             TaskTimeEntryRepositoryInterface::class  => DoctrineOrmTaskTimeEntryRepository::class,
             TeamMemberRepositoryInterface::class     => DoctrineOrmTeamMemberRepository::class,
+            ColumnSetRepositoryInterface::class      => DoctrineOrmColumnSetRepository::class,
         ];
 
         $flushingRepos = [
             DoctrineOrmTaskBoardRepository::class,
             DoctrineOrmBoardColumnRepository::class,
             DoctrineOrmTaskRepository::class,
+            DoctrineOrmColumnSetRepository::class,
         ];
 
         foreach ($repos as $interface => $implementation) {

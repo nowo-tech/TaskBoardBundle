@@ -1,0 +1,18 @@
+{#
+    Task editing panel without layout (since 1.11), answered by the task_panel route and by the task write routes when
+    they are sent with fetch (X-Requested-With: XMLHttpRequest or a Turbo frame). Hosts load it into a side drawer:
+    the same blocks as the task page (edit form, members, priority, subtasks, links); every form posts to the usual
+    routes with _target_path = panelTargetPath, so without fetch they come back to the board, list or Gantt page.
+    The page around it must load task-board.css / task-board.js (the board, list and Gantt pages do).
+#}
+{% use '@NowoTaskBoardBundle/manage/_task_blocks.html.twig' %}
+<div
+    class="nowo-task-panel-fragment"
+    data-task-id="{{ task.id }}"
+    data-task-url="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}"
+    data-panel-target-path="{{ panelTargetPath|default('') }}"
+    aria-label="{{ task.title }}"
+    role="region"
+>
+    {{ block('nowo_task_body') }}
+</div>

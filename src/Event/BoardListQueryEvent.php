@@ -15,14 +15,26 @@ final class BoardListQueryEvent extends Event
     /** @var list<TaskBoard>|null */
     private ?array $overrideList = null;
 
+    /**
+     * @param string|null $tenantKey Tenant of the index being listed (`tenancy`, since 1.11); null outside a tenant
+     */
     public function __construct(
         private readonly object $subject,
+        private readonly ?string $tenantKey = null,
     ) {
     }
 
     public function getSubject(): object
     {
         return $this->subject;
+    }
+
+    /**
+     * Tenant of the index being listed (since 1.11); null without tenancy or outside a tenant.
+     */
+    public function getTenantKey(): ?string
+    {
+        return $this->tenantKey;
     }
 
     /** @param list<TaskBoard> $boards */

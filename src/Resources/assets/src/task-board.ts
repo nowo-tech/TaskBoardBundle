@@ -13,6 +13,8 @@ import TaskPriorityModalController from './task-priority-modal-controller';
 import TaskLinksModalController from './task-links-modal-controller';
 import GanttController from './gantt-controller';
 import EditColumnModalController from './edit-column-modal-controller';
+import DialogController from './dialog-controller';
+import { observeCssVars } from './css-vars';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
 
@@ -32,3 +34,11 @@ application.register('nowo-task-board-task-priority-modal', TaskPriorityModalCon
 application.register('nowo-task-board-task-links-modal', TaskLinksModalController);
 application.register('nowo-task-board-gantt', GanttController);
 application.register('nowo-task-board-edit-column-modal', EditColumnModalController);
+application.register('nowo-task-board-dialog', DialogController);
+
+// Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => observeCssVars(document.documentElement));
+} else {
+    observeCssVars(document.documentElement);
+}

@@ -5,18 +5,23 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Controller;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
+use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
+use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -32,6 +37,7 @@ use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
+use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
@@ -46,6 +52,7 @@ use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -55,8 +62,10 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use function array_key_exists;
 use function is_object;
 use function is_string;
+use function preg_match;
 use function reset;
 use function sprintf;
+use function str_starts_with;
 
 /**
  * Manage UI for task boards, kanban, list, and task detail.
@@ -66,6 +75,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * @param array<string, array{path: string, name: string}> $routes
      * @param array<string, string> $templates
+     * @param list<string> $columnIcons `board.column_icons` (since 1.11)
      */
     public function __construct(
         private readonly TaskBoardAccessCheckerInterface $accessChecker,
@@ -86,6 +96,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly TaskBoardResourceAccessChecker $resourceAccessChecker,
         private readonly ?TaskBoardTenantContext $tenantContext = null,
         private readonly bool $topLevelOnly = false,
+        private readonly ?ColumnSetManager $columnSetManager = null,
+        private readonly array $columnIcons = [],
     ) {
     }
 
@@ -105,12 +117,12 @@ final class TaskBoardManageController extends AbstractController
             $candidates = $tenant instanceof TaskBoardTenant
                 ? $this->boardRepository->findActiveByTenant($tenant->key)
                 : $this->boardRepository->findAllActive();
-            $boards = $this->resourceAccessChecker->filterBoards($user, $candidates);
+            $boards = $this->resourceAccessChecker->filterBoards($user, $candidates, $tenant?->key);
         }
 
         return $this->render($this->templates['index'], [
             'boards'         => $boards,
-            'boardForm'      => $this->createForm(TaskBoardFormType::class, new TaskBoardFormData()),
+            'boardForm'      => $this->createBoardForm($user, $tenant?->key),
             'dashboardRoute' => $this->dashboardRoute,
             'tenant'         => $tenant,
         ]);
@@ -124,13 +136,15 @@ final class TaskBoardManageController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $form = $this->createForm(TaskBoardFormType::class, new TaskBoardFormData());
+        $form = $this->createBoardForm($user, $tenant?->key);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskBoardFormData $data */
-            $data  = $form->getData();
-            $board = $this->boardCreator->create($data, $user, $tenant?->key);
+            $data = $form->getData();
+            // Since 1.11: the columns of a column set the user may apply (another scope's set is ignored).
+            $set   = $data->columnSetId !== null ? $this->columnSetManager?->find($data->columnSetId, $user, null, $tenant?->key) : null;
+            $board = $this->boardCreator->create($data, $user, $tenant?->key, $set);
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
         }
@@ -143,7 +157,8 @@ final class TaskBoardManageController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user);
 
-        $columnForm    = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData());
+        $canEditBoard  = $this->resourceAccessChecker->canEditBoard($user, $board);
+        $columnForm    = $this->createColumnForm(new BoardColumnFormData());
         $columnChoices = $this->buildColumnChoices($board);
 
         $taskForm = $this->createForm(TaskFormType::class, new TaskFormData(
@@ -159,12 +174,103 @@ final class TaskBoardManageController extends AbstractController
             // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
             'tasks'          => $this->topLevelOnly ? $taskTree->roots() : $allTasks,
             'taskTree'       => $taskTree,
-            'canEditBoard'   => $this->resourceAccessChecker->canEditBoard($user, $board),
+            'canEditBoard'   => $canEditBoard,
             'columnForm'     => $columnForm->createView(),
-            'editColumnForm' => $this->createForm(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'editColumnForm' => $this->createColumnForm(new BoardColumnFormData())->createView(),
             'taskForm'       => $taskForm->createView(),
             'dashboardRoute' => $this->dashboardRoute,
+            // Since 1.11: column icons, column delete, column sets and the task panel URL of the cards.
+            'columnIcons'      => $this->columnIcons,
+            'columnDeleteForm' => $canEditBoard ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
+            'panelTargetPath'  => $this->currentRequestUri(),
+        ] + ($canEditBoard ? $this->columnSetViewData($board, $user) : []));
+    }
+
+    /**
+     * Since 1.11: deletes a column; its tasks move to the first remaining column. The last column is kept.
+     */
+    public function deleteColumn(string $boardId, string $columnId, Request $request): RedirectResponse
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_column_delete'));
+        $board  = $this->findBoard($boardId, $user, true);
+        $column = $this->findColumn($board, $columnId);
+
+        $deleted = $this->columnManager->delete($column);
+        $this->addFlash($deleted ? 'success' : 'error', $deleted ? 'task_board.flash.column_deleted' : 'task_board.flash.column_last');
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 1.11: saves the board's columns as a named column set.
+     */
+    public function createColumnSet(string $boardId, Request $request): RedirectResponse
+    {
+        $user    = $this->requireUser();
+        $board   = $this->findBoard($boardId, $user, true);
+        $manager = $this->requireColumnSets();
+
+        $form = $this->createForm(ColumnSetFormType::class, new ColumnSetFormData());
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var ColumnSetFormData $data */
+            $data = $form->getData();
+            $manager->saveFromBoard($board, $data->name, $user);
+            $this->addFlash('success', 'task_board.flash.column_set_saved');
+        }
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 1.11: appends copies of a column set's columns to the board.
+     */
+    public function applyColumnSet(string $boardId, Request $request): RedirectResponse
+    {
+        $user    = $this->requireUser();
+        $board   = $this->findBoard($boardId, $user, true);
+        $manager = $this->requireColumnSets();
+
+        $form = $this->createForm(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), [
+            'column_set_choices' => $this->columnSetChoices($manager->available($user, $board)),
         ]);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var ColumnSetApplyFormData $data */
+            $data = $form->getData();
+            $set  = $manager->find((string) $data->columnSetId, $user, $board);
+            if ($set instanceof ColumnSet) {
+                $manager->applyToBoard($set, $board);
+                $this->addFlash('success', 'task_board.flash.column_set_applied');
+            }
+        }
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 1.11: deletes a column set (its creator or a manage role, unless a COLUMN_SET_ACCESS_CHECK listener
+     * decides otherwise); boards keep the columns they got from it.
+     */
+    public function deleteColumnSet(string $boardId, string $setId, Request $request): RedirectResponse
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_column_set_delete'));
+        $board   = $this->findBoard($boardId, $user, true);
+        $manager = $this->requireColumnSets();
+        $set     = $manager->find($setId, $user, $board) ?? throw new NotFoundHttpException('Column set not found.');
+
+        if (!$this->resourceAccessChecker->canDeleteColumnSet($user, $set)) {
+            throw $this->createAccessDeniedException('Column set access denied.');
+        }
+
+        $manager->delete($set);
+        $this->addFlash('success', 'task_board.flash.column_set_deleted');
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
     public function createColumn(string $boardId, Request $request): RedirectResponse
@@ -172,7 +278,7 @@ final class TaskBoardManageController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user, true);
 
-        $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData());
+        $form = $this->createColumnForm(new BoardColumnFormData());
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -192,9 +298,10 @@ final class TaskBoardManageController extends AbstractController
         $board  = $this->findBoard($boardId, $user, true);
         $column = $this->findColumn($board, $columnId);
 
-        $form = $this->createForm(BoardColumnFormType::class, new BoardColumnFormData(
+        $form = $this->createColumnForm(new BoardColumnFormData(
             name: $column->getName(),
             color: $column->getColor(),
+            icon: $column->getIcon(),
         ));
         $form->handleRequest($request);
 
@@ -333,7 +440,8 @@ final class TaskBoardManageController extends AbstractController
                 'priorities'   => $priorityNames,
                 'column_names' => $columnNames,
             ])->createView(),
-            'dashboardRoute' => $this->dashboardRoute,
+            'dashboardRoute'  => $this->dashboardRoute,
+            'panelTargetPath' => $this->currentRequestUri(),
         ]);
     }
 
@@ -346,9 +454,10 @@ final class TaskBoardManageController extends AbstractController
         $timeline = $this->ganttBuilder->build($tasks);
 
         return $this->render($this->templates['gantt'], [
-            'board'          => $board,
-            'timeline'       => $timeline,
-            'dashboardRoute' => $this->dashboardRoute,
+            'board'           => $board,
+            'timeline'        => $timeline,
+            'dashboardRoute'  => $this->dashboardRoute,
+            'panelTargetPath' => $this->currentRequestUri(),
         ]);
     }
 
@@ -357,19 +466,7 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user);
 
-        $taskData = new TaskFormData(
-            title: $task->getTitle(),
-            description: $task->getDescription(),
-            priority: $task->getPriority(),
-            columnId: $task->getColumn()?->getId(),
-            estimatedMinutes: $task->getEstimatedMinutes(),
-            dueAt: $task->getDueAt(),
-            tags: $task->getTags(),
-        );
-
-        $taskForm = $this->createForm(TaskFormType::class, $taskData, [
-            'column_choices' => $this->buildColumnChoices($task->getBoard()),
-        ]);
+        $taskForm = $this->createTaskEditForm($task);
         $taskForm->handleRequest($request);
 
         if ($taskForm->isSubmitted() && !$this->resourceAccessChecker->canEditTask($user, $task)) {
@@ -382,52 +479,30 @@ final class TaskBoardManageController extends AbstractController
             $this->taskManager->update($task, $data, $user);
             $this->addFlash('success', 'task_board.flash.task_updated');
 
-            return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+            return $this->afterTaskWrite($request, $task, $user);
         }
 
-        $linkForm    = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
-        $memberForm  = $this->createMemberForm($task->getBoard());
-        $subtaskForm = $this->createForm(TaskFormType::class, new TaskFormData(), [
-            'column_choices' => $this->buildColumnChoices($task->getBoard()),
-            'compact'        => true,
-        ]);
-
-        /** @var array<string, FormView> $memberRemoveForms */
-        $memberRemoveForms = [];
-        foreach ($task->getMembers() as $member) {
-            $memberId                     = (string) $member->getId();
-            $memberRemoveForms[$memberId] = $this->csrfActionForm(
-                'task_board_task_member_remove_' . $memberId,
-                $this->generateUrl($this->routes['task_member_remove']['name'], ['taskId' => $taskId, 'memberId' => $memberId]),
-            )->createView();
+        // Since 1.11: a fetch (side panel) gets the panel fragment, with the form errors (422) after an invalid save.
+        if ($this->isPanelRequest($request)) {
+            return $this->renderTaskPanel($request, $task, $user, $taskForm, $taskForm->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK);
         }
 
-        // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
-        $taskTree        = TaskTree::fromTasks($this->taskRepository->findByBoard($task->getBoard(), true));
-        $subtaskProgress = $taskTree->progress($task);
-
-        return $this->render($this->templates['task'], [
-            'task'              => $task,
-            'taskForm'          => $taskForm,
-            'linkForm'          => $linkForm,
-            'memberForm'        => $memberForm,
-            'subtaskForm'       => $subtaskForm,
-            'columnNavigation'  => $this->taskManager->getColumnNavigation($task),
-            'subtaskTotal'      => $subtaskProgress->total,
-            'subtaskDone'       => $subtaskProgress->done,
-            'subtaskProgress'   => $subtaskProgress,
-            'taskTree'          => $taskTree,
-            'canEditTask'       => $this->resourceAccessChecker->canEditTask($user, $task),
-            'priorities'        => TaskPriority::cases(),
-            'dashboardRoute'    => $this->dashboardRoute,
-            'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
-            'linkRemoveForm'    => $this->csrfActionForm('task_board_task_link_remove')->createView(),
-            'priorityForm'      => $this->createPriorityForm($task)->createView(),
-            'memberRemoveForms' => $memberRemoveForms,
-        ]);
+        return $this->render($this->templates['task'], $this->taskViewData($task, $user, $taskForm));
     }
 
-    public function advanceTask(string $taskId, Request $request): RedirectResponse
+    /**
+     * Since 1.11: the task editing panel without layout (edit form, members, subtasks, links, priority) for hosts that
+     * open a task in a side drawer. Its forms post to the usual routes and come back to `_target_path` (a local path,
+     * default the task's board), or answer the refreshed fragment when they are sent with fetch.
+     */
+    public function taskPanel(string $taskId, Request $request): Response
+    {
+        $user = $this->requireUser();
+
+        return $this->renderTaskPanel($request, $this->findTask($taskId, $user), $user);
+    }
+
+    public function advanceTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_advance'));
@@ -453,7 +528,7 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('success', $flashKey);
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
     public function moveTask(string $taskId, Request $request): RedirectResponse
@@ -473,7 +548,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
-    public function attachLink(string $taskId, Request $request): RedirectResponse
+    public function attachLink(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
@@ -488,10 +563,10 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('success', 'task_board.flash.link_added');
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function updateLink(string $taskId, string $linkId, Request $request): RedirectResponse
+    public function updateLink(string $taskId, string $linkId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
@@ -507,10 +582,10 @@ final class TaskBoardManageController extends AbstractController
             }
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function removeLink(string $taskId, string $linkId, Request $request): RedirectResponse
+    public function removeLink(string $taskId, string $linkId, Request $request): Response
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_link_remove'));
@@ -521,10 +596,10 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('success', 'task_board.flash.link_removed');
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function addMember(string $taskId, Request $request): RedirectResponse
+    public function addMember(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
@@ -543,10 +618,10 @@ final class TaskBoardManageController extends AbstractController
             }
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function removeMember(string $taskId, string $memberId, Request $request): RedirectResponse
+    public function removeMember(string $taskId, string $memberId, Request $request): Response
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_member_remove_' . $memberId));
@@ -556,10 +631,10 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('success', 'task_board.flash.member_removed');
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function updatePriority(string $taskId, Request $request): RedirectResponse
+    public function updatePriority(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
@@ -572,16 +647,16 @@ final class TaskBoardManageController extends AbstractController
 
         $priority = $form->isValid() ? TaskPriority::tryFrom((string) $form->get('priority')->getData()) : null;
         if (!$priority instanceof TaskPriority) {
-            return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+            return $this->afterTaskWrite($request, $task, $user);
         }
 
         $this->taskManager->updatePriority($task, $priority, $user);
         $this->addFlash('success', 'task_board.flash.task_updated');
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function createSubtask(string $taskId, Request $request): RedirectResponse
+    public function createSubtask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
@@ -600,7 +675,229 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('success', 'task_board.flash.subtask_created');
         }
 
-        return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * The view data of the task page and the task panel.
+     *
+     * @param FormInterface<TaskFormData> $taskForm
+     * @param array<string, string> $routeExtra Query added to the write routes (the panel's `_target_path`)
+     *
+     * @return array<string, mixed>
+     */
+    private function taskViewData(Task $task, UserInterface $user, FormInterface $taskForm, array $routeExtra = []): array
+    {
+        $taskId      = $task->getId();
+        $linkForm    = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
+        $memberForm  = $this->createMemberForm($task->getBoard());
+        $subtaskForm = $this->createForm(TaskFormType::class, new TaskFormData(), [
+            'column_choices' => $this->buildColumnChoices($task->getBoard()),
+            'compact'        => true,
+        ]);
+
+        /** @var array<string, FormView> $memberRemoveForms */
+        $memberRemoveForms = [];
+        foreach ($task->getMembers() as $member) {
+            $memberId                     = (string) $member->getId();
+            $memberRemoveForms[$memberId] = $this->csrfActionForm(
+                'task_board_task_member_remove_' . $memberId,
+                $this->generateUrl($this->routes['task_member_remove']['name'], ['taskId' => $taskId, 'memberId' => $memberId] + $routeExtra),
+            )->createView();
+        }
+
+        // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
+        $taskTree        = TaskTree::fromTasks($this->taskRepository->findByBoard($task->getBoard(), true));
+        $subtaskProgress = $taskTree->progress($task);
+
+        return [
+            'task'              => $task,
+            'taskForm'          => $taskForm,
+            'linkForm'          => $linkForm,
+            'memberForm'        => $memberForm,
+            'subtaskForm'       => $subtaskForm,
+            'columnNavigation'  => $this->taskManager->getColumnNavigation($task),
+            'subtaskTotal'      => $subtaskProgress->total,
+            'subtaskDone'       => $subtaskProgress->done,
+            'subtaskProgress'   => $subtaskProgress,
+            'taskTree'          => $taskTree,
+            'canEditTask'       => $this->resourceAccessChecker->canEditTask($user, $task),
+            'priorities'        => TaskPriority::cases(),
+            'dashboardRoute'    => $this->dashboardRoute,
+            'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
+            'linkRemoveForm'    => $this->csrfActionForm('task_board_task_link_remove')->createView(),
+            'priorityForm'      => $this->createPriorityForm($task, $routeExtra)->createView(),
+            'memberRemoveForms' => $memberRemoveForms,
+            'taskRouteExtra'    => $routeExtra,
+        ];
+    }
+
+    /**
+     * @return FormInterface<TaskFormData>
+     */
+    private function createTaskEditForm(Task $task): FormInterface
+    {
+        return $this->createForm(TaskFormType::class, new TaskFormData(
+            title: $task->getTitle(),
+            description: $task->getDescription(),
+            priority: $task->getPriority(),
+            columnId: $task->getColumn()?->getId(),
+            estimatedMinutes: $task->getEstimatedMinutes(),
+            dueAt: $task->getDueAt(),
+            tags: $task->getTags(),
+        ), [
+            'column_choices' => $this->buildColumnChoices($task->getBoard()),
+        ]);
+    }
+
+    /**
+     * The task panel fragment (since 1.11); its forms carry `_target_path` (the request's, else the task's board).
+     *
+     * @param FormInterface<TaskFormData>|null $taskForm
+     */
+    private function renderTaskPanel(Request $request, Task $task, UserInterface $user, ?FormInterface $taskForm = null, int $status = Response::HTTP_OK): Response
+    {
+        $target = $this->safeTargetPath($request)
+            ?? $this->generateUrl($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
+
+        $response = $this->render(
+            $this->templates['task_panel'] ?? '@NowoTaskBoardBundle/manage/task_panel.html.twig',
+            ['panel' => true, 'panelTargetPath' => $target] + $this->taskViewData($task, $user, $taskForm ?? $this->createTaskEditForm($task), ['_target_path' => $target]),
+        );
+
+        return $response->setStatusCode($status);
+    }
+
+    /**
+     * Where a task write goes next (since 1.11): the refreshed panel fragment for a fetch, else the local
+     * `_target_path` it carries, else the task page.
+     */
+    private function afterTaskWrite(Request $request, Task $task, UserInterface $user): Response
+    {
+        if ($this->isPanelRequest($request)) {
+            return $this->renderTaskPanel($request, $task, $user);
+        }
+
+        $target = $this->safeTargetPath($request);
+
+        return $target !== null
+            ? $this->redirect($target)
+            : $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $task->getId()]);
+    }
+
+    /**
+     * A request sent by a side panel's fetch (`X-Requested-With: XMLHttpRequest` or a Turbo frame).
+     */
+    private function isPanelRequest(Request $request): bool
+    {
+        return $request->isXmlHttpRequest() || $request->headers->has('Turbo-Frame');
+    }
+
+    /**
+     * `_target_path` of the query or the body when it is a local path (no scheme, host or backslash): open redirects
+     * are refused.
+     */
+    private function safeTargetPath(Request $request): ?string
+    {
+        $target = $request->query->get('_target_path', $request->request->get('_target_path'));
+        if (!is_string($target) || !str_starts_with($target, '/') || preg_match('#^//|\\\\|[\x00-\x1f]#', $target) === 1) {
+            return null;
+        }
+
+        return $target;
+    }
+
+    private function currentRequestUri(): ?string
+    {
+        /** @var RequestStack $requestStack */
+        $requestStack = $this->container->get('request_stack');
+
+        return $requestStack->getCurrentRequest()?->getRequestUri();
+    }
+
+    /**
+     * The add / edit column form; `board.column_icons` adds the icon field (since 1.11).
+     *
+     * @return FormInterface<BoardColumnFormData>
+     */
+    private function createColumnForm(BoardColumnFormData $data): FormInterface
+    {
+        return $this->createForm(BoardColumnFormType::class, $data, ['icon_choices' => $this->columnIcons]);
+    }
+
+    /**
+     * The new board form; with column sets it offers them instead of the default columns (since 1.11).
+     *
+     * @return FormInterface<TaskBoardFormData>
+     */
+    private function createBoardForm(UserInterface $user, ?string $tenantKey): FormInterface
+    {
+        $sets = $this->columnSetManager?->available($user, null, $tenantKey) ?? [];
+
+        return $this->createForm(TaskBoardFormType::class, new TaskBoardFormData(), [
+            'column_set_choices' => $this->columnSetChoices($sets),
+        ]);
+    }
+
+    /**
+     * Column sets of the board page (editors): the sets, their delete forms (when allowed) and the two dialogs.
+     *
+     * @return array<string, mixed>
+     */
+    private function columnSetViewData(TaskBoard $board, UserInterface $user): array
+    {
+        if (!$this->columnSetManager instanceof ColumnSetManager) {
+            return [];
+        }
+
+        $sets = $this->columnSetManager->available($user, $board);
+        /** @var array<string, FormView> $deleteForms */
+        $deleteForms = [];
+        foreach ($sets as $set) {
+            if ($this->resourceAccessChecker->canDeleteColumnSet($user, $set)) {
+                $deleteForms[$set->getId()] = $this->csrfActionForm(
+                    'task_board_column_set_delete',
+                    $this->generateUrl($this->routes['column_set_delete']['name'], ['boardId' => $board->getId(), 'setId' => $set->getId()]),
+                )->createView();
+            }
+        }
+
+        return [
+            'columnSets'         => $sets,
+            'columnSetForm'      => $this->createForm(ColumnSetFormType::class, new ColumnSetFormData())->createView(),
+            'columnSetApplyForm' => $this->createForm(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), [
+                'column_set_choices' => $this->columnSetChoices($sets),
+            ])->createView(),
+            'columnSetDeleteForms' => $deleteForms,
+        ];
+    }
+
+    /**
+     * Column set choices as name => id; duplicate names get a " (2)", " (3)"… suffix.
+     *
+     * @param list<ColumnSet> $sets
+     *
+     * @return array<string, string>
+     */
+    private function columnSetChoices(array $sets): array
+    {
+        $choices = [];
+        foreach ($sets as $set) {
+            $label  = $set->getName();
+            $suffix = 2;
+            while (array_key_exists($label, $choices)) {
+                $label = sprintf('%s (%d)', $set->getName(), $suffix++);
+            }
+
+            $choices[$label] = $set->getId();
+        }
+
+        return $choices;
+    }
+
+    private function requireColumnSets(): ColumnSetManager
+    {
+        return $this->columnSetManager ?? throw new NotFoundHttpException('Column sets are not available.');
     }
 
     private function requireUser(): UserInterface
@@ -641,12 +938,14 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
+     * @param array<string, string> $routeExtra
+     *
      * @return FormInterface<mixed>
      */
-    private function createPriorityForm(Task $task): FormInterface
+    private function createPriorityForm(Task $task, array $routeExtra = []): FormInterface
     {
         return $this->formFactory()->createNamed('', TaskPriorityFormType::class, ['priority' => $task->getPriority()->value], [
-            'action' => $this->generateUrl($this->routes['task_priority']['name'], ['taskId' => $task->getId()]),
+            'action' => $this->generateUrl($this->routes['task_priority']['name'], ['taskId' => $task->getId()] + $routeExtra),
         ]);
     }
 

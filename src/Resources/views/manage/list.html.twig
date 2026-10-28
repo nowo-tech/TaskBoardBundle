@@ -46,15 +46,15 @@
             {{ form_end(filterForm) }}
         </div>
         <div class="table-responsive">
-            <table class="table table-vcenter card-table">
+            <table class="table table-vcenter card-table nowo-task-list__table">
                 <thead>
                     <tr>
-                        <th>{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</th>
-                        <th>{{ 'task_board.form.task.column'|trans({}, 'NowoTaskBoardBundle') }}</th>
-                        <th>{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}</th>
-                        <th>{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</th>
-                        <th>{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</th>
-                        <th>{{ 'task_board.form.task.estimate'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.column'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.form.task.estimate'|trans({}, 'NowoTaskBoardBundle') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,6 +64,9 @@
                             data-title="{{ task.title }}"
                             data-priority="{{ task.priority.value }}"
                             data-column="{{ task.column ? task.column.name : '' }}"
+                            data-task-id="{{ task.id }}"
+                            data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
+                            class="nowo-task-list__row{{ task.completed ? ' is-done' : '' }}"
                         >
                             <td>
                                 <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="text-reset fw-semibold">{{ task.title }}</a>
@@ -77,7 +80,7 @@
                             <td class="text-secondary">{{ task.estimatedMinutes ?? '—' }}</td>
                         </tr>
                     {% else %}
-                        <tr><td colspan="6" class="text-secondary">{{ 'task_board.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</td></tr>
+                        <tr class="nowo-task-list__empty"><td colspan="6" class="text-secondary">{{ 'task_board.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -42,4 +42,10 @@ final class TaskBoardEvents
 
     /** {@see TaskMemberAddedEvent}, after flush (since 1.10). */
     public const TASK_MEMBER_ADDED = 'nowo_task_board.task_member_added';
+
+    /** {@see ColumnSetQueryEvent}: scope / list of the column sets (since 1.11). */
+    public const COLUMN_SET_QUERY = 'nowo_task_board.column_set_query';
+
+    /** {@see ColumnSetAccessCheckEvent}: who may delete a column set (since 1.11). */
+    public const COLUMN_SET_ACCESS_CHECK = 'nowo_task_board.column_set_access_check';
 }

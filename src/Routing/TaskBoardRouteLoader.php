@@ -59,6 +59,12 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, 'column_update', 'updateColumn', ['POST']);
         $this->addRoute($collection, 'column_reorder', 'reorderColumns', ['POST']);
         $this->addRoute($collection, 'board_import', 'importBoard', ['GET', 'POST']);
+        // Since 1.11.
+        $this->addRoute($collection, 'column_delete', 'deleteColumn', ['POST']);
+        $this->addRoute($collection, 'column_set_create', 'createColumnSet', ['POST']);
+        $this->addRoute($collection, 'column_set_apply', 'applyColumnSet', ['POST']);
+        $this->addRoute($collection, 'column_set_delete', 'deleteColumnSet', ['POST']);
+        $this->addRoute($collection, 'task_panel', 'taskPanel', ['GET']);
 
         $this->addTenantCopies($collection);
 

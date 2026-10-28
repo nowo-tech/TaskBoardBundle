@@ -1,15 +1,20 @@
 {#
-    Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree, canEditBoard (default true).
+    Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree,
+    canEditBoard (default true), panelTargetPath (since 1.11, for the cards' data-task-panel-url).
+    Since 1.11 the colour is a CSS custom property set from data-nowo-task-vars (no inline style) and the header
+    shows the column icon.
 #}
 {% set columnTasks = tasks|filter(t => t.column and t.column.id == column.id) %}
+{% set columnColor = column.color|nowo_task_board_safe_color %}
 <section
-    class="nowo-task-board__column nowo-task-column"
+    class="nowo-task-board__column nowo-task-column{{ columnColor ? ' nowo-task-column--colored' : '' }}"
     data-nowo-task-board-target="column"
     data-column-id="{{ column.id }}"
-    {% if column.color|nowo_task_board_safe_color %}style="border-top: 3px solid {{ column.color|nowo_task_board_safe_color }}"{% endif %}
+    {% if columnColor %}data-nowo-task-vars="{{ {'--nowo-task-column-color': columnColor}|json_encode }}"{% endif %}
+    aria-labelledby="nowo-task-column-{{ column.id }}-name"
 >
     <div
-        class="nowo-task-board__column-header"
+        class="nowo-task-board__column-header nowo-task-column__header"
         data-column-handle
         draggable="true"
         title="{{ 'task_board.board.drag_column'|trans({}, 'NowoTaskBoardBundle') }}"
@@ -17,45 +22,50 @@
         <span class="nowo-task-board__column-grip" aria-hidden="true">
             <i class="ti ti-grip-vertical"></i>
         </span>
-        <h3 class="nowo-task-board__column-title">
-            <span class="nowo-task-board__column-name">{{ column.name }}</span>
+        <h3 class="nowo-task-board__column-title nowo-task-column__title">
+            {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: column.icon}) }}
+            <span class="nowo-task-board__column-name nowo-task-column__name" id="nowo-task-column-{{ column.id }}-name">{{ column.name }}</span>
             <span
-                class="nowo-task-board__column-count"
+                class="nowo-task-board__column-count nowo-task-column__count"
                 aria-label="{{ 'task_board.board.column_task_count'|trans({'%count%': columnTasks|length}, 'NowoTaskBoardBundle') }}"
             >{{ columnTasks|length }}</span>
         </h3>
         {% if (canEditBoard ?? true) %}
         <button
             type="button"
-            class="nowo-task-board__column-edit"
+            class="nowo-task-board__column-edit nowo-task-column__edit"
             title="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
-            aria-label="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
+            aria-label="{{ 'task_board.board.edit_column_named'|trans({'%column%': column.name}, 'NowoTaskBoardBundle') }}"
             data-action="click->nowo-task-board-edit-column-modal#open mousedown->nowo-task-board-edit-column-modal#stopDrag"
             data-column-id="{{ column.id }}"
             data-column-name="{{ column.name|e('html_attr') }}"
-            data-column-color="{{ column.color|nowo_task_board_safe_color|default('#206bc4')|e('html_attr') }}"
+            data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"
+            data-column-icon="{{ column.icon|default('') }}"
         >
             <i class="ti ti-pencil" aria-hidden="true"></i>
         </button>
         {% endif %}
     </div>
 
-    <ul class="nowo-task-board__task-list" data-nowo-task-board-target="taskList">
+    <ul class="nowo-task-board__task-list nowo-task-column__tasks" data-nowo-task-board-target="taskList">
         {% for task in columnTasks %}
             {{ include('@NowoTaskBoardBundle/manage/_task_card.html.twig', {task: task}) }}
         {% endfor %}
     </ul>
+    {% if columnTasks is empty %}
+        <p class="nowo-task-column__empty text-secondary small">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {% endif %}
 
     {# Write controls only for users who may edit the board (since 1.10). #}
     {% if (canEditBoard ?? true) %}
     <button
         type="button"
-        class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn"
+        class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn nowo-task-column__add-task"
         data-action="click->nowo-task-board-add-task-modal#open"
         data-column-id="{{ column.id }}"
         data-column-name="{{ column.name|e('html_attr') }}"
     >
-        <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+        <i class="ti ti-plus me-1" aria-hidden="true"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
     {% endif %}
 </section>

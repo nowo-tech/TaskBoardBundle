@@ -1,5 +1,9 @@
+{#
+    Edit column dialog: name, colour and (since 1.11, with board.column_icons) icon; since 1.11 also "Delete column"
+    (columnDeleteForm, its tasks move to the first remaining column) when the board has more than one column.
+#}
 <div
-    class="modal modal-blur fade"
+    class="modal modal-blur fade nowo-task-dialog"
     data-nowo-task-board-edit-column-modal-target="modal"
     tabindex="-1"
     role="dialog"
@@ -9,9 +13,9 @@
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="nowo-task-board-edit-column-modal-title" data-nowo-task-board-edit-column-modal-target="title">
+                <h2 class="modal-title h5" id="nowo-task-board-edit-column-modal-title" data-nowo-task-board-edit-column-modal-target="title">
                     {{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}
-                </h5>
+                </h2>
                 <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-edit-column-modal#close"></button>
             </div>
             {{ form_start(editColumnForm, {
@@ -26,6 +30,11 @@
                     {{ form_row(editColumnForm.color, {
                         attr: {'data-nowo-task-board-edit-column-modal-target': 'colorInput'},
                     }) }}
+                    {% if editColumnForm.icon is defined %}
+                        {{ form_row(editColumnForm.icon, {
+                            attr: {'data-nowo-task-board-edit-column-modal-target': 'iconInput'},
+                        }) }}
+                    {% endif %}
                     {% for child in editColumnForm %}
                         {% if not child.rendered %}
                             {{ form_row(child) }}
@@ -37,10 +46,30 @@
                         {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
                     <button type="submit" class="btn btn-primary">
-                        <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+                        <i class="ti ti-device-floppy me-1" aria-hidden="true"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
                 </div>
             {{ form_end(editColumnForm) }}
+            {% if (columnDeleteForm ?? null) is not null and board.columns|length > 1 %}
+                <div class="modal-footer nowo-task-dialog__danger">
+                    {{ form_start(columnDeleteForm, {action: '#', attr: {
+                        class: 'nowo-task-column-delete-form',
+                        'data-nowo-task-board-edit-column-modal-target': 'deleteForm',
+                        'data-action': 'submit->nowo-task-board-edit-column-modal#confirmDelete',
+                        'data-confirm': 'task_board.board.delete_column_confirm'|trans({}, 'NowoTaskBoardBundle'),
+                    }}) }}
+                        {% for child in columnDeleteForm %}
+                            {% if not child.rendered %}
+                                {{ form_row(child) }}
+                            {% endif %}
+                        {% endfor %}
+                        <p class="text-secondary small mb-2">{{ 'task_board.board.delete_column_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i class="ti ti-trash me-1" aria-hidden="true"></i>{{ 'task_board.action.delete_column'|trans({}, 'NowoTaskBoardBundle') }}
+                        </button>
+                    {{ form_end(columnDeleteForm) }}
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

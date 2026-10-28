@@ -1,5 +1,8 @@
 {#
-    Kanban card of a task (since 1.10 a partial). Variables: task; taskTree (optional, for the subtask counter).
+    Kanban card of a task (since 1.10 a partial). Variables: task; taskTree (optional, for the subtask counter);
+    panelTargetPath (optional, since 1.11): the page the task panel's forms come back to.
+    data-task-panel-url (since 1.11): the task_panel fragment for hosts that open the task in a side drawer; the title
+    link keeps opening the task page without JavaScript.
 #}
 {% set progress = taskTree|default(null) ? taskTree.progress(task) : null %}
 {% set priorityColor = task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) %}
@@ -9,14 +12,15 @@
     data-nowo-task-board-target="task"
     data-task-id="{{ task.id }}"
     data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
+    data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
 >
     <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title d-block mb-1">{{ task.title }}</a>
     <div class="nowo-task-card__meta d-flex align-items-center gap-2 flex-wrap">
-        <span class="nowo-task-card__priority badge bg-{{ priorityColor }}-lt text-{{ priorityColor }}">
+        <span class="nowo-task-card__priority badge bg-{{ priorityColor }}-lt text-{{ priorityColor }}" data-priority="{{ task.priority.value }}">
             {{ task.priority.value }}
         </span>
         {% if task.estimatedMinutes %}
-            <span class="nowo-task-card__estimate text-secondary small"><i class="ti ti-clock"></i> {{ task.estimatedMinutes }}m</span>
+            <span class="nowo-task-card__estimate text-secondary small"><i class="ti ti-clock" aria-hidden="true"></i> {{ task.estimatedMinutes }}m</span>
         {% endif %}
         {% if progress and progress.total > 0 %}
             <span class="nowo-task-card__subtasks text-secondary small" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">

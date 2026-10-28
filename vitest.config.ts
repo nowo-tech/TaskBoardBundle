@@ -8,7 +8,7 @@ export default defineConfig({
             provider: 'v8',
             reporter: ['text', 'text-summary'],
             reportsDirectory: './coverage-ts',
-            include: ['src/Resources/assets/src/list-filter-utils.ts'],
+            include: ['src/Resources/assets/src/list-filter-utils.ts', 'src/Resources/assets/src/css-vars.ts'],
             exclude: ['**/*.test.ts', '**/node_modules/**'],
         },
     },
