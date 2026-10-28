@@ -318,6 +318,14 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame('token-task_board_task_member_remove_' . $member->getId(), $this->rendered['memberRemoveForms'][$member->getId()]->children['_token']->vars['value']);
     }
 
+    /** 1.10.1: the subtask handler builds the compact form the task page renders (title and the hidden column). */
+    public function testSubtaskUsesTheCompactForm(): void
+    {
+        $this->controller($this->owner)->createSubtask($this->task->getId(), Request::create('/', 'POST'));
+
+        self::assertTrue($this->findCreatedForm(TaskFormType::class)['options']['compact']);
+    }
+
     public function testListPassesClientSideFilterForm(): void
     {
         $this->controller($this->owner, realFormFactory: $this->realFormFactory())->listView($this->board->getId());

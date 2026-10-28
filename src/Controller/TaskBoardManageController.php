@@ -586,8 +586,10 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
 
+        // The same compact form the task page renders (title and the hidden column), or the submission misses fields.
         $form = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
+            'compact'        => true,
         ]);
         $form->handleRequest($request);
 

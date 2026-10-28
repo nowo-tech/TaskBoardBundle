@@ -148,13 +148,13 @@ final readonly class TaskGanttBuilder
         $start = $task->getCreatedAt()->setTime(0, 0);
         $end   = $task->getDueAt()?->setTime(0, 0);
 
-        if ($end === null && $task->getEstimatedMinutes() !== null && $task->getEstimatedMinutes() > 0) {
+        if (!$end instanceof DateTimeImmutable && $task->getEstimatedMinutes() !== null && $task->getEstimatedMinutes() > 0) {
             $durationDays = max(self::DEFAULT_BAR_DAYS, (int) ceil($task->getEstimatedMinutes() / self::MINUTES_PER_DAY));
             $modified     = $start->modify('+' . ($durationDays - 1) . ' days');
             $end          = $modified instanceof DateTimeImmutable ? $modified : $start;
         }
 
-        if ($end === null) {
+        if (!$end instanceof DateTimeImmutable) {
             $modified = $start->modify('+' . (self::DEFAULT_BAR_DAYS - 1) . ' days');
             $end      = $modified instanceof DateTimeImmutable ? $modified : $start;
         }

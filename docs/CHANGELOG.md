@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.10.1] - 2026-10-28](#1101---2026-10-28)
 - [[1.10.0] - 2026-10-28](#1100---2026-10-28)
 - [[1.9.0] - 2026-10-26](#190---2026-10-26)
 - [[1.8.4] - 2026-10-25](#184---2026-10-25)
@@ -42,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.10.1] - 2026-10-28
+
+### Fixed
+
+- **Task page with an assignee provider** (`assignee_provider`): it answered 500 — `TaskMemberFormType` set the allowed
+  types of `user_choices` before declaring the option ("The option user_choices does not exist").
+- **Add a subtask** (`POST …/task/{taskId}/subtask`): it answered 500 — the handler rebuilt the full task form while the
+  page posts the compact one (title and the hidden column), so the priority was missing.
 
 ## [1.10.0] - 2026-10-28
 

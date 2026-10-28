@@ -48,12 +48,13 @@ final class TaskMemberFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setRequired(['user_class']);
-        $resolver->setAllowedTypes('user_choices', ['null', 'array']);
         $resolver->setDefaults([
             'data_class'         => TaskMemberFormData::class,
             'user_choice_label'  => 'email',
             'user_choices'       => null,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
+        // After setDefaults(): an option must exist before its allowed types are set.
+        $resolver->setAllowedTypes('user_choices', ['null', 'array']);
     }
 }
