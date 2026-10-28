@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.13.0] - 2026-10-28](#1130---2026-10-28)
 - [[1.12.0] - 2026-10-28](#1120---2026-10-28)
 - [[1.11.1] - 2026-10-28](#1111---2026-10-28)
 - [[1.11.0] - 2026-10-28](#1110---2026-10-28)
@@ -46,6 +47,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.13.0] - 2026-10-28
+
+Column editor, dialogs and Gantt on the host-neutral look of 1.12. No schema change.
+
+### Added
+
+- **Column editor** (add / edit column): a colour palette with a custom colour and the icons as a grid
+  (`_column_fields.html.twig`, `nowo-task-board-picker` controller over the real form fields).
+- **List groups fold** with UiKit's `collapse-panel` peer and the `_disclosure_icon` chevron (state per board and
+  column in localStorage); without the peer registered they stay open.
+- **Gantt**: at least three weeks drawn (`TaskGanttBuilder::MIN_RANGE_DAYS`), localised weekday initials and month
+  names, one-line titles with the status, the task title beside its bar, a toolbar with the legend, and the chart opens
+  scrolled to today.
+
+### Changed
+
+- The add / edit column dialogs are native `<dialog>` elements styled by `task-board.css` (top layer, Escape and the
+  focus trap from the browser); the column-set dialogs get the same styles, so a host CSS reset no longer misplaces
+  them. The legacy `.modal` markup still works with the controllers.
+- Board toolbar in one quiet row (hint and column-set buttons), card titles at reading size (three lines at most), a
+  neutral status pill for columns without a colour.
 
 ## [1.12.0] - 2026-10-28
 

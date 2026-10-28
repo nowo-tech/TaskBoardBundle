@@ -6,7 +6,7 @@ type GanttLink = { from: string; to: string };
  * Draws dependency arrows over the Gantt chart.
  */
 export default class GanttController extends Controller<HTMLElement> {
-    static targets = ['grid', 'svg', 'row', 'bar'];
+    static targets = ['grid', 'svg', 'row', 'bar', 'today'];
 
     static values = {
         links: { type: Array, default: [] },
@@ -29,9 +29,24 @@ export default class GanttController extends Controller<HTMLElement> {
         this.drawLinks();
     };
 
+    declare readonly hasTodayTarget: boolean;
+
+    declare readonly todayTarget: HTMLElement;
+
     connect(): void {
         this.drawLinks();
         window.addEventListener('resize', this.onResize);
+        this.scrollToToday();
+    }
+
+    /** Since 1.13: the chart opens with today in view (a few days of context on its left). */
+    private scrollToToday(): void {
+        const viewport = this.element.querySelector<HTMLElement>('.nowo-task-gantt__viewport');
+        if (!this.hasTodayTarget || viewport === null) {
+            return;
+        }
+        const label = this.element.querySelector<HTMLElement>('.nowo-task-gantt__corner')?.offsetWidth ?? 0;
+        viewport.scrollLeft = Math.max(0, this.todayTarget.offsetLeft - label - 3 * this.todayTarget.offsetWidth);
     }
 
     disconnect(): void {

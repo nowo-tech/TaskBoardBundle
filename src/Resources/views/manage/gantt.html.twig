@@ -29,20 +29,18 @@
     }) }}
 
     <div
-        class="card nowo-task-gantt"
+        class="nowo-task-gantt"
         data-controller="nowo-task-board-gantt"
         data-nowo-task-board-gantt-links-value="{{ timeline.links|map(l => {from: l.fromId, to: l.toId})|json_encode|e('html_attr') }}"
         data-nowo-task-board-gantt-day-count-value="{{ timeline.dayKeys|length }}"
     >
-        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div>
-                <h2 class="card-title mb-0">{{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-                <div class="text-secondary small">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</div>
-            </div>
-            <div class="d-flex flex-wrap gap-2 small text-secondary">
-                <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar-event'}) }}{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</span>
-            </div>
+        {# Since 1.13: one toolbar (what the chart shows and its legend) on the bundle's own classes. #}
+        <div class="nowo-task-gantt__toolbar">
+            <p class="nowo-task-gantt__subtitle">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            <ul class="nowo-task-gantt__legend">
+                <li>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                <li><span class="nowo-task-gantt__legend-today" aria-hidden="true"></span>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</li>
+            </ul>
         </div>
 
         <div class="nowo-task-gantt__viewport">
@@ -53,12 +51,18 @@
             >
                 <div class="nowo-task-gantt__corner">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</div>
                 <div class="nowo-task-gantt__timeline-head">
+                    {# Since 1.13: localised weekday initials and month names (comma lists in the catalogue). #}
+                    {% set _weekdays = 'task_board.gantt.weekday_initials'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
+                    {% set _months = 'task_board.gantt.month_names'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
                     {% for day in timeline.dayKeys %}
                         {% set isToday = day == timeline.today %}
                         {% set isWeekend = day|date('N') in ['6', '7'] %}
-                        <div class="nowo-task-gantt__day{% if isToday %} is-today{% endif %}{% if isWeekend %} is-weekend{% endif %}">
-                            <span class="nowo-task-gantt__day-label">{{ day|date('d') }}</span>
-                            <span class="nowo-task-gantt__month-label">{{ day|date('M') }}</span>
+                        {# The month shows on the first column and on the 1st of each month. #}
+                        {% set showMonth = loop.first or day|date('d') == '01' %}
+                        <div class="nowo-task-gantt__day{% if isToday %} is-today{% endif %}{% if isWeekend %} is-weekend{% endif %}{% if showMonth %} is-month-start{% endif %}"{% if isToday %} data-nowo-task-board-gantt-target="today"{% endif %}>
+                            <span class="nowo-task-gantt__month-label">{{ showMonth ? (_months|length == 12 ? _months[day|date('n') - 1] : day|date('M')) : '' }}</span>
+                            <span class="nowo-task-gantt__weekday">{{ _weekdays|length == 7 ? _weekdays[day|date('N') - 1] : day|date('D')|slice(0, 1) }}</span>
+                            <span class="nowo-task-gantt__day-label">{{ day|date('j') }}</span>
                         </div>
                     {% endfor %}
                 </div>
@@ -70,9 +74,9 @@
                         data-nowo-task-vars="{{ {'--nowo-task-depth': item.depth}|json_encode }}"
                         data-task-id="{{ item.id }}"
                     >
-                        <a href="{{ path(nowo_task_board_route('task'), {taskId: item.id}) }}" class="text-reset">{{ item.title }}</a>
+                        <a href="{{ path(nowo_task_board_route('task'), {taskId: item.id}) }}" class="nowo-task-gantt__title" title="{{ item.title }}">{{ item.title }}</a>
                         {% if item.columnName %}
-                            <span class="badge bg-secondary-lt ms-1">{{ item.columnName }}</span>
+                            <span class="nowo-task-gantt__status" title="{{ item.columnName }}">{{ item.columnName }}</span>
                         {% endif %}
                     </div>
                     <div class="nowo-task-gantt__track-row" data-nowo-task-board-gantt-target="row" data-task-id="{{ item.id }}">

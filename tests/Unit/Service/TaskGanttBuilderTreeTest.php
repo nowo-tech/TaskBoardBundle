@@ -32,7 +32,7 @@ final class TaskGanttBuilderTreeTest extends TestCase
 
         $timeline = (new TaskGanttBuilder())->build([$task]);
 
-        self::assertCount(5, $timeline->dayKeys);
+        self::assertCount(TaskGanttBuilder::MIN_RANGE_DAYS, $timeline->dayKeys, 'short plans are drawn over at least three weeks');
         self::assertSame(2, $timeline->items[0]->startIndex);
     }
 

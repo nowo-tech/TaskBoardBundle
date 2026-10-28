@@ -185,6 +185,7 @@ task_board.flash.member_not_assignable: "Este usuario no puede añadirse a las t
 task_board.board.subtasks_count: '%done% de %total% subtareas hechas'
 task_board.form.column.icon: "Icono"
 task_board.form.column.no_icon: "Sin icono"
+task_board.form.column.custom_color: 'Color personalizado'
 task_board.form.board.column_set: "Columnas"
 task_board.form.board.default_columns: "Columnas por defecto"
 task_board.form.column_set.name: "Nombre del conjunto"
@@ -208,3 +209,5 @@ task_board.column_set.apply_action: "Añadir columnas"
 task_board.column_set.delete_confirm: "¿Eliminar el conjunto de columnas «%name%»? Los tableros conservan sus columnas."
 task_board.column_set.delete_named: "Eliminar el conjunto de columnas %name%"
 task_board.task.open_page: "Abrir la página de la tarea"
+task_board.gantt.weekday_initials: 'L,M,X,J,V,S,D'
+task_board.gantt.month_names: 'ene,feb,mar,abr,may,jun,jul,ago,sep,oct,nov,dic'

@@ -1,0 +1,58 @@
+{#
+    Since 1.13: the fields of the add / edit column dialogs (ClickUp-like): the name, a colour palette with a custom
+    colour, and the icons as a grid (board.column_icons). The swatches and icon buttons fill the real form fields
+    through the nowo-task-board-picker controller, so the form posts as before.
+    Variables: form (BoardColumnFormType view), controller (the dialog controller's identifier, for its targets),
+    defaultColor (optional: the colour picked when the field is empty, the add dialog).
+#}
+{% set _target = 'data-' ~ controller ~ '-target' %}
+{% set _palette = ['#64748b', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6'] %}
+<div class="nowo-task-field">
+    {{ form_label(form.name) }}
+    {{ form_widget(form.name, {attr: {(_target): 'nameInput', class: 'form-control'}}) }}
+    {{ form_errors(form.name) }}
+</div>
+
+<div class="nowo-task-field nowo-task-picker" data-controller="nowo-task-board-picker"{% if defaultColor|default(null) %} data-nowo-task-board-picker-default-value="{{ defaultColor }}"{% endif %}>
+    {{ form_label(form.color) }}
+    <div class="nowo-task-picker__swatches" role="group" aria-label="{{ 'task_board.form.column.color'|trans({}, 'NowoTaskBoardBundle') }}">
+        {% for colour in _palette %}
+            <button
+                type="button"
+                class="nowo-task-picker__swatch"
+                data-value="{{ colour }}"
+                data-action="nowo-task-board-picker#pick"
+                data-nowo-task-board-picker-target="option"
+                data-nowo-task-vars="{{ {'--nowo-task-swatch': colour}|json_encode }}"
+                aria-pressed="false"
+                title="{{ colour }}"
+            ><span class="nowo-task-sr-only">{{ colour }}</span></button>
+        {% endfor %}
+        {{ form_widget(form.color, {attr: {
+            (_target): 'colorInput',
+            class: 'nowo-task-picker__custom',
+            title: 'task_board.form.column.custom_color'|trans({}, 'NowoTaskBoardBundle'),
+            'aria-label': 'task_board.form.column.custom_color'|trans({}, 'NowoTaskBoardBundle'),
+            'data-nowo-task-board-picker-target': 'input',
+        }}) }}
+    </div>
+    {{ form_errors(form.color) }}
+</div>
+
+{% if form.icon is defined %}
+    <div class="nowo-task-field nowo-task-picker nowo-task-picker--icons" data-controller="nowo-task-board-picker">
+        {{ form_label(form.icon) }}
+        <div hidden>{{ form_widget(form.icon, {attr: {(_target): 'iconInput', 'data-nowo-task-board-picker-target': 'input'}}) }}</div>
+        <div class="nowo-task-picker__icons" role="group" aria-label="{{ 'task_board.form.column.icon'|trans({}, 'NowoTaskBoardBundle') }}">
+            <button type="button" class="nowo-task-picker__icon nowo-task-picker__icon--none" data-value="" data-action="nowo-task-board-picker#pick" data-nowo-task-board-picker-target="option" aria-pressed="false" title="{{ 'task_board.form.column.no_icon'|trans({}, 'NowoTaskBoardBundle') }}">
+                <span aria-hidden="true">—</span><span class="nowo-task-sr-only">{{ 'task_board.form.column.no_icon'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            </button>
+            {% for choice in form.icon.vars.choices %}
+                <button type="button" class="nowo-task-picker__icon" data-value="{{ choice.value }}" data-action="nowo-task-board-picker#pick" data-nowo-task-board-picker-target="option" aria-pressed="false" title="{{ choice.label }}">
+                    {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: choice.value}) }}<span class="nowo-task-sr-only">{{ choice.label }}</span>
+                </button>
+            {% endfor %}
+        </div>
+        {{ form_errors(form.icon) }}
+    </div>
+{% endif %}

@@ -23,7 +23,7 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
 
     declare deleteUrlTemplateValue: string;
 
-    declare readonly modalTarget: HTMLElement;
+    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
 
     declare readonly backdropTarget: HTMLElement;
 
@@ -58,10 +58,13 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
 
         if (this.hasColorInputTarget) {
             this.colorInputTarget.value = columnColor !== '' ? columnColor : '#206bc4';
+            this.colorInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         if (this.hasIconInputTarget) {
             this.iconInputTarget.value = trigger.dataset.columnIcon ?? '';
+            // The icon grid (picker controller) follows the field.
+            this.iconInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         if (this.hasDeleteFormTarget && this.deleteUrlTemplateValue !== '') {
@@ -97,6 +100,12 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
         }
     }
 
+    private closeOnDialogBackdrop = (event: MouseEvent): void => {
+        if (event.target === this.modalTarget) {
+            this.close();
+        }
+    };
+
     closeOnEscape = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
             this.close();
@@ -104,6 +113,15 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
     };
 
     private showModal(): void {
+        // Since 1.13 the dialogs are native <dialog> elements (top layer, Escape and the focus trap from the browser).
+        if (this.modalTarget instanceof HTMLDialogElement) {
+            if (!this.modalTarget.open) {
+                this.modalTarget.addEventListener('click', this.closeOnDialogBackdrop);
+                this.modalTarget.showModal();
+            }
+
+            return;
+        }
         this.modalTarget.classList.add('show');
         this.modalTarget.style.display = 'block';
         this.modalTarget.removeAttribute('aria-hidden');
@@ -118,6 +136,12 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
     }
 
     private hideModal(): void {
+        if (this.modalTarget instanceof HTMLDialogElement) {
+            this.modalTarget.removeEventListener('click', this.closeOnDialogBackdrop);
+            this.modalTarget.close();
+
+            return;
+        }
         this.modalTarget.classList.remove('show');
         this.modalTarget.style.display = 'none';
         this.modalTarget.setAttribute('aria-hidden', 'true');

@@ -185,6 +185,7 @@ task_board.flash.member_not_assignable: "Cet utilisateur ne peut pas être ajout
 task_board.board.subtasks_count: '%done% sur %total% sous-tâches terminées'
 task_board.form.column.icon: "Icône"
 task_board.form.column.no_icon: "Aucune icône"
+task_board.form.column.custom_color: 'Couleur personnalisée'
 task_board.form.board.column_set: "Colonnes"
 task_board.form.board.default_columns: "Colonnes par défaut"
 task_board.form.column_set.name: "Nom de l’ensemble"
@@ -208,3 +209,5 @@ task_board.column_set.apply_action: "Ajouter les colonnes"
 task_board.column_set.delete_confirm: "Supprimer l’ensemble de colonnes « %name% » ? Les tableaux gardent leurs colonnes."
 task_board.column_set.delete_named: "Supprimer l’ensemble de colonnes %name%"
 task_board.task.open_page: "Ouvrir la page de la tâche"
+task_board.gantt.weekday_initials: 'L,M,M,J,V,S,D'
+task_board.gantt.month_names: 'janv,févr,mars,avr,mai,juin,juil,août,sept,oct,nov,déc'

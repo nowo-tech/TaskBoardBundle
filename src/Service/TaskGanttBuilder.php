@@ -21,6 +21,8 @@ final readonly class TaskGanttBuilder
     private const MINUTES_PER_DAY    = 480;
     private const RANGE_PADDING_DAYS = 2;
     private const EMPTY_RANGE_DAYS   = 14;
+    /** Since 1.13: at least three weeks are drawn, so short plans do not squeeze into a few columns. */
+    public const MIN_RANGE_DAYS = 21;
 
     /**
      * @param list<Task> $tasks
@@ -91,6 +93,10 @@ final readonly class TaskGanttBuilder
         $padding    = new DateInterval('P' . self::RANGE_PADDING_DAYS . 'D');
         $rangeStart = $minDay->sub($padding);
         $rangeEnd   = $maxDay->add($padding);
+        $minEnd     = $rangeStart->modify('+' . (self::MIN_RANGE_DAYS - 1) . ' days');
+        if ($rangeEnd < $minEnd) {
+            $rangeEnd = $minEnd;
+        }
         $dayKeys    = $this->dayKeysBetween($rangeStart, $rangeEnd);
         $indexByDay = array_flip($dayKeys);
 

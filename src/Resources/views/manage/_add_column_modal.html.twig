@@ -1,45 +1,36 @@
-<div
-    class="modal modal-blur fade"
+{#
+    Add column dialog (since 1.13 a native <dialog>, styled by task-board.css: no CSS framework modal needed): name,
+    colour palette and icon grid (_column_fields.html.twig).
+#}
+<dialog
+    class="nowo-task-dialog nowo-task-dialog--native"
     data-nowo-task-board-add-column-modal-target="modal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
     aria-labelledby="nowo-task-board-add-column-modal-title"
 >
-    <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="nowo-task-board-add-column-modal-title">
-                    {{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}
-                </h5>
-                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-column-modal#close"></button>
-            </div>
-            {{ form_start(columnForm, {
-                action: path(nowo_task_board_route('column_create'), {boardId: board.id}),
-                method: 'POST',
-            }) }}
-                <div class="modal-body">
-                    {{ form_row(columnForm.name, {attr: {'data-nowo-task-board-add-column-modal-target': 'nameInput'}}) }}
-                    {% for child in columnForm %}
-                        {% if not child.rendered %}
-                            {{ form_row(child) }}
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-column-modal#close">
-                        {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-columns'}) }}{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                </div>
-            {{ form_end(columnForm) }}
-        </div>
+    <div class="nowo-task-dialog__header">
+        <h2 class="nowo-task-dialog__title" id="nowo-task-board-add-column-modal-title">{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-column-modal#close">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+        </button>
     </div>
-</div>
-<div
-    class="modal-backdrop fade"
-    data-nowo-task-board-add-column-modal-target="backdrop"
-    data-action="click->nowo-task-board-add-column-modal#closeOnBackdrop"
-></div>
+    {{ form_start(columnForm, {
+        action: path(nowo_task_board_route('column_create'), {boardId: board.id}),
+        method: 'POST',
+        attr: {class: 'nowo-task-dialog__body'},
+    }) }}
+        {{ include('@NowoTaskBoardBundle/manage/_column_fields.html.twig', {form: columnForm, controller: 'nowo-task-board-add-column-modal', defaultColor: '#64748b'}) }}
+        {% for child in columnForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <div class="nowo-task-dialog__actions">
+            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-column-modal#close">
+                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+            <button type="submit" class="btn btn-primary">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-columns'}) }}{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        </div>
+    {{ form_end(columnForm) }}
+</dialog>

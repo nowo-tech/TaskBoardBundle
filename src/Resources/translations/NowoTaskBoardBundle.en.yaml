@@ -185,6 +185,7 @@ task_board.flash.member_not_assignable: "This user cannot be added to the tasks 
 task_board.board.subtasks_count: '%done% of %total% subtasks done'
 task_board.form.column.icon: "Icon"
 task_board.form.column.no_icon: "No icon"
+task_board.form.column.custom_color: 'Custom colour'
 task_board.form.board.column_set: "Columns"
 task_board.form.board.default_columns: "Default columns"
 task_board.form.column_set.name: "Set name"
@@ -208,3 +209,5 @@ task_board.column_set.apply_action: "Add columns"
 task_board.column_set.delete_confirm: "Delete the column set \"%name%\"? Boards keep their columns."
 task_board.column_set.delete_named: "Delete the column set %name%"
 task_board.task.open_page: "Open task page"
+task_board.gantt.weekday_initials: 'M,T,W,T,F,S,S'
+task_board.gantt.month_names: 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec'

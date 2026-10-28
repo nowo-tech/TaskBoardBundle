@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.13.0](#to-1130)
 - [To 1.12.0](#to-1120)
 - [To 1.11.1](#to-1111)
 - [To 1.11.0](#to-1110)
@@ -86,6 +87,15 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.13.0
+
+From **1.12.x**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change.
+
+- Overrides of `_add_column_modal.html.twig` / `_edit_column_modal.html.twig` that copied the Bootstrap `.modal`
+  markup keep working; the new dialogs are `<dialog class="nowo-task-dialog nowo-task-dialog--native">`.
+- For foldable list groups, register UiKit's `collapse-panel` and `disclosure-icon` Stimulus peers in the host app.
+- `ux_icon` hosts import one more icon: `tabler:x`.
 
 ## To 1.12.0
 

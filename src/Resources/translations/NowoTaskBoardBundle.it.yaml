@@ -185,6 +185,7 @@ task_board.flash.member_not_assignable: "Questo utente non può essere aggiunto 
 task_board.board.subtasks_count: '%done% di %total% sottoattività completate'
 task_board.form.column.icon: "Icona"
 task_board.form.column.no_icon: "Nessuna icona"
+task_board.form.column.custom_color: 'Colore personalizzato'
 task_board.form.board.column_set: "Colonne"
 task_board.form.board.default_columns: "Colonne predefinite"
 task_board.form.column_set.name: "Nome del set"
@@ -208,3 +209,5 @@ task_board.column_set.apply_action: "Aggiungi colonne"
 task_board.column_set.delete_confirm: "Eliminare il set di colonne «%name%»? Le bacheche mantengono le loro colonne."
 task_board.column_set.delete_named: "Elimina il set di colonne %name%"
 task_board.task.open_page: "Apri la pagina dell’attività"
+task_board.gantt.weekday_initials: 'L,M,M,G,V,S,D'
+task_board.gantt.month_names: 'gen,feb,mar,apr,mag,giu,lug,ago,set,ott,nov,dic'

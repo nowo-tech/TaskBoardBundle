@@ -1633,17 +1633,33 @@ details.nowo-task-section[open] > summary,
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    width: 100%;
     padding: 0.6rem 1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
     cursor: pointer;
-    list-style: none;
 }
 
-.nowo-task-list__group-header::-webkit-details-marker {
-    display: none;
+.nowo-task-list__group-header:hover {
+    background: var(--nowo-task-hover, var(--tblr-active-bg, #f1f5f9));
 }
 
-.nowo-task-list__group:not([open]) .nowo-task-list__group-caret {
-    transform: rotate(-90deg);
+.nowo-task-list__group-header:focus-visible {
+    outline: 2px solid var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    outline-offset: -2px;
+}
+
+.nowo-task-list__group-caret {
+    display: inline-flex;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+.nowo-task-list__group.is-collapsed .nowo-task-list__group-header {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
 }
 
 .nowo-task-list__group-name {
@@ -1739,6 +1755,446 @@ details.nowo-task-section[open] > summary,
 @media (max-width: 640px) {
     .nowo-task-list__table th:nth-child(n + 4),
     .nowo-task-list__table td:nth-child(n + 4) {
+        display: none;
+    }
+}
+
+/*
+ * Since 1.13 — native dialogs (add / edit column, column sets), the colour palette and the icon grid. A host's
+ * CSS reset (e.g. Tailwind preflight) cannot move them: position, size and colours are set here from the tokens.
+ */
+dialog.nowo-task-dialog--native {
+    position: fixed;
+    inset: 0;
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.3);
+}
+
+dialog.nowo-task-dialog--native:not([open]) {
+    display: none;
+}
+
+dialog.nowo-task-dialog--native::backdrop {
+    background: rgb(15 23 42 / 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.nowo-task-dialog--native .nowo-task-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem 0.5rem;
+}
+
+.nowo-task-dialog--native .nowo-task-dialog__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+}
+
+.nowo-task-dialog__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 4px));
+    background: transparent;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    cursor: pointer;
+}
+
+.nowo-task-dialog__close:hover,
+.nowo-task-dialog__close:focus-visible {
+    background: var(--nowo-task-hover, var(--tblr-active-bg, #f1f5f9));
+    color: inherit;
+}
+
+.nowo-task-dialog--native .nowo-task-dialog__body {
+    display: grid;
+    gap: 1rem;
+    padding: 0.5rem 1.25rem 1.25rem;
+}
+
+.nowo-task-dialog--native .nowo-task-dialog__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.nowo-task-dialog__help {
+    margin: 0;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.875rem;
+}
+
+.nowo-task-dialog__danger {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    background: var(--nowo-task-danger-soft, var(--tblr-red-lt, #fbebeb));
+}
+
+.nowo-task-dialog__danger-help {
+    flex: 1 1 14rem;
+    margin: 0;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-btn-danger {
+    color: var(--nowo-task-danger, var(--tblr-red, #d63939));
+    border-color: var(--nowo-task-danger, var(--tblr-red, #d63939));
+}
+
+.nowo-task-field {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.nowo-task-field > label {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.nowo-task-picker__swatches,
+.nowo-task-picker__icons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.nowo-task-picker__swatch {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--nowo-task-swatch);
+    box-shadow: inset 0 0 0 2px var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    cursor: pointer;
+}
+
+.nowo-task-picker__swatch[aria-pressed='true'],
+.nowo-task-picker__swatch:focus-visible {
+    border-color: var(--nowo-task-swatch);
+    outline: none;
+}
+
+.nowo-task-picker__custom {
+    width: 2.25rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 4px));
+    background: transparent;
+    cursor: pointer;
+}
+
+.nowo-task-picker__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 4px));
+    background: transparent;
+    color: inherit;
+    font-size: 1.05rem;
+    cursor: pointer;
+}
+
+.nowo-task-picker__icon:hover {
+    background: var(--nowo-task-hover, var(--tblr-active-bg, #f1f5f9));
+}
+
+.nowo-task-picker__icon[aria-pressed='true'] {
+    border-color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    background: var(--nowo-task-accent-soft, var(--tblr-primary-lt, #eff6ff));
+    color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-picker__icon .nowo-task-column__icon {
+    margin: 0;
+}
+
+.nowo-task-column-sets__list {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nowo-task-column-sets__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+}
+
+.nowo-task-column-sets__info {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.nowo-task-column-sets__name {
+    font-weight: 600;
+}
+
+.nowo-task-column-sets__columns {
+    overflow: hidden;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Since 1.13 — Gantt: toolbar and legend, readable day headers, one-line titles, labels beside short bars. */
+.nowo-task-gantt {
+    --gantt-day-width: 2.5rem;
+    --gantt-label-width: 18rem;
+
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    overflow: hidden;
+}
+
+.nowo-task-gantt__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+}
+
+.nowo-task-gantt__subtitle {
+    margin: 0;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.875rem;
+}
+
+.nowo-task-gantt__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nowo-task-gantt__legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: 999px;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.75rem;
+}
+
+.nowo-task-gantt__legend-today {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--nowo-task-accent, var(--tblr-primary, #206bc4)) 35%, transparent);
+}
+
+.nowo-task-gantt__grid {
+    grid-template-columns: var(--gantt-label-width) max-content;
+}
+
+.nowo-task-gantt__day,
+.nowo-task-gantt__cell {
+    border-right-color: color-mix(in srgb, var(--nowo-task-border, var(--tblr-border-color, #e6e7e9)) 60%, transparent);
+}
+
+.nowo-task-gantt__day {
+    gap: 0.05rem;
+    padding: 0.3rem 0;
+}
+
+.nowo-task-gantt__day.is-month-start {
+    border-left: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+}
+
+.nowo-task-gantt__month-label {
+    min-height: 0.7rem;
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.nowo-task-gantt__weekday {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+}
+
+.nowo-task-gantt__day-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.nowo-task-gantt__day.is-today,
+.nowo-task-gantt__cell.is-today {
+    background: color-mix(in srgb, var(--nowo-task-accent, var(--tblr-primary, #206bc4)) 14%, transparent);
+}
+
+.nowo-task-gantt__day.is-today .nowo-task-gantt__day-label {
+    color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-gantt__day.is-weekend,
+.nowo-task-gantt__cell.is-weekend {
+    background: color-mix(in srgb, var(--nowo-task-muted, var(--tblr-secondary, #626976)) 7%, transparent);
+}
+
+.nowo-task-gantt__label-cell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline-start: calc(0.75rem + var(--nowo-task-depth, 0) * 1rem);
+    white-space: nowrap;
+}
+
+.nowo-task-gantt__title {
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    font-weight: 500;
+    text-decoration: none;
+    text-overflow: ellipsis;
+}
+
+.nowo-task-gantt__title:hover {
+    text-decoration: underline;
+}
+
+.nowo-task-gantt__label-cell.is-completed .nowo-task-gantt__title {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    text-decoration: line-through;
+}
+
+.nowo-task-gantt__status {
+    max-width: 6.5rem;
+    overflow: hidden;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+}
+
+.nowo-task-gantt__bar {
+    overflow: visible;
+    cursor: pointer;
+}
+
+/* The title rides after the bar (ClickUp-like), readable whatever the bar's length. */
+.nowo-task-gantt__bar-label {
+    position: absolute;
+    inset: 50% auto auto calc(100% + 0.45rem);
+    display: block;
+    padding: 0;
+    max-width: 16rem;
+    overflow: hidden;
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+@media (max-width: 640px) {
+    .nowo-task-gantt {
+        --gantt-label-width: 10rem;
+        --gantt-day-width: 2.25rem;
+    }
+
+    .nowo-task-gantt__status {
+        display: none;
+    }
+}
+
+/* Since 1.13 — board toolbar in one quiet row, readable card titles, neutral status pill without a column colour. */
+.nowo-task-board__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.nowo-task-board__hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-column-sets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.nowo-task-card__title,
+.nowo-task-board__task-title.nowo-task-card__title {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+}
+
+.nowo-task-detail__status-current:not(.nowo-task-detail__status-current--colored) {
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+}
+
+@media (max-width: 640px) {
+    .nowo-task-board__hint {
         display: none;
     }
 }

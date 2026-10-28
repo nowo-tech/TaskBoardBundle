@@ -422,7 +422,7 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
 calendar-event, check, chevron-down, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
 columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
-line-dashed, link, list, list-tree, notes, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus, users.
+line-dashed, link, list, list-tree, notes, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus, users, x.
 
 ### Inline new task
 

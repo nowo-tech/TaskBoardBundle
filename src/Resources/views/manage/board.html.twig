@@ -43,7 +43,7 @@
     >
         <div class="nowo-task-board__toolbar">
             {% if (canEditBoard ?? true) %}
-            <p class="nowo-task-board__hint text-secondary small mb-0">
+            <p class="nowo-task-board__hint">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrows-sort'}) }} {{ 'task_board.board.reorder_hint'|trans({}, 'NowoTaskBoardBundle') }}
             </p>
             {# Since 1.11: column sets (save this board's columns, add the columns of a set). #}

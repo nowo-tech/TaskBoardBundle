@@ -55,10 +55,22 @@
         {% endif %}
         {% for group in _groups %}
             {% set _color = group.column ? group.column.color|nowo_task_board_safe_color : null %}
-            <details class="nowo-task-list__group{{ _color ? ' nowo-task-list__group--colored' : '' }}" open
+            {#
+                Since 1.13 the groups fold with UiKit's collapse-panel peer (state per board and column in localStorage,
+                the disclosure chevron of the host's icon set); without the peer registered they stay open.
+            #}
+            <section class="nowo-task-list__group{{ _color ? ' nowo-task-list__group--colored' : '' }}"
+                data-controller="collapse-panel"
+                data-collapse-panel-id-value="{{ board.id }}-{{ group.column ? group.column.id : 'none' }}"
+                data-collapse-panel-storage-key-value="nowo-task-board.list-groups"
                 {% if _color %}data-nowo-task-vars="{{ {'--nowo-task-column-color': _color}|json_encode }}"{% endif %}>
-                <summary class="nowo-task-list__group-header">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-down', class: 'nowo-task-list__group-caret'}) }}
+                <button type="button" class="nowo-task-list__group-header" data-collapse-panel-target="button" data-action="collapse-panel#toggle" data-controller="disclosure-icon" aria-expanded="true">
+                    {% set _set = nowo_ui_kit_icon_set|default('tabler-icons') %}
+                    {{ include('@NowoUiKitBundle/partials/_disclosure_icon.html.twig', {
+                        class: 'nowo-task-list__group-caret',
+                        morph: true,
+                        icons: _set == 'ux_icon' ? {open: 'tabler:chevron-down', closed: 'tabler:chevron-right'} : {},
+                    }, false, true) }}
                     <span class="nowo-task-list__group-name">
                         {% if group.column %}
                             {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: group.column.icon}) }}{{ group.column.name }}
@@ -67,7 +79,8 @@
                         {% endif %}
                     </span>
                     <span class="nowo-task-list__group-count">{{ group.tasks|length }}</span>
-                </summary>
+                </button>
+                <div class="nowo-task-list__group-body" data-collapse-panel-target="body">
                 <div class="nowo-task-list__table-wrap">
                     <table class="nowo-task-list__table">
                         <thead>
@@ -127,7 +140,8 @@
                 {% if group.column and (canEditBoard ?? false) and inlineTaskForms[group.column.id] is defined %}
                     {{ include('@NowoTaskBoardBundle/manage/_inline_task_add.html.twig', {form: inlineTaskForms[group.column.id]}) }}
                 {% endif %}
-            </details>
+                </div>
+            </section>
         {% else %}
             <p class="nowo-task-list__empty">{{ 'task_board.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
         {% endfor %}

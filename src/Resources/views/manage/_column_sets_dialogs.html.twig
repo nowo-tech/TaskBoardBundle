@@ -14,11 +14,11 @@
 
     <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="save" aria-labelledby="nowo-task-column-set-save-title">
         <div class="nowo-task-dialog__header">
-            <h2 class="nowo-task-dialog__title h5" id="nowo-task-column-set-save-title">{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-            <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close"></button>
+            <h2 class="nowo-task-dialog__title" id="nowo-task-column-set-save-title">{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
         </div>
         {{ form_start(columnSetForm, {action: path(nowo_task_board_route('column_set_create'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
-            <p class="text-secondary small">{{ 'task_board.column_set.save_help'|trans({'%count%': board.columns|length}, 'NowoTaskBoardBundle') }}</p>
+            <p class="nowo-task-dialog__help">{{ 'task_board.column_set.save_help'|trans({'%count%': board.columns|length}, 'NowoTaskBoardBundle') }}</p>
             {% for child in columnSetForm %}
                 {% if not child.rendered %}
                     {{ form_row(child) }}
@@ -33,15 +33,15 @@
 
     <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="apply" aria-labelledby="nowo-task-column-set-apply-title">
         <div class="nowo-task-dialog__header">
-            <h2 class="nowo-task-dialog__title h5" id="nowo-task-column-set-apply-title">{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-            <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close"></button>
+            <h2 class="nowo-task-dialog__title" id="nowo-task-column-set-apply-title">{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
         </div>
         <div class="nowo-task-dialog__body">
             {% if columnSets is empty %}
-                <p class="nowo-task-column-sets__empty text-secondary mb-0">{{ 'task_board.column_set.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                <p class="nowo-task-column-sets__empty nowo-task-dialog__help">{{ 'task_board.column_set.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
             {% else %}
                 {{ form_start(columnSetApplyForm, {action: path(nowo_task_board_route('column_set_apply'), {boardId: board.id}), method: 'POST'}) }}
-                    <p class="text-secondary small">{{ 'task_board.column_set.apply_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                    <p class="nowo-task-dialog__help">{{ 'task_board.column_set.apply_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
                     {% for child in columnSetApplyForm %}
                         {% if not child.rendered %}
                             {{ form_row(child) }}
@@ -52,12 +52,12 @@
                     </div>
                 {{ form_end(columnSetApplyForm) }}
 
-                <ul class="nowo-task-column-sets__list list-unstyled mt-3 mb-0">
+                <ul class="nowo-task-column-sets__list">
                     {% for set in columnSets %}
                         <li class="nowo-task-column-sets__item" data-column-set-id="{{ set.id }}">
                             <div class="nowo-task-column-sets__info">
-                                <span class="nowo-task-column-sets__name fw-semibold">{{ set.name }}</span>
-                                <span class="nowo-task-column-sets__columns text-secondary small">{{ set.items|map(item => item.name)|join(', ') }}</span>
+                                <span class="nowo-task-column-sets__name">{{ set.name }}</span>
+                                <span class="nowo-task-column-sets__columns">{{ set.items|map(item => item.name)|join(', ') }}</span>
                             </div>
                             {% set deleteForm = columnSetDeleteForms[set.id] ?? null %}
                             {% if deleteForm is not null %}

@@ -6,7 +6,7 @@ import { Controller } from '@hotwired/stimulus';
 export default class AddColumnModalController extends Controller<HTMLElement> {
     static targets = ['modal', 'backdrop', 'nameInput'];
 
-    declare readonly modalTarget: HTMLElement;
+    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
 
     declare readonly backdropTarget: HTMLElement;
 
@@ -34,6 +34,12 @@ export default class AddColumnModalController extends Controller<HTMLElement> {
         }
     }
 
+    private closeOnDialogBackdrop = (event: MouseEvent): void => {
+        if (event.target === this.modalTarget) {
+            this.close();
+        }
+    };
+
     closeOnEscape = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
             this.close();
@@ -41,6 +47,15 @@ export default class AddColumnModalController extends Controller<HTMLElement> {
     };
 
     private showModal(): void {
+        // Since 1.13 the dialogs are native <dialog> elements (top layer, Escape and the focus trap from the browser).
+        if (this.modalTarget instanceof HTMLDialogElement) {
+            if (!this.modalTarget.open) {
+                this.modalTarget.addEventListener('click', this.closeOnDialogBackdrop);
+                this.modalTarget.showModal();
+            }
+
+            return;
+        }
         this.modalTarget.classList.add('show');
         this.modalTarget.style.display = 'block';
         this.modalTarget.removeAttribute('aria-hidden');
@@ -55,6 +70,12 @@ export default class AddColumnModalController extends Controller<HTMLElement> {
     }
 
     private hideModal(): void {
+        if (this.modalTarget instanceof HTMLDialogElement) {
+            this.modalTarget.removeEventListener('click', this.closeOnDialogBackdrop);
+            this.modalTarget.close();
+
+            return;
+        }
         this.modalTarget.classList.remove('show');
         this.modalTarget.style.display = 'none';
         this.modalTarget.setAttribute('aria-hidden', 'true');
