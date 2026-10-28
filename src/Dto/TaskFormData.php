@@ -21,6 +21,8 @@ final class TaskFormData
         public ?DateTimeImmutable $dueAt = null,
         /** @var list<string> */
         public array $tags = [],
+        // Since 1.14: the task's colour (#rrggbb) or null.
+        public ?string $color = null,
     ) {
     }
 }

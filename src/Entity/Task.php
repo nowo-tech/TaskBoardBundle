@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
 use function in_array;
+use function strtolower;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_tasks')]
@@ -36,6 +37,10 @@ class Task
 
     #[ORM\Column(name: 'total_time_seconds', type: 'integer')]
     private int $totalTimeSeconds = 0;
+
+    /** Since 1.14: the task's own colour (#rrggbb), e.g. its Gantt bar; null keeps the priority colours. */
+    #[ORM\Column(type: 'string', length: 7, nullable: true)]
+    private ?string $color = null;
 
     /** @var Collection<int, TaskChangeHistory> */
     #[ORM\OneToMany(targetEntity: TaskChangeHistory::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -232,6 +237,21 @@ class Task
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->dueAt = $dueAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function getColor(): ?string
+    {
+        return $this->color;
+    }
+
+    public function setColor(?string $color): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->color = $color !== null && $color !== '' ? strtolower($color) : null;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 

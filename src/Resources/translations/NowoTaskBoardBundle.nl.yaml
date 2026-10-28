@@ -214,3 +214,7 @@ task_board.column_set.delete_named: "Kolommenset %name% verwijderen"
 task_board.task.open_page: "Taakpagina openen"
 task_board.gantt.weekday_initials: 'M,D,W,D,V,Z,Z'
 task_board.gantt.month_names: 'jan,feb,mrt,apr,mei,jun,jul,aug,sep,okt,nov,dec'
+task_board.form.task.color: "Kleur"
+task_board.form.task.custom_color: "Eigen kleur"
+task_board.form.task.no_color: "Geen kleur"
+task_board.history.type.color: "heeft de kleur gewijzigd"

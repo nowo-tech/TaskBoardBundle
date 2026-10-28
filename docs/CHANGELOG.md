@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.14.0] - 2026-10-28](#1140---2026-10-28)
 - [[1.13.1] - 2026-10-28](#1131---2026-10-28)
 - [[1.13.0] - 2026-10-28](#1130---2026-10-28)
 - [[1.12.0] - 2026-10-28](#1120---2026-10-28)
@@ -48,6 +49,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.14.0] - 2026-10-28
+
+Task colour and the last Bootstrap modals as native dialogs. **Schema change**: one nullable column (see UPGRADING).
+
+### Added
+
+- **Task colour**: `Task::$color` (`#rrggbb` or null, column `task_board_tasks.color`), chosen in the task detail
+  ("Colour" row) and in the *Add task* dialog with the column dialogs' palette, a custom colour and *No colour*. The
+  Gantt bar of a coloured task takes its colour (border and a tinted background, `--nowo-task-bar-color`); without one
+  the priority colours stay. Board cards show it on their left edge (`nowo-task-card--colored`). A change is recorded
+  in the activity (`TaskChangeType::Color`, shown as swatches) and listed as `color` in `TaskUpdatedEvent`.
+- `TaskFormData::$color`, `TaskFormType` fields `color` (hidden, `#rrggbb` only) and `customColor` (unmapped
+  `ColorType`) on the full form; `TaskGanttItem::$color`.
+- `_colour_picker.html.twig`: the palette partial shared by the column dialogs and the task colour; the
+  `nowo-task-board-picker` controller gains an optional `custom` target (a colour input beside a hidden field).
+
+### Changed
+
+- **Add task**, **Manage people**, **Change priority** and **Add / edit link** are native `<dialog>` elements styled by
+  `task-board.css` (top layer, Escape and the focus trap from the browser, the `--nowo-task-overlay` backdrop), without
+  Bootstrap layout utilities. Their Stimulus controllers share one helper (`modal-toggle.ts`) and keep the legacy
+  `.modal` branch for template overrides.
+- **Manage people**: the members as a list (avatar initial, name, role, remove button on one line) and the add form
+  as one row (person, role, *Add member*); one column on phones.
+- **Change priority**: the picked option is highlighted at once.
+
+### Fixed
+
+- The add task dialog's Escape handler was not bound (a method instead of an arrow function) and could not be removed.
+- Activity avatars showed a blank initial (the member label's leading whitespace).
 
 ## [1.13.1] - 2026-10-28
 

@@ -61,6 +61,7 @@ final readonly class TaskManager
             dueAt: $data->dueAt,
             tags: $data->tags,
         );
+        $task->setColor($data->color);
 
         $this->changeRecorder->recordCreated($task, $creator);
         $this->taskRepository->save($task);
@@ -78,6 +79,7 @@ final readonly class TaskManager
         $oldEstimatedMinutes = $task->getEstimatedMinutes();
         $oldDueAt            = $task->getDueAt();
         $oldTags             = $task->getTags();
+        $oldColor            = $task->getColor();
 
         $newColumn = $this->resolveColumn($task->getBoard(), $data->columnId);
 
@@ -88,7 +90,8 @@ final readonly class TaskManager
             ->setColumn($newColumn)
             ->setEstimatedMinutes($data->estimatedMinutes)
             ->setDueAt($data->dueAt)
-            ->setTags($data->tags);
+            ->setTags($data->tags)
+            ->setColor($data->color);
 
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Title, $oldTitle, $data->title);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Description, $oldDescription, $data->description);
@@ -97,6 +100,7 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::EstimatedMinutes, $oldEstimatedMinutes, $data->estimatedMinutes);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $data->dueAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Color, $oldColor, $task->getColor());
 
         $this->taskRepository->save($task);
 
@@ -108,6 +112,7 @@ final readonly class TaskManager
             'estimatedMinutes' => $oldEstimatedMinutes !== $task->getEstimatedMinutes(),
             'dueAt'            => $oldDueAt?->format(DATE_ATOM) !== $task->getDueAt()?->format(DATE_ATOM),
             'tags'             => $oldTags !== $task->getTags(),
+            'color'            => $oldColor !== $task->getColor(),
         ]));
         if ($changed !== []) {
             $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);

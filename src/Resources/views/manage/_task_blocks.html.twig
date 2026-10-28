@@ -139,6 +139,24 @@
                         {{ form_widget(taskForm.tags, {label: false}) }}
                     </dd>
                 </div>
+
+                {# Since 1.14: the task's colour (its Gantt bar and the card's edge), the column dialogs' palette. #}
+                {% if taskForm.color is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr">
+                    <dt class="nowo-task-detail__field-label">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'palette'}) }}
+                        <span>{{ 'task_board.form.task.color'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    </dt>
+                    <dd class="nowo-task-detail__field-value">
+                        {{ include('@NowoTaskBoardBundle/manage/_colour_picker.html.twig', {
+                            field: taskForm.color,
+                            custom: taskForm.customColor,
+                            showLabel: false,
+                            groupLabel: 'task_board.form.task.color'|trans({}, 'NowoTaskBoardBundle'),
+                        }) }}
+                    </dd>
+                </div>
+                {% endif %}
             </dl>
 
             <section class="nowo-task-detail__section nowo-task-detail__description">

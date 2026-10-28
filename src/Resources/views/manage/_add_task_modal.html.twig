@@ -1,56 +1,58 @@
-<div
-    class="modal modal-blur fade"
+{#
+    Add task dialog on the board. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal):
+    title, priority and column, description, estimate and due date, tags and the task colour.
+#}
+<dialog
+    class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
     data-nowo-task-board-add-task-modal-target="modal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
     aria-labelledby="nowo-task-board-add-task-modal-title"
 >
-    <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="nowo-task-board-add-task-modal-title" data-nowo-task-board-add-task-modal-target="title">
-                    {{ 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle') }}
-                </h5>
-                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-task-modal#close"></button>
-            </div>
-            {{ form_start(taskForm, {
-                action: path(nowo_task_board_route('task_create'), {boardId: board.id}),
-                method: 'POST',
-            }) }}
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput'}}) }}</div>
-                        <div class="col-md-6">{{ form_row(taskForm.priority) }}</div>
-                        {# A board without columns has no column field (TaskFormType adds it only with choices). #}
-                        {% if taskForm.columnId is defined %}
-                            <div class="col-md-6">{{ form_row(taskForm.columnId, {attr: {'data-nowo-task-board-add-task-modal-target': 'columnField'}}) }}</div>
-                        {% endif %}
-                        <div class="col-12">{{ form_row(taskForm.description) }}</div>
-                        <div class="col-md-6">{{ form_row(taskForm.estimatedMinutes) }}</div>
-                        <div class="col-md-6">{{ form_row(taskForm.dueAt) }}</div>
-                        <div class="col-12">{{ form_row(taskForm.tags) }}</div>
-                    </div>
-                    {% for child in taskForm %}
-                        {% if not child.rendered %}
-                            {{ form_row(child) }}
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-task-modal#close">
-                        {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                </div>
-            {{ form_end(taskForm) }}
-        </div>
+    <div class="nowo-task-dialog__header">
+        <h2 class="nowo-task-dialog__title" id="nowo-task-board-add-task-modal-title" data-nowo-task-board-add-task-modal-target="title">
+            {{ 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+        </h2>
+        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-task-modal#close">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+        </button>
     </div>
-</div>
-<div
-    class="modal-backdrop fade"
-    data-nowo-task-board-add-task-modal-target="backdrop"
-    data-action="click->nowo-task-board-add-task-modal#closeOnBackdrop"
-></div>
+    {{ form_start(taskForm, {
+        action: path(nowo_task_board_route('task_create'), {boardId: board.id}),
+        method: 'POST',
+        attr: {class: 'nowo-task-dialog__body'},
+    }) }}
+        <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput'}}) }}</div>
+        <div class="nowo-task-dialog__grid">
+            <div class="nowo-task-field">{{ form_row(taskForm.priority) }}</div>
+            {# A board without columns has no column field (TaskFormType adds it only with choices). #}
+            {% if taskForm.columnId is defined %}
+                <div class="nowo-task-field">{{ form_row(taskForm.columnId, {attr: {'data-nowo-task-board-add-task-modal-target': 'columnField'}}) }}</div>
+            {% endif %}
+        </div>
+        <div class="nowo-task-field">{{ form_row(taskForm.description) }}</div>
+        <div class="nowo-task-dialog__grid">
+            <div class="nowo-task-field">{{ form_row(taskForm.estimatedMinutes) }}</div>
+            <div class="nowo-task-field">{{ form_row(taskForm.dueAt) }}</div>
+        </div>
+        <div class="nowo-task-field">{{ form_row(taskForm.tags) }}</div>
+        {% if taskForm.color is defined %}
+            {{ include('@NowoTaskBoardBundle/manage/_colour_picker.html.twig', {
+                field: taskForm.color,
+                custom: taskForm.customColor,
+                groupLabel: 'task_board.form.task.color'|trans({}, 'NowoTaskBoardBundle'),
+            }) }}
+        {% endif %}
+        {% for child in taskForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <div class="nowo-task-dialog__actions">
+            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-task-modal#close">
+                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+            <button type="submit" class="btn btn-primary">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        </div>
+    {{ form_end(taskForm) }}
+</dialog>

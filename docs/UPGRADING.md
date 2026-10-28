@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.14.0](#to-1140)
 - [To 1.13.1](#to-1131)
 - [To 1.13.0](#to-1130)
 - [To 1.12.0](#to-1120)
@@ -88,6 +89,33 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.14.0
+
+From **1.13.x**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`.
+
+**Schema change (every host):** a nullable colour on the tasks. Generate and run a migration
+(`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply (MySQL):
+
+```sql
+ALTER TABLE task_board_tasks ADD color VARCHAR(7) DEFAULT NULL;
+```
+
+Existing tasks keep `NULL` (no colour: the Gantt keeps the priority colours). The demo ships it as
+`demo/symfony8/migrations/Version20261030120000.php`.
+
+Then check these if they apply to you:
+
+- **`ux_icon` hosts** import one more icon: `tabler:palette`.
+- **Overrides of `_add_task_modal.html.twig`, `_task_members_modal.html.twig`, `_task_priority_modal.html.twig` or
+  `_task_links_modal.html.twig`** that copied the Bootstrap `.modal` markup keep working (the controllers keep the
+  legacy branch); the bundle's dialogs are now `<dialog class="nowo-task-dialog nowo-task-dialog--native">` and use
+  no Bootstrap layout utilities. CSS written for the old `.modal-*` structure of these dialogs no longer applies.
+- **Own task form templates:** `TaskFormType` (full form) has two more fields, `color` (hidden) and `customColor`
+  (unmapped colour input); render them with `_colour_picker.html.twig` or let the "remaining children" loop print them.
+- **`TaskUpdatedEvent` listeners** may see `color` in `getChangedFields()`.
+- **Theming:** no new token; the task colour reaches CSS as `--nowo-task-bar-color` (Gantt bar) and
+  `--nowo-task-card-color` (card edge) through `data-nowo-task-vars`.
 
 ## To 1.13.1
 

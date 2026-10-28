@@ -30,6 +30,7 @@
   - [Theming with design tokens](#theming-with-design-tokens)
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
+- [Task colour and dialogs (since 1.14)](#task-colour-and-dialogs-since-114)
 - [Translations](#translations)
 
 ## Manage UI
@@ -423,7 +424,8 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
 calendar-event, check, chevron-down, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
 columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
-line-dashed, link, list, list-tree, notes, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus, users, x.
+line-dashed, link, list, list-tree, notes, palette, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus,
+users, x.
 
 ### Inline new task
 
@@ -431,6 +433,37 @@ The board and list actions pass `inlineTaskForms` (column id → a compact task 
 `task_create` with `?inline=1&_target_path=<page>`: the compact form (title and the hidden column, normal priority)
 creates the task in that column and the page comes back (`_target_path` must be a local path). The *Add task* dialog
 stays for hosts whose controller does not pass the forms.
+
+## Task colour and dialogs (since 1.14)
+
+**Task colour.** A task may have its own colour (`Task::getColor()`, `#rrggbb` or null). It is picked in the task
+detail ("Colour" row) and in the *Add task* dialog with the same palette as the column dialogs, a custom colour and
+*No colour*. Where it shows:
+
+- **Gantt**: the task's bar takes the colour (border and tinted background through `--nowo-task-bar-color`); a task
+  without one keeps the priority colours.
+- **Board**: the card shows the colour on its left edge (`nowo-task-card--colored`, `--nowo-task-card-color`).
+- **Activity**: a change is recorded (`TaskChangeType::Color`) and shown as swatches; `TaskUpdatedEvent` lists `color`.
+
+A native colour input cannot be empty, so `TaskFormType` keeps the value in a hidden `color` field (`#rrggbb` only,
+empty = no colour) and adds an unmapped `customColor` (`ColorType`); the `nowo-task-board-picker` controller writes
+the swatch or the custom colour into the hidden field. Custom templates include the shared partial:
+
+```twig
+{{ include('@NowoTaskBoardBundle/manage/_colour_picker.html.twig', {
+    field: taskForm.color,
+    custom: taskForm.customColor,
+    groupLabel: 'task_board.form.task.color'|trans({}, 'NowoTaskBoardBundle'),
+}) }}
+```
+
+**Dialogs.** Every dialog of the bundle is a native `<dialog class="nowo-task-dialog nowo-task-dialog--native">`
+(*Add column*, *Edit column*, column sets since 1.13; *Add task*, *Manage people*, *Change priority*, *Add / edit link*
+since 1.14): opened with `showModal()` by its Stimulus controller (top layer, Escape and the focus trap from the
+browser, a click on the backdrop closes it), coloured by the `--nowo-task-*` tokens with the `--nowo-task-overlay`
+backdrop, laid out with the bundle's classes (`nowo-task-dialog__header`, `__title`, `__close`, `__body`, `__grid`,
+`__section`, `__actions`, `nowo-task-field`, `nowo-task-members__*`). Overrides that kept the Bootstrap `.modal`
+markup still open through the controllers' legacy branch.
 
 ## Translations
 

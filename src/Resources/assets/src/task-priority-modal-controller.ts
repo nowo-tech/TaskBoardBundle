@@ -1,12 +1,14 @@
 import { Controller } from '@hotwired/stimulus';
+import { ModalToggle } from './modal-toggle';
 
 /**
- * Edit task priority modal on the task detail page.
+ * "Change priority" dialog on the task detail page (since 1.14 a native <dialog>; the Bootstrap `.modal` markup of
+ * older template overrides keeps working).
  */
 export default class TaskPriorityModalController extends Controller<HTMLElement> {
     static targets = ['modal', 'backdrop', 'firstOption'];
 
-    declare readonly modalTarget: HTMLElement;
+    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
 
     declare readonly backdropTarget: HTMLElement;
 
@@ -16,9 +18,11 @@ export default class TaskPriorityModalController extends Controller<HTMLElement>
 
     declare readonly hasFirstOptionTarget: boolean;
 
+    private toggle: ModalToggle | null = null;
+
     open(event: Event): void {
         event.preventDefault();
-        this.showModal();
+        this.modal().show();
 
         const selected = this.modalTarget.querySelector<HTMLInputElement>('input[name="priority"]:checked');
         const focusTarget = selected ?? (this.hasFirstOptionTarget ? this.firstOptionTarget : null);
@@ -28,46 +32,26 @@ export default class TaskPriorityModalController extends Controller<HTMLElement>
     }
 
     close(): void {
-        this.hideModal();
+        this.modal().hide();
     }
 
     closeOnBackdrop(event: Event): void {
-        if (event.target === this.backdropTarget) {
+        if (this.modal().isBackdrop(event.target)) {
             this.close();
         }
     }
 
-    closeOnEscape = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') {
-            this.close();
-        }
-    };
-
-    private showModal(): void {
-        this.modalTarget.classList.add('show');
-        this.modalTarget.style.display = 'block';
-        this.modalTarget.removeAttribute('aria-hidden');
-        this.modalTarget.setAttribute('aria-modal', 'true');
-        document.body.classList.add('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.add('show');
-        }
-
-        document.addEventListener('keydown', this.closeOnEscape);
+    /** Since 1.14: the picked option is highlighted at once (the label carries `is-selected`). */
+    select(event: Event): void {
+        const input = event.currentTarget as HTMLInputElement;
+        this.modalTarget.querySelectorAll('.nowo-task-detail__priority-option').forEach((option) => {
+            option.classList.toggle('is-selected', option.contains(input));
+        });
     }
 
-    private hideModal(): void {
-        this.modalTarget.classList.remove('show');
-        this.modalTarget.style.display = 'none';
-        this.modalTarget.setAttribute('aria-hidden', 'true');
-        this.modalTarget.removeAttribute('aria-modal');
-        document.body.classList.remove('modal-open');
+    private modal(): ModalToggle {
+        this.toggle ??= new ModalToggle(this.modalTarget, this.hasBackdropTarget ? this.backdropTarget : null, () => this.close());
 
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.remove('show');
-        }
-
-        document.removeEventListener('keydown', this.closeOnEscape);
+        return this.toggle;
     }
 }

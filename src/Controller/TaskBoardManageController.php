@@ -756,6 +756,7 @@ final class TaskBoardManageController extends AbstractController
             estimatedMinutes: $task->getEstimatedMinutes(),
             dueAt: $task->getDueAt(),
             tags: $task->getTags(),
+            color: $task->getColor(),
         ), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
         ]);

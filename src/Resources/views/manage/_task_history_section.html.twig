@@ -10,7 +10,7 @@
             {% set changeKey = 'task_board.history.type.' ~ entry.changeType.value %}
             <li class="nowo-task-activity__item nowo-task-detail__history-item">
                     <span class="nowo-task-detail__history-avatar" aria-hidden="true">
-                        {{ memberUi.member_label(entry.user)|slice(0, 1)|upper }}
+                        {{ memberUi.member_label(entry.user)|trim|slice(0, 1)|upper }}
                     </span>
                     <div class="nowo-task-activity__body">
                         <div class="nowo-task-detail__history-summary">
@@ -50,6 +50,17 @@
                                     {% if oldTags|length > 0 and newTags|length > 0 %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if newTags|length > 0 %}
                                         <span>{{ newTags|join(', ') }}</span>
+                                    {% endif %}
+                                {% elseif entry.changeType.value == 'color' %}
+                                    {# Since 1.14: the task colour, as swatches with their hex value. #}
+                                    {% if entry.oldValue %}
+                                        <span class="nowo-task-activity__old"><span class="nowo-task-activity__swatch" data-nowo-task-vars="{{ {'--nowo-task-swatch': entry.oldValue}|json_encode }}" aria-hidden="true"></span>{{ entry.oldValue }}</span>
+                                    {% endif %}
+                                    {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
+                                    {% if entry.newValue %}
+                                        <span><span class="nowo-task-activity__swatch" data-nowo-task-vars="{{ {'--nowo-task-swatch': entry.newValue}|json_encode }}" aria-hidden="true"></span>{{ entry.newValue }}</span>
+                                    {% else %}
+                                        <span>{{ 'task_board.form.task.no_color'|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
                                 {% elseif entry.changeType.value in ['member_added', 'member_removed'] %}
                                     {% if entry.oldValue %}

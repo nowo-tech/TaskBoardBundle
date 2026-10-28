@@ -172,6 +172,71 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('<span>api, ui</span>', $html);
     }
 
+    public function testTaskColourPickerHistoryAndNativeDialogs(): void
+    {
+        $task = $this->task;
+        $task->setColor('#3b82f6');
+        $task->addMember(new TaskMember($task, $this->user, TaskMemberRole::Assignee));
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::Color, null, '#3b82f6'));
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::Color, '#3b82f6'));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [
+            'task'             => $task,
+            'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
+            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
+            'memberForm'       => $this->memberForm(),
+            'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
+            'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
+            'priorities'       => TaskPriority::cases(),
+            'dashboardRoute'   => null,
+        ] + $this->taskActionForms($task));
+
+        // The colour row: hidden value, "No colour" swatch, palette and the unmapped custom colour input.
+        self::assertMatchesRegularExpression('/<input type="hidden" id="task_form_color" name="task_form\[color\]" data-nowo-task-board-picker-target="input" value="#3b82f6"/', $html);
+        self::assertStringContainsString('nowo-task-picker__swatch nowo-task-picker__swatch--none', $html);
+        self::assertMatchesRegularExpression('/<input type="color" id="task_form_customColor" name="task_form\[customColor\]"[^>]*data-nowo-task-board-picker-target="custom"/', $html);
+        self::assertStringContainsString('data-value="#8b5cf6"', $html);
+        // The activity shows the colours as swatches, and "No colour" when it was removed.
+        self::assertStringContainsString('<span class="nowo-task-activity__swatch" data-nowo-task-vars="{&quot;--nowo-task-swatch&quot;:&quot;#3b82f6&quot;}" aria-hidden="true"></span>#3b82f6', $html);
+        self::assertStringContainsString('<span>task_board.form.task.no_color</span>', $html);
+        // People, priority and links are native dialogs (no Bootstrap modal markup).
+        self::assertSame(3, substr_count($html, '<dialog'));
+        self::assertStringContainsString('data-nowo-task-board-task-members-modal-target="modal"', $html);
+        self::assertStringContainsString('class="nowo-task-members__item"', $html);
+        self::assertStringContainsString('class="nowo-task-members__role nowo-task-members__role--assignee"', $html);
+        self::assertStringContainsString('class="nowo-task-members__add"', $html);
+        self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
+        self::assertStringNotContainsString('class="modal', $html);
+        self::assertStringNotContainsString('modal-backdrop', $html);
+        self::assertStringNotContainsString(' style="', $html);
+    }
+
+    public function testBoardCardAndGanttBarUseTheTaskColour(): void
+    {
+        $this->task->setColor('#ef4444');
+        $plain = new Task($this->board, 'Plain', $this->user, column: $this->todo, dueAt: new DateTimeImmutable('+1 day'));
+        $this->board->getTasks()->add($plain);
+
+        $board = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext(['tasks' => [$this->task, $plain]]));
+        self::assertStringContainsString('nowo-task-card nowo-task-card--colored"', $board);
+        self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-card-color&quot;:&quot;#ef4444&quot;}"', $board);
+        self::assertSame(1, substr_count($board, 'nowo-task-card--colored'));
+        // The add task dialog is native and offers the colour.
+        self::assertStringContainsString('class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"', $board);
+        self::assertStringContainsString('name="task_form[customColor]"', $board);
+        self::assertStringNotContainsString('class="modal', $board);
+        self::assertStringNotContainsString(' style="', $board);
+
+        $gantt = $this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', [
+            'board'          => $this->board,
+            'dashboardRoute' => null,
+            'timeline'       => (new TaskGanttBuilder())->build([$this->task, $plain]),
+        ]);
+        self::assertSame(1, substr_count($gantt, 'nowo-task-gantt__bar--colored'));
+        self::assertStringContainsString('&quot;--nowo-task-bar-color&quot;:&quot;#ef4444&quot;', $gantt);
+        self::assertStringNotContainsString(' style="', $gantt);
+    }
+
     public function testTaskDetailRendersTheSubtaskTreeAndHostObjectLinks(): void
     {
         $task = $this->task;
@@ -561,6 +626,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             estimatedMinutes: $this->task->getEstimatedMinutes(),
             dueAt: $this->task->getDueAt(),
             tags: $this->task->getTags(),
+            color: $this->task->getColor(),
         );
 
         return $this->factory()->create(TaskFormType::class, $data, [

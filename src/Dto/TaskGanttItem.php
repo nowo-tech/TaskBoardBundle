@@ -21,6 +21,8 @@ final readonly class TaskGanttItem
         public ?string $columnName,
         public int $depth,
         public bool $completed,
+        // Since 1.14: the task's colour (#rrggbb) for its bar; null keeps the priority colours.
+        public ?string $color = null,
     ) {
     }
 }

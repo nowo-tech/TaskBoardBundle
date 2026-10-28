@@ -1,77 +1,67 @@
-<div
-    class="modal modal-blur fade"
+{# Add / edit link dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal). #}
+<dialog
+    class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
     data-nowo-task-board-task-links-modal-target="modal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
     aria-labelledby="nowo-task-board-task-links-modal-title"
 >
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="nowo-task-board-task-links-modal-title" data-nowo-task-board-task-links-modal-target="title">
-                    {{ 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle') }}
-                </h5>
-                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#close"></button>
-            </div>
-            {{ form_start(linkForm, {
-                action: path(nowo_task_board_route('task_link'), {taskId: task.id}|merge(taskRouteExtra|default({}))),
-                method: 'POST',
-                attr: {
-                    id: 'nowo-task-link-form',
-                    'data-nowo-task-board-task-links-modal-target': 'form',
-                },
-            }) }}
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">{{ form_row(linkForm.linkType, {attr: {'data-nowo-task-board-task-links-modal-target': 'linkType'}}) }}</div>
-                        <div class="col-md-8">{{ form_row(linkForm.url, {attr: {'data-nowo-task-board-task-links-modal-target': 'url'}}) }}</div>
-                        <div class="col-md-6">{{ form_row(linkForm.label, {attr: {'data-nowo-task-board-task-links-modal-target': 'label'}}) }}</div>
-                        <div class="col-md-6">{{ form_row(linkForm.externalId, {attr: {'data-nowo-task-board-task-links-modal-target': 'externalId'}}) }}</div>
-                    </div>
-                    {% for child in linkForm %}
-                        {% if not child.rendered %}
-                            {{ form_row(child) }}
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                <div class="modal-footer justify-content-between">
-                    <div>
-                        <button
-                            type="submit"
-                            form="nowo-task-link-delete-form"
-                            class="btn btn-outline-danger"
-                            hidden
-                            data-nowo-task-board-task-links-modal-target="deleteButton"
-                            data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
-                            data-action="click->nowo-task-board-task-links-modal#confirmDelete"
-                        >
-                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
-                        </button>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-links-modal#close">
-                            {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
-                        </button>
-                    </div>
-                </div>
-            {{ form_end(linkForm) }}
-            {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
-            {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
-                {% for child in linkRemoveForm %}
-                    {% if not child.rendered %}
-                        {{ form_row(child) }}
-                    {% endif %}
-                {% endfor %}
-            {{ form_end(linkRemoveForm) }}
-        </div>
+    <div class="nowo-task-dialog__header">
+        <h2 class="nowo-task-dialog__title" id="nowo-task-board-task-links-modal-title" data-nowo-task-board-task-links-modal-target="title">
+            {{ 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle') }}
+        </h2>
+        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#close">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+        </button>
     </div>
-</div>
-<div
-    class="modal-backdrop fade"
-    data-nowo-task-board-task-links-modal-target="backdrop"
-    data-action="click->nowo-task-board-task-links-modal#closeOnBackdrop"
-></div>
+    {{ form_start(linkForm, {
+        action: path(nowo_task_board_route('task_link'), {taskId: task.id}|merge(taskRouteExtra|default({}))),
+        method: 'POST',
+        attr: {
+            id: 'nowo-task-link-form',
+            class: 'nowo-task-dialog__body',
+            'data-nowo-task-board-task-links-modal-target': 'form',
+        },
+    }) }}
+        <div class="nowo-task-dialog__grid nowo-task-dialog__grid--narrow-first">
+            <div class="nowo-task-field">{{ form_row(linkForm.linkType, {attr: {'data-nowo-task-board-task-links-modal-target': 'linkType'}}) }}</div>
+            <div class="nowo-task-field">{{ form_row(linkForm.url, {attr: {'data-nowo-task-board-task-links-modal-target': 'url'}}) }}</div>
+        </div>
+        <div class="nowo-task-dialog__grid">
+            <div class="nowo-task-field">{{ form_row(linkForm.label, {attr: {'data-nowo-task-board-task-links-modal-target': 'label'}}) }}</div>
+            <div class="nowo-task-field">{{ form_row(linkForm.externalId, {attr: {'data-nowo-task-board-task-links-modal-target': 'externalId'}}) }}</div>
+        </div>
+        {% for child in linkForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <div class="nowo-task-dialog__actions nowo-task-dialog__actions--split">
+            <button
+                type="submit"
+                form="nowo-task-link-delete-form"
+                class="btn btn-outline-danger nowo-task-btn-danger"
+                hidden
+                data-nowo-task-board-task-links-modal-target="deleteButton"
+                data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
+                data-action="click->nowo-task-board-task-links-modal#confirmDelete"
+            >
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+            <div class="nowo-task-dialog__actions-end">
+                <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-links-modal#close">
+                    {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+                </button>
+            </div>
+        </div>
+    {{ form_end(linkForm) }}
+    {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
+    {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
+        {% for child in linkRemoveForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+    {{ form_end(linkRemoveForm) }}
+</dialog>

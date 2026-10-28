@@ -3,10 +3,12 @@
     panelTargetPath (optional, since 1.11): the page the task panel's forms come back to.
     data-task-panel-url (since 1.11): the task_panel fragment for hosts that open the task in a side drawer; the title
     link keeps opening the task page without JavaScript.
+    Since 1.14 a task with a colour shows it on the card's left edge (nowo-task-card--colored, --nowo-task-card-color).
 #}
 {% set progress = taskTree|default(null) ? taskTree.progress(task) : null %}
 <li
-    class="nowo-task-board__task nowo-task-card{{ task.completed ? ' is-done' : '' }}"
+    class="nowo-task-board__task nowo-task-card{{ task.completed ? ' is-done' : '' }}{{ task.color ? ' nowo-task-card--colored' : '' }}"
+    {% if task.color %}data-nowo-task-vars="{{ {'--nowo-task-card-color': task.color}|json_encode }}"{% endif %}
     draggable="true"
     data-nowo-task-board-target="task"
     data-task-id="{{ task.id }}"

@@ -17,6 +17,7 @@ enum TaskChangeType: string
     case DueDate          = 'due_date';
     case EstimatedMinutes = 'estimated_minutes';
     case Tags             = 'tags';
+    case Color            = 'color';
     case Completed        = 'completed';
     case LinkAdded        = 'link_added';
     case LinkUpdated      = 'link_updated';

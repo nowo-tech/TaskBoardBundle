@@ -6,38 +6,19 @@
     defaultColor (optional: the colour picked when the field is empty, the add dialog).
 #}
 {% set _target = 'data-' ~ controller ~ '-target' %}
-{% set _palette = ['#64748b', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6'] %}
 <div class="nowo-task-field">
     {{ form_label(form.name) }}
     {{ form_widget(form.name, {attr: {(_target): 'nameInput', class: 'form-control'}}) }}
     {{ form_errors(form.name) }}
 </div>
 
-<div class="nowo-task-field nowo-task-picker" data-controller="nowo-task-board-picker"{% if defaultColor|default(null) %} data-nowo-task-board-picker-default-value="{{ defaultColor }}"{% endif %}>
-    {{ form_label(form.color) }}
-    <div class="nowo-task-picker__swatches" role="group" aria-label="{{ 'task_board.form.column.color'|trans({}, 'NowoTaskBoardBundle') }}">
-        {% for colour in _palette %}
-            <button
-                type="button"
-                class="nowo-task-picker__swatch"
-                data-value="{{ colour }}"
-                data-action="nowo-task-board-picker#pick"
-                data-nowo-task-board-picker-target="option"
-                data-nowo-task-vars="{{ {'--nowo-task-swatch': colour}|json_encode }}"
-                aria-pressed="false"
-                title="{{ colour }}"
-            ><span class="nowo-task-sr-only">{{ colour }}</span></button>
-        {% endfor %}
-        {{ form_widget(form.color, {attr: {
-            (_target): 'colorInput',
-            class: 'nowo-task-picker__custom',
-            title: 'task_board.form.column.custom_color'|trans({}, 'NowoTaskBoardBundle'),
-            'aria-label': 'task_board.form.column.custom_color'|trans({}, 'NowoTaskBoardBundle'),
-            'data-nowo-task-board-picker-target': 'input',
-        }}) }}
-    </div>
-    {{ form_errors(form.color) }}
-</div>
+{# Since 1.14 the palette is the shared _colour_picker.html.twig partial (also the task colour). #}
+{{ include('@NowoTaskBoardBundle/manage/_colour_picker.html.twig', {
+    field: form.color,
+    fieldAttr: {(_target): 'colorInput'},
+    groupLabel: 'task_board.form.column.color'|trans({}, 'NowoTaskBoardBundle'),
+    defaultColor: defaultColor|default(null),
+}) }}
 
 {% if form.icon is defined %}
     <div class="nowo-task-field nowo-task-picker nowo-task-picker--icons" data-controller="nowo-task-board-picker">

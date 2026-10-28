@@ -1,80 +1,78 @@
 {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
 
-<div
-    class="modal modal-blur fade"
+{#
+    "Manage people" dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal): the members
+    as a list (avatar initial, name, role, remove button on one line) and the add form as one row (person, role, add).
+#}
+<dialog
+    class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
     data-nowo-task-board-task-members-modal-target="modal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
     aria-labelledby="nowo-task-board-task-members-modal-title"
 >
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="nowo-task-board-task-members-modal-title">
-                    {{ 'task_board.task.members_modal_title'|trans({}, 'NowoTaskBoardBundle') }}
-                </h5>
-                <button type="button" class="btn-close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-members-modal#close"></button>
-            </div>
-            <div class="modal-body">
-                <h6 class="text-secondary text-uppercase fs-6 mb-3">{{ 'task_board.task.current_members'|trans({}, 'NowoTaskBoardBundle') }}</h6>
-                <div class="list-group list-group-flush nowo-task-detail__members-list mb-4">
-                    {% for member in task.members %}
-                        <div class="list-group-item nowo-task-detail__member-row">
-                            <div class="nowo-task-detail__member-info">
-                                <span class="nowo-task-detail__member-avatar" aria-hidden="true">
-                                    {{ memberUi.member_label(member.user)|slice(0, 1)|upper }}
-                                </span>
-                                <div>
-                                    <div class="fw-semibold">{{ memberUi.member_label(member.user) }}</div>
-                                    <span class="badge bg-green-lt">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
-                                </div>
-                            </div>
-                            {% set member_remove_form = memberRemoveForms[member.id] %}
-                            {{ form_start(member_remove_form) }}
-                                {% for child in member_remove_form %}
-                                    {% if not child.rendered %}
-                                        {{ form_row(child) }}
-                                    {% endif %}
-                                {% endfor %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
-                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-minus'}) }}
-                                </button>
-                            {{ form_end(member_remove_form) }}
-                        </div>
-                    {% else %}
-                        <div class="list-group-item text-secondary">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</div>
-                    {% endfor %}
-                </div>
-
-                <h6 class="text-secondary text-uppercase fs-6 mb-3">{{ 'task_board.task.add_member'|trans({}, 'NowoTaskBoardBundle') }}</h6>
-                {{ form_start(memberForm, {action: path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))), method: 'POST'}) }}
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-6">{{ form_row(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}}) }}</div>
-                        <div class="col-md-4">{{ form_row(memberForm.memberRole) }}</div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100">
-                                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}
+    <div class="nowo-task-dialog__header">
+        <h2 class="nowo-task-dialog__title" id="nowo-task-board-task-members-modal-title">
+            {{ 'task_board.task.members_modal_title'|trans({}, 'NowoTaskBoardBundle') }}
+        </h2>
+        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-members-modal#close">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+        </button>
+    </div>
+    <div class="nowo-task-dialog__body">
+        <section class="nowo-task-dialog__section" aria-labelledby="nowo-task-board-task-members-current">
+            <h3 class="nowo-task-dialog__section-title" id="nowo-task-board-task-members-current">{{ 'task_board.task.current_members'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+            <ul class="nowo-task-members">
+                {% for member in task.members %}
+                    {% set _name = memberUi.member_label(member.user)|trim %}
+                    <li class="nowo-task-members__item">
+                        <span class="nowo-task-members__avatar" aria-hidden="true">{{ _name|slice(0, 1)|upper }}</span>
+                        <span class="nowo-task-members__name">{{ _name }}</span>
+                        <span class="nowo-task-members__role nowo-task-members__role--{{ member.memberRole.value }}">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        {% set member_remove_form = memberRemoveForms[member.id] %}
+                        {{ form_start(member_remove_form, {attr: {class: 'nowo-task-members__remove'}}) }}
+                            {% for child in member_remove_form %}
+                                {% if not child.rendered %}
+                                    {{ form_row(child) }}
+                                {% endif %}
+                            {% endfor %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger nowo-task-btn-danger nowo-task-members__remove-button" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
+                                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-minus'}) }}<span class="nowo-task-sr-only">{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }} {{ _name }}</span>
                             </button>
-                        </div>
-                    </div>
-                    {% for child in memberForm %}
-                        {% if not child.rendered %}
-                            {{ form_row(child) }}
-                        {% endif %}
-                    {% endfor %}
-                {{ form_end(memberForm) }}
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">
-                    {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
+                        {{ form_end(member_remove_form) }}
+                    </li>
+                {% else %}
+                    <li class="nowo-task-members__item nowo-task-members__item--empty">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="nowo-task-dialog__section" aria-labelledby="nowo-task-board-task-members-add">
+            <h3 class="nowo-task-dialog__section-title" id="nowo-task-board-task-members-add">{{ 'task_board.task.add_member'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+            {{ form_start(memberForm, {action: path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))), method: 'POST', attr: {class: 'nowo-task-members__add'}}) }}
+                <div class="nowo-task-field nowo-task-members__add-user">
+                    {{ form_label(memberForm.user) }}
+                    {{ form_widget(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}}) }}
+                    {{ form_errors(memberForm.user) }}
+                </div>
+                <div class="nowo-task-field nowo-task-members__add-role">
+                    {{ form_label(memberForm.memberRole) }}
+                    {{ form_widget(memberForm.memberRole) }}
+                    {{ form_errors(memberForm.memberRole) }}
+                </div>
+                <button type="submit" class="btn btn-primary nowo-task-members__add-button">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
                 </button>
-            </div>
+                {% for child in memberForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(memberForm) }}
+        </section>
+
+        <div class="nowo-task-dialog__actions">
+            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">
+                {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
         </div>
     </div>
-</div>
-<div
-    class="modal-backdrop fade"
-    data-nowo-task-board-task-members-modal-target="backdrop"
-    data-action="click->nowo-task-board-task-members-modal#closeOnBackdrop"
-></div>
+</dialog>

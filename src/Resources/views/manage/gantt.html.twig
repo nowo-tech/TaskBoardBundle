@@ -84,11 +84,12 @@
                             <div class="nowo-task-gantt__cell{% if day == timeline.today %} is-today{% endif %}{% if day|date('N') in ['6', '7'] %} is-weekend{% endif %}"></div>
                         {% endfor %}
                         <div
-                            class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.completed %} is-completed{% endif %}"
+                            class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.color %} nowo-task-gantt__bar--colored{% endif %}{% if item.completed %} is-completed{% endif %}"
                             data-nowo-task-board-gantt-target="bar"
                             data-task-id="{{ item.id }}"
                             data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
-                            data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|json_encode }}"
+                            {# Since 1.14 a task's own colour paints its bar (otherwise the priority colours). #}
+                            data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|merge(item.color ? {'--nowo-task-bar-color': item.color} : {})|json_encode }}"
                             title="{{ item.startDate }} → {{ item.endDate }}"
                         >
                             {% if item.progress > 0 %}

@@ -120,6 +120,7 @@ final readonly class TaskGanttBuilder
                 columnName: $task->getColumn()?->getName(),
                 depth: $item['entry']['depth'],
                 completed: $task->isCompleted(),
+                color: $task->getColor(),
             );
         }
 

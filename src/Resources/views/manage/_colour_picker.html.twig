@@ -1,0 +1,65 @@
+{#
+    Since 1.14: the colour palette with a custom colour (the column dialogs and the task colour), filled through the
+    nowo-task-board-picker controller so the form posts as before.
+    Variables:
+      field        the form field that holds the colour: a ColorType (columns) or, with `custom`, a hidden field;
+      custom       optional: an unmapped ColorType for the custom colour beside a hidden `field`, which adds a
+                   "No colour" swatch (a native colour input cannot be empty: the task colour is optional);
+      fieldAttr    optional: extra attributes of the field's widget (e.g. a dialog controller's target);
+      showLabel    optional (default true): render the field's label (false when the caller labels the row);
+      groupLabel   the swatches' accessible name;
+      noneLabel    optional: the "No colour" swatch's name (with `custom`);
+      defaultColor optional: the colour picked when the field is empty (the add column dialog).
+#}
+{% set _palette = ['#64748b', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6'] %}
+{# `??`, not `default`: an empty FormView counts as empty for `default`. #}
+{% set _custom = custom ?? null %}
+{% set _fieldAttr = fieldAttr|default({})|merge({'data-nowo-task-board-picker-target': 'input'}) %}
+{% set _customLabel = 'task_board.form.column.custom_color'|trans({}, 'NowoTaskBoardBundle') %}
+<div class="nowo-task-field nowo-task-picker" data-controller="nowo-task-board-picker"{% if defaultColor|default(null) %} data-nowo-task-board-picker-default-value="{{ defaultColor }}"{% endif %}>
+    {% if showLabel ?? true %}
+        {{ form_label(_custom is not null ? _custom : field, _custom is not null ? field.vars.label : null) }}
+    {% endif %}
+    <div class="nowo-task-picker__swatches" role="group" aria-label="{{ groupLabel }}">
+        {% if _custom is not null %}
+            {% set _noneLabel = noneLabel|default('task_board.form.task.no_color'|trans({}, 'NowoTaskBoardBundle')) %}
+            <button
+                type="button"
+                class="nowo-task-picker__swatch nowo-task-picker__swatch--none"
+                data-value=""
+                data-action="nowo-task-board-picker#pick"
+                data-nowo-task-board-picker-target="option"
+                aria-pressed="false"
+                title="{{ _noneLabel }}"
+            ><span class="nowo-task-sr-only">{{ _noneLabel }}</span></button>
+        {% endif %}
+        {% for colour in _palette %}
+            <button
+                type="button"
+                class="nowo-task-picker__swatch"
+                data-value="{{ colour }}"
+                data-action="nowo-task-board-picker#pick"
+                data-nowo-task-board-picker-target="option"
+                data-nowo-task-vars="{{ {'--nowo-task-swatch': colour}|json_encode }}"
+                aria-pressed="false"
+                title="{{ colour }}"
+            ><span class="nowo-task-sr-only">{{ colour }}</span></button>
+        {% endfor %}
+        {% if _custom is not null %}
+            {{ form_widget(field, {attr: _fieldAttr}) }}
+            {{ form_widget(_custom, {attr: {
+                class: 'nowo-task-picker__custom',
+                title: _customLabel,
+                'aria-label': _customLabel,
+                'data-nowo-task-board-picker-target': 'custom',
+            }}) }}
+        {% else %}
+            {{ form_widget(field, {attr: _fieldAttr|merge({
+                class: 'nowo-task-picker__custom',
+                title: _customLabel,
+                'aria-label': _customLabel,
+            })}) }}
+        {% endif %}
+    </div>
+    {{ form_errors(field) }}
+</div>

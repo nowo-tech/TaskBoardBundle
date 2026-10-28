@@ -214,3 +214,7 @@ task_board.column_set.delete_named: "Spaltenset %name% löschen"
 task_board.task.open_page: "Aufgabenseite öffnen"
 task_board.gantt.weekday_initials: 'M,D,M,D,F,S,S'
 task_board.gantt.month_names: 'Jan,Feb,Mär,Apr,Mai,Jun,Jul,Aug,Sep,Okt,Nov,Dez'
+task_board.form.task.color: "Farbe"
+task_board.form.task.custom_color: "Eigene Farbe"
+task_board.form.task.no_color: "Keine Farbe"
+task_board.history.type.color: "hat die Farbe geändert"

@@ -2202,3 +2202,236 @@ dialog.nowo-task-dialog--native::backdrop {
         display: none;
     }
 }
+
+/*
+ * Since 1.14 — the add task, people, priority and link dialogs are native dialogs too (same tokens as 1.13), the task
+ * colour (palette with "No colour", Gantt bar, card edge, activity swatch).
+ */
+dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
+    width: min(40rem, calc(100vw - 2rem));
+}
+
+.nowo-task-dialog__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.nowo-task-dialog__grid--narrow-first {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+.nowo-task-dialog__grid > *,
+.nowo-task-dialog__grid > * > *:last-child {
+    margin-bottom: 0;
+}
+
+.nowo-task-dialog__section {
+    display: grid;
+    gap: 0.6rem;
+}
+
+.nowo-task-dialog__section-title {
+    margin: 0;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.nowo-task-dialog--native .nowo-task-dialog__actions--split {
+    justify-content: space-between;
+}
+
+.nowo-task-dialog__actions-end {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+/* People: one line per member (avatar, name, role, remove), the add form as one row. */
+.nowo-task-members {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
+}
+
+.nowo-task-members__item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.nowo-task-members__item + .nowo-task-members__item {
+    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+}
+
+.nowo-task-members__item--empty {
+    display: block;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.875rem;
+}
+
+.nowo-task-members__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--nowo-task-accent-soft, var(--tblr-primary-lt, #eff6ff));
+    color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.nowo-task-members__name {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nowo-task-members__role {
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--nowo-task-muted-soft, var(--tblr-secondary-lt, #f3f4f6));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.nowo-task-members__role--assignee {
+    background: var(--nowo-task-success-soft, var(--tblr-green-lt, #ecfdf5));
+    color: var(--nowo-task-success, var(--tblr-green, #16a34a));
+}
+
+.nowo-task-members__remove {
+    margin: 0;
+}
+
+.nowo-task-members__remove-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nowo-task-members__add {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.nowo-task-members__add .nowo-task-field > *:last-child {
+    margin-bottom: 0;
+}
+
+.nowo-task-members__add-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+/* Priority options: the radio stays visible and aligned with its tag. */
+.nowo-task-detail__priority-radio {
+    flex: none;
+    margin: 0;
+    accent-color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-detail__priority-options > .nowo-task-detail__priority-option {
+    color: inherit;
+}
+
+/* Task colour: "No colour" swatch, custom colour picked, Gantt bar, card edge, activity swatch. */
+.nowo-task-picker__swatch--none {
+    border-color: var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    background:
+        linear-gradient(
+            to top right,
+            transparent calc(50% - 1px),
+            var(--nowo-task-danger, var(--tblr-red, #d63939)) calc(50% - 1px),
+            var(--nowo-task-danger, var(--tblr-red, #d63939)) calc(50% + 1px),
+            transparent calc(50% + 1px)
+        ),
+        var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    box-shadow: none;
+}
+
+.nowo-task-picker__swatch--none[aria-pressed='true'],
+.nowo-task-picker__swatch--none:focus-visible {
+    border-color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-picker__custom.is-selected {
+    outline: 2px solid var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    outline-offset: 1px;
+}
+
+.nowo-task-detail__field-value .nowo-task-picker {
+    gap: 0;
+}
+
+.nowo-task-gantt__bar--colored {
+    border-color: var(--nowo-task-bar-color);
+    background: color-mix(in srgb, var(--nowo-task-bar-color) 22%, var(--nowo-task-surface, var(--tblr-bg-surface, #fff)));
+}
+
+.nowo-task-gantt__bar--colored .nowo-task-gantt__bar-progress {
+    background: color-mix(in srgb, var(--nowo-task-bar-color) 45%, transparent);
+}
+
+.nowo-task-card--colored {
+    border-left: 3px solid var(--nowo-task-card-color);
+}
+
+.nowo-task-activity__swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 0.3rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: 999px;
+    background: var(--nowo-task-swatch);
+    vertical-align: -0.1em;
+}
+
+@media (max-width: 640px) {
+    .nowo-task-dialog__grid,
+    .nowo-task-dialog__grid--narrow-first,
+    .nowo-task-members__add {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nowo-task-members__item {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .nowo-task-members__avatar {
+        grid-row: 1 / span 2;
+    }
+
+    .nowo-task-members__role {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: start;
+    }
+
+    .nowo-task-members__remove {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+    }
+}

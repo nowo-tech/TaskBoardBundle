@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
@@ -22,6 +23,7 @@ use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Regex;
 
 use function class_exists;
 
@@ -32,6 +34,9 @@ use function class_exists;
 final class TaskFormType extends AbstractType
 {
     use FormOptionsTrait;
+
+    /** Since 1.14: a task colour is #rrggbb (the column holds 7 characters). */
+    public const COLOR_PATTERN = '/^#[0-9a-fA-F]{6}$/D';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -107,6 +112,19 @@ final class TaskFormType extends AbstractType
                 ]);
                 $builder->get('tags')->addModelTransformer(new TagsToStringTransformer());
             }
+
+            // Since 1.14: the task colour. A native colour input cannot be empty, so the value lives in a hidden field
+            // (empty = no colour) that the palette swatches and the unmapped custom colour input fill (picker controller).
+            $this->addWithDefaults($builder, 'color', HiddenType::class, [
+                'label'       => 'task_board.form.task.color',
+                'required'    => false,
+                'constraints' => [new Regex(pattern: self::COLOR_PATTERN)],
+            ]);
+            $this->addWithDefaults($builder, 'customColor', ColorType::class, [
+                'label'    => 'task_board.form.task.custom_color',
+                'mapped'   => false,
+                'required' => false,
+            ]);
         }
     }
 

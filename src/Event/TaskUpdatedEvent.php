@@ -16,7 +16,7 @@ final class TaskUpdatedEvent extends AbstractTaskEvent
 {
     /**
      * @param list<string> $changedFields Names of the changed fields: title, description, priority, column,
-     *                                    estimatedMinutes, dueAt, tags
+     *                                    estimatedMinutes, dueAt, tags, color (since 1.14)
      */
     public function __construct(
         Task $task,

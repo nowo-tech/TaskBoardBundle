@@ -1,12 +1,14 @@
 import { Controller } from '@hotwired/stimulus';
+import { ModalToggle } from './modal-toggle';
 
 /**
- * Manage assignees modal on the task detail page.
+ * "Manage people" dialog on the task detail page (since 1.14 a native <dialog>; the Bootstrap `.modal` markup of
+ * older template overrides keeps working).
  */
 export default class TaskMembersModalController extends Controller<HTMLElement> {
     static targets = ['modal', 'backdrop', 'userField'];
 
-    declare readonly modalTarget: HTMLElement;
+    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
 
     declare readonly backdropTarget: HTMLElement;
 
@@ -16,9 +18,11 @@ export default class TaskMembersModalController extends Controller<HTMLElement> 
 
     declare readonly hasUserFieldTarget: boolean;
 
+    private toggle: ModalToggle | null = null;
+
     open(event: Event): void {
         event.preventDefault();
-        this.showModal();
+        this.modal().show();
 
         if (this.hasUserFieldTarget) {
             window.requestAnimationFrame(() => this.userFieldTarget.focus());
@@ -26,46 +30,18 @@ export default class TaskMembersModalController extends Controller<HTMLElement> 
     }
 
     close(): void {
-        this.hideModal();
+        this.modal().hide();
     }
 
     closeOnBackdrop(event: Event): void {
-        if (event.target === this.backdropTarget) {
+        if (this.modal().isBackdrop(event.target)) {
             this.close();
         }
     }
 
-    closeOnEscape = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') {
-            this.close();
-        }
-    };
+    private modal(): ModalToggle {
+        this.toggle ??= new ModalToggle(this.modalTarget, this.hasBackdropTarget ? this.backdropTarget : null, () => this.close());
 
-    private showModal(): void {
-        this.modalTarget.classList.add('show');
-        this.modalTarget.style.display = 'block';
-        this.modalTarget.removeAttribute('aria-hidden');
-        this.modalTarget.setAttribute('aria-modal', 'true');
-        document.body.classList.add('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.add('show');
-        }
-
-        document.addEventListener('keydown', this.closeOnEscape);
-    }
-
-    private hideModal(): void {
-        this.modalTarget.classList.remove('show');
-        this.modalTarget.style.display = 'none';
-        this.modalTarget.setAttribute('aria-hidden', 'true');
-        this.modalTarget.removeAttribute('aria-modal');
-        document.body.classList.remove('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.remove('show');
-        }
-
-        document.removeEventListener('keydown', this.closeOnEscape);
+        return this.toggle;
     }
 }

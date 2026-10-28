@@ -1,7 +1,9 @@
 import { Controller } from '@hotwired/stimulus';
+import { ModalToggle } from './modal-toggle';
 
 /**
- * Add/edit task links in a modal on the task detail page.
+ * Add/edit task links in a dialog on the task detail page (since 1.14 a native <dialog>; the Bootstrap `.modal`
+ * markup of older template overrides keeps working).
  */
 export default class TaskLinksModalController extends Controller<HTMLElement> {
     static targets = [
@@ -25,7 +27,7 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         editTitle: String,
     };
 
-    declare readonly modalTarget: HTMLElement;
+    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
 
     declare readonly backdropTarget: HTMLElement;
 
@@ -61,12 +63,14 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
 
     declare readonly editTitleValue: string;
 
+    private toggle: ModalToggle | null = null;
+
     openAdd(event: Event): void {
         event.preventDefault();
         this.resetForm(this.createUrlValue);
         this.titleTarget.textContent = this.addTitleValue;
         this.toggleDeleteForm(false);
-        this.showModal();
+        this.modal().show();
         this.focusUrlField();
     }
 
@@ -91,25 +95,19 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         }
 
         this.toggleDeleteForm(true);
-        this.showModal();
+        this.modal().show();
         this.focusUrlField();
     }
 
     close(): void {
-        this.hideModal();
+        this.modal().hide();
     }
 
     closeOnBackdrop(event: Event): void {
-        if (event.target === this.backdropTarget) {
+        if (this.modal().isBackdrop(event.target)) {
             this.close();
         }
     }
-
-    closeOnEscape = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') {
-            this.close();
-        }
-    };
 
     /** Since 1.12: the confirmation of "Remove link" (no inline handler, so a strict CSP keeps it working). */
     confirmDelete(event: Event): void {
@@ -138,31 +136,9 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         window.requestAnimationFrame(() => this.urlTarget.focus());
     }
 
-    private showModal(): void {
-        this.modalTarget.classList.add('show');
-        this.modalTarget.style.display = 'block';
-        this.modalTarget.removeAttribute('aria-hidden');
-        this.modalTarget.setAttribute('aria-modal', 'true');
-        document.body.classList.add('modal-open');
+    private modal(): ModalToggle {
+        this.toggle ??= new ModalToggle(this.modalTarget, this.hasBackdropTarget ? this.backdropTarget : null, () => this.close());
 
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.add('show');
-        }
-
-        document.addEventListener('keydown', this.closeOnEscape);
-    }
-
-    private hideModal(): void {
-        this.modalTarget.classList.remove('show');
-        this.modalTarget.style.display = 'none';
-        this.modalTarget.setAttribute('aria-hidden', 'true');
-        this.modalTarget.removeAttribute('aria-modal');
-        document.body.classList.remove('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.remove('show');
-        }
-
-        document.removeEventListener('keydown', this.closeOnEscape);
+        return this.toggle;
     }
 }

@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Validator\ValidatorExtension;
@@ -130,6 +131,41 @@ final class FormTypesTest extends TestCase
         $form->submit(['name' => 'Todo', 'color' => '']);
 
         self::assertTrue($form->isValid());
+    }
+
+    /** @return iterable<string, array{string, bool, ?string}> */
+    public static function taskColors(): iterable
+    {
+        yield 'none' => ['', true, null];
+        yield 'rrggbb' => ['#3B82F6', true, '#3B82F6'];
+        yield 'short hex' => ['#fff', false, null];
+        yield 'css injection' => ['red;background:url(https://evil.example/x)', false, null];
+        yield 'trailing payload after newline' => ["#ffffff\n;x", false, null];
+    }
+
+    #[DataProvider('taskColors')]
+    public function testTaskColorIsAnOptionalHexColour(string $color, bool $valid, ?string $expected): void
+    {
+        $form = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['rich_description' => false, 'tag_input' => false]);
+        self::assertInstanceOf(ColorType::class, $form->get('customColor')->getConfig()->getType()->getInnerType());
+        self::assertFalse($form->get('customColor')->getConfig()->getMapped());
+
+        $form->submit(['title' => 'Task', 'priority' => 'normal', 'color' => $color, 'customColor' => '#000000']);
+
+        self::assertSame($valid, $form->isValid(), (string) $form->getErrors(true));
+        if ($valid) {
+            /** @var TaskFormData $data */
+            $data = $form->getData();
+            self::assertSame($expected, $data->color);
+        }
+    }
+
+    public function testCompactTaskFormHasNoColour(): void
+    {
+        $form = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['compact' => true]);
+
+        self::assertFalse($form->has('color'));
+        self::assertFalse($form->has('customColor'));
     }
 
     private function factory(): FormFactoryInterface
