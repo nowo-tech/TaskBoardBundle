@@ -1354,6 +1354,26 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/import"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_import"
  *         },
+ *         column_delete?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column/{columnId}/delete"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_delete"
+ *         },
+ *         column_set_create?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column-sets"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_set_create"
+ *         },
+ *         column_set_apply?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column-sets/apply"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_set_apply"
+ *         },
+ *         column_set_delete?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column-sets/{setId}/delete"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_set_delete"
+ *         },
+ *         task_panel?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/panel"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_panel"
+ *         },
  *     },
  *     templates?: array{
  *         layout?: scalar|Param|null, // Twig layout extended by manage pages via global nowo_task_board_layout (REQ-UI-001). Host apps set this to the project layout or a one-file bridge. Default is the bundle demo layout (Tabler CDN). // Default: "@NowoTaskBoardBundle/layout.html.twig"
@@ -1364,6 +1384,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         gantt?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/gantt.html.twig"
  *         task?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task.html.twig"
  *         import?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import.html.twig"
+ *         task_panel?: scalar|Param|null, // Task editing panel without layout (since 1.11), served by the task_panel route for side drawers. // Default: "@NowoTaskBoardBundle/manage/task_panel.html.twig"
  *     },
  *     database?: array{
  *         entity_manager?: scalar|Param|null, // Default: "default"
@@ -1384,7 +1405,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         default_columns?: list<array{ // Default: [{"name":"To do","color":"#94a3b8"},{"name":"In progress","color":"#3b82f6"},{"name":"Done","color":"#22c55e"}]
  *             name?: scalar|Param|null,
  *             color?: scalar|Param|null, // Default: null
+ *             icon?: scalar|Param|null, // Icon name such as tabler:bug (since 1.11). // Default: null
  *         }>,
+ *         column_icons?: list<scalar|Param|null>,
  *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
  *     },
  * }
