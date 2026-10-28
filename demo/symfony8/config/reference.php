@@ -1368,6 +1368,25 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     database?: array{
  *         entity_manager?: scalar|Param|null, // Default: "default"
  *     },
+ *     tenancy?: array{ // Boards per host tenant (since 1.10): every manage route is copied under each `tenant_paths` entry (its {tenantSlug} names the tenant), a tenant sees only its boards and a board or task of another tenant answers 404.
+ *         enabled?: bool|Param, // Default: false
+ *         tenant_paths?: list<array{ // Default: []
+ *             path?: scalar|Param|null, // Replaces the routes' base path (routes.index.path) and holds {tenantSlug}, e.g. /projects/{tenantSlug}/tasks.
+ *             name_prefix?: scalar|Param|null, // Prefix of the copied route names, e.g. app_project_ (app_project_nowo_task_board_board).
+ *             slug_prefix?: scalar|Param|null, // Slugs this path serves (prefix match); empty: every slug. // Default: ""
+ *             slug_requirement?: scalar|Param|null, // Route requirement of {tenantSlug}; default: the slug prefix then [A-Za-z0-9_-]+. // Default: null
+ *         }>,
+ *         single_board?: bool|Param, // One board per tenant: the tenant index opens its board, created (with board.default_columns) on the first visit. // Default: false
+ *         resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface (slug => tenant key and name; null for a slug the user may not open). null = the slug is the tenant. // Default: null
+ *     },
+ *     assignee_provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface (since 1.10): who may be a member of a task on a board. null = every user of user_class. // Default: null
+ *     board?: array{
+ *         default_columns?: list<array{ // Default: [{"name":"To do","color":"#94a3b8"},{"name":"In progress","color":"#3b82f6"},{"name":"Done","color":"#22c55e"}]
+ *             name?: scalar|Param|null,
+ *             color?: scalar|Param|null, // Default: null
+ *         }>,
+ *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
+ *     },
  * }
  * @psalm-type NowoUiKitConfig = array{
  *     css_framework?: "bootstrap"|"bootstrap5"|"bootstrap4"|"tailwind"|"foundation"|"custom"|"tabler"|"none"|Param, // Host CSS stack: bootstrap5|bootstrap4|tailwind|foundation|custom|none|tabler (bootstrap alias → bootstrap5). // Default: "bootstrap5"
