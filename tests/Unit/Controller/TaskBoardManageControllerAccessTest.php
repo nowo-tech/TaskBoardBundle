@@ -72,6 +72,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
+use function count;
 use function in_array;
 
 /**
@@ -481,6 +482,35 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(['tabler:bug'], $this->findCreatedForm(BoardColumnFormType::class)['options']['icon_choices']);
     }
 
+    public function testBoardAndListPassOneInlineTaskFormPerColumnToEditors(): void
+    {
+        $this->controller($this->owner, currentRequest: Request::create('/board'))->board($this->board->getId());
+        $columnIds = array_map(static fn (BoardColumn $column): string => $column->getId(), $this->board->getColumns()->toArray());
+        self::assertSame($columnIds, array_keys($this->rendered['inlineTaskForms']));
+        $inline = array_values(array_filter($this->createdForms, static fn (array $form): bool => ($form['options']['compact'] ?? false) === true));
+        self::assertCount(count($columnIds), $inline);
+        self::assertSame('/redirect', $inline[0]['options']['action']);
+
+        $this->controller($this->owner)->listView($this->board->getId());
+        self::assertTrue($this->rendered['canEditBoard']);
+        self::assertSame($columnIds, array_keys($this->rendered['inlineTaskForms']));
+
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher())->listView($this->board->getId());
+        self::assertSame([], $this->rendered['inlineTaskForms']);
+    }
+
+    public function testInlineNewTaskUsesTheCompactFormAndComesBack(): void
+    {
+        $request  = Request::create('/create?inline=1&_target_path=/tools/task-board/board/x/list', 'POST');
+        $response = $this->controller($this->owner, formData: new TaskFormData(title: 'Inline'), currentRequest: $request)->createTask($this->board->getId(), $request);
+        self::assertSame('/tools/task-board/board/x/list', $response->getTargetUrl());
+        self::assertTrue($this->findCreatedForm(TaskFormType::class)['options']['compact']);
+
+        $unsafe   = Request::create('/create?inline=1&_target_path=//evil.example', 'POST');
+        $response = $this->controller($this->owner, formData: new TaskFormData(title: 'Inline'), currentRequest: $unsafe)->createTask($this->board->getId(), $unsafe);
+        self::assertSame('/redirect', $response->getTargetUrl());
+    }
+
     public function testReadOnlyBoardHasNoColumnSetControls(): void
     {
         $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), columnSets: $this->columnSets([new ColumnSet('Other')]))->board($this->board->getId());
@@ -704,7 +734,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             ganttBuilder: new TaskGanttBuilder(),
             importOrchestrator: new TaskImportOrchestrator([], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
             translator: $this->createMock(TranslatorInterface::class),
-            routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete'], ['path' => '/', 'name' => 'route']),
+            routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete', 'task_create'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,
             dashboardRoute: null,

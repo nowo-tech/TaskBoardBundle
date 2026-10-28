@@ -5,7 +5,6 @@
     link keeps opening the task page without JavaScript.
 #}
 {% set progress = taskTree|default(null) ? taskTree.progress(task) : null %}
-{% set priorityColor = task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) %}
 <li
     class="nowo-task-board__task nowo-task-card{{ task.completed ? ' is-done' : '' }}"
     draggable="true"
@@ -14,19 +13,39 @@
     data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
     data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
 >
-    <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title d-block mb-1">{{ task.title }}</a>
-    <div class="nowo-task-card__meta d-flex align-items-center gap-2 flex-wrap">
-        <span class="nowo-task-card__priority badge bg-{{ priorityColor }}-lt text-{{ priorityColor }}" data-priority="{{ task.priority.value }}">
-            {{ task.priority.value }}
+    <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title">{{ task.title }}</a>
+    {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'nowo-task-card__tags'}) }}
+    {# Since 1.12 (ClickUp-like): priority flag, due date (late in the danger colour), estimate, subtasks and assignees. #}
+    <div class="nowo-task-card__meta">
+        {# The default (normal) priority is not repeated on every card. #}
+        {% if task.priority.value != 'normal' %}
+        <span class="nowo-task-card__priority nowo-task-priority nowo-task-priority--{{ task.priority.value }}" data-priority="{{ task.priority.value }}" title="{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ ('task_board.priority.' ~ task.priority.value)|trans({}, 'NowoTaskBoardBundle') }}
         </span>
+        {% endif %}
+        {% if task.dueAt %}
+            {% set _late = not task.completed and task.dueAt|date('Y-m-d') < 'now'|date('Y-m-d') %}
+            <span class="nowo-task-card__due{{ _late ? ' is-late' : '' }}" title="{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar'}) }}<time datetime="{{ task.dueAt|date('Y-m-d') }}">{{ task.dueAt|date('d M') }}</time>
+            </span>
+        {% endif %}
         {% if task.estimatedMinutes %}
-            <span class="nowo-task-card__estimate text-secondary small">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }} {{ task.estimatedMinutes }}m</span>
+            <span class="nowo-task-card__estimate">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }}{{ task.estimatedMinutes }}m</span>
         {% endif %}
         {% if progress and progress.total > 0 %}
-            <span class="nowo-task-card__subtasks text-secondary small" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }} {{ progress.done }}/{{ progress.total }}
+            <span class="nowo-task-card__subtasks" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}{{ progress.done }}/{{ progress.total }}
+            </span>
+        {% endif %}
+        {% if task.members|length > 0 %}
+            {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+            <span class="nowo-task-avatars">
+                {% for member in task.members|slice(0, 3) %}
+                    {% set _name = memberUi.member_label(member.user)|trim %}
+                    <span class="nowo-task-avatar" title="{{ _name }}">{{ _name|slice(0, 1)|upper }}</span>
+                {% endfor %}
+                {% if task.members|length > 3 %}<span class="nowo-task-avatar nowo-task-avatar--more">+{{ task.members|length - 3 }}</span>{% endif %}
             </span>
         {% endif %}
     </div>
-    {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'mt-2'}) }}
 </li>

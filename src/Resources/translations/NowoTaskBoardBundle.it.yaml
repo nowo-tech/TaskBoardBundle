@@ -70,6 +70,7 @@ task_board.task.no_docs: No documentation pages.
 task_board.action.create: Create
 task_board.action.back: Back
 task_board.action.add_task: Add task
+task_board.action.new_task: 'Nuova attività'
 task_board.action.save: Save
 task_board.action.add_subtask: Add subtask
 task_board.action.add_link: Add link

@@ -82,7 +82,7 @@ final class RenamedRoutesRenderingTest extends TestCase
 
         self::assertStringContainsString('/host/board/' . $this->board->getId() . '/gantt', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="priority"', $html);
-        self::assertStringContainsString('class="nowo-task-board-list-filters"', $html);
+        self::assertStringContainsString('class="nowo-task-board-list-filters nowo-task-list__filters"', $html);
         self::assertStringContainsString('/host/task/' . $this->task->getId(), $html);
     }
 

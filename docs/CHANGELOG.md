@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.12.0] - 2026-10-28](#1120---2026-10-28)
 - [[1.11.1] - 2026-10-28](#1111---2026-10-28)
 - [[1.11.0] - 2026-10-28](#1110---2026-10-28)
 - [[1.10.1] - 2026-10-28](#1101---2026-10-28)
@@ -45,6 +46,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.12.0] - 2026-10-28
+
+ClickUp-like views on a host-neutral look (see [USAGE](USAGE.md#look-and-feel-clickup-like-views-theming-and-icons-since-112)).
+No schema change.
+
+### Added
+
+- **Design tokens** `--nowo-task-*` (surface, border, ink, muted, accent, radius, success / danger / warning / info /
+  purple and their soft variants): every colour of `task-board.css` reads them first, then the Tabler variables, so a
+  host themes the board, list, Gantt, task page and panel without overriding rules.
+- **Inline "+ New task"** at the foot of every board column and list group (`inlineTaskForms`, `task_create?inline=1`
+  with the compact form, back to `_target_path`).
+- **Task detail**: status pill in the column's colour, title edited in place, one attribute grid (people, due date,
+  time, tags), subtasks as a checklist with an inline *Add subtask*, sections for links, dependencies, documentation
+  and the activity stream (now last).
+- **Board cards**: priority flag (not repeated for *normal*), due date (late dates highlighted), assignee avatars.
+- **List**: grouped by column (colour, icon, count, collapsible), people and priority columns.
+- Member names prefer `displayName` / `fullName` over the e-mail.
+
+### Changed
+
+- Icons go through the UiKit icon set (`components/_icon.html.twig`): no Tabler webfont is required; `ux_icon` hosts
+  import the icons listed in USAGE.
+- The detail, card, list, links, subtasks and activity templates lay out with the bundle's own classes instead of CSS
+  framework utilities (`d-flex`, `row` / `col`, spacing, `card`, `list-group`); hidden parts use the `hidden`
+  attribute instead of `d-none`.
+
+### Fixed
+
+- The task page under a strict CSP: the link removal confirmation and the external-link button no longer use inline
+  event handlers (and no link sits inside a button any more).
+- Hosts without Bootstrap utilities no longer see the hidden column / priority selects and empty icon boxes.
 
 ## [1.11.1] - 2026-10-28
 

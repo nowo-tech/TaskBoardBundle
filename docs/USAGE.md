@@ -26,6 +26,10 @@
   - [Several boards per tenant and boards owned by a user](#several-boards-per-tenant-and-boards-owned-by-a-user)
   - [Task panel in a side drawer](#task-panel-in-a-side-drawer)
   - [No inline styles](#no-inline-styles)
+- [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
+  - [Theming with design tokens](#theming-with-design-tokens)
+  - [Icons](#icons)
+  - [Inline new task](#inline-new-task)
 - [Translations](#translations)
 
 ## Manage UI
@@ -369,6 +373,63 @@ inserted later). The subtask progress is a native `<progress>`. New semantic cla
 `nowo-task-column__icon`, `__header`, `__title`, `__name`, `__count`, `__edit`, `__tasks`, `__empty`, `__add-task`,
 `nowo-task-column-sets` (`__item`, `__delete`, `__empty`), `nowo-task-dialog` (`--native`, `__header`, `__body`,
 `__actions`, `__danger`), `nowo-task-progress`, `nowo-task-list__row`, `nowo-task-panel-fragment`.
+
+## Look and feel: ClickUp-like views, theming and icons (since 1.12)
+
+The views follow ClickUp's way of working; their look is the host's:
+
+- **Task detail** (page and panel): a status pill in the column's colour (its menu moves the task; the arrows step to the
+  previous / next column, the check completes it), the priority flag, the title edited in place, then one grid of
+  attributes (people, due date, time, tags) and the description; below, the subtasks as a checklist with an inline
+  *Add subtask* (Enter adds), links, dependencies, documentation and the activity stream.
+- **Board**: cards with tags, priority flag (only when not *normal*), due date (late dates in the danger colour),
+  estimate, subtask progress and assignee avatars; an inline *+ New task* at the foot of every column.
+- **List**: one collapsible group per column (its colour, icon and count) with the tasks as rows — title, people, due
+  date, priority, tags — and an inline *+ New task* per group; tasks without a column close the list.
+
+The templates lay out with the bundle's own classes (`nowo-task-detail__*`, `nowo-task-section*`, `nowo-task-rows`,
+`nowo-task-activity`, `nowo-task-list__*`, `nowo-task-card__*`, `nowo-task-inline-add`, `nowo-task-avatar(s)`,
+`nowo-task-priority--*`, `nowo-task-tags`, `nowo-task-sr-only`) styled by `task-board.css`, so they need no CSS framework
+utilities; `btn` / `badge` classes stay for hosts whose framework styles them.
+
+### Theming with design tokens
+
+Every colour, border and radius of `task-board.css` reads a `--nowo-task-*` token, then the Tabler variable, then a
+neutral value. Set the tokens on any ancestor to give the board, list, Gantt, task page and panel your look:
+
+```css
+:root {
+    --nowo-task-surface: #ffffff;       /* cards, sections */
+    --nowo-task-surface-muted: #f8fafc; /* columns */
+    --nowo-task-border: #e6e7e9;
+    --nowo-task-ink: #1d273b;
+    --nowo-task-muted: #626976;
+    --nowo-task-hover: #f1f5f9;
+    --nowo-task-accent: #206bc4;        /* links, focus, avatars */
+    --nowo-task-accent-soft: #eff6ff;
+    --nowo-task-radius: 8px;
+    --nowo-task-radius-sm: 4px;
+    --nowo-task-success: #22c55e;       /* also -danger, -warning, -info, -purple, each with a -soft variant */
+}
+```
+
+A dark theme redefines them under its own selector (e.g. `[data-theme="dark"]`).
+
+### Icons
+
+The icons go through UiKit's `components/_icon.html.twig` with `nowo_ui_kit_icon_set` — no icon webfont is needed:
+with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti ti-<name>`. A host on `ux_icon` imports
+the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
+calendar-event, check, chevron-down, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
+columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
+line-dashed, link, list, list-tree, notes, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus, users.
+
+### Inline new task
+
+The board and list actions pass `inlineTaskForms` (column id → a compact task form, editors only). It posts to
+`task_create` with `?inline=1&_target_path=<page>`: the compact form (title and the hidden column, normal priority)
+creates the task in that column and the page comes back (`_target_path` must be a local path). The *Add task* dialog
+stays for hosts whose controller does not pass the forms.
 
 ## Translations
 

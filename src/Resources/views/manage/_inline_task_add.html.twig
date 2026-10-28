@@ -1,0 +1,21 @@
+{#
+    Since 1.12: the inline "+ New task" of a board column or a list group (ClickUp-like): type a title, Enter adds it to
+    that column and the page comes back. Variables: form (the column's compact task form, inlineTaskForms[column.id]).
+#}
+{{ form_start(form, {attr: {class: 'nowo-task-inline-add nowo-task-inline-add--task'}}) }}
+    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus', class: 'nowo-task-inline-add__icon'}) }}
+    {{ form_widget(form.title, {
+        label: false,
+        attr: {
+            class: 'form-control nowo-task-inline-add__input',
+            placeholder: 'task_board.action.new_task'|trans({}, 'NowoTaskBoardBundle'),
+            'aria-label': 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle'),
+        },
+    }) }}
+    <button type="submit" class="btn btn-sm btn-primary nowo-task-inline-add__submit">{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {% for child in form %}
+        {% if not child.rendered %}
+            {{ form_widget(child) }}
+        {% endif %}
+    {% endfor %}
+{{ form_end(form, {render_rest: false}) }}

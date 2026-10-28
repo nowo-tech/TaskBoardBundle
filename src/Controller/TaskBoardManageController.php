@@ -183,6 +183,7 @@ final class TaskBoardManageController extends AbstractController
             'columnIcons'      => $this->columnIcons,
             'columnDeleteForm' => $canEditBoard ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
             'panelTargetPath'  => $this->currentRequestUri(),
+            'inlineTaskForms'  => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
         ] + ($canEditBoard ? $this->columnSetViewData($board, $user) : []));
     }
 
@@ -340,8 +341,12 @@ final class TaskBoardManageController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user, true);
 
-        $form = $this->createForm(TaskFormType::class, new TaskFormData(), [
+        // Since 1.12: `?inline=1` is the inline "+ New task" of a column or a list group — the compact form (title and
+        // the hidden column, normal priority) — and comes back to `_target_path` (the board or the list).
+        $inline = $request->query->getBoolean('inline');
+        $form   = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($board),
+            'compact'        => $inline,
         ]);
         $form->handleRequest($request);
 
@@ -351,7 +356,9 @@ final class TaskBoardManageController extends AbstractController
             $this->taskManager->create($board, $data, $user);
         }
 
-        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        $target = $inline ? $this->safeTargetPath($request) : null;
+
+        return $target !== null ? $this->redirect($target) : $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
     public function importBoard(string $boardId, Request $request): Response
@@ -412,8 +419,9 @@ final class TaskBoardManageController extends AbstractController
 
     public function listView(string $boardId): Response
     {
-        $user  = $this->requireUser();
-        $board = $this->findBoard($boardId, $user);
+        $user         = $this->requireUser();
+        $board        = $this->findBoard($boardId, $user);
+        $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         // Completed tasks (last column) stay visible so the column filter can show "Done" work.
         $tasks = $this->taskRepository->findByBoard($board, true);
 
@@ -442,6 +450,9 @@ final class TaskBoardManageController extends AbstractController
             ])->createView(),
             'dashboardRoute'  => $this->dashboardRoute,
             'panelTargetPath' => $this->currentRequestUri(),
+            // Since 1.12: the list groups the tasks by column, each group with its inline "+ New task".
+            'canEditBoard'    => $canEditBoard,
+            'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $this->buildColumnChoices($board)) : [],
         ]);
     }
 
@@ -805,6 +816,37 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $target;
+    }
+
+    /**
+     * Since 1.12: one compact task form per column (title and the hidden column) for the inline "+ New task" of the
+     * board columns and the list groups; it posts to task_create with `inline=1` and comes back to this page.
+     *
+     * @param array<string, string> $columnChoices label => column id
+     *
+     * @return array<string, FormView> column id => form
+     */
+    private function inlineTaskForms(TaskBoard $board, array $columnChoices): array
+    {
+        $route = $this->routes['task_create']['name'] ?? null;
+        if (!is_string($route)) {
+            return [];
+        }
+        $action = $this->generateUrl($route, array_filter([
+            'boardId'      => $board->getId(),
+            'inline'       => 1,
+            '_target_path' => $this->currentRequestUri(),
+        ], static fn (mixed $value): bool => $value !== null));
+        $forms = [];
+        foreach ($columnChoices as $columnId) {
+            $forms[$columnId] = $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columnId), [
+                'column_choices' => $columnChoices,
+                'compact'        => true,
+                'action'         => $action,
+            ])->createView();
+        }
+
+        return $forms;
     }
 
     private function currentRequestUri(): ?string

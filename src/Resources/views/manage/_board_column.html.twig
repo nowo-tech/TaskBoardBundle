@@ -53,11 +53,14 @@
         {% endfor %}
     </ul>
     {% if columnTasks is empty %}
-        <p class="nowo-task-column__empty text-secondary small">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+        <p class="nowo-task-column__empty">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
     {% endif %}
 
-    {# Write controls only for users who may edit the board (since 1.10). #}
-    {% if (canEditBoard ?? true) %}
+    {# Write controls only for users who may edit the board (since 1.10); since 1.12 an inline "+ New task" when the
+       controller passes inlineTaskForms, else the "Add task" dialog. #}
+    {% if (canEditBoard ?? true) and inlineTaskForms[column.id] is defined %}
+        {{ include('@NowoTaskBoardBundle/manage/_inline_task_add.html.twig', {form: inlineTaskForms[column.id]}) }}
+    {% elseif (canEditBoard ?? true) %}
     <button
         type="button"
         class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn nowo-task-column__add-task"

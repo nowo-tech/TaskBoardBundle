@@ -70,6 +70,7 @@ task_board.task.no_docs: Sin documentación.
 task_board.action.create: Crear
 task_board.action.back: Volver
 task_board.action.add_task: Añadir tarea
+task_board.action.new_task: 'Nueva tarea'
 task_board.action.save: Guardar
 task_board.action.add_subtask: Añadir subtarea
 task_board.action.add_link: Añadir enlace

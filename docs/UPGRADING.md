@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.12.0](#to-1120)
 - [To 1.11.1](#to-1111)
 - [To 1.11.0](#to-1110)
 - [To 1.10.1](#to-1101)
@@ -85,6 +86,22 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.12.0
+
+From **1.11.x**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change.
+
+- **Look**: the task detail, board cards and list changed layout (ClickUp-like) and use the bundle's own classes.
+  A host that styled the old Bootstrap structure (`.card`, `.list-group-item`, `.row` inside the task page) moves its
+  rules to the new classes, or themes through the `--nowo-task-*` tokens (USAGE, "Theming with design tokens").
+- **Icons**: with `nowo_ui_kit.icon_set: ux_icon`, import the Tabler icons listed in USAGE ("Icons"); with the Tabler
+  webfont nothing changes.
+- **Overridden templates**: the blocks `nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`,
+  `nowo_task_relations` keep their names; their markup changed, so re-check overrides that copied it. A board / list
+  template override that wants the inline *+ New task* includes `@NowoTaskBoardBundle/manage/_inline_task_add.html.twig`
+  with `inlineTaskForms[column.id]`.
+- **Tests**: assertions on the old classes (`fw-semibold text-truncate`, `text-decoration-line-through`, `mt-2` on the
+  progress bar) now read the new ones (`nowo-task-link__label`, `nowo-task-activity__old`, `nowo-task-progress`).
 
 ## To 1.11.1
 
