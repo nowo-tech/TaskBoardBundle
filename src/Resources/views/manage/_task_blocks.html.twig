@@ -77,7 +77,9 @@
                         </div>
                         <div class="nowo-task-detail__field-value">
                             {{ include('@NowoTaskBoardBundle/manage/_task_status_field.html.twig') }}
-                            <div class="d-none">{{ form_widget(taskForm.columnId, {label: false}) }}</div>
+                            {% if taskForm.columnId is defined %}
+                                <div class="d-none">{{ form_widget(taskForm.columnId, {label: false}) }}</div>
+                            {% endif %}
                         </div>
                     </div>
 

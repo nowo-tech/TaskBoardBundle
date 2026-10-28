@@ -22,7 +22,10 @@
                     <div class="row g-3">
                         <div class="col-12">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput'}}) }}</div>
                         <div class="col-md-6">{{ form_row(taskForm.priority) }}</div>
-                        <div class="col-md-6">{{ form_row(taskForm.columnId, {attr: {'data-nowo-task-board-add-task-modal-target': 'columnField'}}) }}</div>
+                        {# A board without columns has no column field (TaskFormType adds it only with choices). #}
+                        {% if taskForm.columnId is defined %}
+                            <div class="col-md-6">{{ form_row(taskForm.columnId, {attr: {'data-nowo-task-board-add-task-modal-target': 'columnField'}}) }}</div>
+                        {% endif %}
                         <div class="col-12">{{ form_row(taskForm.description) }}</div>
                         <div class="col-md-6">{{ form_row(taskForm.estimatedMinutes) }}</div>
                         <div class="col-md-6">{{ form_row(taskForm.dueAt) }}</div>

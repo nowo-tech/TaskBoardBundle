@@ -344,6 +344,38 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('Ship it', $html);
     }
 
+    public function testBoardAndTaskPagesRenderWithoutColumns(): void
+    {
+        $taskForm = $this->factory()->create(TaskFormType::class, new TaskFormData(), [
+            'column_choices'   => [],
+            'rich_description' => false,
+            'tag_input'        => false,
+        ])->createView();
+        self::assertFalse(isset($taskForm['columnId']));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext(['tasks' => [], 'taskForm' => $taskForm]));
+        self::assertStringContainsString('data-nowo-task-board-add-task-modal-target="titleInput"', $html);
+        self::assertStringNotContainsString('data-nowo-task-board-add-task-modal-target="columnField"', $html);
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [
+            'task'     => $this->task,
+            'taskForm' => $this->factory()->create(TaskFormType::class, new TaskFormData(title: 'Ship it'), [
+                'column_choices'   => [],
+                'rich_description' => false,
+                'tag_input'        => false,
+            ])->createView(),
+            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
+            'memberForm'       => $this->memberForm(),
+            'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
+            'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
+            'subtaskTotal'     => 0,
+            'subtaskDone'      => 0,
+            'priorities'       => TaskPriority::cases(),
+            'dashboardRoute'   => null,
+        ] + $this->taskActionForms($this->task));
+        self::assertStringContainsString('Ship it', $html);
+    }
+
     public function testBoardShowsColumnIconsSetsAndDeleteWithoutInlineStyle(): void
     {
         $this->todo->setColor('#16a34a')->setIcon('tabler:inbox');

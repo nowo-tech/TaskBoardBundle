@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.11.1] - 2026-10-28](#1111---2026-10-28)
 - [[1.11.0] - 2026-10-28](#1110---2026-10-28)
 - [[1.10.1] - 2026-10-28](#1101---2026-10-28)
 - [[1.10.0] - 2026-10-28](#1100---2026-10-28)
@@ -44,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.11.1] - 2026-10-28
+
+### Fixed
+
+- **A board without columns** (all its columns deleted, or created empty by a host): the board page and the task page
+  answered 500 — the templates rendered the task form's column field, which `TaskFormType` only adds when the board has
+  columns.
 
 ## [1.11.0] - 2026-10-28
 
