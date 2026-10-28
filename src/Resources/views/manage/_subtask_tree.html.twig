@@ -16,7 +16,7 @@
         <li class="nowo-task-subtree__item{{ depth == 0 ? ' list-group-item' : '' }}{{ node.completed ? ' is-done' : '' }}" data-task-id="{{ node.id }}">
             <div class="nowo-task-subtree__row d-flex align-items-start gap-2">
                 <span class="nowo-task-subtree__check nowo-task-detail__subtask-check{{ node.completed ? ' is-done' : '' }}" aria-hidden="true">
-                    <i class="ti ti-{{ node.completed ? 'circle-check' : 'circle' }}"></i>
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: (node.completed ? 'circle-check' : 'circle')}) }}
                 </span>
                 <div class="nowo-task-subtree__body flex-grow-1">
                     <a href="{{ path(nowo_task_board_route('task'), {taskId: node.id}) }}" class="nowo-task-subtree__title text-reset fw-semibold">{{ node.title }}</a>
@@ -25,7 +25,7 @@
                     {% endif %}
                     {% if progress.total > 0 %}
                         <span class="nowo-task-subtree__progress text-secondary small ms-1" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
-                            <i class="ti ti-subtask" aria-hidden="true"></i> {{ progress.done }}/{{ progress.total }}
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }} {{ progress.done }}/{{ progress.total }}
                         </span>
                     {% endif %}
                     {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: node.tags, wrapper_class: 'mt-1'}) }}

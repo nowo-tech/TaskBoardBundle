@@ -40,8 +40,8 @@
                 <div class="text-secondary small">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</div>
             </div>
             <div class="d-flex flex-wrap gap-2 small text-secondary">
-                <span><i class="ti ti-line-dashed me-1"></i>{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                <span><i class="ti ti-calendar-event me-1"></i>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar-event'}) }}{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</span>
             </div>
         </div>
 

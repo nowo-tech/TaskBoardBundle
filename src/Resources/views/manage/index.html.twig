@@ -40,7 +40,7 @@
                             {% endif %}
                         {% endfor %}
                         <button type="submit" class="btn btn-primary">
-                            <i class="ti ti-plus me-1"></i>{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     {{ form_end(boardForm) }}
                 </div>
@@ -63,10 +63,10 @@
                                 </div>
                                 <div class="col-auto btn-list">
                                     <a href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}" class="btn btn-sm btn-primary">
-                                        <i class="ti ti-layout-kanban"></i> {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}
+                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-kanban'}) }} {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}
                                     </a>
                                     <a href="{{ path(nowo_task_board_route('list'), {boardId: board.id}) }}" class="btn btn-sm btn-outline-secondary">
-                                        <i class="ti ti-list"></i> {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}
+                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'list'}) }} {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}
                                     </a>
                                 </div>
                             </div>

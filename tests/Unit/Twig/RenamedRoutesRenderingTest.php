@@ -157,6 +157,8 @@ final class RenamedRoutesRenderingTest extends TestCase
             (static function (): FilesystemLoader {
                 $filesystem = new FilesystemLoader([self::VENDOR . '/symfony/twig-bridge/Resources/views/Form']);
                 $filesystem->addPath(self::VIEWS, 'NowoTaskBoardBundle');
+                // Since 1.12 the icons go through UiKit's components/_icon.
+                $filesystem->addPath(self::VENDOR . '/nowo-tech/ui-kit-bundle/src/Resources/views', 'NowoUiKitBundle');
 
                 return $filesystem;
             })(),

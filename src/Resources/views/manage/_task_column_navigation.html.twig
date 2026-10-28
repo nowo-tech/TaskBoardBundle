@@ -26,7 +26,7 @@
                 class="btn btn-outline-secondary"
                 {% if not columnNavigation.canPrevious %} disabled{% endif %}
             >
-                <i class="ti ti-arrow-left me-1"></i>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-left'}) }}
                 {% if columnNavigation.previousColumnName %}
                     {{ 'task_board.action.previous_column_to'|trans({'%column%': columnNavigation.previousColumnName}, 'NowoTaskBoardBundle') }}
                 {% else %}
@@ -49,7 +49,7 @@
                 {% else %}
                     {{ 'task_board.action.next_column'|trans({}, 'NowoTaskBoardBundle') }}
                 {% endif %}
-                <i class="ti ti-arrow-right ms-1"></i>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}
             </button>
 
             <button
@@ -62,7 +62,7 @@
                 class="btn btn-success"
                 {% if not columnNavigation.canDone %} disabled{% endif %}
             >
-                <i class="ti ti-circle-check me-1"></i>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'circle-check'}) }}
                 {% if columnNavigation.doneColumnName %}
                     {{ 'task_board.action.mark_done_column'|trans({'%column%': columnNavigation.doneColumnName}, 'NowoTaskBoardBundle') }}
                 {% else %}

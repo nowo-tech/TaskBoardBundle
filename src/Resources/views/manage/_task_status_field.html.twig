@@ -13,7 +13,7 @@
             {% if not columnNavigation.canPrevious %} disabled{% endif %}
             title="{{ 'task_board.action.previous_column'|trans({}, 'NowoTaskBoardBundle') }}"
         >
-            <i class="ti ti-chevron-left"></i>
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-left'}) }}
         </button>
 
         <div class="nowo-task-detail__status-picker">
@@ -31,9 +31,9 @@
                 {% else %}
                     <span class="text-secondary">{{ 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle') }}</span>
                 {% endif %}
-                <i class="ti ti-chevron-down nowo-task-detail__status-caret"></i>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-down', class: 'nowo-task-detail__status-caret'}) }}
                 {% if columnNavigation.isCompleted %}
-                    <i class="ti ti-circle-check nowo-task-detail__status-done-icon" aria-hidden="true"></i>
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'circle-check', class: 'nowo-task-detail__status-done-icon'}) }}
                 {% endif %}
             </button>
 
@@ -60,7 +60,7 @@
                             <span>{{ column.name }}</span>
                         </span>
                         {% if column.id == currentColumnId %}
-                            <i class="ti ti-check nowo-task-detail__status-option-check"></i>
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'check', class: 'nowo-task-detail__status-option-check'}) }}
                         {% endif %}
                     </button>
                 {% else %}
@@ -80,7 +80,7 @@
             {% if not columnNavigation.canNext %} disabled{% endif %}
             title="{{ columnNavigation.nextColumnName ?? 'task_board.action.next_column'|trans({}, 'NowoTaskBoardBundle') }}"
         >
-            <i class="ti ti-chevron-right"></i>
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-right'}) }}
         </button>
 
         <button
@@ -94,7 +94,7 @@
             {% if not columnNavigation.canDone %} disabled{% endif %}
             title="{{ 'task_board.action.mark_done'|trans({}, 'NowoTaskBoardBundle') }}"
         >
-            <i class="ti ti-circle-check"></i>
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'circle-check'}) }}
         </button>
     </div>
 </div>

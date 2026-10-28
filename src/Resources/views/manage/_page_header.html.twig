@@ -16,7 +16,7 @@
             {% if headerActions is defined and headerActions is iterable %}
                 {% for action in headerActions %}
                     <a href="{{ action.href }}" class="btn {{ action.class|default('btn-outline-primary') }}">
-                        {%- if action.icon|default(null) %}<i class="ti ti-{{ action.icon }}" aria-hidden="true"></i> {% endif -%}
+                        {%- if action.icon|default(null) %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: (action.icon)}) }} {% endif -%}
                         {{ action.label }}
                     </a>
                 {% endfor %}

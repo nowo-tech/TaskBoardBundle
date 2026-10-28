@@ -40,11 +40,13 @@
                         <button
                             type="submit"
                             form="nowo-task-link-delete-form"
-                            class="btn btn-outline-danger d-none"
+                            class="btn btn-outline-danger"
+                            hidden
                             data-nowo-task-board-task-links-modal-target="deleteButton"
-                            onclick="return confirm('{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle')|e('js') }}')"
+                            data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
+                            data-action="click->nowo-task-board-task-links-modal#confirmDelete"
                         >
-                            <i class="ti ti-trash me-1"></i>{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     </div>
                     <div class="d-flex gap-2">
@@ -52,13 +54,13 @@
                             {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="ti ti-device-floppy me-1"></i>{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     </div>
                 </div>
             {{ form_end(linkForm) }}
             {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
-            {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', class: 'd-none', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
+            {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
                 {% for child in linkRemoveForm %}
                     {% if not child.rendered %}
                         {{ form_row(child) }}

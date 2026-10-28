@@ -111,6 +111,14 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         }
     };
 
+    /** Since 1.12: the confirmation of "Remove link" (no inline handler, so a strict CSP keeps it working). */
+    confirmDelete(event: Event): void {
+        const message = (event.currentTarget as HTMLElement | null)?.dataset.confirmMessage ?? '';
+        if ('' !== message && !window.confirm(message)) {
+            event.preventDefault();
+        }
+    }
+
     private resetForm(action: string): void {
         this.formTarget.action = action;
         this.formTarget.reset();
@@ -118,11 +126,11 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
 
     private toggleDeleteForm(visible: boolean): void {
         if (this.hasDeleteFormTarget) {
-            this.deleteFormTarget.classList.toggle('d-none', !visible);
+            this.deleteFormTarget.hidden = !visible;
         }
 
         if (this.hasDeleteButtonTarget) {
-            this.deleteButtonTarget.classList.toggle('d-none', !visible);
+            this.deleteButtonTarget.hidden = !visible;
         }
     }
 

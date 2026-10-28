@@ -20,11 +20,11 @@
             {{ task.priority.value }}
         </span>
         {% if task.estimatedMinutes %}
-            <span class="nowo-task-card__estimate text-secondary small"><i class="ti ti-clock" aria-hidden="true"></i> {{ task.estimatedMinutes }}m</span>
+            <span class="nowo-task-card__estimate text-secondary small">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }} {{ task.estimatedMinutes }}m</span>
         {% endif %}
         {% if progress and progress.total > 0 %}
             <span class="nowo-task-card__subtasks text-secondary small" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
-                <i class="ti ti-subtask" aria-hidden="true"></i> {{ progress.done }}/{{ progress.total }}
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }} {{ progress.done }}/{{ progress.total }}
             </span>
         {% endif %}
     </div>

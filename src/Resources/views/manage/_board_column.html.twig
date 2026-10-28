@@ -20,7 +20,7 @@
         title="{{ 'task_board.board.drag_column'|trans({}, 'NowoTaskBoardBundle') }}"
     >
         <span class="nowo-task-board__column-grip" aria-hidden="true">
-            <i class="ti ti-grip-vertical"></i>
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'grip-vertical'}) }}
         </span>
         <h3 class="nowo-task-board__column-title nowo-task-column__title">
             {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: column.icon}) }}
@@ -42,7 +42,7 @@
             data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"
             data-column-icon="{{ column.icon|default('') }}"
         >
-            <i class="ti ti-pencil" aria-hidden="true"></i>
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}
         </button>
         {% endif %}
     </div>
@@ -65,7 +65,7 @@
         data-column-id="{{ column.id }}"
         data-column-name="{{ column.name|e('html_attr') }}"
     >
-        <i class="ti ti-plus me-1" aria-hidden="true"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
     {% endif %}
 </section>

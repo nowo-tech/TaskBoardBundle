@@ -2,7 +2,7 @@
 
 <details class="card mb-3 nowo-task-detail__relation nowo-task-detail__history" open>
     <summary class="card-header nowo-task-detail__relation-summary">
-        <span><i class="ti ti-history me-2"></i>{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
+        <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'history'}) }}{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
     </summary>
     <div class="list-group list-group-flush">
         {% for entry in task.changeHistory %}
@@ -25,7 +25,7 @@
                                     {% if entry.oldValue %}
                                         <span class="text-decoration-line-through">{{ ('task_board.priority.' ~ entry.oldValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
-                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
                                         <span>{{ ('task_board.priority.' ~ entry.newValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
@@ -35,7 +35,7 @@
                                     {% else %}
                                         {{ 'task_board.history.completed_no'|trans({}, 'NowoTaskBoardBundle') }}
                                     {% endif %}
-                                    <i class="ti ti-arrow-right mx-1"></i>
+                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}
                                     {% if entry.newValue == 'true' %}
                                         {{ 'task_board.history.completed_yes'|trans({}, 'NowoTaskBoardBundle') }}
                                     {% else %}
@@ -47,7 +47,7 @@
                                     {% if oldTags|length > 0 %}
                                         <span class="text-decoration-line-through">{{ oldTags|join(', ') }}</span>
                                     {% endif %}
-                                    {% if oldTags|length > 0 and newTags|length > 0 %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if oldTags|length > 0 and newTags|length > 0 %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if newTags|length > 0 %}
                                         <span>{{ newTags|join(', ') }}</span>
                                     {% endif %}
@@ -65,7 +65,7 @@
                                     {% if entry.oldValue %}
                                         <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
                                     {% endif %}
-                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
                                         <span>{{ entry.newValue }}</span>
                                     {% elseif entry.oldValue and entry.changeType.value == 'link_removed' %}
@@ -75,7 +75,7 @@
                                     {% if entry.oldValue %}
                                         <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
                                     {% endif %}
-                                    {% if entry.oldValue and entry.newValue %}<i class="ti ti-arrow-right mx-1"></i>{% endif %}
+                                    {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
                                         <span>{{ entry.newValue }}</span>
                                     {% endif %}

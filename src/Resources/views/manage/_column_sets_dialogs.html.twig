@@ -6,10 +6,10 @@
 {% set columnSets = columnSets|default([]) %}
 <div class="nowo-task-column-sets" data-controller="nowo-task-board-dialog">
     <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-column-sets__save" data-action="nowo-task-board-dialog#open" data-dialog="save">
-        <i class="ti ti-device-floppy me-1" aria-hidden="true"></i>{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}
+        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
     <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-column-sets__apply" data-action="nowo-task-board-dialog#open" data-dialog="apply">
-        <i class="ti ti-columns me-1" aria-hidden="true"></i>{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}
+        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'columns'}) }}{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
 
     <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="save" aria-labelledby="nowo-task-column-set-save-title">
@@ -72,7 +72,7 @@
                                         {% endif %}
                                     {% endfor %}
                                     <button type="submit" class="btn btn-sm btn-ghost-danger" aria-label="{{ 'task_board.column_set.delete_named'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}">
-                                        <i class="ti ti-trash" aria-hidden="true"></i>
+                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}
                                     </button>
                                 {{ form_end(deleteForm) }}
                             {% endif %}

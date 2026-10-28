@@ -47,7 +47,7 @@
                             {% endif %}
                         {% endfor %}
                         <button type="submit" class="btn btn-primary">
-                            <i class="ti ti-upload me-1"></i>{{ 'task_board.import.form.submit'|trans({}, 'NowoTaskBoardBundle') }}
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.form.submit'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     {{ form_end(importForm) }}
                 </div>

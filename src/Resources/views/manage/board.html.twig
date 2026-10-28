@@ -44,7 +44,7 @@
         <div class="nowo-task-board__toolbar">
             {% if (canEditBoard ?? true) %}
             <p class="nowo-task-board__hint text-secondary small mb-0">
-                <i class="ti ti-arrows-sort" aria-hidden="true"></i> {{ 'task_board.board.reorder_hint'|trans({}, 'NowoTaskBoardBundle') }}
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrows-sort'}) }} {{ 'task_board.board.reorder_hint'|trans({}, 'NowoTaskBoardBundle') }}
             </p>
             {# Since 1.11: column sets (save this board's columns, add the columns of a set). #}
             {% if columnSetForm is defined and columnSetApplyForm is defined %}
@@ -77,7 +77,7 @@
                     title="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
                     aria-label="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
                 >
-                    <i class="ti ti-plus" aria-hidden="true"></i>
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}
                 </button>
             </div>
             {% endif %}

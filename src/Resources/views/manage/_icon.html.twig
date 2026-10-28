@@ -1,0 +1,11 @@
+{#
+    Decorative icon (since 1.12) through the UiKit icon set (nowo_ui_kit_icon_set), so the bundle needs no icon
+    webfont: `name` is a Tabler icon name (e.g. chevron-left); ux_icon gets "tabler:<name>", the Tabler webfont and the
+    other sets get the bare name. Optional `class`. Hosts on ux_icon import the icons listed in docs/USAGE.md "Icons".
+#}
+{% set _set = nowo_ui_kit_icon_set|default('tabler-icons') %}
+{% if _set != 'none' -%}
+<span class="nowo-task-icon{{ class|default(false) ? ' ' ~ class : '' }}" aria-hidden="true">
+    {{- include('@NowoUiKitBundle/components/_icon.html.twig', {name: _set == 'ux_icon' ? 'tabler:' ~ name : name, nowo_ui_kit_icon_set: _set}, false)|trim|raw -}}
+</span>
+{%- endif %}

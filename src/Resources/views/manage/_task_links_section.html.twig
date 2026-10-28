@@ -2,10 +2,10 @@
     <div class="card-header nowo-task-detail__section-header">
         <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap w-100">
             <h2 class="card-title mb-0">
-                <i class="ti ti-link me-2"></i>{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'link'}) }}{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
             </h2>
             <button type="button" class="btn btn-sm btn-outline-primary" data-action="click->nowo-task-board-task-links-modal#openAdd">
-                <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>
     </div>
@@ -50,7 +50,7 @@
                         </div>
                     </div>
                     <a href="{{ link.url|nowo_task_board_safe_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}" onclick="event.stopPropagation();">
-                        <i class="ti ti-external-link"></i>
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'external-link'}) }}
                     </a>
                 </div>
             </button>

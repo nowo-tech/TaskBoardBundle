@@ -38,7 +38,7 @@
                                     {% endif %}
                                 {% endfor %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ 'task_board.action.remove_member'|trans({}, 'NowoTaskBoardBundle') }}">
-                                    <i class="ti ti-user-minus"></i>
+                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-minus'}) }}
                                 </button>
                             {{ form_end(member_remove_form) }}
                         </div>
@@ -54,7 +54,7 @@
                         <div class="col-md-4">{{ form_row(memberForm.memberRole) }}</div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary w-100">
-                                <i class="ti ti-user-plus"></i>
+                                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}
                             </button>
                         </div>
                     </div>
