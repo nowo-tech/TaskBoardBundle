@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.15.0](#to-1150)
 - [To 1.14.1](#to-1141)
 - [To 1.14.0](#to-1140)
 - [To 1.13.1](#to-1131)
@@ -90,6 +91,49 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.15.0
+
+From **1.14.x**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`.
+
+**Schema change (every host):** a nullable start date on the tasks (dependencies and time entries already had their
+tables). Generate and run a migration (`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`),
+or apply (MySQL):
+
+```sql
+ALTER TABLE task_board_tasks ADD start_at DATETIME DEFAULT NULL;
+```
+
+Existing tasks keep `NULL`: their Gantt bars start on their creation day, as before. The demo ships it as
+`demo/symfony8/migrations/Version20261031120000.php`. Seeds or imports that faked `createdAt` to place a bar should set
+`Task::setStartAt()` instead.
+
+Then check these if they apply to you:
+
+- **Routes**: four new manage routes (`task_dependency`, `task_dependency_remove`, `task_time`, `task_time_remove`);
+  hosts with `tenancy.tenant_paths` get their tenant copies automatically. A host that lists the routes by hand
+  (`routes.*`) gets the defaults.
+- **Week start**: the Gantt weeks start on Monday (`gantt.week_start`); set `sunday`, or a
+  `gantt.week_start_resolver` service for a per-user choice.
+- **`ux_icon` hosts** import three more icons: `tabler:hourglass`, `tabler:filter` and `tabler:calendar-event`.
+- **Task titles** (and board / column names, link labels) longer than their column are form errors now (`Length`,
+  `maxlength`); a refused inline task shows an error flash (`task_board.flash.task_invalid`) instead of a 500.
+- **`TaskFormType`** (full form) has one more field, `startAt`; `TaskFormData::$startAt`; `TaskUpdatedEvent` may list
+  `startAt`; `TaskChangeType::StartDate`.
+- **`TaskListFilterType`** has a `sort` field (display option).
+- **Overrides of `manage/gantt.html.twig`** keep working with `timeline.dayKeys` in the days scale (the default);
+  draw `timeline.slots` to support the other scales. `TaskGanttItem::$startIndex` / `$endIndex` are columns of the
+  scale.
+- **Overrides of `manage/list.html.twig`**: `TaskListFilterType` has two more fields (`overEstimate`, `timeColumns`;
+  the remaining-children loop prints them) and the list filter controller reads `data-estimate`, `data-spent` and
+  `data-over` on the rows.
+- **Overrides of `_task_blocks.html.twig`**: the Dependencies section is now `_task_dependencies_section.html.twig`
+  and a new block `nowo_task_time` includes `_task_time_section.html.twig`.
+- **Theming** (optional): `--nowo-task-gantt-spent`, `--nowo-task-overrun`, `--nowo-task-on-track`,
+  `--nowo-task-under`.
+- **Custom `TaskBoardManageController` wiring**: three optional constructor arguments at the end
+  (`dependencyManager`, `timeLogger`, `weekStartResolver`); without them the dependency and time forms are not shown
+  and the week starts on Monday.
 
 ## To 1.14.1
 

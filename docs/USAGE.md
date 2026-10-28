@@ -31,6 +31,13 @@
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
 - [Task colour and dialogs (since 1.14)](#task-colour-and-dialogs-since-114)
+- [Dependencies, time and Gantt scales (since 1.15)](#dependencies-time-and-gantt-scales-since-115)
+  - [Dependencies](#dependencies)
+  - [Time tracking and deviation](#time-tracking-and-deviation)
+  - [List: folding filters and time columns](#list-folding-filters-and-time-columns)
+  - [Gantt scales and week start](#gantt-scales-and-week-start)
+  - [Start date, parent path, sorting and tall columns](#start-date-parent-path-sorting-and-tall-columns)
+  - [Collapsible sections](#collapsible-sections)
 - [Translations](#translations)
 
 ## Manage UI
@@ -57,6 +64,10 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Remove member | `task_member_remove` | Unassign a member (POST + CSRF) |
 | Add subtask | `task_subtask` | Create child task |
 | Set priority | `task_priority` | Update task priority |
+| Add dependency | `task_dependency` | Since 1.15: "this task blocks / is blocked by / relates to / duplicates" another task of the board (POST + CSRF) |
+| Remove dependency | `task_dependency_remove` | Since 1.15 (POST + CSRF) |
+| Log time | `task_time` | Since 1.15: minutes, day and note (POST + CSRF) |
+| Remove time entry | `task_time_remove` | Since 1.15 (POST + CSRF) |
 
 ## TimeTrack integration (optional)
 
@@ -464,6 +475,101 @@ browser, a click on the backdrop closes it), coloured by the `--nowo-task-*` tok
 backdrop, laid out with the bundle's classes (`nowo-task-dialog__header`, `__title`, `__close`, `__body`, `__grid`,
 `__section`, `__actions`, `nowo-task-field`, `nowo-task-members__*`). Overrides that kept the Bootstrap `.modal`
 markup still open through the controllers' legacy branch.
+
+## Dependencies, time and Gantt scales (since 1.15)
+
+No schema change: the dependencies (`task_board_task_dependencies`) and the manual time entries
+(`task_board_task_time_entries`) already had their tables.
+
+### Dependencies
+
+The task detail and panel list the task's dependencies in both directions ("Blocks", "Blocked by", "Related to",
+"Duplicates", "Duplicated by"). Editors get **Add dependency** — a native dialog with the relation and a list of the
+board's other tasks filtered as you type (`nowo-task-board-option-filter` controller) — and a remove button per row.
+`TaskDependencyManager` refuses, with a flash message:
+
+| Refusal | Flash key |
+|---------|-----------|
+| The task itself | `task_board.flash.dependency_self` |
+| A task of another board | `task_board.flash.dependency_other_board` |
+| The same link again (also "A blocks B" after "B blocked by A", "related" either way) | `task_board.flash.dependency_duplicate` |
+| A cycle of "blocks" links (A blocks B blocks … A) | `task_board.flash.dependency_cycle` |
+
+Writes need edit access (`TASK_ACCESS_CHECK`; read-only boards answer 403) and are recorded in the activity
+(`TaskChangeType::DependencyAdded` / `DependencyRemoved`, the relation in the entry's context). The Gantt draws the
+"blocks" links as before; a Gantt bar opens the task panel, where the dependency can be added.
+
+### Time tracking and deviation
+
+The detail's **Time tracking** section shows the estimate, the time spent (TimeTrack timers plus manual entries) and
+the deviation — the difference in time and %, coloured *on track* / *over* / *under* (`Support\TaskDeviation`: *over*
+when more was spent than estimated, *under* when a completed task used less than 90 % of it) — the subtasks' sum
+beside the task's own, the manual entries and **Log time** (minutes, day, note; `TaskTimeLogger`, recorded as
+`TimeLogged` / `TimeRemoved`). Durations read "45 min", "2 h", "1 h 30 min" (Twig filter `nowo_task_board_duration`,
+function `nowo_task_board_deviation(task)`).
+
+### List: folding filters and time columns
+
+The list filters fold behind a **Filters** toggle (the disclosure chevron, `aria-expanded`, the state per board in
+localStorage, open while a filter is active; `nowo-task-board-filter-collapse` controller). Two more fields:
+**Over estimate** (only the tasks that took longer than estimated) and **Show time** (the Estimate, Spent and Deviation
+columns, remembered per board), with the totals of the shown rows at the foot of every group and below the list.
+
+### Gantt scales and week start
+
+`?scale=hours|days|weeks|months` (default `days`) picks the column unit; the toolbar offers the four scales and the
+last one used is remembered per board (localStorage). Each scale draws at least and at most a number of columns
+(`GanttScale::minSlots()` / `maxSlots()`: 48 to 168 hours, 21 to 366 days, 12 to 104 weeks, 12 to 60 months); a
+longer plan is clamped to a window around now and the chart says so (`TaskGanttTimeline::$clamped`; bars running past
+it are clipped, bars outside it are not drawn). In the Hours scale a task whose due date carries a time runs from the
+hour it was created to its due time; date-only tasks span whole days. Weekends are shaded in the Hours and Days scales.
+
+Bars show the time spent against the estimate as a fill (capped at the bar's end) with an over-run marker past 100 %,
+and the numbers in the bar's tooltip. New template data: `timeline.slots` (`TaskGanttSlot`), `timeline.scale`,
+`timeline.weekStart`, `timeline.clamped`, `timeline.todayIndex`, `scales`; `TaskGanttItem` gains the estimate, spent,
+`spentPercent`, `deviationStatus`, `overrun`, `visible`, `clippedStart` / `clippedEnd`, `startTime` / `endTime`.
+
+The **week start** (`monday` or `sunday`) sets the Weeks scale columns and the week separators of the Days scale.
+`gantt.week_start` sets it for everyone; a host answers per request (e.g. a user preference) by implementing
+`Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface` and naming it in `gantt.week_start_resolver`:
+
+```php
+final readonly class UserWeekStartResolver implements WeekStartResolverInterface
+{
+    public function __construct(private Security $security) {}
+
+    public function resolve(): WeekStart
+    {
+        $user = $this->security->getUser();
+
+        return $user instanceof User && $user->weekStartsOnSunday() ? WeekStart::Sunday : WeekStart::Monday;
+    }
+}
+```
+
+### Start date, parent path, sorting and tall columns
+
+- **Start date** (`Task::$startAt`, nullable): next to the due date in the detail and the *Add task* dialog; the Gantt
+  bar starts there in every scale (`Task::getPlannedStart()` = the start date, else the creation). A start after the
+  due date is a form error.
+- **Parent path**: a subtask's detail shows its parents ("Epic › Story › this task"), from
+  `nowo_task_board_ancestors(task)`.
+- **List sorting**: the *Sort* select of the filters orders the rows inside every group by title, priority (urgent
+  first), due date (none last) or column; empty keeps the board order.
+- **Tall columns**: `--nowo-task-column-max-height: 70vh; --nowo-task-column-overflow: auto;` on the board (or an
+  ancestor) makes a long column scroll inside itself.
+- **Lengths**: titles and names are limited to their column (`TaskFormType::TITLE_MAX` = 255) with `maxlength`.
+
+### Collapsible sections
+
+Every collapsible of the task detail and panel (Documentation, Activity, the subtask tree's children) and the list
+filters use the platform disclosure toggle: UiKit's `_disclosure_icon` partial with its morph icon, through
+`@NowoTaskBoardBundle/manage/_disclosure.html.twig`, and `data-controller="disclosure-icon"` on the `<summary>` or
+button (register UiKit's `disclosure-icon` peer for the animation; the static icons follow the state without it).
+
+**Theming.** New optional tokens: `--nowo-task-gantt-spent` (the spent fill), `--nowo-task-overrun` (over-estimate
+marks, default the danger colour), `--nowo-task-on-track` and `--nowo-task-under` (deviation colours, default success
+and warning). **Icons** (`ux_icon` hosts): `tabler:hourglass`, `tabler:filter` and `tabler:calendar-event`.
 
 ## Translations
 

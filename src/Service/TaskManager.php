@@ -62,6 +62,7 @@ final readonly class TaskManager
             tags: $data->tags,
         );
         $task->setColor($data->color);
+        $task->setStartAt($data->startAt);
 
         $this->changeRecorder->recordCreated($task, $creator);
         $this->taskRepository->save($task);
@@ -80,6 +81,7 @@ final readonly class TaskManager
         $oldDueAt            = $task->getDueAt();
         $oldTags             = $task->getTags();
         $oldColor            = $task->getColor();
+        $oldStartAt          = $task->getStartAt();
 
         $newColumn = $this->resolveColumn($task->getBoard(), $data->columnId);
 
@@ -91,13 +93,15 @@ final readonly class TaskManager
             ->setEstimatedMinutes($data->estimatedMinutes)
             ->setDueAt($data->dueAt)
             ->setTags($data->tags)
-            ->setColor($data->color);
+            ->setColor($data->color)
+            ->setStartAt($data->startAt);
 
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Title, $oldTitle, $data->title);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Description, $oldDescription, $data->description);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $data->priority);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $newColumn);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::EstimatedMinutes, $oldEstimatedMinutes, $data->estimatedMinutes);
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $data->startAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $data->dueAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Color, $oldColor, $task->getColor());
@@ -110,6 +114,7 @@ final readonly class TaskManager
             'priority'         => $oldPriority !== $task->getPriority(),
             'column'           => $oldColumn?->getId() !== $newColumn?->getId(),
             'estimatedMinutes' => $oldEstimatedMinutes !== $task->getEstimatedMinutes(),
+            'startAt'          => $oldStartAt?->format(DATE_ATOM) !== $task->getStartAt()?->format(DATE_ATOM),
             'dueAt'            => $oldDueAt?->format(DATE_ATOM) !== $task->getDueAt()?->format(DATE_ATOM),
             'tags'             => $oldTags !== $task->getTags(),
             'color'            => $oldColor !== $task->getColor(),

@@ -4,32 +4,41 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
+use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
+use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
+use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
@@ -39,10 +48,13 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
+use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -98,6 +110,10 @@ final class TaskBoardManageController extends AbstractController
         private readonly bool $topLevelOnly = false,
         private readonly ?ColumnSetManager $columnSetManager = null,
         private readonly array $columnIcons = [],
+        // Since 1.15: dependencies, manual time entries and the Gantt week start (defaults when not wired).
+        private readonly ?TaskDependencyManager $dependencyManager = null,
+        private readonly ?TaskTimeLogger $timeLogger = null,
+        private readonly ?WeekStartResolverInterface $weekStartResolver = null,
     ) {
     }
 
@@ -354,6 +370,9 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskFormData $data */
             $data = $form->getData();
             $this->taskManager->create($board, $data, $user);
+        } elseif ($form->isSubmitted()) {
+            // Since 1.15: a refused task (e.g. a title over 255 characters) says why instead of vanishing.
+            $this->flashFormErrors($form);
         }
 
         $target = $inline ? $this->safeTargetPath($request) : null;
@@ -461,12 +480,16 @@ final class TaskBoardManageController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user);
         // Completed tasks are drawn as finished bars (and keep their subtasks attached to the tree).
-        $tasks    = $this->taskRepository->findByBoard($board, true);
-        $timeline = $this->ganttBuilder->build($tasks);
+        $tasks = $this->taskRepository->findByBoard($board, true);
+        // Since 1.15: `?scale=hours|days|weeks|months` (default days) and the week start of the request.
+        $scale    = GanttScale::fromQuery($this->currentRequest()?->query->get('scale'));
+        $timeline = $this->ganttBuilder->build($tasks, $scale, $this->weekStartResolver?->resolve() ?? WeekStart::Monday);
 
         return $this->render($this->templates['gantt'], [
             'board'           => $board,
             'timeline'        => $timeline,
+            'scale'           => $scale,
+            'scales'          => GanttScale::cases(),
             'dashboardRoute'  => $this->dashboardRoute,
             'panelTargetPath' => $this->currentRequestUri(),
         ]);
@@ -684,6 +707,104 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             $this->taskManager->create($task->getBoard(), $data, $user, $task);
             $this->addFlash('success', 'task_board.flash.subtask_created');
+        } elseif ($form->isSubmitted()) {
+            $this->flashFormErrors($form);
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.15: adds a dependency between the task and another task of its board (CSRF, edit access); a dependency
+     * on itself, towards another board, a duplicate or one closing a cycle is refused with a flash message.
+     */
+    public function addDependency(string $taskId, Request $request): Response
+    {
+        $user    = $this->requireUser();
+        $task    = $this->findTask($taskId, $user, true);
+        $manager = $this->dependencyManager ?? throw new NotFoundHttpException('Dependencies are not available.');
+
+        $form = $this->createDependencyForm($task);
+        $form->handleRequest($request);
+        if (!$form->isSubmitted()) {
+            return $this->afterTaskWrite($request, $task, $user);
+        }
+
+        $this->denyOnRootErrors($form);
+        /** @var TaskDependencyFormData $data */
+        $data  = $form->getData();
+        $other = $form->isValid() && $data->taskId !== null ? $this->taskRepository->findById($data->taskId) : null;
+        if (!$other instanceof Task) {
+            $this->addFlash('error', 'task_board.flash.dependency_invalid');
+
+            return $this->afterTaskWrite($request, $task, $user);
+        }
+
+        try {
+            $manager->add($task, $other, $data->type, $user);
+            $this->addFlash('success', 'task_board.flash.dependency_added');
+        } catch (InvalidTaskDependencyException $exception) {
+            $this->addFlash('error', 'task_board.flash.dependency_' . $exception->reason);
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.15: removes one of the task's dependencies (POST + CSRF, edit access).
+     */
+    public function removeDependency(string $taskId, string $dependencyId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_dependency_remove'));
+        $task    = $this->findTask($taskId, $user, true);
+        $manager = $this->dependencyManager ?? throw new NotFoundHttpException('Dependencies are not available.');
+
+        if ($manager->remove($task, $dependencyId, $user)) {
+            $this->addFlash('success', 'task_board.flash.dependency_removed');
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.15: logs time spent on the task (minutes, day, note; CSRF, edit access).
+     */
+    public function logTime(string $taskId, Request $request): Response
+    {
+        $user   = $this->requireUser();
+        $task   = $this->findTask($taskId, $user, true);
+        $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
+
+        $form = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('today')));
+        $form->handleRequest($request);
+        if ($form->isSubmitted()) {
+            $this->denyOnRootErrors($form);
+            /** @var TaskTimeEntryFormData $data */
+            $data = $form->getData();
+            if ($form->isValid() && $data->minutes !== null && $data->loggedAt !== null) {
+                $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note);
+                $this->addFlash('success', 'task_board.flash.time_logged');
+            } else {
+                $this->addFlash('error', 'task_board.flash.time_invalid');
+            }
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.15: removes a manual time entry of the task (POST + CSRF, edit access).
+     */
+    public function removeTimeEntry(string $taskId, string $entryId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_time_remove'));
+        $task   = $this->findTask($taskId, $user, true);
+        $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
+
+        if ($logger->remove($task, $entryId, $user)) {
+            $this->addFlash('success', 'task_board.flash.time_removed');
         }
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -718,8 +839,10 @@ final class TaskBoardManageController extends AbstractController
         }
 
         // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
-        $taskTree        = TaskTree::fromTasks($this->taskRepository->findByBoard($task->getBoard(), true));
+        $boardTasks      = $this->taskRepository->findByBoard($task->getBoard(), true);
+        $taskTree        = TaskTree::fromTasks($boardTasks);
         $subtaskProgress = $taskTree->progress($task);
+        $descendants     = $taskTree->descendantsOf($task);
 
         return [
             'task'              => $task,
@@ -740,7 +863,92 @@ final class TaskBoardManageController extends AbstractController
             'priorityForm'      => $this->createPriorityForm($task, $routeExtra)->createView(),
             'memberRemoveForms' => $memberRemoveForms,
             'taskRouteExtra'    => $routeExtra,
+            // Since 1.15: dependencies, time entries and the deviation (own, and the subtasks' sum).
+            'dependencyForm'       => $this->dependencyManager instanceof TaskDependencyManager ? $this->createDependencyForm($task, $routeExtra, $boardTasks)->createView() : null,
+            'dependencyRemoveForm' => $this->csrfActionForm('task_board_task_dependency_remove')->createView(),
+            'timeEntryForm'        => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
+            'timeEntryRemoveForm'  => $this->csrfActionForm('task_board_task_time_remove')->createView(),
+            'deviation'            => TaskDeviation::of($task),
+            'subtaskDeviation'     => $descendants === [] ? null : TaskDeviation::sum($descendants),
         ];
+    }
+
+    /**
+     * Since 1.15: the "Add dependency" form; its choices are the board's other tasks (title => id).
+     *
+     * @param array<string, string> $routeExtra
+     * @param list<Task>|null $boardTasks The board's tasks when already loaded
+     *
+     * @return FormInterface<TaskDependencyFormData>
+     */
+    private function createDependencyForm(Task $task, array $routeExtra = [], ?array $boardTasks = null): FormInterface
+    {
+        $choices = [];
+        foreach ($boardTasks ?? $this->taskRepository->findByBoard($task->getBoard(), true) as $candidate) {
+            if ($candidate->getId() === $task->getId()) {
+                continue;
+            }
+
+            $label  = $candidate->getTitle();
+            $suffix = 2;
+            while (array_key_exists($label, $choices)) {
+                $label = sprintf('%s (%d)', $candidate->getTitle(), $suffix++);
+            }
+
+            $choices[$label] = $candidate->getId();
+        }
+
+        $route = $this->routes['task_dependency']['name'] ?? null;
+
+        return $this->createForm(TaskDependencyFormType::class, new TaskDependencyFormData(), [
+            'task_choices' => $choices,
+            'action'       => is_string($route) ? $this->generateUrl($route, ['taskId' => $task->getId()] + $routeExtra) : '',
+        ]);
+    }
+
+    /**
+     * Since 1.15: the "Log time" form (today by default).
+     *
+     * @param array<string, string> $routeExtra
+     *
+     * @return FormInterface<TaskTimeEntryFormData>
+     */
+    private function createTimeEntryForm(Task $task, array $routeExtra = []): FormInterface
+    {
+        $route = $this->routes['task_time']['name'] ?? null;
+
+        return $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('today')), [
+            'action' => is_string($route) ? $this->generateUrl($route, ['taskId' => $task->getId()] + $routeExtra) : '',
+        ]);
+    }
+
+    /**
+     * Since 1.15: an error flash naming the first error of a refused form (field errors included).
+     *
+     * @param FormInterface<mixed> $form
+     */
+    private function flashFormErrors(FormInterface $form): void
+    {
+        $message = '';
+        foreach ($form->getErrors(true) as $error) {
+            $message = $error->getMessage();
+
+            break;
+        }
+
+        $this->addFlash('error', $this->translator->trans('task_board.flash.task_invalid', ['%error%' => $message], 'NowoTaskBoardBundle'));
+    }
+
+    /**
+     * A form error on the root (not on a field) is a CSRF failure: 403.
+     *
+     * @param FormInterface<mixed> $form
+     */
+    private function denyOnRootErrors(FormInterface $form): void
+    {
+        if ($form->getErrors()->count() > 0) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
     }
 
     /**
@@ -757,6 +965,7 @@ final class TaskBoardManageController extends AbstractController
             dueAt: $task->getDueAt(),
             tags: $task->getTags(),
             color: $task->getColor(),
+            startAt: $task->getStartAt(),
         ), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
         ]);
@@ -852,10 +1061,15 @@ final class TaskBoardManageController extends AbstractController
 
     private function currentRequestUri(): ?string
     {
+        return $this->currentRequest()?->getRequestUri();
+    }
+
+    private function currentRequest(): ?Request
+    {
         /** @var RequestStack $requestStack */
         $requestStack = $this->container->get('request_stack');
 
-        return $requestStack->getCurrentRequest()?->getRequestUri();
+        return $requestStack->getCurrentRequest();
     }
 
     /**

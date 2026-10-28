@@ -68,14 +68,28 @@
                     {{ priorityUi.priority_tag(task.priority, true) }}
                     <div hidden>{{ form_widget(taskForm.priority, {label: false}) }}</div>
                 </div>
+                {# Since 1.15: the parent path of a subtask ("Epic › Story › this task"). #}
+                {% set _ancestors = nowo_task_board_ancestors(task) %}
+                {% if _ancestors is not empty %}
+                    <nav class="nowo-task-detail__parents" aria-label="{{ 'task_board.task.parents'|trans({}, 'NowoTaskBoardBundle') }}">
+                        <ol class="nowo-task-detail__parents-list">
+                            {% for ancestor in _ancestors %}
+                                <li><a href="{{ path(nowo_task_board_route('task'), {taskId: ancestor.id}) }}"{% if panel|default(false) %} data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: ancestor.id}|merge(taskRouteExtra|default({}))) }}"{% endif %}>{{ ancestor.title }}</a></li>
+                            {% endfor %}
+                            <li aria-current="page">{{ task.title }}</li>
+                        </ol>
+                    </nav>
+                {% endif %}
                 <div class="nowo-task-detail__title">
                     {{ form_widget(taskForm.title, {
                         label: false,
                         attr: {
+                            maxlength: 255,
                             class: 'form-control nowo-task-detail__title-input',
                             placeholder: 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle'),
                         },
                     }) }}
+                    {{ form_errors(taskForm.title) }}
                 </div>
             </div>
 
@@ -106,6 +120,20 @@
                     </dd>
                 </div>
 
+                {# Since 1.15: the start date (the Gantt bar starts there), next to the due date. #}
+                {% if taskForm.startAt is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr">
+                    <dt class="nowo-task-detail__field-label">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar-event'}) }}
+                        <span>{{ 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    </dt>
+                    <dd class="nowo-task-detail__field-value">
+                        {{ form_widget(taskForm.startAt, {label: false, attr: taskForm.startAt.vars.attr|merge({'aria-label': 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                        {{ form_errors(taskForm.startAt) }}
+                    </dd>
+                </div>
+                {% endif %}
+
                 <div class="nowo-task-detail__field nowo-task-detail__attr">
                     <dt class="nowo-task-detail__field-label">
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar'}) }}
@@ -122,7 +150,12 @@
                         <span>{{ 'task_board.task.time'|trans({}, 'NowoTaskBoardBundle') }}</span>
                     </dt>
                     <dd class="nowo-task-detail__field-value nowo-task-detail__time">
-                        <span class="nowo-task-detail__logged" title="{{ 'task_board.time.logged'|trans({}, 'NowoTaskBoardBundle') }}"><strong>{{ task.loggedMinutes }} min</strong></span>
+                        {% set _deviation = deviation|default(nowo_task_board_deviation(task)) %}
+                        <span class="nowo-task-detail__logged" title="{{ 'task_board.time.logged'|trans({}, 'NowoTaskBoardBundle') }}"><strong>{{ task.loggedMinutes|nowo_task_board_duration }}</strong></span>
+                        {% if _deviation.hasEstimate %}
+                            {# Since 1.15: the deviation beside the time spent. #}
+                            <span class="nowo-task-deviation-pill nowo-task-deviation-pill--{{ _deviation.status }}" title="{{ ('task_board.time.status.' ~ _deviation.status)|trans({}, 'NowoTaskBoardBundle') }}">{{ _deviation.difference|nowo_task_board_duration(true) }} ({{ _deviation.percent > 0 ? '+' : '' }}{{ _deviation.percent }} %)</span>
+                        {% endif %}
                         <span class="nowo-task-detail__estimate">
                             <span class="nowo-task-detail__inline-label">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</span>
                             {{ form_widget(taskForm.estimatedMinutes, {label: false, attr: {class: 'form-control form-control-sm nowo-task-detail__inline-input', 'aria-label': 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle')}}) }}
@@ -212,6 +245,7 @@
                 {{ form_widget(subtaskForm.title, {
                     label: false,
                     attr: {
+                        maxlength: 255,
                         class: 'form-control nowo-task-inline-add__input',
                         placeholder: 'task_board.task.add_subtask_placeholder'|trans({}, 'NowoTaskBoardBundle'),
                         'aria-label': 'task_board.action.add_subtask'|trans({}, 'NowoTaskBoardBundle'),
@@ -228,6 +262,11 @@
     </section>
     {% endblock %}
 
+    {% block nowo_task_time %}
+    {# Since 1.15: estimate, time spent, the deviation and the manual time entries. #}
+    {{ include('@NowoTaskBoardBundle/manage/_task_time_section.html.twig') }}
+    {% endblock %}
+
     {% block nowo_task_relations %}
     <div
         class="nowo-task-detail__relations"
@@ -241,24 +280,12 @@
         {{ include('@NowoTaskBoardBundle/manage/_task_links_section.html.twig') }}
         {{ include('@NowoTaskBoardBundle/manage/_task_links_modal.html.twig') }}
 
-        <details class="nowo-task-section nowo-task-detail__relation">
-            <summary class="nowo-task-section__header nowo-task-detail__relation-summary">
-                <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'git-branch'}) }}{{ 'task_board.task.dependencies'|trans({}, 'NowoTaskBoardBundle') }}</span>
-            </summary>
-            <ul class="nowo-task-rows">
-                {% for dep in task.outgoingDependencies %}
-                    <li class="nowo-task-rows__item">
-                        <span class="badge bg-secondary-lt nowo-task-badge">{{ dep.dependencyType.value }}</span>
-                        <a href="{{ path(nowo_task_board_route('task'), {taskId: dep.targetTask.id}) }}">{{ dep.targetTask.title }}</a>
-                    </li>
-                {% else %}
-                    <li class="nowo-task-rows__item nowo-task-detail__empty">{{ 'task_board.task.no_dependencies'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                {% endfor %}
-            </ul>
-        </details>
+        {# Since 1.15: dependencies in both directions, added and removed from here. #}
+        {{ include('@NowoTaskBoardBundle/manage/_task_dependencies_section.html.twig') }}
 
         <details class="nowo-task-section nowo-task-detail__relation">
-            <summary class="nowo-task-section__header nowo-task-detail__relation-summary">
+            <summary class="nowo-task-section__header nowo-task-detail__relation-summary" data-controller="disclosure-icon">
+                {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}
                 <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'notes'}) }}{{ 'task_board.task.documentation'|trans({}, 'NowoTaskBoardBundle') }}</span>
             </summary>
             <div class="nowo-task-section__body">

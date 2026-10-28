@@ -12,6 +12,7 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
@@ -26,14 +27,17 @@ final class TaskBoardFormType extends AbstractType
     {
         $this->addText($builder, 'name', [
             'label'       => 'task_board.form.board.name',
-            'constraints' => [new NotBlank()],
+            'constraints' => [new NotBlank(), new Length(max: 255)],
+            'attr'        => ['maxlength' => 255],
         ]);
         $this->addText($builder, 'slug', [
             'label'    => 'task_board.form.board.slug',
             'required' => false,
             // Since 1.14.1: an empty slug is '' (the board creator derives it from the name), not null.
-            'empty_data' => '',
-            'help'       => 'task_board.form.board.slug_help',
+            'empty_data'  => '',
+            'help'        => 'task_board.form.board.slug_help',
+            'constraints' => [new Length(max: 255)],
+            'attr'        => ['maxlength' => 255],
         ]);
         $this->addTextarea($builder, 'description', [
             'label'    => 'task_board.form.board.description',

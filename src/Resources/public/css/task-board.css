@@ -2435,3 +2435,458 @@ dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
         grid-row: 1 / span 2;
     }
 }
+
+/*
+ * Since 1.15 — folding list filters, time columns and totals, deviation, dependencies, time entries, Gantt scales.
+ * New tokens: --nowo-task-gantt-spent (the time-spent fill of a bar), --nowo-task-overrun (over-estimate marks,
+ * default the danger colour), --nowo-task-on-track / --nowo-task-under (deviation colours, default success / warning).
+ */
+.nowo-task-list__filter-panel {
+    margin-bottom: 1rem;
+}
+
+.nowo-task-list__filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 6px));
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.nowo-task-list__filter-toggle:hover {
+    background: var(--nowo-task-hover, var(--tblr-bg-surface-secondary, #f8fafc));
+}
+
+.nowo-task-list__filter-toggle:focus-visible {
+    outline: 2px solid var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    outline-offset: 2px;
+}
+
+.nowo-task-list__filter-count {
+    min-width: 1.25rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    color: #fff;
+    font-size: 0.6875rem;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.nowo-task-list__filter-panel .nowo-task-list__filters {
+    margin-bottom: 0;
+}
+
+.nowo-task-board-list-filters .nowo-task-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    align-self: center;
+}
+
+.nowo-task-board-list-filters .nowo-task-check label,
+.nowo-task-board-list-filters label.nowo-task-check__label {
+    display: inline;
+    min-width: 0;
+    margin: 0;
+    font-weight: 500;
+}
+
+.nowo-task-list:not(.is-time-visible) .nowo-task-list__time-col {
+    display: none;
+}
+
+.nowo-task-list__num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.nowo-task-list__table tfoot th,
+.nowo-task-list__table tfoot td {
+    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.nowo-task-list__totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-list__totals div {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.nowo-task-list__totals dt {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-weight: 500;
+}
+
+.nowo-task-list__totals dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.nowo-task-list__totals dd[data-status='over'] {
+    color: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+.nowo-task-deviation-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    background: var(--nowo-task-muted-soft, var(--tblr-secondary-lt, #f1f5f9));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+.nowo-task-deviation-pill--on_track {
+    background: var(--nowo-task-success-soft, var(--tblr-green-lt, #dcfce7));
+    color: var(--nowo-task-on-track, var(--nowo-task-success, var(--tblr-green, #15803d)));
+}
+
+.nowo-task-deviation-pill--over {
+    background: var(--nowo-task-danger-soft, var(--tblr-red-lt, #fef2f2));
+    color: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+.nowo-task-deviation-pill--under {
+    background: var(--nowo-task-warning-soft, var(--tblr-yellow-lt, #fef9c3));
+    color: var(--nowo-task-under, var(--nowo-task-warning, var(--tblr-yellow, #a16207)));
+}
+
+.nowo-task-deviation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 6px));
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+}
+
+.nowo-task-deviation--on_track {
+    border-left-color: var(--nowo-task-on-track, var(--nowo-task-success, var(--tblr-green, #15803d)));
+}
+
+.nowo-task-deviation--over {
+    border-left-color: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+.nowo-task-deviation--under {
+    border-left-color: var(--nowo-task-under, var(--nowo-task-warning, var(--tblr-yellow, #a16207)));
+}
+
+.nowo-task-deviation__figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0;
+}
+
+.nowo-task-deviation__figure dt {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.nowo-task-deviation__figure dd {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.nowo-task-deviation--over .nowo-task-deviation__figure--difference dd {
+    color: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+.nowo-task-deviation__percent {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-weight: 500;
+}
+
+.nowo-task-deviation__status {
+    margin-inline-start: auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+.nowo-task-deviation__bar {
+    flex-basis: 100%;
+}
+
+.nowo-task-deviation__table {
+    margin-bottom: 0.75rem;
+}
+
+.nowo-task-dependencies__item,
+.nowo-task-time-entries__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nowo-task-dependencies__relation {
+    min-width: 6.5rem;
+    justify-content: center;
+    background: var(--nowo-task-muted-soft, var(--tblr-secondary-lt, #f1f5f9));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+.nowo-task-dependencies__item--blocked_by .nowo-task-dependencies__relation {
+    background: var(--nowo-task-warning-soft, var(--tblr-yellow-lt, #fef9c3));
+    color: var(--nowo-task-under, var(--nowo-task-warning, var(--tblr-yellow, #a16207)));
+}
+
+.nowo-task-dependencies__item--blocks .nowo-task-dependencies__relation {
+    background: var(--nowo-task-info-soft, var(--tblr-blue-lt, #dbeafe));
+    color: var(--nowo-task-info, var(--tblr-blue, #206bc4));
+}
+
+.nowo-task-dependencies__task {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nowo-task-dependencies__task.is-done {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    text-decoration: line-through;
+}
+
+.nowo-task-dependencies__remove,
+.nowo-task-time-entries__remove {
+    margin-inline-start: auto;
+}
+
+select.nowo-task-dependency-picker {
+    width: 100%;
+    min-height: 12rem;
+    padding: 0.25rem;
+}
+
+select.nowo-task-dependency-picker option {
+    padding: 0.3rem 0.5rem;
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 6px));
+}
+
+.nowo-task-time-entries__date,
+.nowo-task-time-entries__user,
+.nowo-task-time-entries__note {
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-time-entries__minutes {
+    font-variant-numeric: tabular-nums;
+}
+
+.nowo-task-time-entries__note {
+    flex-basis: 100%;
+}
+
+.nowo-task-gantt__scales {
+    display: inline-flex;
+    padding: 0.15rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 6px));
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+}
+
+.nowo-task-gantt__scale {
+    padding: 0.2rem 0.65rem;
+    border-radius: calc(var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 6px)) - 2px);
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.nowo-task-gantt__scale:hover {
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+}
+
+.nowo-task-gantt__scale.is-active {
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    font-weight: 600;
+}
+
+.nowo-task-gantt__scale:focus-visible {
+    outline: 2px solid var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    outline-offset: 1px;
+}
+
+.nowo-task-gantt__notice {
+    margin: 0;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    background: var(--nowo-task-info-soft, var(--tblr-blue-lt, #dbeafe));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-gantt--hours {
+    --gantt-day-width: 2rem;
+}
+
+.nowo-task-gantt--weeks {
+    --gantt-day-width: 3.5rem;
+}
+
+.nowo-task-gantt--months {
+    --gantt-day-width: 4.5rem;
+}
+
+.nowo-task-gantt__day.is-week-start,
+.nowo-task-gantt__cell.is-week-start {
+    border-left: 1px solid color-mix(in srgb, var(--nowo-task-border, var(--tblr-border-color, #e6e7e9)) 100%, var(--nowo-task-ink, #1d273b) 15%);
+}
+
+.nowo-task-gantt__bar-spent {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--nowo-task-spent, 0) * 1%);
+    border-radius: inherit;
+    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--tblr-body-color, #1d273b)) 16%, transparent));
+    pointer-events: none;
+}
+
+.nowo-task-gantt__bar.is-overrun {
+    border-color: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+.nowo-task-gantt__bar-overrun {
+    position: absolute;
+    top: -0.2rem;
+    right: -0.2rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    border: 2px solid var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    border-radius: 999px;
+    background: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+    pointer-events: none;
+}
+
+.nowo-task-gantt__bar.is-clipped-start {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left-style: dashed;
+}
+
+.nowo-task-gantt__bar.is-clipped-end {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right-style: dashed;
+}
+
+.nowo-task-gantt__legend-spent,
+.nowo-task-gantt__legend-overrun {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--tblr-body-color, #1d273b)) 16%, transparent));
+}
+
+.nowo-task-gantt__legend-overrun {
+    border-radius: 999px;
+    background: var(--nowo-task-overrun, var(--nowo-task-danger, var(--tblr-red, #dc2626)));
+}
+
+/* Since 1.15: every collapsible of the task detail uses the platform disclosure toggle (UiKit _disclosure_icon). */
+.nowo-task-disclosure {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+details.nowo-task-section > summary {
+    justify-content: flex-start;
+    gap: 0.4rem;
+}
+
+.nowo-task-subtree__summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.nowo-task-subtree__summary::-webkit-details-marker {
+    display: none;
+}
+
+.nowo-task-list__filter-caret {
+    display: inline-flex;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+/*
+ * Since 1.15: a very tall board column may scroll inside itself — set --nowo-task-column-max-height (e.g. 70vh) and
+ * --nowo-task-column-overflow: auto on the board or any ancestor; the defaults (none, visible) keep the column as tall
+ * as its cards.
+ */
+.nowo-task-board__task-list {
+    max-height: var(--nowo-task-column-max-height, none);
+    overflow-y: var(--nowo-task-column-overflow, visible);
+    overscroll-behavior: contain;
+}
+
+/* Since 1.15: the parent path of a subtask at the top of its detail. */
+.nowo-task-detail__parents-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0 0 0.35rem;
+    padding: 0;
+    list-style: none;
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-detail__parents-list li + li::before {
+    content: '›';
+    margin-inline-end: 0.25rem;
+}
+
+.nowo-task-detail__parents-list a {
+    color: inherit;
+}
+
+.nowo-task-detail__parents-list [aria-current] {
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-weight: 500;
+}

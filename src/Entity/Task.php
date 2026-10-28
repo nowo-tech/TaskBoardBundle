@@ -38,6 +38,10 @@ class Task
     #[ORM\Column(name: 'total_time_seconds', type: 'integer')]
     private int $totalTimeSeconds = 0;
 
+    /** Since 1.15: the day work starts — the Gantt bar starts here instead of the creation day (null = createdAt). */
+    #[ORM\Column(name: 'start_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $startAt = null;
+
     /** Since 1.14: the task's own colour (#rrggbb), e.g. its Gantt bar; null keeps the priority colours. */
     #[ORM\Column(type: 'string', length: 7, nullable: true)]
     private ?string $color = null;
@@ -243,6 +247,26 @@ class Task
         return $this;
     }
 
+    public function getStartAt(): ?DateTimeImmutable
+    {
+        return $this->startAt;
+    }
+
+    public function setStartAt(?DateTimeImmutable $startAt): self
+    {
+        $this->startAt = $startAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    /** Since 1.15: the start of the task's plan: its start date, else its creation. */
+    public function getPlannedStart(): DateTimeImmutable
+    {
+        return $this->startAt ?? $this->createdAt;
+    }
+
     public function getColor(): ?string
     {
         return $this->color;
@@ -436,6 +460,34 @@ class Task
         return $this->incomingDependencies;
     }
 
+    /**
+     * Since 1.15: links a dependency to both of its tasks (this task must be its source).
+     */
+    public function addOutgoingDependency(TaskDependency $dependency): self
+    {
+        if (!$this->outgoingDependencies->contains($dependency)) {
+            $this->outgoingDependencies->add($dependency);
+        }
+
+        $incoming = $dependency->getTargetTask()->incomingDependencies;
+        if (!$incoming->contains($dependency)) {
+            $incoming->add($dependency);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Since 1.15: unlinks a dependency from both of its tasks (orphan removal deletes it).
+     */
+    public function removeDependency(TaskDependency $dependency): self
+    {
+        $dependency->getSourceTask()->outgoingDependencies->removeElement($dependency);
+        $dependency->getTargetTask()->incomingDependencies->removeElement($dependency);
+
+        return $this;
+    }
+
     /** @return Collection<int, TaskDocument> */
     public function getDocuments(): Collection
     {
@@ -446,6 +498,26 @@ class Task
     public function getTimeEntries(): Collection
     {
         return $this->timeEntries;
+    }
+
+    /** Since 1.15: a manual time entry (logged from the task detail). */
+    public function addTimeEntry(TaskTimeEntry $entry): self
+    {
+        if (!$this->timeEntries->contains($entry)) {
+            $this->timeEntries->add($entry);
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->updatedAt = new DateTimeImmutable();
+        }
+
+        return $this;
+    }
+
+    /** Since 1.15. */
+    public function removeTimeEntry(TaskTimeEntry $entry): self
+    {
+        $this->timeEntries->removeElement($entry);
+
+        return $this;
     }
 
     /**

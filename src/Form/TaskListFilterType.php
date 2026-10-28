@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Override;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\SearchType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -76,6 +77,51 @@ final class TaskListFilterType extends AbstractType
                     'class'                              => 'form-select',
                     'data-' . self::STIMULUS . '-target' => 'column',
                     'data-action'                        => 'change->' . self::STIMULUS . '#filter',
+                ],
+            ])
+            // Since 1.15: the order of the rows inside each group (a display option, not a filter).
+            ->add('sort', ChoiceType::class, [
+                'mapped'      => false,
+                'required'    => false,
+                'label'       => 'task_board.list.sort',
+                'label_attr'  => ['class' => 'nowo-task-sr-only'],
+                'placeholder' => 'task_board.list.sort_manual',
+                'choices'     => [
+                    'task_board.list.sort_title'    => 'title',
+                    'task_board.list.sort_priority' => 'priority',
+                    'task_board.list.sort_due'      => 'due',
+                    'task_board.list.sort_column'   => 'column',
+                ],
+                'attr' => [
+                    'class'                              => 'form-select',
+                    'data-' . self::STIMULUS . '-target' => 'sort',
+                    'data-action'                        => 'change->' . self::STIMULUS . '#sort',
+                    'data-nowo-task-filter-ignore'       => '',
+                ],
+            ])
+            // Since 1.15: only the tasks that took longer than estimated, and the Estimate / Spent / Deviation columns.
+            ->add('overEstimate', CheckboxType::class, [
+                'mapped'     => false,
+                'required'   => false,
+                'label'      => 'task_board.list.filter_over_estimate',
+                'label_attr' => ['class' => 'nowo-task-check__label'],
+                'row_attr'   => ['class' => 'nowo-task-check'],
+                'attr'       => [
+                    'data-' . self::STIMULUS . '-target' => 'overEstimate',
+                    'data-action'                        => 'change->' . self::STIMULUS . '#filter',
+                ],
+            ])
+            ->add('timeColumns', CheckboxType::class, [
+                'mapped'     => false,
+                'required'   => false,
+                'label'      => 'task_board.list.show_time_columns',
+                'label_attr' => ['class' => 'nowo-task-check__label'],
+                'row_attr'   => ['class' => 'nowo-task-check'],
+                'attr'       => [
+                    'data-' . self::STIMULUS . '-target' => 'timeColumns',
+                    'data-action'                        => 'change->' . self::STIMULUS . '#toggleTimeColumns',
+                    // A display option, not a filter: the folded filters do not count it as active.
+                    'data-nowo-task-filter-ignore' => '',
                 ],
             ]);
     }

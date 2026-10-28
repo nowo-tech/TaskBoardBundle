@@ -17,3 +17,11 @@ describe('matchesListFilter', () => {
         expect(matchesListFilter('Task', 'high', 'To do', '', 'high', 'To do')).toBe(true);
     });
 });
+
+describe('matchesListFilter over estimate (1.15)', () => {
+    it('keeps only the tasks over their estimate when asked', () => {
+        expect(matchesListFilter('Task', 'high', 'To do', '', '', '', true, false)).toBe(false);
+        expect(matchesListFilter('Task', 'high', 'To do', '', '', '', true, true)).toBe(true);
+        expect(matchesListFilter('Task', 'high', 'To do', '', '', '', false, false)).toBe(true);
+    });
+});

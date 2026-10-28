@@ -1,9 +1,14 @@
 import { Controller } from '@hotwired/stimulus';
+import { scaleRedirect, scaleToRemember } from './gantt-scale';
+import { readMap, writeEntry } from './storage';
+
+const SCALE_KEY = 'nowo-task-board.gantt-scale';
 
 type GanttLink = { from: string; to: string };
 
 /**
- * Draws dependency arrows over the Gantt chart.
+ * Draws dependency arrows over the Gantt chart. Since 1.15 it also remembers the scale per board (a visit without
+ * `?scale=` opens the saved one) and opens with now in view in every scale.
  */
 export default class GanttController extends Controller<HTMLElement> {
     static targets = ['grid', 'svg', 'row', 'bar', 'today'];
@@ -11,7 +16,13 @@ export default class GanttController extends Controller<HTMLElement> {
     static values = {
         links: { type: Array, default: [] },
         dayCount: { type: Number, default: 0 },
+        board: { type: String, default: '' },
+        scale: { type: String, default: 'days' },
     };
+
+    declare boardValue: string;
+
+    declare scaleValue: string;
 
     declare readonly gridTarget: HTMLElement;
 
@@ -34,6 +45,16 @@ export default class GanttController extends Controller<HTMLElement> {
     declare readonly todayTarget: HTMLElement;
 
     connect(): void {
+        const target = scaleRedirect(window.location.href, this.scaleValue, readMap(SCALE_KEY)[this.boardValue]);
+        if (target !== null) {
+            window.location.replace(target);
+
+            return;
+        }
+        const scale = scaleToRemember(window.location.href);
+        if (scale !== null) {
+            writeEntry(SCALE_KEY, this.boardValue, scale);
+        }
         this.drawLinks();
         window.addEventListener('resize', this.onResize);
         this.scrollToToday();
@@ -51,6 +72,14 @@ export default class GanttController extends Controller<HTMLElement> {
 
     disconnect(): void {
         window.removeEventListener('resize', this.onResize);
+    }
+
+    /** Since 1.15: a click on a scale saves it before the page changes. */
+    rememberScale(event: Event): void {
+        const scale = (event.currentTarget as HTMLElement).dataset.scale ?? '';
+        if (scale !== '') {
+            writeEntry(SCALE_KEY, this.boardValue, scale);
+        }
     }
 
     private drawLinks(): void {

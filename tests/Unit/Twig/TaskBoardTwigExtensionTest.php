@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use stdClass;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
@@ -62,7 +63,22 @@ final class TaskBoardTwigExtensionTest extends TestCase
     {
         $names = array_map(static fn (TwigFilter $filter): string => $filter->getName(), (new TaskBoardTwigExtension('base.html.twig', 'custom'))->getFilters());
 
-        self::assertSame(['nowo_task_board_safe_url', 'nowo_task_board_safe_color', 'nowo_task_board_tag_list'], $names);
+        self::assertSame(['nowo_task_board_safe_url', 'nowo_task_board_safe_color', 'nowo_task_board_tag_list', 'nowo_task_board_duration'], $names);
+    }
+
+    public function testAncestorsGoFromTheTopDownAndStopOnCycles(): void
+    {
+        $user  = new stdClass();
+        $board = new TaskBoard('B', 'b', $user);
+        $epic  = new Task($board, 'Epic', $user);
+        $story = new Task($board, 'Story', $user, parent: $epic);
+        $leaf  = new Task($board, 'Leaf', $user, parent: $story);
+
+        self::assertSame([$epic, $story], TaskBoardTwigExtension::ancestors($leaf));
+        self::assertSame([], TaskBoardTwigExtension::ancestors($epic));
+
+        (new ReflectionProperty(Task::class, 'parent'))->setValue($epic, $leaf);
+        self::assertCount(50, TaskBoardTwigExtension::ancestors($leaf));
     }
 
     public function testRouteFunctionMapsLogicalKeysToConfiguredNames(): void
@@ -72,7 +88,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'list'  => ['path' => '/l/{boardId}', 'name' => ''],
         ]);
 
-        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
+        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress', 'nowo_task_board_deviation', 'nowo_task_board_ancestors'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
         self::assertSame('app_board', $extension->routeName('board'));
         self::assertSame('nowo_task_board_list', $extension->routeName('list'));
         self::assertSame('nowo_task_board_task', $extension->routeName('task'));

@@ -28,46 +28,97 @@
         dashboardRoute: dashboardRoute|default(null),
     }) }}
 
+    {#
+        Since 1.15: a scale switcher (hours, days, weeks, months; `?scale=`, remembered per board in localStorage), the
+        columns of timeline.slots in that scale, week separators by the week start, the time spent as a fill of the bar
+        (spent / estimate, an over-run marker past 100 %) and the numbers in the bar's tooltip.
+    #}
+    {% set _scale = timeline.scale.value|default('days') %}
+    {% set _slots = timeline.slots|default([]) %}
+    {% set _weekdays = 'task_board.gantt.weekday_initials'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
+    {% set _months = 'task_board.gantt.month_names'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
     <div
-        class="nowo-task-gantt"
+        class="nowo-task-gantt nowo-task-gantt--{{ _scale }}"
         data-controller="nowo-task-board-gantt"
         data-nowo-task-board-gantt-links-value="{{ timeline.links|map(l => {from: l.fromId, to: l.toId})|json_encode|e('html_attr') }}"
-        data-nowo-task-board-gantt-day-count-value="{{ timeline.dayKeys|length }}"
+        data-nowo-task-board-gantt-day-count-value="{{ _slots|length }}"
+        data-nowo-task-board-gantt-board-value="{{ board.id }}"
+        data-nowo-task-board-gantt-scale-value="{{ _scale }}"
+        data-scale="{{ _scale }}"
+        data-week-start="{{ timeline.weekStart.value|default('monday') }}"
     >
         {# Since 1.13: one toolbar (what the chart shows and its legend) on the bundle's own classes. #}
         <div class="nowo-task-gantt__toolbar">
             <p class="nowo-task-gantt__subtitle">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            <nav class="nowo-task-gantt__scales" aria-label="{{ 'task_board.gantt.scale'|trans({}, 'NowoTaskBoardBundle') }}">
+                {% for option in scales|default([]) %}
+                    <a
+                        href="{{ path(nowo_task_board_route('gantt'), {boardId: board.id, scale: option.value}) }}"
+                        class="nowo-task-gantt__scale{{ option.value == _scale ? ' is-active' : '' }}"
+                        data-scale="{{ option.value }}"
+                        data-action="nowo-task-board-gantt#rememberScale"
+                        {% if option.value == _scale %}aria-current="true"{% endif %}
+                    >{{ ('task_board.gantt.scale_' ~ option.value)|trans({}, 'NowoTaskBoardBundle') }}</a>
+                {% endfor %}
+            </nav>
             <ul class="nowo-task-gantt__legend">
                 <li>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</li>
                 <li><span class="nowo-task-gantt__legend-today" aria-hidden="true"></span>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                <li><span class="nowo-task-gantt__legend-spent" aria-hidden="true"></span>{{ 'task_board.gantt.legend_spent'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                <li><span class="nowo-task-gantt__legend-overrun" aria-hidden="true"></span>{{ 'task_board.gantt.legend_overrun'|trans({}, 'NowoTaskBoardBundle') }}</li>
             </ul>
         </div>
+        {% if timeline.clamped|default(false) %}
+            <p class="nowo-task-gantt__notice" role="note">{{ ('task_board.gantt.clamped_' ~ _scale)|trans({'%count%': _slots|length}, 'NowoTaskBoardBundle') }}</p>
+        {% endif %}
 
         <div class="nowo-task-gantt__viewport">
             <div
                 class="nowo-task-gantt__grid"
-                data-nowo-task-vars="{{ {'--gantt-days': timeline.dayKeys|length}|json_encode }}"
+                data-nowo-task-vars="{{ {'--gantt-days': _slots|length}|json_encode }}"
                 data-nowo-task-board-gantt-target="grid"
             >
                 <div class="nowo-task-gantt__corner">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</div>
                 <div class="nowo-task-gantt__timeline-head">
                     {# Since 1.13: localised weekday initials and month names (comma lists in the catalogue). #}
-                    {% set _weekdays = 'task_board.gantt.weekday_initials'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
-                    {% set _months = 'task_board.gantt.month_names'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
-                    {% for day in timeline.dayKeys %}
-                        {% set isToday = day == timeline.today %}
-                        {% set isWeekend = day|date('N') in ['6', '7'] %}
-                        {# The month shows on the first column and on the 1st of each month. #}
-                        {% set showMonth = loop.first or day|date('d') == '01' %}
-                        <div class="nowo-task-gantt__day{% if isToday %} is-today{% endif %}{% if isWeekend %} is-weekend{% endif %}{% if showMonth %} is-month-start{% endif %}"{% if isToday %} data-nowo-task-board-gantt-target="today"{% endif %}>
-                            <span class="nowo-task-gantt__month-label">{{ showMonth ? (_months|length == 12 ? _months[day|date('n') - 1] : day|date('M')) : '' }}</span>
-                            <span class="nowo-task-gantt__weekday">{{ _weekdays|length == 7 ? _weekdays[day|date('N') - 1] : day|date('D')|slice(0, 1) }}</span>
-                            <span class="nowo-task-gantt__day-label">{{ day|date('j') }}</span>
+                    {% for slot in _slots %}
+                        {% set _month = _months|length == 12 ? _months[slot.month - 1] : slot.date|date('M') %}
+                        {% set _weekday = _weekdays|length == 7 ? _weekdays[slot.weekday - 1] : slot.date|date('D')|slice(0, 1) %}
+                        {% if _scale == 'hours' %}
+                            {% set _group = _weekday ~ ' ' ~ slot.day ~ ' ' ~ _month %}
+                            {% set _top = '%02d'|format(slot.hour) %}
+                            {% set _title = slot.date ~ ' ' ~ '%02d'|format(slot.hour) ~ ':00' %}
+                        {% elseif _scale == 'weeks' %}
+                            {% set _group = _month %}
+                            {% set _top = slot.day %}
+                            {% set _title = slot.date ~ ' → ' ~ slot.lastDate %}
+                        {% elseif _scale == 'months' %}
+                            {% set _group = slot.year %}
+                            {% set _top = _month %}
+                            {% set _title = _month ~ ' ' ~ slot.year %}
+                        {% else %}
+                            {% set _group = _month %}
+                            {% set _top = slot.day %}
+                            {% set _title = slot.date %}
+                        {% endif %}
+                        <div
+                            class="nowo-task-gantt__day{% if slot.today %} is-today{% endif %}{% if slot.weekend %} is-weekend{% endif %}{% if slot.groupStart %} is-month-start{% endif %}{% if slot.periodStart %} is-week-start{% endif %}"
+                            data-slot="{{ slot.key }}"
+                            title="{{ _title }}"
+                            {% if slot.today %}data-nowo-task-board-gantt-target="today"{% endif %}
+                        >
+                            <span class="nowo-task-gantt__month-label">{{ slot.groupStart ? _group : '' }}</span>
+                            <span class="nowo-task-gantt__weekday">{{ _scale in ['days', 'weeks'] ? _weekday : '' }}</span>
+                            <span class="nowo-task-gantt__day-label">{{ _top }}</span>
                         </div>
                     {% endfor %}
                 </div>
 
                 {% for item in timeline.items %}
+                    {% set _when = item.startDate ~ (item.startTime ? ' ' ~ item.startTime : '') ~ ' → ' ~ item.endDate ~ (item.endTime ? ' ' ~ item.endTime : '') %}
+                    {% set _time = item.estimatedMinutes is not null and item.estimatedMinutes > 0
+                        ? 'task_board.gantt.bar_time'|trans({'%estimate%': item.estimatedMinutes|nowo_task_board_duration, '%spent%': item.loggedMinutes|nowo_task_board_duration, '%percent%': item.spentPercent}, 'NowoTaskBoardBundle')
+                        : (item.loggedMinutes > 0 ? 'task_board.gantt.bar_spent'|trans({'%spent%': item.loggedMinutes|nowo_task_board_duration}, 'NowoTaskBoardBundle') : '') %}
                     <div
                         class="nowo-task-gantt__label-cell{% if item.completed %} is-completed{% endif %}"
                         data-depth="{{ item.depth }}"
@@ -80,23 +131,32 @@
                         {% endif %}
                     </div>
                     <div class="nowo-task-gantt__track-row" data-nowo-task-board-gantt-target="row" data-task-id="{{ item.id }}">
-                        {% for day in timeline.dayKeys %}
-                            <div class="nowo-task-gantt__cell{% if day == timeline.today %} is-today{% endif %}{% if day|date('N') in ['6', '7'] %} is-weekend{% endif %}"></div>
+                        {% for slot in _slots %}
+                            <div class="nowo-task-gantt__cell{% if slot.today %} is-today{% endif %}{% if slot.weekend %} is-weekend{% endif %}{% if slot.periodStart %} is-week-start{% endif %}"></div>
                         {% endfor %}
+                        {% if item.visible ?? true %}
                         <div
-                            class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.color %} nowo-task-gantt__bar--colored{% endif %}{% if item.completed %} is-completed{% endif %}"
+                            class="nowo-task-gantt__bar nowo-task-gantt__bar--{{ item.priority }}{% if item.color %} nowo-task-gantt__bar--colored{% endif %}{% if item.completed %} is-completed{% endif %}{% if item.overrun ?? false %} is-overrun{% endif %}{% if item.clippedStart ?? false %} is-clipped-start{% endif %}{% if item.clippedEnd ?? false %} is-clipped-end{% endif %}"
                             data-nowo-task-board-gantt-target="bar"
                             data-task-id="{{ item.id }}"
+                            data-deviation="{{ item.deviationStatus ?? 'none' }}"
                             data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
                             {# Since 1.14 a task's own colour paints its bar (otherwise the priority colours). #}
                             data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|merge(item.color ? {'--nowo-task-bar-color': item.color} : {})|json_encode }}"
-                            title="{{ item.startDate }} → {{ item.endDate }}"
+                            title="{{ _when }}{{ _time ? ' · ' ~ _time : '' }}"
                         >
-                            {% if item.progress > 0 %}
+                            {% if item.spentPercent ?? null %}
+                                {# Since 1.15: the time spent against the estimate (capped at the bar's end). #}
+                                <span class="nowo-task-gantt__bar-spent" data-nowo-task-vars="{{ {'--nowo-task-spent': min(item.spentPercent, 100)}|json_encode }}"></span>
+                            {% elseif item.progress > 0 %}
                                 <span class="nowo-task-gantt__bar-progress" data-nowo-task-vars="{{ {'--nowo-task-progress': item.progress}|json_encode }}"></span>
                             {% endif %}
-                            <span class="nowo-task-gantt__bar-label">{{ item.title }}</span>
+                            {% if item.overrun ?? false %}
+                                <span class="nowo-task-gantt__bar-overrun" aria-hidden="true"></span>
+                            {% endif %}
+                            <span class="nowo-task-gantt__bar-label">{{ item.title }}{% if _time %}<span class="nowo-task-sr-only"> · {{ _time }}</span>{% endif %}</span>
                         </div>
+                        {% endif %}
                     </div>
                 {% else %}
                     <div class="nowo-task-gantt__empty">{{ 'task_board.gantt.empty'|trans({}, 'NowoTaskBoardBundle') }}</div>

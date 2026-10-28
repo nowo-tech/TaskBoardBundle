@@ -9,11 +9,14 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
+use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
 
+use function array_unshift;
+use function count;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -48,6 +51,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_link_url', $this->linkResolver->url(...)),
             new TwigFunction('nowo_task_board_link_badge', $this->linkBadge(...)),
             new TwigFunction('nowo_task_board_subtask_progress', $this->subtaskProgress(...)),
+            new TwigFunction('nowo_task_board_deviation', TaskDeviation::of(...)),
+            new TwigFunction('nowo_task_board_ancestors', self::ancestors(...)),
         ];
     }
 
@@ -68,6 +73,24 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     }
 
     /**
+     * Since 1.15: the parents of a task from the top-level one down to its direct parent (at most 50 levels, so corrupted
+     * cyclic data cannot loop).
+     *
+     * @return list<Task>
+     */
+    public static function ancestors(Task $task): array
+    {
+        $ancestors = [];
+        $parent    = $task->getParent();
+        while ($parent instanceof Task && count($ancestors) < 50) {
+            array_unshift($ancestors, $parent);
+            $parent = $parent->getParent();
+        }
+
+        return $ancestors;
+    }
+
+    /**
      * Maps a logical route key (e.g. "board", "task_move") to the route name configured under
      * `nowo_task_board.routes.<key>.name`, so templates keep working when hosts rename routes.
      */
@@ -84,6 +107,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFilter('nowo_task_board_safe_url', self::safeUrl(...)),
             new TwigFilter('nowo_task_board_safe_color', self::safeColor(...)),
             new TwigFilter('nowo_task_board_tag_list', self::tagList(...)),
+            // Since 1.15: minutes as "45 min", "2 h", "1 h 30 min" (signed: "+20 min", "−1 h").
+            new TwigFilter('nowo_task_board_duration', TaskDeviation::formatMinutes(...)),
         ];
     }
 

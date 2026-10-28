@@ -1,0 +1,139 @@
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+{#
+    Since 1.15: time tracking of the task — estimate, time spent, the deviation (difference in time and %, coloured
+    on track / over / under), the subtasks' sum beside the task's own, the manual time entries and a "Log time" dialog
+    for the editors. Variables: task, deviation, subtaskDeviation (null without subtasks), canEditTask, timeEntryForm
+    (null: no time logger), timeEntryRemoveForm, taskRouteExtra.
+#}
+{% set deviation = deviation|default(nowo_task_board_deviation(task)) %}
+{% set _canEdit = (canEditTask ?? true) and timeEntryForm|default(null) is not null %}
+{% set _rows = [{label: 'task_board.time.own'|trans({}, 'NowoTaskBoardBundle'), value: deviation, own: true}] %}
+{% if subtaskDeviation|default(null) %}
+    {% set _rows = _rows|merge([{label: 'task_board.time.subtasks_sum'|trans({}, 'NowoTaskBoardBundle'), value: subtaskDeviation, own: false}]) %}
+{% endif %}
+<section class="nowo-task-section nowo-task-detail nowo-task-detail__timesheet" data-controller="nowo-task-board-dialog">
+    <header class="nowo-task-section__header nowo-task-detail__section-header">
+        <h2 class="nowo-task-section__title" id="nowo-task-time-title-{{ task.id }}">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'hourglass'}) }}{{ 'task_board.time.section'|trans({}, 'NowoTaskBoardBundle') }}
+        </h2>
+        {% if _canEdit %}
+            <button type="button" class="btn btn-sm btn-outline-primary" data-action="nowo-task-board-dialog#open" data-dialog="time">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        {% endif %}
+    </header>
+
+    <div class="nowo-task-deviation nowo-task-deviation--{{ deviation.status }}" data-deviation-status="{{ deviation.status }}">
+        <dl class="nowo-task-deviation__figures">
+            <div class="nowo-task-deviation__figure">
+                <dt>{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</dt>
+                <dd>{{ deviation.hasEstimate ? deviation.estimatedMinutes|nowo_task_board_duration : '—' }}</dd>
+            </div>
+            <div class="nowo-task-deviation__figure">
+                <dt>{{ 'task_board.time.spent'|trans({}, 'NowoTaskBoardBundle') }}</dt>
+                <dd>{{ deviation.spentMinutes|nowo_task_board_duration }}</dd>
+            </div>
+            <div class="nowo-task-deviation__figure nowo-task-deviation__figure--difference">
+                <dt>{{ 'task_board.time.deviation'|trans({}, 'NowoTaskBoardBundle') }}</dt>
+                <dd>
+                    {% if deviation.hasEstimate %}
+                        <span class="nowo-task-deviation__value">{{ deviation.difference|nowo_task_board_duration(true) }}</span>
+                        <span class="nowo-task-deviation__percent">({{ deviation.percent > 0 ? '+' : '' }}{{ deviation.percent }} %)</span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+        <span class="nowo-task-deviation__status">{{ ('task_board.time.status.' ~ deviation.status)|trans({}, 'NowoTaskBoardBundle') }}</span>
+        {% if deviation.hasEstimate %}
+            <progress class="nowo-task-progress nowo-task-deviation__bar" max="100" value="{{ min(deviation.spentPercent, 100) }}" aria-label="{{ 'task_board.time.spent_of_estimate'|trans({'%percent%': deviation.spentPercent}, 'NowoTaskBoardBundle') }}">{{ deviation.spentPercent }} %</progress>
+        {% endif %}
+    </div>
+
+    {% if _rows|length > 1 %}
+        <div class="nowo-task-list__table-wrap">
+            <table class="nowo-task-list__table nowo-task-deviation__table">
+                <caption class="nowo-task-sr-only">{{ 'task_board.time.compare_caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                <thead>
+                    <tr>
+                        <th scope="col"><span class="nowo-task-sr-only">{{ 'task_board.form.task.title'|trans({}, 'NowoTaskBoardBundle') }}</span></th>
+                        <th scope="col">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.time.spent'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.time.deviation'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in _rows %}
+                        <tr>
+                            <th scope="row">{{ row.label }}</th>
+                            <td>{{ row.value.hasEstimate ? row.value.estimatedMinutes|nowo_task_board_duration : '—' }}</td>
+                            <td>{{ row.value.spentMinutes|nowo_task_board_duration }}</td>
+                            <td><span class="nowo-task-deviation-pill nowo-task-deviation-pill--{{ row.value.status }}">{{ row.value.hasEstimate ? row.value.difference|nowo_task_board_duration(true) ~ ' (' ~ (row.value.percent > 0 ? '+' : '') ~ row.value.percent ~ ' %)' : '—' }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    <ul class="nowo-task-rows nowo-task-time-entries" aria-labelledby="nowo-task-time-title-{{ task.id }}">
+        {% for entry in task.timeEntries %}
+            <li class="nowo-task-rows__item nowo-task-time-entries__item" data-time-entry-id="{{ entry.id }}">
+                <time datetime="{{ entry.loggedAt|date('Y-m-d') }}" class="nowo-task-time-entries__date">{{ entry.loggedAt|date('Y-m-d') }}</time>
+                <strong class="nowo-task-time-entries__minutes">{{ entry.minutes|nowo_task_board_duration }}</strong>
+                <span class="nowo-task-time-entries__user">{{ memberUi.member_label(entry.user)|trim }}</span>
+                {% if entry.description %}<span class="nowo-task-time-entries__note">{{ entry.description }}</span>{% endif %}
+                {% if _canEdit %}
+                    <button
+                        type="submit"
+                        form="nowo-task-time-remove-form"
+                        formaction="{{ path(nowo_task_board_route('task_time_remove'), {taskId: task.id, entryId: entry.id}|merge(taskRouteExtra|default({}))) }}"
+                        class="btn btn-sm btn-ghost-secondary nowo-task-time-entries__remove"
+                        title="{{ 'task_board.time.remove'|trans({}, 'NowoTaskBoardBundle') }}"
+                    >
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}<span class="nowo-task-sr-only">{{ 'task_board.time.remove'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    </button>
+                {% endif %}
+            </li>
+        {% else %}
+            <li class="nowo-task-rows__item nowo-task-detail__empty">{{ 'task_board.time.no_entries'|trans({}, 'NowoTaskBoardBundle') }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if _canEdit %}
+        {# REQ-TWIG-005: CSRF-only form; each remove button sets its own formaction. #}
+        {{ form_start(timeEntryRemoveForm, {action: '#', attr: {id: 'nowo-task-time-remove-form', hidden: 'hidden'}}) }}
+            {% for child in timeEntryRemoveForm %}
+                {% if not child.rendered %}
+                    {{ form_row(child) }}
+                {% endif %}
+            {% endfor %}
+        {{ form_end(timeEntryRemoveForm) }}
+
+        <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="time" aria-labelledby="nowo-task-time-dialog-title-{{ task.id }}">
+            <div class="nowo-task-dialog__header">
+                <h2 class="nowo-task-dialog__title" id="nowo-task-time-dialog-title-{{ task.id }}">{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+                </button>
+            </div>
+            {{ form_start(timeEntryForm, {method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+                <div class="nowo-task-dialog__grid">
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.minutes) }}</div>
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.loggedAt) }}</div>
+                </div>
+                <div class="nowo-task-field">{{ form_row(timeEntryForm.note) }}</div>
+                {% for child in timeEntryForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+                <div class="nowo-task-dialog__actions">
+                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" class="btn btn-primary">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                </div>
+            {{ form_end(timeEntryForm) }}
+        </dialog>
+    {% endif %}
+</section>

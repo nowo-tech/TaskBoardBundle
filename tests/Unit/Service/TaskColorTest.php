@@ -55,6 +55,23 @@ final class TaskColorTest extends TestCase
         self::assertNull($task->getColor());
     }
 
+    public function testTheStartDateIsCreatedUpdatedAndRecorded(): void
+    {
+        $task = $this->manager()->create($this->board, new TaskFormData(title: 'New', startAt: new DateTimeImmutable('2026-11-02')), $this->user);
+        self::assertSame('2026-11-02', $task->getStartAt()?->format('Y-m-d'));
+
+        $events     = [];
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::TASK_UPDATED, static function (TaskUpdatedEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $this->manager($dispatcher)->update($task, new TaskFormData(title: 'New', columnId: $this->todo->getId(), startAt: new DateTimeImmutable('2026-11-03')), $this->user);
+
+        self::assertContains('startAt', $events[0]->getChangedFields());
+        $types = array_map(static fn ($entry): TaskChangeType => $entry->getChangeType(), $task->getChangeHistory()->toArray());
+        self::assertContains(TaskChangeType::StartDate, $types);
+    }
+
     public function testCreateKeepsTheColour(): void
     {
         $task = $this->manager()->create($this->board, new TaskFormData(title: 'New', color: '#EF4444'), $this->user);

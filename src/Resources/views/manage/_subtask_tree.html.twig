@@ -33,7 +33,7 @@
             </div>
             {% if children|length > 0 %}
                 <details class="nowo-task-subtree__children" open>
-                    <summary class="nowo-task-subtree__summary">{{ 'task_board.task.subtasks_progress'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}</summary>
+                    <summary class="nowo-task-subtree__summary" data-controller="disclosure-icon">{{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}{{ 'task_board.task.subtasks_progress'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}</summary>
                     {{ include('@NowoTaskBoardBundle/manage/_subtask_tree.html.twig', {tasks: children, depth: depth + 1}) }}
                 </details>
             {% endif %}

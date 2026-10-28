@@ -20,7 +20,7 @@
         method: 'POST',
         attr: {class: 'nowo-task-dialog__body'},
     }) }}
-        <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput'}}) }}</div>
+        <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput', maxlength: 255}}) }}</div>
         <div class="nowo-task-dialog__grid">
             <div class="nowo-task-field">{{ form_row(taskForm.priority) }}</div>
             {# A board without columns has no column field (TaskFormType adds it only with choices). #}
@@ -31,6 +31,10 @@
         <div class="nowo-task-field">{{ form_row(taskForm.description) }}</div>
         <div class="nowo-task-dialog__grid">
             <div class="nowo-task-field">{{ form_row(taskForm.estimatedMinutes) }}</div>
+            {# Since 1.15: the start date beside the due date. #}
+            {% if taskForm.startAt is defined %}
+                <div class="nowo-task-field">{{ form_row(taskForm.startAt) }}</div>
+            {% endif %}
             <div class="nowo-task-field">{{ form_row(taskForm.dueAt) }}</div>
         </div>
         <div class="nowo-task-field">{{ form_row(taskForm.tags) }}</div>

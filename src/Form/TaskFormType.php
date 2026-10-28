@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use DateTimeInterface;
 use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TagInputBundle\Form\TagType;
@@ -21,9 +22,13 @@ use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Callback;
+use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Regex;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 use function class_exists;
 
@@ -34,6 +39,8 @@ use function class_exists;
 final class TaskFormType extends AbstractType
 {
     use FormOptionsTrait;
+    /** Since 1.15: the longest title (task_board_tasks.title is VARCHAR(255)). */
+    public const TITLE_MAX = 255;
 
     /** Since 1.14: a task colour is #rrggbb (the column holds 7 characters). */
     public const COLOR_PATTERN = '/^#[0-9a-fA-F]{6}$/D';
@@ -45,8 +52,10 @@ final class TaskFormType extends AbstractType
         $compact       = (bool) $options['compact'];
 
         $this->addText($builder, 'title', [
-            'label'       => 'task_board.form.task.title',
-            'constraints' => [new NotBlank()],
+            'label' => 'task_board.form.task.title',
+            // Since 1.15: the column is VARCHAR(255) — a longer title is a form error, not a database error.
+            'constraints' => [new NotBlank(), new Length(max: self::TITLE_MAX)],
+            'attr'        => ['maxlength' => self::TITLE_MAX],
         ]);
 
         if (!$compact) {
@@ -87,6 +96,23 @@ final class TaskFormType extends AbstractType
             $this->addInteger($builder, 'estimatedMinutes', [
                 'label'    => 'task_board.form.task.estimate',
                 'required' => false,
+            ]);
+            // Since 1.15: the start date (the Gantt bar starts there); after the due date is a form error.
+            $this->addWithDefaults($builder, 'startAt', DateType::class, [
+                'label'           => 'task_board.form.task.start',
+                'required'        => false,
+                'widget'          => 'single_text',
+                'input'           => 'datetime_immutable',
+                'invalid_message' => 'task_board.form.task.due_invalid',
+                'constraints'     => [new Callback(static function (mixed $startAt, ExecutionContextInterface $context): void {
+                    $form  = $context->getObject();
+                    $dueAt = $form instanceof FormInterface ? $form->getParent()?->get('dueAt')->getData() : null;
+                    if ($startAt instanceof DateTimeInterface && $dueAt instanceof DateTimeInterface && $startAt > $dueAt) {
+                        $context->buildViolation('task_board.form.task.start_after_due')
+                            ->setTranslationDomain('NowoTaskBoardBundle')
+                            ->addViolation();
+                    }
+                })],
             ]);
             $this->addWithDefaults($builder, 'dueAt', DateType::class, [
                 'label'           => 'task_board.form.task.due',

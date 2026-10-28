@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
+use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
+use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
@@ -106,6 +108,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.default_columns', $config['board']['default_columns']);
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
+        $container->setParameter('nowo_task_board.gantt.week_start', $config['gantt']['week_start']);
 
         if (
             !$config['security']['allow_unauthenticated']
@@ -126,6 +129,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTimeTrackIntegration($container, $loader);
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
+        $this->registerWeekStartResolver($container, $config['gantt']);
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
     }
@@ -155,6 +159,21 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (is_string($providerId) && $providerId !== '') {
             $container->setAlias(TaskAssigneeProviderInterface::class, $providerId);
         }
+    }
+
+    /**
+     * Since 1.15: {@see WeekStartResolverInterface} answers `gantt.week_start` ({@see ConfiguredWeekStartResolver}),
+     * or the host's `gantt.week_start_resolver` service when set.
+     *
+     * @param array{week_start: string, week_start_resolver: string|null} $gantt
+     */
+    private function registerWeekStartResolver(ContainerBuilder $container, array $gantt): void
+    {
+        $container->setDefinition(ConfiguredWeekStartResolver::class, (new Definition(ConfiguredWeekStartResolver::class))
+            ->setArgument('$weekStart', $gantt['week_start']));
+
+        $resolverId = $gantt['week_start_resolver'];
+        $container->setAlias(WeekStartResolverInterface::class, is_string($resolverId) && $resolverId !== '' ? $resolverId : ConfiguredWeekStartResolver::class);
     }
 
     private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void

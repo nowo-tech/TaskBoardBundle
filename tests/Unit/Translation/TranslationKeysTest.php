@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Translation;
 
+use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -97,6 +100,21 @@ final class TranslationKeysTest extends TestCase
         foreach ($dynamic as $prefix => $cases) {
             foreach ($cases as $case) {
                 $keys[$prefix . $case->value] = true;
+            }
+        }
+
+        // Since 1.15: keys built from the scales, the dependency refusals and relations, the deviation statuses.
+        $suffixes = [
+            'task_board.gantt.scale_'         => array_map(static fn (GanttScale $scale): string => $scale->value, GanttScale::cases()),
+            'task_board.gantt.clamped_'       => array_map(static fn (GanttScale $scale): string => $scale->value, GanttScale::cases()),
+            'task_board.flash.dependency_'    => [InvalidTaskDependencyException::REASON_SELF, InvalidTaskDependencyException::REASON_OTHER_BOARD, InvalidTaskDependencyException::REASON_DUPLICATE, InvalidTaskDependencyException::REASON_CYCLE],
+            'task_board.dependency.relation.' => ['blocks', 'blocked_by', 'related', 'duplicates', 'duplicated_by'],
+            'task_board.time.status.'         => [TaskDeviation::STATUS_NONE, TaskDeviation::STATUS_ON_TRACK, TaskDeviation::STATUS_OVER, TaskDeviation::STATUS_UNDER],
+        ];
+        foreach ($suffixes as $prefix => $values) {
+            unset($keys[$prefix]);
+            foreach ($values as $value) {
+                $keys[$prefix . $value] = true;
             }
         }
 

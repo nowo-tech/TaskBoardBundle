@@ -2,7 +2,8 @@
 
 {# Since 1.12: the activity stream (who did what, when) closing the task detail. #}
 <details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__history" open>
-    <summary class="nowo-task-section__header nowo-task-detail__relation-summary">
+    <summary class="nowo-task-section__header nowo-task-detail__relation-summary" data-controller="disclosure-icon">
+        {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}
         <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'history'}) }}{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
     </summary>
     <ol class="nowo-task-activity">
@@ -72,6 +73,16 @@
                                     {% if entry.context %}
                                         <span class="badge bg-green-lt nowo-task-badge">{{ ('task_board.member.' ~ entry.context)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
+                                {% elseif entry.changeType.value in ['dependency_added', 'dependency_removed'] %}
+                                    {# Since 1.15: the relation and the other task. #}
+                                    {% if entry.context %}
+                                        <span class="nowo-task-badge nowo-task-dependencies__relation">{{ ('task_board.dependency.relation.' ~ entry.context)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {% endif %}
+                                    <span class="{{ entry.changeType.value == 'dependency_removed' ? 'nowo-task-activity__old' : '' }}">{{ entry.newValue ?? entry.oldValue }}</span>
+                                {% elseif entry.changeType.value in ['time_logged', 'time_removed'] %}
+                                    {# Since 1.15: the minutes and the day of a manual time entry. #}
+                                    <span class="{{ entry.changeType.value == 'time_removed' ? 'nowo-task-activity__old' : '' }}">{{ ((entry.newValue ?? entry.oldValue) + 0)|nowo_task_board_duration }}</span>
+                                    {% if entry.context %}<time datetime="{{ entry.context }}">{{ entry.context }}</time>{% endif %}
                                 {% elseif entry.changeType.value in ['link_added', 'link_updated', 'link_removed'] %}
                                     {% if entry.oldValue %}
                                         <span class="nowo-task-activity__old">{{ entry.oldValue }}</span>

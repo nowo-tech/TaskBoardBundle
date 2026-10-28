@@ -13,6 +13,7 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Regex;
 
@@ -33,7 +34,8 @@ final class BoardColumnFormType extends AbstractType
     {
         $this->addText($builder, 'name', [
             'label'       => 'task_board.form.column.name',
-            'constraints' => [new NotBlank()],
+            'constraints' => [new NotBlank(), new Length(max: 128)],
+            'attr'        => ['maxlength' => 128],
         ]);
         $this->addWithDefaults($builder, 'color', ColorType::class, [
             'label'    => 'task_board.form.column.color',

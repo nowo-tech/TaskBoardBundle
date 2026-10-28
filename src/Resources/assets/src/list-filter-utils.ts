@@ -7,6 +7,8 @@
  * @param search - Free-text search filter
  * @param priorityFilter - Selected priority filter (empty = any)
  * @param columnFilter - Selected column filter (empty = any)
+ * @param overEstimateOnly - Since 1.15: only the tasks that took longer than estimated
+ * @param overEstimate - Since 1.15: whether this task took longer than estimated
  * @returns True when the row matches all active filters
  */
 export function matchesListFilter(
@@ -16,7 +18,13 @@ export function matchesListFilter(
     search: string,
     priorityFilter: string,
     columnFilter: string,
+    overEstimateOnly = false,
+    overEstimate = false,
 ): boolean {
+    if (overEstimateOnly && !overEstimate) {
+        return false;
+    }
+
     const normalizedSearch = search.trim().toLowerCase();
     if (normalizedSearch !== '' && !title.toLowerCase().includes(normalizedSearch)) {
         return false;

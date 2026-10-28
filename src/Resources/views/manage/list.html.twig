@@ -38,15 +38,29 @@
         data-priority, data-column on every row).
     #}
     {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
-    <div class="nowo-task-list" data-controller="nowo-task-board-list-filter">
-        {# REQ-TWIG-005: client-side filters (unmapped TaskListFilterType fields keep the Stimulus targets). #}
-        {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: 'nowo-task-board-list-filters nowo-task-list__filters', 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
-            {% for child in filterForm %}
-                {% if not child.rendered %}
-                    {{ form_row(child) }}
-                {% endif %}
-            {% endfor %}
-        {{ form_end(filterForm) }}
+    <div class="nowo-task-list" data-controller="nowo-task-board-list-filter" data-nowo-task-board-list-filter-board-value="{{ board.id }}">
+        {#
+            Since 1.15 the filters fold behind a "Filters" toggle (state per board in localStorage, open while a filter
+            is active, the disclosure chevron of the host's icon set) and gain "Over estimate" and the time columns.
+        #}
+        <div class="nowo-task-list__filter-panel" data-controller="nowo-task-board-filter-collapse" data-nowo-task-board-filter-collapse-id-value="{{ board.id }}">
+            <button type="button" class="nowo-task-list__filter-toggle" data-nowo-task-board-filter-collapse-target="button" data-action="nowo-task-board-filter-collapse#toggle" data-controller="disclosure-icon" aria-expanded="true" aria-controls="nowo-task-list-filters-{{ board.id }}">
+                {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig', {class: 'nowo-task-list__filter-caret'}) }}
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'filter'}) }}
+                <span>{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <span class="nowo-task-list__filter-count" data-nowo-task-board-filter-collapse-target="count" hidden></span>
+            </button>
+            <div class="nowo-task-list__filter-body" id="nowo-task-list-filters-{{ board.id }}" data-nowo-task-board-filter-collapse-target="body">
+                {# REQ-TWIG-005: client-side filters (unmapped TaskListFilterType fields keep the Stimulus targets). #}
+                {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: 'nowo-task-board-list-filters nowo-task-list__filters', 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                    {% for child in filterForm %}
+                        {% if not child.rendered %}
+                            {{ form_row(child) }}
+                        {% endif %}
+                    {% endfor %}
+                {{ form_end(filterForm) }}
+            </div>
+        </div>
 
         {% set _groups = board.columns|map(c => {column: c, tasks: tasks|filter(t => t.column and t.column.id == c.id)}) %}
         {% set _orphans = tasks|filter(t => not t.column) %}
@@ -90,16 +104,25 @@
                                 <th scope="col">{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</th>
                                 <th scope="col">{{ 'task_board.form.task.priority'|trans({}, 'NowoTaskBoardBundle') }}</th>
                                 <th scope="col">{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                {# Since 1.15: optional time columns ("Show time" in the filters). #}
+                                <th scope="col" class="nowo-task-list__time-col nowo-task-list__num">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="col" class="nowo-task-list__time-col nowo-task-list__num">{{ 'task_board.time.spent'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="col" class="nowo-task-list__time-col nowo-task-list__num">{{ 'task_board.time.deviation'|trans({}, 'NowoTaskBoardBundle') }}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for task in group.tasks %}
+                                {% set _deviation = nowo_task_board_deviation(task) %}
                                 <tr
                                     data-nowo-task-board-list-filter-target="row"
                                     data-title="{{ task.title }}"
                                     data-priority="{{ task.priority.value }}"
                                     data-column="{{ task.column ? task.column.name : '' }}"
+                                    data-due="{{ task.dueAt ? task.dueAt|date('Y-m-d') : '' }}"
                                     data-task-id="{{ task.id }}"
+                                    data-estimate="{{ _deviation.hasEstimate ? _deviation.estimatedMinutes : '' }}"
+                                    data-spent="{{ _deviation.spentMinutes }}"
+                                    data-over="{{ _deviation.over ? '1' : '0' }}"
                                     data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
                                     class="nowo-task-list__row{{ task.completed ? ' is-done' : '' }}"
                                 >
@@ -130,11 +153,31 @@
                                         <span class="nowo-task-priority nowo-task-priority--{{ task.priority.value }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ ('task_board.priority.' ~ task.priority.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     </td>
                                     <td>{{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags}) }}</td>
+                                    <td class="nowo-task-list__time-col nowo-task-list__num">{{ _deviation.hasEstimate ? _deviation.estimatedMinutes|nowo_task_board_duration : '—' }}</td>
+                                    <td class="nowo-task-list__time-col nowo-task-list__num">{{ _deviation.spentMinutes|nowo_task_board_duration }}</td>
+                                    <td class="nowo-task-list__time-col nowo-task-list__num">
+                                        {% if _deviation.hasEstimate %}
+                                            <span class="nowo-task-deviation-pill nowo-task-deviation-pill--{{ _deviation.status }}" title="{{ ('task_board.time.status.' ~ _deviation.status)|trans({}, 'NowoTaskBoardBundle') }}">{{ _deviation.difference|nowo_task_board_duration(true) }} ({{ _deviation.percent > 0 ? '+' : '' }}{{ _deviation.percent }} %)</span>
+                                        {% else %}
+                                            <span class="nowo-task-list__none">—</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                             {% else %}
-                                <tr class="nowo-task-list__empty"><td colspan="5">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</td></tr>
+                                <tr class="nowo-task-list__empty"><td colspan="8">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</td></tr>
                             {% endfor %}
                         </tbody>
+                        {% if group.tasks is not empty %}
+                            {# Since 1.15: the totals of the rows the filters show (kept up to date by the list filter controller). #}
+                            <tfoot class="nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">
+                                <tr>
+                                    <th scope="row" colspan="5">{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                    <td class="nowo-task-list__num" data-total="estimate">—</td>
+                                    <td class="nowo-task-list__num" data-total="spent">—</td>
+                                    <td class="nowo-task-list__num" data-total="deviation">—</td>
+                                </tr>
+                            </tfoot>
+                        {% endif %}
                     </table>
                 </div>
                 {% if group.column and (canEditBoard ?? false) and inlineTaskForms[group.column.id] is defined %}
@@ -145,6 +188,14 @@
         {% else %}
             <p class="nowo-task-list__empty">{{ 'task_board.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
         {% endfor %}
+
+        {% if tasks is not empty %}
+            <dl class="nowo-task-list__totals nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals" aria-label="{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}">
+                <div><dt>{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }} · {{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</dt><dd data-total="estimate">—</dd></div>
+                <div><dt>{{ 'task_board.time.spent'|trans({}, 'NowoTaskBoardBundle') }}</dt><dd data-total="spent">—</dd></div>
+                <div><dt>{{ 'task_board.time.deviation'|trans({}, 'NowoTaskBoardBundle') }}</dt><dd data-total="deviation">—</dd></div>
+            </dl>
+        {% endif %}
     </div>
     {% endblock %}
 {% endblock %}

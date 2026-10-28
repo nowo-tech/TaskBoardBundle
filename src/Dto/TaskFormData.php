@@ -23,6 +23,8 @@ final class TaskFormData
         public array $tags = [],
         // Since 1.14: the task's colour (#rrggbb) or null.
         public ?string $color = null,
+        // Since 1.15: the day work starts (the Gantt bar's start; null = the creation day).
+        public ?DateTimeImmutable $startAt = null,
     ) {
     }
 }

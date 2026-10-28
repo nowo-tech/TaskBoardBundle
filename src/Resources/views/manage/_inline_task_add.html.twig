@@ -7,6 +7,7 @@
     {{ form_widget(form.title, {
         label: false,
         attr: {
+            maxlength: 255,
             class: 'form-control nowo-task-inline-add__input',
             placeholder: 'task_board.action.new_task'|trans({}, 'NowoTaskBoardBundle'),
             'aria-label': 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle'),

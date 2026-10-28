@@ -13,6 +13,7 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Url;
 
@@ -37,16 +38,22 @@ final class TaskLinkFormType extends AbstractType
                 new NotBlank(),
                 // Rendered as href: only http(s) — rejects javascript:, data:, vbscript:…
                 new Url(protocols: ['http', 'https'], requireTld: false),
+                new Length(max: 2048),
             ],
+            'attr' => ['maxlength' => 2048],
         ]);
         $this->addText($builder, 'label', [
-            'label'    => 'task_board.form.link.label',
-            'required' => false,
+            'label'       => 'task_board.form.link.label',
+            'required'    => false,
+            'constraints' => [new Length(max: 255)],
+            'attr'        => ['maxlength' => 255],
         ]);
         $this->addText($builder, 'externalId', [
-            'label'    => 'task_board.form.link.external_id',
-            'required' => false,
-            'help'     => 'task_board.form.link.external_id_help',
+            'label'       => 'task_board.form.link.external_id',
+            'required'    => false,
+            'constraints' => [new Length(max: 128)],
+            'attr'        => ['maxlength' => 128],
+            'help'        => 'task_board.form.link.external_id_help',
         ]);
     }
 

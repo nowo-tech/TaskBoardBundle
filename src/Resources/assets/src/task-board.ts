@@ -15,6 +15,8 @@ import GanttController from './gantt-controller';
 import EditColumnModalController from './edit-column-modal-controller';
 import DialogController from './dialog-controller';
 import PickerController from './picker-controller';
+import OptionFilterController from './option-filter-controller';
+import FilterCollapseController from './filter-collapse-controller';
 import { observeCssVars } from './css-vars';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
@@ -37,6 +39,8 @@ application.register('nowo-task-board-gantt', GanttController);
 application.register('nowo-task-board-edit-column-modal', EditColumnModalController);
 application.register('nowo-task-board-dialog', DialogController);
 application.register('nowo-task-board-picker', PickerController);
+application.register('nowo-task-board-option-filter', OptionFilterController);
+application.register('nowo-task-board-filter-collapse', FilterCollapseController);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

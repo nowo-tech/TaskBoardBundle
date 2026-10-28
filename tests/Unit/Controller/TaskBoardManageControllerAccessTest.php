@@ -4,25 +4,33 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Controller;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\GanttScale;
+use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
+use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
@@ -37,10 +45,12 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\GitLabMergeRequestLinkParser;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -51,6 +61,8 @@ use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Csrf\CsrfExtension;
 use Symfony\Component\Form\Extension\HttpFoundation\HttpFoundationExtension;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormError;
+use Symfony\Component\Form\FormErrorIterator;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Forms;
@@ -101,6 +113,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     /** @var list<bool> */
     private array $findByBoardIncludeCompleted = [];
 
+    /** @var list<Task> Since 1.15: more tasks the repository knows (dependency targets). */
+    private array $extraTasks = [];
+
     protected function setUp(): void
     {
         $this->owner    = new TestUser('1', 'owner@example.com');
@@ -137,6 +152,10 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         yield 'apply column set' => ['applyColumnSet', ['board', 'request'], []];
         yield 'delete column set' => ['deleteColumnSet', ['board', 'set', 'request'], []];
         yield 'task panel' => ['taskPanel', ['task', 'request'], []];
+        yield 'add dependency' => ['addDependency', ['task', 'request'], []];
+        yield 'remove dependency' => ['removeDependency', ['task', 'dependency', 'request'], []];
+        yield 'log time' => ['logTime', ['task', 'request'], []];
+        yield 'remove time entry' => ['removeTimeEntry', ['task', 'entry', 'request'], []];
     }
 
     /**
@@ -696,21 +715,156 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     }
 
     /**
+     * Since 1.15: add a dependency (flash per outcome), remove it, and refuse a CSRF failure.
+     */
+    public function testAddingADependencyFlashesTheOutcome(): void
+    {
+        $other            = new Task($this->board, 'Other', $this->owner, column: $this->column);
+        $foreign          = new Task(new TaskBoard('Foreign', 'foreign', $this->owner), 'Foreign', $this->owner);
+        $this->extraTasks = [$other, $foreign];
+
+        $cases = [
+            'task_board.flash.dependency_added'       => new TaskDependencyFormData(TaskDependencyType::Blocks, $other->getId()),
+            'task_board.flash.dependency_cycle'       => new TaskDependencyFormData(TaskDependencyType::BlockedBy, $other->getId()),
+            'task_board.flash.dependency_self'        => new TaskDependencyFormData(TaskDependencyType::Blocks, $this->task->getId()),
+            'task_board.flash.dependency_other_board' => new TaskDependencyFormData(TaskDependencyType::Blocks, $foreign->getId()),
+            'task_board.flash.dependency_invalid'     => new TaskDependencyFormData(TaskDependencyType::Blocks, 'missing'),
+        ];
+        foreach ($cases as $flash => $data) {
+            $request  = Request::create('/?_target_path=/board', 'POST');
+            $response = $this->controller($this->owner, formData: $data, currentRequest: $request)->addDependency($this->task->getId(), $request);
+            self::assertInstanceOf(RedirectResponse::class, $response);
+            self::assertSame('/board', $response->getTargetUrl());
+            self::assertSame([$flash], array_merge(...array_values($request->getSession()->getFlashBag()->all())), $flash);
+        }
+
+        self::assertCount(1, $this->task->getOutgoingDependencies());
+        $dependency = $this->task->getOutgoingDependencies()->first();
+        self::assertNotFalse($dependency);
+
+        // An unsubmitted form changes nothing.
+        $this->controller($this->owner)->addDependency($this->task->getId(), Request::create('/', 'POST'));
+
+        $request = Request::create('/', 'POST', ['_token' => 'ok']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request)->removeDependency($this->task->getId(), $dependency->getId(), $request);
+        self::assertSame(['task_board.flash.dependency_removed'], $request->getSession()->getFlashBag()->get('success'));
+        self::assertTrue($this->task->getOutgoingDependencies()->isEmpty());
+        self::assertTrue($other->getIncomingDependencies()->isEmpty());
+
+        $request = Request::create('/', 'POST', ['_token' => 'ok']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request)->removeDependency($this->task->getId(), 'missing', $request);
+        self::assertSame([], $request->getSession()->getFlashBag()->all());
+    }
+
+    public function testDependencyAndTimeWritesRefuseAnInvalidToken(): void
+    {
+        foreach (['addDependency', 'logTime'] as $action) {
+            try {
+                $this->controller($this->owner, formData: new TaskDependencyFormData(), rootError: true)->{$action}($this->task->getId(), Request::create('/', 'POST'));
+                self::fail('AccessDeniedException expected for ' . $action);
+            } catch (AccessDeniedException) {
+            }
+        }
+
+        $this->expectException(AccessDeniedException::class);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(false), csrfValid: false)->removeTimeEntry($this->task->getId(), 'x', Request::create('/', 'POST', ['_token' => 'bad']));
+    }
+
+    public function testARefusedTaskSaysWhyInAFlash(): void
+    {
+        $request = Request::create('/', 'POST');
+        $this->controller($this->owner, formData: new TaskFormData(title: str_repeat('x', 300)), formValid: false, currentRequest: $request, translator: true)->createTask($this->board->getId(), $request);
+        self::assertSame(['task_board.flash.task_invalid'], $request->getSession()->getFlashBag()->get('error'));
+
+        $request = Request::create('/', 'POST');
+        $this->controller($this->owner, formData: new TaskFormData(title: ''), formValid: false, currentRequest: $request, translator: true)->createSubtask($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.task_invalid'], $request->getSession()->getFlashBag()->get('error'));
+    }
+
+    public function testLoggingAndRemovingTime(): void
+    {
+        $request = Request::create('/', 'POST');
+        $this->controller($this->owner, formData: new TaskTimeEntryFormData(45, new DateTimeImmutable('2026-10-28'), 'Review'), currentRequest: $request)->logTime($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.time_logged'], $request->getSession()->getFlashBag()->get('success'));
+        self::assertSame(45, $this->task->getLoggedMinutes());
+
+        $request = Request::create('/', 'POST');
+        $this->controller($this->owner, formData: new TaskTimeEntryFormData(null, null), formValid: false, currentRequest: $request)->logTime($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.time_invalid'], $request->getSession()->getFlashBag()->get('error'));
+
+        $this->controller($this->owner)->logTime($this->task->getId(), Request::create('/', 'POST'));
+
+        $entry = $this->task->getTimeEntries()->first();
+        self::assertNotFalse($entry);
+        $request = Request::create('/', 'POST', ['_token' => 'ok']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request)->removeTimeEntry($this->task->getId(), $entry->getId(), $request);
+        self::assertSame(['task_board.flash.time_removed'], $request->getSession()->getFlashBag()->get('success'));
+        self::assertSame(0, $this->task->getLoggedMinutes());
+
+        $request = Request::create('/', 'POST', ['_token' => 'ok']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request)->removeTimeEntry($this->task->getId(), 'missing', $request);
+        self::assertSame([], $request->getSession()->getFlashBag()->all());
+    }
+
+    public function testTaskViewPassesTheDependencyAndTimeFormsAndTheDeviation(): void
+    {
+        $child            = new Task($this->board, 'Child', $this->owner, parent: $this->task, estimatedMinutes: 30);
+        $this->extraTasks = [$child];
+
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
+
+        self::assertInstanceOf(FormView::class, $this->rendered['dependencyForm']);
+        self::assertInstanceOf(FormView::class, $this->rendered['timeEntryForm']);
+        self::assertSame(['Child' => $child->getId()], $this->findCreatedForm(TaskDependencyFormType::class)['options']['task_choices']);
+        self::assertSame(30, $this->rendered['subtaskDeviation']->estimatedMinutes);
+        self::assertNull($this->rendered['deviation']->estimatedMinutes);
+    }
+
+    public function testGanttUsesTheScaleOfTheQueryAndTheWeekStart(): void
+    {
+        $request = Request::create('/?scale=weeks');
+        $this->controller($this->owner, currentRequest: $request)->ganttView($this->board->getId());
+
+        self::assertSame(GanttScale::Weeks, $this->rendered['scale']);
+        self::assertSame(GanttScale::cases(), $this->rendered['scales']);
+        self::assertSame(WeekStart::Sunday, $this->rendered['timeline']->weekStart);
+
+        $this->controller($this->owner, currentRequest: Request::create('/?scale=years'))->ganttView($this->board->getId());
+        self::assertSame(GanttScale::Days, $this->rendered['scale']);
+    }
+
+    private function identityTranslator(): TranslatorInterface
+    {
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnArgument(0);
+
+        return $translator;
+    }
+
+    /**
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
         $boardRepository->method('findAllActive')->willReturn($boards);
 
         $taskRepository = $this->createMock(TaskRepositoryInterface::class);
-        $taskRepository->method('findById')->willReturnCallback(fn (string $id): ?Task => $id === $this->task->getId() ? $this->task : null);
+        $taskRepository->method('findById')->willReturnCallback(function (string $id): ?Task {
+            foreach ([$this->task, ...$this->extraTasks] as $task) {
+                if ($task->getId() === $id) {
+                    return $task;
+                }
+            }
+
+            return null;
+        });
         $taskRepository->method('findByBoard')->willReturnCallback(function (TaskBoard $board, bool $includeCompleted = false): array {
             $this->findByBoardIncludeCompleted[] = $includeCompleted;
 
-            return [$this->task];
+            return array_values(array_filter([$this->task, ...$this->extraTasks], static fn (Task $task): bool => $task->getBoard() === $board));
         });
 
         $teamMembers = $this->createMock(TeamMemberRepositoryInterface::class);
@@ -733,7 +887,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             memberAssigner: new TaskMemberAssigner($taskRepository, $recorder),
             ganttBuilder: new TaskGanttBuilder(),
             importOrchestrator: new TaskImportOrchestrator([], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
-            translator: $this->createMock(TranslatorInterface::class),
+            translator: $translator ? $this->identityTranslator() : $this->createMock(TranslatorInterface::class),
             routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete', 'task_create'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,
@@ -741,6 +895,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             resourceAccessChecker: new TaskBoardResourceAccessChecker($teamMembers, new NullTaskBoardTeamMembershipResolver(), $authorization, $dispatcher),
             columnSetManager: $columnSets,
             columnIcons: ['tabler:bug'],
+            dependencyManager: new TaskDependencyManager($taskRepository, $recorder),
+            timeLogger: new TaskTimeLogger($taskRepository, $recorder),
+            weekStartResolver: new ConfiguredWeekStartResolver('sunday'),
         );
 
         $tokenStorage = new TokenStorage();
@@ -754,6 +911,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $form->method('isSubmitted')->willReturn($formData !== null);
         $form->method('isValid')->willReturn($formValid);
         $form->method('getData')->willReturn($formData);
+        $form->method('getErrors')->willReturnCallback(static fn (bool $deep = false): FormErrorIterator => new FormErrorIterator($form, $rootError || $deep ? [new FormError('Invalid CSRF token.')] : []));
         $formFactory = $this->createMock(FormFactoryInterface::class);
         $formFactory->method('create')->willReturnCallback(function (string $type, mixed $data = null, array $options = []) use ($form): FormInterface {
             $this->createdForms[] = ['type' => $type, 'data' => $data, 'options' => $options];

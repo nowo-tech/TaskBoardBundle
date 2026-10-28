@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.15.0] - 2026-10-29](#1150---2026-10-29)
 - [[1.14.1] - 2026-10-29](#1141---2026-10-29)
 - [[1.14.0] - 2026-10-28](#1140---2026-10-28)
 - [[1.13.1] - 2026-10-28](#1131---2026-10-28)
@@ -50,6 +51,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.15.0] - 2026-10-29
+
+Dependencies edited in the task detail, time tracking with the deviation, list time columns, sorting and folding
+filters, Gantt scales and week start, a task start date. **Schema change**: one nullable column (see UPGRADING).
+
+### Added
+
+- **Dependencies**: *Add dependency* in the task detail and panel (a native dialog with the relation — blocks,
+  blocked by, related to, duplicates — and a searchable list of the board's other tasks), both directions listed with
+  a remove button. `TaskDependencyManager` refuses the task itself, another board, duplicates and cycles of "blocks"
+  links with a flash message; the changes are recorded in the activity (`TaskChangeType::DependencyAdded` /
+  `DependencyRemoved`). Routes `task_dependency`, `task_dependency_remove`; `TaskDependencyFormType`,
+  `TaskDependencyType::relation()`, `Task::addOutgoingDependency()` / `removeDependency()`.
+- **Time tracking and deviation**: a *Time tracking* section with the estimate, the time spent, the difference in time
+  and % coloured on track / over / under (`Support\TaskDeviation`), the subtasks' sum beside the task's own, the
+  manual time entries and *Log time* (minutes, day, note; `TaskTimeLogger`, `TaskTimeEntryFormType`, routes
+  `task_time`, `task_time_remove`, `TaskChangeType::TimeLogged` / `TimeRemoved`). Twig filter
+  `nowo_task_board_duration` ("1 h 30 min") and function `nowo_task_board_deviation(task)`.
+- **List**: optional Estimate, Spent and Deviation columns (*Show time*, remembered per board) with the totals of the
+  shown rows, and an *Over estimate* filter.
+- **Gantt scales**: Hours, Days, Weeks and Months (`?scale=`, remembered per board), each between a minimum and a
+  maximum number of columns — a longer plan is clamped to a window around now and the chart says so. The bars show the
+  time spent against the estimate (fill and over-run marker) and the numbers in their tooltip. `GanttScale`,
+  `TaskGanttSlot`, `TaskGanttTimeline::$slots` / `$scale` / `$weekStart` / `$clamped` / `$todayIndex`, more
+  `TaskGanttItem` fields.
+- **Week start**: `nowo_task_board.gantt.week_start` (monday | sunday) and `gantt.week_start_resolver`, a
+  `WeekStartResolverInterface` service the host answers per request (e.g. a user preference).
+- **Start date**: `Task::$startAt` (column `task_board_tasks.start_at`, nullable), edited next to the due date in the
+  task detail and the *Add task* dialog (a start after the due date is a form error); the Gantt starts the bar there
+  (`Task::getPlannedStart()`: the start date, else the creation), in every scale. Recorded as
+  `TaskChangeType::StartDate`; `TaskUpdatedEvent` lists `startAt`.
+- **Parent path**: a subtask's detail and panel open with its parents ("Epic › Story › this task"), Twig function
+  `nowo_task_board_ancestors(task)`.
+- **List sorting**: a *Sort* select (title, priority, due date, column; board order by default) orders the rows of
+  every group.
+- **Tall board columns** may scroll inside themselves: tokens `--nowo-task-column-max-height` and
+  `--nowo-task-column-overflow` (defaults none / visible).
+- Stimulus controllers `nowo-task-board-option-filter` and `nowo-task-board-filter-collapse`; tokens
+  `--nowo-task-gantt-spent`, `--nowo-task-overrun`, `--nowo-task-on-track`, `--nowo-task-under`.
+
+### Fixed
+
+- A task title over 255 characters gave a 500 (MySQL "Data too long"): the title, the board name and slug, the column
+  name and the link fields have a `Length` constraint and a `maxlength`; a refused inline task says why in a flash.
+- The task detail listed only the outgoing dependencies: the incoming ones ("blocked by", "duplicated by") show too.
+
+### Changed
+
+- **List filters** fold behind a *Filters* toggle (disclosure chevron, `aria-expanded`, state per board in
+  localStorage, open while a filter is active).
+- **Collapsibles** of the task detail and panel (Documentation, Activity, subtask children) use the platform
+  disclosure toggle (UiKit `_disclosure_icon` with its morph icon, `_disclosure.html.twig`) instead of the native
+  marker.
+- The task detail's time spent reads as a duration ("2 h 5 min") with the deviation beside it.
+- `TaskGanttBuilder::build()` takes the scale, the week start and the current time (all optional; the days scale is
+  the default and keeps the 1.13 range rules); `TaskGanttItem` indexes are columns of the scale.
 
 ## [1.14.1] - 2026-10-29
 

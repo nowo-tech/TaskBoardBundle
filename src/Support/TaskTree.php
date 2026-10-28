@@ -69,6 +69,24 @@ final readonly class TaskTree
     }
 
     /**
+     * Since 1.15: `$task`'s subtasks at any depth among the loaded tasks (depth-first, in order).
+     *
+     * @return list<Task>
+     */
+    public function descendantsOf(Task $task): array
+    {
+        $descendants = [];
+        foreach ($this->childrenOf($task) as $child) {
+            $descendants[] = $child;
+            foreach ($this->descendantsOf($child) as $nested) {
+                $descendants[] = $nested;
+            }
+        }
+
+        return $descendants;
+    }
+
+    /**
      * Done / total of `$task`'s subtasks at any depth among the loaded tasks.
      */
     public function progress(Task $task): SubtaskProgress

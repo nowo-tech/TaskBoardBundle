@@ -15,6 +15,7 @@ enum TaskChangeType: string
     case Priority         = 'priority';
     case Column           = 'column';
     case DueDate          = 'due_date';
+    case StartDate        = 'start_date';
     case EstimatedMinutes = 'estimated_minutes';
     case Tags             = 'tags';
     case Color            = 'color';
@@ -24,4 +25,9 @@ enum TaskChangeType: string
     case LinkRemoved      = 'link_removed';
     case MemberAdded      = 'member_added';
     case MemberRemoved    = 'member_removed';
+    // Since 1.15.
+    case DependencyAdded   = 'dependency_added';
+    case DependencyRemoved = 'dependency_removed';
+    case TimeLogged        = 'time_logged';
+    case TimeRemoved       = 'time_removed';
 }

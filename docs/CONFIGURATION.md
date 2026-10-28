@@ -16,6 +16,7 @@
   - [CSS framework](#css-framework)
 - [Other options](#other-options)
   - [Tenancy, boards and assignees (since 1.10)](#tenancy-boards-and-assignees-since-110)
+  - [Gantt (since 1.15)](#gantt-since-115)
   - [Rich description editor (Tiptap profile `task`)](#rich-description-editor-tiptap-profile-task)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
@@ -94,6 +95,10 @@ Each route has `path` and `name`. Optional `route_prefix` is prepended to every 
 | `routes.column_set_apply` (1.11) | `/tools/task-board/board/{boardId}/column-sets/apply` | `nowo_task_board_column_set_apply` |
 | `routes.column_set_delete` (1.11) | `/tools/task-board/board/{boardId}/column-sets/{setId}/delete` | `nowo_task_board_column_set_delete` |
 | `routes.task_panel` (1.11, GET) | `/tools/task-board/task/{taskId}/panel` | `nowo_task_board_task_panel` |
+| `routes.task_dependency` (1.15) | `/tools/task-board/task/{taskId}/dependency` | `nowo_task_board_task_dependency` |
+| `routes.task_dependency_remove` (1.15) | `/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove` | `nowo_task_board_task_dependency_remove` |
+| `routes.task_time` (1.15) | `/tools/task-board/task/{taskId}/time` | `nowo_task_board_task_time` |
+| `routes.task_time_remove` (1.15) | `/tools/task-board/task/{taskId}/time/{entryId}/remove` | `nowo_task_board_task_time_remove` |
 
 Renaming a route (`routes.<key>.name`) is fully supported: the bundle templates never hard-code route names, they resolve them with the Twig function `nowo_task_board_route('<key>')` (e.g. `path(nowo_task_board_route('board'), {boardId: board.id})`). Use the same function in overridden templates.
 
@@ -312,6 +317,22 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
 
 Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
+
+### Gantt (since 1.15)
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `gantt.week_start` | `monday` | First day of the week (`monday` or `sunday`): the columns of the Weeks scale and the week separators of the Days scale |
+| `gantt.week_start_resolver` | `null` | Service id of a `Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface` answering the week start per request (e.g. a user preference). `null` = `gantt.week_start` |
+
+```yaml
+nowo_task_board:
+    gantt:
+        week_start: sunday                                  # every user
+        week_start_resolver: App\Task\UserWeekStartResolver  # or per user
+```
+
+See [Gantt scales and week start](USAGE.md#gantt-scales-and-week-start).
 
 ### Rich description editor (Tiptap profile `task`)
 

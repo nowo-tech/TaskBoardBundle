@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
+use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
@@ -78,6 +80,26 @@ final class TaskBoardExtensionTest extends TestCase
             self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
             self::assertFalse($container->hasAlias('nowo_task_board.team_context_provider'));
         }
+    }
+
+    public function testWeekStartResolverFollowsTheGanttConfig(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
+
+        self::assertSame('monday', $container->getParameter('nowo_task_board.gantt.week_start'));
+        self::assertSame(ConfiguredWeekStartResolver::class, (string) $container->getAlias(WeekStartResolverInterface::class));
+        self::assertSame('monday', $container->getDefinition(ConfiguredWeekStartResolver::class)->getArgument('$weekStart'));
+
+        $host = new ContainerBuilder();
+        $host->setParameter('kernel.environment', 'test');
+        $host->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class, 'gantt' => ['week_start' => 'sunday', 'week_start_resolver' => 'app.week_start']]], $host);
+
+        self::assertSame('sunday', $host->getParameter('nowo_task_board.gantt.week_start'));
+        self::assertSame('app.week_start', (string) $host->getAlias(WeekStartResolverInterface::class));
     }
 
     public function testPrependRegistersFrameworkAssetsAndDoctrineMapping(): void

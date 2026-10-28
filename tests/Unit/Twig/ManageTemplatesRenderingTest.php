@@ -12,9 +12,11 @@ use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
+use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -25,21 +27,25 @@ use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
+use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
@@ -48,6 +54,7 @@ use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
+use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
@@ -567,6 +574,192 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString($panelUrl, $gantt);
         self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-depth&quot;:0}"', $gantt);
         self::assertStringNotContainsString(' style="', $gantt);
+    }
+
+    /**
+     * Since 1.15: dependencies (both directions, add dialog, remove buttons), time tracking and the deviation, and the
+     * platform disclosure toggle on every collapsible.
+     */
+    public function testTaskDetailEditsDependenciesAndTime(): void
+    {
+        $task    = $this->task;
+        $blocker = new Task($this->board, 'Design', $this->user, column: $this->todo);
+        $blocked = new Task($this->board, 'Deploy', $this->user, column: $this->todo, parent: $task);
+        $blocked->markCompleted();
+        $task->getSubtasks()->add($blocked);
+        $task->addOutgoingDependency(new TaskDependency($task, $blocked, TaskDependencyType::Blocks));
+        $blocker->addOutgoingDependency(new TaskDependency($blocker, $task, TaskDependencyType::Duplicates));
+        $task->addTimeEntry(new TaskTimeEntry($task, $this->user, 120, new DateTimeImmutable('2026-10-27'), 'Pairing'));
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::DependencyAdded, null, 'Deploy', 'blocks'));
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::TimeRemoved, '95', null, '2026-10-26'));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + [
+            'dependencyForm'       => $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData(), ['task_choices' => ['Design' => $blocker->getId()]])->createView(),
+            'dependencyRemoveForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
+            'timeEntryForm'        => $this->factory()->create(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('2026-10-28')))->createView(),
+            'timeEntryRemoveForm'  => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 't'])->createView(),
+            'deviation'            => TaskDeviation::of($task),
+            'subtaskDeviation'     => TaskDeviation::sum([$blocked]),
+        ]);
+
+        // Dependencies: the add dialog with its searchable picker, one remove button per row, both directions.
+        self::assertStringContainsString('data-dialog="dependency"', $html);
+        self::assertStringContainsString('data-controller="nowo-task-board-option-filter"', $html);
+        self::assertStringContainsString('data-nowo-task-board-option-filter-target="select"', $html);
+        self::assertStringContainsString('id="nowo-task-dependency-remove-form"', $html);
+        self::assertStringContainsString('task_board.dependency.relation.blocks', $html);
+        self::assertStringContainsString('task_board.dependency.relation.duplicated_by', $html);
+        self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/dependency/', $html);
+        self::assertStringContainsString('nowo-task-dependencies__task is-done', $html);
+        // Time: estimate 1 h 30 min, 2 h spent, +30 min (+33 %), over; the subtasks' row; the entries and the dialog.
+        self::assertStringContainsString('nowo-task-deviation--over', $html);
+        self::assertStringContainsString('<dd>1 h 30 min</dd>', $html);
+        self::assertStringContainsString('+30 min', $html);
+        self::assertStringContainsString('(+33 %)', $html);
+        self::assertStringContainsString('task_board.time.subtasks_sum', $html);
+        self::assertStringContainsString('Pairing', $html);
+        self::assertStringContainsString('data-dialog="time"', $html);
+        self::assertStringContainsString('name="task_time_entry[minutes]"', $html);
+        self::assertStringContainsString('id="nowo-task-time-remove-form"', $html);
+        self::assertStringContainsString('nowo-task-deviation-pill--over', $html);
+        self::assertStringContainsString('task_board.history.type.dependency_added', $html);
+        self::assertStringContainsString('<span class="nowo-task-activity__old">1 h 35 min</span>', $html);
+        // Every <summary> carries the disclosure toggle (UiKit partial, morph icon).
+        self::assertSame(substr_count($html, '<summary'), substr_count($html, 'data-controller="disclosure-icon"'));
+        self::assertGreaterThan(0, substr_count($html, 'nowo-task-disclosure'));
+        self::assertStringContainsString('data-disclosure-morph', $html);
+        self::assertStringNotContainsString(' style="', $html);
+    }
+
+    public function testReadOnlyTaskShowsDependenciesAndTimeWithoutWriteControls(): void
+    {
+        $other = new Task($this->board, 'Other', $this->user);
+        $this->task->addOutgoingDependency(new TaskDependency($this->task, $other, TaskDependencyType::BlockedBy));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($this->task) + [
+            'canEditTask'          => false,
+            'dependencyForm'       => $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData())->createView(),
+            'dependencyRemoveForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
+        ]);
+
+        self::assertStringContainsString('task_board.dependency.relation.blocked_by', $html);
+        self::assertStringContainsString('task_board.time.status.on_track', $html);
+        self::assertStringNotContainsString('id="nowo-task-dependency-remove-form"', $html);
+        self::assertStringNotContainsString('data-dialog="dependency"', $html);
+        self::assertStringNotContainsString('data-dialog="time"', $html);
+    }
+
+    public function testListFoldsItsFiltersAndShowsTheTimeColumns(): void
+    {
+        $this->task->addTimeEntry(new TaskTimeEntry($this->task, $this->user, 120, new DateTimeImmutable()));
+        $plain = new Task($this->board, 'No estimate', $this->user, column: $this->todo);
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/list.html.twig', [
+            'board'          => $this->board,
+            'tasks'          => [$this->task, $plain],
+            'priorities'     => ['high'],
+            'columnNames'    => ['Todo'],
+            'filterForm'     => Forms::createFormFactory()->createNamed('', TaskListFilterType::class, null, ['priorities' => ['high'], 'column_names' => ['Todo']])->createView(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringContainsString('data-controller="nowo-task-board-filter-collapse"', $html);
+        self::assertMatchesRegularExpression('/class="nowo-task-list__filter-toggle"[^>]*data-controller="disclosure-icon"[^>]*aria-expanded="true"[^>]*aria-controls="nowo-task-list-filters-/', $html);
+        self::assertStringContainsString('data-nowo-task-board-list-filter-board-value="' . $this->board->getId() . '"', $html);
+        self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
+        self::assertMatchesRegularExpression('/name="sort"[^>]*data-nowo-task-board-list-filter-target="sort"|data-nowo-task-board-list-filter-target="sort"[^>]*name="sort"/', $html);
+        self::assertMatchesRegularExpression('/data-due="2026-12-01"/', $html);
+        self::assertMatchesRegularExpression('/data-nowo-task-board-list-filter-target="timeColumns"[^>]*data-nowo-task-filter-ignore/', $html);
+        self::assertMatchesRegularExpression('/data-estimate="90"\s+data-spent="120"\s+data-over="1"/', $html);
+        self::assertMatchesRegularExpression('/data-estimate=""\s+data-spent="0"\s+data-over="0"/', $html);
+        self::assertStringContainsString('<tfoot class="nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">', $html);
+        self::assertStringContainsString('nowo-task-list__totals', $html);
+        self::assertStringContainsString('+30 min (+33 %)', $html);
+        self::assertStringNotContainsString(' style="', $html);
+    }
+
+    public function testGanttOffersTheScalesAndDrawsTheTimeSpent(): void
+    {
+        $this->task->addTimeEntry(new TaskTimeEntry($this->task, $this->user, 120, new DateTimeImmutable()));
+        $long = new Task($this->board, 'Long', $this->user, dueAt: new DateTimeImmutable('+6 years'));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', [
+            'board'          => $this->board,
+            'timeline'       => (new TaskGanttBuilder())->build([$this->task, $long], GanttScale::Months, WeekStart::Sunday),
+            'scale'          => GanttScale::Months,
+            'scales'         => GanttScale::cases(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringContainsString('data-week-start="sunday"', $html);
+        self::assertStringContainsString('nowo-task-gantt--months', $html);
+        self::assertMatchesRegularExpression('/href="[^"]*scale=months"[^>]*class="nowo-task-gantt__scale is-active"[^>]*aria-current="true"/', $html);
+        self::assertStringContainsString('href="/tools/task-board/board/' . $this->board->getId() . '/gantt?scale=hours"', $html);
+        self::assertStringContainsString('task_board.gantt.clamped_months', $html);
+        self::assertStringContainsString('nowo-task-gantt__bar-spent', $html);
+        self::assertStringContainsString('{&quot;--nowo-task-spent&quot;:100}', $html);
+        self::assertStringContainsString('is-overrun', $html);
+        self::assertStringContainsString('task_board.gantt.bar_time', $html);
+        self::assertStringNotContainsString(' style="', $html);
+
+        foreach ([GanttScale::Hours, GanttScale::Weeks, GanttScale::Days] as $scale) {
+            $html = $this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', [
+                'board'          => $this->board,
+                'timeline'       => (new TaskGanttBuilder())->build([$this->task], $scale),
+                'scales'         => GanttScale::cases(),
+                'dashboardRoute' => null,
+            ]);
+            self::assertStringContainsString('data-scale="' . $scale->value . '"', $html);
+        }
+    }
+
+    /**
+     * Since 1.15: a subtask opens with its parent path; the start date sits next to the due date; titles are limited.
+     */
+    public function testSubtaskDetailShowsItsParentsAndTheStartDate(): void
+    {
+        $story = new Task($this->board, 'Story', $this->user, parent: $this->task);
+        $leaf  = new Task($this->board, 'Leaf', $this->user, parent: $story);
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($leaf) + ['panel' => true, 'panelTargetPath' => '/board', 'taskRouteExtra' => ['_target_path' => '/board']]);
+
+        self::assertMatchesRegularExpression('/<nav class="nowo-task-detail__parents"[^>]*>\s*<ol[^>]*>\s*<li><a href="\/tools\/task-board\/task\/' . $this->task->getId() . '" data-task-panel-url="[^"]+">Ship it<\/a><\/li>\s*<li><a [^>]*>Story<\/a><\/li>\s*<li aria-current="page">Leaf<\/li>/', $html);
+        self::assertStringContainsString('name="task_form[startAt]"', $html);
+        self::assertMatchesRegularExpression('/name="task_form\[title\]"[^>]*maxlength="255"|maxlength="255"[^>]*name="task_form\[title\]"/', $html);
+
+        $page = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($this->task));
+        self::assertStringNotContainsString('nowo-task-detail__parents', $page);
+    }
+
+    public function testLongTitlesAndAStartAfterTheDueDateAreFormErrors(): void
+    {
+        $form = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['column_choices' => ['Todo' => $this->todo->getId()], 'rich_description' => false, 'tag_input' => false]);
+        $form->submit(['title' => str_repeat('x', 256), 'priority' => 'normal', 'startAt' => '2026-11-10', 'dueAt' => '2026-11-01']);
+
+        self::assertFalse($form->isValid());
+        self::assertCount(1, $form->get('title')->getErrors());
+        self::assertSame('task_board.form.task.start_after_due', $form->get('startAt')->getErrors()[0]->getMessage());
+
+        $ok = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['column_choices' => ['Todo' => $this->todo->getId()], 'rich_description' => false, 'tag_input' => false]);
+        $ok->submit(['title' => str_repeat('x', 255), 'priority' => 'normal', 'startAt' => '2026-11-01', 'dueAt' => '2026-11-10']);
+        self::assertTrue($ok->isValid(), (string) $ok->getErrors(true));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function taskContext(Task $task): array
+    {
+        return [
+            'task'             => $task,
+            'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
+            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
+            'memberForm'       => $this->memberForm(),
+            'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
+            'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
+            'priorities'       => TaskPriority::cases(),
+            'dashboardRoute'   => null,
+        ] + $this->taskActionForms($task);
     }
 
     public function testIndexOffersTheColumnSetsForANewBoard(): void

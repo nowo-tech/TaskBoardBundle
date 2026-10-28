@@ -1,0 +1,12 @@
+{#
+    Since 1.15: the platform disclosure toggle of a collapsible (<summary> of a <details>, or a button with
+    aria-expanded): UiKit's _disclosure_icon partial with its morph icon, the host's icon set (ux_icon gets the Tabler
+    names). Put it first inside the toggle and add data-controller="disclosure-icon" on the toggle. Optional `class`.
+    Without UiKit's partial nothing is drawn (the toggle still works).
+#}
+{% set _set = nowo_ui_kit_icon_set|default('tabler-icons') %}
+{{ include('@NowoUiKitBundle/partials/_disclosure_icon.html.twig', {
+    class: 'nowo-task-disclosure' ~ (class|default('') ? ' ' ~ class : ''),
+    morph: true,
+    icons: _set == 'ux_icon' ? {open: 'tabler:chevron-down', closed: 'tabler:chevron-right'} : {},
+}, false, true) }}
