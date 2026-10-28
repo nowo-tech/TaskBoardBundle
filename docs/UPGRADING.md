@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.14.1](#to-1141)
 - [To 1.14.0](#to-1140)
 - [To 1.13.1](#to-1131)
 - [To 1.13.0](#to-1130)
@@ -89,6 +90,12 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.14.1
+
+From **1.14.0**: `composer update nowo-tech/task-board-bundle`. Bug fixes only (an empty board slug no longer fails; the task detail fields
+have an `aria-label`); no schema or configuration change. A host override of `manage/_task_blocks.html.twig` can add
+the same `aria-label`s.
 
 ## To 1.14.0
 

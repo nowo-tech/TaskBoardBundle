@@ -31,7 +31,9 @@ final class TaskBoardFormType extends AbstractType
         $this->addText($builder, 'slug', [
             'label'    => 'task_board.form.board.slug',
             'required' => false,
-            'help'     => 'task_board.form.board.slug_help',
+            // Since 1.14.1: an empty slug is '' (the board creator derives it from the name), not null.
+            'empty_data' => '',
+            'help'       => 'task_board.form.board.slug_help',
         ]);
         $this->addTextarea($builder, 'description', [
             'label'    => 'task_board.form.board.description',

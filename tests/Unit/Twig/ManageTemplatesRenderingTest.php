@@ -157,6 +157,10 @@ final class ManageTemplatesRenderingTest extends TestCase
         ] + $this->taskActionForms($task));
 
         self::assertStringContainsString('<strong>27 min</strong>', $html);
+        // 1.14.1: the detail's widgets drawn without a label are named (axe "label").
+        foreach (['dueAt', 'estimatedMinutes', 'tags', 'description'] as $field) {
+            self::assertMatchesRegularExpression('/<(input|textarea)[^>]*name="task_form\[' . $field . '\]"[^>]*aria-label="[^"]+"|<(input|textarea)[^>]*aria-label="[^"]+"[^>]*name="task_form\[' . $field . '\]"/', $html, $field);
+        }
         // REQ-TWIG-005: CSRF-only actions and the priority modal render from Form views.
         self::assertStringContainsString('id="nowo-task-advance-form"', $html);
         self::assertStringContainsString('id="nowo-task-link-delete-form"', $html);

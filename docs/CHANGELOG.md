@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.14.1] - 2026-10-29](#1141---2026-10-29)
 - [[1.14.0] - 2026-10-28](#1140---2026-10-28)
 - [[1.13.1] - 2026-10-28](#1131---2026-10-28)
 - [[1.13.0] - 2026-10-28](#1130---2026-10-28)
@@ -49,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.14.1] - 2026-10-29
+
+### Fixed
+
+- **New board without a slug**: submitting the board form with the optional *Slug* empty gave a 500 (`null` into the
+  string slug); the empty field now submits `''` and the slug is derived from the name, as documented.
+- **Task detail accessibility**: the due date, estimate, tags and description fields (drawn without a visible label
+  next to their row title) now carry an `aria-label`, so screen readers name them (axe rule *label*).
 
 ## [1.14.0] - 2026-10-28
 

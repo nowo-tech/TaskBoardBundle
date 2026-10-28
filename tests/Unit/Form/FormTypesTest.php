@@ -8,10 +8,12 @@ use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
 use Nowo\TagInputBundle\Form\TagType;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
+use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
@@ -133,6 +135,15 @@ final class FormTypesTest extends TestCase
         self::assertTrue($form->isValid());
     }
 
+    public function testBoardSlugIsOptional(): void
+    {
+        $form = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData());
+        $form->submit(['name' => 'Release', 'slug' => '', 'description' => '']);
+
+        self::assertTrue($form->isValid());
+        self::assertSame('', $form->getData()->slug);
+    }
+
     /** @return iterable<string, array{string, bool, ?string}> */
     public static function taskColors(): iterable
     {
@@ -176,7 +187,7 @@ final class FormTypesTest extends TestCase
             'field_types'        => [],
         ];
         $merger = new FormOptionsMerger(['default' => $profile, 'task_board' => $profile], 'default', new ConstraintDefinitionFactory());
-        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType()];
+        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType()];
         foreach ($types as $type) {
             $type->setFormOptionsMerger($merger);
         }

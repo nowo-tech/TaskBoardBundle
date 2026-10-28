@@ -112,7 +112,7 @@
                         <span>{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</span>
                     </dt>
                     <dd class="nowo-task-detail__field-value">
-                        {{ form_widget(taskForm.dueAt, {label: false}) }}
+                        {{ form_widget(taskForm.dueAt, {label: false, attr: taskForm.dueAt.vars.attr|merge({'aria-label': 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle')})}) }}
                     </dd>
                 </div>
 
@@ -125,7 +125,7 @@
                         <span class="nowo-task-detail__logged" title="{{ 'task_board.time.logged'|trans({}, 'NowoTaskBoardBundle') }}"><strong>{{ task.loggedMinutes }} min</strong></span>
                         <span class="nowo-task-detail__estimate">
                             <span class="nowo-task-detail__inline-label">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                            {{ form_widget(taskForm.estimatedMinutes, {label: false, attr: {class: 'form-control form-control-sm nowo-task-detail__inline-input'}}) }}
+                            {{ form_widget(taskForm.estimatedMinutes, {label: false, attr: {class: 'form-control form-control-sm nowo-task-detail__inline-input', 'aria-label': 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle')}}) }}
                         </span>
                     </dd>
                 </div>
@@ -136,7 +136,7 @@
                         <span>{{ 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle') }}</span>
                     </dt>
                     <dd class="nowo-task-detail__field-value">
-                        {{ form_widget(taskForm.tags, {label: false}) }}
+                        {{ form_widget(taskForm.tags, {label: false, attr: taskForm.tags.vars.attr|merge({'aria-label': 'task_board.form.task.tags'|trans({}, 'NowoTaskBoardBundle')})}) }}
                     </dd>
                 </div>
 
@@ -160,8 +160,9 @@
             </dl>
 
             <section class="nowo-task-detail__section nowo-task-detail__description">
+                {# Since 1.14.1: the widgets drawn without their label carry an aria-label (axe "label"). #}
                 <h3 class="nowo-task-detail__section-title">{{ 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle') }}</h3>
-                {{ form_widget(taskForm.description, {label: false}) }}
+                {{ form_widget(taskForm.description, {label: false, attr: taskForm.description.vars.attr|merge({'aria-label': 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle')})}) }}
             </section>
 
             {% for child in taskForm %}
