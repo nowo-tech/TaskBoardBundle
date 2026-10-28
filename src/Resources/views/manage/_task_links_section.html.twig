@@ -1,62 +1,56 @@
-<div class="card mb-3 nowo-task-detail">
-    <div class="card-header nowo-task-detail__section-header">
-        <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap w-100">
-            <h2 class="card-title mb-0">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'link'}) }}{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
-            </h2>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-action="click->nowo-task-board-task-links-modal#openAdd">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-        </div>
-    </div>
-    <div class="list-group list-group-flush nowo-task-detail__links-list">
+<section class="nowo-task-section nowo-task-detail nowo-task-detail__links">
+    <header class="nowo-task-section__header nowo-task-detail__section-header">
+        <h2 class="nowo-task-section__title">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'link'}) }}{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
+        </h2>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-action="click->nowo-task-board-task-links-modal#openAdd">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+    </header>
+    <ul class="nowo-task-rows nowo-task-detail__links-list">
         {% for link in task.links %}
             {% if link.hostObject %}
                 {# Since 1.10: a host object (issue, order…) described by the host's TaskObjectLinkResolverInterface. #}
                 {% set objectUrl = nowo_task_board_link_url(link) %}
                 {% set objectBadge = nowo_task_board_link_badge(link) %}
-                <div class="list-group-item nowo-task-detail__link-row nowo-task-link nowo-task-link--host-object" data-link-id="{{ link.id }}" data-object-type="{{ link.objectType }}" data-object-id="{{ link.objectId }}">
-                    <div class="nowo-task-detail__link-row-main d-flex align-items-center gap-2 flex-wrap">
-                        <span class="badge bg-blue-lt">{{ 'task_board.link.host_object'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <li class="nowo-task-rows__item nowo-task-detail__link-row nowo-task-link nowo-task-link--host-object" data-link-id="{{ link.id }}" data-object-type="{{ link.objectType }}" data-object-id="{{ link.objectId }}">
+                    <div class="nowo-task-detail__link-row-main">
+                        <span class="badge bg-blue-lt nowo-task-badge">{{ 'task_board.link.host_object'|trans({}, 'NowoTaskBoardBundle') }}</span>
                         {% if objectUrl %}
-                            <a href="{{ objectUrl }}" class="fw-semibold text-truncate nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</a>
+                            <a href="{{ objectUrl }}" class="nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</a>
                         {% else %}
-                            <span class="fw-semibold text-truncate nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</span>
+                            <span class="nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</span>
                         {% endif %}
                         {% if objectBadge %}
-                            <span class="badge bg-{{ objectBadge.variant }}-lt nowo-task-link__badge">{{ objectBadge.label }}</span>
+                            <span class="badge bg-{{ objectBadge.variant }}-lt nowo-task-badge nowo-task-link__badge nowo-task-badge--{{ objectBadge.variant }}">{{ objectBadge.label }}</span>
                         {% endif %}
                     </div>
-                </div>
+                </li>
             {% else %}
-            <button
-                type="button"
-                class="list-group-item list-group-item-action nowo-task-detail__link-row"
-                data-action="click->nowo-task-board-task-links-modal#openEdit"
-                data-link-id="{{ link.id }}"
-                data-link-type="{{ link.linkType.value }}"
-                data-link-url="{{ link.url }}"
-                data-link-label="{{ link.label ?? '' }}"
-                data-link-external-id="{{ link.externalId ?? '' }}"
-            >
-                <div class="d-flex align-items-start justify-content-between gap-3 w-100">
-                    <div class="min-width-0 flex-grow-1">
-                        <div class="nowo-task-detail__link-row-main">
-                            <span class="badge bg-blue-lt">{{ ('task_board.link.' ~ link.linkType.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
-                            <span class="fw-semibold text-truncate">{{ link.label ?? link.url }}</span>
-                        </div>
-                        <div class="nowo-task-detail__link-row-meta text-secondary small text-truncate">
-                            {{ link.url }}
-                        </div>
-                    </div>
-                    <a href="{{ link.url|nowo_task_board_safe_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}" onclick="event.stopPropagation();">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'external-link'}) }}
-                    </a>
-                </div>
-            </button>
+            <li class="nowo-task-rows__item nowo-task-detail__link-row">
+                <button
+                    type="button"
+                    class="nowo-task-detail__link-edit"
+                    data-action="click->nowo-task-board-task-links-modal#openEdit"
+                    data-link-id="{{ link.id }}"
+                    data-link-type="{{ link.linkType.value }}"
+                    data-link-url="{{ link.url }}"
+                    data-link-label="{{ link.label ?? '' }}"
+                    data-link-external-id="{{ link.externalId ?? '' }}"
+                >
+                    <span class="nowo-task-detail__link-row-main">
+                        <span class="badge bg-blue-lt nowo-task-badge">{{ ('task_board.link.' ~ link.linkType.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        <span class="nowo-task-link__label">{{ link.label ?? link.url }}</span>
+                    </span>
+                    <span class="nowo-task-detail__link-row-meta">{{ link.url }}</span>
+                </button>
+                <a href="{{ link.url|nowo_task_board_safe_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary nowo-task-detail__link-open" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'external-link'}) }}<span class="nowo-task-sr-only">{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                </a>
+            </li>
             {% endif %}
         {% else %}
-            <div class="list-group-item text-secondary">{{ 'task_board.task.no_links'|trans({}, 'NowoTaskBoardBundle') }}</div>
+            <li class="nowo-task-rows__item nowo-task-detail__empty">{{ 'task_board.task.no_links'|trans({}, 'NowoTaskBoardBundle') }}</li>
         {% endfor %}
-    </div>
-</div>
+    </ul>
+</section>

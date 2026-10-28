@@ -1,29 +1,29 @@
 {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
 
-<details class="card mb-3 nowo-task-detail__relation nowo-task-detail__history" open>
-    <summary class="card-header nowo-task-detail__relation-summary">
-        <span>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'history'}) }}{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
+{# Since 1.12: the activity stream (who did what, when) closing the task detail. #}
+<details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__history" open>
+    <summary class="nowo-task-section__header nowo-task-detail__relation-summary">
+        <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'history'}) }}{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
     </summary>
-    <div class="list-group list-group-flush">
+    <ol class="nowo-task-activity">
         {% for entry in task.changeHistory %}
             {% set changeKey = 'task_board.history.type.' ~ entry.changeType.value %}
-            <div class="list-group-item nowo-task-detail__history-item">
-                <div class="d-flex align-items-start gap-3">
+            <li class="nowo-task-activity__item nowo-task-detail__history-item">
                     <span class="nowo-task-detail__history-avatar" aria-hidden="true">
                         {{ memberUi.member_label(entry.user)|slice(0, 1)|upper }}
                     </span>
-                    <div class="flex-grow-1 min-w-0">
+                    <div class="nowo-task-activity__body">
                         <div class="nowo-task-detail__history-summary">
                             <strong>{{ memberUi.member_label(entry.user) }}</strong>
-                            <span class="text-secondary">
+                            <span class="nowo-task-activity__action">
                                 {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
                             </span>
                         </div>
                         {% if entry.oldValue is not null or entry.newValue is not null %}
-                            <div class="nowo-task-detail__history-values text-secondary small mt-1">
+                            <div class="nowo-task-detail__history-values nowo-task-activity__values">
                                 {% if entry.changeType.value == 'priority' %}
                                     {% if entry.oldValue %}
-                                        <span class="text-decoration-line-through">{{ ('task_board.priority.' ~ entry.oldValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                        <span class="nowo-task-activity__old">{{ ('task_board.priority.' ~ entry.oldValue)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
                                     {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
@@ -45,7 +45,7 @@
                                     {% set oldTags = entry.oldValue|nowo_task_board_tag_list %}
                                     {% set newTags = entry.newValue|nowo_task_board_tag_list %}
                                     {% if oldTags|length > 0 %}
-                                        <span class="text-decoration-line-through">{{ oldTags|join(', ') }}</span>
+                                        <span class="nowo-task-activity__old">{{ oldTags|join(', ') }}</span>
                                     {% endif %}
                                     {% if oldTags|length > 0 and newTags|length > 0 %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if newTags|length > 0 %}
@@ -59,11 +59,11 @@
                                         <span>{{ entry.newValue }}</span>
                                     {% endif %}
                                     {% if entry.context %}
-                                        <span class="badge bg-green-lt ms-1">{{ ('task_board.member.' ~ entry.context)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                        <span class="badge bg-green-lt nowo-task-badge">{{ ('task_board.member.' ~ entry.context)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
                                 {% elseif entry.changeType.value in ['link_added', 'link_updated', 'link_removed'] %}
                                     {% if entry.oldValue %}
-                                        <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
+                                        <span class="nowo-task-activity__old">{{ entry.oldValue }}</span>
                                     {% endif %}
                                     {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
@@ -73,7 +73,7 @@
                                     {% endif %}
                                 {% else %}
                                     {% if entry.oldValue %}
-                                        <span class="text-decoration-line-through">{{ entry.oldValue }}</span>
+                                        <span class="nowo-task-activity__old">{{ entry.oldValue }}</span>
                                     {% endif %}
                                     {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
                                     {% if entry.newValue %}
@@ -82,14 +82,11 @@
                                 {% endif %}
                             </div>
                         {% endif %}
-                        <div class="text-secondary small mt-1">
-                            <time datetime="{{ entry.createdAt|date('c') }}">{{ entry.createdAt|date('Y-m-d H:i') }}</time>
-                        </div>
+                        <time class="nowo-task-activity__time" datetime="{{ entry.createdAt|date('c') }}">{{ entry.createdAt|date('Y-m-d H:i') }}</time>
                     </div>
-                </div>
-            </div>
+            </li>
         {% else %}
-            <div class="list-group-item text-secondary">{{ 'task_board.task.no_history'|trans({}, 'NowoTaskBoardBundle') }}</div>
+            <li class="nowo-task-activity__item nowo-task-detail__empty">{{ 'task_board.task.no_history'|trans({}, 'NowoTaskBoardBundle') }}</li>
         {% endfor %}
-    </div>
+    </ol>
 </details>

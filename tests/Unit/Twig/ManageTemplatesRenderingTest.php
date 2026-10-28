@@ -168,7 +168,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('Proofread', $html);
         self::assertStringContainsString('MR !1', $html);
         self::assertStringContainsString('Spec', $html);
-        self::assertStringContainsString('<span class="text-decoration-line-through">legacy</span>', $html);
+        self::assertStringContainsString('<span class="nowo-task-activity__old">legacy</span>', $html);
         self::assertStringContainsString('<span>api, ui</span>', $html);
     }
 
@@ -226,9 +226,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-depth="3"', $html);
         // Level 1 counts its 3 descendants, one of them done.
         self::assertStringContainsString('1/3', $html);
-        self::assertStringContainsString('<a href="/projects/1/issues/12" class="fw-semibold text-truncate nowo-task-link__label">BEACON-12 Crash</a>', $html);
-        self::assertStringContainsString('bg-success-lt nowo-task-link__badge">Resolved', $html);
-        self::assertStringContainsString('<span class="fw-semibold text-truncate nowo-task-link__label">Order 7</span>', $html);
+        self::assertStringContainsString('<a href="/projects/1/issues/12" class="nowo-task-link__label">BEACON-12 Crash</a>', $html);
+        self::assertStringContainsString('nowo-task-link__badge nowo-task-badge--success">Resolved', $html);
+        self::assertStringContainsString('<span class="nowo-task-link__label">Order 7</span>', $html);
     }
 
     public function testBoardCardsShowTheSubtaskCounter(): void
@@ -473,7 +473,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/member' . $query, $html);
         self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/link' . $query, $html);
         self::assertStringContainsString('task_board.task.open_page', $html);
-        self::assertStringContainsString('<progress class="nowo-task-progress mt-2" max="2" value="1"', $html);
+        self::assertStringContainsString('<progress class="nowo-task-progress" max="2" value="1"', $html);
     }
 
     public function testListAndGanttCarryTaskPanelUrlsWithoutInlineStyle(): void

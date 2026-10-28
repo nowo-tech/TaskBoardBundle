@@ -1,5 +1,9 @@
 {% macro member_label(user) %}
-    {% if user.email is defined and user.email %}
+    {% if user.displayName is defined and user.displayName %}
+        {{ user.displayName }}
+    {% elseif user.fullName is defined and user.fullName %}
+        {{ user.fullName }}
+    {% elseif user.email is defined and user.email %}
         {{ user.email }}
     {% elseif user.username is defined and user.username %}
         {{ user.username }}
