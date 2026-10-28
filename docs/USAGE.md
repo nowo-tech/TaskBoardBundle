@@ -15,6 +15,7 @@
 - [Layout without forking pages](#layout-without-forking-pages)
 - [Multi-tenant hosts (since 1.10)](#multi-tenant-hosts-since-110)
   - [Boards per tenant (`tenancy`)](#boards-per-tenant-tenancy)
+  - [Read-only access (since 1.10)](#read-only-access-since-110)
   - [Links to host objects](#links-to-host-objects)
   - [Who may be assigned](#who-may-be-assigned)
   - [Events after writes](#events-after-writes)
@@ -200,6 +201,30 @@ nowo_task_board:
   `findActiveByTenant()` look them up. Per-board resource scoping (`security.resource_scoping`) still applies: a host
   that authorizes by tenant usually sets it to `false` and checks its own permission in a `kernel.request` /
   `kernel.controller` listener on the copied routes.
+
+### Read-only access (since 1.10)
+
+Board writes (columns, new tasks, import) need `TaskBoardResourceAccessChecker::canEditBoard()`; task writes need
+`canEditTask()`. A `BOARD_ACCESS_CHECK` listener gives read-only access with `grant()` + `markReadOnly()` (the tasks of
+the board become read-only too, unless a `TASK_ACCESS_CHECK` listener grants a task explicitly):
+
+```php
+#[AsEventListener(event: TaskBoardEvents::BOARD_ACCESS_CHECK)]
+public function onBoardAccess(BoardAccessCheckEvent $event): void
+{
+    $project = $this->projects->forTenantKey($event->getBoard()->getTenantKey());
+    if (!$this->security->isGranted('project.tasks.view', $project)) {
+        $event->deny();
+
+        return;
+    }
+
+    $event->grant();
+    if (!$this->security->isGranted('project.tasks.manage', $project)) {
+        $event->markReadOnly();
+    }
+}
+```
 
 ### Links to host objects
 

@@ -115,6 +115,17 @@ Nothing else is required: tenancy, the assignee provider, the board options and 
   levels render through `_subtask_tree.html.twig`. The board cards and columns moved to `_task_card.html.twig` /
   `_board_column.html.twig`. Prefer overriding the new blocks over copying pages.
 - **Controllers or services built by hand** (tests): the new constructor arguments are optional and trailing.
+- **Security — read-only board access (behaviour change):** board writes (columns, new tasks, import) now require
+  `TaskBoardResourceAccessChecker::canEditBoard()` instead of view access. Users who can view a board through the
+  default rules (creator, team member, `security.manage_roles`, or `security.resource_scoping: false`) keep writing as
+  before. A `BOARD_ACCESS_CHECK` listener that should grant read-only access calls `$event->grant()` and
+  `$event->markReadOnly()`: those users now get 403 on every board and task write (before 1.10 they could change
+  columns, create tasks and import). If you relied on viewers being able to write, do not mark them read-only. To map
+  a host permission (e.g. Beacon `project.tasks.view` / `project.tasks.manage`), grant on view and call
+  `markReadOnly()` when the manage permission is missing.
+- **Template overrides that include `_page_header.html.twig`:** `headerActions` is now a list of
+  `{href, label, icon?, class?}` printed with auto-escaping (no `|raw`). An HTML string still passed by an older
+  override is printed escaped (visible as text): convert it to the list.
 - **Enabling tenancy:** the tenant-less routes (`/tools/task-board/...`) answer 404 while it is on, and the router is
   decorated by `Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator`. Existing boards have no tenant key: set
   `tenant_key` on the boards a tenant should keep, otherwise `single_board` creates a new board on the first visit.

@@ -64,6 +64,11 @@ change:** two nullable columns on the boards and two on the task links. See [UPG
 - The link form no longer offers a link type for host objects (`TaskLinkType::userChoices()`).
 - `TaskManager`, `TaskMemberAssigner`, `TaskBoardCreator`, `TaskBoardTwigExtension` and `TaskBoardManageController` take new optional trailing constructor arguments (event dispatcher, assignee provider, default columns, link resolver, tenant context, `top_level_only`).
 
+### Security
+
+- **Board writes need edit access, not view access.** Adding, renaming or reordering columns, creating tasks and importing (`createColumn`, `updateColumn`, `reorderColumns`, `createTask`, `importBoard`) used to check only `canViewBoard()`, so a user granted read access through `BOARD_ACCESS_CHECK` could still change the board. They now require the new `TaskBoardResourceAccessChecker::canEditBoard()` (view access that no listener marked read-only) and answer 403 otherwise. A listener marks read-only access with the new `BoardAccessCheckEvent::markReadOnly()` / `isReadOnly()`. The tasks of a read-only board are read-only too (`canEditTask()`), participants included, unless a `TASK_ACCESS_CHECK` listener grants the task explicitly. The board and task pages receive `canEditBoard` / `canEditTask` and hide the write controls (import, add / edit column, add task, save, add subtask) for read-only users.
+- **No `|raw` in the page header.** `manage/_page_header.html.twig` printed `headerActions` with `|raw` (an HTML string built from `path()` and translations). `headerActions` is now a list of `{href, label, icon, class}` rendered with auto-escaping; a string from an older override is printed escaped.
+
 ## [1.9.0] - 2026-10-26
 
 Forms in the bundle views are Symfony Form Types rendered with form_start / child loop / form_end, no raw form controls (REQ-TWIG-005). See [UPGRADING](UPGRADING.md#to-190).
