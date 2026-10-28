@@ -20,6 +20,12 @@
   - [Who may be assigned](#who-may-be-assigned)
   - [Events after writes](#events-after-writes)
   - [Template blocks and partials](#template-blocks-and-partials)
+- [Columns, column sets and the task panel (since 1.11)](#columns-column-sets-and-the-task-panel-since-111)
+  - [Column icon, rename, colour, delete](#column-icon-rename-colour-delete)
+  - [Column sets](#column-sets)
+  - [Several boards per tenant and boards owned by a user](#several-boards-per-tenant-and-boards-owned-by-a-user)
+  - [Task panel in a side drawer](#task-panel-in-a-side-drawer)
+  - [No inline styles](#no-inline-styles)
 - [Translations](#translations)
 
 ## Manage UI
@@ -270,7 +276,7 @@ Restyle a page by extending it and overriding a block instead of copying it:
 | `manage/index.html.twig` | `nowo_task_board_toolbar` |
 | `manage/board.html.twig` | `nowo_task_board_toolbar`, `nowo_task_board_flashes`, `nowo_task_board_columns`, `nowo_task_board_column` (per column) |
 | `manage/list.html.twig` | `nowo_task_board_toolbar`, `nowo_task_board_list` |
-| `manage/task.html.twig` | `nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`, `nowo_task_relations` |
+| `manage/task.html.twig` | `nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`, `nowo_task_relations` (since 1.11 defined in `_task_blocks.html.twig`, imported with `{% use %}` by the task page and the task panel; override them in a template extending `task.html.twig` as before) |
 
 Partials: `_board_column.html.twig` (`column`, `tasks`), `_task_card.html.twig` (`task`, optional `taskTree` for the
 subtask counter) and `_subtask_tree.html.twig` (`tasks`, `taskTree`, `depth`): a recursive tree of any depth with a
@@ -279,6 +285,90 @@ done / total counter per node and `<details>` to expand / collapse. The controll
 `nowo_task_board_subtask_progress(task)` gives done / total from `task.subtasks` when no tree is at hand. Semantic
 classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`, `__subtasks`), `nowo-task-subtree`
 (`__item`, `__row`, `__progress`, `__children`), `nowo-task-panel`, `nowo-task-link--host-object`.
+
+## Columns, column sets and the task panel (since 1.11)
+
+All opt-in or backward compatible: a host that does nothing keeps the 1.10 pages, plus the column icon field and the
+column set buttons for board editors.
+
+### Column icon, rename, colour, delete
+
+Board editors (`canEditBoard`) rename, recolour and give an icon to a column in the edit dialog, and delete it there
+(`column_delete`, CSRF token id `task_board_column_delete`): its tasks move to the end of the first remaining column
+(completed when that column is the last one, reopened otherwise) and the last column of a board is never deleted
+(flash `task_board.flash.column_last`). Read-only users see none of these controls and get 403 on the routes.
+
+`BoardColumn::$icon` holds a name such as `tabler:bug`, picked from `board.column_icons`. The column header renders it
+through `manage/_column_icon.html.twig` → UiKit `components/_icon.html.twig`: with `nowo_ui_kit.icon_set: ux_icon` the
+full name goes to `ux_icon()` (import the icons you offer in the host, e.g. `bin/console ux:icons:import tabler:bug`),
+with the webfont sets the bare name (`ti ti-bug`); `icon_set: none` shows no icon.
+
+### Column sets
+
+A column set (`Nowo\TaskBoardBundle\Entity\ColumnSet`, table `task_board_column_sets`) is a named, ordered list of
+`{name, color, icon}`. On the board page editors get **Save columns as set** (`column_set_create`) and **Add columns
+from set** (`column_set_apply`: copies appended after the board's columns; the dialog also lists the sets with a delete
+button for those `canDeleteColumnSet()` allows, `column_set_delete`). The new board form offers the sets
+(`TaskBoardFormData::$columnSetId`); `TaskBoardCreator::create($data, $creator, $tenantKey, $columnSet)` uses the set's
+columns instead of `board.default_columns`. Boards always get copies: editing a board never changes a set.
+
+`Nowo\TaskBoardBundle\Service\ColumnSetManager` does the work (`available()`, `find()`, `saveFromBoard()`,
+`applyToBoard()`, `delete()`). Which sets a user sees — and the scope stored on a new set — come from
+`TaskBoardEvents::COLUMN_SET_QUERY`: the default scope is the board's tenant key (a tenant's sets stay in the tenant),
+null without tenancy. A host that shares the sets across tenants sets it to null:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::COLUMN_SET_QUERY)]
+public function shareColumnSets(ColumnSetQueryEvent $event): void
+{
+    $event->setScopeKey(null);           // or overrideList([...]) to pick the sets yourself
+}
+```
+
+Deleting a set: its creator or a `security.manage_roles` role, or what a `COLUMN_SET_ACCESS_CHECK` listener decides
+(`ColumnSetAccessCheckEvent::grant()` / `deny()`).
+
+### Several boards per tenant and boards owned by a user
+
+With `tenancy.single_board: false` the tenant index lists the tenant's boards (`findActiveByTenant()`, filtered by
+`BOARD_ACCESS_CHECK`; `BoardListQueryEvent::getTenantKey()` names the tenant, since 1.11) next to the **New board**
+form, which stores the tenant key and offers the column sets. A board "owned by a user" is a tenant like any other: a
+resolver that maps `user-<id>` slugs to a `TaskBoardTenant` (and returns it for the users the boards are shared with),
+plus a `BOARD_ACCESS_CHECK` listener that grants the owner and the people a board is shared with (`markReadOnly()` for
+view-only shares) and denies everyone else, is all the bundle needs.
+
+### Task panel in a side drawer
+
+`GET task_panel` (`…/task/{taskId}/panel`) renders `templates.task_panel` (`manage/task_panel.html.twig`): the task
+page's blocks (edit form, members, priority, column, subtasks, links) without the layout. Board cards, list rows and
+Gantt bars carry `data-task-panel-url` (the panel URL with `_target_path` = the current page); the title links keep
+opening the task page without JavaScript. Host JavaScript opens its drawer with that URL:
+
+```js
+document.addEventListener('click', async (event) => {
+    const link = event.target.closest('[data-task-panel-url] a[href]');
+    if (!link) return;
+    event.preventDefault();
+    const url = link.closest('[data-task-panel-url]').dataset.taskPanelUrl;
+    drawer.innerHTML = await (await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})).text();
+    drawer.showModal();
+});
+```
+
+Every form of the panel posts to the usual routes with `?_target_path=<page>`: without fetch they redirect back there
+(only a local path is followed: no scheme, no `//`, no backslash); sent with fetch (`X-Requested-With: XMLHttpRequest`
+or a `Turbo-Frame` header) they answer the refreshed panel (an invalid edit answers 422 with the errors), so the drawer
+replaces its content and the host reloads the board when it closes. The task page itself answers the panel to a fetch
+too. The page around the drawer must load `task-board.css` / `task-board.js` (the board, list and Gantt pages do).
+
+### No inline styles
+
+The templates carry no `style=""` (CSP without `'unsafe-inline'`): colours, Gantt positions and depths are CSS custom
+properties written as JSON in `data-nowo-task-vars` and set by `task-board.js` through the CSSOM (also inside panels
+inserted later). The subtask progress is a native `<progress>`. New semantic classes: `nowo-task-column--colored`,
+`nowo-task-column__icon`, `__header`, `__title`, `__name`, `__count`, `__edit`, `__tasks`, `__empty`, `__add-task`,
+`nowo-task-column-sets` (`__item`, `__delete`, `__empty`), `nowo-task-dialog` (`--native`, `__header`, `__body`,
+`__actions`, `__danger`), `nowo-task-progress`, `nowo-task-list__row`, `nowo-task-panel-fragment`.
 
 ## Translations
 

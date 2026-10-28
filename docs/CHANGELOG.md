@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.11.0] - 2026-10-28](#1110---2026-10-28)
 - [[1.10.1] - 2026-10-28](#1101---2026-10-28)
 - [[1.10.0] - 2026-10-28](#1100---2026-10-28)
 - [[1.9.0] - 2026-10-26](#190---2026-10-26)
@@ -43,6 +44,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.11.0] - 2026-10-28
+
+Columns, column sets and a task panel for side drawers (spec 171 block E of Symfony Beacon). All opt-in or backward
+compatible. **Schema change:** a nullable column on the board columns and a new table `task_board_column_sets`. See
+[UPGRADING](UPGRADING.md#to-1110).
+
+### Added
+
+- **Column icon:** `BoardColumn::$icon` (`getIcon()` / `setIcon()`, e.g. `tabler:bug`), `BoardColumnFormData::$icon`,
+  `BoardColumnFormType` option `icon_choices`, config `board.column_icons` (30 curated Tabler icons by default,
+  `Configuration::DEFAULT_COLUMN_ICONS`; `[]` hides the field) and `board.default_columns[].icon`. The column header
+  renders it through `manage/_column_icon.html.twig` → UiKit `components/_icon` (`ux_icon()` with `icon_set: ux_icon`).
+- **Delete a column:** route `column_delete` (POST, CSRF `task_board_column_delete`), `BoardColumnManager::delete()`
+  (tasks move to the end of the first remaining column, completed / reopened as that column is or is not the last
+  one; the last column of a board is kept), `TaskBoard::removeColumn()`, a delete button in the edit column dialog.
+- **Column sets:** entity `ColumnSet` (name, `createdBy`, `createdAt`, `scopeKey`, ordered `items` `{name, color,
+  icon}`; `ColumnSet::fromBoard()`), `ColumnSetRepositoryInterface` / `DoctrineOrmColumnSetRepository`,
+  `ColumnSetManager` (`available()`, `find()`, `saveFromBoard()`, `applyToBoard()`, `delete()`), routes
+  `column_set_create`, `column_set_apply`, `column_set_delete`, forms `ColumnSetFormType` / `ColumnSetApplyFormType`,
+  the board dialogs **Save columns as set** / **Add columns from set** (`_column_sets_dialogs.html.twig`) and the
+  optional set of a new board (`TaskBoardFormData::$columnSetId`, `TaskBoardFormType` option `column_set_choices`,
+  `TaskBoardCreator::create(..., ?ColumnSet $columnSet)`).
+- **Hooks:** `TaskBoardEvents::COLUMN_SET_QUERY` (`ColumnSetQueryEvent`: scope of the listed and saved sets, default
+  the board's tenant key; `setScopeKey()`, `overrideList()`), `TaskBoardEvents::COLUMN_SET_ACCESS_CHECK`
+  (`ColumnSetAccessCheckEvent`: who may delete a set, default its creator or a `security.manage_roles` role) and
+  `TaskBoardResourceAccessChecker::canDeleteColumnSet()`; `BoardListQueryEvent::getTenantKey()` (the tenant of the
+  index being listed).
+- **Task panel:** route `task_panel` (GET `…/task/{taskId}/panel`) and template `templates.task_panel`
+  (`manage/task_panel.html.twig`, no layout): the task page's blocks for side drawers. Its forms post to the usual
+  routes with `_target_path` and come back to it (local paths only); a write sent with fetch (`X-Requested-With:
+  XMLHttpRequest` or `Turbo-Frame`) answers the refreshed panel (422 for an invalid edit), and so does the task page.
+  Board cards, list rows and Gantt bars carry `data-task-panel-url`.
+- `nowo-task-board-dialog` Stimulus controller (native `<dialog>`), `data-nowo-task-vars` (CSS custom properties set
+  by `task-board.js`), translations (7 locales) for the new controls and flashes.
+
+### Changed
+
+- **No inline `style=""` in the templates** (column colour, column dots, Gantt grid / bars / depth, subtask progress):
+  CSS custom properties from `data-nowo-task-vars` and a native `<progress>`; more semantic `nowo-task-*` classes,
+  empty states (column without tasks, no column sets), `scope="col"` on the list headers, labelled column sections.
+- `manage/task.html.twig` takes its blocks from `manage/_task_blocks.html.twig` (`{% use %}`), shared with the panel;
+  the edit form posts to an explicit `task` route URL. The task write actions return `Response` (a redirect, or the
+  panel for a fetch) instead of `RedirectResponse`.
+- The add / edit column and add task dialogs are only rendered for board editors.
+- `TaskBoardManageController` takes the optional trailing arguments `$columnSetManager` and `$columnIcons`;
+  `TaskBoardResourceAccessChecker::filterBoards()` takes an optional tenant key.
 
 ## [1.10.1] - 2026-10-28
 

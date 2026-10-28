@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.11.0](#to-1110)
 - [To 1.10.1](#to-1101)
 - [To 1.10.0](#to-1100)
 - [To 1.9.0](#to-190)
@@ -83,6 +84,55 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.11.0
+
+From **1.10.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+**Schema change (every host):** a nullable column on the board columns and a new table for the column sets. Generate
+and run a migration (`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply the
+equivalent of (MySQL; `created_by_id` has the type of your `user_class` id and references its table):
+
+```sql
+ALTER TABLE task_board_columns ADD icon VARCHAR(64) DEFAULT NULL;
+CREATE TABLE task_board_column_sets (
+    id VARCHAR(36) NOT NULL,
+    created_by_id INT DEFAULT NULL,
+    name VARCHAR(128) NOT NULL,
+    scope_key VARCHAR(191) DEFAULT NULL,
+    items JSON NOT NULL,
+    created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+    INDEX idx_task_board_column_sets_scope (scope_key),
+    INDEX IDX_TASK_BOARD_COLUMN_SET_CREATOR (created_by_id),
+    PRIMARY KEY(id),
+    CONSTRAINT FK_TASK_BOARD_COLUMN_SET_CREATOR FOREIGN KEY (created_by_id) REFERENCES users (id) ON DELETE SET NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
+```
+
+Existing columns keep `NULL` (no icon). The demo ships it as `demo/symfony8/migrations/Version20261029120000.php`.
+
+Then check these if they apply to you (see [Columns, column sets and the task panel](USAGE.md#columns-column-sets-and-the-task-panel-since-111)):
+
+- **Column icons with `ux_icon`:** the icons of `board.column_icons` are rendered with `ux_icon('tabler:<name>')`;
+  import the ones you offer (`bin/console ux:icons:import tabler:bug …`) or set your own list; `[]` hides the field.
+- **Column sets are scoped by tenant by default:** with `tenancy`, a set saved on a tenant's board is only offered on
+  that tenant's boards. To share the sets across tenants, listen to `TaskBoardEvents::COLUMN_SET_QUERY` and call
+  `setScopeKey(null)`. Who may delete a set: its creator or a `security.manage_roles` role, unless a
+  `COLUMN_SET_ACCESS_CHECK` listener decides.
+- **Template overrides of `manage/task.html.twig`:** the page now `{% use %}`s `manage/_task_blocks.html.twig`; the
+  blocks keep their names (`nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`, `nowo_task_relations`, plus
+  `nowo_task_body` around them), so overrides in a template extending `task.html.twig` keep working. A full copy of
+  the old page keeps working too, but does not get the panel's `_target_path` on its forms.
+- **Overrides of `_board_column.html.twig`, `gantt.html.twig` or the task page with inline `style=""`:** the bundle no
+  longer prints inline styles; the colours and Gantt positions come from `data-nowo-task-vars`, applied by
+  `task-board.js`. A page that does not load `task-board.js` shows no column colour bar and unpositioned Gantt bars.
+- **Own `ColumnSetRepositoryInterface`:** new interface; the bundle aliases it to the Doctrine implementation.
+- **Controllers or services built by hand** (tests): the new constructor arguments are optional and trailing; the
+  task write actions return `Response`.
 
 ## To 1.10.1
 

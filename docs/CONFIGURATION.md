@@ -41,7 +41,7 @@ Tables created by the bundle (with default prefix):
 | Table | Entity |
 |-------|--------|
 | `task_board_boards` | `TaskBoard` |
-| `task_board_board_columns` | `BoardColumn` |
+| `task_board_columns` | `BoardColumn` |
 | `task_board_tasks` | `Task` |
 | `task_board_teams` | `Team` |
 | `task_board_team_members` | `TeamMember` |
@@ -51,6 +51,7 @@ Tables created by the bundle (with default prefix):
 | `task_board_task_documents` | `TaskDocument` |
 | `task_board_task_change_history` | `TaskChangeHistory` |
 | `task_board_task_time_entries` | `TaskTimeEntry` |
+| `task_board_column_sets` | `ColumnSet` (since 1.11) |
 
 Example:
 
@@ -88,6 +89,11 @@ Each route has `path` and `name`. Optional `route_prefix` is prepended to every 
 | `routes.column_update` | `/tools/task-board/board/{boardId}/column/{columnId}` | `nowo_task_board_column_update` |
 | `routes.column_reorder` | `/tools/task-board/board/{boardId}/columns/reorder` | `nowo_task_board_column_reorder` |
 | `routes.board_import` | `/tools/task-board/board/{boardId}/import` | `nowo_task_board_board_import` |
+| `routes.column_delete` (1.11) | `/tools/task-board/board/{boardId}/column/{columnId}/delete` | `nowo_task_board_column_delete` |
+| `routes.column_set_create` (1.11) | `/tools/task-board/board/{boardId}/column-sets` | `nowo_task_board_column_set_create` |
+| `routes.column_set_apply` (1.11) | `/tools/task-board/board/{boardId}/column-sets/apply` | `nowo_task_board_column_set_apply` |
+| `routes.column_set_delete` (1.11) | `/tools/task-board/board/{boardId}/column-sets/{setId}/delete` | `nowo_task_board_column_set_delete` |
+| `routes.task_panel` (1.11, GET) | `/tools/task-board/task/{taskId}/panel` | `nowo_task_board_task_panel` |
 
 Renaming a route (`routes.<key>.name`) is fully supported: the bundle templates never hard-code route names, they resolve them with the Twig function `nowo_task_board_route('<key>')` (e.g. `path(nowo_task_board_route('board'), {boardId: board.id})`). Use the same function in overridden templates.
 
@@ -170,6 +176,8 @@ Events dispatched by `TaskBoardResourceAccessChecker` (requires the `event_dispa
 | `BoardListQueryEvent` | `TaskBoardEvents::BOARD_LIST_QUERY` | Replace the candidate board list on the index (`overrideList()`); the result is still filtered by board access |
 | `BoardAccessCheckEvent` | `TaskBoardEvents::BOARD_ACCESS_CHECK` | `grant()` / `deny()` board access; `isDefaultGranted()` exposes the built-in decision |
 | `TaskAccessCheckEvent` | `TaskBoardEvents::TASK_ACCESS_CHECK` | `grant()` / `deny()` task access; `markReadOnly()` blocks every mutation on the task (403) while keeping it viewable |
+| `ColumnSetQueryEvent` (1.11) | `TaskBoardEvents::COLUMN_SET_QUERY` | Scope of the column sets listed and saved (`setScopeKey()`; default the board's tenant key, null without tenancy) or `overrideList()`; dispatched by `ColumnSetManager` |
+| `ColumnSetAccessCheckEvent` (1.11) | `TaskBoardEvents::COLUMN_SET_ACCESS_CHECK` | `grant()` / `deny()` deleting a column set; default: its creator or a `security.manage_roles` role |
 
 `deny()` always wins over the built-in rules; `grant()` opens a board/task the built-in rules would refuse.
 
@@ -204,6 +212,7 @@ nowo_task_board:
         gantt: '@NowoTaskBoardBundle/manage/gantt.html.twig'
         task: '@NowoTaskBoardBundle/manage/task.html.twig'
         import: '@NowoTaskBoardBundle/manage/import.html.twig'
+        task_panel: '@NowoTaskBoardBundle/manage/task_panel.html.twig'   # since 1.11, no layout
 ```
 
 | Option | Default | Description |
@@ -216,6 +225,7 @@ nowo_task_board:
 | `templates.gantt` | `@NowoTaskBoardBundle/manage/gantt.html.twig` | Gantt view page. |
 | `templates.task` | `@NowoTaskBoardBundle/manage/task.html.twig` | Task detail page. |
 | `templates.import` | `@NowoTaskBoardBundle/manage/import.html.twig` | Import page. |
+| `templates.task_panel` | `@NowoTaskBoardBundle/manage/task_panel.html.twig` | Task editing panel without layout (since 1.11), for side drawers. |
 
 ## Layout integration (REQ-UI-001)
 
@@ -297,7 +307,8 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `tenancy.single_board` | `false` | One board per tenant: the tenant index opens it (created with `board.default_columns` and the tenant label as name on the first visit) |
 | `tenancy.resolver` | `null` | Service id of a `TaskBoardTenantResolverInterface` (slug → tenant, or null = 404). `null` = the slug is the tenant |
 | `assignee_provider` | `null` | Service id of a `TaskAssigneeProviderInterface`: who may be a member of a task on a board. `null` = every `user_class` user |
-| `board.default_columns` | To do, In progress, Done | Columns of a new board (`name`, optional `color`), in order; the last one is "done" |
+| `board.default_columns` | To do, In progress, Done | Columns of a new board (`name`, optional `color`, optional `icon` since 1.11), in order; the last one is "done" |
+| `board.column_icons` | 30 Tabler icons (`Configuration::DEFAULT_COLUMN_ICONS`) | Since 1.11: icons offered in the add / edit column dialogs, as `<set>:<name>` (e.g. `tabler:bug`), rendered through UiKit `components/_icon` (`ux_icon()` with `icon_set: ux_icon`, the bare name with the webfont sets). `[]` = no icon field |
 | `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
 
 Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
