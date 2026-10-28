@@ -40,4 +40,9 @@ export default class ListFilterController extends Controller<HTMLElement> {
             row.hidden = !visible;
         });
     }
+
+    /** Since 1.13.1: the filters apply while typing; Enter does not submit the form (replaces an inline onsubmit). */
+    prevent(event: Event): void {
+        event.preventDefault();
+    }
 }

@@ -27,6 +27,9 @@ task_board.list.filter_search: Search
 task_board.list.filter_priority: Priority
 task_board.list.filter_column: Column
 task_board.list.filter_all: All
+task_board.list.filter_search_placeholder: 'Aufgaben suchen…'
+task_board.list.filter_any_priority: 'Jede Priorität'
+task_board.list.filter_any_column: 'Jede Spalte'
 task_board.list.filters: Filters
 task_board.list.empty: No tasks yet.
 task_board.task.toggle_subtasks: Toggle subtasks

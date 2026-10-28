@@ -410,6 +410,7 @@ neutral value. Set the tokens on any ancestor to give the board, list, Gantt, ta
     --nowo-task-radius: 8px;
     --nowo-task-radius-sm: 4px;
     --nowo-task-success: #22c55e;       /* also -danger, -warning, -info, -purple, each with a -soft variant */
+    --nowo-task-overlay: rgb(15 23 42 / 0.55); /* dialog backdrop (since 1.13.1), with --nowo-task-overlay-blur */
 }
 ```
 

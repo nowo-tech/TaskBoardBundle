@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.13.1] - 2026-10-28](#1131---2026-10-28)
 - [[1.13.0] - 2026-10-28](#1130---2026-10-28)
 - [[1.12.0] - 2026-10-28](#1120---2026-10-28)
 - [[1.11.1] - 2026-10-28](#1111---2026-10-28)
@@ -47,6 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.13.1] - 2026-10-28
+
+### Changed
+
+- **List filters** read as one filter bar in a panel: the fields show placeholders ("Search tasks…", "Any priority",
+  "Any column") and keep their labels for screen readers; the priorities are translated.
+- The native dialogs' backdrop reads `--nowo-task-overlay` / `--nowo-task-overlay-blur`, so a host gives them the same
+  backdrop as its own modals.
+
+### Fixed
+
+- The list filter form no longer uses an inline `onsubmit` handler (blocked by a strict CSP): the list filter
+  controller stops the submit.
 
 ## [1.13.0] - 2026-10-28
 

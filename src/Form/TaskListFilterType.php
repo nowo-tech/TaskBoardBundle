@@ -38,25 +38,27 @@ final class TaskListFilterType extends AbstractType
 
         $builder
             ->add('search', SearchType::class, [
-                'mapped'     => false,
-                'required'   => false,
-                'label'      => 'task_board.list.filter_search',
-                'label_attr' => ['class' => 'form-label mb-0'],
+                'mapped'   => false,
+                'required' => false,
+                'label'    => 'task_board.list.filter_search',
+                // Since 1.13.1 the labels stay for screen readers and the fields read as one filter bar.
+                'label_attr' => ['class' => 'nowo-task-sr-only'],
                 'attr'       => [
                     'class'                              => 'form-control',
+                    'placeholder'                        => 'task_board.list.filter_search_placeholder',
                     'data-' . self::STIMULUS . '-target' => 'search',
                     'data-action'                        => 'input->' . self::STIMULUS . '#filter',
                 ],
             ])
             ->add('priority', ChoiceType::class, [
-                'mapped'                    => false,
-                'required'                  => false,
-                'label'                     => 'task_board.list.filter_priority',
-                'label_attr'                => ['class' => 'form-label mb-0'],
-                'placeholder'               => 'task_board.list.filter_all',
-                'choices'                   => array_combine($priorities, $priorities),
-                'choice_translation_domain' => false,
-                'attr'                      => [
+                'mapped'      => false,
+                'required'    => false,
+                'label'       => 'task_board.list.filter_priority',
+                'label_attr'  => ['class' => 'nowo-task-sr-only'],
+                'placeholder' => 'task_board.list.filter_any_priority',
+                // Since 1.13.1 the priorities read in the user's language.
+                'choices' => array_combine(array_map(static fn (string $priority): string => 'task_board.priority.' . $priority, $priorities), $priorities),
+                'attr'    => [
                     'class'                              => 'form-select',
                     'data-' . self::STIMULUS . '-target' => 'priority',
                     'data-action'                        => 'change->' . self::STIMULUS . '#filter',
@@ -66,8 +68,8 @@ final class TaskListFilterType extends AbstractType
                 'mapped'                    => false,
                 'required'                  => false,
                 'label'                     => 'task_board.list.filter_column',
-                'label_attr'                => ['class' => 'form-label mb-0'],
-                'placeholder'               => 'task_board.list.filter_all',
+                'label_attr'                => ['class' => 'nowo-task-sr-only'],
+                'placeholder'               => 'task_board.list.filter_any_column',
                 'choices'                   => array_combine($columnNames, $columnNames),
                 'choice_translation_domain' => false,
                 'attr'                      => [
@@ -87,7 +89,8 @@ final class TaskListFilterType extends AbstractType
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
             'priorities'         => [],
             'column_names'       => [],
-            'attr'               => ['onsubmit' => 'return false;'],
+            // Since 1.13.1 no inline handler (strict CSP): the list filter controller stops the submit.
+            'attr' => ['data-action' => 'submit->' . self::STIMULUS . '#prevent'],
         ]);
         $resolver->setAllowedTypes('priorities', 'string[]');
         $resolver->setAllowedTypes('column_names', 'string[]');

@@ -1606,16 +1606,19 @@ details.nowo-task-section[open] > summary,
     padding: 0.4rem 1rem 0.6rem;
 }
 
+/* Since 1.13.1 the list filters are one bar in a panel: fields with placeholders, labels for screen readers. */
 .nowo-task-list__filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
 }
 
 .nowo-task-list__filters > * {
-    flex: 0 1 14rem;
     margin: 0;
 }
 
@@ -1783,8 +1786,9 @@ dialog.nowo-task-dialog--native:not([open]) {
 }
 
 dialog.nowo-task-dialog--native::backdrop {
-    background: rgb(15 23 42 / 0.55);
-    backdrop-filter: blur(2px);
+    /* Since 1.13.1 a token: hosts give every dialog the same backdrop as their own modals. */
+    background: var(--nowo-task-overlay, rgb(15 23 42 / 0.55));
+    backdrop-filter: blur(var(--nowo-task-overlay-blur, 2px));
 }
 
 .nowo-task-dialog--native .nowo-task-dialog__header {
