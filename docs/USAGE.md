@@ -13,6 +13,12 @@
 - [Twig overrides](#twig-overrides)
   - [Forms (REQ-TWIG-005)](#forms-req-twig-005)
 - [Layout without forking pages](#layout-without-forking-pages)
+- [Multi-tenant hosts (since 1.10)](#multi-tenant-hosts-since-110)
+  - [Boards per tenant (`tenancy`)](#boards-per-tenant-tenancy)
+  - [Links to host objects](#links-to-host-objects)
+  - [Who may be assigned](#who-may-be-assigned)
+  - [Events after writes](#events-after-writes)
+  - [Template blocks and partials](#template-blocks-and-partials)
 - [Translations](#translations)
 
 ## Manage UI
@@ -149,6 +155,105 @@ nowo_task_board:
         layout: 'base.html.twig'
         css_framework: bootstrap5   # or tabler | custom
 ```
+
+## Multi-tenant hosts (since 1.10)
+
+Everything in this section is opt-in: without the options below the bundle behaves as in 1.9.
+
+### Boards per tenant (`tenancy`)
+
+A host whose boards belong to a tenant (a project, a customer, a workspace) maps one or several boards to each tenant
+without decorating the router or overriding controllers:
+
+```yaml
+# config/packages/nowo_task_board.yaml
+nowo_task_board:
+    tenancy:
+        enabled: true
+        single_board: true            # the tenant index opens its board, created on the first visit
+        resolver: App\Task\ProjectTaskBoardTenantResolver
+        tenant_paths:
+            - path: /projects/{tenantSlug}/tasks
+              name_prefix: app_project_
+              slug_requirement: '\d+'
+    board:
+        default_columns:              # columns of a new board, the last one is "done"
+            - { name: To do }
+            - { name: In progress }
+            - { name: Review }
+            - { name: Done, color: '#22c55e' }
+        top_level_only: true          # the Kanban board shows top-level tasks; subtasks are counted on their card
+```
+
+- Every manage route is copied under each `tenant_paths` entry as `<name_prefix><route name>`, e.g.
+  `app_project_nowo_task_board_board` → `/projects/{tenantSlug}/tasks/board/{boardId}`. The first entry whose
+  `slug_prefix` (default `''`: every slug) the slug starts with serves it.
+- The router is decorated (only when `tenancy.enabled`): `path('nowo_task_board_board', {boardId: id})` inside a
+  tenant page links to the tenant copy and fills `{tenantSlug}` from the current request; from a host page pass it
+  (`path('nowo_task_board_task', {taskId: id, tenantSlug: project.id})`). `Nowo\TaskBoardBundle\Routing\TenantPaths`
+  maps a copied route name back to the bundle route (`bundleRoute()`), for host listeners.
+- `TaskBoardTenantResolverInterface::resolve(string $tenantSlug, object $user): ?TaskBoardTenant` maps the slug to the
+  tenant (`key` stored on its boards, `slug`, `label` used as the board name with `single_board`), or returns null
+  for a slug the user may not open (404). Without a resolver the slug is the tenant.
+- A board or task of another tenant answers **404**; the tenant-less routes answer 404 too while tenancy is on. New
+  boards get the tenant key (`TaskBoard::getTenantKey()`); `TaskBoardRepositoryInterface::findOneByTenant()` /
+  `findActiveByTenant()` look them up. Per-board resource scoping (`security.resource_scoping`) still applies: a host
+  that authorizes by tenant usually sets it to `false` and checks its own permission in a `kernel.request` /
+  `kernel.controller` listener on the copied routes.
+
+### Links to host objects
+
+A task can link to an object of the host (an issue, an order, a ticket) with `TaskLinkType::HostObject`:
+
+```php
+$linkAttacher->attachObject($task, 'issue', (string) $issue->getId(), $user, 'BEACON-12');   // idempotent
+$linkAttacher->detachObject($task, 'issue', (string) $issue->getId(), $user);
+$tasks = $taskRepository->findByHostObject('issue', (string) $issue->getId());              // the tasks of an object
+```
+
+Implement `Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface` (autoconfigured, tag
+`nowo_task_board.object_link_resolver`) to describe the objects: `supports($type)`, `label($type, $id)`,
+`url($type, $id)`, `badge($type, $id)` (a `TaskObjectBadge` with a label and a colour variant). The task page shows the
+label, link and badge; Twig has `nowo_task_board_link_label(link)`, `nowo_task_board_link_url(link)` and
+`nowo_task_board_link_badge(link)`. Host object links are not offered in the link form (`TaskLinkType::userChoices()`).
+
+### Who may be assigned
+
+`assignee_provider: App\Task\ProjectMemberAssigneeProvider` (a `Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface`)
+limits the member picker to `assignableUsers(TaskBoard $board)` and makes `TaskMemberAssigner::assign()` throw
+`UnassignableUserException` (flash `task_board.flash.member_not_assignable`) for a user `canBeAssigned()` refuses.
+
+### Events after writes
+
+Dispatched after the change is flushed (listen with `#[AsEventListener(event: TaskBoardEvents::TASK_CREATED)]`):
+
+| Constant | Event | Payload (besides `getTask()`, `getActor()`) |
+|---|---|---|
+| `TASK_CREATED` | `TaskCreatedEvent` | — (also for subtasks: `getTask()->getParent()`) |
+| `TASK_UPDATED` | `TaskUpdatedEvent` | `getChangedFields()` (title, description, priority, column, estimatedMinutes, dueAt, tags), `hasChanged()` |
+| `TASK_MOVED` | `TaskMovedEvent` | `getFromColumn()`, `getToColumn()` (a reorder in the same column is not a move) |
+| `TASK_COMPLETED` | `TaskCompletedEvent` | — (moved to the last column) |
+| `TASK_REOPENED` | `TaskReopenedEvent` | — (left the last column) |
+| `TASK_MEMBER_ADDED` | `TaskMemberAddedEvent` | `getMember()`, `getUser()` |
+
+### Template blocks and partials
+
+Restyle a page by extending it and overriding a block instead of copying it:
+
+| Page | Blocks |
+|---|---|
+| `manage/index.html.twig` | `nowo_task_board_toolbar` |
+| `manage/board.html.twig` | `nowo_task_board_toolbar`, `nowo_task_board_flashes`, `nowo_task_board_columns`, `nowo_task_board_column` (per column) |
+| `manage/list.html.twig` | `nowo_task_board_toolbar`, `nowo_task_board_list` |
+| `manage/task.html.twig` | `nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`, `nowo_task_relations` |
+
+Partials: `_board_column.html.twig` (`column`, `tasks`), `_task_card.html.twig` (`task`, optional `taskTree` for the
+subtask counter) and `_subtask_tree.html.twig` (`tasks`, `taskTree`, `depth`): a recursive tree of any depth with a
+done / total counter per node and `<details>` to expand / collapse. The controller passes `taskTree`
+(`Nowo\TaskBoardBundle\Support\TaskTree`, built from the board's tasks in one query) to the board, list and task pages;
+`nowo_task_board_subtask_progress(task)` gives done / total from `task.subtasks` when no tree is at hand. Semantic
+classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`, `__subtasks`), `nowo-task-subtree`
+(`__item`, `__row`, `__progress`, `__children`), `nowo-task-panel`, `nowo-task-link--host-object`.
 
 ## Translations
 

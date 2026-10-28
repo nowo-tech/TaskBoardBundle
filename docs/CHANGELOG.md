@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.10.0] - 2026-10-28](#1100---2026-10-28)
 - [[1.9.0] - 2026-10-26](#190---2026-10-26)
 - [[1.8.4] - 2026-10-25](#184---2026-10-25)
 - [[1.8.3] - 2026-10-24](#183---2026-10-24)
@@ -41,6 +42,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.10.0] - 2026-10-28
+
+Host integration for multi-tenant apps (all opt-in; without the new options the bundle behaves as in 1.9). **Schema
+change:** two nullable columns on the boards and two on the task links. See [UPGRADING](UPGRADING.md#to-1100).
+
+### Added
+
+- **Boards per tenant (`tenancy`):** `TaskBoard::$tenantKey` (nullable, indexed), `TaskBoardRepositoryInterface::findActiveByTenant()` / `findOneByTenant()`, `tenancy.enabled`, `tenancy.tenant_paths` (`path`, `name_prefix`, `slug_prefix`, `slug_requirement`: every manage route copied as `<name_prefix><route>` under the host's own URL, e.g. `/projects/{tenantSlug}/tasks`), `tenancy.single_board` (the tenant index opens its board, created on the first visit) and `tenancy.resolver` (`TaskBoardTenantResolverInterface` → `TaskBoardTenant`; default: the slug is the tenant). `TenantPathUrlGenerator` decorates the router (only with tenancy on) so `nowo_task_board_*` links go to the tenant copy and reuse the `{tenantSlug}` of the current tenant page; `TenantPaths::bundleRoute()` maps a copy back. A board or task of another tenant answers 404.
+- `board.default_columns` (columns of a new board) and `board.top_level_only` (Kanban shows top-level tasks with a subtask counter).
+- **Host object links:** `TaskLinkType::HostObject`, `TaskLink::$objectType` / `$objectId`, `TaskLink::forHostObject()`, `TaskLinkAttacher::attachObject()` / `detachObject()`, `TaskRepositoryInterface::findByHostObject()`, and `TaskObjectLinkResolverInterface` (`supports`, `label`, `url`, `badge` → `TaskObjectBadge`; autoconfigured, tag `nowo_task_board.object_link_resolver`) rendered on the task page and through the Twig functions `nowo_task_board_link_label()` / `_url()` / `_badge()`.
+- **Assignee provider:** `assignee_provider` (`TaskAssigneeProviderInterface::assignableUsers()` / `canBeAssigned()`) limits the member picker (`TaskMemberFormType` option `user_choices`) and `TaskMemberAssigner::assign()` (`UnassignableUserException`, flash `task_board.flash.member_not_assignable`).
+- **Events after writes** (`TaskBoardEvents::TASK_CREATED`, `TASK_UPDATED` with the changed field names, `TASK_MOVED` with the from / to column, `TASK_COMPLETED`, `TASK_REOPENED`, `TASK_MEMBER_ADDED`), dispatched by `TaskManager` and `TaskMemberAssigner` after the flush.
+- **Templates:** blocks per region (`nowo_task_board_toolbar`, `nowo_task_board_columns`, `nowo_task_board_column`, `nowo_task_board_list`, `nowo_task_panel`, `nowo_task_toolbar`, `nowo_task_subtasks`, `nowo_task_relations`), partials `_board_column`, `_task_card` (subtask done / total) and `_subtask_tree` (recursive, any depth, done / total per node, `<details>` expand / collapse), semantic `nowo-task-*` classes; `TaskTree` (subtree and progress from the board's tasks in one query), `SubtaskProgress` and the Twig function `nowo_task_board_subtask_progress()`.
+- Translations (7 locales): `task_board.link.host_object`, `task_board.flash.member_not_assignable`, `task_board.board.subtasks_count`.
+
+### Changed
+
+- The task page counts subtasks at any depth (done / total of the whole subtree) and renders the nested levels through `_subtask_tree.html.twig`; the task, board and list pages receive `taskTree`.
+- The link form no longer offers a link type for host objects (`TaskLinkType::userChoices()`).
+- `TaskManager`, `TaskMemberAssigner`, `TaskBoardCreator`, `TaskBoardTwigExtension` and `TaskBoardManageController` take new optional trailing constructor arguments (event dispatcher, assignee provider, default columns, link resolver, tenant context, `top_level_only`).
 
 ## [1.9.0] - 2026-10-26
 

@@ -15,6 +15,7 @@
 - [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
   - [CSS framework](#css-framework)
 - [Other options](#other-options)
+  - [Tenancy, boards and assignees (since 1.10)](#tenancy-boards-and-assignees-since-110)
   - [Rich description editor (Tiptap profile `task`)](#rich-description-editor-tiptap-profile-task)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
@@ -281,6 +282,25 @@ Example bridge:
 | `route_prefix` | `''` | Prepended to all route paths |
 | `dashboard_route` | `null` | Route name for "back" link in manage UI |
 | `firewall` | `main` | **Deprecated since 1.7, no effect.** Never read by the bundle; protect the manage routes in your `security.yaml` (see [Firewall](#firewall)). Remove the key |
+
+### Tenancy, boards and assignees (since 1.10)
+
+All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAGE.md#multi-tenant-hosts-since-110).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `tenancy.enabled` | `false` | Boards per host tenant: manage routes copied under `tenancy.tenant_paths`, router decorated, boards / tasks of another tenant answer 404. Needs at least one `tenant_paths` entry |
+| `tenancy.tenant_paths[].path` | — (required) | Base path of the copies; must hold `{tenantSlug}` (e.g. `/projects/{tenantSlug}/tasks`). Replaces `routes.index.path` in every route path |
+| `tenancy.tenant_paths[].name_prefix` | — (required) | Prefix of the copied route names (`app_project_` → `app_project_nowo_task_board_board`) |
+| `tenancy.tenant_paths[].slug_prefix` | `''` | Slugs this entry serves (prefix match, first entry wins); `''` = every slug |
+| `tenancy.tenant_paths[].slug_requirement` | `null` | Route requirement of `{tenantSlug}`; `null` = the slug prefix then `[A-Za-z0-9_-]+` |
+| `tenancy.single_board` | `false` | One board per tenant: the tenant index opens it (created with `board.default_columns` and the tenant label as name on the first visit) |
+| `tenancy.resolver` | `null` | Service id of a `TaskBoardTenantResolverInterface` (slug → tenant, or null = 404). `null` = the slug is the tenant |
+| `assignee_provider` | `null` | Service id of a `TaskAssigneeProviderInterface`: who may be a member of a task on a board. `null` = every `user_class` user |
+| `board.default_columns` | To do, In progress, Done | Columns of a new board (`name`, optional `color`), in order; the last one is "done" |
+| `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
+
+Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
 
 ### Rich description editor (Tiptap profile `task`)
 

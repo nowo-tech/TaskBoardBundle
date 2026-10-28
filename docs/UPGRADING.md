@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.10.0](#to-1100)
 - [To 1.9.0](#to-190)
 - [To 1.8.4](#to-184)
 - [To 1.8.3](#to-183)
@@ -81,6 +82,42 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.10.0
+
+From **1.9.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+**Schema change (every host):** the entities gained nullable columns. Generate and run a migration
+(`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply the equivalent of (MySQL,
+default `table_prefix`):
+
+```sql
+ALTER TABLE task_board_boards ADD tenant_key VARCHAR(191) DEFAULT NULL;
+CREATE INDEX idx_task_board_boards_tenant ON task_board_boards (tenant_key);
+ALTER TABLE task_board_task_links ADD object_type VARCHAR(64) DEFAULT NULL, ADD object_id VARCHAR(191) DEFAULT NULL;
+CREATE INDEX idx_task_board_task_links_object ON task_board_task_links (object_type, object_id);
+```
+
+Existing rows keep `NULL` (boards outside any tenant, ordinary links), so no data migration is needed. The demo ships
+it as `demo/symfony8/migrations/Version20261028120000.php`.
+
+Nothing else is required: tenancy, the assignee provider, the board options and the object link resolvers are opt-in
+(see [Multi-tenant hosts](USAGE.md#multi-tenant-hosts-since-110)). Check these if they apply to you:
+
+- **Own repository implementations:** `TaskRepositoryInterface` gained `findByHostObject()` and
+  `TaskBoardRepositoryInterface` gained `findActiveByTenant()` / `findOneByTenant()`.
+- **Template overrides of `manage/task.html.twig`:** the subtask counter is now recursive (`subtaskTotal` /
+  `subtaskDone` count the whole subtree) and the controller passes `subtaskProgress` and `taskTree`; the nested
+  levels render through `_subtask_tree.html.twig`. The board cards and columns moved to `_task_card.html.twig` /
+  `_board_column.html.twig`. Prefer overriding the new blocks over copying pages.
+- **Controllers or services built by hand** (tests): the new constructor arguments are optional and trailing.
+- **Enabling tenancy:** the tenant-less routes (`/tools/task-board/...`) answer 404 while it is on, and the router is
+  decorated by `Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator`. Existing boards have no tenant key: set
+  `tenant_key` on the boards a tenant should keep, otherwise `single_board` creates a new board on the first visit.
 
 ## To 1.9.0
 
