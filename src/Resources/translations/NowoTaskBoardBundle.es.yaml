@@ -179,3 +179,6 @@ task_board.history.type.link_updated: "actualizó un enlace"
 task_board.history.type.link_removed: "eliminó un enlace"
 task_board.history.type.member_added: "añadió un miembro"
 task_board.history.type.member_removed: "quitó un miembro"
+task_board.link.host_object: "Elemento enlazado"
+task_board.flash.member_not_assignable: "Este usuario no puede añadirse a las tareas de este tablero."
+task_board.board.subtasks_count: '%done% de %total% subtareas hechas'

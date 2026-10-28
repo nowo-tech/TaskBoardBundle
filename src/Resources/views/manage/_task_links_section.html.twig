@@ -11,6 +11,24 @@
     </div>
     <div class="list-group list-group-flush nowo-task-detail__links-list">
         {% for link in task.links %}
+            {% if link.hostObject %}
+                {# Since 1.10: a host object (issue, order…) described by the host's TaskObjectLinkResolverInterface. #}
+                {% set objectUrl = nowo_task_board_link_url(link) %}
+                {% set objectBadge = nowo_task_board_link_badge(link) %}
+                <div class="list-group-item nowo-task-detail__link-row nowo-task-link nowo-task-link--host-object" data-link-id="{{ link.id }}" data-object-type="{{ link.objectType }}" data-object-id="{{ link.objectId }}">
+                    <div class="nowo-task-detail__link-row-main d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge bg-blue-lt">{{ 'task_board.link.host_object'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        {% if objectUrl %}
+                            <a href="{{ objectUrl }}" class="fw-semibold text-truncate nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</a>
+                        {% else %}
+                            <span class="fw-semibold text-truncate nowo-task-link__label">{{ nowo_task_board_link_label(link) }}</span>
+                        {% endif %}
+                        {% if objectBadge %}
+                            <span class="badge bg-{{ objectBadge.variant }}-lt nowo-task-link__badge">{{ objectBadge.label }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
             <button
                 type="button"
                 class="list-group-item list-group-item-action nowo-task-detail__link-row"
@@ -36,6 +54,7 @@
                     </a>
                 </div>
             </button>
+            {% endif %}
         {% else %}
             <div class="list-group-item text-secondary">{{ 'task_board.task.no_links'|trans({}, 'NowoTaskBoardBundle') }}</div>
         {% endfor %}

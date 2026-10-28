@@ -21,4 +21,16 @@ interface TaskBoardRepositoryInterface
     public function findAllActive(): array;
 
     public function findBySlug(string $slug): ?TaskBoard;
+
+    /**
+     * Active boards of a host tenant (`tenancy`), by name.
+     *
+     * @return list<TaskBoard>
+     */
+    public function findActiveByTenant(string $tenantKey): array;
+
+    /**
+     * The first active board of a host tenant (`tenancy`), oldest first; null when the tenant has none.
+     */
+    public function findOneByTenant(string $tenantKey): ?TaskBoard;
 }

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
 
@@ -68,10 +72,24 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'list'  => ['path' => '/l/{boardId}', 'name' => ''],
         ]);
 
-        self::assertSame(['nowo_task_board_route'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
+        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
         self::assertSame('app_board', $extension->routeName('board'));
         self::assertSame('nowo_task_board_list', $extension->routeName('list'));
         self::assertSame('nowo_task_board_task', $extension->routeName('task'));
+    }
+
+    public function testLinkBadgeAndSubtaskProgress(): void
+    {
+        $extension = new TaskBoardTwigExtension('base.html.twig', 'custom');
+        $board     = new TaskBoard('Board', 'board', new stdClass());
+        $task      = new Task($board, 'Parent', new stdClass());
+        $subtask   = new Task($board, 'Child', new stdClass(), parent: $task);
+        $task->getSubtasks()->add($subtask);
+        $subtask->markCompleted();
+
+        self::assertNull($extension->linkBadge(TaskLink::forHostObject($task, 'issue', '1')));
+        self::assertSame(1, $extension->subtaskProgress($task)->done);
+        self::assertSame(1, $extension->subtaskProgress($task)->total);
     }
 
     public function testTagListDecodesJsonListsOfStrings(): void

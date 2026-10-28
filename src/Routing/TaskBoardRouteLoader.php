@@ -9,17 +9,29 @@ use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
+use function rtrim;
+use function str_starts_with;
+use function strlen;
+use function substr;
+
 /**
- * Loads TaskBoard routes from bundle configuration.
+ * Loads TaskBoard routes from bundle configuration and, with `tenancy`, a copy of every manage route under each
+ * `tenancy.tenant_paths` entry (`<name_prefix><route name>`, path `<path><route path minus routes.index.path>`).
  */
 final class TaskBoardRouteLoader extends Loader
 {
+    /** Default base path of the manage routes (routes.index.path). */
+    private const DEFAULT_BASE = '/tools/task-board';
+
     /**
      * @param array<string, array{path: string, name: string}> $routes
+     * @param array{enabled?: bool, tenant_paths?: list<array{path: string, name_prefix: string, slug_prefix?: string, slug_requirement?: string|null}>} $tenancy
+     *                                                                                                                                                            `tenancy` (since 1.10)
      */
     public function __construct(
         private readonly array $routes,
         private readonly string $routePrefix,
+        private readonly array $tenancy = [],
     ) {
     }
 
@@ -47,6 +59,8 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, 'column_update', 'updateColumn', ['POST']);
         $this->addRoute($collection, 'column_reorder', 'reorderColumns', ['POST']);
         $this->addRoute($collection, 'board_import', 'importBoard', ['GET', 'POST']);
+
+        $this->addTenantCopies($collection);
 
         return $collection;
     }
@@ -77,5 +91,44 @@ final class TaskBoardRouteLoader extends Loader
                 $methods,
             ),
         );
+    }
+
+    /**
+     * `tenancy.tenant_paths`: every manage route once more per tenant path, with `{tenantSlug}` in its path.
+     */
+    private function addTenantCopies(RouteCollection $collection): void
+    {
+        if (!($this->tenancy['enabled'] ?? false)) {
+            return;
+        }
+
+        $originals = $collection->all();
+        foreach ($this->tenancy['tenant_paths'] ?? [] as $tenantPath) {
+            $requirement = TenantPaths::slugRequirement($tenantPath);
+            foreach ($this->routes as $route) {
+                $original = $originals[$route['name']] ?? null;
+                if (!$original instanceof Route) {
+                    continue;
+                }
+
+                $copy = clone $original;
+                $copy->setPath(rtrim($tenantPath['path'], '/') . $this->relativePath($route['path']));
+                $copy->setRequirement('tenantSlug', $requirement);
+                $collection->add($tenantPath['name_prefix'] . $route['name'], $copy);
+            }
+        }
+    }
+
+    /**
+     * A route path relative to the routes' base path (routes.index.path); a route outside that base keeps its path.
+     */
+    private function relativePath(string $path): string
+    {
+        $base = rtrim($this->routes['index']['path'] ?? self::DEFAULT_BASE, '/');
+        if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) {
+            return substr($path, strlen($base));
+        }
+
+        return $path;
     }
 }

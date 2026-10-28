@@ -34,10 +34,14 @@ use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
+use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
+use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
@@ -159,6 +163,90 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('Spec', $html);
         self::assertStringContainsString('<span class="text-decoration-line-through">legacy</span>', $html);
         self::assertStringContainsString('<span>api, ui</span>', $html);
+    }
+
+    public function testTaskDetailRendersTheSubtaskTreeAndHostObjectLinks(): void
+    {
+        $task = $this->task;
+        $a    = new Task($this->board, 'Level 1', $this->user, column: $this->todo, parent: $task);
+        $a1   = new Task($this->board, 'Level 2', $this->user, parent: $a);
+        $a1x  = new Task($this->board, 'Level 3', $this->user, parent: $a1);
+        $a1xy = new Task($this->board, 'Level 4', $this->user, parent: $a1x);
+        $a1xy->markCompleted();
+        $task->addLink(TaskLink::forHostObject($task, 'issue', '12'));
+        $task->addLink(TaskLink::forHostObject($task, 'order', '7', 'Order 7'));
+        $tree = TaskTree::fromTasks([$task, $a, $a1, $a1x, $a1xy]);
+
+        $resolver = new class implements TaskObjectLinkResolverInterface {
+            public function supports(string $objectType): bool
+            {
+                return $objectType === 'issue';
+            }
+
+            public function label(string $objectType, string $objectId): string
+            {
+                return 'BEACON-' . $objectId . ' Crash';
+            }
+
+            public function url(string $objectType, string $objectId): string
+            {
+                return '/projects/1/issues/' . $objectId;
+            }
+
+            public function badge(string $objectType, string $objectId): TaskObjectBadge
+            {
+                return new TaskObjectBadge('Resolved', 'success');
+            }
+        };
+
+        $html = $this->twig(new TaskObjectLinkResolver([$resolver]))->render('@NowoTaskBoardBundle/manage/task.html.twig', [
+            'task'             => $task,
+            'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
+            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
+            'memberForm'       => $this->memberForm(),
+            'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
+            'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
+            'subtaskTotal'     => $tree->progress($task)->total,
+            'subtaskDone'      => $tree->progress($task)->done,
+            'taskTree'         => $tree,
+            'priorities'       => TaskPriority::cases(),
+            'dashboardRoute'   => null,
+        ] + $this->taskActionForms($task));
+
+        foreach (['Level 1', 'Level 2', 'Level 3', 'Level 4'] as $title) {
+            self::assertStringContainsString($title, $html);
+        }
+        self::assertStringContainsString('data-depth="3"', $html);
+        // Level 1 counts its 3 descendants, one of them done.
+        self::assertStringContainsString('1/3', $html);
+        self::assertStringContainsString('<a href="/projects/1/issues/12" class="fw-semibold text-truncate nowo-task-link__label">BEACON-12 Crash</a>', $html);
+        self::assertStringContainsString('bg-success-lt nowo-task-link__badge">Resolved', $html);
+        self::assertStringContainsString('<span class="fw-semibold text-truncate nowo-task-link__label">Order 7</span>', $html);
+    }
+
+    public function testBoardCardsShowTheSubtaskCounter(): void
+    {
+        $subtask = new Task($this->board, 'Child', $this->user, column: $this->todo, parent: $this->task);
+        $subtask->markCompleted();
+        $choices = ['Todo' => $this->todo->getId()];
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', [
+            'board'          => $this->board,
+            'tasks'          => [$this->task],
+            'taskTree'       => TaskTree::fromTasks([$this->task, $subtask]),
+            'columnForm'     => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'taskForm'       => $this->factory()->create(TaskFormType::class, new TaskFormData(columnId: $this->todo->getId()), [
+                'column_choices'   => $choices,
+                'rich_description' => false,
+                'tag_input'        => false,
+            ])->createView(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringContainsString('nowo-task-card__subtasks', $html);
+        self::assertStringContainsString('1/1', $html);
+        self::assertStringNotContainsString('>Child<', $html);
     }
 
     public function testTaskDetailPageShowsZeroWithoutLoggedTime(): void
@@ -294,7 +382,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             ->getFormFactory();
     }
 
-    private function twig(): Environment
+    private function twig(?TaskObjectLinkResolver $linkResolver = null): Environment
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => TestUser::class]]);
         /** @var array<string, array{path: string, name: string}> $routes */
@@ -318,7 +406,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes));
+        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes, $linkResolver ?? new TaskObjectLinkResolver()));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

@@ -16,6 +16,7 @@
 {% block container_class %}container container-wide{% endblock %}
 
 {% block body %}
+    {% block nowo_task_board_toolbar %}
     {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name ~ ' — ' ~ ('task_board.list.title'|trans({}, 'NowoTaskBoardBundle')),
         breadcrumbRoute: nowo_task_board_route('board'),
@@ -31,8 +32,10 @@
         ',
         dashboardRoute: dashboardRoute|default(null),
     }) }}
+    {% endblock %}
 
-    <div class="card" data-controller="nowo-task-board-list-filter">
+    {% block nowo_task_board_list %}
+    <div class="card nowo-task-list" data-controller="nowo-task-board-list-filter">
         <div class="card-header">
             <h2 class="card-title">{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</h2>
         </div>
@@ -84,4 +87,5 @@
             </table>
         </div>
     </div>
+    {% endblock %}
 {% endblock %}

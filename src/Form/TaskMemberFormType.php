@@ -16,6 +16,8 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
+use function is_array;
+
 /**
  * @extends AbstractType<TaskMemberFormData>
  */
@@ -26,12 +28,17 @@ final class TaskMemberFormType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $this->addWithDefaults($builder, 'user', EntityType::class, [
+        $userOptions = [
             'class'        => $options['user_class'],
             'choice_label' => $options['user_choice_label'],
             'label'        => 'task_board.form.member.user',
             'constraints'  => [new NotBlank()],
-        ]);
+        ];
+        // Since 1.10: the assignee provider's users only (TaskAssigneeProviderInterface).
+        if (is_array($options['user_choices'])) {
+            $userOptions['choices'] = $options['user_choices'];
+        }
+        $this->addWithDefaults($builder, 'user', EntityType::class, $userOptions);
         $this->addWithDefaults($builder, 'memberRole', EnumType::class, [
             'class' => TaskMemberRole::class,
             'label' => 'task_board.form.member.role',
@@ -41,9 +48,11 @@ final class TaskMemberFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setRequired(['user_class']);
+        $resolver->setAllowedTypes('user_choices', ['null', 'array']);
         $resolver->setDefaults([
             'data_class'         => TaskMemberFormData::class,
             'user_choice_label'  => 'email',
+            'user_choices'       => null,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
     }

@@ -50,6 +50,47 @@ final readonly class TaskLinkAttacher
         return $link;
     }
 
+    /**
+     * Links the task to a host object (`TaskLinkType::HostObject`); an existing link to the same object is returned
+     * as it is.
+     */
+    public function attachObject(Task $task, string $objectType, string $objectId, object $user, ?string $label = null): TaskLink
+    {
+        foreach ($task->getLinks() as $existing) {
+            if ($existing->isHostObjectOf($objectType, $objectId)) {
+                return $existing;
+            }
+        }
+
+        $link = TaskLink::forHostObject($task, $objectType, $objectId, $label);
+        $task->addLink($link);
+        $this->changeRecorder->record(
+            $task,
+            $user,
+            TaskChangeType::LinkAdded,
+            null,
+            $label ?? $objectType . ' #' . $objectId,
+            $objectType . ':' . $objectId,
+        );
+        $this->taskRepository->save($task);
+
+        return $link;
+    }
+
+    /**
+     * Removes the task's link to a host object; false when the task has none.
+     */
+    public function detachObject(Task $task, string $objectType, string $objectId, object $user): bool
+    {
+        foreach ($task->getLinks() as $link) {
+            if ($link->isHostObjectOf($objectType, $objectId)) {
+                return $this->remove($task, $link->getId(), $user);
+            }
+        }
+
+        return false;
+    }
+
     public function update(Task $task, string $linkId, TaskLinkFormData $data, object $user): bool
     {
         $link = $this->findLink($task, $linkId);
@@ -88,7 +129,7 @@ final readonly class TaskLinkAttacher
         }
 
         $summary = $this->linkSummary($link);
-        $url     = $link->getUrl();
+        $url     = $link->isHostObject() ? $link->getObjectType() . ':' . $link->getObjectId() : $link->getUrl();
 
         $task->removeLink($link);
         $this->changeRecorder->record(
@@ -137,7 +178,10 @@ final readonly class TaskLinkAttacher
     private function linkSummary(TaskLink $link): string
     {
         $label = $link->getLabel();
+        if ($label !== null && $label !== '') {
+            return $label;
+        }
 
-        return ($label !== null && $label !== '') ? $label : $link->getUrl();
+        return $link->isHostObject() ? $link->getObjectType() . ' #' . $link->getObjectId() : $link->getUrl();
     }
 }

@@ -1,0 +1,46 @@
+{#
+    Recursive subtask tree (since 1.10): any depth, a done / total counter on every node with subtasks, nested levels
+    in <details> (expand / collapse without JavaScript).
+    Variables:
+      tasks     the nodes of this level (list of Task)
+      taskTree  Nowo\TaskBoardBundle\Support\TaskTree built from the board's tasks (one query); without it the
+                partial walks task.subtasks (a query per node)
+      depth     level of `tasks` (default 0)
+#}
+{% set depth = depth|default(0) %}
+{% set tree = taskTree|default(null) %}
+<ul class="nowo-task-subtree{{ depth == 0 ? ' list-group list-group-flush' : '' }}" data-depth="{{ depth }}">
+    {% for node in tasks %}
+        {% set children = tree ? tree.childrenOf(node) : node.subtasks %}
+        {% set progress = tree ? tree.progress(node) : nowo_task_board_subtask_progress(node) %}
+        <li class="nowo-task-subtree__item{{ depth == 0 ? ' list-group-item' : '' }}{{ node.completed ? ' is-done' : '' }}" data-task-id="{{ node.id }}">
+            <div class="nowo-task-subtree__row d-flex align-items-start gap-2">
+                <span class="nowo-task-subtree__check nowo-task-detail__subtask-check{{ node.completed ? ' is-done' : '' }}" aria-hidden="true">
+                    <i class="ti ti-{{ node.completed ? 'circle-check' : 'circle' }}"></i>
+                </span>
+                <div class="nowo-task-subtree__body flex-grow-1">
+                    <a href="{{ path(nowo_task_board_route('task'), {taskId: node.id}) }}" class="nowo-task-subtree__title text-reset fw-semibold">{{ node.title }}</a>
+                    {% if node.column %}
+                        <span class="nowo-task-subtree__column badge bg-secondary-lt ms-1">{{ node.column.name }}</span>
+                    {% endif %}
+                    {% if progress.total > 0 %}
+                        <span class="nowo-task-subtree__progress text-secondary small ms-1" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
+                            <i class="ti ti-subtask" aria-hidden="true"></i> {{ progress.done }}/{{ progress.total }}
+                        </span>
+                    {% endif %}
+                    {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: node.tags, wrapper_class: 'mt-1'}) }}
+                </div>
+            </div>
+            {% if children|length > 0 %}
+                <details class="nowo-task-subtree__children mt-1 ps-3 border-start" open>
+                    <summary class="nowo-task-subtree__summary text-secondary small">{{ 'task_board.task.subtasks_progress'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}</summary>
+                    {{ include('@NowoTaskBoardBundle/manage/_subtask_tree.html.twig', {tasks: children, depth: depth + 1}) }}
+                </details>
+            {% endif %}
+        </li>
+    {% else %}
+        {% if depth == 0 %}
+            <li class="list-group-item nowo-task-subtree__empty text-secondary">{{ 'task_board.task.no_subtasks'|trans({}, 'NowoTaskBoardBundle') }}</li>
+        {% endif %}
+    {% endfor %}
+</ul>

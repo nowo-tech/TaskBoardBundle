@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
+use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use SortDirection;
 
@@ -77,6 +78,26 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
 
         /** @var list<Task> $result */
         $result = $qb->getQuery()->getResult();
+
+        return $result;
+    }
+
+    public function findByHostObject(string $objectType, string $objectId): array
+    {
+        /** @var list<Task> $result */
+        $result = $this->entityManager->createQueryBuilder()
+            ->select('DISTINCT t')
+            ->from(Task::class, 't')
+            ->innerJoin('t.links', 'link')
+            ->where('link.linkType = :linkType')
+            ->andWhere('link.objectType = :objectType')
+            ->andWhere('link.objectId = :objectId')
+            ->setParameter('linkType', TaskLinkType::HostObject)
+            ->setParameter('objectType', $objectType)
+            ->setParameter('objectId', $objectId)
+            ->orderBy('t.createdAt', SortDirection::Ascending)
+            ->getQuery()
+            ->getResult();
 
         return $result;
     }

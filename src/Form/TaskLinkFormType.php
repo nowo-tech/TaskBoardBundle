@@ -27,8 +27,9 @@ final class TaskLinkFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $this->addWithDefaults($builder, 'linkType', EnumType::class, [
-            'class' => TaskLinkType::class,
-            'label' => 'task_board.form.link.type',
+            'class'   => TaskLinkType::class,
+            'choices' => TaskLinkType::userChoices(),
+            'label'   => 'task_board.form.link.type',
         ]);
         $this->addUrl($builder, 'url', [
             'label'       => 'task_board.form.link.url',

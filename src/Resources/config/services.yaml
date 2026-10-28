@@ -29,6 +29,13 @@ services:
             - '../../Security/TaskBoardTeamMembershipResolverInterface.php'
             - '../../Security/NullTaskBoardTeamMembershipResolver.php'
             - '../../Security/TaskBoardResourceAccessChecker.php'
+            - '../../Tenancy/TaskBoardTenant.php'
+            - '../../Tenancy/TaskBoardTenantResolverInterface.php'
+            - '../../Tenancy/SlugTaskBoardTenantResolver.php'
+            - '../../Routing/TenantPathUrlGenerator.php'
+            - '../../Assignee/'
+            - '../../Link/TaskObjectLinkResolverInterface.php'
+            - '../../Link/TaskObjectBadge.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
@@ -38,6 +45,7 @@ services:
         arguments:
             $routes: '%nowo_task_board.routes%'
             $routePrefix: '%nowo_task_board.route_prefix%'
+            $tenancy: '%nowo_task_board.tenancy%'
         tags:
             - { name: routing.loader }
 
@@ -48,6 +56,7 @@ services:
             $templates: '%nowo_task_board.templates%'
             $userClass: '%nowo_task_board.user_class%'
             $dashboardRoute: '%nowo_task_board.dashboard_route%'
+            $topLevelOnly: '%nowo_task_board.board.top_level_only%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver
@@ -85,3 +94,24 @@ services:
         resource: '../../Form/'
         exclude: '../../Form/DataTransformer/'
         tags: ['form.type']
+
+    # Since 1.10 (tenancy): the tenant of the request and the tenant copies of the manage routes.
+    Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext:
+        arguments:
+            $enabled: '%nowo_task_board.tenancy.enabled%'
+            $singleBoard: '%nowo_task_board.tenancy.single_board%'
+
+    Nowo\TaskBoardBundle\Routing\TenantPaths:
+        arguments:
+            $tenantPaths: '%nowo_task_board.tenancy.tenant_paths%'
+            $routes: '%nowo_task_board.routes%'
+            $enabled: '%nowo_task_board.tenancy.enabled%'
+
+    Nowo\TaskBoardBundle\Service\TaskBoardCreator:
+        arguments:
+            $defaultColumns: '%nowo_task_board.board.default_columns%'
+
+    # Since 1.10: host object links (TaskLinkType::HostObject) resolved by the host's resolvers.
+    Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver:
+        arguments:
+            $resolvers: !tagged_iterator nowo_task_board.object_link_resolver

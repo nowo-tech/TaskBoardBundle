@@ -7,10 +7,12 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_links')]
+#[ORM\Index(name: 'idx_task_board_task_links_object', columns: ['object_type', 'object_id'])]
 class TaskLink
 {
     #[ORM\Id]
@@ -32,6 +34,12 @@ class TaskLink
         private ?string $label = null,
         #[ORM\Column(name: 'external_id', type: 'string', length: 128, nullable: true)]
         private ?string $externalId = null,
+        /** Host object type of a `TaskLinkType::HostObject` link (e.g. "issue"); since 1.10. */
+        #[ORM\Column(name: 'object_type', type: 'string', length: 64, nullable: true)]
+        private ?string $objectType = null,
+        /** Host object id of a `TaskLinkType::HostObject` link; since 1.10. */
+        #[ORM\Column(name: 'object_id', type: 'string', length: 191, nullable: true)]
+        private ?string $objectId = null,
     ) {
         $this->id        = Uuid::generate()->toString();
         $this->createdAt = new DateTimeImmutable();
@@ -105,6 +113,47 @@ class TaskLink
         $this->externalId = $externalId;
 
         return $this;
+    }
+
+    /**
+     * A link to a host object (`objectType` / `objectId`), resolved by {@see TaskObjectLinkResolverInterface}.
+     */
+    public static function forHostObject(Task $task, string $objectType, string $objectId, ?string $label = null): self
+    {
+        return new self(
+            task: $task,
+            linkType: TaskLinkType::HostObject,
+            url: '',
+            label: $label,
+            objectType: $objectType,
+            objectId: $objectId,
+        );
+    }
+
+    public function getObjectType(): ?string
+    {
+        return $this->objectType;
+    }
+
+    public function getObjectId(): ?string
+    {
+        return $this->objectId;
+    }
+
+    /**
+     * Whether the link names a host object (`TaskLinkType::HostObject` with a type and an id).
+     */
+    public function isHostObject(): bool
+    {
+        return $this->linkType === TaskLinkType::HostObject && $this->objectType !== null && $this->objectId !== null;
+    }
+
+    /**
+     * Whether the link names the host object `$objectType` / `$objectId`.
+     */
+    public function isHostObjectOf(string $objectType, string $objectId): bool
+    {
+        return $this->isHostObject() && $this->objectType === $objectType && $this->objectId === $objectId;
     }
 
     public function getCreatedAt(): DateTimeImmutable

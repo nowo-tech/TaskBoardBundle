@@ -54,6 +54,38 @@ final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardReposito
         return $boards;
     }
 
+    public function findActiveByTenant(string $tenantKey): array
+    {
+        /** @var list<TaskBoard> $boards */
+        $boards = $this->entityManager->createQueryBuilder()
+            ->select('b')
+            ->from(TaskBoard::class, 'b')
+            ->where('b.archivedAt IS NULL')
+            ->andWhere('b.tenantKey = :tenantKey')
+            ->setParameter('tenantKey', $tenantKey)
+            ->orderBy('b.name', SortDirection::Ascending)
+            ->getQuery()
+            ->getResult();
+
+        return $boards;
+    }
+
+    public function findOneByTenant(string $tenantKey): ?TaskBoard
+    {
+        $board = $this->entityManager->createQueryBuilder()
+            ->select('b')
+            ->from(TaskBoard::class, 'b')
+            ->where('b.archivedAt IS NULL')
+            ->andWhere('b.tenantKey = :tenantKey')
+            ->setParameter('tenantKey', $tenantKey)
+            ->orderBy('b.createdAt', SortDirection::Ascending)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $board instanceof TaskBoard ? $board : null;
+    }
+
     public function findBySlug(string $slug): ?TaskBoard
     {
         $board = $this->entityManager->getRepository(TaskBoard::class)->findOneBy(['slug' => $slug]);

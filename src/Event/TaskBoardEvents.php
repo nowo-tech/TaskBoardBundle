@@ -24,4 +24,22 @@ final class TaskBoardEvents
     public const TASK_READ_ONLY_RESOLVE = 'nowo_task_board.task_read_only_resolve';
 
     public const MEMBER_LIST_QUERY = 'nowo_task_board.member_list_query';
+
+    /** {@see TaskCreatedEvent}, after flush (since 1.10). */
+    public const TASK_CREATED = 'nowo_task_board.task_created';
+
+    /** {@see TaskUpdatedEvent}, after flush (since 1.10). */
+    public const TASK_UPDATED = 'nowo_task_board.task_updated';
+
+    /** {@see TaskMovedEvent}, after flush (since 1.10). */
+    public const TASK_MOVED = 'nowo_task_board.task_moved';
+
+    /** {@see TaskCompletedEvent}, after flush (since 1.10). */
+    public const TASK_COMPLETED = 'nowo_task_board.task_completed';
+
+    /** {@see TaskReopenedEvent}, after flush (since 1.10). */
+    public const TASK_REOPENED = 'nowo_task_board.task_reopened';
+
+    /** {@see TaskMemberAddedEvent}, after flush (since 1.10). */
+    public const TASK_MEMBER_ADDED = 'nowo_task_board.task_member_added';
 }

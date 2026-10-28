@@ -179,3 +179,6 @@ task_board.history.type.link_updated: "ha aggiornato un link"
 task_board.history.type.link_removed: "ha rimosso un link"
 task_board.history.type.member_added: "ha aggiunto un membro"
 task_board.history.type.member_removed: "ha rimosso un membro"
+task_board.link.host_object: "Elemento collegato"
+task_board.flash.member_not_assignable: "Questo utente non può essere aggiunto alle attività di questa bacheca."
+task_board.board.subtasks_count: '%done% di %total% sottoattività completate'

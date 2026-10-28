@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
@@ -36,6 +37,9 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Support\TaskTree;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
@@ -80,26 +84,42 @@ final class TaskBoardManageController extends AbstractController
         private readonly string $userClass,
         private readonly ?string $dashboardRoute,
         private readonly TaskBoardResourceAccessChecker $resourceAccessChecker,
+        private readonly ?TaskBoardTenantContext $tenantContext = null,
+        private readonly bool $topLevelOnly = false,
     ) {
     }
 
     public function index(): Response
     {
         $user   = $this->requireUser();
-        $boards = $this->accessChecker->canListBoards($user)
-            ? $this->resourceAccessChecker->filterBoards($user, $this->boardRepository->findAllActive())
-            : [];
+        $tenant = $this->tenantContext?->require($user);
+        if ($tenant instanceof TaskBoardTenant && $this->tenantContext?->isSingleBoard() === true) {
+            $board = $this->boardRepository->findOneByTenant($tenant->key)
+                ?? $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+        }
+
+        $boards = [];
+        if ($this->accessChecker->canListBoards($user)) {
+            $candidates = $tenant instanceof TaskBoardTenant
+                ? $this->boardRepository->findActiveByTenant($tenant->key)
+                : $this->boardRepository->findAllActive();
+            $boards = $this->resourceAccessChecker->filterBoards($user, $candidates);
+        }
 
         return $this->render($this->templates['index'], [
             'boards'         => $boards,
             'boardForm'      => $this->createForm(TaskBoardFormType::class, new TaskBoardFormData()),
             'dashboardRoute' => $this->dashboardRoute,
+            'tenant'         => $tenant,
         ]);
     }
 
     public function createBoard(Request $request): RedirectResponse
     {
-        $user = $this->requireUser();
+        $user   = $this->requireUser();
+        $tenant = $this->tenantContext?->require($user);
         if (!$this->accessChecker->canCreateBoard($user)) {
             throw $this->createAccessDeniedException();
         }
@@ -110,7 +130,7 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskBoardFormData $data */
             $data  = $form->getData();
-            $board = $this->boardCreator->create($data, $user);
+            $board = $this->boardCreator->create($data, $user, $tenant?->key);
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
         }
@@ -131,9 +151,14 @@ final class TaskBoardManageController extends AbstractController
             columnId: $columnChoices === [] ? null : reset($columnChoices),
         ), ['column_choices' => $columnChoices]);
 
+        $allTasks = $this->taskRepository->findByBoard($board, true);
+        $taskTree = TaskTree::fromTasks($allTasks);
+
         return $this->render($this->templates['board'], [
-            'board'          => $board,
-            'tasks'          => $this->taskRepository->findByBoard($board, true),
+            'board' => $board,
+            // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
+            'tasks'          => $this->topLevelOnly ? $taskTree->roots() : $allTasks,
+            'taskTree'       => $taskTree,
             'columnForm'     => $columnForm->createView(),
             'editColumnForm' => $this->createForm(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
             'taskForm'       => $taskForm->createView(),
@@ -300,6 +325,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->render($this->templates['list'], [
             'board'       => $board,
             'tasks'       => $tasks,
+            'taskTree'    => TaskTree::fromTasks($tasks),
             'priorities'  => $priorityNames,
             'columnNames' => $columnNames,
             'filterForm'  => $this->formFactory()->createNamed('', TaskListFilterType::class, null, [
@@ -358,11 +384,8 @@ final class TaskBoardManageController extends AbstractController
             return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
         }
 
-        $linkForm   = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
-        $memberForm = $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
-            'user_class'        => $this->userClass,
-            'user_choice_label' => 'email',
-        ]);
+        $linkForm    = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
+        $memberForm  = $this->createMemberForm($task->getBoard());
         $subtaskForm = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
             'compact'        => true,
@@ -378,12 +401,9 @@ final class TaskBoardManageController extends AbstractController
             )->createView();
         }
 
-        $subtaskDone = 0;
-        foreach ($task->getSubtasks() as $subtask) {
-            if ($subtask->isCompleted()) {
-                ++$subtaskDone;
-            }
-        }
+        // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
+        $taskTree        = TaskTree::fromTasks($this->taskRepository->findByBoard($task->getBoard(), true));
+        $subtaskProgress = $taskTree->progress($task);
 
         return $this->render($this->templates['task'], [
             'task'              => $task,
@@ -392,8 +412,10 @@ final class TaskBoardManageController extends AbstractController
             'memberForm'        => $memberForm,
             'subtaskForm'       => $subtaskForm,
             'columnNavigation'  => $this->taskManager->getColumnNavigation($task),
-            'subtaskTotal'      => $task->getSubtasks()->count(),
-            'subtaskDone'       => $subtaskDone,
+            'subtaskTotal'      => $subtaskProgress->total,
+            'subtaskDone'       => $subtaskProgress->done,
+            'subtaskProgress'   => $subtaskProgress,
+            'taskTree'          => $taskTree,
             'priorities'        => TaskPriority::cases(),
             'dashboardRoute'    => $this->dashboardRoute,
             'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
@@ -505,17 +527,18 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
 
-        $form = $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
-            'user_class'        => $this->userClass,
-            'user_choice_label' => 'email',
-        ]);
+        $form = $this->createMemberForm($task->getBoard());
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskMemberFormData $data */
             $data = $form->getData();
-            $this->memberAssigner->assign($task, $data, $user);
-            $this->addFlash('success', 'task_board.flash.member_added');
+            try {
+                $this->memberAssigner->assign($task, $data, $user);
+                $this->addFlash('success', 'task_board.flash.member_added');
+            } catch (UnassignableUserException) {
+                $this->addFlash('error', 'task_board.flash.member_not_assignable');
+            }
         }
 
         return $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $taskId]);
@@ -600,6 +623,20 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
+     * Member picker; with an assignee provider it offers only the users the provider allows on `$board`.
+     *
+     * @return FormInterface<TaskMemberFormData>
+     */
+    private function createMemberForm(TaskBoard $board): FormInterface
+    {
+        return $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
+            'user_class'        => $this->userClass,
+            'user_choice_label' => 'email',
+            'user_choices'      => $this->memberAssigner->assignableUsers($board),
+        ]);
+    }
+
+    /**
      * @return FormInterface<mixed>
      */
     private function createPriorityForm(Task $task): FormInterface
@@ -643,7 +680,8 @@ final class TaskBoardManageController extends AbstractController
     private function findBoard(string $boardId, UserInterface $user): TaskBoard
     {
         $board = $this->boardRepository->findById($boardId);
-        if (!$board instanceof TaskBoard) {
+        // A board of another tenant is not found (tenancy).
+        if (!$board instanceof TaskBoard || $this->tenantContext?->owns($board, $user) === false) {
             throw new NotFoundHttpException('Board not found.');
         }
 
@@ -671,7 +709,8 @@ final class TaskBoardManageController extends AbstractController
     private function findTask(string $taskId, UserInterface $user, bool $forWrite = false): Task
     {
         $task = $this->taskRepository->findById($taskId);
-        if (!$task instanceof Task) {
+        // A task of another tenant's board is not found (tenancy).
+        if (!$task instanceof Task || $this->tenantContext?->owns($task->getBoard(), $user) === false) {
             throw new NotFoundHttpException('Task not found.');
         }
 

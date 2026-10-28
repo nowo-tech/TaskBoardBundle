@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
+use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
@@ -27,12 +29,16 @@ use Nowo\TaskBoardBundle\Repository\TaskMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TenantPaths;
+use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -91,6 +97,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);
+        $container->setParameter('nowo_task_board.tenancy', $config['tenancy']);
+        $container->setParameter('nowo_task_board.tenancy.enabled', $config['tenancy']['enabled']);
+        $container->setParameter('nowo_task_board.tenancy.single_board', $config['tenancy']['single_board']);
+        $container->setParameter('nowo_task_board.tenancy.tenant_paths', $config['tenancy']['tenant_paths']);
+        $container->setParameter('nowo_task_board.board.default_columns', $config['board']['default_columns']);
+        $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
 
         if (
             !$config['security']['allow_unauthenticated']
@@ -104,10 +116,42 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerAccessChecker($container, $config['security']);
         $this->registerResourceAccessChecker($container, $config['security']);
         $this->registerTeamResolver($container, $config['team_membership_resolver'] ?? null);
+        $this->registerTenantResolver($container, $config['tenancy']['resolver']);
 
         $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . '/../Resources/config'));
         $loader->load('services.yaml');
         $this->registerTimeTrackIntegration($container, $loader);
+        $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
+        $this->registerAssigneeProvider($container, $config['assignee_provider']);
+        $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
+            ->addTag('nowo_task_board.object_link_resolver');
+    }
+
+    /**
+     * `tenancy.enabled`: decorates the router so links to the manage routes go to the tenant copies.
+     */
+    private function registerTenantUrlGenerator(ContainerBuilder $container, bool $enabled): void
+    {
+        if (!$enabled) {
+            return;
+        }
+
+        // A host without a `router` service (console-only kernels) keeps no decorator.
+        $container->setDefinition(TenantPathUrlGenerator::class, (new Definition(TenantPathUrlGenerator::class))
+            ->setDecoratedService('router', null, 0, ContainerInterface::IGNORE_ON_INVALID_REFERENCE)
+            ->setArgument('$inner', new Reference(TenantPathUrlGenerator::class . '.inner'))
+            ->setArgument('$tenantPaths', new Reference(TenantPaths::class))
+            ->setArgument('$requestStack', new Reference('request_stack')));
+    }
+
+    /**
+     * Aliases {@see TaskAssigneeProviderInterface} to `assignee_provider` when set (none: every user may be added).
+     */
+    private function registerAssigneeProvider(ContainerBuilder $container, mixed $providerId): void
+    {
+        if (is_string($providerId) && $providerId !== '') {
+            $container->setAlias(TaskAssigneeProviderInterface::class, $providerId);
+        }
     }
 
     private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void
@@ -418,6 +462,21 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $bundles = $container->getParameter('kernel.bundles');
 
         return isset($bundles['SecurityBundle']);
+    }
+
+    /**
+     * Aliases the tenant resolver: `tenancy.resolver`, else the slug-is-the-tenant default.
+     */
+    private function registerTenantResolver(ContainerBuilder $container, mixed $resolverId): void
+    {
+        if (is_string($resolverId) && $resolverId !== '') {
+            $container->setAlias(TaskBoardTenantResolverInterface::class, $resolverId);
+
+            return;
+        }
+
+        $container->setDefinition('nowo_task_board.tenant_resolver.slug', new Definition(SlugTaskBoardTenantResolver::class));
+        $container->setAlias(TaskBoardTenantResolverInterface::class, 'nowo_task_board.tenant_resolver.slug');
     }
 
     private function registerTeamResolver(ContainerBuilder $container, mixed $resolverId): void

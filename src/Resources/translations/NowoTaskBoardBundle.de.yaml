@@ -179,3 +179,6 @@ task_board.history.type.link_updated: "hat einen Link aktualisiert"
 task_board.history.type.link_removed: "hat einen Link entfernt"
 task_board.history.type.member_added: "hat ein Mitglied hinzugefügt"
 task_board.history.type.member_removed: "hat ein Mitglied entfernt"
+task_board.link.host_object: "Verknüpftes Element"
+task_board.flash.member_not_assignable: "Dieser Benutzer kann den Aufgaben dieses Boards nicht hinzugefügt werden."
+task_board.board.subtasks_count: '%done% von %total% Unteraufgaben erledigt'

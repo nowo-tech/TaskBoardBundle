@@ -15,19 +15,26 @@ use Nowo\TaskBoardBundle\Support\SlugGenerator;
  */
 final readonly class TaskBoardCreator
 {
-    /** @var list{array{name: string, color: ?string}} */
-    private const DEFAULT_COLUMNS = [
+    /** @var list<array{name: string, color: ?string}> */
+    public const DEFAULT_COLUMNS = [
         ['name' => 'To do', 'color' => '#94a3b8'],
         ['name' => 'In progress', 'color' => '#3b82f6'],
         ['name' => 'Done', 'color' => '#22c55e'],
     ];
 
+    /**
+     * @param list<array{name: string, color: ?string}> $defaultColumns `board.default_columns` (since 1.10)
+     */
     public function __construct(
         private TaskBoardRepositoryInterface $boardRepository,
+        private array $defaultColumns = self::DEFAULT_COLUMNS,
     ) {
     }
 
-    public function create(TaskBoardFormData $data, object $creator): TaskBoard
+    /**
+     * Creates a board with the default columns; `$tenantKey` puts it in a host tenant (`tenancy`).
+     */
+    public function create(TaskBoardFormData $data, object $creator, ?string $tenantKey = null): TaskBoard
     {
         $slug = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : SlugGenerator::fromName($data->name));
 
@@ -37,8 +44,9 @@ final readonly class TaskBoardCreator
             creator: $creator,
             description: $data->description,
         );
+        $board->setTenantKey($tenantKey);
 
-        foreach (self::DEFAULT_COLUMNS as $position => $columnDef) {
+        foreach ($this->defaultColumns as $position => $columnDef) {
             $board->addColumn(new BoardColumn(
                 board: $board,
                 name: $columnDef['name'],

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Twig;
 
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
@@ -31,6 +36,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly string $layoutTemplate,
         private readonly string $cssFramework,
         private readonly array $routes = [],
+        private readonly TaskObjectLinkResolver $linkResolver = new TaskObjectLinkResolver(),
     ) {
     }
 
@@ -38,7 +44,27 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     {
         return [
             new TwigFunction('nowo_task_board_route', $this->routeName(...)),
+            new TwigFunction('nowo_task_board_link_label', $this->linkResolver->label(...)),
+            new TwigFunction('nowo_task_board_link_url', $this->linkResolver->url(...)),
+            new TwigFunction('nowo_task_board_link_badge', $this->linkBadge(...)),
+            new TwigFunction('nowo_task_board_subtask_progress', $this->subtaskProgress(...)),
         ];
+    }
+
+    /**
+     * Status badge of a host object link (since 1.10); null for other links.
+     */
+    public function linkBadge(TaskLink $link): ?TaskObjectBadge
+    {
+        return $this->linkResolver->badge($link);
+    }
+
+    /**
+     * Done / total of a task's subtasks at any depth (since 1.10).
+     */
+    public function subtaskProgress(Task $task): SubtaskProgress
+    {
+        return SubtaskProgress::of($task);
     }
 
     /**

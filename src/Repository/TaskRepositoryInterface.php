@@ -22,4 +22,11 @@ interface TaskRepositoryInterface
      * @return list<Task>
      */
     public function findTrackableForUser(string $userId, ?string $search, int $limit, int $offset): array;
+
+    /**
+     * Tasks linked to a host object (`TaskLinkType::HostObject`), oldest first (since 1.10).
+     *
+     * @return list<Task>
+     */
+    public function findByHostObject(string $objectType, string $objectId): array;
 }

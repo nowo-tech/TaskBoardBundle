@@ -14,6 +14,7 @@ use SortDirection;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_boards')]
+#[ORM\Index(name: 'idx_task_board_boards_tenant', columns: ['tenant_key'])]
 class TaskBoard
 {
     #[ORM\Id]
@@ -28,6 +29,10 @@ class TaskBoard
 
     #[ORM\Column(name: 'archived_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $archivedAt = null;
+
+    /** Host tenant the board belongs to (`tenancy`); null: a board outside any tenant. */
+    #[ORM\Column(name: 'tenant_key', type: 'string', length: 191, nullable: true)]
+    private ?string $tenantKey = null;
 
     /** @var Collection<int, BoardColumn> */
     #[ORM\OneToMany(targetEntity: BoardColumn::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -125,6 +130,19 @@ class TaskBoard
         $this->team = $team;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function getTenantKey(): ?string
+    {
+        return $this->tenantKey;
+    }
+
+    public function setTenantKey(?string $tenantKey): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->tenantKey = $tenantKey;
 
         return $this;
     }

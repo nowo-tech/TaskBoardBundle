@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\DependencyInjection;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
+use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
@@ -17,13 +18,17 @@ use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskManager;
+use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
@@ -394,6 +399,45 @@ final class TaskBoardExtensionTest extends TestCase
         (new TaskBoardExtension())->prepend($container);
 
         self::assertSame([], $container->getExtensionConfig('nowo_tiptap_editor'));
+    }
+
+    public function testTenancyDecoratesTheRouterAndAliasesTheResolvers(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'tenancy'    => [
+                'enabled'      => true,
+                'resolver'     => 'app.tenant_resolver',
+                'tenant_paths' => [['path' => '/projects/{tenantSlug}/tasks', 'name_prefix' => 'app_project_']],
+            ],
+            'assignee_provider' => 'app.assignees',
+        ]], $container);
+
+        self::assertTrue($container->getParameter('nowo_task_board.tenancy.enabled'));
+        self::assertSame('app_project_', $container->getParameter('nowo_task_board.tenancy.tenant_paths')[0]['name_prefix']);
+        $decorator = $container->getDefinition(TenantPathUrlGenerator::class);
+        self::assertSame(['router', null, 0, ContainerInterface::IGNORE_ON_INVALID_REFERENCE], $decorator->getDecoratedService());
+        self::assertSame(TenantPathUrlGenerator::class . '.inner', (string) $decorator->getArgument('$inner'));
+        self::assertSame('app.tenant_resolver', (string) $container->getAlias(TaskBoardTenantResolverInterface::class));
+        self::assertSame('app.assignees', (string) $container->getAlias(TaskAssigneeProviderInterface::class));
+        self::assertArrayHasKey(TaskObjectLinkResolverInterface::class, $container->getAutoconfiguredInstanceof());
+        self::assertTrue($container->getAutoconfiguredInstanceof()[TaskObjectLinkResolverInterface::class]->hasTag('nowo_task_board.object_link_resolver'));
+    }
+
+    public function testWithoutTenancyTheRouterIsNotDecorated(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
+
+        // Excluded from the resource scan (kept as a "container.excluded" placeholder): no decorator.
+        self::assertTrue($container->getDefinition(TenantPathUrlGenerator::class)->hasTag('container.excluded'));
+        self::assertFalse($container->hasAlias(TaskAssigneeProviderInterface::class));
+        self::assertSame('nowo_task_board.tenant_resolver.slug', (string) $container->getAlias(TaskBoardTenantResolverInterface::class));
+        self::assertSame(SlugTaskBoardTenantResolver::class, $container->getDefinition('nowo_task_board.tenant_resolver.slug')->getClass());
+        self::assertFalse($container->getParameter('nowo_task_board.board.top_level_only'));
     }
 
     private function securedContainer(): ContainerBuilder

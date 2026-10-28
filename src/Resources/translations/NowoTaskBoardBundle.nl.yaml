@@ -179,3 +179,6 @@ task_board.history.type.link_updated: "heeft een link bijgewerkt"
 task_board.history.type.link_removed: "heeft een link verwijderd"
 task_board.history.type.member_added: "heeft een lid toegevoegd"
 task_board.history.type.member_removed: "heeft een lid verwijderd"
+task_board.link.host_object: "Gekoppeld item"
+task_board.flash.member_not_assignable: "Deze gebruiker kan niet aan de taken van dit bord worden toegevoegd."
+task_board.board.subtasks_count: '%done% van %total% subtaken klaar'

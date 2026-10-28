@@ -179,3 +179,6 @@ task_board.history.type.link_updated: "updated a link"
 task_board.history.type.link_removed: "removed a link"
 task_board.history.type.member_added: "added a member"
 task_board.history.type.member_removed: "removed a member"
+task_board.link.host_object: "Linked item"
+task_board.flash.member_not_assignable: "This user cannot be added to the tasks of this board."
+task_board.board.subtasks_count: '%done% of %total% subtasks done'

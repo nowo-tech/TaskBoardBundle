@@ -16,11 +16,13 @@
 {% block container_class %}container container-narrow{% endblock %}
 
 {% block body %}
+    {% block nowo_task_board_toolbar %}
     {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
         pageSubtitle: 'task_board.index.subtitle'|trans({}, 'NowoTaskBoardBundle'),
         dashboardRoute: dashboardRoute|default(null),
     }) }}
+    {% endblock %}
 
     {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
 

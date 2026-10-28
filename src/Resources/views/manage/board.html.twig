@@ -14,6 +14,7 @@
 {% block title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
 {% block body %}
+    {% block nowo_task_board_toolbar %}
     {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name,
         pageSubtitle: board.description,
@@ -32,8 +33,11 @@
         ',
         dashboardRoute: dashboardRoute|default(null),
     }) }}
+    {% endblock %}
 
-    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+    {% block nowo_task_board_flashes %}
+        {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+    {% endblock %}
 
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
@@ -52,79 +56,13 @@
             data-nowo-task-board-reorder-csrf-token-value="{{ csrf_token('task_board_column_reorder') }}"
             data-nowo-task-board-move-csrf-token-value="{{ csrf_token('task_board_task_move') }}"
         >
-            {% for column in board.columns %}
-                <section
-                    class="nowo-task-board__column"
-                    data-nowo-task-board-target="column"
-                    data-column-id="{{ column.id }}"
-                    {% if column.color|nowo_task_board_safe_color %}style="border-top: 3px solid {{ column.color|nowo_task_board_safe_color }}"{% endif %}
-                >
-                    <div
-                        class="nowo-task-board__column-header"
-                        data-column-handle
-                        draggable="true"
-                        title="{{ 'task_board.board.drag_column'|trans({}, 'NowoTaskBoardBundle') }}"
-                    >
-                        <span class="nowo-task-board__column-grip" aria-hidden="true">
-                            <i class="ti ti-grip-vertical"></i>
-                        </span>
-                        <h3 class="nowo-task-board__column-title">
-                            <span class="nowo-task-board__column-name">{{ column.name }}</span>
-                            <span
-                                class="nowo-task-board__column-count"
-                                aria-label="{{ 'task_board.board.column_task_count'|trans({'%count%': tasks|filter(t => t.column and t.column.id == column.id)|length}, 'NowoTaskBoardBundle') }}"
-                            >{{ tasks|filter(t => t.column and t.column.id == column.id)|length }}</span>
-                        </h3>
-                        <button
-                            type="button"
-                            class="nowo-task-board__column-edit"
-                            title="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
-                            aria-label="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
-                            data-action="click->nowo-task-board-edit-column-modal#open mousedown->nowo-task-board-edit-column-modal#stopDrag"
-                            data-column-id="{{ column.id }}"
-                            data-column-name="{{ column.name|e('html_attr') }}"
-                            data-column-color="{{ column.color|nowo_task_board_safe_color|default('#206bc4')|e('html_attr') }}"
-                        >
-                            <i class="ti ti-pencil" aria-hidden="true"></i>
-                        </button>
-                    </div>
-
-                    <ul class="nowo-task-board__task-list" data-nowo-task-board-target="taskList">
-                        {% for task in tasks %}
-                            {% if task.column and task.column.id == column.id %}
-                            <li
-                                class="nowo-task-board__task"
-                                draggable="true"
-                                data-nowo-task-board-target="task"
-                                data-task-id="{{ task.id }}"
-                                data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
-                            >
-                                <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title d-block mb-1">{{ task.title }}</a>
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <span class="badge bg-{{ task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) }}-lt text-{{ task.priority.value == 'urgent' ? 'red' : (task.priority.value == 'high' ? 'orange' : (task.priority.value == 'low' ? 'secondary' : 'blue')) }}">
-                                    {{ task.priority.value }}
-                                </span>
-                                {% if task.estimatedMinutes %}
-                                    <span class="text-secondary small"><i class="ti ti-clock"></i> {{ task.estimatedMinutes }}m</span>
-                                {% endif %}
-                            </div>
-                            {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'mt-2'}) }}
-                            </li>
-                            {% endif %}
-                        {% endfor %}
-                    </ul>
-
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn"
-                        data-action="click->nowo-task-board-add-task-modal#open"
-                        data-column-id="{{ column.id }}"
-                        data-column-name="{{ column.name|e('html_attr') }}"
-                    >
-                        <i class="ti ti-plus me-1"></i>{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                </section>
-            {% endfor %}
+            {% block nowo_task_board_columns %}
+                {% for column in board.columns %}
+                    {% block nowo_task_board_column %}
+                        {{ include('@NowoTaskBoardBundle/manage/_board_column.html.twig', {column: column}) }}
+                    {% endblock %}
+                {% endfor %}
+            {% endblock %}
 
             <div class="nowo-task-board__add-column">
                 <button

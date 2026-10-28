@@ -11,19 +11,36 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Event\AbstractTaskEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskCompletedEvent;
+use Nowo\TaskBoardBundle\Event\TaskCreatedEvent;
+use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
+use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
+use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function array_filter;
+use function array_keys;
 use function count;
 
+use const DATE_ATOM;
+
 /**
- * Creates and updates tasks on a board.
+ * Creates and updates tasks on a board; after each saved write it dispatches the task events (since 1.10:
+ * {@see TaskBoardEvents::TASK_CREATED}, TASK_UPDATED, TASK_MOVED, TASK_COMPLETED, TASK_REOPENED).
  */
 final readonly class TaskManager
 {
+    /**
+     * @param EventDispatcherInterface|null $eventDispatcher Dispatches the task events (none: no events)
+     */
     public function __construct(
         private TaskRepositoryInterface $taskRepository,
         private TaskChangeRecorder $changeRecorder,
+        private ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -47,6 +64,7 @@ final readonly class TaskManager
 
         $this->changeRecorder->recordCreated($task, $creator);
         $this->taskRepository->save($task);
+        $this->dispatch(new TaskCreatedEvent($task, $creator), TaskBoardEvents::TASK_CREATED);
 
         return $task;
     }
@@ -81,6 +99,22 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
 
         $this->taskRepository->save($task);
+
+        $changed = array_keys(array_filter([
+            'title'            => $oldTitle !== $task->getTitle(),
+            'description'      => $oldDescription !== $task->getDescription(),
+            'priority'         => $oldPriority !== $task->getPriority(),
+            'column'           => $oldColumn?->getId() !== $newColumn?->getId(),
+            'estimatedMinutes' => $oldEstimatedMinutes !== $task->getEstimatedMinutes(),
+            'dueAt'            => $oldDueAt?->format(DATE_ATOM) !== $task->getDueAt()?->format(DATE_ATOM),
+            'tags'             => $oldTags !== $task->getTags(),
+        ]));
+        if ($changed !== []) {
+            $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+        }
+        if ($oldColumn?->getId() !== $newColumn?->getId()) {
+            $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
+        }
     }
 
     public function updatePriority(Task $task, TaskPriority $priority, object $user): void
@@ -89,6 +123,9 @@ final readonly class TaskManager
         $task->setPriority($priority);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $priority);
         $this->taskRepository->save($task);
+        if ($oldPriority !== $priority) {
+            $this->dispatch(new TaskUpdatedEvent($task, $user, ['priority']), TaskBoardEvents::TASK_UPDATED);
+        }
     }
 
     /**
@@ -130,6 +167,23 @@ final readonly class TaskManager
         }
 
         $this->taskRepository->save($task);
+
+        if ($oldColumn?->getId() !== $column?->getId()) {
+            $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
+        }
+        if (!$wasCompleted && $task->isCompleted()) {
+            $this->dispatch(new TaskCompletedEvent($task, $user), TaskBoardEvents::TASK_COMPLETED);
+        } elseif ($wasCompleted && !$task->isCompleted()) {
+            $this->dispatch(new TaskReopenedEvent($task, $user), TaskBoardEvents::TASK_REOPENED);
+        }
+    }
+
+    /**
+     * Dispatches a task event (after the write was saved) when a dispatcher is wired.
+     */
+    private function dispatch(AbstractTaskEvent $event, string $eventName): void
+    {
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 
     public function getColumnNavigation(Task $task): TaskColumnNavigation
