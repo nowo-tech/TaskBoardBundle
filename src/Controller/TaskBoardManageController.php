@@ -851,6 +851,7 @@ final class TaskBoardManageController extends AbstractController
             $this->denyOnRootErrors($form);
             /** @var TaskCommentFormData $data */
             $data = $form->getData();
+            // @igor-ignore - HTTP handler delegates to services; no controller worker state.
             $this->saveComment($form->isValid(), static fn (): mixed => $manager->add($task, $user, $data->body, $data->mentionIds()), 'task_board.flash.comment_added');
         }
 
