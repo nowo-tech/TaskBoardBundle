@@ -18,6 +18,8 @@ describe('compareRows', () => {
     it('keeps the board order for equal rows and an unknown key', () => {
         expect(compareRows(row('x', 'odd', '', 'a', 3), row('x', 'odd2', '', 'a', 1), 'priority')).toBe(2);
         expect(compareRows(row('x', 'low', '', 'a', 0), row('x', 'odd', '', 'a', 1), 'priority')).toBeLessThan(0);
+        expect(compareRows(row('x', 'low', '', 'a', 0), row('y', 'low', '2026-01-01', 'b', 1), 'due')).toBe(1);
+        expect(compareRows(row('x', 'low', '2026-02-01', 'a', 0), row('y', 'low', '2026-01-01', 'b', 1), 'due')).toBe(1);
         expect(compareRows(row('x', 'low', '', 'a', 3), row('y', 'low', '', 'b', 1), '')).toBe(2);
         expect(compareRows(row('x', 'low', '2026-01-01', 'a', 0), row('y', 'low', '2026-01-01', 'b', 1), 'due')).toBe(-1);
         expect(compareRows(row('x', 'low', '2026-01-01', 'a', 0), row('y', 'low', '', 'b', 1), 'due')).toBe(-1);

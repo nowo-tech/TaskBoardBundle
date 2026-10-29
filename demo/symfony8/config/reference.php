@@ -1374,6 +1374,22 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/panel"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_panel"
  *         },
+ *         task_dependency?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/dependency"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_dependency"
+ *         },
+ *         task_dependency_remove?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_dependency_remove"
+ *         },
+ *         task_time?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time"
+ *         },
+ *         task_time_remove?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time/{entryId}/remove"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time_remove"
+ *         },
  *     },
  *     templates?: array{
  *         layout?: scalar|Param|null, // Twig layout extended by manage pages via global nowo_task_board_layout (REQ-UI-001). Host apps set this to the project layout or a one-file bridge. Default is the bundle demo layout (Tabler CDN). // Default: "@NowoTaskBoardBundle/layout.html.twig"
@@ -1409,6 +1425,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         }>,
  *         column_icons?: list<scalar|Param|null>,
  *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
+ *     },
+ *     gantt?: array{ // Gantt view (since 1.15).
+ *         week_start?: "monday"|"sunday"|Param, // First day of the week: the Weeks scale columns and the week separators of the Days scale. // Default: "monday"
+ *         week_start_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface answering the week start per request (e.g. a user preference). null = week_start. // Default: null
  *     },
  * }
  * @psalm-type NowoUiKitConfig = array{

@@ -110,7 +110,7 @@ final class TaskDependencyManagerTest extends TestCase
     public function testRefusesALongerCycleButAcceptsAChain(): void
     {
         [$a, $b, $c, $d, $e] = $this->tasks('A', 'B', 'C', 'D', 'E');
-        $manager         = $this->manager();
+        $manager             = $this->manager();
         $manager->add($a, $b, TaskDependencyType::Blocks, $this->user);
         $manager->add($c, $b, TaskDependencyType::BlockedBy, $this->user);
         // A diamond and a related link are no cycle.
