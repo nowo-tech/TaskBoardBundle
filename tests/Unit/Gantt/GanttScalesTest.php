@@ -211,6 +211,7 @@ final class GanttScalesTest extends TestCase
 
         $task->setStartAt(null);
         self::assertSame('2026-09-01', $task->getPlannedStart()->format('Y-m-d'));
+        self::assertSame($task->getCreatedAt(), $task->getPlannedStart());
     }
 
     public function testScaleAndWeekStartValues(): void

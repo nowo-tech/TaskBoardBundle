@@ -109,7 +109,7 @@ final class TaskDependencyManagerTest extends TestCase
 
     public function testRefusesALongerCycleButAcceptsAChain(): void
     {
-        [$a, $b, $c, $d] = $this->tasks('A', 'B', 'C', 'D');
+        [$a, $b, $c, $d, $e] = $this->tasks('A', 'B', 'C', 'D', 'E');
         $manager         = $this->manager();
         $manager->add($a, $b, TaskDependencyType::Blocks, $this->user);
         $manager->add($c, $b, TaskDependencyType::BlockedBy, $this->user);
@@ -117,6 +117,8 @@ final class TaskDependencyManagerTest extends TestCase
         $manager->add($a, $d, TaskDependencyType::Blocks, $this->user);
         $manager->add($d, $c, TaskDependencyType::Blocks, $this->user);
         $manager->add($c, $a, TaskDependencyType::Related, $this->user);
+        // E blocks A: the search from A walks the diamond (C reached twice) without finding E.
+        $manager->add($e, $a, TaskDependencyType::Blocks, $this->user);
 
         $this->assertRefused(InvalidTaskDependencyException::REASON_CYCLE, fn (): mixed => $manager->add($c, $a, TaskDependencyType::Blocks, $this->user));
     }
