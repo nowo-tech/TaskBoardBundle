@@ -22,6 +22,8 @@ final class TaskMemberFormTypeTest extends TestCase
         (new TaskMemberFormType())->configureOptions($resolver);
 
         self::assertNull($resolver->resolve(['user_class' => stdClass::class])['user_choices']);
+        // 1.16.1: no property by default — the options show the person's name (UserLabel::option).
+        self::assertNull($resolver->resolve(['user_class' => stdClass::class])['user_choice_label']);
         $users = [new stdClass()];
         self::assertSame($users, $resolver->resolve(['user_class' => stdClass::class, 'user_choices' => $users])['user_choices']);
 

@@ -1374,6 +1374,18 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/panel"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_panel"
  *         },
+ *         task_comment?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/comment"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_comment"
+ *         },
+ *         task_comment_edit?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/comment/{commentId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_comment_edit"
+ *         },
+ *         task_comment_delete?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/comment/{commentId}/delete"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_comment_delete"
+ *         },
  *         task_dependency?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/dependency"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_dependency"
@@ -1425,6 +1437,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         }>,
  *         column_icons?: list<scalar|Param|null>,
  *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
+ *     },
+ *     comments?: array{ // Task comments and @mentions (since 1.16).
+ *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment. // Default: true
+ *         mention_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface: who may be @mentioned (the people who can read the task). null = the board's assignable users, else its creator and task members. // Default: null
  *     },
  *     gantt?: array{ // Gantt view (since 1.15).
  *         week_start?: "monday"|"sunday"|Param, // First day of the week: the Weeks scale columns and the week separators of the Days scale. // Default: "monday"

@@ -8,6 +8,7 @@ use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
@@ -29,8 +30,9 @@ final class TaskMemberFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $userOptions = [
-            'class'        => $options['user_class'],
-            'choice_label' => $options['user_choice_label'],
+            'class' => $options['user_class'],
+            // Since 1.16.1 the person's name (e-mail after it), unless the host names a property or a callable.
+            'choice_label' => $options['user_choice_label'] ?? UserLabel::option(...),
             'label'        => 'task_board.form.member.user',
             'constraints'  => [new NotBlank()],
         ];
@@ -50,7 +52,7 @@ final class TaskMemberFormType extends AbstractType
         $resolver->setRequired(['user_class']);
         $resolver->setDefaults([
             'data_class'         => TaskMemberFormData::class,
-            'user_choice_label'  => 'email',
+            'user_choice_label'  => null,
             'user_choices'       => null,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);

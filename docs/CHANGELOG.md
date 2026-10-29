@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.16.1] - 2026-10-29](#1161---2026-10-29)
 - [[1.16.0] - 2026-10-29](#1160---2026-10-29)
 - [[1.15.0] - 2026-10-29](#1150---2026-10-29)
 - [[1.14.1] - 2026-10-29](#1141---2026-10-29)
@@ -52,6 +53,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.16.1] - 2026-10-29
+
+Fixes from a host UX audit (phone layouts, contrast, tap targets). No schema change, no API change.
+
+### Fixed
+
+- **Gantt**: the grid is as wide as its timeline (`width: max-content`), so the sticky title column stays in view once
+  the chart opens on today (it only measured the visible width and scrolled away). A completed task's title cell
+  loses its `opacity: 0.75` — the bars no longer show through the sticky cell; the title is already dimmed.
+- **List filters**: the label rules (`.nowo-task-board-list-filters label`, the checkbox label `display: inline`) are
+  wrapped in `:where()` (no specificity), so a host form theme's checkbox label keeps its box beside its text.
+- **Task detail**: the attributes stack (label above value) when the attribute grid is narrower than 30rem — a
+  container query (`container: nowo-task-attrs`), so a drawer on a phone no longer lets the estimate input overflow.
+  A deviation duration ("0 min") stays on one line.
+- **List groups**: the column name reads in the text colour on a lightly tinted chip with a column-colour dot
+  (WCAG AA whatever the column colour; light colours as text fell to 3.3:1).
+- **Tap targets on phones** (≤ 640px): column edit button, a tag's remove button in the task detail and the dialog
+  close button are at least 32×32px; dialog footer buttons are at least 32px high everywhere.
+- **People dialog**: the person picker shows the person's name with the e-mail after it ("Ada Lovelace
+  (ada@example.com)", `UserLabel::option()`; the `user_choice_label` option now defaults to `null` = that label, a
+  property path or callable still overrides it), and Close / Add member share the dialog footer like the other
+  dialogs (the submit button names the add form with `form="nowo-task-members-add-<task id>"`).
 
 ## [1.16.0] - 2026-10-29
 

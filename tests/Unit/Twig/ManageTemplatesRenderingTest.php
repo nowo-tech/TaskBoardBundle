@@ -218,7 +218,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-nowo-task-board-task-members-modal-target="modal"', $html);
         self::assertStringContainsString('class="nowo-task-members__item"', $html);
         self::assertStringContainsString('class="nowo-task-members__role nowo-task-members__role--assignee"', $html);
-        self::assertStringContainsString('class="nowo-task-members__add"', $html);
+        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
+        // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form.
+        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__actions">\s*<button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="btn btn-primary nowo-task-members__add-button">/', $html);
         self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);

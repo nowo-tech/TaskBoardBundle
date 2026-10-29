@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.16.1](#to-1161)
 - [To 1.16.0](#to-1160)
 - [To 1.15.0](#to-1150)
 - [To 1.14.1](#to-1141)
@@ -92,6 +93,18 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.16.1
+
+From **1.16.0**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change.
+
+- Host CSS that patched the Gantt sticky column, the list filter checkbox labels, the task attributes on phones or
+  the deviation durations can go: `task-board.css` now does it.
+- The list filter label rules have no specificity (`:where()`): a host rule of any specificity on those labels wins.
+- The people dialog's person options read the name (then the e-mail). To keep e-mails only, pass
+  `user_choice_label: 'email'` to `TaskMemberFormType`. The Add member button moved from the add form row to the
+  dialog footer (`form="nowo-task-members-add-<task id>"`); a host override of `_task_members_modal.html.twig` should
+  follow.
 
 ## To 1.16.0
 

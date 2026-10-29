@@ -179,7 +179,9 @@ body.modal-open {
     margin-bottom: 1rem;
 }
 
-.nowo-task-board-list-filters label {
+/* Since 1.16.1 without specificity (:where): a host form theme's own label (e.g. a checkbox label with its box beside
+ * its text) keeps its layout; only unstyled labels stack above their field. */
+:where(.nowo-task-board-list-filters) label {
     display: flex;
     flex-direction: column;
     font-size: 0.875rem;
@@ -691,9 +693,12 @@ button.nowo-task-detail__priority-tag:hover {
     max-height: 72vh;
 }
 
+/* Since 1.16.1 as wide as its timeline (max-content): measured only to the visible width, the grid let the sticky
+ * title column scroll away once the chart was opened on today. */
 .nowo-task-gantt__grid {
     display: grid;
     grid-template-columns: var(--gantt-label-width) max-content;
+    width: max-content;
     min-width: 100%;
 }
 
@@ -773,10 +778,6 @@ button.nowo-task-detail__priority-tag:hover {
     padding: 0.35rem 0.75rem;
     border-bottom: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
     font-size: 0.875rem;
-}
-
-.nowo-task-gantt__label-cell.is-completed {
-    opacity: 0.75;
 }
 
 .nowo-task-gantt__track-row {
@@ -1124,6 +1125,7 @@ button.nowo-task-detail__priority-tag:hover {
 }
 
 .nowo-task-detail__attrs {
+    container: nowo-task-attrs / inline-size;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
     column-gap: 1.5rem;
@@ -1161,6 +1163,20 @@ button.nowo-task-detail__priority-tag:hover {
 .nowo-task-detail__attr input:not([type='hidden']),
 .nowo-task-detail__attr select {
     max-width: 14rem;
+}
+
+/* Since 1.16.1 a narrow detail (drawer on a phone): the label above its value, so wide fields (an estimate input with
+ * a minimum width) stay inside the panel. */
+@container nowo-task-attrs (max-width: 30rem) {
+    .nowo-task-detail__attr {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.35rem;
+    }
+
+    .nowo-task-detail__attr input:not([type='hidden']),
+    .nowo-task-detail__attr select {
+        max-width: 100%;
+    }
 }
 
 .nowo-task-detail__people {
@@ -1665,18 +1681,29 @@ details.nowo-task-section[open] > summary,
     border-bottom-right-radius: inherit;
 }
 
+/* Since 1.16.1 the column colour is a dot and the chip tint; the name reads in the text colour (WCAG AA whatever the
+ * column colour: a light colour as text fell to 3.3:1). */
 .nowo-task-list__group-name {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     padding: 0.15rem 0.6rem;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--nowo-task-column-color) 18%, var(--nowo-task-surface, var(--tblr-bg-surface, #fff)));
-    color: var(--nowo-task-column-color);
+    background: color-mix(in srgb, var(--nowo-task-column-color) 12%, var(--nowo-task-surface, var(--tblr-bg-surface, #fff)));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+}
+
+.nowo-task-list__group-name::before {
+    content: '';
+    flex: none;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: var(--nowo-task-column-color);
 }
 
 .nowo-task-list__group-count {
@@ -2328,7 +2355,7 @@ dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
 
 .nowo-task-members__add {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     align-items: end;
     gap: 0.75rem;
     margin: 0;
@@ -2491,9 +2518,10 @@ dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
     align-self: center;
 }
 
-.nowo-task-board-list-filters .nowo-task-check label,
-.nowo-task-board-list-filters label.nowo-task-check__label {
+:where(.nowo-task-board-list-filters .nowo-task-check) label {
     display: inline;
+    flex-direction: row;
+    align-items: center;
     min-width: 0;
     margin: 0;
     font-weight: 500;
@@ -2645,6 +2673,11 @@ dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
 
 .nowo-task-deviation__table {
     margin-bottom: 0.75rem;
+}
+
+/* Since 1.16.1 a duration ("0 min", "1 h 30 min") stays on one line. */
+.nowo-task-deviation__table td {
+    white-space: nowrap;
 }
 
 .nowo-task-dependencies__item,
@@ -3034,4 +3067,53 @@ details.nowo-task-section > summary {
 
 .nowo-task-list__comments {
     margin-inline-start: 0.4rem;
+}
+
+/*
+ * Since 1.16.1 — phone tap targets of at least 32px (column edit, a tag's remove button, the dialog footer buttons);
+ * the people dialog's Close and Add member share the footer like the other dialogs.
+ */
+.nowo-task-dialog--native .nowo-task-dialog__actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+}
+
+@media (max-width: 640px) {
+    .nowo-task-board__column-edit {
+        min-width: 2rem;
+        min-height: 2rem;
+    }
+
+    .nowo-task-detail .tagify__tag__removeBtn {
+        width: 2rem;
+        height: 2rem;
+        margin-block: -0.5rem;
+        background: transparent;
+    }
+
+    .nowo-task-detail .tagify__tag__removeBtn::after {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50px;
+        background: var(--tag-remove-btn-bg);
+    }
+
+    .nowo-task-detail .tagify__tag__removeBtn:hover {
+        background: transparent;
+    }
+
+    .nowo-task-detail .tagify__tag__removeBtn:hover::after {
+        background: var(--tag-remove-btn-bg--hover);
+    }
+
+    .nowo-task-dialog__close {
+        min-width: 2rem;
+        min-height: 2rem;
+    }
 }

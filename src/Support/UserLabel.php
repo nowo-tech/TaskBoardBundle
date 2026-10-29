@@ -30,4 +30,19 @@ final class UserLabel
 
         return '#' . (is_scalar($id) ? (string) $id : '?');
     }
+
+    /**
+     * Since 1.16.1: a person picker option — the name, with the e-mail after it when the name is not the e-mail
+     * ("Ada Lovelace (ada@example.com)"), so two people with the same name stay apart.
+     */
+    public static function option(object $user): string
+    {
+        $name  = self::of($user);
+        $email = method_exists($user, 'getEmail') ? $user->getEmail() : ($user->email ?? null);
+        if (!is_string($email) || trim($email) === '' || trim($email) === $name) {
+            return $name;
+        }
+
+        return $name . ' (' . trim($email) . ')';
+    }
 }

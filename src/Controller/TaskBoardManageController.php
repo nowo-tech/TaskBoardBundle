@@ -1392,9 +1392,8 @@ final class TaskBoardManageController extends AbstractController
     private function createMemberForm(TaskBoard $board): FormInterface
     {
         return $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
-            'user_class'        => $this->userClass,
-            'user_choice_label' => 'email',
-            'user_choices'      => $this->memberAssigner->assignableUsers($board),
+            'user_class'   => $this->userClass,
+            'user_choices' => $this->memberAssigner->assignableUsers($board),
         ]);
     }
 

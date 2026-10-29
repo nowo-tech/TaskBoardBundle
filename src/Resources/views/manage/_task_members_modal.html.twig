@@ -2,7 +2,8 @@
 
 {#
     "Manage people" dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal): the members
-    as a list (avatar initial, name, role, remove button on one line) and the add form as one row (person, role, add).
+    as a list (avatar initial, name, role, remove button on one line) and the add form as one row (person, role). Since
+    1.16.1 Close and Add member share the footer, like the other dialogs (the submit button names its form).
 #}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
@@ -47,7 +48,7 @@
 
         <section class="nowo-task-dialog__section" aria-labelledby="nowo-task-board-task-members-add">
             <h3 class="nowo-task-dialog__section-title" id="nowo-task-board-task-members-add">{{ 'task_board.task.add_member'|trans({}, 'NowoTaskBoardBundle') }}</h3>
-            {{ form_start(memberForm, {action: path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))), method: 'POST', attr: {class: 'nowo-task-members__add'}}) }}
+            {{ form_start(memberForm, {action: path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))), method: 'POST', attr: {class: 'nowo-task-members__add', id: 'nowo-task-members-add-' ~ task.id}}) }}
                 <div class="nowo-task-field nowo-task-members__add-user">
                     {{ form_label(memberForm.user) }}
                     {{ form_widget(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}}) }}
@@ -58,9 +59,6 @@
                     {{ form_widget(memberForm.memberRole) }}
                     {{ form_errors(memberForm.memberRole) }}
                 </div>
-                <button type="submit" class="btn btn-primary nowo-task-members__add-button">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
-                </button>
                 {% for child in memberForm %}
                     {% if not child.rendered %}
                         {{ form_row(child) }}
@@ -72,6 +70,9 @@
         <div class="nowo-task-dialog__actions">
             <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">
                 {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+            <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="btn btn-primary nowo-task-members__add-button">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>
     </div>
