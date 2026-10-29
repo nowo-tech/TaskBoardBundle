@@ -810,8 +810,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         // An invalid form, an empty body, an unsubmitted form.
         $request = Request::create('/', 'POST');
         $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData(''), formValid: false, currentRequest: $request)->addComment($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.comment_invalid'], $request->getSession()->getFlashBag()->get('error'));
         $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('   '), currentRequest: $request)->addComment($this->task->getId(), $request);
-        self::assertSame(['task_board.flash.comment_invalid', 'task_board.flash.comment_invalid'], $request->getSession()->getFlashBag()->get('error'));
+        self::assertSame(['task_board.flash.comment_invalid'], $request->getSession()->getFlashBag()->get('error'));
         $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher())->addComment($this->task->getId(), Request::create('/', 'POST'));
         self::assertCount(1, $this->comments);
 
