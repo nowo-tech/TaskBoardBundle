@@ -11,6 +11,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -22,6 +23,9 @@ use function strtolower;
 #[ORM\Index(name: 'task_board_tasks_board_idx', columns: ['board_id'])]
 class Task
 {
+    /** Since 1.16: the longest title (column length); longer ones are cut. */
+    public const TITLE_MAX = 255;
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -108,7 +112,9 @@ class Task
         #[ORM\Column(type: 'json')]
         private array $tags = [],
     ) {
-        $this->id                   = Uuid::generate()->toString();
+        $this->id = Uuid::generate()->toString();
+        // Since 1.16: cut to the column (VARCHAR(255)) whatever the caller (imports, host integrations).
+        $this->title                = Text::cut($title, self::TITLE_MAX);
         $this->createdAt            = new DateTimeImmutable();
         $this->updatedAt            = new DateTimeImmutable();
         $this->tags                 = $this->normalizeTags($tags);
@@ -140,7 +146,7 @@ class Task
     public function setTitle(string $title): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->title = $title;
+        $this->title = Text::cut($title, self::TITLE_MAX);
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 

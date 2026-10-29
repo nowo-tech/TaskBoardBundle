@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.16.0](#to-1160)
 - [To 1.15.0](#to-1150)
 - [To 1.14.1](#to-1141)
 - [To 1.14.0](#to-1140)
@@ -91,6 +92,36 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.16.0
+
+From **1.15.x**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`.
+
+**Schema change (every host):** the task comments table. Generate and run a migration
+(`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply (MySQL; `user` is your
+user table):
+
+```sql
+CREATE TABLE task_board_task_comments (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, edited_at DATETIME DEFAULT NULL, deleted_at DATETIME DEFAULT NULL, mentions JSON NOT NULL, body LONGTEXT NOT NULL, task_id VARCHAR(36) NOT NULL, author_id INT NOT NULL, INDEX IDX_BC3E8197F675F31B (author_id), INDEX task_board_task_comments_task_idx (task_id, created_at), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E81978DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197F675F31B FOREIGN KEY (author_id) REFERENCES user (id) ON DELETE CASCADE;
+```
+
+The demo ships it as `demo/symfony8/migrations/Version20261101120000.php`.
+
+Then check these if they apply to you:
+
+- **Readers comment by default** (`comments.readers_can_comment: true`): set it to `false` to keep comments to the
+  people who may edit the task.
+- **Who can be @mentioned**: implement `Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface` (the
+  people who can read the task) and set `comments.mention_resolver`; the default offers the board's assignable users.
+- **Notifications**: listen to `TaskBoardEvents::TASK_MENTION` / `TASK_COMMENT`; the bundle sends nothing itself.
+- **Routes**: three new manage routes (`task_comment`, `task_comment_edit`, `task_comment_delete`).
+- **Overrides of `_task_history_section.html.twig`** get `comments`, `commentForm`, `commentEditForms`,
+  `commentDeletable`, `commentDeleteForm`, `mentionCandidates` and `viewerId`; the new partials are
+  `_task_comment.html.twig` and `_task_comment_box.html.twig`.
+- **`ux_icon` hosts** import `tabler:message-circle`.
+- **Titles and labels** given by code are now cut to their column instead of failing.
 
 ## To 1.15.0
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.16.0] - 2026-10-29](#1160---2026-10-29)
 - [[1.15.0] - 2026-10-29](#1150---2026-10-29)
 - [[1.14.1] - 2026-10-29](#1141---2026-10-29)
 - [[1.14.0] - 2026-10-28](#1140---2026-10-28)
@@ -51,6 +52,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.16.0] - 2026-10-29
+
+Task comments with @mentions (ClickUp-like activity), and titles / labels cut to their column at the service level.
+**Schema change**: one new table (see UPGRADING).
+
+### Added
+
+- **Comments** (`TaskComment`, table `task_board_task_comments`: task, author, plain-text body with line breaks,
+  created / edited / deleted dates, the mentions): a comment box closes the activity stream of the task detail and
+  panel; comments are interleaved with the history in time order, with a **All activity / Comments** toggle.
+  Authors edit their comments in place; the author or an editor of the task deletes one (soft delete: "Comment
+  deleted" keeps its place). Routes `task_comment`, `task_comment_edit`, `task_comment_delete` (CSRF, length 5000,
+  `TASK_ACCESS_CHECK`); the authors are fetched with the comments (`TaskCommentRepositoryInterface::findByTask()`).
+- **Readers may comment**: `nowo_task_board.comments.readers_can_comment` (default **true**, like ClickUp guests with
+  comment rights): someone who may read a task but not edit it (a read-only board) still comments; `false` keeps
+  comments to editors.
+- **@mentions**: typing `@` in a comment lists the people who can read the task (↑ ↓, Enter / Tab, Escape;
+  `role="combobox"` with `aria-activedescendant`, the `nowo-task-board-mention` controller). The mentions are stored
+  structured (ids and names of valid candidates still named in the text; anything else stays plain text), shown as
+  chips, and a comment that mentions the viewer is highlighted. Who can be mentioned comes from
+  `TaskMentionCandidatesResolverInterface` (`comments.mention_resolver`; default: the board's assignable users, else
+  its creator and task members).
+- **Events** after flush: `TaskBoardEvents::TASK_COMMENT` (`TaskCommentEvent`, created / edited) and
+  `TASK_MENTION` (`TaskMentionEvent`: the task, the comment and the people mentioned — on an edit only the ones it
+  adds; never the author).
+- **Counts**: the comment count on the board cards and in the list rows (`commentCounts`, one query per page).
+- Tokens `--nowo-task-mention-bg`, `--nowo-task-mention-ink`, `--nowo-task-mention-me`; Twig function
+  `nowo_task_board_comment_body(comment, viewerId)`.
+
+### Fixed
+
+- A label or a title longer than its column given by code (`TaskLinkAttacher::attachObject()`,
+  `TaskLink::forHostObject()`, `new TaskLink()`, `new Task()` / `setTitle()`, board and column names) was a
+  "Data too long" 500: the entities cut them to the column (`Support\Text::cut()`).
 
 ## [1.15.0] - 2026-10-29
 

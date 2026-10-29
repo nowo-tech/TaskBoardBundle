@@ -1,13 +1,30 @@
 {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
 
-{# Since 1.12: the activity stream (who did what, when) closing the task detail. #}
-<details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__history" open>
+{#
+    Since 1.12: the activity stream (who did what, when) closing the task detail. Since 1.16 the comments are
+    interleaved with the history in time order, a "Comments / All activity" toggle (ClickUp-like) shows only the
+    comments, and the comment box with @mentions closes the stream.
+#}
+{% set _comments = comments|default([]) %}
+{% set _stream = task.changeHistory|map(e => {kind: 'history', at: e.createdAt, entry: e})|merge(_comments|map(c => {kind: 'comment', at: c.createdAt, entry: c}))|sort((a, b) => a.at <=> b.at) %}
+<details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__history" open data-controller="nowo-task-board-activity-filter">
     <summary class="nowo-task-section__header nowo-task-detail__relation-summary" data-controller="disclosure-icon">
         {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}
         <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'history'}) }}{{ 'task_board.task.history'|trans({}, 'NowoTaskBoardBundle') }}</span>
+        {% if _comments|filter(c => not c.deleted)|length > 0 %}<span class="nowo-task-section__count" title="{{ 'task_board.comment.count'|trans({}, 'NowoTaskBoardBundle') }}">{{ _comments|filter(c => not c.deleted)|length }}</span>{% endif %}
     </summary>
-    <ol class="nowo-task-activity">
-        {% for entry in task.changeHistory %}
+    {% if commentForm is defined and (commentForm or _comments is not empty) %}
+        <div class="nowo-task-activity__filter" role="group" aria-label="{{ 'task_board.comment.filter'|trans({}, 'NowoTaskBoardBundle') }}">
+            <button type="button" class="nowo-task-activity__filter-btn" aria-pressed="true" data-filter="all" data-action="nowo-task-board-activity-filter#show" data-nowo-task-board-activity-filter-target="button">{{ 'task_board.comment.filter_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="button" class="nowo-task-activity__filter-btn" aria-pressed="false" data-filter="comments" data-action="nowo-task-board-activity-filter#show" data-nowo-task-board-activity-filter-target="button">{{ 'task_board.comment.filter_comments'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        </div>
+    {% endif %}
+    <ol class="nowo-task-activity" data-nowo-task-board-activity-filter-target="list">
+        {% for item in _stream %}
+            {% if item.kind == 'comment' %}
+                {{ include('@NowoTaskBoardBundle/manage/_task_comment.html.twig', {comment: item.entry}) }}
+            {% else %}
+            {% set entry = item.entry %}
             {% set changeKey = 'task_board.history.type.' ~ entry.changeType.value %}
             <li class="nowo-task-activity__item nowo-task-detail__history-item">
                     <span class="nowo-task-detail__history-avatar" aria-hidden="true">
@@ -107,8 +124,22 @@
                         <time class="nowo-task-activity__time" datetime="{{ entry.createdAt|date('c') }}">{{ entry.createdAt|date('Y-m-d H:i') }}</time>
                     </div>
             </li>
+            {% endif %}
         {% else %}
             <li class="nowo-task-activity__item nowo-task-detail__empty">{{ 'task_board.task.no_history'|trans({}, 'NowoTaskBoardBundle') }}</li>
         {% endfor %}
     </ol>
+    {% if commentDeleteForm is defined and commentDeleteForm %}
+        {# REQ-TWIG-005: CSRF-only form; each delete button sets its own formaction. #}
+        {{ form_start(commentDeleteForm, {action: '#', attr: {id: 'nowo-task-comment-delete-form', hidden: 'hidden'}}) }}
+            {% for child in commentDeleteForm %}
+                {% if not child.rendered %}
+                    {{ form_row(child) }}
+                {% endif %}
+            {% endfor %}
+        {{ form_end(commentDeleteForm) }}
+    {% endif %}
+    {% if commentForm|default(null) %}
+        {{ include('@NowoTaskBoardBundle/manage/_task_comment_box.html.twig', {form: commentForm, submitLabel: 'task_board.comment.add'}) }}
+    {% endif %}
 </details>

@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
@@ -53,6 +54,7 @@ final readonly class TaskBoardMetadataListener
             TaskDocument::class      => ['creator'],
             TaskTimeEntry::class     => ['user'],
             ColumnSet::class         => ['createdBy'],
+            TaskComment::class       => ['author'],
         ];
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {

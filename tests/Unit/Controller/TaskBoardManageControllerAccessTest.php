@@ -6,10 +6,13 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Controller;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Comment\MentionCandidate;
+use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
@@ -17,6 +20,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
@@ -36,6 +40,7 @@ use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
@@ -45,6 +50,7 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
@@ -116,6 +122,11 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     /** @var list<Task> Since 1.15: more tasks the repository knows (dependency targets). */
     private array $extraTasks = [];
 
+    /** @var array<string, TaskComment> Since 1.16: the comments the comment repository holds. */
+    private array $comments = [];
+
+    private ?TaskCommentRepositoryInterface $commentRepositoryMock = null;
+
     protected function setUp(): void
     {
         $this->owner    = new TestUser('1', 'owner@example.com');
@@ -156,6 +167,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         yield 'remove dependency' => ['removeDependency', ['task', 'dependency', 'request'], []];
         yield 'log time' => ['logTime', ['task', 'request'], []];
         yield 'remove time entry' => ['removeTimeEntry', ['task', 'entry', 'request'], []];
+        yield 'comment' => ['addComment', ['task', 'request'], []];
+        yield 'edit comment' => ['editComment', ['task', 'comment', 'request'], []];
+        yield 'delete comment' => ['deleteComment', ['task', 'comment', 'request'], []];
     }
 
     /**
@@ -183,7 +197,8 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     public static function writeActions(): iterable
     {
         foreach (self::foreignBoardActions() as $name => $case) {
-            if (!in_array($case[0], ['board', 'listView', 'ganttView', 'task', 'taskPanel'], true)) {
+            // Since 1.16 readers may comment (readers_can_comment): the comment actions have their own tests.
+            if (!in_array($case[0], ['board', 'listView', 'ganttView', 'task', 'taskPanel', 'addComment', 'editComment', 'deleteComment'], true)) {
                 yield $name => $case;
             }
         }
@@ -781,6 +796,105 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(['task_board.flash.task_invalid'], $request->getSession()->getFlashBag()->get('error'));
     }
 
+    /**
+     * Since 1.16: a reader comments (readers_can_comment), only the author edits, the author or an editor deletes.
+     */
+    public function testCommentsByReadersAuthorsAndEditors(): void
+    {
+        $request = Request::create('/', 'POST');
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('Hi @owner', '[{"id":"1","label":"owner"}]'), currentRequest: $request)->addComment($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.comment_added'], $request->getSession()->getFlashBag()->get('success'));
+        $comment = array_values($this->comments)[0];
+        self::assertSame(['1'], $comment->getMentionedIds());
+
+        // An invalid form, an empty body, an unsubmitted form.
+        $request = Request::create('/', 'POST');
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData(''), formValid: false, currentRequest: $request)->addComment($this->task->getId(), $request);
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('   '), currentRequest: $request)->addComment($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.comment_invalid', 'task_board.flash.comment_invalid'], $request->getSession()->getFlashBag()->get('error'));
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher())->addComment($this->task->getId(), Request::create('/', 'POST'));
+        self::assertCount(1, $this->comments);
+
+        // The author edits; the owner (an editor) may not edit someone else's comment, but may delete it.
+        $request = Request::create('/', 'POST');
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('Edited'), currentRequest: $request)->editComment($this->task->getId(), $comment->getId(), $request);
+        self::assertSame('Edited', $comment->getBody());
+        self::assertSame(['task_board.flash.comment_updated'], $request->getSession()->getFlashBag()->get('success'));
+        try {
+            $this->controller($this->owner, formData: new TaskCommentFormData('Hijack'))->editComment($this->task->getId(), $comment->getId(), Request::create('/', 'POST'));
+            self::fail('AccessDeniedException expected');
+        } catch (AccessDeniedException) {
+        }
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher())->editComment($this->task->getId(), $comment->getId(), Request::create('/', 'POST'));
+
+        $request = Request::create('/', 'POST', ['_token' => 'ok']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request)->deleteComment($this->task->getId(), $comment->getId(), $request);
+        self::assertTrue($comment->isDeleted());
+        self::assertSame(['task_board.flash.comment_deleted'], $request->getSession()->getFlashBag()->get('success'));
+
+        // A deleted or unknown comment is not found.
+        $this->expectException(NotFoundHttpException::class);
+        $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('again'))->editComment($this->task->getId(), $comment->getId(), Request::create('/', 'POST'));
+    }
+
+    public function testReadersCannotCommentWhenTheOptionIsOffNorDeleteOthersComments(): void
+    {
+        try {
+            $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('x'), readersCanComment: false)->addComment($this->task->getId(), Request::create('/', 'POST'));
+            self::fail('AccessDeniedException expected');
+        } catch (AccessDeniedException) {
+        }
+
+        $byOwner                           = new TaskComment($this->task, $this->owner, 'Owner note');
+        $this->comments[$byOwner->getId()] = $byOwner;
+        try {
+            $this->controller($this->attacker, realFormFactory: $this->realFormFactory(), dispatcher: $this->readOnlyDispatcher())->deleteComment($this->task->getId(), $byOwner->getId(), Request::create('/', 'POST', ['_token' => 'ok']));
+            self::fail('AccessDeniedException expected');
+        } catch (AccessDeniedException) {
+        }
+
+        try {
+            $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), formData: new TaskCommentFormData('x'), rootError: true)->addComment($this->task->getId(), Request::create('/', 'POST'));
+            self::fail('AccessDeniedException expected');
+        } catch (AccessDeniedException) {
+        }
+
+        $other                             = new Task(new TaskBoard('Other', 'other', $this->owner), 'Elsewhere', $this->owner);
+        $foreign                           = new TaskComment($other, $this->owner, 'x');
+        $this->comments[$foreign->getId()] = $foreign;
+        $this->expectException(NotFoundHttpException::class);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->deleteComment($this->task->getId(), $foreign->getId(), Request::create('/', 'POST', ['_token' => 'ok']));
+    }
+
+    public function testTheTaskViewPassesTheCommentsTheBoxAndTheCandidates(): void
+    {
+        $mine   = new TaskComment($this->task, $this->owner, 'Mine');
+        $theirs = new TaskComment($this->task, $this->attacker, 'Theirs');
+        $gone   = (new TaskComment($this->task, $this->attacker, 'Gone'))->markDeleted();
+        foreach ([$mine, $theirs, $gone] as $comment) {
+            $this->comments[$comment->getId()] = $comment;
+        }
+
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
+
+        self::assertCount(3, $this->rendered['comments']);
+        self::assertInstanceOf(FormView::class, $this->rendered['commentForm']);
+        self::assertSame([$mine->getId()], array_keys($this->rendered['commentEditForms']));
+        self::assertSame([$mine->getId() => true, $theirs->getId() => true], $this->rendered['commentDeletable']);
+        self::assertSame([['id' => '1', 'label' => 'owner'], ['id' => '2', 'label' => 'attacker']], $this->rendered['mentionCandidates']);
+        self::assertSame('1', $this->rendered['viewerId']);
+
+        $this->controller($this->attacker, realFormFactory: $this->realFormFactory(), dispatcher: $this->readOnlyDispatcher(), readersCanComment: false)->task($this->task->getId(), Request::create('/'));
+        self::assertNull($this->rendered['commentForm']);
+        self::assertSame([], $this->rendered['mentionCandidates']);
+        self::assertSame([$mine->getId() => false, $theirs->getId() => true], $this->rendered['commentDeletable']);
+
+        $this->controller($this->owner)->board($this->board->getId());
+        self::assertSame([$this->task->getId() => 2], $this->rendered['commentCounts']);
+        $this->controller($this->owner)->listView($this->board->getId());
+        self::assertSame([$this->task->getId() => 2], $this->rendered['commentCounts']);
+    }
+
     public function testLoggingAndRemovingTime(): void
     {
         $request = Request::create('/', 'POST');
@@ -833,6 +947,31 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(GanttScale::Days, $this->rendered['scale']);
     }
 
+    private function commentRepository(): TaskCommentRepositoryInterface
+    {
+        if ($this->commentRepositoryMock instanceof TaskCommentRepositoryInterface) {
+            return $this->commentRepositoryMock;
+        }
+
+        $repository = $this->createMock(TaskCommentRepositoryInterface::class);
+        $repository->method('save')->willReturnCallback(function (TaskComment $comment): void {
+            $this->comments[$comment->getId()] = $comment;
+        });
+        $repository->method('findById')->willReturnCallback(fn (string $id): ?TaskComment => $this->comments[$id] ?? null);
+        $repository->method('findByTask')->willReturnCallback(fn (Task $task): array => array_values(array_filter($this->comments, static fn (TaskComment $c): bool => $c->getTask() === $task)));
+        $repository->method('countByTasks')->willReturnCallback(fn (array $ids): array => array_count_values(array_map(static fn (TaskComment $c): string => $c->getTask()->getId(), array_filter($this->comments, static fn (TaskComment $c): bool => !$c->isDeleted() && in_array($c->getTask()->getId(), $ids, true)))));
+
+        return $this->commentRepositoryMock = $repository;
+    }
+
+    private function mentionCandidates(): TaskMentionCandidatesResolverInterface
+    {
+        $resolver = $this->createMock(TaskMentionCandidatesResolverInterface::class);
+        $resolver->method('candidates')->willReturnCallback(fn (): array => [new MentionCandidate('1', 'owner', $this->owner), new MentionCandidate('2', 'attacker', $this->attacker)]);
+
+        return $resolver;
+    }
+
     private function identityTranslator(): TranslatorInterface
     {
         $translator = $this->createMock(TranslatorInterface::class);
@@ -845,7 +984,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -898,6 +1037,10 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             dependencyManager: new TaskDependencyManager($taskRepository, $recorder),
             timeLogger: new TaskTimeLogger($taskRepository, $recorder),
             weekStartResolver: new ConfiguredWeekStartResolver('sunday'),
+            commentManager: new TaskCommentManager($this->commentRepository(), $candidates = $this->mentionCandidates()),
+            commentRepository: $this->commentRepository(),
+            mentionCandidates: $candidates,
+            readersCanComment: $readersCanComment,
         );
 
         $tokenStorage = new TokenStorage();

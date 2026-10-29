@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
@@ -22,6 +23,7 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
@@ -39,6 +41,7 @@ use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskCommentFormType;
 use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
@@ -743,6 +746,55 @@ final class ManageTemplatesRenderingTest extends TestCase
         $ok = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['column_choices' => ['Todo' => $this->todo->getId()], 'rich_description' => false, 'tag_input' => false]);
         $ok->submit(['title' => str_repeat('x', 255), 'priority' => 'normal', 'startAt' => '2026-11-01', 'dueAt' => '2026-11-10']);
         self::assertTrue($ok->isValid(), (string) $ok->getErrors(true));
+    }
+
+    /**
+     * Since 1.16: comments interleaved with the history, the "Comments / All activity" toggle, mention chips (the
+     * viewer's highlighted), the comment box as a combobox, the edit box of the viewer's comment and the counts.
+     */
+    public function testTaskActivityShowsCommentsAndTheCommentBox(): void
+    {
+        $task = $this->task;
+        $bob  = new TestUser('2', 'bob', 'bob@example.com');
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::Priority, 'normal', 'high'));
+        $mine = new TaskComment($task, $this->user, 'Ping @bob@example.com <script>', [['id' => '2', 'label' => 'bob@example.com']]);
+        $hers = new TaskComment($task, $bob, 'Thanks @owner@example.com', [['id' => '1', 'label' => 'owner@example.com']]);
+        $gone = (new TaskComment($task, $bob, 'gone'))->markDeleted();
+        $edit = $this->factory()->create(TaskCommentFormType::class, new TaskCommentFormData('Ping @bob@example.com', '[{"id":"2","label":"bob@example.com"}]'));
+
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + [
+            'comments'          => [$mine, $hers, $gone],
+            'commentForm'       => $this->factory()->create(TaskCommentFormType::class, new TaskCommentFormData())->createView(),
+            'commentEditForms'  => [$mine->getId() => $edit->createView()],
+            'commentDeletable'  => [$mine->getId() => true, $hers->getId() => false],
+            'commentDeleteForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'c'])->createView(),
+            'mentionCandidates' => [['id' => '2', 'label' => 'bob@example.com']],
+            'viewerId'          => '1',
+        ]);
+
+        self::assertStringContainsString('data-controller="nowo-task-board-activity-filter"', $html);
+        self::assertStringContainsString('data-filter="comments"', $html);
+        self::assertStringContainsString('<span class="nowo-task-mention" data-user-id="2">@bob@example.com</span> &lt;script&gt;', $html);
+        self::assertStringContainsString('nowo-task-mention nowo-task-mention--me', $html);
+        self::assertMatchesRegularExpression('/class="nowo-task-activity__item nowo-task-comment is-mentioning-me"[^>]*data-comment-id="' . $hers->getId() . '"/', $html);
+        self::assertStringContainsString('task_board.comment.deleted', $html);
+        self::assertStringContainsString('id="nowo-task-comment-delete-form"', $html);
+        self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/comment/' . $mine->getId() . '/delete"', $html);
+        self::assertStringNotContainsString('/comment/' . $hers->getId() . '/delete', $html);
+        self::assertStringContainsString('id="nowo-task-comment-edit-' . $mine->getId() . '"', $html);
+        self::assertMatchesRegularExpression('/role="combobox"[^>]*aria-autocomplete="list"[^>]*aria-expanded="false"[^>]*aria-controls="nowo-task-mention-list-task_comment"/', $html);
+        self::assertStringContainsString('role="listbox"', $html);
+        self::assertStringContainsString('data-nowo-task-board-mention-candidates-value="[{&quot;id&quot;:&quot;2&quot;,&quot;label&quot;:&quot;bob@example.com&quot;}]"', $html);
+        // The stream is in time order: the history entry (added first) before the comments.
+        self::assertLessThan(strpos($html, 'data-comment-id="' . $mine->getId() . '"'), strpos($html, 'task_board.history.type.priority'));
+        self::assertSame(substr_count($html, '<summary'), substr_count($html, 'data-controller="disclosure-icon"'));
+        self::assertStringNotContainsString(' style="', $html);
+
+        $board = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext(['commentCounts' => [$task->getId() => 2]]));
+        self::assertStringContainsString('nowo-task-card__comments', $board);
+        $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + ['comments' => [$hers], 'commentForm' => null, 'viewerId' => '3']);
+        self::assertStringNotContainsString('role="combobox"', $readOnly);
+        self::assertStringContainsString('data-filter="comments"', $readOnly);
     }
 
     /**

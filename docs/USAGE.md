@@ -31,6 +31,7 @@
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
 - [Task colour and dialogs (since 1.14)](#task-colour-and-dialogs-since-114)
+- [Comments and @mentions (since 1.16)](#comments-and-mentions-since-116)
 - [Dependencies, time and Gantt scales (since 1.15)](#dependencies-time-and-gantt-scales-since-115)
   - [Dependencies](#dependencies)
   - [Time tracking and deviation](#time-tracking-and-deviation)
@@ -476,9 +477,43 @@ backdrop, laid out with the bundle's classes (`nowo-task-dialog__header`, `__tit
 `__section`, `__actions`, `nowo-task-field`, `nowo-task-members__*`). Overrides that kept the Bootstrap `.modal`
 markup still open through the controllers' legacy branch.
 
+## Comments and @mentions (since 1.16)
+
+The activity stream of the task detail and panel holds the **comments** interleaved with the history (time order),
+with an *All activity / Comments* toggle, and closes with a comment box. A comment is plain text (line breaks kept,
+no HTML or Markdown), up to 5000 characters. Its author edits it in place; its author or an editor of the task deletes
+it (it stays as "Comment deleted"). Board cards and list rows show the comment count.
+
+**Who comments.** Everyone who may read the task, unless `comments.readers_can_comment: false` (then only the people
+who may edit it). The write routes check CSRF and `TASK_ACCESS_CHECK` like every other task write.
+
+**@mentions.** Typing `@` in the box lists the people who can read the task; ↑ ↓ move, Enter or Tab pick, Escape
+closes (a combobox: `aria-expanded`, `aria-activedescendant`). The server keeps a mention only for a candidate whose
+"@Name" is still in the text; the rest stays plain text. Mentions show as chips and a comment that mentions the viewer
+is highlighted. The candidates come from your `TaskMentionCandidatesResolverInterface`:
+
+```php
+final readonly class ProjectMentionCandidates implements TaskMentionCandidatesResolverInterface
+{
+    public function candidates(Task $task): array
+    {
+        return array_map(
+            static fn (User $user): MentionCandidate => new MentionCandidate((string) $user->getId(), $user->getDisplayName(), $user),
+            $this->readersOf($task->getBoard()),
+        );
+    }
+}
+```
+
+**Events** (after flush): `TaskBoardEvents::TASK_COMMENT` (`TaskCommentEvent`: `getComment()`, `getAction()` created
+/ edited) and `TaskBoardEvents::TASK_MENTION` (`TaskMentionEvent::getMentionedUsers()`: the people mentioned — on an
+edit only the ones it adds, never the author). The bundle sends no notification: notify from these events.
+
+**Theming**: `--nowo-task-mention-bg`, `--nowo-task-mention-ink` (the chip), `--nowo-task-mention-me` (the highlight).
+
 ## Dependencies, time and Gantt scales (since 1.15)
 
-No schema change: the dependencies (`task_board_task_dependencies`) and the manual time entries
+One new column (`task_board_tasks.start_at`, see UPGRADING); the dependencies (`task_board_task_dependencies`) and the manual time entries
 (`task_board_task_time_entries`) already had their tables.
 
 ### Dependencies

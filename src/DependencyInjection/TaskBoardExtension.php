@@ -8,6 +8,8 @@ use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
+use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
+use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
@@ -18,6 +20,7 @@ use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmColumnSetRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskCommentRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDependencyRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDocumentRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskLinkRepository;
@@ -26,6 +29,7 @@ use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskTimeEntryRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDependencyRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDocumentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskLinkRepositoryInterface;
@@ -109,6 +113,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
         $container->setParameter('nowo_task_board.gantt.week_start', $config['gantt']['week_start']);
+        $container->setParameter('nowo_task_board.comments.readers_can_comment', $config['comments']['readers_can_comment']);
 
         if (
             !$config['security']['allow_unauthenticated']
@@ -130,6 +135,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
         $this->registerWeekStartResolver($container, $config['gantt']);
+        $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
     }
@@ -174,6 +180,15 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
         $resolverId = $gantt['week_start_resolver'];
         $container->setAlias(WeekStartResolverInterface::class, is_string($resolverId) && $resolverId !== '' ? $resolverId : ConfiguredWeekStartResolver::class);
+    }
+
+    /**
+     * Since 1.16: {@see TaskMentionCandidatesResolverInterface} is the host's `comments.mention_resolver` when set, else
+     * {@see DefaultTaskMentionCandidatesResolver}.
+     */
+    private function registerMentionResolver(ContainerBuilder $container, mixed $resolverId): void
+    {
+        $container->setAlias(TaskMentionCandidatesResolverInterface::class, is_string($resolverId) && $resolverId !== '' ? $resolverId : DefaultTaskMentionCandidatesResolver::class);
     }
 
     private function registerTimeTrackIntegration(ContainerBuilder $container, YamlFileLoader $loader): void
@@ -396,6 +411,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             TaskTimeEntryRepositoryInterface::class  => DoctrineOrmTaskTimeEntryRepository::class,
             TeamMemberRepositoryInterface::class     => DoctrineOrmTeamMemberRepository::class,
             ColumnSetRepositoryInterface::class      => DoctrineOrmColumnSetRepository::class,
+            // Since 1.16.
+            TaskCommentRepositoryInterface::class => DoctrineOrmTaskCommentRepository::class,
         ];
 
         $flushingRepos = [
@@ -403,6 +420,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             DoctrineOrmBoardColumnRepository::class,
             DoctrineOrmTaskRepository::class,
             DoctrineOrmColumnSetRepository::class,
+            DoctrineOrmTaskCommentRepository::class,
         ];
 
         foreach ($repos as $interface => $implementation) {

@@ -1,0 +1,38 @@
+{#
+    Since 1.16: a comment box — the text with @mentions (typing "@" lists the people who can read the task: ↑ ↓ move,
+    Enter or Tab pick, Escape closes; the textarea is a combobox with aria-activedescendant) and the hidden list of the
+    people picked. Variables: form (TaskCommentFormType view), submitLabel, mentionCandidates (list of {id, label}),
+    cancelEdit (optional: the edit form's cancel button).
+#}
+{% set _listId = 'nowo-task-mention-list-' ~ form.vars.id %}
+{{ form_start(form, {method: 'POST', attr: {
+    class: 'nowo-task-comment-box',
+    'data-controller': 'nowo-task-board-mention',
+    'data-nowo-task-board-mention-candidates-value': mentionCandidates|default([])|json_encode,
+    'data-action': 'submit->nowo-task-board-mention#collect',
+}}) }}
+    {{ form_label(form.body) }}
+    <div class="nowo-task-comment-box__field">
+        {{ form_widget(form.body, {attr: form.body.vars.attr|merge({
+            role: 'combobox',
+            'aria-autocomplete': 'list',
+            'aria-expanded': 'false',
+            'aria-controls': _listId,
+            placeholder: 'task_board.comment.placeholder'|trans({}, 'NowoTaskBoardBundle'),
+        })}) }}
+        <ul class="nowo-task-mention-list" id="{{ _listId }}" role="listbox" aria-label="{{ 'task_board.comment.mention_list'|trans({}, 'NowoTaskBoardBundle') }}" hidden data-nowo-task-board-mention-target="list"></ul>
+    </div>
+    {{ form_errors(form.body) }}
+    {% for child in form %}
+        {% if not child.rendered %}
+            {{ form_widget(child) }}
+        {% endif %}
+    {% endfor %}
+    <div class="nowo-task-comment-box__actions">
+        <span class="nowo-task-comment-box__hint">{{ 'task_board.comment.hint'|trans({}, 'NowoTaskBoardBundle') }}</span>
+        {% if cancelEdit|default(false) %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="nowo-task-board-activity-filter#cancelEdit">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endif %}
+        <button type="submit" class="btn btn-sm btn-primary">{{ submitLabel|trans({}, 'NowoTaskBoardBundle') }}</button>
+    </div>
+{{ form_end(form, {render_rest: false}) }}

@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -38,6 +39,7 @@ class BoardColumn
         private ?string $icon = null,
     ) {
         $this->id    = Uuid::generate()->toString();
+        $this->name  = Text::cut($name, 128);
         $this->tasks = new ArrayCollection();
     }
 
@@ -67,7 +69,7 @@ class BoardColumn
     public function setName(string $name): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->name = $name;
+        $this->name = Text::cut($name, 128);
 
         return $this;
     }

@@ -43,6 +43,12 @@ final class TaskBoardEvents
     /** {@see TaskMemberAddedEvent}, after flush (since 1.10). */
     public const TASK_MEMBER_ADDED = 'nowo_task_board.task_member_added';
 
+    /** {@see TaskCommentEvent}: a comment was created or edited, after flush (since 1.16). */
+    public const TASK_COMMENT = 'nowo_task_board.task_comment';
+
+    /** {@see TaskMentionEvent}: a comment mentions people (new mentions only on an edit), after flush (since 1.16). */
+    public const TASK_MENTION = 'nowo_task_board.task_mention';
+
     /** {@see ColumnSetQueryEvent}: scope / list of the column sets (since 1.11). */
     public const COLUMN_SET_QUERY = 'nowo_task_board.column_set_query';
 

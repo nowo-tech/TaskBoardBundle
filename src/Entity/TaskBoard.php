@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -58,6 +59,7 @@ class TaskBoard
         private ?Team $team = null,
     ) {
         $this->id        = Uuid::generate()->toString();
+        $this->name      = Text::cut($name, 255);
         $this->createdAt = new DateTimeImmutable();
         $this->updatedAt = new DateTimeImmutable();
         $this->columns   = new ArrayCollection();
@@ -77,7 +79,7 @@ class TaskBoard
     public function setName(string $name): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->name = $name;
+        $this->name = Text::cut($name, 255);
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 

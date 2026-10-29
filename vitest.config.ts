@@ -17,6 +17,7 @@ export default defineConfig({
                 'src/Resources/assets/src/filter-collapse-utils.ts',
                 'src/Resources/assets/src/gantt-scale.ts',
                 'src/Resources/assets/src/list-sort-utils.ts',
+                'src/Resources/assets/src/mention-utils.ts',
             ],
             thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
             exclude: ['**/*.test.ts', '**/node_modules/**'],

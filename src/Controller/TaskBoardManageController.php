@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Controller;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Comment\MentionCandidate;
+use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
@@ -19,6 +23,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
@@ -30,6 +35,7 @@ use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskCommentFormType;
 use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
@@ -42,12 +48,14 @@ use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
@@ -56,6 +64,7 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskTree;
+use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -114,6 +123,11 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?TaskDependencyManager $dependencyManager = null,
         private readonly ?TaskTimeLogger $timeLogger = null,
         private readonly ?WeekStartResolverInterface $weekStartResolver = null,
+        // Since 1.16: comments and @mentions; `comments.readers_can_comment` (default true).
+        private readonly ?TaskCommentManager $commentManager = null,
+        private readonly ?TaskCommentRepositoryInterface $commentRepository = null,
+        private readonly ?TaskMentionCandidatesResolverInterface $mentionCandidates = null,
+        private readonly bool $readersCanComment = true,
     ) {
     }
 
@@ -200,6 +214,8 @@ final class TaskBoardManageController extends AbstractController
             'columnDeleteForm' => $canEditBoard ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
             'panelTargetPath'  => $this->currentRequestUri(),
             'inlineTaskForms'  => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
+            // Since 1.16: comments per task (one query) for the card counters.
+            'commentCounts' => $this->commentCounts($allTasks),
         ] + ($canEditBoard ? $this->columnSetViewData($board, $user) : []));
     }
 
@@ -472,6 +488,7 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.12: the list groups the tasks by column, each group with its inline "+ New task".
             'canEditBoard'    => $canEditBoard,
             'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $this->buildColumnChoices($board)) : [],
+            'commentCounts'   => $this->commentCounts($tasks),
         ]);
     }
 
@@ -815,6 +832,188 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
+     * Since 1.16: comments on the task — readers too unless `comments.readers_can_comment` is false (CSRF, length,.
+     *
+     * @mentions of valid candidates only).
+     */
+    public function addComment(string $taskId, Request $request): Response
+    {
+        $user    = $this->requireUser();
+        $task    = $this->findTask($taskId, $user);
+        $manager = $this->commentManager ?? throw new NotFoundHttpException('Comments are not available.');
+        if (!$this->canComment($user, $task)) {
+            throw $this->createAccessDeniedException('Comments are read-only.');
+        }
+
+        $form = $this->createForm(TaskCommentFormType::class, new TaskCommentFormData());
+        $form->handleRequest($request);
+        if ($form->isSubmitted()) {
+            $this->denyOnRootErrors($form);
+            /** @var TaskCommentFormData $data */
+            $data = $form->getData();
+            $this->saveComment($form->isValid(), static fn (): mixed => $manager->add($task, $user, $data->body, $data->mentionIds()), 'task_board.flash.comment_added');
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.16: the author edits their comment (others: 403); the mentions it adds are notified.
+     */
+    public function editComment(string $taskId, string $commentId, Request $request): Response
+    {
+        $user    = $this->requireUser();
+        $task    = $this->findTask($taskId, $user);
+        $manager = $this->commentManager ?? throw new NotFoundHttpException('Comments are not available.');
+        $comment = $this->findComment($task, $commentId);
+        if (!TaskCommentManager::isAuthor($comment, $user) || !$this->canComment($user, $task)) {
+            throw $this->createAccessDeniedException('Only the author edits a comment.');
+        }
+
+        $form = $this->createForm(TaskCommentFormType::class, new TaskCommentFormData());
+        $form->handleRequest($request);
+        if ($form->isSubmitted()) {
+            $this->denyOnRootErrors($form);
+            /** @var TaskCommentFormData $data */
+            $data = $form->getData();
+            $this->saveComment($form->isValid(), static function () use ($manager, $comment, $user, $data): void {
+                $manager->edit($comment, $user, $data->body, $data->mentionIds());
+            }, 'task_board.flash.comment_updated');
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 1.16: the author, or an editor of the task, deletes a comment (POST + CSRF); its place stays in the stream.
+     */
+    public function deleteComment(string $taskId, string $commentId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_comment_delete'));
+        $task    = $this->findTask($taskId, $user);
+        $manager = $this->commentManager ?? throw new NotFoundHttpException('Comments are not available.');
+        $comment = $this->findComment($task, $commentId);
+        if (!$this->canDeleteComment($user, $task, $comment)) {
+            throw $this->createAccessDeniedException('Comment access denied.');
+        }
+
+        // @igor-ignore - HTTP handler delegates to services; no controller worker state.
+        $manager->delete($comment);
+        $this->addFlash('success', 'task_board.flash.comment_deleted');
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * @param callable(): mixed $save
+     */
+    private function saveComment(bool $valid, callable $save, string $flash): void
+    {
+        if (!$valid) {
+            $this->addFlash('error', 'task_board.flash.comment_invalid');
+
+            return;
+        }
+
+        try {
+            $save();
+            $this->addFlash('success', $flash);
+        } catch (InvalidArgumentException) {
+            $this->addFlash('error', 'task_board.flash.comment_invalid');
+        }
+    }
+
+    private function findComment(Task $task, string $commentId): TaskComment
+    {
+        $comment = $this->commentRepository?->findById($commentId);
+        if (!$comment instanceof TaskComment || $comment->getTask()->getId() !== $task->getId() || $comment->isDeleted()) {
+            throw new NotFoundHttpException('Comment not found.');
+        }
+
+        return $comment;
+    }
+
+    private function canComment(UserInterface $user, Task $task): bool
+    {
+        return $this->commentManager instanceof TaskCommentManager
+            && ($this->readersCanComment || $this->resourceAccessChecker->canEditTask($user, $task));
+    }
+
+    private function canDeleteComment(UserInterface $user, Task $task, TaskComment $comment): bool
+    {
+        return TaskCommentManager::isAuthor($comment, $user) || $this->resourceAccessChecker->canEditTask($user, $task);
+    }
+
+    /**
+     * Comments per task id for the board cards and the list rows (one query; none without comments).
+     *
+     * @param list<Task> $tasks
+     *
+     * @return array<string, int>
+     */
+    private function commentCounts(array $tasks): array
+    {
+        return $this->commentRepository?->countByTasks(array_map(static fn (Task $task): string => $task->getId(), $tasks)) ?? [];
+    }
+
+    /**
+     * The comment data of the task page and panel: the comments (authors fetched with them), the box, the edit forms
+     * of the viewer's comments, the delete form and the @mention candidates.
+     *
+     * @param array<string, string> $routeExtra
+     *
+     * @return array<string, mixed>
+     */
+    private function commentViewData(Task $task, UserInterface $user, array $routeExtra): array
+    {
+        if (!$this->commentManager instanceof TaskCommentManager) {
+            return ['comments' => [], 'commentForm' => null];
+        }
+
+        $comments   = $this->commentRepository?->findByTask($task) ?? [];
+        $canComment = $this->canComment($user, $task);
+        $editForms  = [];
+        $deletable  = [];
+        foreach ($comments as $comment) {
+            if ($comment->isDeleted()) {
+                continue;
+            }
+
+            $deletable[$comment->getId()] = $this->canDeleteComment($user, $task, $comment);
+            if ($canComment && TaskCommentManager::isAuthor($comment, $user)) {
+                $editForms[$comment->getId()] = $this->createForm(TaskCommentFormType::class, new TaskCommentFormData($comment->getBody(), (string) json_encode($comment->getMentions())), [
+                    'action' => $this->routeUrl('task_comment_edit', ['taskId' => $task->getId(), 'commentId' => $comment->getId()] + $routeExtra),
+                ])->createView();
+            }
+        }
+
+        $candidates = $canComment && $this->mentionCandidates instanceof TaskMentionCandidatesResolverInterface
+            ? array_map(static fn (MentionCandidate $candidate): array => ['id' => $candidate->id, 'label' => $candidate->label], $this->mentionCandidates->candidates($task))
+            : [];
+
+        return [
+            'comments'          => $comments,
+            'commentForm'       => $canComment ? $this->createForm(TaskCommentFormType::class, new TaskCommentFormData(), ['action' => $this->routeUrl('task_comment', ['taskId' => $task->getId()] + $routeExtra)])->createView() : null,
+            'commentEditForms'  => $editForms,
+            'commentDeletable'  => $deletable,
+            'commentDeleteForm' => $this->csrfActionForm('task_board_task_comment_delete')->createView(),
+            'mentionCandidates' => $candidates,
+            'viewerId'          => UserIdResolver::getId($user),
+        ];
+    }
+
+    /**
+     * @param array<string, string> $parameters
+     */
+    private function routeUrl(string $key, array $parameters): string
+    {
+        $route = $this->routes[$key]['name'] ?? null;
+
+        return is_string($route) ? $this->generateUrl($route, $parameters) : '';
+    }
+
+    /**
      * The view data of the task page and the task panel.
      *
      * @param FormInterface<TaskFormData> $taskForm
@@ -874,7 +1073,7 @@ final class TaskBoardManageController extends AbstractController
             'timeEntryRemoveForm'  => $this->csrfActionForm('task_board_task_time_remove')->createView(),
             'deviation'            => TaskDeviation::of($task),
             'subtaskDeviation'     => $descendants === [] ? null : TaskDeviation::sum($descendants),
-        ];
+        ] + $this->commentViewData($task, $user, $routeExtra);
     }
 
     /**

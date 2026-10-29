@@ -1,0 +1,52 @@
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
+{#
+    Since 1.16: one comment of the activity stream — author, time, "edited", the text with its mention chips (the viewer's
+    highlighted), and for its author Edit (the comment box in place) / for its author or an editor Delete. A deleted
+    comment keeps its place as "Comment deleted". Variables: comment, viewerId, commentEditForms, commentDeletable,
+    taskRouteExtra.
+#}
+{% set _mine = viewerId|default(null) and comment.mentions(viewerId) %}
+<li class="nowo-task-activity__item nowo-task-comment{{ comment.deleted ? ' is-deleted' : '' }}{{ _mine ? ' is-mentioning-me' : '' }}" data-kind="comment" data-comment-id="{{ comment.id }}">
+    <span class="nowo-task-detail__history-avatar" aria-hidden="true">{{ memberUi.member_label(comment.author)|trim|slice(0, 1)|upper }}</span>
+    <div class="nowo-task-activity__body nowo-task-comment__body">
+        <div class="nowo-task-detail__history-summary">
+            <strong>{{ memberUi.member_label(comment.author)|trim }}</strong>
+            <time class="nowo-task-activity__time" datetime="{{ comment.createdAt|date('c') }}">{{ comment.createdAt|date('Y-m-d H:i') }}</time>
+            {% if comment.editedAt and not comment.deleted %}<span class="nowo-task-comment__edited">{{ 'task_board.comment.edited'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+            {% if _mine %}<span class="nowo-task-sr-only">{{ 'task_board.comment.mentions_you'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+        </div>
+        {% if comment.deleted %}
+            <p class="nowo-task-comment__text nowo-task-detail__empty">{{ 'task_board.comment.deleted'|trans({}, 'NowoTaskBoardBundle') }}</p>
+        {% else %}
+            <div class="nowo-task-comment__text" data-comment-text>{{ nowo_task_board_comment_body(comment, viewerId|default(null)) }}</div>
+            {% set _editForm = commentEditForms[comment.id] ?? null %}
+            {% set _deletable = commentDeletable[comment.id] ?? false %}
+            {% if _editForm or _deletable %}
+                <div class="nowo-task-comment__actions">
+                    {% if _editForm %}
+                        <button type="button" class="btn btn-sm btn-ghost-secondary" data-action="nowo-task-board-activity-filter#edit" aria-expanded="false" aria-controls="nowo-task-comment-edit-{{ comment.id }}">
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}{{ 'task_board.comment.edit'|trans({}, 'NowoTaskBoardBundle') }}
+                        </button>
+                    {% endif %}
+                    {% if _deletable %}
+                        <button
+                            type="submit"
+                            form="nowo-task-comment-delete-form"
+                            formaction="{{ path(nowo_task_board_route('task_comment_delete'), {taskId: comment.task.id, commentId: comment.id}|merge(taskRouteExtra|default({}))) }}"
+                            class="btn btn-sm btn-ghost-secondary"
+                            data-confirm="{{ 'task_board.comment.delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
+                            data-action="nowo-task-board-activity-filter#confirm"
+                        >
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.comment.delete'|trans({}, 'NowoTaskBoardBundle') }}
+                        </button>
+                    {% endif %}
+                </div>
+                {% if _editForm %}
+                    <div class="nowo-task-comment__edit" id="nowo-task-comment-edit-{{ comment.id }}" hidden>
+                        {{ include('@NowoTaskBoardBundle/manage/_task_comment_box.html.twig', {form: _editForm, submitLabel: 'task_board.action.save', cancelEdit: true}) }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+    </div>
+</li>

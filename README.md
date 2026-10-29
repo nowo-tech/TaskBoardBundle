@@ -18,6 +18,7 @@ This bundle is **FrankenPHP worker mode friendly** (worker mode with kernel not 
 - Vite + Stimulus assets for board interactions
 - **Multi-tenant hosts (1.10, opt-in):** boards per tenant under the host's own URLs (`tenancy.tenant_paths`), links from tasks to host objects (issues, orders…) with a resolver, an assignee provider, events after every task write, and template blocks / partials with a recursive subtask tree — see [Usage](docs/USAGE.md#multi-tenant-hosts-since-110)
 - **Columns and task panel (1.11):** column icons, rename / colour / delete, reusable column sets (save a board's columns, apply them to a new or existing board), and a task panel fragment for side drawers (`data-task-panel-url` on cards, list rows and Gantt bars); no inline styles in the templates — see [Usage](docs/USAGE.md#columns-column-sets-and-the-task-panel-since-111)
+- **Comments and @mentions (1.16):** comments interleaved with the task activity, @mentions of the people who can read the task (host resolver), events to notify them — see [Usage](docs/USAGE.md#comments-and-mentions-since-116)
 - **Dependencies, time and Gantt scales (1.15):** add / remove dependencies with cycle checks, time tracking with the estimate deviation, list time columns, Gantt in hours / days / weeks / months with a configurable week start — see [Usage](docs/USAGE.md#dependencies-time-and-gantt-scales-since-115)
 - **Optional TimeTrack integration** — task provider, team context, and automatic `total_time_seconds` aggregation when TimeTrack is installed
 

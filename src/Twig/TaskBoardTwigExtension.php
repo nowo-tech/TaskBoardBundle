@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Twig;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
@@ -17,14 +18,23 @@ use Twig\TwigFunction;
 
 use function array_unshift;
 use function count;
+use function htmlspecialchars;
 use function in_array;
 use function is_array;
 use function is_string;
 use function json_decode;
+use function mb_strlen;
+use function nl2br;
 use function parse_url;
 use function preg_match;
+use function sprintf;
+use function str_replace;
 use function strtolower;
+use function strtr;
+use function usort;
 
+use const ENT_QUOTES;
+use const ENT_SUBSTITUTE;
 use const PHP_URL_SCHEME;
 
 /**
@@ -53,6 +63,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_subtask_progress', $this->subtaskProgress(...)),
             new TwigFunction('nowo_task_board_deviation', TaskDeviation::of(...)),
             new TwigFunction('nowo_task_board_ancestors', self::ancestors(...)),
+            new TwigFunction('nowo_task_board_comment_body', self::commentBody(...), ['is_safe' => ['html']]),
         ];
     }
 
@@ -88,6 +99,31 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         }
 
         return $ancestors;
+    }
+
+    /**
+     * Since 1.16: a comment's text as HTML — escaped, line breaks kept, its stored mentions ("@Name") as chips
+     * (`nowo-task-mention`, `nowo-task-mention--me` for the viewer). No other markup: the body is plain text.
+     */
+    public static function commentBody(TaskComment $comment, ?string $viewerId = null): string
+    {
+        $html     = htmlspecialchars($comment->getBody(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $mentions = $comment->getMentions();
+        usort($mentions, static fn (array $a, array $b): int => mb_strlen($b['label']) <=> mb_strlen($a['label']));
+        $chips = [];
+        foreach ($mentions as $index => $mention) {
+            $label               = htmlspecialchars('@' . $mention['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $placeholder         = "\u{0}" . $index . "\u{0}";
+            $html                = str_replace($label, $placeholder, $html);
+            $chips[$placeholder] = sprintf(
+                '<span class="nowo-task-mention%s" data-user-id="%s">%s</span>',
+                $mention['id'] === $viewerId ? ' nowo-task-mention--me' : '',
+                htmlspecialchars($mention['id'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $label,
+            );
+        }
+
+        return nl2br(strtr($html, $chips), false);
     }
 
     /**

@@ -39,6 +39,13 @@
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}{{ progress.done }}/{{ progress.total }}
             </span>
         {% endif %}
+        {# Since 1.16: the comment count (commentCounts from the board page, one query). #}
+        {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}
+        {% if _comments > 0 %}
+            <span class="nowo-task-card__comments" title="{{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'message-circle'}) }}{{ _comments }}<span class="nowo-task-sr-only"> {{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}</span>
+            </span>
+        {% endif %}
         {% if task.members|length > 0 %}
             {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
             <span class="nowo-task-avatars">

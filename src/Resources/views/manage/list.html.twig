@@ -130,6 +130,10 @@
                                         <span class="nowo-task-list__title">
                                             <span class="nowo-task-list__status-dot" aria-hidden="true"></span>
                                             <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}">{{ task.title }}</a>
+                                            {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}
+                                            {% if _comments > 0 %}
+                                                <span class="nowo-task-list__comments" title="{{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'message-circle'}) }}{{ _comments }}<span class="nowo-task-sr-only"> {{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}</span></span>
+                                            {% endif %}
                                         </span>
                                     </td>
                                     <td>

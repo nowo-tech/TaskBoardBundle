@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 #[ORM\Entity]
@@ -43,6 +44,9 @@ class TaskLink
     ) {
         $this->id        = Uuid::generate()->toString();
         $this->createdAt = new DateTimeImmutable();
+        // Since 1.16: cut to the columns whatever the caller (host object links, imports).
+        $this->label      = Text::cutNullable($label, 255);
+        $this->externalId = Text::cutNullable($externalId, 128);
     }
 
     public function getId(): string
@@ -97,7 +101,7 @@ class TaskLink
     public function setLabel(?string $label): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->label = $label;
+        $this->label = Text::cutNullable($label, 255);
 
         return $this;
     }
@@ -110,7 +114,7 @@ class TaskLink
     public function setExternalId(?string $externalId): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->externalId = $externalId;
+        $this->externalId = Text::cutNullable($externalId, 128);
 
         return $this;
     }
