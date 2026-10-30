@@ -21,15 +21,21 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCommentEvent;
 use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
+use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+
+use const ENT_QUOTES;
+use const ENT_SUBSTITUTE;
 
 /**
  * Since 1.16: comments, @mentions (valid candidates only), their events, the default candidates and the rendering.
@@ -171,6 +177,27 @@ final class TaskCommentsTest extends TestCase
 
         self::assertSame('&lt;b&gt;Hi&lt;/b&gt; <span class="nowo-task-mention" data-user-id="5">@Ann</span> and <span class="nowo-task-mention nowo-task-mention--me" data-user-id="6">@Ann Lee</span><br>' . "\nbye", $html);
         self::assertSame('plain', TaskBoardTwigExtension::commentBody(new TaskComment($this->task, $this->ana, 'plain')));
+    }
+
+    /** Since 1.19: a host text renderer (here a fake Markdown) renders the body; the mention chips survive it. */
+    public function testCommentBodyGoesThroughTheTextRenderer(): void
+    {
+        $markdown = new class implements TaskTextRendererInterface {
+            public function render(string $text): string
+            {
+                return '<p>' . str_replace('**done**', '<strong>done</strong>', htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+            }
+        };
+        $comment = new TaskComment($this->task, $this->ana, '**done** @Ann', [['id' => '5', 'label' => 'Ann']]);
+
+        self::assertSame('<p><strong>done</strong> <span class="nowo-task-mention" data-user-id="5">@Ann</span></p>', TaskBoardTwigExtension::commentBody($comment, null, $markdown));
+
+        $extension = new TaskBoardTwigExtension('layout.html.twig', 'tabler', [], new TaskObjectLinkResolver(), null, '', $markdown);
+        self::assertSame('<p><strong>done</strong> <span class="nowo-task-mention nowo-task-mention--me" data-user-id="5">@Ann</span></p>', $extension->renderCommentBody($comment, '5'));
+        self::assertSame('<p><strong>done</strong></p>', $extension->renderText('**done**'));
+        self::assertSame('', $extension->renderText('  '));
+        self::assertSame('', $extension->renderText(null));
+        self::assertSame('a<br>' . "\n" . '&lt;b&gt;', (new PlainTaskTextRenderer())->render("a\n<b>"));
     }
 
     public function testLabelsAndCutTexts(): void

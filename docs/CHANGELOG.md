@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.19.0] - 2026-10-30](#1190---2026-10-30)
 - [[1.18.1] - 2026-10-30](#1181---2026-10-30)
 - [[1.18.0] - 2026-10-30](#1180---2026-10-30)
 - [[1.17.1] - 2026-10-30](#1171---2026-10-30)
@@ -57,6 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.19.0] - 2026-10-30
+
+### Added
+
+- **Host text renderer** `Nowo\TaskBoardBundle\Text\TaskTextRendererInterface` (`render(string $text): string`, safe
+  HTML): comment bodies and plain-text descriptions go through it. The default `PlainTaskTextRenderer` keeps them plain
+  (escaped, line breaks); alias the interface to render Markdown or your own markup. @mention chips survive any renderer.
+- A plain-text description (no rich editor) is **shown rendered** on the task page and panel; editors open the field
+  under it with *Edit description* (readers only see the text). Twig function `nowo_task_board_text(text)`.
+
+### Changed
+
+- `TaskBoardTwigExtension::commentBody()` takes an optional renderer (default plain: same output as before).
 
 ## [1.18.1] - 2026-10-30
 
