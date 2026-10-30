@@ -1,0 +1,89 @@
+{#
+    Since 1.20: previous / next of the task. Variables: task, taskNavigation (Nowo\TaskBoardBundle\Dto\TaskNavigation),
+    panel (bool), taskRouteExtra (the panel's _target_path).
+    - On the page: the board order (or the list's, `?from=list`) with the position ("3/14 · In progress"); a subtask
+      also steps through its parent's subtasks ("Subtask 2/5", and back up to the parent); a task with subtasks opens
+      its first one. The nowo-task-board-task-nav controller adds Alt+←/→ and J / K (focus outside a field) and asks
+      before leaving unsaved edits.
+    - In the panel only the subtask steps show (the host's drawer walks its own view): their links carry
+      data-task-panel-url, so a drawer opens them in place.
+    The ends render as disabled steps (aria-disabled), never as links.
+#}
+{% set _nav = taskNavigation|default(null) %}
+{% set _panel = panel|default(false) %}
+{% set _query = _nav ? _nav.query : {} %}
+{% set _position = _nav and not _panel ? _nav.position : null %}
+{% set _siblings = _nav ? _nav.siblings : null %}
+{% set _first = _nav ? _nav.firstSubtask : null %}
+{% if _position or _siblings or _first %}
+    {% set _steps = [] %}
+    {% if _position %}
+        {% set _steps = _steps|merge([{
+            kind: 'view',
+            position: _position,
+            label: (_position.group ? 'task_board.nav.position_column' : 'task_board.nav.position')|trans({'%index%': _position.index, '%total%': _position.total, '%column%': _position.group}, 'NowoTaskBoardBundle'),
+            keys: true,
+        }]) %}
+    {% endif %}
+    {% if _siblings %}
+        {% set _steps = _steps|merge([{
+            kind: 'subtasks',
+            position: _siblings,
+            label: 'task_board.nav.subtask_position'|trans({'%index%': _siblings.index, '%total%': _siblings.total}, 'NowoTaskBoardBundle'),
+            keys: not _position,
+        }]) %}
+    {% endif %}
+    <nav
+        class="nowo-task-nav{{ _panel ? ' nowo-task-nav--panel' : '' }}"
+        aria-label="{{ 'task_board.nav.label'|trans({}, 'NowoTaskBoardBundle') }}"
+        data-controller="nowo-task-board-task-nav"
+        data-nowo-task-board-task-nav-unsaved-value="{{ 'task_board.nav.unsaved'|trans({}, 'NowoTaskBoardBundle') }}"
+        data-nowo-task-board-task-nav-keys-value="{{ _panel ? 'false' : 'true' }}"
+    >
+        {% for step in _steps %}
+            <div class="nowo-task-nav__group nowo-task-nav__group--{{ step.kind }}" data-nav="{{ step.kind }}">
+                {% if step.kind == 'subtasks' and _nav.parent %}
+                    <a
+                        class="nowo-task-nav__parent"
+                        href="{{ path(nowo_task_board_route('task'), {taskId: _nav.parent.id}|merge(_query)) }}"
+                        {% if _panel %}data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: _nav.parent.id}|merge(taskRouteExtra|default({}))) }}"{% endif %}
+                        data-action="nowo-task-board-task-nav#leave"
+                        data-title="{{ _nav.parent.title }}"
+                        title="{{ 'task_board.nav.parent'|trans({'%title%': _nav.parent.title}, 'NowoTaskBoardBundle') }}"
+                    >{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'corner-left-up'}) }}<span class="nowo-task-nav__parent-title">{{ _nav.parent.title }}</span></a>
+                {% endif %}
+                {% for direction in ['previous', 'next'] %}
+                    {% set _target = direction == 'previous' ? step.position.previous : step.position.next %}
+                    {% set _label = ('task_board.nav.' ~ (step.kind == 'subtasks' ? 'subtask_' : '') ~ direction)|trans({}, 'NowoTaskBoardBundle') %}
+                    {% if direction == 'next' %}
+                        <span class="nowo-task-nav__position" aria-live="polite">{{ step.label }}</span>
+                    {% endif %}
+                    {% if _target %}
+                        <a
+                            class="nowo-task-nav__step nowo-task-nav__step--{{ direction }}"
+                            href="{{ path(nowo_task_board_route('task'), {taskId: _target.id}|merge(_query)) }}"
+                            {% if _panel %}data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: _target.id}|merge(taskRouteExtra|default({}))) }}"{% endif %}
+                            {% if step.keys %}data-nowo-task-board-task-nav-target="{{ direction }}"{% endif %}
+                            data-action="nowo-task-board-task-nav#leave"
+                            data-title="{{ _target.title }}"
+                            rel="{{ direction == 'previous' ? 'prev' : 'next' }}"
+                            title="{{ _label }}: {{ _target.title }}{{ step.keys and not _panel ? ' (' ~ (direction == 'previous' ? 'Alt+← / K' : 'Alt+→ / J') ~ ')' : '' }}"
+                        >{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-' ~ (direction == 'previous' ? 'left' : 'right')}) }}<span class="nowo-task-sr-only">{{ _label }}: {{ _target.title }}</span></a>
+                    {% else %}
+                        <span class="nowo-task-nav__step nowo-task-nav__step--{{ direction }} is-disabled" aria-disabled="true" title="{{ _label }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-' ~ (direction == 'previous' ? 'left' : 'right')}) }}<span class="nowo-task-sr-only">{{ _label }}</span></span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endfor %}
+        {% if _first %}
+            <a
+                class="nowo-task-nav__first-subtask"
+                href="{{ path(nowo_task_board_route('task'), {taskId: _first.id}|merge(_query)) }}"
+                {% if _panel %}data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: _first.id}|merge(taskRouteExtra|default({}))) }}"{% endif %}
+                data-action="nowo-task-board-task-nav#leave"
+                data-title="{{ _first.title }}"
+                title="{{ 'task_board.nav.first_subtask'|trans({}, 'NowoTaskBoardBundle') }}: {{ _first.title }}"
+            >{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}<span>{{ 'task_board.nav.first_subtask'|trans({}, 'NowoTaskBoardBundle') }}</span></a>
+        {% endif %}
+    </nav>
+{% endif %}

@@ -102,7 +102,7 @@ task_board.form.task.title: Title
 task_board.form.task.description: Description
 task_board.form.task.priority: Priority
 task_board.form.task.column: Column ID
-task_board.form.task.estimate: Estimated minutes
+task_board.form.task.estimate: "Estimate"
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: 'Invalid due date.'
@@ -351,3 +351,20 @@ task_board.import.subtasks.help: "The file's tasks become subtasks of \"%title%\
 task_board.import.subtasks.submit: "Import"
 task_board.flash.subtask_import_summary: "Imported %created% subtask(s) and %dependencies% Gantt relation(s), skipped %skipped%."
 task_board.task.edit_description: "Edit description"
+# Since 1.20: previous / next task, remaining time, the estimate as a duration.
+task_board.nav.label: "Task navigation"
+task_board.nav.position: "%index%/%total%"
+task_board.nav.position_column: "%index%/%total% · %column%"
+task_board.nav.subtask_position: "Subtask %index%/%total%"
+task_board.nav.previous: "Previous task"
+task_board.nav.next: "Next task"
+task_board.nav.subtask_previous: "Previous subtask"
+task_board.nav.subtask_next: "Next subtask"
+task_board.nav.parent: "Parent task: %title%"
+task_board.nav.first_subtask: "First subtask"
+task_board.nav.unsaved: "This task has unsaved changes. Leave it anyway?"
+task_board.time.left: "%duration% left"
+task_board.time.over_by: "Over by %duration%"
+task_board.form.task.estimate_invalid: "Enter a duration such as 90, 45 min, 2 h or 1 h 30 min."
+task_board.form.task.estimate_placeholder: "e.g. 2 h 30 min"
+task_board.task.dates: "Dates"

@@ -11,6 +11,7 @@ use Nowo\TagInputBundle\Form\TagType;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Form\DataTransformer\MinutesToDurationTransformer;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
@@ -93,10 +94,14 @@ final class TaskFormType extends AbstractType
         }
 
         if (!$compact) {
-            $this->addInteger($builder, 'estimatedMinutes', [
-                'label'    => 'task_board.form.task.estimate',
-                'required' => false,
+            // Since 1.20 a duration ("2 h 30 min", "90", "1.5h"), shown as one; the model keeps minutes.
+            $this->addWithDefaults($builder, 'estimatedMinutes', TextType::class, [
+                'label'           => 'task_board.form.task.estimate',
+                'required'        => false,
+                'invalid_message' => 'task_board.form.task.estimate_invalid',
+                'attr'            => ['placeholder' => 'task_board.form.task.estimate_placeholder', 'inputmode' => 'text', 'autocomplete' => 'off'],
             ]);
+            $builder->get('estimatedMinutes')->addModelTransformer(new MinutesToDurationTransformer());
             // Since 1.15: the start date (the Gantt bar starts there); after the due date is a form error.
             $this->addWithDefaults($builder, 'startAt', DateType::class, [
                 'label'           => 'task_board.form.task.start',

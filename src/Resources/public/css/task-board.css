@@ -190,9 +190,6 @@ body.modal-open {
     min-width: 180px;
 }
 
-.nowo-task-board-subtask-tree__toggle {
-    margin-bottom: 0.75rem;
-}
 
 /* Task detail — ClickUp-inspired layout */
 .nowo-task-detail {
@@ -454,13 +451,14 @@ body.modal-open {
     padding-inline: 0.5rem;
 }
 
+/* Since 1.20 the section headings of the task (Description) read like the other sections (Subtasks, Time): sentence case. */
 .nowo-task-detail__section-title {
-    font-size: 0.875rem;
+    margin: 0 0 0.75rem;
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    font-size: 0.9375rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
-    margin-bottom: 0.75rem;
+    letter-spacing: normal;
+    text-transform: none;
 }
 
 .nowo-task-detail__section-header {
@@ -980,12 +978,34 @@ button.nowo-task-detail__priority-tag:hover {
     min-width: 140px;
 }
 
+/* Since 1.20 a themed bar (track and fill from the tokens) instead of the engine's grey default. */
 .nowo-task-progress {
     display: block;
     width: 100%;
     max-width: 240px;
     height: 0.5rem;
+    border: 0;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #eef2f7));
+    color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
     accent-color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    appearance: none;
+}
+
+.nowo-task-progress::-webkit-progress-bar {
+    border-radius: 999px;
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #eef2f7));
+}
+
+.nowo-task-progress::-webkit-progress-value {
+    border-radius: 999px;
+    background: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-progress::-moz-progress-bar {
+    border-radius: 999px;
+    background: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
 }
 
 .nowo-task-gantt__label-cell {
@@ -3264,4 +3284,260 @@ details.nowo-task-section > summary {
 
 .nowo-task-detail__history > :last-child {
     margin-bottom: 1rem;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Since 1.20 — task navigation, subtask rows, colour swatches, remaining time.
+ * ---------------------------------------------------------------------------------------------------------------- */
+
+/* Previous / next: one row of compact groups ("‹ 3/14 · In progress ›", "↰ Parent ‹ Subtask 2/5 ›", "First subtask"). */
+.nowo-task-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 1.25rem;
+    border-bottom: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.8125rem;
+}
+
+.nowo-task-nav__group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.nowo-task-nav__position {
+    padding-inline: 0.25rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.nowo-task-nav__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: var(--nowo-task-radius-sm, var(--tblr-border-radius-sm, 4px));
+    color: var(--nowo-task-ink, var(--tblr-body-color, #1d273b));
+    text-decoration: none;
+}
+
+a.nowo-task-nav__step:hover,
+a.nowo-task-nav__step:focus-visible {
+    border-color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    background: var(--nowo-task-accent-soft, var(--tblr-primary-lt, #eff6ff));
+}
+
+.nowo-task-nav__step.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.nowo-task-nav__parent,
+.nowo-task-nav__first-subtask {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 16rem;
+    color: var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    text-decoration: none;
+}
+
+.nowo-task-nav__parent:hover,
+.nowo-task-nav__first-subtask:hover {
+    text-decoration: underline;
+}
+
+.nowo-task-nav__parent-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Subtasks header: title, count, bar and the fold toggle together; the bar centred on the title's line. */
+.nowo-task-subtasks__header {
+    justify-content: flex-start;
+    gap: 0.5rem 0.75rem;
+}
+
+.nowo-task-subtasks__header .nowo-task-subtasks__progress {
+    flex: 0 1 8rem;
+    margin: 0;
+}
+
+.nowo-task-subtasks__header .nowo-task-board-subtask-tree__toggle {
+    margin: 0 0 0 auto;
+}
+
+/* Subtask row: title on the left, status and tags as badges in a right-hand column. */
+.nowo-task-subtree__row {
+    align-items: center;
+}
+
+.nowo-task-subtree__check {
+    margin-top: 0;
+}
+
+.nowo-task-subtree__meta {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    max-width: 50%;
+    margin-inline-start: auto;
+}
+
+.nowo-task-subtree .nowo-task-badge,
+.nowo-task-tags .nowo-task-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 12rem;
+    overflow: hidden;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    border-radius: 999px;
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: normal;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.nowo-task-tags .nowo-task-tag {
+    border-color: transparent;
+    background: var(--nowo-task-accent-soft, var(--tblr-purple-lt, #f3e8ff));
+    color: var(--nowo-task-accent, var(--tblr-purple, #7e22ce));
+}
+
+/* Colour swatches stay round; the picked one gets a ring and a check (never a bigger square). */
+.nowo-task-picker .nowo-task-picker__swatch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1.75rem;
+    min-width: 0;
+    height: 1.75rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    transform: none;
+}
+
+.nowo-task-picker .nowo-task-picker__swatch[aria-pressed='true'] {
+    border-color: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+    box-shadow: 0 0 0 2px var(--nowo-task-swatch, var(--nowo-task-accent, var(--tblr-primary, #206bc4)));
+}
+
+.nowo-task-picker .nowo-task-picker__swatch--none[aria-pressed='true'] {
+    box-shadow: 0 0 0 2px var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+}
+
+.nowo-task-picker .nowo-task-picker__swatch[aria-pressed='true']:not(.nowo-task-picker__swatch--none)::after {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    width: 0.3rem;
+    height: 0.55rem;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    content: '';
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.nowo-task-picker .nowo-task-picker__swatch:focus-visible {
+    outline: 2px solid var(--nowo-task-accent, var(--tblr-primary, #206bc4));
+    outline-offset: 2px;
+}
+
+/* Remaining time beside the time spent: neutral while time is left, the danger colour once over. */
+.nowo-task-remaining--left {
+    background: var(--nowo-task-muted-soft, var(--tblr-secondary-lt, #f1f5f9));
+    color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
+}
+
+.nowo-task-detail__estimate .nowo-task-detail__inline-input {
+    width: 7.5rem;
+}
+
+/* Since 1.20: the task attributes as a stacked list — one field per row (People, Dates, Time tracking, Tags, Colour),
+ * the label in a fixed narrow column, the value beside it; the label goes above its value in a narrow panel. */
+.nowo-task-detail__attrs {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.nowo-task-detail__attr {
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    align-items: center;
+    padding-block: 0.35rem;
+}
+
+.nowo-task-detail__attr .nowo-task-detail__field-value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.75rem;
+    padding: 0;
+}
+
+/* People: the chips inline, the add button right after them (not pushed to the far end). */
+.nowo-task-detail__attr .nowo-task-detail__people {
+    width: auto;
+    max-width: 100%;
+}
+
+.nowo-task-detail__attr .nowo-task-detail__people .nowo-task-detail__field-edit {
+    margin-inline-start: 0.125rem;
+}
+
+/* Dates: start and due side by side, each with its small label; they wrap on a phone. */
+.nowo-task-detail__dates {
+    gap: 0.5rem 1rem;
+}
+
+.nowo-task-detail__date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-weight: 400;
+}
+
+.nowo-task-detail__date .nowo-task-detail__inline-label {
+    margin: 0;
+}
+
+.nowo-task-detail__attr .nowo-task-detail__date input:not([type='hidden']) {
+    width: 10rem;
+    max-width: 100%;
+}
+
+/* Tags take the row's width (chips inline, the input after them); colours stay one row of swatches. */
+.nowo-task-detail__attr .nowo-task-detail__field-value > :is(nowo-tag-input, .tagify, input[name$='[tags]']) {
+    flex: 1 1 16rem;
+    max-width: 100%;
+}
+
+.nowo-task-detail__attr .nowo-task-picker,
+.nowo-task-detail__attr .nowo-task-picker__swatches {
+    flex-wrap: wrap;
+}
+
+@container nowo-task-attrs (max-width: 30rem) {
+    .nowo-task-detail__attr {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }

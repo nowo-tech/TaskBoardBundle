@@ -4,6 +4,8 @@
     data-task-panel-url (since 1.11): the task_panel fragment for hosts that open the task in a side drawer; the title
     link keeps opening the task page without JavaScript.
     Since 1.14 a task with a colour shows it on the card's left edge (nowo-task-card--colored, --nowo-task-card-color).
+    Since 1.20 the card carries data-title (the task title alone, for a drawer heading and its accessible name) and
+    data-column-name (the column, for a position such as "3/14 · In progress"); the estimate reads "24 h", not "1440m".
 #}
 {% set progress = taskTree|default(null) ? taskTree.progress(task) : null %}
 <li
@@ -12,6 +14,8 @@
     draggable="true"
     data-nowo-task-board-target="task"
     data-task-id="{{ task.id }}"
+    data-title="{{ task.title }}"
+    {% if task.column %}data-column-name="{{ task.column.name }}"{% endif %}
     data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
     data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
 >
@@ -32,7 +36,7 @@
             </span>
         {% endif %}
         {% if task.estimatedMinutes %}
-            <span class="nowo-task-card__estimate">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }}{{ task.estimatedMinutes }}m</span>
+            <span class="nowo-task-card__estimate">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }}{{ task.estimatedMinutes|nowo_task_board_duration }}</span>
         {% endif %}
         {% if progress and progress.total > 0 %}
             <span class="nowo-task-card__subtasks" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">

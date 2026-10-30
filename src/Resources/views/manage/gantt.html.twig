@@ -140,6 +140,8 @@
                             data-nowo-task-board-gantt-target="bar"
                             data-task-id="{{ item.id }}"
                             data-deviation="{{ item.deviationStatus ?? 'none' }}"
+                            data-title="{{ item.title }}"
+                            {% if item.columnName ?? null %}data-column-name="{{ item.columnName }}"{% endif %}
                             data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
                             {# Since 1.14 a task's own colour paints its bar (otherwise the priority colours). #}
                             data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|merge(item.color ? {'--nowo-task-bar-color': item.color} : {})|json_encode }}"

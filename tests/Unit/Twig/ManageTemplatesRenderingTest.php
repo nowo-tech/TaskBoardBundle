@@ -59,6 +59,7 @@ use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
@@ -590,7 +591,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/member' . $query, $html);
         self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId() . '/link' . $query, $html);
         self::assertStringContainsString('task_board.task.open_page', $html);
-        self::assertStringContainsString('<progress class="nowo-task-progress" max="2" value="1"', $html);
+        self::assertStringContainsString('<progress class="nowo-task-progress nowo-task-subtasks__progress" max="2" value="1"', $html);
     }
 
     public function testListAndGanttCarryTaskPanelUrlsWithoutInlineStyle(): void
@@ -850,6 +851,73 @@ final class ManageTemplatesRenderingTest extends TestCase
         $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + ['comments' => [$hers], 'commentForm' => null, 'viewerId' => '3']);
         self::assertStringNotContainsString('role="combobox"', $readOnly);
         self::assertStringContainsString('data-filter="comments"', $readOnly);
+    }
+
+    public function testTheTaskPageStepsThroughTheBoardAndTheSubtasks(): void
+    {
+        $done   = $this->board->getColumns()->last();
+        $next   = new Task($this->board, 'Next card', $this->user, column: $done);
+        $first  = new Task($this->board, 'First sub', $this->user, column: $this->todo, parent: $this->task);
+        $second = new Task($this->board, 'Second sub', $this->user, column: $done, parent: $this->task);
+        $tasks  = [$this->task, $first, $second, $next];
+        $tree   = TaskTree::fromTasks($tasks);
+
+        // The first card of the board: previous disabled, next jumps to the next column, the way into its subtasks.
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($this->task) + [
+            'taskTree'       => $tree,
+            'taskNavigation' => TaskNavigator::navigate($this->task, $tasks, $tree, null, true),
+        ]);
+        self::assertStringContainsString('data-controller="nowo-task-board-task-nav"', $html);
+        self::assertStringContainsString('data-nowo-task-board-task-nav-keys-value="true"', $html);
+        self::assertStringContainsString('<span class="nowo-task-nav__position" aria-live="polite">task_board.nav.position_column</span>', $html);
+        self::assertMatchesRegularExpression('/<span class="nowo-task-nav__step nowo-task-nav__step--previous is-disabled" aria-disabled="true"/', $html);
+        self::assertMatchesRegularExpression('/<a\s+class="nowo-task-nav__step nowo-task-nav__step--next"\s+href="\/tools\/task-board\/task\/' . $next->getId() . '"\s+data-nowo-task-board-task-nav-target="next"/', $html);
+        self::assertMatchesRegularExpression('/class="nowo-task-nav__first-subtask"\s+href="\/tools\/task-board\/task\/' . $first->getId() . '"/', $html);
+        // The subtask rows: title on the left, status badge on the right, no host badge classes.
+        self::assertStringContainsString('<span class="nowo-task-subtree__column nowo-task-badge"', $html);
+        self::assertStringNotContainsString('bg-secondary-lt', $html);
+        // The time left, not a signed deviation.
+        self::assertStringContainsString('nowo-task-remaining--left', $html);
+        self::assertStringContainsString('task_board.time.left', $html);
+        // The estimate is a duration.
+        self::assertMatchesRegularExpression('/name="task_form\[estimatedMinutes\]"[^>]*value="1 h 30 min"|value="1 h 30 min"[^>]*name="task_form\[estimatedMinutes\]"/', $html);
+
+        // The list order keeps `from=list` on its links.
+        $list = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($first) + [
+            'taskTree'       => $tree,
+            'taskNavigation' => TaskNavigator::navigate($first, $tasks, $tree, 'list', true),
+        ]);
+        self::assertStringContainsString('/tools/task-board/task/' . $second->getId() . '?from=list', $list);
+        self::assertStringContainsString('task_board.nav.subtask_position', $list);
+        self::assertMatchesRegularExpression('/class="nowo-task-nav__parent"\s+href="\/tools\/task-board\/task\/' . $this->task->getId() . '\?from=list"/', $list);
+
+        // A subtask of a board of top-level cards: its siblings take the keys; in the panel only the subtask steps
+        // show, opening in the drawer, without keys.
+        $nav  = TaskNavigator::navigate($second, $tasks, $tree, null, true);
+        $page = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($second) + ['taskTree' => $tree, 'taskNavigation' => $nav]);
+        self::assertStringNotContainsString('task_board.nav.position_column', $page);
+        self::assertMatchesRegularExpression('/data-nowo-task-board-task-nav-target="previous"\s+data-action="nowo-task-board-task-nav#leave"\s+data-title="First sub"/', $page);
+        $panel = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($second) + [
+            'taskTree'        => $tree,
+            'taskNavigation'  => TaskNavigator::navigate($second, $tasks, $tree, null, false),
+            'panel'           => true,
+            'panelTargetPath' => '/board',
+            'taskRouteExtra'  => ['_target_path' => '/board'],
+        ]);
+        self::assertStringContainsString('nowo-task-nav nowo-task-nav--panel', $panel);
+        self::assertStringContainsString('data-nowo-task-board-task-nav-keys-value="false"', $panel);
+        self::assertStringNotContainsString('task_board.nav.position_column', $panel);
+        self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $first->getId() . '/panel?_target_path=/board"', $panel);
+    }
+
+    public function testBoardCardsCarryTheirTitleColumnAndAReadableEstimate(): void
+    {
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_task_card.html.twig', ['task' => $this->task]);
+
+        self::assertStringContainsString('data-title="Ship it"', $html);
+        self::assertStringContainsString('data-column-name="Todo"', $html);
+        self::assertStringContainsString('1 h 30 min</span>', $html);
+        self::assertStringNotContainsString('90m', $html);
     }
 
     /**

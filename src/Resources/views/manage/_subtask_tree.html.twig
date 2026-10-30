@@ -18,18 +18,26 @@
                 <span class="nowo-task-subtree__check nowo-task-detail__subtask-check{{ node.completed ? ' is-done' : '' }}" aria-hidden="true">
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: (node.completed ? 'circle-check' : 'circle')}) }}
                 </span>
+                {#
+                    Since 1.20: the title (and its subtask counter) on the left, the column and the tags as badges in a
+                    right-hand column; in the panel the title opens the subtask in the drawer (data-task-panel-url).
+                #}
                 <div class="nowo-task-subtree__body">
-                    <a href="{{ path(nowo_task_board_route('task'), {taskId: node.id}) }}" class="nowo-task-subtree__title">{{ node.title }}</a>
-                    {% if node.column %}
-                        <span class="nowo-task-subtree__column badge bg-secondary-lt nowo-task-badge">{{ node.column.name }}</span>
-                    {% endif %}
+                    <a href="{{ path(nowo_task_board_route('task'), {taskId: node.id}) }}" class="nowo-task-subtree__title"{% if panel|default(false) %} data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: node.id}|merge(taskRouteExtra|default({}))) }}"{% endif %} data-title="{{ node.title }}">{{ node.title }}</a>
                     {% if progress.total > 0 %}
                         <span class="nowo-task-subtree__progress" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
                             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }} {{ progress.done }}/{{ progress.total }}
                         </span>
                     {% endif %}
-                    {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: node.tags, wrapper_class: 'nowo-task-subtree__tags'}) }}
                 </div>
+                {% if node.column or node.tags is not empty %}
+                    <div class="nowo-task-subtree__meta">
+                        {% if node.column %}
+                            <span class="nowo-task-subtree__column nowo-task-badge" title="{{ 'task_board.task.status'|trans({}, 'NowoTaskBoardBundle') }}">{{ node.column.name }}</span>
+                        {% endif %}
+                        {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: node.tags, wrapper_class: 'nowo-task-subtree__tags'}) }}
+                    </div>
+                {% endif %}
             </div>
             {% if children|length > 0 %}
                 <details class="nowo-task-subtree__children" open>

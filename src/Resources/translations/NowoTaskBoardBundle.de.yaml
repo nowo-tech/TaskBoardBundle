@@ -102,7 +102,7 @@ task_board.form.task.title: Title
 task_board.form.task.description: Description
 task_board.form.task.priority: Priority
 task_board.form.task.column: Column ID
-task_board.form.task.estimate: Estimated minutes
+task_board.form.task.estimate: "Schätzung"
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: Invalid due date.
@@ -351,3 +351,20 @@ task_board.import.subtasks.help: "Die Aufgaben der Datei werden Unteraufgaben vo
 task_board.import.subtasks.submit: "Importieren"
 task_board.flash.subtask_import_summary: "%created% Unteraufgabe(n) und %dependencies% Gantt-Beziehung(en) importiert, %skipped% übersprungen."
 task_board.task.edit_description: "Beschreibung bearbeiten"
+# Since 1.20: previous / next task, remaining time, the estimate as a duration.
+task_board.nav.label: "Aufgabennavigation"
+task_board.nav.position: "%index%/%total%"
+task_board.nav.position_column: "%index%/%total% · %column%"
+task_board.nav.subtask_position: "Unteraufgabe %index%/%total%"
+task_board.nav.previous: "Vorherige Aufgabe"
+task_board.nav.next: "Nächste Aufgabe"
+task_board.nav.subtask_previous: "Vorherige Unteraufgabe"
+task_board.nav.subtask_next: "Nächste Unteraufgabe"
+task_board.nav.parent: "Übergeordnete Aufgabe: %title%"
+task_board.nav.first_subtask: "Erste Unteraufgabe"
+task_board.nav.unsaved: "Diese Aufgabe hat ungespeicherte Änderungen. Trotzdem verlassen?"
+task_board.time.left: "Noch %duration%"
+task_board.time.over_by: "%duration% überschritten"
+task_board.form.task.estimate_invalid: "Gib eine Dauer wie 90, 45 min, 2 h oder 1 h 30 min ein."
+task_board.form.task.estimate_placeholder: "z. B. 2 h 30 min"
+task_board.task.dates: "Termine"
