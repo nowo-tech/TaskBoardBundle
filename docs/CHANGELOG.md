@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.20.1] - 2026-10-30](#1201---2026-10-30)
 - [[1.20.0] - 2026-10-30](#1200---2026-10-30)
 - [[1.19.1] - 2026-10-30](#1191---2026-10-30)
 - [[1.19.0] - 2026-10-30](#1190---2026-10-30)
@@ -60,6 +61,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.20.1] - 2026-10-30
+
+Every manage form is a FormKit Type (REQ-TWIG-005 rule 11). See [UPGRADING](UPGRADING.md#to-1201).
+
+### Changed
+
+- **FormKit Types**: `TaskPriorityFormType`, `CsrfActionType`, `TaskTimeEntryFormType`, `TaskDependencyFormType`,
+  `TaskCommentFormType` and `TaskListFilterType` carry `#[FormKitConfig('task_board')]` + `FormOptionsTrait` like the
+  other manage forms, so every page form of the bundle is on the `nowo_form_kit.profiles.task_board` profile. Their
+  fields keep their explicit options: same form names, field names, ids, classes and Stimulus attributes.
+- **Docs**: CONFIGURATION documents the `task_board` FormKit profile and how a host overrides it.
 
 ## [1.20.0] - 2026-10-30
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
@@ -22,8 +24,11 @@ use Symfony\Component\Validator\Constraints\NotBlank;
  *
  * @extends AbstractType<TaskCommentFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskCommentFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     private const MENTION = 'nowo-task-board-mention';
 
     /**

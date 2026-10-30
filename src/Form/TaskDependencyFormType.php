@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
@@ -24,8 +26,11 @@ use Symfony\Component\Validator\Constraints\NotBlank;
  *
  * @extends AbstractType<TaskDependencyFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskDependencyFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     private const FILTER = 'nowo-task-board-option-filter';
 
     /**

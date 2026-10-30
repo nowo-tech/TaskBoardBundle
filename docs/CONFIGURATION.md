@@ -14,6 +14,7 @@
 - [Templates](#templates)
 - [Layout integration (REQ-UI-001)](#layout-integration-req-ui-001)
   - [CSS framework](#css-framework)
+  - [FormKit profile (REQ-TWIG-005)](#formkit-profile-req-twig-005)
 - [Other options](#other-options)
   - [Tenancy, boards and assignees (since 1.10)](#tenancy-boards-and-assignees-since-110)
   - [Comments (since 1.16)](#comments-since-116)
@@ -298,6 +299,18 @@ Example bridge:
     {{ parent() }}
 {% endblock %}
 ```
+
+### FormKit profile (REQ-TWIG-005)
+
+Every manage form (task, board, column, column sets, links, members, import, priority, time entry, dependency,
+comment, list filter, CSRF-only actions) is a Symfony Form Type built with FormKit (`#[FormKitConfig('task_board')]`),
+rendered with `form_start` / the child `form_row` loop / `form_end` — never raw `<form>` / `<input>` (keep it that way
+in overrides). Fields added through FormKit take their options from the profile `nowo_form_kit.profiles.task_board`,
+which the extension prepends when FormKitBundle is registered and the host does not define it (translation domain
+`NowoTaskBoardBundle`, `nowo-ui-input form-control` text controls, `form-select` choices, `form-check` checkboxes).
+Define `profiles.task_board` in your own `nowo_form_kit` config to theme the forms; the bundle then does not prepend its
+default. The priority, time entry, dependency, comment and list filter forms keep their explicit classes and Stimulus
+hooks (the profile does not add classes or convention keys to them).
 
 ## Other options
 

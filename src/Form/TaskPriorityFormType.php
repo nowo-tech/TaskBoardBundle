@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Override;
 use Symfony\Component\Form\AbstractType;
@@ -16,8 +18,11 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @extends AbstractType<array{priority?: string|null}>
  */
+#[FormKitConfig('task_board')]
 final class TaskPriorityFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     public const CSRF_TOKEN_ID = 'task_board_task_priority';
 
     /**

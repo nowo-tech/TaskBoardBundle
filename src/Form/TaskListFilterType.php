@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Override;
 use Symfony\Component\Form\AbstractType;
@@ -21,8 +23,11 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @extends AbstractType<null>
  */
+#[FormKitConfig('task_board')]
 final class TaskListFilterType extends AbstractType
 {
+    use FormOptionsTrait;
+
     private const STIMULUS = 'nowo-task-board-list-filter';
 
     /**

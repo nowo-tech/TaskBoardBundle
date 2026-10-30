@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Override;
@@ -22,8 +24,11 @@ use Symfony\Component\Validator\Constraints\Range;
  *
  * @extends AbstractType<TaskTimeEntryFormData>
  */
+#[FormKitConfig('task_board')]
 final class TaskTimeEntryFormType extends AbstractType
 {
+    use FormOptionsTrait;
+
     /** At most a week of work in one entry. */
     public const MAX_MINUTES = 10080;
 
