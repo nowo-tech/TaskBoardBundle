@@ -16,6 +16,12 @@ function rules(selector: string): string {
 }
 
 describe('task-board.css', () => {
+  it('keeps the task attributes compact: rows at their fields\' height, one line below the grid (1.18.1)', () => {
+    expect(rules('.nowo-task-detail__attr')).toMatch(/min-height:\s*2\.25rem/);
+    expect(rules('.nowo-task-detail__attrs > .nowo-task-detail__attr:last-child')).toMatch(/border-bottom:\s*0/);
+    expect(rules('.nowo-task-detail__meta')).toMatch(/padding-top:\s*0/);
+  });
+
   it('sizes the Gantt grid to its timeline so the sticky title column stays in view', () => {
     expect(rules('.nowo-task-gantt__grid')).toMatch(/width:\s*max-content/);
   });
