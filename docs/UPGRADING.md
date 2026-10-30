@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.19.0](#to-1190)
 - [To 1.18.1](#to-1181)
 - [To 1.18.0](#to-1180)
 - [To 1.17.1](#to-1171)
@@ -97,6 +98,20 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.19.0
+
+From **1.18.1**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change;
+comments and descriptions look the same until you plug a renderer:
+
+```yaml
+# config/services.yaml — e.g. Markdown
+Nowo\TaskBoardBundle\Text\TaskTextRendererInterface:
+    alias: App\Tasks\Text\MarkdownTaskTextRenderer
+```
+
+The renderer's HTML is printed raw: escape or sanitize what users typed. A plain-text description now shows rendered
+with *Edit description* (a `<details>`) for editors; host templates overriding `nowo_task_panel` keep their own markup.
 
 ## To 1.18.1
 

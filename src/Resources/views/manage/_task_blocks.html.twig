@@ -195,7 +195,26 @@
             <section class="nowo-task-detail__section nowo-task-detail__description">
                 {# Since 1.14.1: the widgets drawn without their label carry an aria-label (axe "label"). #}
                 <h3 class="nowo-task-detail__section-title">{{ 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle') }}</h3>
-                {{ form_widget(taskForm.description, {label: false, attr: taskForm.description.vars.attr|merge({'aria-label': 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                {% set _description_widget %}{{ form_widget(taskForm.description, {label: false, attr: taskForm.description.vars.attr|merge({'aria-label': 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle')})}) }}{% endset %}
+                {#
+                    Since 1.19: a plain-text description (no rich editor) is shown through the text renderer (plain, or the
+                    host's Markdown); editors open the field under it. A rich editor keeps showing itself.
+                #}
+                {% if 'textarea' in taskForm.description.vars.block_prefixes and task.description|default('')|trim is not empty %}
+                    <div class="nowo-task-detail__description-view nowo-task-text">{{ nowo_task_board_text(task.description) }}</div>
+                    {% if (canEditTask ?? true) %}
+                        <details class="nowo-task-detail__description-edit">
+                            <summary class="btn btn-sm btn-outline-secondary" data-controller="disclosure-icon">
+                                {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}{{ 'task_board.task.edit_description'|trans({}, 'NowoTaskBoardBundle') }}
+                            </summary>
+                            {{ _description_widget }}
+                        </details>
+                    {% else %}
+                        <div hidden>{{ _description_widget }}</div>
+                    {% endif %}
+                {% else %}
+                    {{ _description_widget }}
+                {% endif %}
             </section>
 
             {% for child in taskForm %}

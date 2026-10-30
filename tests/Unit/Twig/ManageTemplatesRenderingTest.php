@@ -407,6 +407,25 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('Roadmap', $html);
     }
 
+    /** Since 1.19: a plain-text description is shown rendered, with "Edit description" for editors only. */
+    public function testAPlainTextDescriptionIsShownRenderedWithAnEditDisclosure(): void
+    {
+        $this->task->setDescription("Line <b>one</b>\nline two");
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['panel' => true]);
+
+        self::assertStringContainsString('<div class="nowo-task-detail__description-view nowo-task-text">Line &lt;b&gt;one&lt;/b&gt;<br>', $html);
+        self::assertStringContainsString('nowo-task-detail__description-edit', $html);
+        self::assertStringContainsString('task_board.task.edit_description', $html);
+
+        $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['panel' => true, 'canEditTask' => false]);
+        self::assertStringContainsString('nowo-task-detail__description-view', $readOnly);
+        self::assertStringNotContainsString('nowo-task-detail__description-edit', $readOnly);
+
+        $this->task->setDescription(null);
+        $empty = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['panel' => true]);
+        self::assertStringNotContainsString('nowo-task-detail__description-view', $empty);
+    }
+
     public function testATaskOffersImportSubtasksWithItsHelpToEditorsOnly(): void
     {
         $form = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData(TaskImportSource::TaskBoardCsv), ['action' => '/task/import'])->createView();

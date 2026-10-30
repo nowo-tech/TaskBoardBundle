@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
+use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
@@ -24,7 +26,6 @@ use function is_array;
 use function is_string;
 use function json_decode;
 use function mb_strlen;
-use function nl2br;
 use function parse_url;
 use function preg_match;
 use function sprintf;
@@ -52,6 +53,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly TaskObjectLinkResolver $linkResolver = new TaskObjectLinkResolver(),
         private readonly ?string $filtersCollapse = null,
         private readonly string $filtersFormClass = '',
+        private readonly TaskTextRendererInterface $textRenderer = new PlainTaskTextRenderer(),
     ) {
     }
 
@@ -65,7 +67,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_subtask_progress', $this->subtaskProgress(...)),
             new TwigFunction('nowo_task_board_deviation', TaskDeviation::of(...)),
             new TwigFunction('nowo_task_board_ancestors', self::ancestors(...)),
-            new TwigFunction('nowo_task_board_comment_body', self::commentBody(...), ['is_safe' => ['html']]),
+            new TwigFunction('nowo_task_board_comment_body', $this->renderCommentBody(...), ['is_safe' => ['html']]),
+            new TwigFunction('nowo_task_board_text', $this->renderText(...), ['is_safe' => ['html']]),
         ];
     }
 
@@ -107,25 +110,42 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * Since 1.16: a comment's text as HTML — escaped, line breaks kept, its stored mentions ("@Name") as chips
      * (`nowo-task-mention`, `nowo-task-mention--me` for the viewer). No other markup: the body is plain text.
      */
-    public static function commentBody(TaskComment $comment, ?string $viewerId = null): string
+    public static function commentBody(TaskComment $comment, ?string $viewerId = null, TaskTextRendererInterface $renderer = new PlainTaskTextRenderer()): string
     {
-        $html     = htmlspecialchars($comment->getBody(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // Since 1.19 the body goes through the text renderer (plain by default, Markdown in a host): the mentions are
+        // swapped for private-use placeholders first, so the renderer never sees (or breaks) them, then become chips.
+        $text     = $comment->getBody();
         $mentions = $comment->getMentions();
         usort($mentions, static fn (array $a, array $b): int => mb_strlen($b['label']) <=> mb_strlen($a['label']));
         $chips = [];
         foreach ($mentions as $index => $mention) {
-            $label               = htmlspecialchars('@' . $mention['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $placeholder         = "\u{0}" . $index . "\u{0}";
-            $html                = str_replace($label, $placeholder, $html);
+            $placeholder         = "\u{E000}" . $index . "\u{E001}";
+            $text                = str_replace('@' . $mention['label'], $placeholder, $text);
             $chips[$placeholder] = sprintf(
                 '<span class="nowo-task-mention%s" data-user-id="%s">%s</span>',
                 $mention['id'] === $viewerId ? ' nowo-task-mention--me' : '',
                 htmlspecialchars($mention['id'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                $label,
+                htmlspecialchars('@' . $mention['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
             );
         }
 
-        return nl2br(strtr($html, $chips), false);
+        return strtr($renderer->render($text), $chips);
+    }
+
+    /**
+     * Since 1.19: a comment body through the configured text renderer (Twig nowo_task_board_comment_body).
+     */
+    public function renderCommentBody(TaskComment $comment, ?string $viewerId = null): string
+    {
+        return self::commentBody($comment, $viewerId, $this->textRenderer);
+    }
+
+    /**
+     * Since 1.19: user text (a plain-text description) through the configured text renderer (Twig nowo_task_board_text).
+     */
+    public function renderText(?string $text): string
+    {
+        return $text === null || trim($text) === '' ? '' : $this->textRenderer->render($text);
     }
 
     /**

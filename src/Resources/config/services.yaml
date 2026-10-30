@@ -99,6 +99,12 @@ services:
             $routes: '%nowo_task_board.routes%'
             $filtersCollapse: '%nowo_task_board.templates.filters_collapse%'
             $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
+            $textRenderer: '@Nowo\TaskBoardBundle\Text\TaskTextRendererInterface'
+
+    # Since 1.19: user text (comments, plain-text descriptions) → HTML; hosts alias the interface to their renderer.
+    Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer: ~
+    Nowo\TaskBoardBundle\Text\TaskTextRendererInterface:
+        alias: Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer
 
     # Form Kit injects FormOptionsMerger into tagged form types (FormOptionsMergerInjectorCompilerPass).
     Nowo\TaskBoardBundle\Form\:

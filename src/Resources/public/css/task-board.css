@@ -3232,3 +3232,22 @@ details.nowo-task-section > summary {
 .nowo-task-detail__section-title {
     margin-bottom: 0.5rem;
 }
+
+/* Since 1.19: a plain-text description shown through the text renderer, with "Edit description" under it. */
+.nowo-task-detail__description-view {
+    margin-bottom: 0.5rem;
+    overflow-wrap: anywhere;
+}
+
+.nowo-task-detail__description-edit > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+    list-style: none;
+    cursor: pointer;
+}
+
+.nowo-task-detail__description-edit > summary::-webkit-details-marker {
+    display: none;
+}

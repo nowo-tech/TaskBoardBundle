@@ -57,6 +57,7 @@ final class TaskBoardBundleIntegrationTest extends TestCase
         $twig = $container->getDefinition(TaskBoardTwigExtension::class)->getArguments();
         self::assertContains('%nowo_task_board.templates.filters_collapse%', $twig);
         self::assertContains('%nowo_task_board.templates.filters_form_class%', $twig);
+        self::assertSame('Nowo\\TaskBoardBundle\\Text\\PlainTaskTextRenderer', (string) $container->getAlias('Nowo\\TaskBoardBundle\\Text\\TaskTextRendererInterface'));
         self::assertNotContains('%nowo_task_board.templates.filters_collapse%', $container->getDefinition(TaskBoardRouteLoader::class)->getArguments());
     }
 }
