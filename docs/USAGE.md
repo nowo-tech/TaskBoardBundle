@@ -25,6 +25,7 @@
   - [Column sets](#column-sets)
   - [Several boards per tenant and boards owned by a user](#several-boards-per-tenant-and-boards-owned-by-a-user)
   - [Task panel in a side drawer](#task-panel-in-a-side-drawer)
+  - [Previous / next task (since 1.20)](#previous--next-task-since-120)
   - [No inline styles](#no-inline-styles)
 - [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
   - [Theming with design tokens](#theming-with-design-tokens)
@@ -383,6 +384,26 @@ or a `Turbo-Frame` header) they answer the refreshed panel (an invalid edit answ
 replaces its content and the host reloads the board when it closes. The task page itself answers the panel to a fetch
 too. The page around the drawer must load `task-board.css` / `task-board.js` (the board, list and Gantt pages do).
 
+### Previous / next task (since 1.20)
+
+The task page shows where the task sits and steps to its neighbours (`manage/_task_navigation.html.twig`, block
+`nowo_task_navigation`, view variable `taskNavigation` built by `Support\TaskNavigator`):
+
+- **Board order** (default): the columns left to right, each column's cards top to bottom — the last card of a column
+  steps on to the first of the next one. With `board.top_level_only` only top-level cards count. Position: *3/14 · In
+  progress*.
+- **List order**: `?from=list` (the list view's title links add it) follows the list's groups, subtasks included, then
+  the tasks without a column. The step links keep `from`. The list's client-side filters and sort stay in the browser:
+  the page follows the server order; a drawer on the list page walks the rows as filtered and sorted.
+- **Subtasks**: a subtask steps through its parent's subtasks (*Subtask 2/5*) and links back up to the parent; a task
+  with subtasks offers *First subtask*.
+- **Keyboard**: Alt+← / Alt+→ (not inside a multi-line text, where they move by word) and K / J (outside any field);
+  leaving unsaved edits of the task form asks first. The ends are disabled steps (`aria-disabled`).
+
+In the task panel only the subtask steps render (`.nowo-task-nav--panel`), with `data-task-panel-url` on their links:
+a drawer opens them in place, and can use them for its own ‹ › when the open task is not one of its view's. Cards, list
+rows and Gantt bars carry `data-title` and `data-column-name` for a drawer's heading and position.
+
 ### No inline styles
 
 The templates carry no `style=""` (CSP without `'unsafe-inline'`): colours, Gantt positions and depths are CSS custom
@@ -439,7 +460,7 @@ A dark theme redefines them under its own selector (e.g. `[data-theme="dark"]`).
 The icons go through UiKit's `components/_icon.html.twig` with `nowo_ui_kit_icon_set` — no icon webfont is needed:
 with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti ti-<name>`. A host on `ux_icon` imports
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
-calendar-event, check, chevron-down, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
+calendar-event, check, chevron-down, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
 columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
 help, line-dashed, link, list, list-tree, notes, palette, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus,
 users, x.

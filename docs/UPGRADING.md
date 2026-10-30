@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.20.0](#to-1200)
 - [To 1.19.1](#to-1191)
 - [To 1.19.0](#to-1190)
 - [To 1.18.1](#to-1181)
@@ -99,6 +100,22 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.20.0
+
+From **1.19.1**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change.
+
+- **Icons**: a host on `ux_icon` imports `tabler:corner-left-up` (the parent step); `chevron-left`, `chevron-right` and
+  `subtask` were already used.
+- **Estimate field**: `task_form[estimatedMinutes]` is a text field (a duration, e.g. *2 h 30 min*); a bare number is
+  still minutes, so scripts posting minutes keep working. Tests reading the rendered value expect *1 h 30 min*, not *90*.
+- **Templates**: a host overriding `_task_blocks.html.twig` gets the new block `nowo_task_navigation` after the toolbar;
+  the Start and Due rows are one *Dates* row (`.nowo-task-detail__attr--dates`). The subtask tree's column badge lost
+  `badge bg-secondary-lt` (now `.nowo-task-badge`); the head's deviation pill is `.nowo-task-remaining--left|--over`.
+- **Drawers**: read `data-title` (not the card text) for the heading, and step a subtask through the panel's
+  `.nowo-task-nav--panel [data-nav="subtasks"] a[rel=prev|next]` links when it is not one of the view's tasks.
+- **Task page links from the list**: `?from=list` keeps the list order; a host linking to the page from its own list
+  may add it.
 
 ## To 1.19.1
 

@@ -64,6 +64,7 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -1094,12 +1095,14 @@ final class TaskBoardManageController extends AbstractController
         $descendants     = $taskTree->descendantsOf($task);
 
         return [
-            'task'              => $task,
-            'taskForm'          => $taskForm,
-            'linkForm'          => $linkForm,
-            'memberForm'        => $memberForm,
-            'subtaskForm'       => $subtaskForm,
-            'columnNavigation'  => $this->taskManager->getColumnNavigation($task),
+            'task'             => $task,
+            'taskForm'         => $taskForm,
+            'linkForm'         => $linkForm,
+            'memberForm'       => $memberForm,
+            'subtaskForm'      => $subtaskForm,
+            'columnNavigation' => $this->taskManager->getColumnNavigation($task),
+            // Since 1.20: previous / next in the board order (`?from=list`: the list's), and among the parent's subtasks.
+            'taskNavigation'    => TaskNavigator::navigate($task, $boardTasks, $taskTree, $this->currentRequest()?->query->getString('from'), $this->topLevelOnly),
             'subtaskTotal'      => $subtaskProgress->total,
             'subtaskDone'       => $subtaskProgress->done,
             'subtaskProgress'   => $subtaskProgress,

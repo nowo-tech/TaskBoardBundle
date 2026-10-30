@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.20.0] - 2026-10-30](#1200---2026-10-30)
 - [[1.19.1] - 2026-10-30](#1191---2026-10-30)
 - [[1.19.0] - 2026-10-30](#1190---2026-10-30)
 - [[1.18.1] - 2026-10-30](#1181---2026-10-30)
@@ -59,6 +60,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.20.0] - 2026-10-30
+
+### Added
+
+- **Previous / next task** on the task page (`manage/_task_navigation.html.twig`, block `nowo_task_navigation`): in the
+  board order (columns left to right, each column's cards top to bottom, so the end of a column goes on to the next
+  one; top-level cards only with `board.top_level_only`) with the position (*3/14 · In progress*); `?from=list` follows
+  the list's order instead (the list's title links carry it) and every step keeps it. A subtask also steps through its
+  parent's subtasks (*Subtask 2/5*, with a link back up to the parent); a task with subtasks offers *First subtask*.
+  The ends render as disabled steps. Alt+← / Alt+→ (outside a multi-line text) and K / J (outside any field) step; the
+  `nowo-task-board-task-nav` controller asks before leaving unsaved edits of the task form.
+- The task **panel** shows the subtask steps only, their links carrying `data-task-panel-url` (a drawer opens them in
+  place; the host's drawer walks its own view). Subtask titles in the panel's tree carry it too.
+- `Nowo\TaskBoardBundle\Support\TaskNavigator`, `Dto\TaskNavigation`, `Dto\TaskPosition`; view variable
+  `taskNavigation` on the task page and panel.
+- Board cards carry `data-title` (the task title alone, for a drawer's heading and accessible name) and
+  `data-column-name`; list rows and Gantt bars too.
+- The **estimate is a duration**: the field shows *24 h*, *1 h 30 min* and reads *90* (minutes, as before), *45 min*,
+  *2 h*, *1.5h*, *1h30*… (`Form\DataTransformer\MinutesToDurationTransformer`); anything else is a form error. The
+  model still holds minutes.
+
+### Changed
+
+- The task attributes are a **stacked list**, one field per row (People, Dates, Time tracking, Tags, Colour), the label
+  in a narrow column: start and due date share one row (side by side, wrapping on a phone), the people chips are
+  followed by their add button, tags and colours take the row's width.
+- Beside the time spent, the remaining time is worded — *24 h left* (neutral) or *Over by 2 h* (danger colour) — with
+  the signed deviation in the tooltip, instead of a green *−24 h (−100 %)*.
+- Board cards show the estimate as a duration (*24 h*, not *1440m*).
+- Subtasks: the title, its counter, a themed progress bar and the fold toggle (an icon button) sit together in the
+  header; each row has the title on the left and the column and tags as badges in a right-hand column (the bundle's
+  own `.nowo-task-badge` / `.nowo-task-tag` pills, sentence case, no host `badge` classes needed).
+- Colour swatches stay round: the picked one gets a ring and a check (it no longer grows into a square).
+- Section headings read alike: *Description* is sentence case like *Subtasks* and *Time tracking*.
 
 ## [1.19.1] - 2026-10-30
 

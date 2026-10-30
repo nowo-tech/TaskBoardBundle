@@ -6,6 +6,7 @@ import BoardController from './board-controller';
 import AddTaskModalController from './add-task-modal-controller';
 import AddColumnModalController from './add-column-modal-controller';
 import ListFilterController from './list-filter-controller';
+import TaskNavController from './task-nav-controller';
 import SubtaskTreeController from './subtask-tree-controller';
 import TaskStatusController from './task-status-controller';
 import TaskMembersModalController from './task-members-modal-controller';
@@ -45,6 +46,7 @@ application.register('nowo-task-board-option-filter', OptionFilterController);
 application.register('nowo-task-board-filter-collapse', FilterCollapseController);
 application.register('nowo-task-board-mention', MentionController);
 application.register('nowo-task-board-activity-filter', ActivityFilterController);
+application.register('nowo-task-board-task-nav', TaskNavController);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

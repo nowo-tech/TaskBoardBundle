@@ -102,7 +102,7 @@ task_board.form.task.title: Title
 task_board.form.task.description: Description
 task_board.form.task.priority: Priority
 task_board.form.task.column: Column ID
-task_board.form.task.estimate: Estimated minutes
+task_board.form.task.estimate: "Estimativa"
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: Invalid due date.
@@ -351,3 +351,19 @@ task_board.import.subtasks.help: "As tarefas do ficheiro passam a subtarefas de 
 task_board.import.subtasks.submit: "Importar"
 task_board.flash.subtask_import_summary: "Importadas %created% subtarefa(s) e %dependencies% relação(ões) do Gantt; ignoradas %skipped%."
 task_board.task.edit_description: "Editar descrição"
+# Since 1.20: previous / next task, remaining time, the estimate as a duration.
+task_board.nav.label: "Navegação entre tarefas"
+task_board.nav.position: "%index%/%total%"
+task_board.nav.position_column: "%index%/%total% · %column%"
+task_board.nav.subtask_position: "Subtarefa %index%/%total%"
+task_board.nav.previous: "Tarefa anterior"
+task_board.nav.next: "Tarefa seguinte"
+task_board.nav.subtask_previous: "Subtarefa anterior"
+task_board.nav.subtask_next: "Subtarefa seguinte"
+task_board.nav.parent: "Tarefa principal: %title%"
+task_board.nav.first_subtask: "Primeira subtarefa"
+task_board.nav.unsaved: "Esta tarefa tem alterações não guardadas. Sair mesmo assim?"
+task_board.time.left: "Faltam %duration%"
+task_board.time.over_by: "Excedido em %duration%"
+task_board.form.task.estimate_invalid: "Indique uma duração como 90, 45 min, 2 h ou 1 h 30 min."
+task_board.form.task.estimate_placeholder: "p. ex. 2 h 30 min"

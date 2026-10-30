@@ -102,7 +102,7 @@ task_board.form.task.title: Title
 task_board.form.task.description: Description
 task_board.form.task.priority: Priority
 task_board.form.task.column: Column ID
-task_board.form.task.estimate: Estimated minutes
+task_board.form.task.estimate: "Stima"
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: Invalid due date.
@@ -351,3 +351,19 @@ task_board.import.subtasks.help: "Le attività del file diventano sottoattività
 task_board.import.subtasks.submit: "Importa"
 task_board.flash.subtask_import_summary: "Importate %created% sottoattività e %dependencies% relazioni del Gantt, %skipped% saltate."
 task_board.task.edit_description: "Modifica descrizione"
+# Since 1.20: previous / next task, remaining time, the estimate as a duration.
+task_board.nav.label: "Navigazione tra le attività"
+task_board.nav.position: "%index%/%total%"
+task_board.nav.position_column: "%index%/%total% · %column%"
+task_board.nav.subtask_position: "Sottoattività %index%/%total%"
+task_board.nav.previous: "Attività precedente"
+task_board.nav.next: "Attività successiva"
+task_board.nav.subtask_previous: "Sottoattività precedente"
+task_board.nav.subtask_next: "Sottoattività successiva"
+task_board.nav.parent: "Attività principale: %title%"
+task_board.nav.first_subtask: "Prima sottoattività"
+task_board.nav.unsaved: "Questa attività ha modifiche non salvate. Uscire comunque?"
+task_board.time.left: "Restano %duration%"
+task_board.time.over_by: "Superato di %duration%"
+task_board.form.task.estimate_invalid: "Inserisci una durata come 90, 45 min, 2 h o 1 h 30 min."
+task_board.form.task.estimate_placeholder: "es. 2 h 30 min"

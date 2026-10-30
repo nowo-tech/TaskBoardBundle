@@ -56,6 +56,11 @@
         </div>
         {% endblock %}
 
+        {% block nowo_task_navigation %}
+        {# Since 1.20: previous / next task (board or list order, subtasks). #}
+        {{ include('@NowoTaskBoardBundle/manage/_task_navigation.html.twig') }}
+        {% endblock %}
+
         <div class="nowo-task-detail__body">
             {{ form_start(taskForm, {action: path(nowo_task_board_route('task'), {taskId: task.id}|merge(taskRouteExtra|default({}))), attr: {id: 'nowo-task-edit-form', class: 'nowo-task-detail__form'}}) }}
 
@@ -120,27 +125,27 @@
                     </dd>
                 </div>
 
-                {# Since 1.15: the start date (the Gantt bar starts there), next to the due date. #}
-                {% if taskForm.startAt is defined %}
-                <div class="nowo-task-detail__field nowo-task-detail__attr">
-                    <dt class="nowo-task-detail__field-label">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar-event'}) }}
-                        <span>{{ 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                    </dt>
-                    <dd class="nowo-task-detail__field-value">
-                        {{ form_widget(taskForm.startAt, {label: false, attr: taskForm.startAt.vars.attr|merge({'aria-label': 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle')})}) }}
-                        {{ form_errors(taskForm.startAt) }}
-                    </dd>
-                </div>
-                {% endif %}
-
-                <div class="nowo-task-detail__field nowo-task-detail__attr">
+                {#
+                    Since 1.15 the start date (the Gantt bar starts there); since 1.20 start and due date share one row,
+                    side by side (wrapping on a narrow panel), each input with its own small label.
+                #}
+                <div class="nowo-task-detail__field nowo-task-detail__attr nowo-task-detail__attr--dates">
                     <dt class="nowo-task-detail__field-label">
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar'}) }}
-                        <span>{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        <span>{{ 'task_board.task.dates'|trans({}, 'NowoTaskBoardBundle') }}</span>
                     </dt>
-                    <dd class="nowo-task-detail__field-value">
-                        {{ form_widget(taskForm.dueAt, {label: false, attr: taskForm.dueAt.vars.attr|merge({'aria-label': 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                    <dd class="nowo-task-detail__field-value nowo-task-detail__dates">
+                        {% if taskForm.startAt is defined %}
+                            <label class="nowo-task-detail__date">
+                                <span class="nowo-task-detail__inline-label">{{ 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                {{ form_widget(taskForm.startAt, {label: false, attr: taskForm.startAt.vars.attr|merge({'aria-label': 'task_board.form.task.start'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                            </label>
+                        {% endif %}
+                        <label class="nowo-task-detail__date">
+                            <span class="nowo-task-detail__inline-label">{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                            {{ form_widget(taskForm.dueAt, {label: false, attr: taskForm.dueAt.vars.attr|merge({'aria-label': 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                        </label>
+                        {% if taskForm.startAt is defined %}{{ form_errors(taskForm.startAt) }}{% endif %}
                     </dd>
                 </div>
 
@@ -153,12 +158,23 @@
                         {% set _deviation = deviation|default(nowo_task_board_deviation(task)) %}
                         <span class="nowo-task-detail__logged" title="{{ 'task_board.time.logged'|trans({}, 'NowoTaskBoardBundle') }}"><strong>{{ task.loggedMinutes|nowo_task_board_duration }}</strong></span>
                         {% if _deviation.hasEstimate %}
-                            {# Since 1.15: the deviation beside the time spent. #}
-                            <span class="nowo-task-deviation-pill nowo-task-deviation-pill--{{ _deviation.status }}" title="{{ ('task_board.time.status.' ~ _deviation.status)|trans({}, 'NowoTaskBoardBundle') }}">{{ _deviation.difference|nowo_task_board_duration(true) }} ({{ _deviation.percent > 0 ? '+' : '' }}{{ _deviation.percent }} %)</span>
+                            {#
+                                Since 1.15 the deviation beside the time spent; since 1.20 worded as the time left ("24 h left",
+                                neutral) or the overrun ("Over by 2 h", danger colour), the signed deviation in the tooltip.
+                            #}
+                            {% set _over = _deviation.difference > 0 %}
+                            <span
+                                class="nowo-task-deviation-pill nowo-task-remaining nowo-task-remaining--{{ _over ? 'over' : 'left' }}{{ _over ? ' nowo-task-deviation-pill--over' : '' }}"
+                                data-deviation-status="{{ _deviation.status }}"
+                                title="{{ ('task_board.time.status.' ~ _deviation.status)|trans({}, 'NowoTaskBoardBundle') }} · {{ _deviation.difference|nowo_task_board_duration(true) }} ({{ _deviation.percent > 0 ? '+' : '' }}{{ _deviation.percent }} %)"
+                            >{{ _over
+                                ? 'task_board.time.over_by'|trans({'%duration%': _deviation.difference|nowo_task_board_duration}, 'NowoTaskBoardBundle')
+                                : 'task_board.time.left'|trans({'%duration%': (0 - _deviation.difference)|nowo_task_board_duration}, 'NowoTaskBoardBundle') }}</span>
                         {% endif %}
                         <span class="nowo-task-detail__estimate">
                             <span class="nowo-task-detail__inline-label">{{ 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                            {{ form_widget(taskForm.estimatedMinutes, {label: false, attr: {class: 'form-control form-control-sm nowo-task-detail__inline-input', 'aria-label': 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle')}}) }}
+                            {{ form_widget(taskForm.estimatedMinutes, {label: false, attr: taskForm.estimatedMinutes.vars.attr|merge({class: 'form-control form-control-sm nowo-task-detail__inline-input', 'aria-label': 'task_board.time.estimate'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                            {{ form_errors(taskForm.estimatedMinutes) }}
                         </span>
                     </dd>
                 </div>
@@ -234,7 +250,11 @@
     {% block nowo_task_subtasks %}
     {# Since 1.12: a checklist with its progress and an inline "Add subtask" (Enter adds). #}
     <section class="nowo-task-detail nowo-task-section nowo-task-detail__subtasks" data-controller="nowo-task-board-subtask-tree">
-        <header class="nowo-task-section__header nowo-task-detail__section-header">
+        {#
+            Since 1.20 the header keeps the title, its count, the progress bar and the fold toggle together on the left
+            (the toggle is an icon button beside the title, not a far-off button).
+        #}
+        <header class="nowo-task-section__header nowo-task-detail__section-header nowo-task-subtasks__header">
             <h2 class="nowo-task-section__title">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}{{ 'task_board.task.subtasks'|trans({}, 'NowoTaskBoardBundle') }}
                 {% if subtaskTotal > 0 %}
@@ -242,14 +262,12 @@
                 {% endif %}
             </h2>
             {% if subtaskTotal > 0 %}
-                <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-board-subtask-tree__toggle" data-nowo-task-board-subtask-tree-target="toggle" data-action="nowo-task-board-subtask-tree#toggle" aria-expanded="true">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'list-tree'}) }} {{ 'task_board.task.toggle_subtasks'|trans({}, 'NowoTaskBoardBundle') }}
+                <progress class="nowo-task-progress nowo-task-subtasks__progress" max="{{ subtaskTotal }}" value="{{ subtaskDone }}" aria-label="{{ 'task_board.task.subtasks_progress'|trans({'%done%': subtaskDone, '%total%': subtaskTotal}, 'NowoTaskBoardBundle') }}">{{ subtaskDone }}/{{ subtaskTotal }}</progress>
+                <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon nowo-task-board-subtask-tree__toggle" data-nowo-task-board-subtask-tree-target="toggle" data-action="nowo-task-board-subtask-tree#toggle" aria-expanded="true" title="{{ 'task_board.task.toggle_subtasks'|trans({}, 'NowoTaskBoardBundle') }}">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'list-tree'}) }}<span class="nowo-task-sr-only">{{ 'task_board.task.toggle_subtasks'|trans({}, 'NowoTaskBoardBundle') }}</span>
                 </button>
             {% endif %}
         </header>
-        {% if subtaskTotal > 0 %}
-            <progress class="nowo-task-progress" max="{{ subtaskTotal }}" value="{{ subtaskDone }}" aria-label="{{ 'task_board.task.subtasks_progress'|trans({'%done%': subtaskDone, '%total%': subtaskTotal}, 'NowoTaskBoardBundle') }}">{{ subtaskDone }}/{{ subtaskTotal }}</progress>
-        {% endif %}
         <div class="nowo-task-detail__subtask-list" data-nowo-task-board-subtask-tree-target="list">
             {# Since 1.10: the whole subtree (any depth) through the recursive partial. #}
             {{ include('@NowoTaskBoardBundle/manage/_subtask_tree.html.twig', {

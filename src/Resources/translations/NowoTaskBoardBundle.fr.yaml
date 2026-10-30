@@ -102,7 +102,7 @@ task_board.form.task.title: Title
 task_board.form.task.description: Description
 task_board.form.task.priority: Priority
 task_board.form.task.column: Column ID
-task_board.form.task.estimate: Estimated minutes
+task_board.form.task.estimate: "Estimation"
 task_board.form.task.due: Due date
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: Invalid due date.
@@ -351,3 +351,19 @@ task_board.import.subtasks.help: "Les tâches du fichier deviennent des sous-tâ
 task_board.import.subtasks.submit: "Importer"
 task_board.flash.subtask_import_summary: "%created% sous-tâche(s) et %dependencies% relation(s) de Gantt importées, %skipped% ignorée(s)."
 task_board.task.edit_description: "Modifier la description"
+# Since 1.20: previous / next task, remaining time, the estimate as a duration.
+task_board.nav.label: "Navigation entre les tâches"
+task_board.nav.position: "%index%/%total%"
+task_board.nav.position_column: "%index%/%total% · %column%"
+task_board.nav.subtask_position: "Sous-tâche %index%/%total%"
+task_board.nav.previous: "Tâche précédente"
+task_board.nav.next: "Tâche suivante"
+task_board.nav.subtask_previous: "Sous-tâche précédente"
+task_board.nav.subtask_next: "Sous-tâche suivante"
+task_board.nav.parent: "Tâche parente : %title%"
+task_board.nav.first_subtask: "Première sous-tâche"
+task_board.nav.unsaved: "Cette tâche a des modifications non enregistrées. La quitter quand même ?"
+task_board.time.left: "%duration% restantes"
+task_board.time.over_by: "Dépassé de %duration%"
+task_board.form.task.estimate_invalid: "Saisissez une durée comme 90, 45 min, 2 h ou 1 h 30 min."
+task_board.form.task.estimate_placeholder: "p. ex. 2 h 30 min"
