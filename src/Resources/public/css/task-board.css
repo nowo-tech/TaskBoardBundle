@@ -3251,3 +3251,17 @@ details.nowo-task-section > summary {
 .nowo-task-detail__description-edit > summary::-webkit-details-marker {
     display: none;
 }
+
+/* Since 1.19.1: the history card's content (activity filter, stream, comment box) keeps the card's inner padding on
+ * the task page instead of touching its edges; a host drawing the panel without card frames can reset it. */
+.nowo-task-detail__history > :not(summary) {
+    margin-inline: 1.25rem;
+}
+
+.nowo-task-detail__history > :not(summary):first-of-type {
+    margin-top: 0.75rem;
+}
+
+.nowo-task-detail__history > :last-child {
+    margin-bottom: 1rem;
+}
