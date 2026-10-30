@@ -97,7 +97,12 @@ CLI:
 php bin/console nowo:task-board:import <board-uuid> /path/to/export.csv --source=clickup_csv
 ```
 
-Supported `--source` values: `clickup_csv`, `clickup_json`, `jira_csv`, `trello_json`.
+Supported `--source` values: `clickup_csv`, `clickup_json`, `jira_csv`, `trello_json`, and since 1.18 the bundle's own
+`taskboard_csv` / `taskboard_json` (subtask tree, start dates, Gantt relations: [docs/import/taskboard.md](import/taskboard.md)).
+
+Since 1.18 the import page and the task page have a **How to import** help modal (`manage/_import_help.html.twig`):
+what each format imports, the own format's columns and examples. **Import subtasks** on a task (route `task_import`,
+editors only) imports a file as that task's subtask tree, with its Gantt relations.
 
 **Export guides (English):** [docs/import/](import/README.md) — step-by-step instructions for [ClickUp](import/clickup.md), [Jira](import/jira.md), and [Trello](import/trello.md).
 
@@ -436,7 +441,7 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
 calendar-event, check, chevron-down, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
 columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
-line-dashed, link, list, list-tree, notes, palette, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus,
+help, line-dashed, link, list, list-tree, notes, palette, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus,
 users, x.
 
 ### Inline new task

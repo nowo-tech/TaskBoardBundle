@@ -1,0 +1,36 @@
+{#
+    Since 1.18: "Import subtasks" on a task — a file of tasks becomes this task's subtask tree with its Gantt relations;
+    the help modal documents the format. Editors only (subtaskImportForm is null otherwise).
+    Variables: task, subtaskImportForm.
+#}
+{% if subtaskImportForm|default(null) %}
+    <div class="nowo-task-subtask-import" data-controller="nowo-task-board-dialog">
+        <button type="button" class="btn btn-sm btn-outline-secondary nowo-task-subtask-import__open" data-action="nowo-task-board-dialog#open" data-dialog="subtask-import">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.action'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="subtask-import" aria-labelledby="nowo-task-subtask-import-title-{{ task.id }}">
+            <div class="nowo-task-dialog__header">
+                <h2 class="nowo-task-dialog__title" id="nowo-task-subtask-import-title-{{ task.id }}">{{ 'task_board.import.subtasks.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+                </button>
+            </div>
+            {{ form_start(subtaskImportForm, {method: 'POST', attr: {class: 'nowo-task-dialog__body', enctype: 'multipart/form-data'}}) }}
+                <p class="nowo-task-dialog__help">{{ 'task_board.import.subtasks.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
+                {% for child in subtaskImportForm %}
+                    {% if not child.rendered %}
+                        <div class="nowo-task-field">{{ form_row(child) }}</div>
+                    {% endif %}
+                {% endfor %}
+                <div class="nowo-task-dialog__actions">
+                    <button type="button" class="btn btn-outline-secondary nowo-task-subtask-import__help" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" class="btn btn-primary">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                </div>
+            {{ form_end(subtaskImportForm) }}
+        </dialog>
+        {{ include('@NowoTaskBoardBundle/manage/_import_help.html.twig', {scope: 'task', helpId: 'task-' ~ task.id}) }}
+    </div>
+{% endif %}

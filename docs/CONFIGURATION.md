@@ -100,6 +100,7 @@ Each route has `path` and `name`. Optional `route_prefix` is prepended to every 
 | `routes.task_comment_edit` (1.16) | `/tools/task-board/task/{taskId}/comment/{commentId}` | `nowo_task_board_task_comment_edit` |
 | `routes.task_comment_delete` (1.16) | `/tools/task-board/task/{taskId}/comment/{commentId}/delete` | `nowo_task_board_task_comment_delete` |
 | `routes.task_dependency` (1.15) | `/tools/task-board/task/{taskId}/dependency` | `nowo_task_board_task_dependency` |
+| `routes.task_import` (1.18, POST) | `/tools/task-board/task/{taskId}/import` | `nowo_task_board_task_import` |
 | `routes.task_dependency_remove` (1.15) | `/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove` | `nowo_task_board_task_dependency_remove` |
 | `routes.task_time` (1.15) | `/tools/task-board/task/{taskId}/time` | `nowo_task_board_task_time` |
 | `routes.task_time_remove` (1.15) | `/tools/task-board/task/{taskId}/time/{entryId}/remove` | `nowo_task_board_task_time_remove` |

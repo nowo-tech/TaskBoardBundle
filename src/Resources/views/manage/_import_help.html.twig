@@ -1,0 +1,66 @@
+{#
+    Since 1.18: the help modal of every import — what each format imports and how to prepare the file; the bundle's
+    own CSV / JSON with its columns, the subtask tree, start dates and the Gantt relations, with an example.
+    Inside an element with data-controller="nowo-task-board-dialog"; the trigger is
+    `<button data-action="nowo-task-board-dialog#open" data-dialog="import-help">`.
+    Variables: scope ('board': into the board, 'task': as subtasks of a task), helpId (unique id suffix).
+#}
+{% set _scope = scope|default('board') %}
+{% set _t = 'task_board.import.help.' %}
+<dialog class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide nowo-task-import-help" data-nowo-task-board-dialog-target="dialog" data-dialog="import-help" aria-labelledby="nowo-task-import-help-title-{{ helpId|default('board') }}">
+    <div class="nowo-task-dialog__header">
+        <h2 class="nowo-task-dialog__title" id="nowo-task-import-help-title-{{ helpId|default('board') }}">{{ (_t ~ 'modal_title')|trans({}, 'NowoTaskBoardBundle') }}</h2>
+        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
+        </button>
+    </div>
+    <div class="nowo-task-dialog__body nowo-task-import-help__body">
+        <p>{{ (_t ~ 'intro_' ~ _scope)|trans({}, 'NowoTaskBoardBundle') }}</p>
+
+        <h3 class="nowo-task-import-help__heading">{{ (_t ~ 'taskboard_title')|trans({}, 'NowoTaskBoardBundle') }}</h3>
+        <p>{{ (_t ~ 'taskboard_intro')|trans({}, 'NowoTaskBoardBundle') }}</p>
+        <div class="nowo-task-import-help__table-wrap">
+            <table class="nowo-task-import-help__table">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ (_t ~ 'column')|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ (_t ~ 'meaning')|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for _column in ['id', 'parent', 'title', 'description', 'status', 'priority', 'assignee', 'start', 'due', 'estimate', 'tags', 'depends_on'] %}
+                        <tr>
+                            <th scope="row"><code>{{ _column }}</code></th>
+                            <td>{{ (_t ~ 'col_' ~ _column)|trans({}, 'NowoTaskBoardBundle') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p>{{ (_t ~ 'dependencies')|trans({}, 'NowoTaskBoardBundle') }}</p>
+        <h4 class="nowo-task-import-help__subheading">{{ (_t ~ 'example_csv')|trans({}, 'NowoTaskBoardBundle') }}</h4>
+        <pre class="nowo-task-import-help__example"><code>id,parent,title,status,start,due,estimate,depends_on
+design,,Design the screens,To do,2026-11-02,2026-11-06,8h,
+api,,Build the API,To do,2026-11-04,2026-11-12,16h,
+api-auth,api,Authentication endpoints,To do,2026-11-04,2026-11-06,6h,
+release,,Release,To do,2026-11-13,2026-11-13,1h,design;api</code></pre>
+        <h4 class="nowo-task-import-help__subheading">{{ (_t ~ 'example_json')|trans({}, 'NowoTaskBoardBundle') }}</h4>
+        <pre class="nowo-task-import-help__example"><code>{"tasks": [
+  {"id": "api", "title": "Build the API", "start": "2026-11-04", "due": "2026-11-12",
+   "subtasks": [{"id": "api-auth", "title": "Authentication endpoints"}]},
+  {"id": "release", "title": "Release", "depends_on": ["api", "api-auth:related"]}
+]}</code></pre>
+
+        <h3 class="nowo-task-import-help__heading">{{ (_t ~ 'others_title')|trans({}, 'NowoTaskBoardBundle') }}</h3>
+        <dl class="nowo-task-import-help__sources">
+            {% for _source in ['clickup_csv', 'clickup_json', 'jira_csv', 'trello_json'] %}
+                <dt>{{ ('task_board.import.source.' ~ _source)|trans({}, 'NowoTaskBoardBundle') }}</dt>
+                <dd>{{ (_t ~ 'source_' ~ _source)|trans({}, 'NowoTaskBoardBundle') }}</dd>
+            {% endfor %}
+        </dl>
+        <p class="nowo-task-import-help__note">{{ (_t ~ 'options')|trans({}, 'NowoTaskBoardBundle') }}</p>
+    </div>
+    <div class="nowo-task-dialog__actions">
+        <button type="button" class="btn btn-primary" data-action="nowo-task-board-dialog#close">{{ (_t ~ 'got_it')|trans({}, 'NowoTaskBoardBundle') }}</button>
+    </div>
+</dialog>

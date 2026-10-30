@@ -54,24 +54,17 @@
             </div>
         </div>
         <div class="col-12 col-lg-4">
-            <div class="card">
+            {# Since 1.18: what each format imports and how, in a help modal. #}
+            <div class="card nowo-task-import-help-card" data-controller="nowo-task-board-dialog">
                 <div class="card-header">
                     <h3 class="card-title">{{ 'task_board.import.help.title'|trans({}, 'NowoTaskBoardBundle') }}</h3>
                 </div>
                 <div class="card-body">
-                    <h4 class="h5">{{ 'task_board.import.help.clickup_title'|trans({}, 'NowoTaskBoardBundle') }}</h4>
-                    <ol class="text-secondary small mb-4">
-                        <li>{{ 'task_board.import.help.clickup_step_1'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                        <li>{{ 'task_board.import.help.clickup_step_2'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                        <li>{{ 'task_board.import.help.clickup_step_3'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                    </ol>
-                    <h4 class="h5">{{ 'task_board.import.help.supported_title'|trans({}, 'NowoTaskBoardBundle') }}</h4>
-                    <ul class="text-secondary small mb-0">
-                        <li>{{ 'task_board.import.source.clickup_csv'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                        <li>{{ 'task_board.import.source.clickup_json'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                        <li>{{ 'task_board.import.source.jira_csv'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                        <li>{{ 'task_board.import.source.trello_json'|trans({}, 'NowoTaskBoardBundle') }}</li>
-                    </ul>
+                    <p class="text-secondary small">{{ 'task_board.import.help.intro_board'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    {{ include('@NowoTaskBoardBundle/manage/_import_help.html.twig', {scope: 'board', helpId: 'board-' ~ board.id}) }}
                 </div>
             </div>
         </div>

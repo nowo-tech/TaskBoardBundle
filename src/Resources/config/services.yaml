@@ -79,6 +79,12 @@ services:
     Nowo\TaskBoardBundle\Import\Trello\TrelloJsonImporter:
         tags: [{ name: nowo_task_board.task_importer }]
 
+    Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardCsvImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
+    Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardJsonImporter:
+        tags: [{ name: nowo_task_board.task_importer }]
+
     Nowo\TaskBoardBundle\Import\TaskImportOrchestrator:
         arguments:
             $importers: !tagged_iterator nowo_task_board.task_importer

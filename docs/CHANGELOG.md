@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.18.0] - 2026-10-30](#1180---2026-10-30)
 - [[1.17.1] - 2026-10-30](#1171---2026-10-30)
 - [[1.17.0] - 2026-10-30](#1170---2026-10-30)
 - [[1.16.1] - 2026-10-29](#1161---2026-10-29)
@@ -55,6 +56,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.18.0] - 2026-10-30
+
+### Added
+
+- **Import subtasks into a task** (route `task_import`, POST, editors only): the task page and panel offer *Import
+  subtasks*; the file's rows without a parent become subtasks of the task, the others hang from their parent row, and
+  their Gantt relations are created. `TaskImportOrchestrator::import()` takes an optional `parentTask`.
+- **The bundle's own import format**, `taskboard_csv` / `taskboard_json` ([docs/import/taskboard.md](import/taskboard.md)):
+  `id`, `parent` (or nested `subtasks` in JSON), `title`, `description`, `status`, `priority`, `assignee`, `start`,
+  `due`, `estimate`, `tags` and `depends_on` (Gantt relations, `ID` or `ID:type`). Relations to rows outside the file,
+  duplicates and cycles are skipped with a warning; `TaskImportResult::$dependenciesCreated` counts the rest.
+  `ImportedTaskDto` gains `startAt` and `dependsOn`.
+- **Import help modal** (`manage/_import_help.html.twig`) on the import page and in *Import subtasks*: what each format
+  imports (ClickUp, Jira, Trello, the own format), the own format's columns and examples (7 locales).
 
 ## [1.17.1] - 2026-10-30
 

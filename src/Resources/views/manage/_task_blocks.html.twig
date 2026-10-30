@@ -258,6 +258,8 @@
                     {% endif %}
                 {% endfor %}
             {{ form_end(subtaskForm) }}
+            {# Since 1.18: import a subtask tree (with its Gantt relations) from a file. #}
+            {{ include('@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig') }}
         {% endif %}
     </section>
     {% endblock %}
