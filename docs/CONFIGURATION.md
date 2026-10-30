@@ -222,6 +222,8 @@ nowo_task_board:
         task: '@NowoTaskBoardBundle/manage/task.html.twig'
         import: '@NowoTaskBoardBundle/manage/import.html.twig'
         task_panel: '@NowoTaskBoardBundle/manage/task_panel.html.twig'   # since 1.11, no layout
+        filters_collapse: null       # since 1.17, host partial folding the list filters
+        filters_form_class: ''       # since 1.17, extra classes on the list filter form
 ```
 
 | Option | Default | Description |
@@ -235,6 +237,8 @@ nowo_task_board:
 | `templates.task` | `@NowoTaskBoardBundle/manage/task.html.twig` | Task detail page. |
 | `templates.import` | `@NowoTaskBoardBundle/manage/import.html.twig` | Import page. |
 | `templates.task_panel` | `@NowoTaskBoardBundle/manage/task_panel.html.twig` | Task editing panel without layout (since 1.11), for side drawers. |
+| `templates.filters_collapse` | `null` | Since 1.17: host partial that folds the list view filters (e.g. `@NowoUiKitBundle/partials/_filters_collapse.html.twig`), included first in the filter form with `key` / `fold_key` and `form` / `filter_form`. Null keeps the bundle's "Filters" toggle. |
+| `templates.filters_form_class` | `''` | Since 1.17: extra classes on the list view filter form (the host's filter card). |
 
 ## Layout integration (REQ-UI-001)
 

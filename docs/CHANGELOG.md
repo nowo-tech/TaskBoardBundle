@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.17.0] - 2026-10-30](#1170---2026-10-30)
 - [[1.16.1] - 2026-10-29](#1161---2026-10-29)
 - [[1.16.0] - 2026-10-29](#1160---2026-10-29)
 - [[1.15.0] - 2026-10-29](#1150---2026-10-29)
@@ -53,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.17.0] - 2026-10-30
+
+### Added
+
+- `templates.filters_collapse` (Twig global `nowo_task_board_filters_collapse`): a host partial that folds the list
+  view filters, e.g. UiKit's `partials/_filters_collapse.html.twig` (corner tab on the right, "N active filters" while
+  folded) or the host's wrapper of it, so the list folds like the host's other filter cards. It is included as the
+  first child of the filter form with `key` / `fold_key` (`nowo-task-board-list-<board id>`) and `form` /
+  `filter_form`. Null (default) keeps the bundle's own "Filters" toggle.
+- `templates.filters_form_class` (Twig global `nowo_task_board_filters_form_class`): extra classes on the list view
+  filter form (the host's filter card, e.g. `issue-filters panel`).
 
 ## [1.16.1] - 2026-10-29
 

@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -21,18 +22,22 @@ final class TaskBoardTwigExtensionTest extends TestCase
         $extension = new TaskBoardTwigExtension('@NowoTaskBoardBundle/layout.html.twig', 'tabler');
 
         self::assertSame([
-            'nowo_task_board_layout'        => '@NowoTaskBoardBundle/layout.html.twig',
-            'nowo_task_board_css_framework' => 'tabler',
+            'nowo_task_board_layout'             => '@NowoTaskBoardBundle/layout.html.twig',
+            'nowo_task_board_css_framework'      => 'tabler',
+            'nowo_task_board_filters_collapse'   => null,
+            'nowo_task_board_filters_form_class' => '',
         ], $extension->getGlobals());
     }
 
     public function testGetGlobalsUsesConfiguredValues(): void
     {
-        $extension = new TaskBoardTwigExtension('base.html.twig', 'custom');
+        $extension = new TaskBoardTwigExtension('base.html.twig', 'custom', [], new TaskObjectLinkResolver(), 'shared/_filters_collapse.html.twig', 'issue-filters panel');
 
         self::assertSame([
-            'nowo_task_board_layout'        => 'base.html.twig',
-            'nowo_task_board_css_framework' => 'custom',
+            'nowo_task_board_layout'             => 'base.html.twig',
+            'nowo_task_board_css_framework'      => 'custom',
+            'nowo_task_board_filters_collapse'   => 'shared/_filters_collapse.html.twig',
+            'nowo_task_board_filters_form_class' => 'issue-filters panel',
         ], $extension->getGlobals());
     }
 
