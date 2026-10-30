@@ -45,8 +45,6 @@ services:
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:
         arguments:
             $routes: '%nowo_task_board.routes%'
-            $filtersCollapse: '%nowo_task_board.templates.filters_collapse%'
-            $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
             $routePrefix: '%nowo_task_board.route_prefix%'
             $tenancy: '%nowo_task_board.tenancy%'
         tags:
@@ -93,6 +91,8 @@ services:
             $layoutTemplate: '%nowo_task_board.templates.layout%'
             $cssFramework: '%nowo_task_board.templates.css_framework%'
             $routes: '%nowo_task_board.routes%'
+            $filtersCollapse: '%nowo_task_board.templates.filters_collapse%'
+            $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
 
     # Form Kit injects FormOptionsMerger into tagged form types (FormOptionsMergerInjectorCompilerPass).
     Nowo\TaskBoardBundle\Form\:

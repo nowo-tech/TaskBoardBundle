@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.17.1] - 2026-10-30](#1171---2026-10-30)
 - [[1.17.0] - 2026-10-30](#1170---2026-10-30)
 - [[1.16.1] - 2026-10-29](#1161---2026-10-29)
 - [[1.16.0] - 2026-10-29](#1160---2026-10-29)
@@ -54,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.17.1] - 2026-10-30
+
+### Fixed
+
+- 1.17.0 bound the two new template arguments (`$filtersCollapse`, `$filtersFormClass`) to the route loader instead of
+  the Twig extension: the container did not compile ("has no argument named $filtersCollapse"). An integration test now
+  resolves the named arguments of every bundle service.
 
 ## [1.17.0] - 2026-10-30
 
