@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
+use Nowo\FormKitBundle\Attribute\FormKitConfig;
+use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Override;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -16,8 +18,11 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @extends AbstractType<null>
  */
+#[FormKitConfig('task_board')]
 final class CsrfActionType extends AbstractType
 {
+    use FormOptionsTrait;
+
     #[Override]
     public function configureOptions(OptionsResolver $resolver): void
     {
