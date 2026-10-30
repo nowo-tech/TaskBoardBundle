@@ -3372,7 +3372,13 @@ a.nowo-task-nav__step:focus-visible {
 }
 
 .nowo-task-subtasks__header .nowo-task-board-subtask-tree__toggle {
-    margin: 0 0 0 auto;
+    margin: 0;
+}
+
+/* The track stays visible on a tinted header (0 done reads as an empty bar, not as nothing). */
+.nowo-task-subtasks__header .nowo-task-subtasks__progress,
+.nowo-task-subtasks__header .nowo-task-subtasks__progress::-webkit-progress-bar {
+    background: var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
 }
 
 /* Subtask row: title on the left, status and tags as badges in a right-hand column. */
