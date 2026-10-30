@@ -16,6 +16,11 @@ function rules(selector: string): string {
 }
 
 describe('task-board.css', () => {
+  it('keeps the history card content off the card edges (1.19.1)', () => {
+    expect(rules('.nowo-task-detail__history > :not(summary)')).toMatch(/margin-inline:\s*1\.25rem/);
+    expect(rules('.nowo-task-detail__history > :last-child')).toMatch(/margin-bottom:\s*1rem/);
+  });
+
   it('keeps the task attributes compact: rows at their fields\' height, one line below the grid (1.18.1)', () => {
     expect(rules('.nowo-task-detail__attr')).toMatch(/min-height:\s*2\.25rem/);
     expect(rules('.nowo-task-detail__attrs > .nowo-task-detail__attr:last-child')).toMatch(/border-bottom:\s*0/);

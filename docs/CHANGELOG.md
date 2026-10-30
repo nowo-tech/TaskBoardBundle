@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.19.1] - 2026-10-30](#1191---2026-10-30)
 - [[1.19.0] - 2026-10-30](#1190---2026-10-30)
 - [[1.18.1] - 2026-10-30](#1181---2026-10-30)
 - [[1.18.0] - 2026-10-30](#1180---2026-10-30)
@@ -58,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.19.1] - 2026-10-30
+
+### Fixed
+
+- Task page: the history card's activity filter, stream and comment box touched the card's edges; they keep its
+  inner padding now.
 
 ## [1.19.0] - 2026-10-30
 

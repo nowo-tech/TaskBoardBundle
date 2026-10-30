@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.19.1](#to-1191)
 - [To 1.19.0](#to-1190)
 - [To 1.18.1](#to-1181)
 - [To 1.18.0](#to-1180)
@@ -98,6 +99,11 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.19.1
+
+From **1.19.0**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. CSS only: a host
+that draws the task panel without card frames resets `.nowo-task-detail__history > :not(summary)` (margin-inline).
 
 ## To 1.19.0
 
