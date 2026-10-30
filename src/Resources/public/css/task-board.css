@@ -3198,3 +3198,37 @@ details.nowo-task-section > summary {
 .nowo-task-subtask-import__help {
     margin-inline-end: auto;
 }
+
+/* Since 1.18.1: a compact attribute grid — rows at the height of their fields (no 2.75rem minimum), compact inputs,
+ * one line above and one below the grid (the last row draws none of its own) and less padding around it. */
+.nowo-task-detail__meta {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.nowo-task-detail__attrs {
+    margin-bottom: 1rem;
+}
+
+.nowo-task-detail__attr {
+    min-height: 2.25rem;
+    padding: 0.2rem 0;
+    gap: 0.5rem 0.75rem;
+}
+
+.nowo-task-detail__attrs > .nowo-task-detail__attr:last-child {
+    border-bottom: 0;
+}
+
+.nowo-task-detail__attr :is(input:not([type='hidden'], [type='checkbox'], [type='radio']), select) {
+    min-height: 2rem;
+    padding-block: 0.2rem;
+}
+
+.nowo-task-detail__section + .nowo-task-detail__section {
+    margin-top: 0.75rem;
+}
+
+.nowo-task-detail__section-title {
+    margin-bottom: 0.5rem;
+}

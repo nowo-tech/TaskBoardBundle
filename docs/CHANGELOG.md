@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.18.1] - 2026-10-30](#1181---2026-10-30)
 - [[1.18.0] - 2026-10-30](#1180---2026-10-30)
 - [[1.17.1] - 2026-10-30](#1171---2026-10-30)
 - [[1.17.0] - 2026-10-30](#1170---2026-10-30)
@@ -56,6 +57,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.18.1] - 2026-10-30
+
+### Changed
+
+- Compact task attributes (task page and panel): rows at the height of their fields (no 2.75rem minimum), compact
+  inputs and selects, one line above and one below the grid (the last row draws none of its own), less padding around
+  it and between the detail sections.
 
 ## [1.18.0] - 2026-10-30
 
