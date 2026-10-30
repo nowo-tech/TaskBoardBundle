@@ -102,6 +102,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.templates', $config['templates']);
         $container->setParameter('nowo_task_board.templates.layout', $config['templates']['layout']);
         $container->setParameter('nowo_task_board.templates.css_framework', $config['templates']['css_framework']);
+        $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
+        $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);

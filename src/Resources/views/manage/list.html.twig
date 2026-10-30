@@ -39,28 +39,44 @@
     #}
     {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
     <div class="nowo-task-list" data-controller="nowo-task-board-list-filter" data-nowo-task-board-list-filter-board-value="{{ board.id }}">
-        {#
-            Since 1.15 the filters fold behind a "Filters" toggle (state per board in localStorage, open while a filter
-            is active, the disclosure chevron of the host's icon set) and gain "Over estimate" and the time columns.
-        #}
-        <div class="nowo-task-list__filter-panel" data-controller="nowo-task-board-filter-collapse" data-nowo-task-board-filter-collapse-id-value="{{ board.id }}">
-            <button type="button" class="nowo-task-list__filter-toggle" data-nowo-task-board-filter-collapse-target="button" data-action="nowo-task-board-filter-collapse#toggle" data-controller="disclosure-icon" aria-expanded="true" aria-controls="nowo-task-list-filters-{{ board.id }}">
-                {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig', {class: 'nowo-task-list__filter-caret'}) }}
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'filter'}) }}
-                <span>{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</span>
-                <span class="nowo-task-list__filter-count" data-nowo-task-board-filter-collapse-target="count" hidden></span>
-            </button>
-            <div class="nowo-task-list__filter-body" id="nowo-task-list-filters-{{ board.id }}" data-nowo-task-board-filter-collapse-target="body">
-                {# REQ-TWIG-005: client-side filters (unmapped TaskListFilterType fields keep the Stimulus targets). #}
-                {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: 'nowo-task-board-list-filters nowo-task-list__filters', 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
-                    {% for child in filterForm %}
-                        {% if not child.rendered %}
-                            {{ form_row(child) }}
-                        {% endif %}
-                    {% endfor %}
-                {{ form_end(filterForm) }}
+        {% if nowo_task_board_filters_collapse|default(null) %}
+            {#
+                Since 1.17: the host folds the filters its own way (templates.filters_collapse, e.g. UiKit's corner tab),
+                as the first child of the form, on the host's filter card (templates.filters_form_class).
+            #}
+            {% set _tb_filters_class = ('nowo-task-board-list-filters nowo-task-list__filters ' ~ nowo_task_board_filters_form_class|default(''))|trim %}
+            {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: _tb_filters_class, 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                {{ include(nowo_task_board_filters_collapse, {key: 'nowo-task-board-list-' ~ board.id, fold_key: 'nowo-task-board-list-' ~ board.id, form: filterForm, filter_form: filterForm}) }}
+                {% for child in filterForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(filterForm) }}
+        {% else %}
+            {#
+                Since 1.15 the filters fold behind a "Filters" toggle (state per board in localStorage, open while a filter
+                is active, the disclosure chevron of the host's icon set) and gain "Over estimate" and the time columns.
+            #}
+            <div class="nowo-task-list__filter-panel" data-controller="nowo-task-board-filter-collapse" data-nowo-task-board-filter-collapse-id-value="{{ board.id }}">
+                <button type="button" class="nowo-task-list__filter-toggle" data-nowo-task-board-filter-collapse-target="button" data-action="nowo-task-board-filter-collapse#toggle" data-controller="disclosure-icon" aria-expanded="true" aria-controls="nowo-task-list-filters-{{ board.id }}">
+                    {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig', {class: 'nowo-task-list__filter-caret'}) }}
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'filter'}) }}
+                    <span>{{ 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    <span class="nowo-task-list__filter-count" data-nowo-task-board-filter-collapse-target="count" hidden></span>
+                </button>
+                <div class="nowo-task-list__filter-body" id="nowo-task-list-filters-{{ board.id }}" data-nowo-task-board-filter-collapse-target="body">
+                    {# REQ-TWIG-005: client-side filters (unmapped TaskListFilterType fields keep the Stimulus targets). #}
+                    {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: 'nowo-task-board-list-filters nowo-task-list__filters', 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
+                        {% for child in filterForm %}
+                            {% if not child.rendered %}
+                                {{ form_row(child) }}
+                            {% endif %}
+                        {% endfor %}
+                    {{ form_end(filterForm) }}
+                </div>
             </div>
-        </div>
+        {% endif %}
 
         {% set _groups = board.columns|map(c => {column: c, tasks: tasks|filter(t => t.column and t.column.id == c.id)}) %}
         {% set _orphans = tasks|filter(t => not t.column) %}

@@ -683,6 +683,23 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringNotContainsString(' style="', $html);
     }
 
+    public function testTheHostFoldsTheListFiltersWithItsOwnPartial(): void
+    {
+        $html = $this->twig(null, 'host/_filters_collapse.html.twig', 'issue-filters panel')->render('@NowoTaskBoardBundle/manage/list.html.twig', [
+            'board'          => $this->board,
+            'tasks'          => [$this->task],
+            'priorities'     => ['high'],
+            'columnNames'    => ['Todo'],
+            'filterForm'     => Forms::createFormFactory()->createNamed('', TaskListFilterType::class, null, ['priorities' => ['high'], 'column_names' => ['Todo']])->createView(),
+            'dashboardRoute' => null,
+        ]);
+
+        self::assertStringNotContainsString('nowo-task-board-filter-collapse', $html);
+        self::assertStringNotContainsString('nowo-task-list__filter-toggle', $html);
+        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-board-list-filters nowo-task-list__filters issue-filters panel"[^>]*>\s*<div class="host-fold" data-key="nowo-task-board-list-' . $this->board->getId() . '" data-fold-key="nowo-task-board-list-' . $this->board->getId() . '"/', $html);
+        self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
+    }
+
     public function testGanttOffersTheScalesAndDrawsTheTimeSpent(): void
     {
         $this->task->addTimeEntry(new TaskTimeEntry($this->task, $this->user, 120, new DateTimeImmutable()));
@@ -939,7 +956,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             ->getFormFactory();
     }
 
-    private function twig(?TaskObjectLinkResolver $linkResolver = null): Environment
+    private function twig(?TaskObjectLinkResolver $linkResolver = null, ?string $filtersCollapse = null, string $filtersFormClass = ''): Environment
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => TestUser::class]]);
         /** @var array<string, array{path: string, name: string}> $routes */
@@ -952,7 +969,8 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         $loader = new ChainLoader([
             new ArrayLoader([
-                'layout.html.twig' => '<title>{% block title %}{% endblock %}</title>{% block stylesheets %}{% endblock %}{% block javascripts %}{% endblock %}<main class="{% block container_class %}{% endblock %}">{% block body %}{% endblock %}</main>',
+                'host/_filters_collapse.html.twig' => '<div class="host-fold" data-key="{{ key }}" data-fold-key="{{ fold_key }}" data-fields="{{ form|length }}"></div>',
+                'layout.html.twig'                 => '<title>{% block title %}{% endblock %}</title>{% block stylesheets %}{% endblock %}{% block javascripts %}{% endblock %}<main class="{% block container_class %}{% endblock %}">{% block body %}{% endblock %}</main>',
             ]),
             $filesystem,
         ]);
@@ -963,7 +981,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes, $linkResolver ?? new TaskObjectLinkResolver()));
+        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

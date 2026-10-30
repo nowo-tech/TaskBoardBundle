@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.17.0](#to-1170)
 - [To 1.16.1](#to-1161)
 - [To 1.16.0](#to-1160)
 - [To 1.15.0](#to-1150)
@@ -93,6 +94,20 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.17.0
+
+From **1.16.1**: `composer update nowo-tech/task-board-bundle`. No schema change, nothing to do unless the host wants
+its own filter fold on the list view:
+
+```yaml
+nowo_task_board:
+    templates:
+        filters_collapse: '@NowoUiKitBundle/partials/_filters_collapse.html.twig'   # or the host's wrapper
+        filters_form_class: 'my-filter-card'
+```
+
+With `filters_collapse` set the bundle's "Filters" toggle (and its localStorage state) is not rendered.
 
 ## To 1.16.1
 

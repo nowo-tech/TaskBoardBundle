@@ -50,6 +50,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly string $cssFramework,
         private readonly array $routes = [],
         private readonly TaskObjectLinkResolver $linkResolver = new TaskObjectLinkResolver(),
+        private readonly ?string $filtersCollapse = null,
+        private readonly string $filtersFormClass = '',
     ) {
     }
 
@@ -207,6 +209,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         return [
             'nowo_task_board_layout'        => $this->layoutTemplate,
             'nowo_task_board_css_framework' => $this->cssFramework,
+            // Since 1.17: the host's filter fold partial and filter card classes for the list view.
+            'nowo_task_board_filters_collapse'   => $this->filtersCollapse,
+            'nowo_task_board_filters_form_class' => $this->filtersFormClass,
         ];
     }
 }
