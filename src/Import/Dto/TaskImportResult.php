@@ -17,22 +17,24 @@ final readonly class TaskImportResult
         public array $errors = [],
         /** @var list<string> */
         public array $warnings = [],
+        /** Since 1.18: Gantt dependencies created between the imported tasks. */
+        public int $dependenciesCreated = 0,
     ) {
     }
 
     public function withCreated(int $created): self
     {
-        return new self($created, $this->skipped, $this->columnsCreated, $this->errors, $this->warnings);
+        return new self($created, $this->skipped, $this->columnsCreated, $this->errors, $this->warnings, $this->dependenciesCreated);
     }
 
     public function withSkipped(int $skipped): self
     {
-        return new self($this->created, $skipped, $this->columnsCreated, $this->errors, $this->warnings);
+        return new self($this->created, $skipped, $this->columnsCreated, $this->errors, $this->warnings, $this->dependenciesCreated);
     }
 
     public function withColumnsCreated(int $columnsCreated): self
     {
-        return new self($this->created, $this->skipped, $columnsCreated, $this->errors, $this->warnings);
+        return new self($this->created, $this->skipped, $columnsCreated, $this->errors, $this->warnings, $this->dependenciesCreated);
     }
 
     /**
@@ -40,7 +42,7 @@ final readonly class TaskImportResult
      */
     public function withErrors(array $errors): self
     {
-        return new self($this->created, $this->skipped, $this->columnsCreated, $errors, $this->warnings);
+        return new self($this->created, $this->skipped, $this->columnsCreated, $errors, $this->warnings, $this->dependenciesCreated);
     }
 
     /**
@@ -48,7 +50,7 @@ final readonly class TaskImportResult
      */
     public function withWarnings(array $warnings): self
     {
-        return new self($this->created, $this->skipped, $this->columnsCreated, $this->errors, $warnings);
+        return new self($this->created, $this->skipped, $this->columnsCreated, $this->errors, $warnings, $this->dependenciesCreated);
     }
 
     public function hasErrors(): bool

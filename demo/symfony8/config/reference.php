@@ -1390,6 +1390,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/dependency"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_dependency"
  *         },
+ *         task_import?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/import"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_import"
+ *         },
  *         task_dependency_remove?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_dependency_remove"

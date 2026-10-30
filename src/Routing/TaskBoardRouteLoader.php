@@ -68,6 +68,7 @@ final class TaskBoardRouteLoader extends Loader
         // Since 1.15.
         $this->addRoute($collection, 'task_dependency', 'addDependency', ['POST']);
         $this->addRoute($collection, 'task_dependency_remove', 'removeDependency', ['POST']);
+        $this->addRoute($collection, 'task_import', 'importIntoTask', ['POST']);
         $this->addRoute($collection, 'task_time', 'logTime', ['POST']);
         $this->addRoute($collection, 'task_time_remove', 'removeTimeEntry', ['POST']);
         // Since 1.16.

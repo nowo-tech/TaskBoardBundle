@@ -3117,3 +3117,84 @@ details.nowo-task-section > summary {
         min-height: 2rem;
     }
 }
+
+/* Since 1.18: import help modal (formats, columns table, examples) and "Import subtasks" on a task. */
+.nowo-task-import-help__body {
+    display: grid;
+    gap: 0.75rem;
+    max-height: min(70vh, 40rem);
+    overflow-y: auto;
+}
+
+.nowo-task-import-help__heading {
+    margin: 0.5rem 0 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.nowo-task-import-help__subheading {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.nowo-task-import-help__table-wrap {
+    overflow-x: auto;
+}
+
+.nowo-task-import-help__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.nowo-task-import-help__table th,
+.nowo-task-import-help__table td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--nowo-task-border, #e5e7eb);
+    text-align: start;
+    vertical-align: top;
+}
+
+.nowo-task-import-help__table th[scope="row"] {
+    white-space: nowrap;
+}
+
+.nowo-task-import-help__example {
+    margin: 0;
+    padding: 0.75rem;
+    overflow-x: auto;
+    border: 1px solid var(--nowo-task-border, #e5e7eb);
+    border-radius: 0.375rem;
+    background: var(--nowo-task-surface-muted, #f8fafc);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+}
+
+.nowo-task-import-help__sources {
+    display: grid;
+    gap: 0.25rem 0;
+    margin: 0;
+}
+
+.nowo-task-import-help__sources dt {
+    font-weight: 600;
+}
+
+.nowo-task-import-help__sources dd {
+    margin: 0 0 0.5rem;
+    color: var(--nowo-task-muted, #64748b);
+}
+
+.nowo-task-import-help__note {
+    color: var(--nowo-task-muted, #64748b);
+    font-size: 0.875rem;
+}
+
+.nowo-task-subtask-import {
+    margin-top: 0.5rem;
+}
+
+.nowo-task-subtask-import__help {
+    margin-inline-end: auto;
+}

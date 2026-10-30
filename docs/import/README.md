@@ -58,3 +58,4 @@ The importers normalize common column names. Missing columns are skipped; only *
 
 - [Usage — import tasks](../USAGE.md#import-tasks-from-clickup-jira-or-trello)
 - [Configuration — import routes and custom importers](../CONFIGURATION.md#task-import)
+- [Task board CSV / JSON](taskboard.md) — the bundle's own format (subtasks, start dates, Gantt relations), since 1.18.

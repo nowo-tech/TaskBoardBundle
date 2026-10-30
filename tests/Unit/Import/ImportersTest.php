@@ -220,10 +220,12 @@ final class ImportersTest extends TestCase
     public function testImportSourceLabelsAndExtensions(): void
     {
         $expected = [
-            'clickup_csv'  => ['csv', 'txt', 'tsv'],
-            'clickup_json' => ['json'],
-            'jira_csv'     => ['csv', 'txt', 'tsv'],
-            'trello_json'  => ['json'],
+            'clickup_csv'    => ['csv', 'txt', 'tsv'],
+            'clickup_json'   => ['json'],
+            'jira_csv'       => ['csv', 'txt', 'tsv'],
+            'trello_json'    => ['json'],
+            'taskboard_csv'  => ['csv', 'txt', 'tsv'],
+            'taskboard_json' => ['json'],
         ];
 
         foreach (TaskImportSource::cases() as $source) {

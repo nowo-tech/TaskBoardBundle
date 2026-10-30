@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
@@ -35,7 +36,9 @@ use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
+use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardCsvImporter;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
@@ -73,6 +76,7 @@ use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -148,6 +152,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         yield 'reorder columns' => ['reorderColumns', ['board', 'request'], []];
         yield 'create task' => ['createTask', ['board', 'request'], []];
         yield 'import' => ['importBoard', ['board', 'request'], []];
+        yield 'import into task' => ['importIntoTask', ['task', 'request'], []];
         yield 'task detail' => ['task', ['task', 'request'], []];
         yield 'advance task' => ['advanceTask', ['task', 'request'], ['action' => 'done']];
         yield 'move task' => ['moveTask', ['task', 'request'], []];
@@ -730,6 +735,36 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     }
 
     /**
+     * Since 1.18: import subtasks into a task — no file, a bad file and a good one (subtasks under the task).
+     */
+    public function testImportingSubtasksIntoATaskFlashesTheOutcome(): void
+    {
+        $request = Request::create('/?_target_path=/board', 'POST');
+        $this->controller($this->owner, formData: new TaskImportFormData(TaskImportSource::TaskBoardCsv), currentRequest: $request)->importIntoTask($this->task->getId(), $request);
+        self::assertSame(['task_board.flash.import_file_required'], $request->getSession()->getFlashBag()->get('error'));
+
+        $request = Request::create('/?_target_path=/board', 'POST');
+        $this->controller($this->owner, formData: new TaskImportFormData(TaskImportSource::TaskBoardCsv, $this->upload("title;start\nA;soon")), currentRequest: $request)->importIntoTask($this->task->getId(), $request);
+        self::assertStringContainsString('is not a date', (string) ($request->getSession()->getFlashBag()->get('error')[0] ?? ''));
+
+        $request  = Request::create('/?_target_path=/board', 'POST');
+        $response = $this->controller($this->owner, formData: new TaskImportFormData(TaskImportSource::TaskBoardCsv, $this->upload("id;parent;title\na;;Child\nb;zzz;Orphan")), currentRequest: $request, translator: true)
+            ->importIntoTask($this->task->getId(), $request);
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        $flashes = $request->getSession()->getFlashBag()->all();
+        self::assertSame(['task_board.flash.subtask_import_summary'], $flashes['success'] ?? []);
+        self::assertCount(1, $flashes['warning'] ?? []);
+    }
+
+    private function upload(string $content): UploadedFile
+    {
+        $path = (string) tempnam(sys_get_temp_dir(), 'tb-import-');
+        file_put_contents($path, $content);
+
+        return new UploadedFile($path, 'plan.csv', 'text/csv', null, true);
+    }
+
+    /**
      * Since 1.15: add a dependency (flash per outcome), remove it, and refuse a CSRF failure.
      */
     public function testAddingADependencyFlashesTheOutcome(): void
@@ -1026,7 +1061,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             linkAttacher: new TaskLinkAttacher($taskRepository, new GitLabMergeRequestLinkParser(), $recorder),
             memberAssigner: new TaskMemberAssigner($taskRepository, $recorder),
             ganttBuilder: new TaskGanttBuilder(),
-            importOrchestrator: new TaskImportOrchestrator([], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
+            importOrchestrator: new TaskImportOrchestrator([new TaskBoardCsvImporter()], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
             translator: $translator ? $this->identityTranslator() : $this->createMock(TranslatorInterface::class),
             routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete', 'task_create'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),

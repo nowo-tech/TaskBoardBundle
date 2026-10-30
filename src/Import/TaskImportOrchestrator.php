@@ -16,12 +16,14 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 
 use function mb_strtolower;
 use function sprintf;
@@ -43,6 +45,7 @@ final readonly class TaskImportOrchestrator
         private TaskImportUserResolverInterface $userResolver,
         private EntityManagerInterface $entityManager,
         private ?ManagerRegistry $managerRegistry = null,
+        private ?TaskDependencyManager $dependencyManager = null,
     ) {
     }
 
@@ -53,6 +56,7 @@ final readonly class TaskImportOrchestrator
         string $filename,
         object $actor,
         TaskImportOptions $options = new TaskImportOptions(),
+        ?Task $parentTask = null,
     ): TaskImportResult {
         $importer = $this->resolveImporter($source);
 
@@ -87,9 +91,11 @@ final readonly class TaskImportOrchestrator
 
         /** @var array<string, Task> $importedByExternalId */
         $importedByExternalId = [];
-        $created              = 0;
-        $skipped              = 0;
-        $errors               = [];
+        /** @var list<array{0: Task, 1: ImportedTaskDto}> $pendingDependencies */
+        $pendingDependencies = [];
+        $created             = 0;
+        $skipped             = 0;
+        $errors              = [];
 
         $orderedRows = $this->orderRowsForHierarchy($rows);
 
@@ -101,12 +107,13 @@ final readonly class TaskImportOrchestrator
                 continue;
             }
 
-            $parent = null;
+            // Since 1.18: importing into a task makes every top-level row (and every unresolved parent) its subtask.
+            $parent = $parentTask;
             if ($row->parentExternalId !== null) {
-                $parent = $importedByExternalId[$row->parentExternalId] ?? null;
-                if ($parent === null) {
+                $parent = $importedByExternalId[$row->parentExternalId] ?? $parentTask;
+                if (!isset($importedByExternalId[$row->parentExternalId])) {
                     $warnings[] = sprintf(
-                        'Row %d ("%s"): parent "%s" was not imported yet; task created at root level.',
+                        $parentTask === null ? 'Row %d ("%s"): parent "%s" was not imported yet; task created at root level.' : 'Row %d ("%s"): parent "%s" was not imported yet; task created under the task you import into.',
                         $index + 1,
                         $row->title,
                         $row->parentExternalId,
@@ -128,6 +135,9 @@ final readonly class TaskImportOrchestrator
                 dueAt: $row->dueAt,
                 tags: $row->tags,
             );
+            if ($row->startAt !== null) {
+                $task->setStartAt($row->startAt);
+            }
 
             if ($row->externalId !== null) {
                 $task->addLink(new TaskLink(
@@ -163,6 +173,9 @@ final readonly class TaskImportOrchestrator
                 $importedByExternalId[$row->externalId] = $task;
                 $existingExternalIds[$row->externalId]  = true;
             }
+            if ($row->dependsOn !== []) {
+                $pendingDependencies[] = [$task, $row];
+            }
 
             ++$created;
         }
@@ -171,13 +184,49 @@ final readonly class TaskImportOrchestrator
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
         }
 
+        $dependenciesCreated = $this->linkDependencies($pendingDependencies, $importedByExternalId, $actor, $warnings);
+
         return new TaskImportResult(
             created: $created,
             skipped: $skipped,
             columnsCreated: $columnsCreated,
             errors: $errors,
             warnings: $warnings,
+            dependenciesCreated: $dependenciesCreated,
         );
+    }
+
+    /**
+     * Since 1.18: the Gantt relations of the imported rows, once every task exists; a relation to a row that was not
+     * imported, or one the dependency rules refuse (duplicate, cycle), becomes a warning.
+     *
+     * @param list<array{0: Task, 1: ImportedTaskDto}> $pending
+     * @param array<string, Task> $imported
+     * @param list<string> $warnings
+     */
+    private function linkDependencies(array $pending, array $imported, object $actor, array &$warnings): int
+    {
+        if ($pending === [] || $this->dependencyManager === null) {
+            return 0;
+        }
+        $created = 0;
+        foreach ($pending as [$task, $row]) {
+            foreach ($row->dependsOn as [$otherId, $type]) {
+                $other = $imported[$otherId] ?? null;
+                if ($other === null) {
+                    $warnings[] = sprintf('"%s": the dependency on "%s" was skipped (that row was not imported).', $row->title, $otherId);
+                    continue;
+                }
+                try {
+                    $this->dependencyManager->add($task, $other, $type, $actor);
+                    ++$created;
+                } catch (InvalidTaskDependencyException) {
+                    $warnings[] = sprintf('"%s": the dependency on "%s" was skipped (duplicate or cycle).', $row->title, $otherId);
+                }
+            }
+        }
+
+        return $created;
     }
 
     private function resolveImporter(TaskImportSource $source): TaskImporterInterface

@@ -47,6 +47,7 @@ use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -81,6 +82,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 use function array_key_exists;
+use function count;
 use function is_object;
 use function is_string;
 use function preg_match;
@@ -450,6 +452,49 @@ final class TaskBoardManageController extends AbstractController
             'importForm'     => $form,
             'dashboardRoute' => $this->dashboardRoute,
         ]);
+    }
+
+    /**
+     * Since 1.18: imports a file of tasks as subtasks of a task — the top-level rows under the task, the rest under
+     * their `parent` — with their Gantt relations (the bundle's own CSV / JSON documents them; third-party exports
+     * work too). Needs edit rights on the task.
+     */
+    public function importIntoTask(string $taskId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $task = $this->findTask($taskId, $user, true);
+        $form = $this->createSubtaskImportForm($task);
+        $form->handleRequest($request);
+        /** @var TaskImportFormData $data */
+        $data = $form->getData();
+        $file = $form->isSubmitted() && $form->isValid() ? $data->file : null;
+        if ($file === null) {
+            $this->addFlash('error', 'task_board.flash.import_file_required');
+
+            return $this->afterTaskWrite($request, $task, $user);
+        }
+
+        $result = $this->importOrchestrator->import(
+            board: $task->getBoard(),
+            source: $data->source,
+            content: (string) file_get_contents($file->getPathname()),
+            filename: (string) $file->getClientOriginalName(),
+            actor: $user,
+            options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns, skipExisting: $data->skipExisting),
+            parentTask: $task,
+        );
+        foreach ([...$result->errors, ...$result->warnings] as $index => $message) {
+            $this->addFlash($index < count($result->errors) ? 'error' : 'warning', $message);
+        }
+        if (!$result->hasErrors()) {
+            $this->addFlash('success', $this->translator->trans('task_board.flash.subtask_import_summary', [
+                '%created%'      => (string) $result->created,
+                '%skipped%'      => (string) $result->skipped,
+                '%dependencies%' => (string) $result->dependenciesCreated,
+            ], 'NowoTaskBoardBundle'));
+        }
+
+        return $this->afterTaskWrite($request, $task, $user);
     }
 
     public function listView(string $boardId): Response
@@ -1070,11 +1115,29 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.15: dependencies, time entries and the deviation (own, and the subtasks' sum).
             'dependencyForm'       => $this->dependencyManager instanceof TaskDependencyManager ? $this->createDependencyForm($task, $routeExtra, $boardTasks)->createView() : null,
             'dependencyRemoveForm' => $this->csrfActionForm('task_board_task_dependency_remove')->createView(),
-            'timeEntryForm'        => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
-            'timeEntryRemoveForm'  => $this->csrfActionForm('task_board_task_time_remove')->createView(),
-            'deviation'            => TaskDeviation::of($task),
-            'subtaskDeviation'     => $descendants === [] ? null : TaskDeviation::sum($descendants),
+            // Since 1.18: import subtasks with their Gantt relations (editors only).
+            'subtaskImportForm'   => $this->resourceAccessChecker->canEditTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
+            'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
+            'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
+            'deviation'           => TaskDeviation::of($task),
+            'subtaskDeviation'    => $descendants === [] ? null : TaskDeviation::sum($descendants),
         ] + $this->commentViewData($task, $user, $routeExtra);
+    }
+
+    /**
+     * Since 1.18: the import form of a task (the bundle's own CSV preselected).
+     *
+     * @param array<string, string> $routeExtra
+     *
+     * @return FormInterface<TaskImportFormData>
+     */
+    private function createSubtaskImportForm(Task $task, array $routeExtra = []): FormInterface
+    {
+        $route = $this->routes['task_import']['name'] ?? null;
+
+        return $this->createForm(TaskImportFormType::class, new TaskImportFormData(source: TaskImportSource::TaskBoardCsv), [
+            'action' => is_string($route) ? $this->generateUrl($route, ['taskId' => $task->getId()] + $routeExtra) : '',
+        ]);
     }
 
     /**

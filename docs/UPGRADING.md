@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.18.0](#to-1180)
 - [To 1.17.1](#to-1171)
 - [To 1.17.0](#to-1170)
 - [To 1.16.1](#to-1161)
@@ -95,6 +96,17 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.18.0
+
+From **1.17.1**: `composer update nowo-tech/task-board-bundle`, then `php bin/console assets:install`. No schema change.
+
+- New route `task_import` (POST): hosts that list or secure the bundle's routes by name add it (task write, like
+  `task_subtask`).
+- Hosts using `ux_icon` import `tabler:help` (the help buttons).
+- A host template overriding `nowo_task_subtasks` gets *Import subtasks* only if it includes
+  `@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig`; one overriding `manage/import.html.twig` can include
+  `@NowoTaskBoardBundle/manage/_import_help.html.twig` (inside `data-controller="nowo-task-board-dialog"`).
 
 ## To 1.17.1
 

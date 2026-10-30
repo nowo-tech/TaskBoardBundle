@@ -49,6 +49,7 @@ use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
@@ -404,6 +405,22 @@ final class ManageTemplatesRenderingTest extends TestCase
         ]);
 
         self::assertStringContainsString('Roadmap', $html);
+    }
+
+    public function testATaskOffersImportSubtasksWithItsHelpToEditorsOnly(): void
+    {
+        $form = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData(TaskImportSource::TaskBoardCsv), ['action' => '/task/import'])->createView();
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => $form, 'panel' => true]);
+
+        self::assertStringContainsString('nowo-task-subtask-import', $html);
+        self::assertStringContainsString('data-dialog="subtask-import"', $html);
+        self::assertStringContainsString('action="/task/import"', $html);
+        self::assertStringContainsString('enctype="multipart/form-data"', $html);
+        self::assertStringContainsString('task_board.import.help.intro_task', $html);
+        self::assertMatchesRegularExpression('/<option value="taskboard_csv" selected/', $html);
+
+        $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'panel' => true]);
+        self::assertStringNotContainsString('nowo-task-subtask-import', $readOnly);
     }
 
     public function testBoardPageRenders(): void
@@ -877,6 +894,13 @@ final class ManageTemplatesRenderingTest extends TestCase
         ]);
 
         self::assertStringContainsString('Roadmap', $html);
+        // Since 1.18: the help modal says what each format imports, with the own format's columns and examples.
+        self::assertStringContainsString('data-dialog="import-help"', $html);
+        self::assertStringContainsString('task_board.import.help.intro_board', $html);
+        self::assertStringContainsString('task_board.import.help.col_depends_on', $html);
+        self::assertStringContainsString('task_board.import.help.source_trello_json', $html);
+        self::assertStringContainsString('id,parent,title,status,start,due,estimate,depends_on', $html);
+        self::assertStringContainsString('value="taskboard_csv"', $html);
     }
 
     /**
