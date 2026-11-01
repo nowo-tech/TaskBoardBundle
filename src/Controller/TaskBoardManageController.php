@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
@@ -19,6 +20,7 @@ use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
+use Nowo\TaskBoardBundle\Dto\TaskWindow;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -48,6 +50,7 @@ use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -69,7 +72,11 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Psr\Clock\ClockInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
@@ -100,6 +107,7 @@ final class TaskBoardManageController extends AbstractController
      * @param array<string, array{path: string, name: string}> $routes
      * @param array<string, string> $templates
      * @param list<string> $columnIcons `board.column_icons` (since 1.11)
+     * @param int $maxTasks `board.max_tasks` (since 1.21): the most tasks a board, list, Gantt or task page loads
      */
     public function __construct(
         private readonly TaskBoardAccessCheckerInterface $accessChecker,
@@ -131,6 +139,10 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?TaskCommentRepositoryInterface $commentRepository = null,
         private readonly ?TaskMentionCandidatesResolverInterface $mentionCandidates = null,
         private readonly bool $readersCanComment = true,
+        // Since 1.21: `board.max_tasks` (REQ-PERF-001), the clock (REQ-DI-001) and the logger of the writes (REQ-OBS-001).
+        private readonly int $maxTasks = Configuration::DEFAULT_MAX_TASKS,
+        private readonly ClockInterface $clock = new NativeClock(),
+        private readonly LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -178,6 +190,7 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.11: the columns of a column set the user may apply (another scope's set is ignored).
             $set   = $data->columnSetId !== null ? $this->columnSetManager?->find($data->columnSetId, $user, null, $tenant?->key) : null;
             $board = $this->boardCreator->create($data, $user, $tenant?->key, $set);
+            $this->logWrite('board_create', ['board_id' => $board->getId(), 'column_set_id' => $set?->getId()]);
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
         }
@@ -199,8 +212,8 @@ final class TaskBoardManageController extends AbstractController
             columnId: $columnChoices === [] ? null : reset($columnChoices),
         ), ['column_choices' => $columnChoices]);
 
-        $allTasks = $this->taskRepository->findByBoard($board, true);
-        $taskTree = TaskTree::fromTasks($allTasks);
+        [$allTasks, $taskWindow] = $this->boardTasks($board);
+        $taskTree                = TaskTree::fromTasks($allTasks);
 
         return $this->render($this->templates['board'], [
             'board' => $board,
@@ -219,6 +232,8 @@ final class TaskBoardManageController extends AbstractController
             'inlineTaskForms'  => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
             // Since 1.16: comments per task (one query) for the card counters.
             'commentCounts' => $this->commentCounts($allTasks),
+            // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
+            'taskWindow' => $taskWindow,
         ] + ($canEditBoard ? $this->columnSetViewData($board, $user) : []));
     }
 
@@ -233,6 +248,9 @@ final class TaskBoardManageController extends AbstractController
         $column = $this->findColumn($board, $columnId);
 
         $deleted = $this->columnManager->delete($column);
+        if ($deleted) {
+            $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);
+        }
         $this->addFlash($deleted ? 'success' : 'error', $deleted ? 'task_board.flash.column_deleted' : 'task_board.flash.column_last');
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
@@ -253,7 +271,8 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var ColumnSetFormData $data */
             $data = $form->getData();
-            $manager->saveFromBoard($board, $data->name, $user);
+            $set  = $manager->saveFromBoard($board, $data->name, $user);
+            $this->logWrite('column_set_create', ['board_id' => $boardId, 'column_set_id' => $set->getId()]);
             $this->addFlash('success', 'task_board.flash.column_set_saved');
         }
 
@@ -280,6 +299,7 @@ final class TaskBoardManageController extends AbstractController
             $set  = $manager->find((string) $data->columnSetId, $user, $board);
             if ($set instanceof ColumnSet) {
                 $manager->applyToBoard($set, $board);
+                $this->logWrite('column_set_apply', ['board_id' => $boardId, 'column_set_id' => $set->getId()]);
                 $this->addFlash('success', 'task_board.flash.column_set_applied');
             }
         }
@@ -304,6 +324,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $manager->delete($set);
+        $this->logWrite('column_set_delete', ['board_id' => $boardId, 'column_set_id' => $setId]);
         $this->addFlash('success', 'task_board.flash.column_set_deleted');
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
@@ -321,7 +342,8 @@ final class TaskBoardManageController extends AbstractController
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
             // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-            $this->columnManager->add($board, $data);
+            $column = $this->columnManager->add($board, $data);
+            $this->logWrite('column_create', ['board_id' => $boardId, 'column_id' => $column->getId()]);
             $this->addFlash('success', 'task_board.flash.column_added');
         }
 
@@ -345,6 +367,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
             $this->columnManager->update($column, $data);
+            $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
         }
 
@@ -366,6 +389,7 @@ final class TaskBoardManageController extends AbstractController
 
         if ($order !== []) {
             $this->columnManager->reorder($board, $order);
+            $this->logWrite('column_reorder', ['board_id' => $boardId, 'columns' => count($order)]);
         }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
@@ -387,8 +411,9 @@ final class TaskBoardManageController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskFormData $data */
-            $data = $form->getData();
-            $this->taskManager->create($board, $data, $user);
+            $data    = $form->getData();
+            $created = $this->taskManager->create($board, $data, $user);
+            $this->logWrite('task_create', ['board_id' => $boardId, 'task_id' => $created->getId()]);
         } elseif ($form->isSubmitted()) {
             // Since 1.15: a refused task (e.g. a title over 255 characters) says why instead of vanishing.
             $this->flashFormErrors($form);
@@ -484,6 +509,7 @@ final class TaskBoardManageController extends AbstractController
             options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns, skipExisting: $data->skipExisting),
             parentTask: $task,
         );
+        $this->logWrite('task_import', ['task_id' => $taskId, 'created' => $result->created, 'errors' => count($result->errors)]);
         foreach ([...$result->errors, ...$result->warnings] as $index => $message) {
             $this->addFlash($index < count($result->errors) ? 'error' : 'warning', $message);
         }
@@ -504,7 +530,7 @@ final class TaskBoardManageController extends AbstractController
         $board        = $this->findBoard($boardId, $user);
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         // Completed tasks (last column) stay visible so the column filter can show "Done" work.
-        $tasks = $this->taskRepository->findByBoard($board, true);
+        [$tasks, $taskWindow] = $this->boardTasks($board);
 
         $priorities = [];
         $columns    = [];
@@ -535,6 +561,7 @@ final class TaskBoardManageController extends AbstractController
             'canEditBoard'    => $canEditBoard,
             'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $this->buildColumnChoices($board)) : [],
             'commentCounts'   => $this->commentCounts($tasks),
+            'taskWindow'      => $taskWindow,
         ]);
     }
 
@@ -543,7 +570,7 @@ final class TaskBoardManageController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user);
         // Completed tasks are drawn as finished bars (and keep their subtasks attached to the tree).
-        $tasks = $this->taskRepository->findByBoard($board, true);
+        [$tasks, $taskWindow] = $this->boardTasks($board);
         // Since 1.15: `?scale=hours|days|weeks|months` (default days) and the week start of the request.
         $scale    = GanttScale::fromQuery($this->currentRequest()?->query->get('scale'));
         $timeline = $this->ganttBuilder->build($tasks, $scale, $this->weekStartResolver?->resolve() ?? WeekStart::Monday);
@@ -555,13 +582,14 @@ final class TaskBoardManageController extends AbstractController
             'scales'          => GanttScale::cases(),
             'dashboardRoute'  => $this->dashboardRoute,
             'panelTargetPath' => $this->currentRequestUri(),
+            'taskWindow'      => $taskWindow,
         ]);
     }
 
     public function task(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId, $user);
+        $task = $this->findTask($taskId, $user, detail: true);
 
         $taskForm = $this->createTaskEditForm($task);
         $taskForm->handleRequest($request);
@@ -574,6 +602,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskFormData $data */
             $data = $taskForm->getData();
             $this->taskManager->update($task, $data, $user);
+            $this->logWrite('task_update', ['task_id' => $taskId]);
             $this->addFlash('success', 'task_board.flash.task_updated');
 
             return $this->afterTaskWrite($request, $task, $user);
@@ -596,7 +625,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
 
-        return $this->renderTaskPanel($request, $this->findTask($taskId, $user), $user);
+        return $this->renderTaskPanel($request, $this->findTask($taskId, $user, detail: true), $user);
     }
 
     public function advanceTask(string $taskId, Request $request): Response
@@ -616,6 +645,7 @@ final class TaskBoardManageController extends AbstractController
         };
 
         if ($success) {
+            $this->logWrite('task_advance', ['task_id' => $taskId, 'column_id' => $task->getColumn()?->getId()]);
             $flashKey = match ($action) {
                 'previous' => 'task_board.flash.task_moved_previous',
                 'next'     => 'task_board.flash.task_moved_next',
@@ -638,6 +668,7 @@ final class TaskBoardManageController extends AbstractController
 
         try {
             $this->taskManager->move($task, $columnId !== '' ? $columnId : null, $position, $user);
+            $this->logWrite('task_move', ['task_id' => $taskId, 'column_id' => $task->getColumn()?->getId(), 'position' => $position]);
         } catch (ColumnNotFoundException $exception) {
             throw new BadRequestHttpException($exception->getMessage(), $exception);
         }
@@ -657,6 +688,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskLinkFormData $data */
             $data = $form->getData();
             $this->linkAttacher->attach($task, $data, $user);
+            $this->logWrite('task_link', ['task_id' => $taskId]);
             $this->addFlash('success', 'task_board.flash.link_added');
         }
 
@@ -675,6 +707,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskLinkFormData $data */
             $data = $form->getData();
             if ($this->linkAttacher->update($task, $linkId, $data, $user)) {
+                $this->logWrite('task_link_update', ['task_id' => $taskId, 'link_id' => $linkId]);
                 $this->addFlash('success', 'task_board.flash.link_updated');
             }
         }
@@ -690,6 +723,7 @@ final class TaskBoardManageController extends AbstractController
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($this->linkAttacher->remove($task, $linkId, $user)) {
+            $this->logWrite('task_link_remove', ['task_id' => $taskId, 'link_id' => $linkId]);
             $this->addFlash('success', 'task_board.flash.link_removed');
         }
 
@@ -709,6 +743,7 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             try {
                 $this->memberAssigner->assign($task, $data, $user);
+                $this->logWrite('task_member', ['task_id' => $taskId]);
                 $this->addFlash('success', 'task_board.flash.member_added');
             } catch (UnassignableUserException) {
                 $this->addFlash('error', 'task_board.flash.member_not_assignable');
@@ -725,6 +760,7 @@ final class TaskBoardManageController extends AbstractController
         $task = $this->findTask($taskId, $user, true);
 
         if ($this->memberAssigner->unassign($task, $memberId, $user)) {
+            $this->logWrite('task_member_remove', ['task_id' => $taskId, 'member_id' => $memberId]);
             $this->addFlash('success', 'task_board.flash.member_removed');
         }
 
@@ -748,6 +784,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $this->taskManager->updatePriority($task, $priority, $user);
+        $this->logWrite('task_priority', ['task_id' => $taskId, 'priority' => $priority->value]);
         $this->addFlash('success', 'task_board.flash.task_updated');
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -767,8 +804,9 @@ final class TaskBoardManageController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskFormData $data */
-            $data = $form->getData();
-            $this->taskManager->create($task->getBoard(), $data, $user, $task);
+            $data    = $form->getData();
+            $subtask = $this->taskManager->create($task->getBoard(), $data, $user, $task);
+            $this->logWrite('task_subtask', ['task_id' => $taskId, 'subtask_id' => $subtask->getId()]);
             $this->addFlash('success', 'task_board.flash.subtask_created');
         } elseif ($form->isSubmitted()) {
             $this->flashFormErrors($form);
@@ -806,6 +844,7 @@ final class TaskBoardManageController extends AbstractController
         try {
             // @igor-ignore - HTTP handler delegates to services; no controller worker state.
             $manager->add($task, $other, $data->type, $user);
+            $this->logWrite('task_dependency', ['task_id' => $taskId, 'other_task_id' => $other->getId()]);
             $this->addFlash('success', 'task_board.flash.dependency_added');
         } catch (InvalidTaskDependencyException $exception) {
             $this->addFlash('error', 'task_board.flash.dependency_' . $exception->reason);
@@ -826,6 +865,7 @@ final class TaskBoardManageController extends AbstractController
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($manager->remove($task, $dependencyId, $user)) {
+            $this->logWrite('task_dependency_remove', ['task_id' => $taskId, 'dependency_id' => $dependencyId]);
             $this->addFlash('success', 'task_board.flash.dependency_removed');
         }
 
@@ -841,7 +881,7 @@ final class TaskBoardManageController extends AbstractController
         $task   = $this->findTask($taskId, $user, true);
         $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
 
-        $form = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('today')));
+        $form = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today()));
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $this->denyOnRootErrors($form);
@@ -849,7 +889,8 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             if ($form->isValid() && $data->minutes !== null && $data->loggedAt !== null) {
                 // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-                $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note);
+                $entry = $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note);
+                $this->logWrite('task_time', ['task_id' => $taskId, 'entry_id' => $entry->getId()]);
                 $this->addFlash('success', 'task_board.flash.time_logged');
             } else {
                 $this->addFlash('error', 'task_board.flash.time_invalid');
@@ -871,6 +912,7 @@ final class TaskBoardManageController extends AbstractController
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($logger->remove($task, $entryId, $user)) {
+            $this->logWrite('task_time_remove', ['task_id' => $taskId, 'entry_id' => $entryId]);
             $this->addFlash('success', 'task_board.flash.time_removed');
         }
 
@@ -898,7 +940,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var TaskCommentFormData $data */
             $data = $form->getData();
             // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-            $this->saveComment($form->isValid(), static fn (): mixed => $manager->add($task, $user, $data->body, $data->mentionIds()), 'task_board.flash.comment_added');
+            $this->saveComment($form->isValid(), static fn (): mixed => $manager->add($task, $user, $data->body, $data->mentionIds()), 'task_board.flash.comment_added', 'task_comment', ['task_id' => $taskId]);
         }
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -925,7 +967,7 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             $this->saveComment($form->isValid(), static function () use ($manager, $comment, $user, $data): void {
                 $manager->edit($comment, $user, $data->body, $data->mentionIds());
-            }, 'task_board.flash.comment_updated');
+            }, 'task_board.flash.comment_updated', 'task_comment_edit', ['task_id' => $taskId, 'comment_id' => $commentId]);
         }
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -947,6 +989,7 @@ final class TaskBoardManageController extends AbstractController
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         $manager->delete($comment);
+        $this->logWrite('task_comment_delete', ['task_id' => $taskId, 'comment_id' => $commentId]);
         $this->addFlash('success', 'task_board.flash.comment_deleted');
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -954,8 +997,9 @@ final class TaskBoardManageController extends AbstractController
 
     /**
      * @param callable(): mixed $save
+     * @param array<string, string> $ids logged with the action (REQ-OBS-001)
      */
-    private function saveComment(bool $valid, callable $save, string $flash): void
+    private function saveComment(bool $valid, callable $save, string $flash, string $action, array $ids): void
     {
         if (!$valid) {
             $this->addFlash('error', 'task_board.flash.comment_invalid');
@@ -965,6 +1009,7 @@ final class TaskBoardManageController extends AbstractController
 
         try {
             $save();
+            $this->logWrite($action, $ids);
             $this->addFlash('success', $flash);
         } catch (InvalidArgumentException) {
             $this->addFlash('error', 'task_board.flash.comment_invalid');
@@ -1089,7 +1134,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
-        $boardTasks      = $this->taskRepository->findByBoard($task->getBoard(), true);
+        [$boardTasks]    = $this->boardTasks($task->getBoard());
         $taskTree        = TaskTree::fromTasks($boardTasks);
         $subtaskProgress = $taskTree->progress($task);
         $descendants     = $taskTree->descendantsOf($task);
@@ -1154,7 +1199,7 @@ final class TaskBoardManageController extends AbstractController
     private function createDependencyForm(Task $task, array $routeExtra = [], ?array $boardTasks = null): FormInterface
     {
         $choices = [];
-        foreach ($boardTasks ?? $this->taskRepository->findByBoard($task->getBoard(), true) as $candidate) {
+        foreach ($boardTasks ?? $this->boardTasks($task->getBoard())[0] as $candidate) {
             if ($candidate->getId() === $task->getId()) {
                 continue;
             }
@@ -1187,7 +1232,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $route = $this->routes['task_time']['name'] ?? null;
 
-        return $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('today')), [
+        return $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today()), [
             'action' => is_string($route) ? $this->generateUrl($route, ['taskId' => $task->getId()] + $routeExtra) : '',
         ]);
     }
@@ -1217,6 +1262,8 @@ final class TaskBoardManageController extends AbstractController
     private function denyOnRootErrors(FormInterface $form): void
     {
         if ($form->getErrors()->count() > 0) {
+            $this->logRefused('csrf_invalid');
+
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
     }
@@ -1484,6 +1531,8 @@ final class TaskBoardManageController extends AbstractController
         // child field, which is the case of the CSRF-only actions).
         $form->submit($request->request->all());
         if (!$form->isValid()) {
+            $this->logRefused('csrf_invalid');
+
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
     }
@@ -1499,6 +1548,8 @@ final class TaskBoardManageController extends AbstractController
     private function denyUnlessValidCsrf(Request $request, string $tokenId): void
     {
         if (!$this->isCsrfTokenValid($tokenId, (string) $request->request->get('_token', ''))) {
+            $this->logRefused('csrf_invalid');
+
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
     }
@@ -1538,11 +1589,15 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
-     * Loads a task and enforces per-task access; $forWrite also rejects tasks marked read-only by listeners.
+     * Loads a task and enforces per-task access; $forWrite also rejects tasks marked read-only by listeners; $detail
+     * fetches the relations of the task page with it.
      */
-    private function findTask(string $taskId, UserInterface $user, bool $forWrite = false): Task
+    private function findTask(string $taskId, UserInterface $user, bool $forWrite = false, bool $detail = false): Task
     {
-        $task = $this->taskRepository->findById($taskId);
+        // Since 1.21: the task page and panel load the task with its relations in a fixed number of queries.
+        $task = $detail && $this->taskRepository instanceof BoundedTaskRepositoryInterface
+            ? $this->taskRepository->findForDetail($taskId)
+            : $this->taskRepository->findById($taskId);
         // A task of another tenant's board is not found (tenancy).
         if (!$task instanceof Task || $this->tenantContext?->owns($task->getBoard(), $user) === false) {
             throw new NotFoundHttpException('Task not found.');
@@ -1556,6 +1611,54 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $task;
+    }
+
+    /**
+     * The tasks a page of the board loads (since 1.21, REQ-PERF-001): at most `board.max_tasks` in position order with
+     * their members, and how many the board has. A host task repository without {@see BoundedTaskRepositoryInterface}
+     * keeps loading every task.
+     *
+     * @return array{0: list<Task>, 1: TaskWindow}
+     */
+    private function boardTasks(TaskBoard $board): array
+    {
+        if (!$this->taskRepository instanceof BoundedTaskRepositoryInterface) {
+            $tasks = $this->taskRepository->findByBoard($board, true);
+
+            return [$tasks, new TaskWindow(count($tasks), count($tasks), count($tasks))];
+        }
+
+        $tasks = $this->taskRepository->findByBoardWithin($board, true, $this->maxTasks);
+        $total = count($tasks) < $this->maxTasks ? count($tasks) : $this->taskRepository->countByBoard($board, true);
+
+        return [$tasks, new TaskWindow(count($tasks), $total, $this->maxTasks)];
+    }
+
+    /**
+     * Today at midnight from the injected clock (default day of a time entry).
+     */
+    private function today(): DateTimeImmutable
+    {
+        return $this->clock->now()->setTime(0, 0);
+    }
+
+    /**
+     * REQ-OBS-001: one info line per successful write — the action and the ids of the board objects, never user data,
+     * free text, file names or tokens.
+     *
+     * @param array<string, int|string|null> $ids
+     */
+    private function logWrite(string $action, array $ids): void
+    {
+        $this->logger->info('TaskBoard write: {action}', ['bundle' => 'nowo_task_board', 'action' => $action] + $ids);
+    }
+
+    /**
+     * REQ-OBS-001: a refused write (invalid CSRF token) is logged as a warning without the token.
+     */
+    private function logRefused(string $reason): void
+    {
+        $this->logger->warning('TaskBoard write refused: {reason}', ['bundle' => 'nowo_task_board', 'reason' => $reason, 'route' => $this->currentRequest()?->attributes->get('_route')]);
     }
 
     /**

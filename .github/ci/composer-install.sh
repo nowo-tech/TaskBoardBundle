@@ -12,6 +12,7 @@ echo "Using doctrine/doctrine-bundle ${DOCTRINE_BUNDLE} with Symfony ^${SYMFONY}
 jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
   ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0" |
   del(.require["nowo-tech/time-track-bundle"]) |
+  .require["symfony/clock"] = $symfony |
   .require["symfony/config"] = $symfony |
   .require["symfony/dependency-injection"] = $symfony |
   .require["symfony/form"] = $symfony |

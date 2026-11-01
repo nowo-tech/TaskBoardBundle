@@ -34,6 +34,9 @@
         "nowo-tech/form-kit-bundle": "^2.0",
         "nowo-tech/ui-kit-bundle": "^1.4 || ^2.2",
         "php": ">=8.2 <8.6",
+        "psr/clock": "^1.0",
+        "psr/log": "^1.1 || ^2.0 || ^3.0",
+        "symfony/clock": "^7.4 || ^8.0",
         "symfony/config": "^7.4 || ^8.0",
         "symfony/dependency-injection": "^7.4 || ^8.0",
         "symfony/form": "^7.4 || ^8.0",
@@ -96,8 +99,8 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "scripts": {
-        "test": "@php vendor/bin/phpunit --color=always",
-        "test-coverage": "@php vendor/bin/phpunit --colors=always --coverage-html coverage --coverage-clover coverage.xml --coverage-text",
+        "test": "@php -d memory_limit=512M vendor/bin/phpunit --color=always",
+        "test-coverage": "@php -d memory_limit=512M vendor/bin/phpunit --colors=always --coverage-html coverage --coverage-clover coverage.xml --coverage-text",
         "test-coverage-100": [
             "@test-coverage",
             "@php scripts/check-coverage.php coverage.xml --min-percent=100"

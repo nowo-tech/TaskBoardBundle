@@ -30,6 +30,8 @@
     }) }}
     {% endblock %}
 
+    {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
+
     {% block nowo_task_board_list %}
     {#
         Since 1.12 (ClickUp-like): the filters in one row, then one collapsible group per column (its colour, icon and

@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Integration;
 
 use App\Entity\User;
+use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
+use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
@@ -46,7 +49,7 @@ final class TaskBoardBundleIntegrationTest extends TestCase
         (new TaskBoardExtension())->load([['user_class' => User::class]], $container);
 
         (new ResolveClassPass())->process($container);
-        $container->removeDefinition('Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController');
+        $container->removeDefinition(TaskBoardManageController::class);
         foreach ($container->getDefinitions() as $id => $definition) {
             if ($definition->getClass() === null || !class_exists($definition->getClass())) {
                 $container->removeDefinition($id);
@@ -57,7 +60,7 @@ final class TaskBoardBundleIntegrationTest extends TestCase
         $twig = $container->getDefinition(TaskBoardTwigExtension::class)->getArguments();
         self::assertContains('%nowo_task_board.templates.filters_collapse%', $twig);
         self::assertContains('%nowo_task_board.templates.filters_form_class%', $twig);
-        self::assertSame('Nowo\\TaskBoardBundle\\Text\\PlainTaskTextRenderer', (string) $container->getAlias('Nowo\\TaskBoardBundle\\Text\\TaskTextRendererInterface'));
+        self::assertSame(PlainTaskTextRenderer::class, (string) $container->getAlias(TaskTextRendererInterface::class));
         self::assertNotContains('%nowo_task_board.templates.filters_collapse%', $container->getDefinition(TaskBoardRouteLoader::class)->getArguments());
     }
 }

@@ -367,3 +367,4 @@ task_board.time.left: "Nog %duration%"
 task_board.time.over_by: "%duration% overschreden"
 task_board.form.task.estimate_invalid: "Voer een duur in zoals 90, 45 min, 2 h of 1 h 30 min."
 task_board.form.task.estimate_placeholder: "bijv. 2 h 30 min"
+task_board.view.capped: '%shown% van %total% taken getoond. Dit bord heeft meer taken dan deze pagina laadt (board.max_tasks).'

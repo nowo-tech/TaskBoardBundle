@@ -367,3 +367,4 @@ task_board.time.left: "Faltam %duration%"
 task_board.time.over_by: "Excedido em %duration%"
 task_board.form.task.estimate_invalid: "Indique uma duração como 90, 45 min, 2 h ou 1 h 30 min."
 task_board.form.task.estimate_placeholder: "p. ex. 2 h 30 min"
+task_board.view.capped: 'A mostrar %shown% de %total% tarefas. Este quadro tem mais tarefas do que esta página carrega (board.max_tasks).'

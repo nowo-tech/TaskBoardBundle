@@ -5,6 +5,7 @@
 - [Attack surface](#attack-surface)
 - [Threats and mitigations](#threats-and-mitigations)
 - [Access control model](#access-control-model)
+- [Logging and personal data](#logging-and-personal-data)
 - [Dependencies](#dependencies)
 - [Reporting](#reporting)
 - [Release security checklist](#release-security-checklist)
@@ -39,6 +40,14 @@
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
 3. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+
+## Logging and personal data
+
+REQ-OBS-001 (since 1.21): every successful board / task write logs one `info` line, an invalid CSRF token one `warning`,
+and every import its start, result and failure ([CONFIGURATION — Logging](CONFIGURATION.md#logging-since-121)). The
+context holds only the action, the ids of the board objects (UUIDs) and counts. The bundle never logs user ids, names,
+e-mails, task titles or descriptions, comment bodies, link URLs, uploaded file names or contents, nor tokens. There is
+no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 ## Dependencies
 

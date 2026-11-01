@@ -30,6 +30,19 @@ final class ConfigurationTest extends TestCase
         self::assertSame(['ROLE_ADMIN'], $config['security']['manage_roles']);
     }
 
+    public function testMaxTasksDefaultsToABoundAndRejectsZero(): void
+    {
+        $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class]]);
+        self::assertSame(Configuration::DEFAULT_MAX_TASKS, $config['board']['max_tasks']);
+        self::assertSame(500, Configuration::DEFAULT_MAX_TASKS);
+
+        $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class, 'board' => ['max_tasks' => 1000]]]);
+        self::assertSame(1000, $config['board']['max_tasks']);
+
+        $this->expectException(InvalidConfigurationException::class);
+        (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class, 'board' => ['max_tasks' => 0]]]);
+    }
+
     public function testCustomLayoutTemplate(): void
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [[

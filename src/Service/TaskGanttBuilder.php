@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 
 use function abs;
 use function array_map;
@@ -37,18 +39,27 @@ final readonly class TaskGanttBuilder
     public const MIN_RANGE_DAYS = 21;
 
     /**
+     * @param ClockInterface $clock Since 1.21: the current time when build() gets no `$now` (REQ-DI-001)
+     */
+    public function __construct(
+        private ClockInterface $clock = new NativeClock(),
+    ) {
+    }
+
+    /**
      * @param list<Task> $tasks
-     * @param DateTimeImmutable|null $now Since 1.15: the current time (default: now)
+     * @param DateTimeImmutable|null $now Since 1.15: the current time (default: the clock's now)
      */
     public function build(array $tasks, GanttScale $scale = GanttScale::Days, WeekStart $weekStart = WeekStart::Monday, ?DateTimeImmutable $now = null): TaskGanttTimeline
     {
-        $now ??= new DateTimeImmutable();
+        $now ??= $this->clock->now();
         $flat = $this->flatten($tasks);
         if ($flat === []) {
             // No task, or (only with corrupted, cyclic parent data) no root to draw.
             return $this->timeline([], [], $scale, $weekStart, $now, $now, $now, false);
         }
 
+        // @igor-ignore - DateTimeImmutable::setTime() returns a new instance; the clock is not mutated.
         $today    = $now->setTime(0, 0);
         $entries  = [];
         $minStart = null;

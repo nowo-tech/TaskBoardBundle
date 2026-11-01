@@ -33,6 +33,9 @@ final class Configuration implements ConfigurationInterface
     /** Shape of a column icon name (`<set>:<name>`, since 1.11). */
     public const ICON_PATTERN = '/^[a-z0-9-]+:[a-z0-9-]+$/D';
 
+    /** Default `board.max_tasks` (since 1.21). */
+    public const DEFAULT_MAX_TASKS = 500;
+
     /** @var list<string> Curated Tabler icons of `board.column_icons` (since 1.11). */
     public const DEFAULT_COLUMN_ICONS = [
         'tabler:circle',
@@ -481,6 +484,11 @@ final class Configuration implements ConfigurationInterface
                         ->booleanNode('top_level_only')
                             ->defaultFalse()
                             ->info('The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10.')
+                        ->end()
+                        ->integerNode('max_tasks')
+                            ->defaultValue(self::DEFAULT_MAX_TASKS)
+                            ->min(1)
+                            ->info('Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded.')
                         ->end()
                     ->end()
                 ->end()

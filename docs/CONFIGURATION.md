@@ -5,6 +5,7 @@
 - [Required](#required)
 - [Database](#database)
 - [Routes](#routes)
+  - [Why a route loader instead of `#[Route]` attributes (REQ-SF-004)](#why-a-route-loader-instead-of-route-attributes-req-sf-004)
 - [Security](#security)
   - [Firewall](#firewall)
   - [Access checker](#access-checker)
@@ -19,6 +20,8 @@
   - [Tenancy, boards and assignees (since 1.10)](#tenancy-boards-and-assignees-since-110)
   - [Comments (since 1.16)](#comments-since-116)
   - [Gantt (since 1.15)](#gantt-since-115)
+  - [Query budget (since 1.21)](#query-budget-since-121)
+  - [Logging (since 1.21)](#logging-since-121)
   - [Rich description editor (Tiptap profile `task`)](#rich-description-editor-tiptap-profile-task)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
@@ -116,6 +119,26 @@ nowo_task_board:
     resource: .
     type: nowo_task_board
 ```
+
+### Why a route loader instead of `#[Route]` attributes (REQ-SF-004)
+
+REQ-SF-004 exemption, recorded on purpose: the manage routes are built by `Routing\TaskBoardRouteLoader` (`type: nowo_task_board`)
+from this configuration, not declared with `#[Route]` attributes on `TaskBoardManageController`.
+
+- **Every route name and path is configuration** (`routes.<key>.name`, `routes.<key>.path`, `route_prefix`). Hosts
+  rename them (Beacon serves them under its own paths) and generate them by name. An attribute fixes one name and one
+  path per action at compile time, so attributes could not keep these keys without a BC break (REQ-SF-004 rule 5,
+  REQ-BC-001).
+- **Tenancy copies every route** once per `tenancy.tenant_paths` entry (`<name_prefix><name>`, `{tenantSlug}` in the
+  path, a slug requirement per entry). Attribute routing has no equivalent of a per-host list of copies.
+- **Routes stay opt-in (REQ-SF-004 rule 7).** The controller carries no `#[Route]`, so `routing.controllers` (Symfony
+  >= 7.3 autoconfiguration) never loads it; only the documented `type: nowo_task_board` import does.
+  `tests/Unit/Routing/HostRoutingControllersTest` boots a kernel whose only routing is `routing.controllers` and
+  asserts that no bundle route exists.
+- **One loader, no YAML route files** (REQ-SF-004 rule 3): the bundle ships no `routing.yaml`/XML; the loader maps
+  each route key to its controller action and HTTP methods in one place (`TaskBoardRouteLoader::load()`).
+
+Route names, paths, methods and the prefix are unchanged by 1.21.
 
 ## Security
 
@@ -337,8 +360,43 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `board.default_columns` | To do, In progress, Done | Columns of a new board (`name`, optional `color`, optional `icon` since 1.11), in order; the last one is "done" |
 | `board.column_icons` | 30 Tabler icons (`Configuration::DEFAULT_COLUMN_ICONS`) | Since 1.11: icons offered in the add / edit column dialogs, as `<set>:<name>` (e.g. `tabler:bug`), rendered through UiKit `components/_icon` (`ux_icon()` with `icon_set: ux_icon`, the bare name with the webfont sets). `[]` = no icon field |
 | `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
+| `board.max_tasks` | `500` | Since 1.21 ([REQ-PERF-001](#query-budget-since-121)): the most tasks the board, list, Gantt and task pages load per board |
 
 Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
+
+### Query budget (since 1.21)
+
+REQ-PERF-001: a page never loads an unbounded number of tasks.
+
+| Page | Query | Bound |
+|------|-------|-------|
+| Board, list, Gantt | The board's tasks in position order (the first cards of every column), then their members and the members' users in one query | `board.max_tasks` (default **500**); above it the page says "Showing N of M tasks" (`manage/_task_window_notice.html.twig`, variable `taskWindow`) and counts the board's tasks with one `COUNT` query |
+| Task page and panel | The task with board, column and parent, then one query per relation the page shows (members + users, links, documents, dependencies + their tasks, history + users, time entries); navigation, subtasks and dependency choices reuse the bounded board tasks | Fixed number of queries per task |
+| Comments | One query per task (authors fetched with them); the board and list counters are one grouped query | — |
+
+A host that aliases `TaskRepositoryInterface` to its own repository without `BoundedTaskRepositoryInterface` keeps the
+1.20 behaviour (every task of the board).
+
+```yaml
+nowo_task_board:
+    board:
+        max_tasks: 1000   # very large boards; keep it bounded
+```
+
+### Logging (since 1.21)
+
+REQ-OBS-001: the bundle logs through the autowired `Psr\Log\LoggerInterface` (a `NullLogger` when the container has
+none). Route it with Monolog like any `app` log:
+
+| Level | Message | Context |
+|-------|---------|---------|
+| info | `TaskBoard write: {action}` | `bundle`, `action` (route key, e.g. `task_move`), the ids of the board objects (`board_id`, `task_id`, `column_id`, …), counts |
+| warning | `TaskBoard write refused: {reason}` | `bundle`, `reason` (`csrf_invalid`), `route` |
+| info / warning | `TaskBoard import started` / `finished` / `refused` | `bundle`, `board_id`, `task_id`, `source`, `bytes`, created / skipped / columns / dependencies / warnings / errors counts |
+| error | `TaskBoard import failed` | same, plus the exception class |
+
+Never logged: user ids, names or e-mails, task titles, descriptions, comments, link URLs, uploaded file names or
+contents, CSRF tokens. See [SECURITY.md](SECURITY.md#logging-and-personal-data).
 
 ### Comments (since 1.16)
 
