@@ -85,10 +85,10 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
         if ($result !== []) {
             // Members and their users of the loaded tasks in one query (the cards show the assignees).
             $this->entityManager->createQueryBuilder()
-                ->select('t', 'member', 'memberUser')
+                ->select('t', 'taskMember', 'memberUser')
                 ->from(Task::class, 't')
-                ->leftJoin('t.members', 'member')
-                ->leftJoin('member.user', 'memberUser')
+                ->leftJoin('t.members', 'taskMember')
+                ->leftJoin('taskMember.user', 'memberUser')
                 ->where('t IN (:tasks)')
                 ->setParameter('tasks', $result)
                 ->getQuery()
