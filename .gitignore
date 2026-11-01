@@ -31,7 +31,7 @@ composer.json.tmp
 /.vite/
 
 # IDE / local
-/.cursor/
+# .cursor/ is versioned (rules pack, mcp.json, Spec Kit skills: REQ-IDE-001/003, REQ-DOCS-008, REQ-SPECKIT-001)
 /.idea/
 /.vscode/
 .env
@@ -47,3 +47,4 @@ composer.json.tmp
 .cursor/sandbox.json
 
 /coverage-php.txt
+/coverage-ts.txt
