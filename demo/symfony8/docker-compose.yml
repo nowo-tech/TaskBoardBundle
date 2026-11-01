@@ -8,7 +8,8 @@ services:
     container_name: task-board-demo-symfony8-php
     working_dir: /app
     ports:
-      - "${PORT:-8024}:80"
+      # Loopback only: the demo signs every visitor in as the demo user.
+      - "127.0.0.1:${PORT:-8024}:80"
     volumes:
       - .:/app
       - ../../:/var/task-board-bundle
@@ -21,6 +22,7 @@ services:
       - COMPOSER_ALLOW_SUPERUSER=1
       - SERVER_NAME=:80
       - DATABASE_URL=mysql://${MYSQL_USER:-demo}:${MYSQL_PASSWORD:-demo}@mysql:3306/${MYSQL_DATABASE:-task_board_demo}?serverVersion=8.0.32&charset=utf8mb4
+    # Mitigate Docker/WSL DNS failures resolving repo.packagist.org (composer curl error 6).
     dns:
       - 8.8.8.8
       - 8.8.4.4
