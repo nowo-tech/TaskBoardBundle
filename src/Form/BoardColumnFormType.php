@@ -33,6 +33,8 @@ final class BoardColumnFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $this->addText($builder, 'name', [
+            // Since 1.21: an empty or missing name is a NotBlank error, not a TypeError on the DTO (string).
+            'empty_data'  => '',
             'label'       => 'task_board.form.column.name',
             'constraints' => [new NotBlank(), new Length(max: 128)],
             'attr'        => ['maxlength' => 128],

@@ -9,6 +9,10 @@ jq '
   .require["symfony/config"] = "^7.4" |
   .require["symfony/dependency-injection"] = "^7.4" |
   .require["symfony/form"] = "^7.4" |
+  .require["symfony/mime"] = "^7.4" |
+  ."require-dev"["symfony/browser-kit"] = "^7.4" |
+  ."require-dev"["symfony/css-selector"] = "^7.4" |
+  ."require-dev"["symfony/dom-crawler"] = "^7.4" |
   .require["symfony/framework-bundle"] = "^7.4" |
   .require["symfony/http-kernel"] = "^7.4" |
   .require["symfony/routing"] = "^7.4" |

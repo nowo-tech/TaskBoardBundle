@@ -432,16 +432,11 @@ final class TaskBoardManageController extends AbstractController
         $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
         $form->handleRequest($request);
 
-        if ($form->isSubmitted() && $form->isValid()) {
-            /** @var TaskImportFormData $data */
-            $data = $form->getData();
-            $file = $data->file;
-            if ($file === null) {
-                $this->addFlash('error', 'task_board.flash.import_file_required');
-
-                return $this->redirectToRoute($this->routes['board_import']['name'], ['boardId' => $boardId]);
-            }
-
+        /** @var TaskImportFormData $data */
+        $data = $form->getData();
+        // The file field is NotBlank: a valid submission always carries the upload.
+        $file = $form->isSubmitted() && $form->isValid() ? $data->file : null;
+        if ($file !== null) {
             $result = $this->importOrchestrator->import(
                 board: $board,
                 source: $data->source,
@@ -1355,11 +1350,7 @@ final class TaskBoardManageController extends AbstractController
      */
     private function inlineTaskForms(TaskBoard $board, array $columnChoices): array
     {
-        $route = $this->routes['task_create']['name'] ?? null;
-        if (!is_string($route)) {
-            return [];
-        }
-        $action = $this->generateUrl($route, array_filter([
+        $action = $this->generateUrl($this->routes['task_create']['name'], array_filter([
             'boardId'      => $board->getId(),
             'inline'       => 1,
             '_target_path' => $this->currentRequestUri(),

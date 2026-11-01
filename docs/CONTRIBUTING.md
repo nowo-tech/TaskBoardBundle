@@ -36,6 +36,24 @@ make test-ts
 
 Run `make release-check` before tagging a release.
 
+### Test suites (REQ-TEST-003)
+
+| Suite | Directory | What it covers |
+|-------|-----------|----------------|
+| `unit` | `tests/Unit`, `tests/Integration` | Services, entities, importers, DI, routing, Twig; the controller with mocked collaborators |
+| `functional` | `tests/Functional` | `App\FunctionalKernel` (the bundle with Doctrine, Security, Twig, UiKit, FormKit): every manage page and write over HTTP (`WebTestCase`), and the Doctrine repositories against a real database |
+
+The functional kernel uses SQLite in memory. Set `TASK_BOARD_TEST_DATABASE_URL` to run it against another database
+(the CI `mysql` job uses a MySQL 8.4 service):
+
+```bash
+TASK_BOARD_TEST_DATABASE_URL='mysql://root:root@127.0.0.1:3306/task_board_test?serverVersion=8.4.0' composer test -- --testsuite functional
+```
+
+Its CSRF token manager is predictable (`csrf-<token id>`, `App\PredictableCsrfTokenManager`) and its logger records
+(`App\RecordingLogger`), so tests post the token of the action they call and assert what was logged. Coverage is
+measured on all of `src/` except `src/Resources` (Twig, translations, config, built assets).
+
 ## Pull requests
 
 1. Fork and branch from `main`.

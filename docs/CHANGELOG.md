@@ -84,6 +84,23 @@ Proposed **1.21.0** (minor): bounded board pages, injected clock and logger, rep
 - `.cursor/` versioned: rules pack, `mcp.json` (Engram) and the Spec Kit skills (REQ-IDE-001/003/004, REQ-DOCS-008,
   REQ-GIT-001, REQ-SPECKIT-001).
 
+### Fixed
+
+- Adding a member crashed (500) when the host user class keeps `email` / `username` in a private property:
+  `TaskMemberAssigner` now reads the getter (or a public property) for the history label.
+- A submission without (or with an empty) board name, column name, column set name, task title, link URL, task
+  priority or link type was a 500 (TypeError on the form DTO); it is now a validation error, or the default
+  priority / link type.
+- The import form's file type check needs `symfony/mime`, which is now a requirement (it was only installed
+  transitively).
+
+### Tests
+
+- REQ-TEST-003: no more coverage exclusions for `src/Controller`, `src/Repository`, `src/Doctrine` and `src/Form`
+  (100%, 4831/4831). New `functional` suite: `FunctionalKernel` (SQLite in memory, or `TASK_BOARD_TEST_DATABASE_URL`)
+  renders every manage page, drives the writes over HTTP and runs every Doctrine repository query; the CI coverage
+  job enforces the 100% gate and a `mysql` job runs the functional suite on MySQL 8.4.
+
 ### Changed
 
 - Composer: `psr/clock`, `psr/log` and `symfony/clock` are explicit requirements (already installed through

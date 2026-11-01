@@ -16,6 +16,10 @@ jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
   .require["symfony/config"] = $symfony |
   .require["symfony/dependency-injection"] = $symfony |
   .require["symfony/form"] = $symfony |
+  .require["symfony/mime"] = $symfony |
+  ."require-dev"["symfony/browser-kit"] = $symfony |
+  ."require-dev"["symfony/css-selector"] = $symfony |
+  ."require-dev"["symfony/dom-crawler"] = $symfony |
   .require["symfony/framework-bundle"] = $symfony |
   .require["symfony/http-kernel"] = $symfony |
   .require["symfony/routing"] = $symfony |

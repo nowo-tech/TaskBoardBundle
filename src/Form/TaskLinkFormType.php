@@ -31,8 +31,12 @@ final class TaskLinkFormType extends AbstractType
             'class'   => TaskLinkType::class,
             'choices' => TaskLinkType::userChoices(),
             'label'   => 'task_board.form.link.type',
+            // Since 1.21: a submission without the field is a plain URL link (no TypeError on the DTO).
+            'empty_data' => TaskLinkType::Url->value,
         ]);
         $this->addUrl($builder, 'url', [
+            // Since 1.21: an empty or missing URL is a NotBlank error, not a TypeError on the DTO (string).
+            'empty_data'  => '',
             'label'       => 'task_board.form.link.url',
             'constraints' => [
                 new NotBlank(),
