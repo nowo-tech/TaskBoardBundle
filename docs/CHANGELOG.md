@@ -62,6 +62,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Proposed **1.21.0** (minor): bounded board pages, injected clock and logger, repository hygiene. See
+[UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- `board.max_tasks` (default **500**, REQ-PERF-001): the board, list, Gantt and task pages load at most that many tasks
+  per board (the first cards of every column) with their members and users in one extra query, and say "Showing N of
+  M tasks" (`manage/_task_window_notice.html.twig`, Twig variable `taskWindow`) when a board has more.
+- `Repository\BoundedTaskRepositoryInterface` (implemented by the Doctrine task repository): `findByBoardWithin()`,
+  `countByBoard()` and `findForDetail()` — the task page and panel fetch the task's relations in a fixed number of
+  queries instead of one query per member / history entry.
+- REQ-OBS-001: the manage controller logs every successful write (`info`, action + object ids) and every refused CSRF
+  token (`warning`); `TaskImportOrchestrator` logs the start, result and failure of every import. No user data, text,
+  file names or tokens are logged (docs/CONFIGURATION.md, Logging).
+- REQ-DI-001: `TaskGanttBuilder` and the manage controller take a `Psr\Clock\ClockInterface` (default `NativeClock`).
+- Demo: a PHPUnit kernel test (routes imported, bundle templates compile); `release-check` runs `update-bundle`, the
+  demo tests and the healthcheck (REQ-DEMO-007).
+- Root `make assets` (pnpm build) and `make test-ts` prints the global TS % (REQ-MAKE-001, REQ-TEST-009);
+  `validate-translations` checks the key parity of the 7 locales (REQ-MAKE-004).
+- `.cursor/` versioned: rules pack, `mcp.json` (Engram) and the Spec Kit skills (REQ-IDE-001/003/004, REQ-DOCS-008,
+  REQ-GIT-001, REQ-SPECKIT-001).
+
+### Changed
+
+- Composer: `psr/clock`, `psr/log` and `symfony/clock` are explicit requirements (already installed through
+  FrameworkBundle); `composer test` runs with `memory_limit=512M`.
+- The demo web port is published on `127.0.0.1` only.
+- `ImportFieldMapper` builds dates from Unix timestamps without reading the current time.
+- Spec Kit baseline: inventory of all 262 production files of `src/` and the requirements of releases 1.10–1.21.
+- docs: DEMO-FRANKENPHP (dev / prod start, troubleshooting), the REQ-SF-004 route loader exemption, query budget and
+  logging (CONFIGURATION), logging and personal data (SECURITY), README coverage figures.
+
 ## [1.20.1] - 2026-10-30
 
 Every manage form is a FormKit Type (REQ-TWIG-005 rule 11). See [UPGRADING](UPGRADING.md#to-1201).

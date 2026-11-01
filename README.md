@@ -85,9 +85,15 @@ make test-ts
 make release-check
 ```
 
-- **PHP:** PHPUnit with coverage report via `make test-coverage` (controllers and Doctrine repositories excluded from 100% target)
-- **TS/JS:** Vitest via `pnpm run test:coverage`
-- **Python:** N/A
+| Language | Suite | Coverage | Gate |
+| --- | --- | --- | --- |
+| PHP | PHPUnit 10 (unit + integration), `make test-coverage` | **100%** lines (3293/3293) | `make test-coverage-100` / `scripts/check-coverage.php` (100%) |
+| TS/JS | Vitest + v8, `make test-ts` (prints the global % with `.scripts/ts-coverage-percent.sh`) | **100%** (min of statements / branches / functions / lines; 148/148 lines) | `vitest.config.ts` thresholds (100%) |
+| Python | — | N/A | — |
+
+Figures from CI (`ci.yml`, coverage job, PHP 8.2 + Symfony 7.4) on 2026-11-01. PHP coverage still excludes
+`src/Controller`, `src/Repository`, `src/Doctrine` and `src/Form` (see `phpunit.xml.dist`); the next release covers
+them with kernel tests.
 
 ## License
 

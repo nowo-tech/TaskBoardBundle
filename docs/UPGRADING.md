@@ -102,6 +102,32 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.20.1** (proposed 1.21.0):
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No configuration change is required. Route names, paths and template paths are unchanged.
+
+- **Task cap (new default):** the board, list, Gantt and task pages load at most `board.max_tasks` tasks per board
+  (default **500**: the first cards of every column, in position order) and say "Showing N of M tasks" above the
+  view when a board has more. Raise it for very large boards:
+
+  ```yaml
+  nowo_task_board:
+      board:
+          max_tasks: 1000
+  ```
+
+- **Template overrides:** `manage/board.html.twig`, `manage/list.html.twig` and `manage/gantt.html.twig` include the
+  new `manage/_task_window_notice.html.twig` (variable `taskWindow`) below the page header. An override keeps working;
+  add the include to show the notice.
+- **Custom task repository:** if you alias `TaskRepositoryInterface` to your own class, it keeps working unbounded
+  (1.20 behaviour). Implement `BoundedTaskRepositoryInterface` too to get the cap and the fetch-joined task page.
+- **Logging:** the controller and the importer now log through the autowired `Psr\Log\LoggerInterface`; route the
+  `TaskBoard write` / `TaskBoard import` lines with Monolog if you want them elsewhere (CONFIGURATION, Logging).
+
 ## To 1.20.1
 
 From **1.20.0**: no change needed. The priority, time entry, dependency, comment, list filter and CSRF-only action

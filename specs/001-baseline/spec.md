@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-baseline`  
 **Created**: 2026-07-07  
-**Status**: Active  
+**Status**: Active (refreshed 2026-11-01 for releases 1.10–1.21)  
 **Input**: Backfill GitHub Spec Kit baseline documenting 100% of production code in `src/`.
 
 **Related docs**: [`docs/SPEC-DRIVEN-DEVELOPMENT.md`](../../docs/SPEC-DRIVEN-DEVELOPMENT.md), [`docs/CONFIGURATION.md`](../../docs/CONFIGURATION.md), [`docs/USAGE.md`](../../docs/USAGE.md)  
@@ -60,6 +60,25 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 
 ---
 
+### User Story 5 — Tenants, comments, planning (Priority: P2, releases 1.10–1.21)
+
+As a host integrator and a team member, I serve boards per tenant, discuss tasks with @mentions, reuse column sets,
+plan with dependencies, estimates and time entries, import subtasks, and move between tasks without going back to
+the board.
+
+**Acceptance Scenarios**:
+
+1. **Given** `tenancy.enabled` and a tenant path, **When** a route of another tenant's board or task is requested,
+   **Then** it answers 404 (`TaskBoardTenantContext::owns()`), and every manage route also exists under the tenant path.
+2. **Given** a reader of a task and `comments.readers_can_comment`, **When** they comment with an @mention of a
+   candidate, **Then** the comment is stored, a `TaskMentionEvent` is dispatched, and only the author edits it.
+3. **Given** a board with more than `board.max_tasks` tasks, **When** the board, list or Gantt page renders, **Then**
+   it loads the first `board.max_tasks` cards and says "Showing N of M tasks".
+4. **Given** a task page, **When** previous / next is used, **Then** `TaskNavigator` moves in the board (or list)
+   order and among the parent's subtasks.
+
+---
+
 ## Requirements
 
 ### Bundle & platform
@@ -77,7 +96,9 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 ### Domain model
 
 - **FR-ENTITY-001 … FR-ENTITY-011**: Doctrine entities for board, column, task hierarchy, links, dependencies, documents, members, time entries, teams — see [`code-inventory.md`](code-inventory.md).
-- **FR-ENUM-001**: `TaskPriority`, `TaskStatus`, `TaskLinkType`, `TaskDependencyType`, `TaskMemberRole`, `TeamRole`, `TaskChangeType`.
+- **FR-ENTITY-012**: `ColumnSet` — named list of columns, with its creator and an optional scope key (tenant), offered to the boards of that scope (since 1.11).
+- **FR-ENTITY-013**: `TaskComment` — body, mentions, edited / soft-deleted timestamps (since 1.16).
+- **FR-ENUM-001**: `TaskPriority`, `TaskStatus`, `TaskLinkType`, `TaskDependencyType`, `TaskMemberRole`, `TeamRole`, `TaskChangeType`, `GanttScale`, `WeekStart`.
 - **FR-DTO-001**: Form DTOs for board/column/task/import/link/member and Gantt/navigation structures.
 - **FR-VO-001**: `Uuid` value object for identifiers.
 
@@ -102,7 +123,30 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 - **FR-SEC-001 … FR-SEC-004**: Access checker and team membership resolver interfaces + default implementations.
 - **FR-SEC-005**: `TaskBoardResourceAccessChecker` authorizes per board / task in the manage UI (creator, team member or manage role by default); listeners on `BoardAccessCheckEvent` / `TaskAccessCheckEvent` may override the decision.
 - **FR-EVT-001**: `TaskBoardEvents` constants.
-- **FR-EVT-002**: Query/access events (`BoardListQueryEvent`, `TaskAccessCheckEvent`, etc.).
+- **FR-EVT-002**: Query/access events (`BoardListQueryEvent`, `TaskAccessCheckEvent`, `ColumnSetQueryEvent`, `ColumnSetAccessCheckEvent`, etc.).
+- **FR-EVT-003** (since 1.10): events after writes (`TaskCreatedEvent`, `TaskUpdatedEvent`, `TaskMovedEvent`, `TaskCompletedEvent`, `TaskReopenedEvent`, `TaskMemberAddedEvent`; since 1.16 `TaskCommentEvent`, `TaskMentionEvent`), dispatched after the flush.
+
+### Releases 1.10–1.21
+
+- **FR-TENANT-001** (1.10): `tenancy` — the tenant of the request (`TaskBoardTenantContext`, `TaskBoardTenantResolverInterface`, default `SlugTaskBoardTenantResolver`), a copy of every manage route per `tenancy.tenant_paths` entry (`TaskBoardRouteLoader`, `TenantPaths`), URL generation that keeps the request's `tenantSlug` (`TenantPathUrlGenerator`), boards and tasks of another tenant answer 404, optional `single_board`.
+- **FR-ASSIGNEE-001** (1.10): `assignee_provider` (`TaskAssigneeProviderInterface`) restricts who may be a member of a task on a board; others are refused (`UnassignableUserException`).
+- **FR-LINK-001** (1.10): links to host objects (`TaskLinkType::HostObject`) resolved by tagged `TaskObjectLinkResolverInterface` services into `TaskObjectBadge`s.
+- **FR-TREE-001** (1.10): subtask tree of a board in one query (`TaskTree`, `SubtaskProgress`); `board.top_level_only` shows parents only with a done / total counter.
+- **FR-COLSET-001** (1.11): column sets — save a board's columns, add a set's columns to a board, choose a set for a new board, delete (creator or manage role, `ColumnSetAccessCheckEvent`); column icon, colour, rename and delete.
+- **FR-PANEL-001** (1.11): `task_panel` — the task editing fragment without layout for side drawers; its writes come back to a local `_target_path` or answer the refreshed fragment.
+- **FR-DEP-001** (1.15): task dependencies (`TaskDependencyType`: blocks, blocked by, related, duplicates) inside one board; self, duplicate, cross-board and cyclic dependencies are refused (`InvalidTaskDependencyException`).
+- **FR-TIME-001** (1.15): manual time entries per task (`TaskTimeLogger`), CSRF-protected add / remove by editors.
+- **FR-TIME-002** (1.15): estimate vs spent deviation of a task and of its subtasks (`TaskDeviation`).
+- **FR-GANTT-001** (1.15): Gantt scales (hours, days, weeks, months), week start from config or a `WeekStartResolverInterface`, dependency arrows.
+- **FR-COMMENT-001** (1.16): comments on a task — readers too unless `comments.readers_can_comment: false`; the author edits, the author or an editor deletes (soft delete); mentions are validated against the candidates and dispatched once.
+- **FR-COMMENT-002** (1.16): @mention candidates (`TaskMentionCandidatesResolverInterface`, default `DefaultTaskMentionCandidatesResolver`: assignable users, else creator and members).
+- **FR-IMPORT-007** (1.18): the bundle's own CSV / JSON format (`TaskBoardCsvImporter`, `TaskBoardJsonImporter`, `TaskBoardRowMapper`) and importing a file as subtasks of a task, with their dependencies (editors only).
+- **FR-TEXT-001** (1.19): comments and plain-text descriptions render through `TaskTextRendererInterface` (default `PlainTaskTextRenderer`: escaped text with line breaks); hosts alias it to their own renderer and own its output.
+- **FR-NAV-001** (1.20): previous / next task in the board or list order and among the parent's subtasks (`TaskNavigator`, `TaskNavigation`, `TaskPosition`).
+- **FR-DUR-001** (1.20): duration estimates entered and shown as "1d 2h 30m" (`MinutesToDurationTransformer`, `nowo_task_board_duration`).
+- **FR-PERF-001** (1.21): board, list, Gantt and task pages load at most `board.max_tasks` tasks (members fetched with them), print "Showing N of M tasks" when capped, and the task page fetches its relations in a fixed number of queries (`BoundedTaskRepositoryInterface`, `TaskWindow`).
+- **FR-OBS-001** (1.21): writes, refused CSRF tokens and imports are logged through the injected `LoggerInterface` with ids and counts only (no personal data).
+- **FR-CLOCK-001** (1.21): time-dependent services take `ClockInterface` (`TaskGanttBuilder`, the controller's default time-entry day).
 
 ### Import
 
@@ -117,8 +161,9 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 ### HTTP UI
 
 - **FR-CTRL-001**: `TaskBoardManageController` — all manage actions (board, list, gantt, task CRUD, import UI).
-- **FR-FORM-001**: Symfony form types for board, column, task, import, link, member.
-- **FR-TPL-001**: Twig layout, manage pages, modals, partials (23 templates).
+- **FR-FORM-001**: Symfony form types for board, column, task, import, link, member, priority, list filters, column sets, dependencies, time entries and comments (FormKit profile `task_board`).
+- **FR-FORM-002**: `CsrfActionType` — root-less CSRF-only form of the bare POST actions (REQ-TWIG-005).
+- **FR-TPL-001**: Twig layout, manage pages, modals, partials (44 templates).
 - **FR-I18N-001**: Translation catalogs (`de`, `en`, `es`, `fr`, `it`, `nl`, `pt`).
 
 ### Frontend (Stimulus + Vite)
@@ -130,7 +175,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 - **FR-UI-005**: `subtask-tree-controller` — nested task tree.
 - **FR-UI-006**: `task-status-controller` — inline status updates.
 - **FR-UI-007**: Modal controllers (add/edit column/task, links, members, priority).
-- **FR-UI-008**: Remaining Stimulus controllers wired by manage templates.
+- **FR-UI-008**: Remaining Stimulus controllers and helpers wired by manage templates (activity filter, mentions, pickers, option filters, task navigation keys, time utilities, CSS variables, storage).
 - **FR-UI-010**: `task-board.css` styles.
 - **FR-LEGACY-001**: Published `Resources/public/js|css` fallbacks.
 
@@ -144,7 +189,7 @@ As an integrator, I configure routes, table prefix, templates, and event-driven 
 
 ## Success Criteria
 
-- **SC-001**: **155/155** production files mapped (audited 2026-10-20; `git ls-files src | grep -v '\.test\.ts$' | wc -l`; `*.test.ts` excluded).
+- **SC-001**: **262/262** production files mapped (audited 2026-11-01; `git ls-files src | grep -v '\.test\.ts$' | wc -l`; `*.test.ts` excluded), of which 206 PHP / TypeScript sources.
 - **SC-002**: Config keys match `Configuration.php` and Flex recipe defaults.
 - **SC-003**: PHPUnit + Vitest + PHPStan pass in CI.
 - **SC-004**: Demo with TimeTrack: board + timer + aggregated time on task.
