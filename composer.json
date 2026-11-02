@@ -57,7 +57,7 @@
         "phpstan/phpstan": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-symfony": "^2.0",
-        "phpunit/phpunit": "^10.0",
+        "phpunit/phpunit": "^13.4",
         "rector/rector": "^2.0",
         "vincentlanglet/twig-cs-fixer": "^4.0"
     },
