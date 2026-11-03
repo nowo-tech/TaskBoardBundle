@@ -63,6 +63,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Idempotent task import from every source. See [UPGRADING](UPGRADING.md#unreleased) — **schema change**.
+
+### Added
+
+- Every import (ClickUp CSV / JSON, Jira CSV, Trello JSON, the bundle's CSV / JSON) is an idempotent upsert: rows are
+  matched on (import scope, source id) stored on the task link (`task_board_task_links.import_source`, new, with index
+  `idx_task_board_task_links_import`) and update their task; the same file twice is a no-op. The source wins for every
+  field it has a value for, empty fields keep the application's value (`ImportedTaskUpdater`).
+- Rows without an id are matched by a deterministic fingerprint (scope, parent, normalized title, creation date), with
+  a warning.
+- Cross-board rule: a source id already imported into another board of the tenant is skipped with a warning
+  (`TaskImportLinkLookupInterface`, `DoctrineTaskImportLinkLookup`).
+- `TaskImportResult::$updated` / `$unchanged` (+ withers); the flash messages, the command and the import log report
+  created / updated / unchanged / skipped.
+- ClickUp CSV: `Start Date` (Gantt), `Date Created`, `Dependencies` / `Waiting On` / `Blocking`; ClickUp JSON:
+  `start_date`, `date_created`, `dependencies`; Jira: start date, `Created`, "Blocks" issue links; Trello: `start`.
+  Dependencies resolve within the file and against tasks imported before.
+- Assignees given by name (ClickUp, Jira, Trello members, own format) resolve through `assignee_provider` when exactly
+  one assignable user has that display name (`ImportAssigneeResolver`); otherwise one warning per name.
+- `ImportFieldMapper::parseDate()` (millisecond / second timestamps, ISO, day-first and month-first numeric dates, Jira
+  and ClickUp text dates), `parseNames()`, `parseIdList()`, `mapDependencies()`; `Task::setParent()`;
+  `TaskImportSource::provider()`, `scope()`, `hasGlobalIds()`, `fromLegacyLabel()`.
+
+### Changed
+
+- Links written by imports before 1.22 are recognised by their label, matched, and stamped with their scope on the
+  first re-import.
+- A re-import moves a task under its source parent row when that changes (never under its own descendant); a row
+  without a parent keeps its task where it is.
+- An existing dependency met again on re-import is silently kept (it was a "duplicate or cycle" warning); a refused
+  one says why.
+- Dates without a time are midnight instead of the import time; 10-digit numbers are seconds timestamps.
+- CSV parsing drops a UTF-8 BOM (the first header was lost), keeps quoted multi-line cells, and joins repeated headers.
+- Jira `Time Spent` is no longer read as an estimate. The import form's help and the source descriptions mention the
+  new columns (7 locales).
+- The import form no longer renders the **Skip tasks that were already imported** checkbox.
+
+### Deprecated
+
+- `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and `nowo:task-board:import --force`: ignored
+  since every import is an upsert.
+
 ## [1.21.0] - 2026-11-03
 
 Bounded board pages, injected clock and logger, repository hygiene. See [UPGRADING](UPGRADING.md#to-1210).

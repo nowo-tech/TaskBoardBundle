@@ -28,7 +28,7 @@ use function trim;
  * Since 1.18: one row of the bundle's own import format (CSV columns or JSON keys, case-insensitive) → a task.
  *
  * Keys: `id`, `parent`, `title` (required), `description`, `status` (column name), `priority` (low, normal, high,
- * urgent), `assignee` (e-mail), `start` and `due` (YYYY-MM-DD), `estimate` (minutes, or `1h30m`), `tags` (`;` or `,`)
+ * urgent), `assignee` (e-mail, or since 1.22 a display name), `start` and `due` (YYYY-MM-DD), `estimate` (minutes, or `1h30m`), `tags` (`;` or `,`)
  * and `depends_on`: other rows' ids separated by `;` or `,`, each `ID` (this task waits for ID: blocked by) or `ID:type`
  * with type `blocks`, `blocked_by`, `related` or `duplicates`.
  */
@@ -68,6 +68,9 @@ final readonly class TaskBoardRowMapper
             tags: $this->fieldMapper->parseTags($this->list($row, 'tags')),
             startAt: $this->date($value('start'), $line, 'start'),
             dependsOn: $this->dependencies($this->list($row, 'depends_on'), $line),
+            // Since 1.22: an assignee given by name, and a priority cell left empty keeps the task's on re-import.
+            assigneeNames: $this->fieldMapper->parseNames($value('assignee')),
+            hasPriority: $value('priority') !== '',
         );
     }
 

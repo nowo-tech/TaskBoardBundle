@@ -90,7 +90,10 @@ Configure a custom `team_membership_resolver` for advanced team ACL — see [CON
 1. Open a board → **Import tasks** (or `/tools/task-board/board/{boardId}/import`).
 2. Choose the source format and upload the export file.
 3. Enable **Create missing status columns** to map ClickUp/Jira statuses to new kanban columns.
-4. Enable **Skip already imported tasks** to avoid duplicates (matched by external task ID).
+4. Import again whenever you like: since 1.22 an import is an idempotent upsert — rows imported before update their
+   task (the source wins for the fields it has, empty fields keep your changes), the same file twice changes nothing,
+   and the summary counts created / updated / unchanged / skipped rows. See
+   [Re-importing](import/README.md#re-importing-idempotent-upsert-since-122).
 
 CLI:
 

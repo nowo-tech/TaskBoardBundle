@@ -43,7 +43,7 @@ final class TaskBoardImportCommand extends Command
             ->addArgument('file', InputArgument::REQUIRED, 'Path to CSV or JSON export')
             ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Import source key', TaskImportSource::ClickUpCsv->value)
             ->addOption('no-create-columns', null, InputOption::VALUE_NONE, 'Do not create missing status columns')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Import tasks even if external id already exists');
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Deprecated since 1.22 and ignored: every import updates the tasks it imported before');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -78,16 +78,17 @@ final class TaskBoardImportCommand extends Command
             return Command::FAILURE;
         }
 
+        if ($input->getOption('force')) {
+            $io->note('--force is deprecated since 1.22 and ignored: an import updates the tasks it imported before instead of skipping or duplicating them.');
+        }
+
         $result = $this->importOrchestrator->import(
             board: $board,
             source: $source,
             content: (string) file_get_contents($filePath),
             filename: basename($filePath),
             actor: $actor,
-            options: new TaskImportOptions(
-                createMissingColumns: !$input->getOption('no-create-columns'),
-                skipExisting: !$input->getOption('force'),
-            ),
+            options: new TaskImportOptions(createMissingColumns: !$input->getOption('no-create-columns')),
         );
 
         foreach ($result->errors as $error) {
@@ -103,8 +104,10 @@ final class TaskBoardImportCommand extends Command
         }
 
         $io->success(sprintf(
-            'Imported %d task(s), skipped %d, created %d column(s).',
+            'Import done: %d created, %d updated, %d unchanged, %d skipped; %d column(s) created.',
             $result->created,
+            $result->updated,
+            $result->unchanged,
             $result->skipped,
             $result->columnsCreated,
         ));

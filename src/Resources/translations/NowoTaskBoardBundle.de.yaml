@@ -134,7 +134,7 @@ task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Pri
 task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
 task_board.import.help.supported_title: Supported formats
 task_board.flash.import_file_required: Please choose a file to import.
-task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'
+task_board.flash.import_summary: "Import abgeschlossen: %created% erstellt, %updated% aktualisiert, %unchanged% unverändert, %skipped% übersprungen; %columns% Spalte(n) erstellt."
 task_board.action.open_link: "Link öffnen"
 task_board.action.remove_link: "Link entfernen"
 task_board.action.remove_member: "Mitglied entfernen"
@@ -339,17 +339,17 @@ task_board.import.help.dependencies: "In depends_on bedeutet \"api\": Diese Aufg
 task_board.import.help.example_csv: "Beispiel (CSV)"
 task_board.import.help.example_json: "Beispiel (JSON)"
 task_board.import.help.others_title: "Exporte aus anderen Tools"
-task_board.import.help.source_clickup_csv: "Aufgaben einer ClickUp-Listen- oder Tabellenansicht als CSV (Task Name, Status, Priority, Assignee, Due Date, Task ID; Parent ID erzeugt Unteraufgaben)."
+task_board.import.help.source_clickup_csv: "Aufgaben einer ClickUp-Listen- oder Tabellenansicht als CSV (Task Name, Status, Priority, Assignees, Start Date, Due Date, Date Created, Task ID, Dependencies / Waiting On / Blocking; Parent ID erzeugt Unteraufgaben)."
 task_board.import.help.source_clickup_json: "Aufgaben aus der ClickUp-API oder einem JSON-Export (Name, Status, Priorität, Zuständige, Fälligkeit, Eltern)."
 task_board.import.help.source_jira_csv: "Jira-Vorgänge, als CSV aus der Vorgangssuche exportiert (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key erzeugt Unteraufgaben)."
 task_board.import.help.source_trello_json: "Ein Trello-Board als JSON (Menü → Drucken und exportieren → JSON): Karten werden Aufgaben, Listen Spalten, Checklisten Unteraufgaben."
-task_board.import.help.options: "Bereits importierte Zeilen (gleiche ID aus gleicher Quelle) werden übersprungen, solange \"Bereits importierte Aufgaben überspringen\" aktiv ist; dieselbe Datei lässt sich also gefahrlos erneut importieren. Dateien bis 20 MB."
+task_board.import.help.options: "Ein erneuter Import ist sicher: eine bereits importierte Zeile (gleiche ID aus demselben Tool oder, ohne ID, gleiche Elternaufgabe, gleicher Titel und gleiches Erstelldatum) aktualisiert ihre Aufgabe mit den Werten der Datei statt eine Kopie anzulegen; Felder, die die Datei leer lässt, behalten die hier gesetzten Werte. Bereits in ein anderes Board importierte Zeilen werden übersprungen. Dateien bis 20 MB."
 task_board.import.help.got_it: "Verstanden"
 task_board.import.subtasks.action: "Unteraufgaben importieren"
 task_board.import.subtasks.title: "Unteraufgaben importieren"
 task_board.import.subtasks.help: "Die Aufgaben der Datei werden Unteraufgaben von \"%title%\", mit eigenen Unteraufgaben und Gantt-Beziehungen."
 task_board.import.subtasks.submit: "Importieren"
-task_board.flash.subtask_import_summary: "%created% Unteraufgabe(n) und %dependencies% Gantt-Beziehung(en) importiert, %skipped% übersprungen."
+task_board.flash.subtask_import_summary: "Unteraufgaben: %created% erstellt, %updated% aktualisiert, %unchanged% unverändert, %skipped% übersprungen; %dependencies% Gantt-Beziehung(en) hinzugefügt."
 task_board.task.edit_description: "Beschreibung bearbeiten"
 # Since 1.20: previous / next task, remaining time, the estimate as a duration.
 task_board.nav.label: "Aufgabennavigation"

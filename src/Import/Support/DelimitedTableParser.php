@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Import\Support;
 
 use function array_map;
-use function count;
+use function assert;
+use function fclose;
 use function fgetcsv;
+use function fopen;
+use function fwrite;
 use function is_resource;
 use function mb_strtolower;
-use function preg_split;
-use function str_getcsv;
+use function rewind;
+use function str_starts_with;
+use function substr;
 use function trim;
 
 /**
@@ -19,43 +23,60 @@ use function trim;
 final class DelimitedTableParser
 {
     /**
+     * The rows of a CSV / TSV export keyed by header. Since 1.22: a UTF-8 byte order mark (ClickUp, Excel) is dropped,
+     * quoted cells may span lines (multi-line descriptions), and a header that repeats (Jira writes one "Labels" or
+     * "Inward issue link (Blocks)" column per value) joins its non-empty values with ";".
+     *
      * @return list<array<string, string>>
      */
     public function parse(string $content, string $filename = ''): array
     {
+        $content   = trim(str_starts_with($content, "\xEF\xBB\xBF") ? substr($content, 3) : $content);
         $delimiter = $this->detectDelimiter($content, $filename);
-        $lines     = preg_split("/\r\n|\r|\n/", trim($content)) ?: [];
-        // str_getcsv() always yields at least one field, so an empty file simply produces no data rows.
-        $headers = $this->parseLine($lines[0] ?? '', $delimiter);
+        if ($content === '') {
+            return [];
+        }
+        $stream = fopen('php://temp', 'r+');
+        assert(is_resource($stream));
+        fwrite($stream, $content);
+        rewind($stream);
 
-        $rows = [];
-        for ($i = 1, $max = count($lines); $i < $max; ++$i) {
-            $line = trim($lines[$i]);
-            if ($line === '') {
+        $headers = array_map(static fn (?string $header): string => trim((string) $header), $this->readRecord($stream, $delimiter) ?? []);
+        $rows    = [];
+        while (($values = $this->readRecord($stream, $delimiter)) !== null) {
+            if ($values === [null]) {
                 continue;
             }
 
-            $values     = $this->parseLine($line, $delimiter);
             $normalized = [];
             foreach ($headers as $index => $header) {
-                $normalized[trim($header)] = trim((string) ($values[$index] ?? ''));
+                $value = trim((string) ($values[$index] ?? ''));
+                if (!isset($normalized[$header]) || $normalized[$header] === '') {
+                    $normalized[$header] = $value;
+                } elseif ($value !== '') {
+                    $normalized[$header] .= ';' . $value;
+                }
             }
 
             $rows[] = $normalized;
         }
+        fclose($stream);
 
         return $rows;
     }
 
     /**
-     * @return list<string>
+     * One CSV record (RFC 4180 quoting, no backslash escape); null at the end of the stream.
+     *
+     * @param resource $stream
+     *
+     * @return list<string|null>|null
      */
-    private function parseLine(string $line, string $delimiter): array
+    private function readRecord($stream, string $delimiter): ?array
     {
-        /** @var list<string|null> $fields */
-        $fields = str_getcsv($line, $delimiter);
+        $record = fgetcsv($stream, null, $delimiter, '"', '');
 
-        return array_map(static fn (?string $value): string => trim((string) $value), $fields);
+        return $record === false ? null : $record;
     }
 
     private function detectDelimiter(string $content, string $filename): string

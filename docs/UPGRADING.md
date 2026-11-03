@@ -103,6 +103,68 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.21.0** (proposed 1.22.0): `composer update nowo-tech/task-board-bundle`.
+
+**Schema change (every host):** a nullable import scope on the task links, and an index for the matching key.
+Generate and run a migration (`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply
+(MySQL):
+
+```sql
+ALTER TABLE task_board_task_links ADD import_source VARCHAR(64) DEFAULT NULL;
+CREATE INDEX idx_task_board_task_links_import ON task_board_task_links (import_source, external_id);
+```
+
+The demo ships it as `demo/symfony8/migrations/Version20261103120000.php`.
+
+**Imports are idempotent upserts** (every source: ClickUp CSV / JSON, Jira CSV, Trello JSON, the bundle's CSV / JSON).
+A row imported before **updates** its task instead of being skipped (or, with `skipExisting: false` / `--force`,
+duplicated); importing the same file twice changes nothing. Details: [docs/import/README.md — Re-importing](import/README.md#re-importing-idempotent-upsert-since-122).
+
+- **Matching key:** (import scope, source id) stored on the task link — `import_source` = `clickup` (CSV and JSON
+  share it), `jira`, `trello`, or `taskboard` / `taskboard@<task id>` for the bundle's own format (its ids belong to
+  the file). Rows without an id are matched by a fingerprint (scope, parent, normalized title, source creation date)
+  and the import warns that they are.
+- **Precedence:** the source wins for every field it has a value for (title, column by status, priority, description,
+  start, due, estimate, tags, assignees, parent row); a field the row leaves empty keeps the task's value, so changes
+  made in the application survive unless the source sets that field. Assignees from the source replace the task's
+  assignees (other member roles are untouched). Dependencies are only added. A row without a parent keeps its task
+  where it is (the task you import into only places new tasks).
+- **Across boards:** a source id already imported into another board of the same tenant is skipped with a warning (no
+  move, no copy). Boards of other tenants are not looked at; fingerprint rows and the own format are board-local.
+- **Existing links (before 1.22) are matched without a data migration:** a link with no `import_source` whose label is
+  the one older versions wrote (`clickup_csv #<id>`, `jira_csv #<id>`, `trello_json #<id>`, `taskboard_csv #<id>`, …)
+  belongs to that tool and gets its scope on its first re-import. Optional one-off backfill (MySQL) instead:
+
+  ```sql
+  UPDATE task_board_task_links SET import_source = 'clickup' WHERE import_source IS NULL AND (label = CONCAT('clickup_csv #', external_id) OR label = CONCAT('clickup_json #', external_id));
+  UPDATE task_board_task_links SET import_source = 'jira' WHERE import_source IS NULL AND label = CONCAT('jira_csv #', external_id);
+  UPDATE task_board_task_links SET import_source = 'trello' WHERE import_source IS NULL AND label = CONCAT('trello_json #', external_id);
+  UPDATE task_board_task_links SET import_source = 'taskboard' WHERE import_source IS NULL AND (label = CONCAT('taskboard_csv #', external_id) OR label = CONCAT('taskboard_json #', external_id));
+  ```
+
+  Subtasks imported *into a task* with the own format before 1.22 are not recognised (their scope was not recorded):
+  re-importing that file into the task creates them again; delete the old ones first if you need to.
+- **Deprecated, ignored:** `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and the command's
+  `--force` (it prints a note). They stay for backward compatibility and will be removed in 2.0. The import form no
+  longer has the **Skip tasks that were already imported** checkbox (`task_board.import.form.skip_existing` is kept,
+  unused, for host overrides).
+- **Result:** `TaskImportResult` gained `updated` and `unchanged` (and `withUpdated()` / `withUnchanged()`);
+  `skipped` now counts rows of another board and repeated ids of the file. The flash messages
+  `task_board.flash.import_summary` / `subtask_import_summary` gained `%updated%` and `%unchanged%` (host overrides
+  with the old placeholders keep working). The `TaskBoard import finished` log line has `updated` / `unchanged`.
+- **New mappings:** ClickUp CSV `Start Date`, `Date Created`, `Dependencies` / `Waiting On` / `Blocking`, assignees by
+  name, millisecond and text dates; ClickUp JSON `start_date`, `date_created`, `dependencies`, assignee user names;
+  Jira start date, `Created`, "Blocks" issue links, display names (and `Time Spent` is no longer read as an estimate);
+  Trello `start` and members. Names resolve through `assignee_provider` (unambiguous display-name match only).
+- **Dates without a time** are now midnight (they took the time of the import before), and a 10-digit number is a Unix
+  timestamp in seconds (only 11+ digits are milliseconds). Tasks imported before keep their dates until a re-import
+  sets the source's.
+- **Custom importers / services:** `ImportedTaskDto` gained `createdAt`, `assigneeNames` and `hasPriority` (default
+  `true`: the row's priority is applied, as before). `TaskImportOrchestrator` gained optional constructor arguments
+  (`assigneeProvider`, `linkLookup`, `updater`); without `linkLookup` (manual instantiation) the cross-board rule is
+  not checked. New service alias `TaskImportLinkLookupInterface` → `DoctrineTaskImportLinkLookup`. New
+  `Task::setParent()` and `TaskLink::getImportSource()` / `setImportSource()`.
+
 ## To 1.21.0
 
 From **1.20.1**:

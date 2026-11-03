@@ -19,6 +19,8 @@ services:
             - '../../ValueObject/'
             - '../../Import/Dto/'
             - '../../Import/TaskImportSource.php'
+            # Since 1.22: per-run helper built by the orchestrator (holds the board of the run).
+            - '../../Import/ImportAssigneeResolver.php'
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
@@ -89,6 +91,10 @@ services:
     Nowo\TaskBoardBundle\Import\TaskImportOrchestrator:
         arguments:
             $importers: !tagged_iterator nowo_task_board.task_importer
+
+    # Since 1.22: source ids already imported into another board of the tenant (cross-board rule of the import).
+    Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface:
+        alias: Nowo\TaskBoardBundle\Import\DoctrineTaskImportLinkLookup
 
     Nowo\TaskBoardBundle\Command\TaskBoardImportCommand: ~
 

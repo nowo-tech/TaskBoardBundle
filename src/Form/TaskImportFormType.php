@@ -49,10 +49,7 @@ final class TaskImportFormType extends AbstractType
             'label'    => 'task_board.import.form.create_columns',
             'required' => false,
         ]);
-        $this->addCheckbox($builder, 'skipExisting', [
-            'label'    => 'task_board.import.form.skip_existing',
-            'required' => false,
-        ]);
+        // Since 1.22 no "skip existing" checkbox: every import updates the tasks it imported before (idempotent).
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -60,6 +57,8 @@ final class TaskImportFormType extends AbstractType
         $resolver->setDefaults([
             'data_class'         => TaskImportFormData::class,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
+            // Since 1.22: a post that still sends the removed skipExisting field is accepted (the value is ignored).
+            'allow_extra_fields' => true,
         ]);
     }
 }

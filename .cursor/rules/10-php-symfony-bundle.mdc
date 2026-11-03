@@ -26,3 +26,8 @@ Do not introduce BC breaks unless explicitly requested.
 Do not add PHPDoc in Spanish.
 Do not rename public services, configuration keys, or Twig integrations without warning.
 Do not touch unrelated namespaces or files.
+Task import (since 1.22, FR-IMPORT-008..013): every import is an idempotent upsert keyed on
+`TaskLink::importSource` + `externalId` (rows without an id: fingerprint). An importer must be deterministic — the same
+file gives the same `ImportedTaskDto`s (dates through `ImportFieldMapper::parseDate()`, never "now"), leave a field
+null / empty when the source has no value (that keeps the task's value on re-import) and set `hasPriority`. Re-import
+precedence lives in `ImportedTaskUpdater`; document any change in UPGRADING.

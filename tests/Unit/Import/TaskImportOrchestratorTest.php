@@ -71,7 +71,7 @@ final class TaskImportOrchestratorTest extends TestCase
         self::assertFalse($result->hasErrors());
     }
 
-    public function testSkipsExistingExternalIds(): void
+    public function testAPreviouslyImportedRowUpdatesItsTaskInsteadOfBeingSkipped(): void
     {
         $user  = new TestUser('1', 'dev@example.com');
         $board = new TaskBoard('Demo', 'demo', $user);
@@ -109,10 +109,15 @@ final class TaskImportOrchestratorTest extends TestCase
             content: (string) file_get_contents(__DIR__ . '/../../Fixtures/clickup/sample.csv'),
             filename: 'clickup.csv',
             actor: $user,
+            // Deprecated and ignored since 1.22.
+            options: new TaskImportOptions(skipExisting: false),
         );
 
         self::assertSame(2, $result->created);
-        self::assertSame(1, $result->skipped);
+        self::assertSame(1, $result->updated);
+        self::assertSame(0, $result->skipped);
+        self::assertSame('Setup project', $existing->getTitle());
+        self::assertSame('clickup', $existing->getLinks()->first()?->getImportSource(), 'the pre-1.22 link gets its scope');
     }
 
     public function testComputesPositionsOncePerImportAndIncrementsPerColumn(): void
@@ -252,7 +257,7 @@ final class TaskImportOrchestratorTest extends TestCase
         $this->orchestrator($persisted)->import(new TaskBoard('Demo', 'demo', $user), TaskImportSource::JiraCsv, '', 'x.csv', $user);
     }
 
-    public function testUrlOnlyRowsGetUrlLinkAndResolvedAssigneesBecomeMembers(): void
+    public function testRowsWithoutIdGetAFingerprintLinkAndResolvedAssigneesBecomeMembers(): void
     {
         $user     = new TestUser('1', 'dev@example.com');
         $assignee = new TestUser('2', 'jane@example.com');
@@ -273,8 +278,11 @@ final class TaskImportOrchestratorTest extends TestCase
         self::assertSame(1, $result->created);
         $link = $persisted[0]->getLinks()->first();
         self::assertInstanceOf(TaskLink::class, $link);
-        self::assertSame(TaskLinkType::Url, $link->getLinkType());
+        self::assertSame(TaskLinkType::Other, $link->getLinkType());
         self::assertSame('https://trello.com/c/1', $link->getUrl());
+        self::assertSame('trello', $link->getImportSource());
+        self::assertSame('trello_json (no id)', $link->getLabel());
+        self::assertStringStartsWith('fp:', (string) $link->getExternalId());
 
         $persisted = [];
         $result    = $this->orchestrator($persisted, $resolver)->import(
@@ -287,7 +295,8 @@ final class TaskImportOrchestratorTest extends TestCase
         self::assertSame(2, $result->created);
         self::assertSame($assignee, $persisted[0]->getMembers()->first()->getUser());
         self::assertCount(0, $persisted[1]->getMembers());
-        self::assertStringContainsString('ghost@example.com', $result->warnings[0]);
+        self::assertStringContainsString('ghost@example.com', $result->warnings[1]);
+        self::assertStringContainsString('2 row(s) have no id', $result->warnings[0]);
     }
 
     public function testCyclicParentsAreImportedWithoutInfiniteRecursion(): void

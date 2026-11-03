@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -14,6 +15,7 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_links')]
 #[ORM\Index(name: 'idx_task_board_task_links_object', columns: ['object_type', 'object_id'])]
+#[ORM\Index(name: 'idx_task_board_task_links_import', columns: ['import_source', 'external_id'])]
 class TaskLink
 {
     #[ORM\Id]
@@ -41,6 +43,13 @@ class TaskLink
         /** Host object id of a `TaskLinkType::HostObject` link; since 1.10. */
         #[ORM\Column(name: 'object_id', type: 'string', length: 191, nullable: true)]
         private ?string $objectId = null,
+        /**
+         * Since 1.22: the import scope that owns `externalId` (e.g. "clickup", "jira", "taskboard@<task id>"): the
+         * matching key of an idempotent re-import is (importSource, externalId). Null: a link not written by an
+         * import, or one written before 1.22 (see {@see TaskImportSource::fromLegacyLabel()}).
+         */
+        #[ORM\Column(name: 'import_source', type: 'string', length: 64, nullable: true)]
+        private ?string $importSource = null,
     ) {
         $this->id        = Uuid::generate()->toString();
         $this->createdAt = new DateTimeImmutable();
@@ -115,6 +124,22 @@ class TaskLink
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->externalId = Text::cutNullable($externalId, 128);
+
+        return $this;
+    }
+
+    /**
+     * Since 1.22: the import scope that owns the external id, null when unknown.
+     */
+    public function getImportSource(): ?string
+    {
+        return $this->importSource;
+    }
+
+    public function setImportSource(?string $importSource): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->importSource = $importSource;
 
         return $this;
     }

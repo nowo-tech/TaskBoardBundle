@@ -44,7 +44,8 @@ final class TaskBoardImportCommandTest extends TestCase
         $tester = $this->tester(authenticated: true);
 
         self::assertSame(Command::SUCCESS, $tester->execute(['board-id' => $this->board->getId(), 'file' => self::FIXTURE]));
-        self::assertStringContainsString('Imported 3 task(s), skipped 0, created 2 column(s).', $tester->getDisplay());
+        self::assertStringContainsString('Import done: 3 created, 0 updated, 0 unchanged, 0 skipped; 2 column(s)', $tester->getDisplay());
+        self::assertStringNotContainsString('--force is deprecated', $tester->getDisplay());
     }
 
     public function testNoCreateColumnsReportsWarnings(): void
@@ -57,7 +58,8 @@ final class TaskBoardImportCommandTest extends TestCase
             '--no-create-columns' => true,
             '--force'             => true,
         ]));
-        self::assertStringContainsString('created 0 column(s)', $tester->getDisplay());
+        self::assertStringContainsString('0 column(s)', $tester->getDisplay());
+        self::assertStringContainsString('--force is deprecated since 1.22', $tester->getDisplay());
         self::assertStringContainsString('[WARNING] Status "Done"', $tester->getDisplay());
     }
 

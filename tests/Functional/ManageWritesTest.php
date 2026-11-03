@@ -78,6 +78,23 @@ final class ManageWritesTest extends FunctionalTestCase
         self::assertCount(2, $this->em->getRepository(Task::class)->findBy(['board' => $board]));
     }
 
+    public function testImportingTheSameFileAgainUpdatesInsteadOfDuplicating(): void
+    {
+        $board = $this->board(columns: ['To do']);
+        $this->login($this->owner);
+        $csv = "id,title,status\na,Write the spec,To do\nb,Ship,To do\n";
+
+        $this->post('/board/' . $board->getId() . '/import', ['task_import_form' => ['source' => 'taskboard_csv', '_token' => $this->csrf('task_import_form')]], ['task_import_form' => ['file' => $this->upload($csv)]]);
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'Import done: 2 created, 0 updated, 0 unchanged, 0 skipped');
+
+        // A post with the removed (deprecated) skipExisting field is still accepted.
+        $this->post('/board/' . $board->getId() . '/import', ['task_import_form' => ['source' => 'taskboard_csv', 'skipExisting' => '1', '_token' => $this->csrf('task_import_form')]], ['task_import_form' => ['file' => $this->upload($csv)]]);
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'Import done: 0 created, 0 updated, 2 unchanged, 0 skipped');
+        self::assertCount(2, $this->em->getRepository(Task::class)->findBy(['board' => $board]));
+    }
+
     public function testAnImportThatFailsFlashesTheErrors(): void
     {
         $board = $this->board(columns: ['To do']);
