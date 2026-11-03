@@ -1,0 +1,9 @@
+{#
+    Since 1.21 (REQ-PERF-001): a board with more tasks than board.max_tasks loads only the first ones (the first cards of
+    every column); this notice says so. Variable: taskWindow (Dto\TaskWindow, optional).
+#}
+{% if taskWindow is defined and taskWindow and taskWindow.capped %}
+    <p class="nowo-task-board__window-notice" role="status" data-testid="task-board-window-notice">
+        {{ 'task_board.view.capped'|trans({'%shown%': taskWindow.shown, '%total%': taskWindow.total}, 'NowoTaskBoardBundle') }}
+    </p>
+{% endif %}

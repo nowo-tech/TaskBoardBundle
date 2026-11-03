@@ -17,8 +17,10 @@ use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function get_object_vars;
 use function is_object;
 use function is_string;
+use function ucfirst;
 
 /**
  * Associates users with tasks (assignee, watcher, etc.). With an assignee provider (`assignee_provider`, since 1.10)
@@ -112,14 +114,19 @@ final readonly class TaskMemberAssigner
         return false;
     }
 
+    /**
+     * The history label of a member: e-mail, else username (getter or public property; since 1.21 a private property
+     * no longer crashes the write), else "#id".
+     */
     private function userLabel(object $user): string
     {
-        if (property_exists($user, 'email') && is_string($user->email) && $user->email !== '') {
-            return $user->email;
-        }
-
-        if (property_exists($user, 'username') && is_string($user->username) && $user->username !== '') {
-            return $user->username;
+        $public = get_object_vars($user);
+        foreach (['email', 'username'] as $name) {
+            $getter = 'get' . ucfirst($name);
+            $value  = method_exists($user, $getter) ? $user->{$getter}() : ($public[$name] ?? null);
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
         }
 
         if (method_exists($user, 'getId')) {

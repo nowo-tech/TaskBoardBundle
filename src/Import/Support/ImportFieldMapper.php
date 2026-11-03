@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Import\Support;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 
+use function date_default_timezone_get;
 use function in_array;
 use function is_numeric;
 use function mb_strtolower;
@@ -91,7 +93,7 @@ final class ImportFieldMapper
         }
 
         if (is_numeric($raw) && (int) $raw > 1_000_000_000) {
-            return (new DateTimeImmutable())->setTimestamp((int) floor((int) $raw / 1000));
+            return $this->fromTimestamp((int) floor((int) $raw / 1000));
         }
 
         $formats = [
@@ -115,7 +117,7 @@ final class ImportFieldMapper
 
         $timestamp = strtotime($raw);
 
-        return $timestamp !== false ? (new DateTimeImmutable())->setTimestamp($timestamp) : null;
+        return $timestamp !== false ? $this->fromTimestamp($timestamp) : null;
     }
 
     public function parseEstimatedMinutes(string $raw): ?int
@@ -183,5 +185,13 @@ final class ImportFieldMapper
         $plain = preg_replace('/<[^>]+>/', ' ', $raw) ?? $raw;
 
         return trim(preg_replace('/\s+/', ' ', $plain) ?? $plain);
+    }
+
+    /**
+     * A Unix timestamp in the default time zone (no dependency on the current time).
+     */
+    private function fromTimestamp(int $timestamp): DateTimeImmutable
+    {
+        return (new DateTimeImmutable('@' . $timestamp))->setTimezone(new DateTimeZone(date_default_timezone_get()));
     }
 }

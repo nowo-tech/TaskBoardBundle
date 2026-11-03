@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
+use Symfony\Component\Clock\MockClock;
 
 /**
  * Since 1.15: the Gantt scales (hours, days, weeks, months), their bounded ranges and the week start.
@@ -180,6 +181,15 @@ final class GanttScalesTest extends TestCase
             self::assertCount($scale->minSlots(), $timeline->slots, $scale->value);
             self::assertNotNull($timeline->todayIndex);
         }
+    }
+
+    public function testWithoutNowTheTimelineUsesTheInjectedClock(): void
+    {
+        $clock    = new MockClock(new DateTimeImmutable(self::NOW));
+        $timeline = (new TaskGanttBuilder($clock))->build([$this->task('Planned', '2026-09-01 09:00', '2026-11-04')]);
+
+        self::assertNotNull($timeline->todayIndex);
+        self::assertSame('2026-10-28', $timeline->slots[$timeline->todayIndex]->date);
     }
 
     public function testTheBarCarriesTheTimeSpentAgainstTheEstimate(): void

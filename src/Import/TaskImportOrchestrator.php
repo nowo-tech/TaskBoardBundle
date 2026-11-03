@@ -24,9 +24,14 @@ use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use Throwable;
 
+use function count;
 use function mb_strtolower;
 use function sprintf;
+use function strlen;
 use function trim;
 
 /**
@@ -46,6 +51,8 @@ final readonly class TaskImportOrchestrator
         private EntityManagerInterface $entityManager,
         private ?ManagerRegistry $managerRegistry = null,
         private ?TaskDependencyManager $dependencyManager = null,
+        // Since 1.21 (REQ-OBS-001): start, result and refusal of every import (ids and counts only).
+        private LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -57,6 +64,49 @@ final readonly class TaskImportOrchestrator
         object $actor,
         TaskImportOptions $options = new TaskImportOptions(),
         ?Task $parentTask = null,
+    ): TaskImportResult {
+        $context = [
+            'bundle'   => 'nowo_task_board',
+            'board_id' => $board->getId(),
+            'task_id'  => $parentTask?->getId(),
+            'source'   => $source->value,
+            'bytes'    => strlen($content),
+        ];
+        $this->logger->info('TaskBoard import started', $context);
+
+        try {
+            $result = $this->run($board, $source, $content, $filename, $actor, $options, $parentTask);
+        } catch (Throwable $exception) {
+            $this->logger->error('TaskBoard import failed', $context + ['exception' => $exception::class]);
+
+            throw $exception;
+        }
+
+        $context += [
+            'created'      => $result->created,
+            'skipped'      => $result->skipped,
+            'columns'      => $result->columnsCreated,
+            'dependencies' => $result->dependenciesCreated,
+            'warnings'     => count($result->warnings),
+            'errors'       => count($result->errors),
+        ];
+        if ($result->hasErrors()) {
+            $this->logger->warning('TaskBoard import refused', $context);
+        } else {
+            $this->logger->info('TaskBoard import finished', $context);
+        }
+
+        return $result;
+    }
+
+    private function run(
+        TaskBoard $board,
+        TaskImportSource $source,
+        string $content,
+        string $filename,
+        object $actor,
+        TaskImportOptions $options,
+        ?Task $parentTask,
     ): TaskImportResult {
         $importer = $this->resolveImporter($source);
 
@@ -113,7 +163,7 @@ final readonly class TaskImportOrchestrator
                 $parent = $importedByExternalId[$row->parentExternalId] ?? $parentTask;
                 if (!isset($importedByExternalId[$row->parentExternalId])) {
                     $warnings[] = sprintf(
-                        $parentTask === null ? 'Row %d ("%s"): parent "%s" was not imported yet; task created at root level.' : 'Row %d ("%s"): parent "%s" was not imported yet; task created under the task you import into.',
+                        $parentTask instanceof Task ? 'Row %d ("%s"): parent "%s" was not imported yet; task created under the task you import into.' : 'Row %d ("%s"): parent "%s" was not imported yet; task created at root level.',
                         $index + 1,
                         $row->title,
                         $row->parentExternalId,
@@ -206,7 +256,7 @@ final readonly class TaskImportOrchestrator
      */
     private function linkDependencies(array $pending, array $imported, object $actor, array &$warnings): int
     {
-        if ($pending === [] || $this->dependencyManager === null) {
+        if ($pending === [] || !$this->dependencyManager instanceof TaskDependencyManager) {
             return 0;
         }
         $created = 0;
@@ -218,6 +268,7 @@ final readonly class TaskImportOrchestrator
                     continue;
                 }
                 try {
+                    // @igor-ignore - the dependency manager persists through Doctrine; it keeps no state of its own.
                     $this->dependencyManager->add($task, $other, $type, $actor);
                     ++$created;
                 } catch (InvalidTaskDependencyException) {

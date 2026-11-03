@@ -53,7 +53,9 @@ final class TaskFormType extends AbstractType
         $compact       = (bool) $options['compact'];
 
         $this->addText($builder, 'title', [
-            'label' => 'task_board.form.task.title',
+            // Since 1.21: an empty or missing title is a NotBlank error, not a TypeError on the DTO (string).
+            'empty_data' => '',
+            'label'      => 'task_board.form.task.title',
             // Since 1.15: the column is VARCHAR(255) — a longer title is a form error, not a database error.
             'constraints' => [new NotBlank(), new Length(max: self::TITLE_MAX)],
             'attr'        => ['maxlength' => self::TITLE_MAX],
@@ -80,6 +82,8 @@ final class TaskFormType extends AbstractType
             $this->addWithDefaults($builder, 'priority', EnumType::class, [
                 'class' => TaskPriority::class,
                 'label' => 'task_board.form.task.priority',
+                // Since 1.21: a submission without the field keeps the default priority (no TypeError on the DTO).
+                'empty_data' => TaskPriority::Normal->value,
             ]);
         }
 

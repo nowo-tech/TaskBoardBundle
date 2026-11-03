@@ -64,13 +64,14 @@ final readonly class TaskBoardMetadataListener
         }
     }
 
-    /** @param ClassMetadata<object> $metadata */
+    /**
+     * Called for a field the metadata maps as an association (ORM 3: always an {@see AssociationMapping}).
+     *
+     * @param ClassMetadata<object> $metadata
+     */
     private function remapUserAssociation(ClassMetadata $metadata, string $fieldName): void
     {
-        $mapping = $metadata->associationMappings[$fieldName] ?? null;
-        if (!$mapping instanceof AssociationMapping) {
-            return;
-        }
+        $mapping = $metadata->associationMappings[$fieldName];
 
         $newMapping = array_replace_recursive($mapping->toArray(), [
             'targetEntity' => ltrim($this->userClass, '\\'),

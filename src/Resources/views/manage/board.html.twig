@@ -30,6 +30,8 @@
     }) }}
     {% endblock %}
 
+    {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
+
     {% block nowo_task_board_flashes %}
         {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
     {% endblock %}

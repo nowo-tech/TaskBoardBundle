@@ -23,21 +23,21 @@ Others are **N/A** (or already covered by Symfony) so the decision stays auditab
 
 | PSR | Decision | Notes |
 | --- | -------- | ----- |
-| PSR-3 Logger | **N/A** | Logging calls exist but there is no public/injectable logger SPI yet; do not add `psr/log` without type-hints. |
+| PSR-3 Logger | **Adopted** (1.21) | `psr/log`: `Psr\Log\LoggerInterface` injected (default `NullLogger`) in `TaskBoardManageController` and `TaskImportOrchestrator` (REQ-OBS-001); context = action, object ids and counts, no personal data. |
 | PSR-6 / PSR-16 Cache | **N/A** | No package-owned cache layer. |
 | PSR-7 / PSR-17 HTTP messages | **N/A** | Symfony HttpFoundation (or no HTTP messages API) is the correct surface; a PSR-7 bridge would not help consumers. |
 | PSR-18 HTTP client | **N/A** | No outbound HTTP client. |
 | PSR-11 Container | **N/A** | No container locator in the public API; constructor injection only. |
 | PSR-14 Event dispatcher | **N/A** | No domain event extension points that need a dispatcher SPI. |
 | PSR-15 HTTP middleware | **N/A** | Uses Symfony kernel listeners/subscribers (or has no HTTP middleware pipeline). |
-| PSR-20 Clock | **N/A** | Uses `DateTimeImmutable` / system time internally; no injectable clock SPI yet. Re-evaluate if tests need time freezing at the boundary. |
+| PSR-20 Clock | **Adopted** (1.21) | `psr/clock` + `symfony/clock`: `Psr\Clock\ClockInterface` injected (default `NativeClock`) in `TaskGanttBuilder` (now of the timeline) and `TaskBoardManageController` (default day of a time entry) (REQ-DI-001). Entity constructors and mutators keep stamping `createdAt` / `updatedAt` / `completedAt` themselves: entities are not services (REQ-ORM-001 rule 6) and tests set those values through the entities. |
 
 ## Summary
 
-- **Adopted beyond baseline:** none (baseline PSR-12 + PSR-4 only).
+- **Adopted beyond baseline:** PSR-3 Logger and PSR-20 Clock (1.21).
 - **Rule:** do not add `psr/*` Composer dependencies without matching type-hints and DI wiring.
 - **Re-evaluate** when the package gains logging, HTTP, cache, clock, or event SPIs.
 
 ---
 
-_REQ-CS-007 evaluation date: 2026-08-21._
+_REQ-CS-007 evaluation date: 2026-11-01._

@@ -60,6 +60,7 @@ services:
             $topLevelOnly: '%nowo_task_board.board.top_level_only%'
             $columnIcons: '%nowo_task_board.board.column_icons%'
             $readersCanComment: '%nowo_task_board.comments.readers_can_comment%'
+            $maxTasks: '%nowo_task_board.board.max_tasks%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver

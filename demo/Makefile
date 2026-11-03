@@ -1,4 +1,4 @@
-.PHONY: help up-symfony8 down-symfony8 update-bundle-symfony8 release-check verify demo-smoke verify-symfony8
+.PHONY: test-symfony8 help up-symfony8 down-symfony8 update-bundle-symfony8 release-check verify demo-smoke verify-symfony8
 
 help:
 	@echo "TaskBoard Bundle — Demos"
@@ -7,7 +7,8 @@ help:
 	@echo "  down-symfony8          Stop demo"
 	@echo "  update-bundle-symfony8 Sync bundle in demo"
 	@echo "  verify / demo-smoke    REQ-TEST-011: HTTP 200 on /tools/task-board"
-	@echo "  release-check          Demo healthcheck"
+	@echo "  test-symfony8          update-bundle + demo PHPUnit suite"
+	@echo "  release-check          up + update-bundle + tests + healthcheck, then down (REQ-DEMO-007)"
 
 up-symfony8:
 	@$(MAKE) -C symfony8 up
@@ -44,5 +45,9 @@ demo-smoke:
 	if [ "$$code" != "200" ]; then echo "symfony8 failed with HTTP $$code"; exit 1; fi; \
 	echo "symfony8 OK (HTTP $$code)"
 
+test-symfony8:
+	@$(MAKE) -C symfony8 test
+
+# REQ-DEMO-007: up + update-bundle + demo tests + healthcheck, then the stack goes down.
 release-check:
-	@$(MAKE) demo-smoke
+	@$(MAKE) -C symfony8 release-check; status=$$?; $(MAKE) -C symfony8 down 2>/dev/null || true; exit $$status

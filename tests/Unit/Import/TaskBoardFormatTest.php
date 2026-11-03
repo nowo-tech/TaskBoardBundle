@@ -9,8 +9,10 @@ use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardCsvImporter;
 use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardJsonImporter;
@@ -66,7 +68,7 @@ final class TaskBoardFormatTest extends TestCase
         $json = '{"tasks": [{"id": "api", "title": "Build the API", "tags": ["back", "api"], "subtasks": [{"id": "auth", "title": "Auth", "subtasks": [{"title": "Tokens"}]}]}, {"title": "Release", "depends_on": ["api", "auth:blocks"]}, "noise", {"title": ""}]}';
         $rows = (new TaskBoardJsonImporter())->parse($json, 'plan.json');
 
-        self::assertSame(['Build the API', 'Auth', 'Tokens', 'Release'], array_map(static fn ($r): string => $r->title, $rows));
+        self::assertSame(['Build the API', 'Auth', 'Tokens', 'Release'], array_map(static fn (ImportedTaskDto $r): string => $r->title, $rows));
         self::assertSame(['back', 'api'], $rows[0]->tags);
         self::assertSame('api', $rows[1]->parentExternalId);
         self::assertSame('auth', $rows[2]->parentExternalId);
@@ -153,7 +155,7 @@ final class TaskBoardFormatTest extends TestCase
         self::assertSame($byTitle['Build the API'], $byTitle['Authentication endpoints']->getParent());
         self::assertSame('2026-11-04', $byTitle['Build the API']->getStartAt()?->format('Y-m-d'));
         $relations = array_map(
-            static fn ($d): string => $d->getTargetTask()->getTitle() . ':' . $d->getDependencyType()->value,
+            static fn (TaskDependency $d): string => $d->getTargetTask()->getTitle() . ':' . $d->getDependencyType()->value,
             [...$byTitle['Release']->getOutgoingDependencies()],
         );
         self::assertSame(['Design the screens:blocked_by', 'Build the API:related'], $relations);

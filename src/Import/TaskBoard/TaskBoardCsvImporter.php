@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Import\TaskBoard;
 
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\TaskImporterInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
@@ -31,7 +32,7 @@ final readonly class TaskBoardCsvImporter implements TaskImporterInterface
         $tasks = [];
         foreach ($this->tableParser->parse($content, $filename) as $index => $row) {
             $task = $this->rowMapper->map($row, $index + 2);
-            if ($task !== null) {
+            if ($task instanceof ImportedTaskDto) {
                 $tasks[] = $task;
             }
         }

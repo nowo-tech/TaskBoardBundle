@@ -67,7 +67,7 @@ final readonly class TaskBoardJsonImporter implements TaskImporterInterface
             }
             /** @var array<string, mixed> $item */
             $task = $this->rowMapper->map($item, $line, $parentId);
-            if ($task === null) {
+            if (!$task instanceof ImportedTaskDto) {
                 continue;
             }
             $tasks[]  = $task;

@@ -27,6 +27,7 @@
         ],
         dashboardRoute: dashboardRoute|default(null),
     }) }}
+    {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
 
     {#
         Since 1.15: a scale switcher (hours, days, weeks, months; `?scale=`, remembered per board in localStorage), the

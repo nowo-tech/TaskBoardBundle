@@ -3547,3 +3547,14 @@ a.nowo-task-nav__step:focus-visible {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* Since 1.21 (REQ-PERF-001): "Showing N of M tasks" when a board has more tasks than board.max_tasks. */
+.nowo-task-board__window-notice {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--nowo-ui-border, #e2e8f0);
+  border-radius: var(--nowo-ui-radius, 0.375rem);
+  background: var(--nowo-ui-surface-muted, #f8fafc);
+  color: var(--nowo-ui-text-muted, #475569);
+  font-size: 0.875rem;
+}

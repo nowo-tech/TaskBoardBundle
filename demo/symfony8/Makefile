@@ -8,14 +8,17 @@ endif
 DC := :; $(COMPOSE)
 SERVICE_PHP = php
 
-.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify
+.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify release-check
 
 help:
 	@echo "TaskBoard Bundle — Symfony 8.1 Demo"
 	@echo ""
 	@echo "  up             Start demo (FrankenPHP, port from .env)"
 	@echo "  down           Stop containers"
+	@echo "  update-bundle  Sync the bundle code (dump-autoload, assets:install, cache clear)"
+	@echo "  test           update-bundle + demo PHPUnit suite"
 	@echo "  verify         REQ-TEST-011: HTTP 200 on /tools/task-board"
+	@echo "  release-check  up + update-bundle + test + verify (REQ-DEMO-007)"
 
 ensure-env:
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
@@ -92,8 +95,9 @@ fixtures:
 shell:
 	@$(COMPOSE) exec $(SERVICE_PHP) sh
 
+# Demo PHPUnit suite (APP_ENV=test): the kernel boots with the bundle under test and imports its routes.
 test: update-bundle
-	@$(COMPOSE) exec -T $(SERVICE_PHP) composer test || echo "No demo tests yet"
+	@$(COMPOSE) exec -T $(SERVICE_PHP) vendor/bin/phpunit
 
 update-bundle:
 	@$(COMPOSE) exec -T $(SERVICE_PHP) composer dump-autoload
@@ -108,3 +112,9 @@ verify:
 	$(COMPOSE) up -d 2>/dev/null; sleep 8; \
 	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$$port/tools/task-board" 2>/dev/null || echo "000"); \
 	if [ "$$code" = "200" ]; then echo "OK (HTTP $$code)"; else echo "Failed (HTTP $$code)"; exit 1; fi
+
+# REQ-DEMO-007: sync the bundle code before the demo tests and the final healthcheck.
+release-check: up
+	@$(MAKE) --no-print-directory update-bundle
+	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory verify

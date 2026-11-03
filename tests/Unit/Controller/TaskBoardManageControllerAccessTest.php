@@ -931,6 +931,14 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame([$this->task->getId() => 2], $this->rendered['commentCounts']);
     }
 
+    public function testWithoutTheCommentServicesTheTaskViewHasNoComments(): void
+    {
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), comments: false)->task($this->task->getId(), Request::create('/'));
+
+        self::assertSame([], $this->rendered['comments']);
+        self::assertNull($this->rendered['commentForm']);
+    }
+
     public function testLoggingAndRemovingTime(): void
     {
         $request = Request::create('/', 'POST');
@@ -1020,7 +1028,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -1073,9 +1081,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             dependencyManager: new TaskDependencyManager($taskRepository, $recorder),
             timeLogger: new TaskTimeLogger($taskRepository, $recorder),
             weekStartResolver: new ConfiguredWeekStartResolver('sunday'),
-            commentManager: new TaskCommentManager($this->commentRepository(), $candidates = $this->mentionCandidates()),
-            commentRepository: $this->commentRepository(),
-            mentionCandidates: $candidates,
+            commentManager: $comments ? new TaskCommentManager($this->commentRepository(), $candidates = $this->mentionCandidates()) : null,
+            commentRepository: $comments ? $this->commentRepository() : null,
+            mentionCandidates: $candidates ?? null,
             readersCanComment: $readersCanComment,
         );
 
