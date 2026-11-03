@@ -158,6 +158,11 @@ duplicated); importing the same file twice changes nothing. Details: [docs/impor
                       WHERE h.task_id = l.task_id AND h.change_type IN ('link_added', 'link_updated'));
   ```
 
+  The statement is **idempotent and safe to re-run**: it only touches rows with `import_source IS NULL`, and every row
+  it stamps leaves that set, so a second run (or a re-run of a migration that holds it) updates 0 rows; the other
+  conditions never change between runs either. It is a single `UPDATE`, atomic on InnoDB, so it can run in a
+  non-transactional migration right after the `ALTER TABLE` / `CREATE INDEX` above.
+
   A task skipped by these conditions is created again by the next re-import (delete the old one if you do not want
   both). **Not recognised at all:** anything imported before 1.22 with the bundle's own format (`taskboard_csv` /
   `taskboard_json`), on a board or into a task — re-importing that file **re-creates** those tasks (the old ones
