@@ -143,16 +143,23 @@ final class ImportedTaskUpdaterTest extends TestCase
         $provider = $this->createMock(TaskAssigneeProviderInterface::class);
         $provider->expects(self::once())->method('assignableUsers')->with($this->board)->willReturn([$ada, $twinA, $twinB]);
         $emails = $this->createMock(TaskImportUserResolverInterface::class);
-        $emails->method('resolveByEmail')->willReturnCallback(static fn (string $email): ?object => $email === 'ada@example.com' ? $ada : null);
+        $provider->method('canBeAssigned')->willReturnCallback(static fn (TaskBoard $board, object $user): bool => $user === $ada);
+        $emails->method('resolveByEmail')->willReturnCallback(static fn (string $email): ?object => match ($email) {
+            'ada@example.com' => $ada,
+            'sam@example.com' => $twinA,
+            default           => null,
+        });
         $resolver = new ImportAssigneeResolver($emails, $provider, $this->board);
 
         self::assertSame([$ada], $resolver->resolve(new ImportedTaskDto(title: 'A', assigneeEmail: 'ada@example.com', assigneeNames: ['ada lovelace'])));
         self::assertSame([$ada], $resolver->resolve(new ImportedTaskDto(title: 'B', assigneeNames: ['Sam', 'Nobody', ' ADA LOVELACE '])));
         self::assertSame([], $resolver->resolve(new ImportedTaskDto(title: 'C', assigneeEmail: 'ghost@example.com', assigneeNames: ['Sam'])));
         self::assertSame([], $resolver->resolve(new ImportedTaskDto(title: 'D')));
+        self::assertSame([], $resolver->resolve(new ImportedTaskDto(title: 'E', assigneeEmail: 'sam@example.com')), 'known but not assignable on the board');
 
         self::assertSame([
-            'Assignee "ghost@example.com" for "C" was not found in the application.',
+            'Assignee "ghost@example.com" for "C" cannot be assigned on this board.',
+            'Assignee "sam@example.com" for "E" cannot be assigned on this board.',
             'Assignee "Sam" (2 row(s)) does not match exactly one assignable user by display name; those tasks keep their assignees.',
             'Assignee "Nobody" (1 row(s)) does not match exactly one assignable user by display name; those tasks keep their assignees.',
         ], $resolver->warnings());

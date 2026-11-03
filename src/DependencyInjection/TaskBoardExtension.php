@@ -115,6 +115,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
+        $container->setParameter('nowo_task_board.import.max_rows', $config['import']['max_rows']);
+        $container->setParameter('nowo_task_board.import.max_cell_length', $config['import']['max_cell_length']);
         $container->setParameter('nowo_task_board.gantt.week_start', $config['gantt']['week_start']);
         $container->setParameter('nowo_task_board.comments.readers_can_comment', $config['comments']['readers_can_comment']);
 

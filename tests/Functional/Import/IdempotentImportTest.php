@@ -264,7 +264,7 @@ final class IdempotentImportTest extends KernelTestCase
         $again = $this->import($second, TaskImportSource::ClickUpCsv, self::CLICKUP_CSV);
         self::assertSame(0, $again->created);
         self::assertSame(3, $again->skipped);
-        self::assertTrue($this->hasWarning($again, 'already imported into another board'));
+        self::assertTrue($this->hasWarning($again, 'already imported elsewhere'));
 
         $elsewhere = $this->import($other, TaskImportSource::ClickUpCsv, self::CLICKUP_CSV);
         self::assertSame(3, $elsewhere->created, 'another tenant is not looked at');
@@ -282,7 +282,7 @@ final class IdempotentImportTest extends KernelTestCase
         $again = $this->import($second, TaskImportSource::ClickUpCsv, $csv . "New here,To do,\n");
         self::assertSame(1, $again->created);
         self::assertSame(2, $again->skipped);
-        self::assertTrue($this->hasWarning($again, '2 row(s) were already imported into another board'));
+        self::assertTrue($this->hasWarning($again, '2 row(s) were skipped: already imported elsewhere'));
 
         self::assertSame(2, $this->import($other, TaskImportSource::ClickUpCsv, $csv)->created, 'another tenant is not looked at');
 
@@ -311,7 +311,7 @@ final class IdempotentImportTest extends KernelTestCase
         self::assertSame('2026-10-01', $this->task('Jira issue')->getStartAt()?->format('Y-m-d'));
     }
 
-    public function testTheLookupSeesBoardsWithoutTenantAndLegacyLinks(): void
+    public function testTheLookupSeesBoardsWithoutTenantAndOnlyImportLinks(): void
     {
         $first  = $this->board('First');
         $second = $this->board('Second');
@@ -327,33 +327,24 @@ final class IdempotentImportTest extends KernelTestCase
         self::assertInstanceOf(DoctrineTaskImportLinkLookup::class, $lookup);
         $found = $lookup->findOnOtherBoards($second, 'jira', ['PRJ-9', 'PRJ-8', 'PRJ-7', 'PRJ-6', 'PRJ-5']);
         ksort($found);
-        self::assertSame(['PRJ-5' => true, 'PRJ-9' => true], $found, 'scoped and legacy links; not a hand-made label, not another tool');
-        self::assertSame([], $lookup->findOnOtherBoards($second, 'clickup', ['PRJ-9']));
-        self::assertSame([], $lookup->findOnOtherBoards($first, 'jira', ['PRJ-9']), 'the board itself is not "another board"');
+        self::assertSame(['PRJ-5' => true], $found, 'only links an import wrote: not a legacy-shaped or hand-made label, not another tool');
+        self::assertSame([], $lookup->findOnOtherBoards($second, 'clickup', ['PRJ-5']));
+        self::assertSame([], $lookup->findOnOtherBoards($first, 'jira', ['PRJ-5']), 'the board itself is not "another board"');
         self::assertSame([], $lookup->findOnOtherBoards($second, 'jira', array_map(static fn (int $i): string => 'X-' . $i, range(1, 600))), 'ids in chunks');
     }
 
-    public function testPreviousImportLinksAreMatchedAndGetTheirScope(): void
+    public function testLinksWithoutAnImportSourceAreNotMatched(): void
     {
         $board = $this->board('Plan');
         $task  = new Task($board, 'Old title', $this->alice, $board->getColumns()->first() ?: null);
-        $link  = new TaskLink($task, TaskLinkType::Other, 'import://clickup_json/86a1', 'clickup_json #86a1', '86a1');
-        $task->addLink($link);
+        $task->addLink(new TaskLink($task, TaskLinkType::Other, 'import://clickup_json/86a1', 'clickup_json #86a1', '86a1'));
         $this->em->persist($task);
         $this->em->flush();
 
         $result = $this->import($board, TaskImportSource::ClickUpCsv, "Task ID,Task Name\n86a1,Design\n");
 
-        self::assertSame(0, $result->created);
-        self::assertSame(1, $result->updated);
-        $reloaded = $this->task('Design');
-        self::assertSame($task->getId(), $reloaded->getId());
-        $stamped = $reloaded->getLinks()->first();
-        self::assertInstanceOf(TaskLink::class, $stamped);
-        self::assertSame('clickup', $stamped->getImportSource());
-
-        $again = $this->import($board, TaskImportSource::ClickUpCsv, "Task ID,Task Name\n86a1,Design\n");
-        self::assertSame(1, $again->unchanged);
+        self::assertSame(1, $result->created, 'a pre-1.22 (or hand-made) link is not trusted: see the UPGRADING backfill');
+        self::assertSame('Old title', $this->task('Old title')->getTitle());
     }
 
     public function testTheOwnFormatCanBeImportedUnderSeveralTasksOfOneBoard(): void

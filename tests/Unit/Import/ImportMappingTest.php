@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
@@ -46,6 +47,10 @@ final class ImportMappingTest extends TestCase
         yield 'text month' => ['3 Nov 2026', '2026-11-03 00:00'];
         yield 'fallback' => ['2026-11-03T10:00:00Z', '2026-11-03 10:00'];
         yield 'garbage' => ['not a date', null];
+        yield 'relative' => ['next monday', null];
+        yield 'year out of range' => ['99999999999999999999', null];
+        yield 'zero date' => ['0000-00-00', null];
+        yield 'far future text' => ['3000-01-01T00:00:00Z', null];
     }
 
     #[DataProvider('dates')]
@@ -81,6 +86,23 @@ final class ImportMappingTest extends TestCase
             ['Task ID' => '2', 'Labels' => 'c', 'Notes' => ''],
         ], $rows);
         self::assertSame([], (new DelimitedTableParser())->parse("\xEF\xBB\xBF \n", 'x.csv'));
+    }
+
+    public function testTheCsvParserRefusesTooManyRowsAndTooLongCells(): void
+    {
+        try {
+            (new DelimitedTableParser(maxRows: 1))->parse("a\n1\n2\n", 'x.csv');
+            self::fail('too many rows');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame('The file has more than 1 rows; an import takes at most 1.', $exception->getMessage());
+        }
+        try {
+            (new DelimitedTableParser(maxCellLength: 3))->parse("a\n1234\n", 'x.csv');
+            self::fail('too long');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame('A cell of the file is longer than 3 bytes.', $exception->getMessage());
+        }
+        self::assertCount(1, (new DelimitedTableParser(maxRows: 1, maxCellLength: 3))->parse("a\n123\n", 'x.csv'));
     }
 
     public function testClickUpCsvReadsTheListViewColumns(): void
@@ -159,7 +181,7 @@ final class ImportMappingTest extends TestCase
         self::assertTrue($mailed->hasPriority);
     }
 
-    public function testSourcesHaveAProviderAScopeAndRecogniseTheirOldLabels(): void
+    public function testSourcesHaveAProviderAndAScope(): void
     {
         $user = new TestUser('1', 'dev');
         $task = new Task(new TaskBoard('Demo', 'demo', $user), 'Epic', $user);
@@ -167,14 +189,10 @@ final class ImportMappingTest extends TestCase
         self::assertSame(['clickup', 'clickup', 'jira', 'trello', 'taskboard', 'taskboard'], array_map(static fn (TaskImportSource $s): string => $s->provider(), TaskImportSource::cases()));
         self::assertTrue(TaskImportSource::JiraCsv->hasGlobalIds());
         self::assertFalse(TaskImportSource::TaskBoardJson->hasGlobalIds());
-        self::assertSame('clickup', TaskImportSource::ClickUpJson->scope($task));
+        self::assertSame('clickup', TaskImportSource::ClickUpJson->scope());
+        self::assertSame('clickup@' . $task->getId(), TaskImportSource::ClickUpJson->scope($task), 'an import into a task is task-local for every source');
         self::assertSame('taskboard', TaskImportSource::TaskBoardCsv->scope());
         self::assertSame('taskboard@' . $task->getId(), TaskImportSource::TaskBoardCsv->scope($task));
-        self::assertSame(TaskImportSource::TrelloJson, TaskImportSource::fromLegacyLabel('trello_json #c1', 'c1'));
-        self::assertNull(TaskImportSource::fromLegacyLabel('trello_json #c1', 'c2'));
-        self::assertNull(TaskImportSource::fromLegacyLabel(null, 'c1'));
-        self::assertNull(TaskImportSource::fromLegacyLabel('trello_json #', ''));
-        self::assertNull(TaskImportSource::fromLegacyLabel('x', null));
     }
 
     public function testEntitiesAndResultCarryTheNewFields(): void

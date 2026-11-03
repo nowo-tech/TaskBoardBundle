@@ -84,6 +84,7 @@ final class TaskImportOrchestratorTest extends TestCase
             url: 'import://clickup_csv/1001',
             label: 'clickup_csv #1001',
             externalId: '1001',
+            importSource: 'clickup',
         ));
 
         $taskRepository = $this->createMock(TaskRepositoryInterface::class);
@@ -117,7 +118,6 @@ final class TaskImportOrchestratorTest extends TestCase
         self::assertSame(1, $result->updated);
         self::assertSame(0, $result->skipped);
         self::assertSame('Setup project', $existing->getTitle());
-        self::assertSame('clickup', $existing->getLinks()->first()?->getImportSource(), 'the pre-1.22 link gets its scope');
     }
 
     public function testComputesPositionsOncePerImportAndIncrementsPerColumn(): void

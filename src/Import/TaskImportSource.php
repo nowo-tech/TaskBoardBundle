@@ -70,33 +70,16 @@ enum TaskImportSource: string
 
     /**
      * Since 1.22: the import scope stored on the task links ({@see TaskLink::getImportSource()}):
-     * the provider for tools with global ids; for the bundle's own format, "taskboard" on a board import and
-     * "taskboard@<task id>" when importing into a task, so one template can be imported under several tasks.
+     * the provider on a board import, and "<provider>@<task id>" when importing into a task (every source), so a
+     * subtask import only ever matches the tasks an earlier import put under that same task (one template can be
+     * imported under several tasks, and importing into one task can never update other tasks of the board).
      */
     public function scope(?Task $parentTask = null): string
     {
-        if ($this->hasGlobalIds() || !$parentTask instanceof Task) {
+        if (!$parentTask instanceof Task) {
             return $this->provider();
         }
 
         return sprintf('%s@%s', $this->provider(), $parentTask->getId());
-    }
-
-    /**
-     * Since 1.22: the source of a link written by an import before 1.22 (no `import_source`), from the label those
-     * versions wrote ("clickup_csv #<id>"); null when the label does not have that shape.
-     */
-    public static function fromLegacyLabel(?string $label, ?string $externalId): ?self
-    {
-        if ($label === null || $externalId === null || $externalId === '') {
-            return null;
-        }
-        foreach (self::cases() as $case) {
-            if ($label === sprintf('%s #%s', $case->value, $externalId)) {
-                return $case;
-            }
-        }
-
-        return null;
     }
 }

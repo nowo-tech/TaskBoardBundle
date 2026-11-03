@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
@@ -33,6 +34,7 @@ use Psr\Log\NullLogger;
 use Throwable;
 
 use function array_filter;
+use function array_reverse;
 use function array_slice;
 use function array_values;
 use function count;
@@ -50,6 +52,9 @@ use function trim;
  */
 final readonly class TaskImportOrchestrator
 {
+    /** Since 1.22: default `import.max_rows`. */
+    public const DEFAULT_MAX_ROWS = 5000;
+
     /**
      * @param iterable<TaskImporterInterface> $importers
      */
@@ -69,6 +74,10 @@ final readonly class TaskImportOrchestrator
         // Since 1.22: source ids already imported into another board of the tenant are skipped (none: not checked).
         private ?TaskImportLinkLookupInterface $linkLookup = null,
         private ImportedTaskUpdater $updater = new ImportedTaskUpdater(),
+        // Since 1.22 (audit DL-M2): a matched task, a parent and a dependency target must be editable by the actor.
+        private ?TaskBoardResourceAccessChecker $accessChecker = null,
+        // Since 1.22 (audit DL-L4): the most rows one import accepts (`import.max_rows`).
+        private int $maxRows = self::DEFAULT_MAX_ROWS,
     ) {
     }
 
@@ -138,6 +147,9 @@ final readonly class TaskImportOrchestrator
         } catch (InvalidArgumentException $exception) {
             return new TaskImportResult(errors: [$exception->getMessage()]);
         }
+        if (count($rows) > $this->maxRows) {
+            return new TaskImportResult(errors: [sprintf('The file has %d rows; an import takes at most %d.', count($rows), $this->maxRows)]);
+        }
 
         $scope          = $source->scope($parentTask);
         $existingTasks  = $this->taskRepository->findByBoard($board, true);
@@ -163,8 +175,14 @@ final readonly class TaskImportOrchestrator
             ++$columnsCreated;
         }
 
-        $keyed      = $this->keyRows($this->orderRowsForHierarchy($rows), $scope, $parentTask);
-        $elsewhere  = $this->findOnOtherBoards($board, $source, $scope, $keyed, $known);
+        $keyed     = $this->keyRows($this->orderRowsForHierarchy($rows), $scope, $parentTask);
+        $elsewhere = $this->findOnOtherBoards($board, $source, $scope, $keyed, $known, $parentTask);
+        /** @var array<int, bool> $editable whether the actor may edit each task (by object id), asked once */
+        $editable = [];
+        $canEdit  = function (Task $task) use (&$editable, $actor): bool {
+            return $editable[spl_object_id($task)] ??= !$this->accessChecker instanceof TaskBoardResourceAccessChecker
+                || $this->accessChecker->canEditTask($actor, $task);
+        };
         $columns    = array_values($board->getColumns()->toArray());
         $positionIn = function (?BoardColumn $column) use (&$maxPositions): int {
             return $this->nextPosition($maxPositions, $column);
@@ -180,9 +198,8 @@ final readonly class TaskImportOrchestrator
         $created             = 0;
         $skipped             = 0;
         $fingerprinted       = 0;
-        $legacyAdopted       = false;
-        /** @var list<string> $skippedElsewhere */
-        $skippedElsewhere = [];
+        $skippedElsewhere    = 0;
+        $skippedReadOnly     = 0;
 
         foreach ($keyed as $index => [$row, $key, $byFingerprint]) {
             if (isset($imported[$key])) {
@@ -192,27 +209,28 @@ final readonly class TaskImportOrchestrator
             }
             if (isset($elsewhere[$key])) {
                 ++$skipped;
-                $skippedElsewhere[] = $row->title;
+                ++$skippedElsewhere;
+                continue;
+            }
+            $task = $known[$key][0] ?? null;
+            if ($task instanceof Task && !$canEdit($task)) {
+                // Audit DL-M2: a task the actor may not edit is not rewritten (and its title is not echoed).
+                ++$skipped;
+                ++$skippedReadOnly;
                 continue;
             }
             if ($byFingerprint) {
                 ++$fingerprinted;
             }
 
-            $match = $known[$key] ?? null;
-            if ($match !== null) {
-                [$task, $link] = $match;
-                if ($link->getImportSource() === null) {
-                    // A pre-1.22 link: it gets its scope now, so the next import matches it directly.
-                    $link->setImportSource($scope);
-                    $legacyAdopted = true;
-                }
+            if ($task instanceof Task) {
                 $changed                       = $this->updater->apply($task, $row, $this->matchColumn($columnsByName, $row->status), $positionIn, $columns, $actor);
-                $changed                       = $this->reparent($task, $row, $index, $imported, $known, $warnings) || $changed;
+                $changed                       = $this->reparent($task, $row, $index, $imported, $known, $canEdit, $warnings) || $changed;
                 $changed                       = $this->updater->applyAssignees($task, $assignees->resolve($row), $actor) || $changed;
                 $matched[spl_object_id($task)] = $changed;
             } else {
-                $task = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $warnings);
+                $task                           = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $canEdit, $warnings);
+                $editable[spl_object_id($task)] = true;
                 foreach ($assignees->resolve($row) as $user) {
                     $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
                 }
@@ -228,22 +246,22 @@ final readonly class TaskImportOrchestrator
         }
 
         $updated = count(array_filter($matched));
-        if ($created > 0 || $updated > 0 || $legacyAdopted) {
+        if ($created > 0 || $updated > 0) {
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
         }
 
-        $dependenciesCreated = $this->linkDependencies($pendingDependencies, $imported, $known, $actor, $warnings, $matched);
+        $dependenciesCreated = $this->linkDependencies($pendingDependencies, $imported, $known, $canEdit, $actor, $warnings, $matched);
         $updated             = count(array_filter($matched));
 
         if ($fingerprinted > 0) {
             $warnings[] = sprintf('%d row(s) have no id: they are matched by fingerprint (source, parent, title and creation date), so a row renamed in the source is imported as a new task.', $fingerprinted);
         }
-        if ($skippedElsewhere !== []) {
-            $warnings[] = sprintf(
-                '%d row(s) were already imported into another board and were skipped (an import never moves or copies tasks between boards): %s.',
-                count($skippedElsewhere),
-                implode(', ', array_slice($skippedElsewhere, 0, 5)) . (count($skippedElsewhere) > 5 ? ', …' : ''),
-            );
+        if ($skippedElsewhere > 0) {
+            // Audit DL-L1: a count only — no board, no title.
+            $warnings[] = sprintf('%d row(s) were skipped: already imported elsewhere (an import never moves or copies tasks between boards).', $skippedElsewhere);
+        }
+        if ($skippedReadOnly > 0) {
+            $warnings[] = sprintf('%d row(s) were skipped: they match tasks you cannot edit.', $skippedReadOnly);
         }
 
         return new TaskImportResult(
@@ -265,6 +283,7 @@ final readonly class TaskImportOrchestrator
      * @param Closure(?BoardColumn): int $positionIn
      * @param array<string, Task> $imported
      * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      */
     private function create(
@@ -281,12 +300,13 @@ final readonly class TaskImportOrchestrator
         Closure $positionIn,
         array $imported,
         array $known,
+        Closure $canEdit,
         array &$warnings,
     ): Task {
         // Since 1.18: importing into a task makes every top-level row (and every unresolved parent) its subtask.
         $parent = $parentTask;
         if ($row->parentExternalId !== null) {
-            $parent = $imported[$row->parentExternalId] ?? $known[$row->parentExternalId][0] ?? null;
+            $parent = $this->findParent($row->parentExternalId, $imported, $known, $canEdit);
             if (!$parent instanceof Task) {
                 $parent     = $parentTask;
                 $warnings[] = sprintf(
@@ -335,19 +355,21 @@ final readonly class TaskImportOrchestrator
 
     /**
      * Since 1.22: a matched task follows its parent row when the source names one that exists (in the file or on the
-     * board); a row without a parent keeps the task where it is (the task imported into only places new tasks), and a
-     * move that would make the task its own ancestor is refused with a warning.
+     * board) and that the actor may edit; a row without a parent keeps the task where it is (the task imported into
+     * only places new tasks), and a move that would make the task its own ancestor is refused with a warning — the
+     * whole ancestor chain is walked (audit DL-L5).
      *
      * @param array<string, Task> $imported
      * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      */
-    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, array &$warnings): bool
+    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, Closure $canEdit, array &$warnings): bool
     {
         if ($row->parentExternalId === null) {
             return false;
         }
-        $parent = $imported[$row->parentExternalId] ?? $known[$row->parentExternalId][0] ?? null;
+        $parent = $this->findParent($row->parentExternalId, $imported, $known, $canEdit);
         if (!$parent instanceof Task) {
             $warnings[] = sprintf('Row %d ("%s"): parent "%s" was not found; the task keeps its parent.', $index + 1, $row->title, $row->parentExternalId);
 
@@ -356,16 +378,33 @@ final readonly class TaskImportOrchestrator
         if ($parent === $task->getParent()) {
             return false;
         }
-        for ($ancestor = $parent, $depth = 0; $ancestor instanceof Task && $depth < 1000; $ancestor = $ancestor->getParent(), ++$depth) {
-            if ($ancestor === $task) {
-                $warnings[] = sprintf('Row %d ("%s"): moving it under "%s" would make it its own ancestor; the task keeps its parent.', $index + 1, $row->title, $parent->getTitle());
+        $seen = [];
+        for ($ancestor = $parent; $ancestor instanceof Task; $ancestor = $ancestor->getParent()) {
+            if ($ancestor === $task || isset($seen[spl_object_id($ancestor)])) {
+                $warnings[] = sprintf('Row %d ("%s"): moving it under "%s" would make it its own ancestor; the task keeps its parent.', $index + 1, $row->title, $row->parentExternalId);
 
                 return false;
             }
+            $seen[spl_object_id($ancestor)] = true;
         }
         $task->setParent($parent);
 
         return true;
+    }
+
+    /**
+     * The task an id names — a row of this run or a task the scope imported before — when the actor may edit it;
+     * null otherwise (the same answer for "missing" and "not yours", so the import reveals nothing).
+     *
+     * @param array<string, Task> $imported
+     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param Closure(Task): bool $canEdit
+     */
+    private function findParent(string $id, array $imported, array $known, Closure $canEdit): ?Task
+    {
+        $task = $imported[$id] ?? $known[$id][0] ?? null;
+
+        return $task instanceof Task && $canEdit($task) ? $task : null;
     }
 
     /**
@@ -409,9 +448,10 @@ final readonly class TaskImportOrchestrator
      *
      * @return array<string, true>
      */
-    private function findOnOtherBoards(TaskBoard $board, TaskImportSource $source, string $scope, array $keyed, array $known): array
+    private function findOnOtherBoards(TaskBoard $board, TaskImportSource $source, string $scope, array $keyed, array $known, ?Task $parentTask): array
     {
-        if (!$this->linkLookup instanceof TaskImportLinkLookupInterface || !$source->hasGlobalIds()) {
+        // An import into a task has a task-local scope (no other board can hold it).
+        if (!$this->linkLookup instanceof TaskImportLinkLookupInterface || !$source->hasGlobalIds() || $parentTask instanceof Task) {
             return [];
         }
         $ids = [];
@@ -426,8 +466,8 @@ final readonly class TaskImportOrchestrator
     }
 
     /**
-     * The tasks of the board an earlier import of this scope created, by external id: links with the scope, and
-     * pre-1.22 links (no scope) whose label names a source of the same provider ({@see TaskImportSource::fromLegacyLabel()}).
+     * The tasks of the board an earlier import of this scope created, by external id: only links whose
+     * `import_source` is the scope — written by the importer, never by the link form (audit DL-L2).
      *
      * @param list<Task> $existingTasks
      *
@@ -442,8 +482,7 @@ final readonly class TaskImportOrchestrator
                 if ($externalId === null || $externalId === '' || isset($index[$externalId])) {
                     continue;
                 }
-                $linkScope = $link->getImportSource() ?? TaskImportSource::fromLegacyLabel($link->getLabel(), $externalId)?->provider();
-                if ($linkScope === $scope) {
+                if ($link->getImportSource() === $scope) {
                     $index[$externalId] = [$task, $link];
                 }
             }
@@ -461,10 +500,11 @@ final readonly class TaskImportOrchestrator
      * @param list<array{0: Task, 1: ImportedTaskDto}> $pending
      * @param array<string, Task> $imported
      * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      * @param array<int, bool> $matched
      */
-    private function linkDependencies(array $pending, array $imported, array $known, object $actor, array &$warnings, array &$matched): int
+    private function linkDependencies(array $pending, array $imported, array $known, Closure $canEdit, object $actor, array &$warnings, array &$matched): int
     {
         if ($pending === [] || !$this->dependencyManager instanceof TaskDependencyManager) {
             return 0;
@@ -472,8 +512,8 @@ final readonly class TaskImportOrchestrator
         $created = 0;
         foreach ($pending as [$task, $row]) {
             foreach ($row->dependsOn as [$otherId, $type]) {
-                $other = $imported[$otherId] ?? $known[$otherId][0] ?? null;
-                if ($other === null) {
+                $other = $this->findParent($otherId, $imported, $known, $canEdit);
+                if (!$other instanceof Task) {
                     $warnings[] = sprintf('"%s": the dependency on "%s" was skipped (that row was not imported).', $row->title, $otherId);
                     continue;
                 }
@@ -553,40 +593,29 @@ final readonly class TaskImportOrchestrator
             }
         }
 
-        $ordered  = [];
-        $visited  = [];
-        $visiting = [];
-
-        $visit = static function (ImportedTaskDto $row) use (&$visit, &$ordered, &$visited, &$visiting, $byExternalId): void {
-            $key = spl_object_id($row);
-            if (isset($visited[$key])) {
-                return;
-            }
-
-            if (isset($visiting[$key])) {
-                $ordered[]     = $row;
-                $visited[$key] = true;
-
-                return;
-            }
-
-            $visiting[$key] = true;
-
-            if ($row->parentExternalId !== null && isset($byExternalId[$row->parentExternalId])) {
-                $visit($byExternalId[$row->parentExternalId]);
-                if (isset($visited[$key])) {
-                    // Its parent chain came back to it (a cycle): it was placed then.
-                    return;
-                }
-            }
-
-            $ordered[]     = $row;
-            $visited[$key] = true;
-            unset($visiting[$key]);
-        };
-
+        // Since 1.22 iterative (audit DL-L4: a long parent chain no longer recurses): each row's chain of parents in
+        // the file is placed parents first; in a cycle, the row where it closes goes first, then the rest of it.
+        $ordered = [];
+        $placed  = [];
         foreach ($rows as $row) {
-            $visit($row);
+            $chain   = [];
+            $onChain = [];
+            $closing = null;
+            for ($current = $row; $current instanceof ImportedTaskDto && !isset($placed[spl_object_id($current)]); $current = $current->parentExternalId !== null ? $byExternalId[$current->parentExternalId] ?? null : null) {
+                if (isset($onChain[spl_object_id($current)])) {
+                    $closing = $onChain[spl_object_id($current)];
+                    break;
+                }
+                $onChain[spl_object_id($current)] = count($chain);
+                $chain[]                          = $current;
+            }
+            $order = $closing === null
+                ? array_reverse($chain)
+                : [$chain[$closing], ...array_reverse(array_slice($chain, $closing + 1)), ...array_reverse(array_slice($chain, 0, $closing))];
+            foreach ($order as $item) {
+                $ordered[]                    = $item;
+                $placed[spl_object_id($item)] = true;
+            }
         }
 
         return $ordered;

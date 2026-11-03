@@ -54,10 +54,10 @@ message, CLI) counts every row as **created**, **updated**, **unchanged** or **s
 | With a source id (Task ID, Issue key, card id, `id`) | (import scope, id) — `task_board_task_links.import_source` + `external_id` |
 | Without an id | (import scope, `fp:` + fingerprint of parent, normalized title and source creation date) |
 
-- **Import scope** = the tool: `clickup` (CSV and JSON share it, a task imported from one is matched from the other),
-  `jira`, `trello`. The bundle's own format (`taskboard_csv` / `taskboard_json`) has file-local ids, so its scope is
-  `taskboard` on a board import and `taskboard@<task id>` when importing subtasks into a task: one template can be
-  imported under several tasks.
+- **Import scope** = the tool on a board import: `clickup` (CSV and JSON share it, a task imported from one is
+  matched from the other), `jira`, `trello`, `taskboard` (the bundle's own format). **Importing subtasks into a task**
+  uses `<provider>@<task id>` for every source: it only matches what an earlier import put under that task, and one
+  template can be imported under several tasks.
 - **Fingerprint rows** (no id): the import warns how many rows were matched that way. Renaming a row in the source (or
   changing its parent or creation date) makes it a new task. Identical rows of one file stay apart (the 2nd gets
   `-2`, and so on), so they are matched again in the same order.
@@ -75,7 +75,7 @@ set in the application survives unless the source sets that field.
 | Priority | The source's when the row has one; ClickUp / Jira / own-format rows with an empty priority and every Trello card keep the task's. |
 | Description, start, due, estimate | The source's when the row has a value, else kept (the creation-date fallback for the start applies to new tasks only). |
 | Tags | Replaced by the source's tags when the row has at least one, else kept. |
-| Assignees | **The source replaces the application's assignees**: when the row names someone who resolves, the task's assignees become exactly those people — an assignee added in the application is removed (history: member removed). Reviewers, watchers and stakeholders are never touched; a row with no assignee, or none that resolves, keeps the task's assignees. |
+| Assignees | **The source replaces the application's assignees** (an e-mail only counts when the board's `assignee_provider` accepts that user): when the row names someone who resolves, the task's assignees become exactly those people — an assignee added in the application is removed (history: member removed). Reviewers, watchers and stakeholders are never touched; a row with no assignee, or none that resolves, keeps the task's assignees. |
 | Parent | Follows the source's parent row when it exists (in the file or imported before); a row without a parent keeps the task where it is — the task you import into only places **new** tasks. A move that would make a task its own ancestor is refused with a warning. |
 | Dependencies | Added when missing; existing ones are never removed (a relation already there is silently left as is). |
 | Links, comments, time, documents, colour | Never touched. |
@@ -84,21 +84,35 @@ Every change is written to the task history as if made by the importing user. A 
 
 ### Across boards
 
-A **source id already imported into another board of the same tenant** (boards with the same `tenant_key`, or both
-without one) is **skipped** with one warning listing the rows: an import never moves a task to another board and never
+On a board import, a **source id already imported into another board of the same tenant** (boards with the same
+`tenant_key`, or both without one) is **skipped**, with one warning that only counts the rows (no board, no title): an import never moves a task to another board and never
 copies it. To bring the tasks to the new board, move them there (or delete them on the old one first). **Rows without
 an id follow the same rule**: a fingerprint already imported into another board of the tenant is skipped too. The
-bundle's own format (`taskboard_csv` / `taskboard_json`) is not checked: its ids and fingerprints belong to the board
-(or to the task imported into), so a template can be imported into several boards or tasks. Boards of other tenants
+bundle's own format (`taskboard_csv` / `taskboard_json`) and imports into a task are not checked: their ids and
+fingerprints belong to the board or to the task imported into, so a template can be imported into several boards or
+tasks. Boards of other tenants
 are never looked at.
 
 ### Tasks imported before 1.22
 
-Their links have no `import_source`. They are still matched: a link whose label is the one those versions wrote
-(`clickup_csv #<id>`, `jira_csv #<id>`, …) belongs to that tool, and it is stamped with its scope on the first
-re-import. Links whose label was edited by hand are not recognised (the row creates a new task). Subtasks imported
-into a task before 1.22 with the own format are not recognised either (their scope cannot be inferred). See
-[UPGRADING](../UPGRADING.md#unreleased) for an optional SQL backfill.
+Their links have no `import_source` and are **not matched**: only a link the importer wrote is trusted (anyone who
+may edit a task can type an external id and a label in the link form). Run the one-off backfill of
+[UPGRADING](../UPGRADING.md#unreleased) right after upgrading to keep re-importing older ClickUp / Jira / Trello
+exports without duplicates; anything else imported before 1.22 (including the own format, on a board or into a task)
+is created again by a re-import.
+
+### Who may change what
+
+An import only updates, moves, re-assigns or links tasks **the importing user may edit**
+(`TaskBoardResourceAccessChecker::canEditTask()`: `TASK_ACCESS_CHECK` listeners and `markReadOnly()` apply). A row
+that matches a task the user cannot edit is skipped (counted, no title), and such a task is never used as a parent or a
+dependency target ("not found"). **Import subtasks** on a task only ever matches the tasks an earlier import put under
+that same task (scope `<provider>@<task id>`), so the rights on one task never reach the rest of the board.
+
+### Limits
+
+`import.max_rows` (default 5000) rows per file and `import.max_cell_length` (default 65536 bytes) per CSV cell; a larger
+file is refused with an error. Files are also limited to 20 MB by the upload form.
 
 ## Field mapping overview
 

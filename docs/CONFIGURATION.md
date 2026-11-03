@@ -511,6 +511,15 @@ Rows that name assignees instead of giving an e-mail (ClickUp, Jira, Trello, the
 (`UserLabel::of()`: `displayName`, `fullName`, e-mail, username, identifier) equals the name, ignoring case and
 spaces. Without an `assignee_provider`, names are not resolved and the import warns.
 
+### Import limits (since 1.22)
+
+```yaml
+nowo_task_board:
+    import:
+        max_rows: 5000          # rows (tasks) per file; a larger file is refused
+        max_cell_length: 65536  # bytes per CSV cell; a file with a longer cell is refused
+```
+
 ### Cross-board lookup (since 1.22)
 
 `Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface` (default `DoctrineTaskImportLinkLookup`) tells the import

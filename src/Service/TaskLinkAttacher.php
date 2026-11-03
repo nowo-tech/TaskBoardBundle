@@ -105,8 +105,11 @@ final readonly class TaskLinkAttacher
         $link
             ->setLinkType($linkType)
             ->setUrl($data->url)
-            ->setLabel($label)
-            ->setExternalId($externalId);
+            ->setLabel($label);
+        // Since 1.22: the external id of a link an import wrote is its matching key; the form cannot change it.
+        if ($link->getImportSource() === null) {
+            $link->setExternalId($externalId);
+        }
 
         $this->changeRecorder->record(
             $task,

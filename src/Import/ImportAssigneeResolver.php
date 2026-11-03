@@ -17,7 +17,8 @@ use function sprintf;
 use function trim;
 
 /**
- * Since 1.22: the users a row assigns, for one import run — by e-mail through {@see TaskImportUserResolverInterface},
+ * Since 1.22: the users a row assigns, for one import run — by e-mail through {@see TaskImportUserResolverInterface}
+ * (and, with an assignee provider, only if {@see TaskAssigneeProviderInterface::canBeAssigned()}),
  * by name among the board's assignable users ({@see TaskAssigneeProviderInterface}) when exactly one has that display
  * name ({@see UserLabel::of()}, case-insensitive). A name that matches nobody or several people, or any name without
  * an assignee provider, is a warning (once per name) and assigns no one.
@@ -47,11 +48,13 @@ final class ImportAssigneeResolver
     {
         $users = [];
         if ($row->assigneeEmail !== null) {
+            // Audit DL-L3: an e-mail assigns only someone the board's assignee provider accepts, and "unknown" and
+            // "not assignable here" read the same (no e-mail existence oracle).
             $user = $this->userResolver->resolveByEmail($row->assigneeEmail);
-            if ($user !== null) {
+            if ($user !== null && (!$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($this->board, $user))) {
                 $users[] = $user;
             } else {
-                $this->warnings[] = sprintf('Assignee "%s" for "%s" was not found in the application.', $row->assigneeEmail, $row->title);
+                $this->warnings[] = sprintf('Assignee "%s" for "%s" cannot be assigned on this board.', $row->assigneeEmail, $row->title);
             }
         }
         foreach ($row->assigneeNames as $name) {

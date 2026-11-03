@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Import\Support;
 
+use InvalidArgumentException;
+
 use function array_map;
 use function assert;
+use function count;
 use function fclose;
 use function fgetcsv;
 use function fopen;
@@ -13,15 +16,30 @@ use function fwrite;
 use function is_resource;
 use function mb_strtolower;
 use function rewind;
+use function sprintf;
 use function str_starts_with;
+use function strlen;
 use function substr;
 use function trim;
 
 /**
  * CSV/TSV parsing helpers for vendor exports.
  */
-final class DelimitedTableParser
+final readonly class DelimitedTableParser
 {
+    /** Since 1.22: default `import.max_cell_length` (bytes). */
+    public const DEFAULT_MAX_CELL_LENGTH = 65536;
+
+    /**
+     * @param int $maxRows the most data rows read (one more is refused, audit DL-L4)
+     * @param int $maxCellLength the longest cell in bytes (a longer one is refused)
+     */
+    public function __construct(
+        private int $maxRows = 5000,
+        private int $maxCellLength = self::DEFAULT_MAX_CELL_LENGTH,
+    ) {
+    }
+
     /**
      * The rows of a CSV / TSV export keyed by header. Since 1.22: a UTF-8 byte order mark (ClickUp, Excel) is dropped,
      * quoted cells may span lines (multi-line descriptions), and a header that repeats (Jira writes one "Labels" or
@@ -46,6 +64,18 @@ final class DelimitedTableParser
         while (($values = $this->readRecord($stream, $delimiter)) !== null) {
             if ($values === [null]) {
                 continue;
+            }
+            if (count($rows) >= $this->maxRows) {
+                fclose($stream);
+
+                throw new InvalidArgumentException(sprintf('The file has more than %d rows; an import takes at most %d.', $this->maxRows, $this->maxRows));
+            }
+            foreach ($values as $value) {
+                if (strlen((string) $value) > $this->maxCellLength) {
+                    fclose($stream);
+
+                    throw new InvalidArgumentException(sprintf('A cell of the file is longer than %d bytes.', $this->maxCellLength));
+                }
             }
 
             $normalized = [];

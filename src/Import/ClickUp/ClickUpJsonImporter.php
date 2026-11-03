@@ -11,7 +11,6 @@ use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
 use Nowo\TaskBoardBundle\Import\TaskImporterInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 
-use function in_array;
 use function is_array;
 use function is_string;
 use function json_decode;
@@ -181,10 +180,12 @@ final readonly class ClickUpJsonImporter implements TaskImporterInterface
             return $this->fieldMapper->parseNames($this->stringValue($assignees));
         }
         $names = [];
+        $seen  = [];
         foreach ($assignees as $assignee) {
             $name = is_array($assignee) ? $this->stringValue($assignee['username'] ?? $assignee['name'] ?? null) : $this->stringValue($assignee);
-            if ($name !== '' && !in_array($name, $names, true)) {
-                $names[] = $name;
+            if ($name !== '' && !isset($seen[$name])) {
+                $seen[$name] = true;
+                $names[]     = $name;
             }
         }
 

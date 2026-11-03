@@ -15,7 +15,6 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
-use function in_array;
 use function strtolower;
 
 #[ORM\Entity]
@@ -557,10 +556,12 @@ class Task
     {
         /** @var list<string> $normalized */
         $normalized = [];
+        $seen       = [];
 
         foreach ($tags as $tag) {
             $tag = trim((string) $tag);
-            if ($tag !== '' && !in_array($tag, $normalized, true)) {
+            if ($tag !== '' && !isset($seen[$tag])) {
+                $seen[$tag]   = true;
                 $normalized[] = $tag;
             }
         }

@@ -7,7 +7,6 @@ namespace Nowo\TaskBoardBundle\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
-use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -46,7 +45,8 @@ class TaskLink
         /**
          * Since 1.22: the import scope that owns `externalId` (e.g. "clickup", "jira", "taskboard@<task id>"): the
          * matching key of an idempotent re-import is (importSource, externalId). Null: a link not written by an
-         * import, or one written before 1.22 (see {@see TaskImportSource::fromLegacyLabel()}).
+         * import (or written before 1.22): never matched by an import. Only the importer sets it; the link form
+         * cannot.
          */
         #[ORM\Column(name: 'import_source', type: 'string', length: 64, nullable: true)]
         private ?string $importSource = null,

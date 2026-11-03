@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -78,6 +79,20 @@ final class TaskLinkAttacherTest extends TestCase
         self::assertSame('https://example.com/guide', $link->getUrl());
         self::assertSame('Guide', $link->getLabel());
         self::assertSame('guide-1', $link->getExternalId());
+    }
+
+    public function testTheFormCannotChangeTheMatchingKeyOfAnImportLink(): void
+    {
+        $task = new Task(board: new TaskBoard('Demo', 'demo', new stdClass()), title: 'Task', creator: new stdClass());
+        $link = new TaskLink($task, TaskLinkType::Other, 'import://jira_csv/PRJ-1', 'jira_csv #PRJ-1', 'PRJ-1', importSource: 'jira');
+        $task->addLink($link);
+
+        $attacher = new TaskLinkAttacher($this->createMock(TaskRepositoryInterface::class), new GitLabMergeRequestLinkParser(), new TaskChangeRecorder());
+        self::assertTrue($attacher->update($task, $link->getId(), new TaskLinkFormData(linkType: TaskLinkType::Url, url: 'https://jira/PRJ-1', label: 'Jira', externalId: 'PRJ-7'), new stdClass()));
+
+        self::assertSame('PRJ-1', $link->getExternalId());
+        self::assertSame('jira', $link->getImportSource());
+        self::assertSame('https://jira/PRJ-1', $link->getUrl());
     }
 
     public function testRemoveDeletesLinkFromTask(): void

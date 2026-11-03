@@ -90,8 +90,8 @@ Idempotent task import from every source. See [UPGRADING](UPGRADING.md#unrelease
 
 ### Changed
 
-- Links written by imports before 1.22 are recognised by their label, matched, and stamped with their scope on the
-  first re-import.
+- Only links an import wrote (`import_source`) are matched; links from before 1.22 are not (one-off backfill SQL in
+  UPGRADING), and the link form can no longer change the external id of an import link (audit DL-L2).
 - A re-import moves a task under its source parent row when that changes (never under its own descendant); a row
   without a parent keeps its task where it is.
 - An existing dependency met again on re-import is silently kept (it was a "duplicate or cycle" warning); a refused
@@ -101,6 +101,17 @@ Idempotent task import from every source. See [UPGRADING](UPGRADING.md#unrelease
 - Jira `Time Spent` is no longer read as an estimate. The import form's help and the source descriptions mention the
   new columns (7 locales).
 - The import form no longer renders the **Skip tasks that were already imported** checkbox.
+
+### Security (1.22 audit, Appendix DL)
+
+- An import only updates, moves, re-assigns or links tasks the importer may edit (`canEditTask`, so
+  `TASK_ACCESS_CHECK` / `markReadOnly()` apply); other matched rows are skipped and counted, never echoed (DL-M2).
+- **Import subtasks** matches only the tasks earlier imports put under that same task (`<provider>@<task id>` for every
+  source): the rights on one task no longer reach the rest of the board (DL-M1).
+- Cross-board and read-only warnings give counts only; an unknown and a non-assignable e-mail read the same, and
+  e-mails respect `assignee_provider::canBeAssigned()` (DL-L1, DL-L3).
+- `import.max_rows` (5000) and `import.max_cell_length` (65536), linear de-duplication, iterative parent ordering, an
+  exact ancestor check on moves, and dates bounded to 1970-2200 without relative input (DL-L4, DL-L5, DL-I2).
 
 ### Deprecated
 
@@ -668,6 +679,17 @@ Allows nowo-tech/ui-kit-bundle 2.x (^1.4 || ^2.2) so hosts can move to UiKit 2.2
 - **List and Gantt views** hid completed (last-column) tasks although the Gantt draws completed bars and the list filters by column; both now include them, and Gantt subtasks whose parent is not on the timeline are shown at root level instead of disappearing.
 - `services.yaml` no longer registers entities, DTOs, events, enums, exceptions and value objects as autowired services.
 - Docs: routes table now lists `task_link_update`, `task_link_remove` and `task_member_remove`; documented that `TaskBoard::team` is assigned programmatically (no UI picker).
+
+### Security (1.22 audit, Appendix DL)
+
+- An import only updates, moves, re-assigns or links tasks the importer may edit (`canEditTask`, so
+  `TASK_ACCESS_CHECK` / `markReadOnly()` apply); other matched rows are skipped and counted, never echoed (DL-M2).
+- **Import subtasks** matches only the tasks earlier imports put under that same task (`<provider>@<task id>` for every
+  source): the rights on one task no longer reach the rest of the board (DL-M1).
+- Cross-board and read-only warnings give counts only; an unknown and a non-assignable e-mail read the same, and
+  e-mails respect `assignee_provider::canBeAssigned()` (DL-L1, DL-L3).
+- `import.max_rows` (5000) and `import.max_cell_length` (65536), linear de-duplication, iterative parent ordering, an
+  exact ancestor check on moves, and dates bounded to 1970-2200 without relative input (DL-L4, DL-L5, DL-I2).
 
 ### Deprecated
 

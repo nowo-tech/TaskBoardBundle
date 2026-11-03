@@ -111,11 +111,13 @@ final class ImportFieldMapper
 
         $parts = preg_split('/[,|;]/', $raw) ?: [];
         $tags  = [];
+        $seen  = [];
         foreach ($parts as $part) {
             // Since 1.22: ClickUp writes lists as "[a, b]".
             $tag = trim($part, " \t\n\r\0\x0B[]\"'");
-            if ($tag !== '' && !in_array($tag, $tags, true)) {
-                $tags[] = $tag;
+            if ($tag !== '' && !isset($seen[$tag])) {
+                $seen[$tag] = true;
+                $tags[]     = $tag;
             }
         }
 
@@ -141,7 +143,7 @@ final class ImportFieldMapper
         }
 
         if (preg_match('/^\d{9,}$/', $raw) === 1) {
-            return $this->fromTimestamp(strlen($raw) >= 11 ? intdiv((int) $raw, 1000) : (int) $raw);
+            return $this->inRange($this->fromTimestamp(strlen($raw) >= 11 ? intdiv((int) $raw, 1000) : (int) $raw));
         }
 
         // Week day, ordinal suffixes and commas only decorate the text dates ("Friday, March 1st 2024, 9:46 am").
@@ -152,13 +154,14 @@ final class ImportFieldMapper
         foreach (self::DATE_FORMATS as $format) {
             $date = DateTimeImmutable::createFromFormat('!' . $format, $clean);
             if ($date instanceof DateTimeImmutable && DateTimeImmutable::getLastErrors() === false) {
-                return $date;
+                return $this->inRange($date);
             }
         }
 
-        $timestamp = strtotime($clean);
+        // The last resort needs a four-digit year: relative input ("now", "next monday") is not a date of the source.
+        $timestamp = preg_match('/\d{4}/', $clean) === 1 ? strtotime($clean) : false;
 
-        return $timestamp !== false ? $this->fromTimestamp($timestamp) : null;
+        return $timestamp !== false ? $this->inRange($this->fromTimestamp($timestamp)) : null;
     }
 
     public function parseEstimatedMinutes(string $raw): ?int
@@ -233,10 +236,12 @@ final class ImportFieldMapper
             return [];
         }
         $names = [];
+        $seen  = [];
         foreach (preg_split('/[,;|]/', $raw) ?: [] as $part) {
             $name = trim(preg_replace('/\s+/', ' ', trim($part, " \t\n\r\0\x0B[]\"'")) ?? '');
-            if ($name !== '' && !in_array($name, $names, true)) {
-                $names[] = $name;
+            if ($name !== '' && !isset($seen[$name])) {
+                $seen[$name] = true;
+                $names[]     = $name;
             }
         }
 
@@ -250,11 +255,13 @@ final class ImportFieldMapper
      */
     public function parseIdList(string $raw): array
     {
-        $ids = [];
+        $ids  = [];
+        $seen = [];
         foreach (preg_split('/[\s,;|]+/', $raw) ?: [] as $part) {
             $id = ltrim(trim($part, "[]\"'"), '#');
-            if ($id !== '' && !in_array($id, $ids, true)) {
-                $ids[] = $id;
+            if ($id !== '' && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $ids[]     = $id;
             }
         }
 
@@ -286,6 +293,16 @@ final class ImportFieldMapper
         $plain = preg_replace('/<[^>]+>/', ' ', $raw) ?? $raw;
 
         return trim(preg_replace('/\s+/', ' ', $plain) ?? $plain);
+    }
+
+    /**
+     * Since 1.22: a date a database column keeps (years 1970-2200), null otherwise.
+     */
+    private function inRange(DateTimeImmutable $date): ?DateTimeImmutable
+    {
+        $year = (int) $date->format('Y');
+
+        return $year >= 1970 && $year <= 2200 ? $date : null;
     }
 
     /**

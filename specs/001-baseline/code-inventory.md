@@ -19,8 +19,8 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Comment/TaskMentionCandidatesResolverInterface.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Controller/TaskBoardManageController.php` | Manage UI controller (bounded pages, logged writes since 1.21) | FR-CTRL-001, FR-PERF-001, FR-OBS-001 |
 | `DependencyInjection/Compiler/TwigPathsPass.php` | Twig namespace | FR-TWIG-001 |
-| `DependencyInjection/Configuration.php` | Config tree | FR-CFG-001 |
-| `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002 |
+| `DependencyInjection/Configuration.php` | Config tree (`import.*` since 1.22) | FR-CFG-001, FR-IMPORT-015 |
+| `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002, FR-IMPORT-015 |
 | `Doctrine/RecoveringFlusher.php` | FrankenPHP worker flush recovery | FR-DOCTRINE-002 |
 | `Doctrine/TaskBoardMetadataListener.php` | Table prefix | FR-DOCTRINE-001 |
 | `Dto/BoardColumnFormData.php` | Form/API DTO | FR-DTO-001 |
@@ -108,17 +108,17 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Import/Dto/TaskImportResult.php` | Import DTOs (updated / unchanged since 1.22) | FR-IMPORT-006, FR-IMPORT-008 |
 | `Import/Jira/JiraCsvImporter.php` | External importers | FR-IMPORT-005, FR-IMPORT-012 |
 | `Import/DoctrineTaskImportLinkLookup.php` | Cross-board lookup of imported ids (since 1.22) | FR-IMPORT-010, FR-IMPORT-011 |
-| `Import/ImportAssigneeResolver.php` | Assignees by e-mail or display name (since 1.22) | FR-IMPORT-012 |
+| `Import/ImportAssigneeResolver.php` | Assignees by e-mail or display name (since 1.22) | FR-IMPORT-012, FR-IMPORT-014 |
 | `Import/ImportedTaskUpdater.php` | Re-import precedence (since 1.22) | FR-IMPORT-008 |
 | `Import/NullTaskImportUserResolver.php` | Null user resolver | FR-IMPORT-003 |
-| `Import/Support/DelimitedTableParser.php` | Import parsers | FR-IMPORT-004, FR-IMPORT-012 |
+| `Import/Support/DelimitedTableParser.php` | Import parsers (row / cell limits since 1.22) | FR-IMPORT-004, FR-IMPORT-012, FR-IMPORT-015 |
 | `Import/Support/ImportFieldMapper.php` | Import parsers | FR-IMPORT-004, FR-IMPORT-012 |
 | `Import/TaskBoard/TaskBoardCsvImporter.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
 | `Import/TaskBoard/TaskBoardJsonImporter.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
 | `Import/TaskBoard/TaskBoardRowMapper.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007, FR-IMPORT-012 |
-| `Import/TaskImportOrchestrator.php` | Import orchestrator (logged since 1.21, idempotent upsert since 1.22) | FR-IMPORT-001, FR-OBS-001, FR-IMPORT-008, FR-IMPORT-009, FR-IMPORT-010, FR-IMPORT-011 |
+| `Import/TaskImportOrchestrator.php` | Import orchestrator (logged since 1.21, idempotent upsert since 1.22) | FR-IMPORT-001, FR-OBS-001, FR-IMPORT-008, FR-IMPORT-009, FR-IMPORT-010, FR-IMPORT-011, FR-IMPORT-014, FR-IMPORT-015 |
 | `Import/TaskImportLinkLookupInterface.php` | Import contracts (since 1.22) | FR-IMPORT-010 |
-| `Import/TaskImportSource.php` | Import contracts (provider / scope since 1.22) | FR-IMPORT-002, FR-IMPORT-008, FR-IMPORT-011 |
+| `Import/TaskImportSource.php` | Import contracts (provider / scope since 1.22) | FR-IMPORT-002, FR-IMPORT-008, FR-IMPORT-014 |
 | `Import/TaskImportUserResolverInterface.php` | Import contracts | FR-IMPORT-002 |
 | `Import/TaskImporterInterface.php` | Import contracts | FR-IMPORT-002 |
 | `Import/Trello/TrelloJsonImporter.php` | External importers | FR-IMPORT-005, FR-IMPORT-012 |
@@ -168,7 +168,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Service/TaskCommentManager.php` | Comments and mentions (since 1.16) | FR-COMMENT-001 |
 | `Service/TaskDependencyManager.php` | Task dependencies (since 1.15) | FR-DEP-001 |
 | `Service/TaskGanttBuilder.php` | Gantt timeline (clock-injected since 1.21) | FR-SVC-005, FR-GANTT-001, FR-CLOCK-001 |
-| `Service/TaskLinkAttacher.php` | Domain service | FR-SVC-006 |
+| `Service/TaskLinkAttacher.php` | Domain service (import links keep their key since 1.22) | FR-SVC-006, FR-IMPORT-011 |
 | `Service/TaskManager.php` | Domain service | FR-SVC-007 |
 | `Service/TaskMemberAssigner.php` | Domain service | FR-SVC-008 |
 | `Service/TaskTimeLogger.php` | Manual time entries (since 1.15) | FR-TIME-001 |
