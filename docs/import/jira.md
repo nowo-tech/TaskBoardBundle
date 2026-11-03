@@ -76,7 +76,7 @@ php bin/console nowo:task-board:import <board-uuid> jira-export.csv --source=jir
 - **Re-import:** Issue keys are the matching key: importing a newer export updates the issues imported before (since
   1.22, see [Re-importing](README.md#re-importing-idempotent-upsert-since-122)).
 - **Since 1.22** the importer also reads the start date (`Start date`, `Custom field (Start date)`), `Created`
-  (fingerprint of rows without a key), the "Blocks" issue links (`Inward issue link (Blocks)` → blocked by,
+  (the start of a new issue without a start date, and the fingerprint of rows without a key), the "Blocks" issue links (`Inward issue link (Blocks)` → blocked by,
   `Outward issue link (Blocks)` → blocks) and assignees given by display name. `Time Spent` is no longer read as an
   estimate (it is logged time, which is not imported).
 - **Large projects:** Export in batches (by sprint, component, or JQL) if your Jira plan limits CSV size, then import each file into the same board.

@@ -16,8 +16,9 @@ use function trim;
 /**
  * Imports tasks from ClickUp CSV exports (Workspace export or List/Table view export).
  *
- * Since 1.22 also: Start Date (the Gantt bar), Date Created (fingerprint of rows without a Task ID), Dependencies /
- * Waiting On (blocked by) and Blocking (blocks) by task id, assignees by name, and ClickUp's dates (millisecond
+ * Since 1.22 also: Start Date (the Gantt bar), Date Created (start of a new task without Start Date, fingerprint of
+ * rows without a Task ID), Dependencies / Waiting On (blocked by) and Blocking (blocks) by task id, assignees by name,
+ * and ClickUp's dates (millisecond
  * timestamps and the "Friday, March 1st 2024, 9:46:52 am" text). Time Spent has no target: logged time is made of
  * time entries of a person in the host, which an export cannot name.
  */

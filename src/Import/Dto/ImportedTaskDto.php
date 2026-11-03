@@ -36,8 +36,9 @@ final readonly class ImportedTaskDto
          */
         public array $dependsOn = [],
         /**
-         * Since 1.22: when the task was created in the source tool. It has no task field to go to (the task's own
-         * creation date is the audit time of the import); it only tells apart rows without an id (fingerprint).
+         * Since 1.22: when the task was created in the source tool — part of the fingerprint of rows without an id,
+         * and the start of a new task whose row has no `startAt` (on create only; the task's own creation date stays
+         * the audit time of the import).
          */
         public ?DateTimeImmutable $createdAt = null,
         /**

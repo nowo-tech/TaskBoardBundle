@@ -72,7 +72,9 @@ Idempotent task import from every source. See [UPGRADING](UPGRADING.md#unrelease
   `idx_task_board_task_links_import`) and update their task; the same file twice is a no-op. The source wins for every
   field it has a value for, empty fields keep the application's value (`ImportedTaskUpdater`).
 - Rows without an id are matched by a deterministic fingerprint (scope, parent, normalized title, creation date), with
-  a warning.
+  a warning; a fingerprint already imported into another board of the tenant is skipped like an id.
+- A new task without a start date starts on the source's creation date (ClickUp `Date Created`, Jira `Created`); on
+  create only.
 - Cross-board rule: a source id already imported into another board of the tenant is skipped with a warning
   (`TaskImportLinkLookupInterface`, `DoctrineTaskImportLinkLookup`).
 - `TaskImportResult::$updated` / `$unchanged` (+ withers); the flash messages, the command and the import log report

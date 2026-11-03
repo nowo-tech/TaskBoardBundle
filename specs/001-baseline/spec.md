@@ -167,10 +167,11 @@ the board.
   title, source creation date; the n-th identical row gets `-n`) and the import warns that they are.
 - **FR-IMPORT-010** (1.22): cross-board rule — a source id already imported into another board of the same tenant
   (`TaskImportLinkLookupInterface`, `DoctrineTaskImportLinkLookup`) is skipped with a warning, never moved or copied;
-  fingerprint rows and the own format are board-local.
+  fingerprint rows of those tools follow the same rule; the own format is board- / task-local.
 - **FR-IMPORT-011** (1.22): pre-1.22 import links (no `import_source`) are recognised by the label those versions wrote
   (`TaskImportSource::fromLegacyLabel()`), matched and stamped with their scope on the first re-import.
-- **FR-IMPORT-012** (1.22): ClickUp CSV / JSON map start date, creation date, dependencies (Dependencies / Waiting On →
+- **FR-IMPORT-012** (1.22): ClickUp CSV / JSON map start date, creation date (the start of a new task without a start
+  date, on create only), dependencies (Dependencies / Waiting On →
   blocked by, Blocking → blocks; API `dependencies`) and assignees by name; Jira CSV maps start date, Created, "Blocks"
   issue links and names; Trello maps `start` and members; names resolve through `TaskAssigneeProviderInterface` by
   display name when exactly one user matches (`ImportAssigneeResolver`), else a warning. Dates read millisecond and

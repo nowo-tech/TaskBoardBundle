@@ -29,9 +29,11 @@ use PHPUnit\Framework\TestCase;
 
 use function array_filter;
 use function array_map;
+use function array_slice;
 use function array_values;
 use function count;
 use function str_contains;
+use function str_starts_with;
 
 /** Since 1.22: the upsert paths of the orchestrator that the database tests do not reach. */
 final class TaskImportUpsertTest extends TestCase
@@ -111,7 +113,7 @@ final class TaskImportUpsertTest extends TestCase
     {
         $lookup = $this->createMock(TaskImportLinkLookupInterface::class);
         $lookup->expects(self::once())->method('findOnOtherBoards')
-            ->with($this->board, 'clickup', ['1', '2', '3', '4', '5', '6'])
+            ->with($this->board, 'clickup', self::callback(static fn (array $ids): bool => array_slice($ids, 0, 6) === ['1', '2', '3', '4', '5', '6'] && count($ids) === 7 && str_starts_with($ids[6], 'fp:')))
             ->willReturn(['1' => true, '2' => true, '3' => true, '4' => true, '5' => true, '6' => true]);
         $this->imported('Here', '7');
 
@@ -127,7 +129,7 @@ final class TaskImportUpsertTest extends TestCase
         $lookup->expects(self::never())->method('findOnOtherBoards');
         $this->imported('Here', '7');
 
-        $this->importCsv("Task ID,Task Name\n7,Here\n,No id\n", lookup: $lookup);
+        $this->importCsv("Task ID,Task Name\n7,Here\n", lookup: $lookup);
         $result = $this->importCsv("id,title\n7,Here\n", lookup: $lookup, source: TaskImportSource::TaskBoardCsv);
 
         self::assertSame(1, $result->created, 'own-format ids are not ClickUp ids');

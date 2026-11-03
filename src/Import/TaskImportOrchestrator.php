@@ -312,8 +312,11 @@ final readonly class TaskImportOrchestrator
             dueAt: $row->dueAt,
             tags: $row->tags,
         );
-        if ($row->startAt instanceof DateTimeImmutable) {
-            $task->setStartAt($row->startAt);
+        // Since 1.22: without a start date the source's creation date places the Gantt bar — on create only; a
+        // re-import sets the start only from a start date (the task's own start is never overwritten from it).
+        $startAt = $row->startAt ?? $row->createdAt;
+        if ($startAt instanceof DateTimeImmutable) {
+            $task->setStartAt($startAt);
         }
 
         $task->addLink(new TaskLink(
@@ -397,7 +400,9 @@ final readonly class TaskImportOrchestrator
     }
 
     /**
-     * The source ids of the file already imported into another board of the tenant and not on this one.
+     * The keys of the file already imported into another board of the tenant and not on this one: source ids and,
+     * since 1.22, fingerprints of rows without an id — for tools with global ids only (the bundle's own format is
+     * board- or task-local).
      *
      * @param list<array{0: ImportedTaskDto, 1: string, 2: bool}> $keyed
      * @param array<string, array{0: Task, 1: TaskLink}> $known
@@ -410,8 +415,8 @@ final readonly class TaskImportOrchestrator
             return [];
         }
         $ids = [];
-        foreach ($keyed as [, $key, $byFingerprint]) {
-            if (!$byFingerprint && !isset($known[$key])) {
+        foreach ($keyed as [, $key]) {
+            if (!isset($known[$key])) {
                 $ids[$key] = $key;
             }
         }

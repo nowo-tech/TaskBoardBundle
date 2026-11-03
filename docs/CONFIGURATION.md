@@ -514,7 +514,8 @@ spaces. Without an `assignee_provider`, names are not resolved and the import wa
 ### Cross-board lookup (since 1.22)
 
 `Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface` (default `DoctrineTaskImportLinkLookup`) tells the import
-which source ids are already imported into another board of the same tenant; those rows are skipped. Alias it to
+which source ids (and fingerprints of rows without an id) are already imported into another board of the same
+tenant; those rows are skipped. The bundle's own format is not checked. Alias it to
 your own service to change the rule (return `[]` to allow copies across boards).
 
 ## Assets

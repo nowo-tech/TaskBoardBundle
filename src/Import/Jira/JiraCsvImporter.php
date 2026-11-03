@@ -15,7 +15,7 @@ use Nowo\TaskBoardBundle\Import\TaskImportSource;
  * Imports issues from Jira CSV exports.
  *
  * Since 1.22 also: the start date, "Inward issue link (Blocks)" (blocked by) and "Outward issue link (Blocks)"
- * (blocks), Created (fingerprint of rows without a key) and assignees by display name.
+ * (blocks), Created (start of a new issue without a start date, fingerprint of rows without a key) and assignees by display name.
  */
 final readonly class JiraCsvImporter implements TaskImporterInterface
 {

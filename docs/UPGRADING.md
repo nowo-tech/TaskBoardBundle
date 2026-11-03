@@ -130,7 +130,8 @@ duplicated); importing the same file twice changes nothing. Details: [docs/impor
   assignees (other member roles are untouched). Dependencies are only added. A row without a parent keeps its task
   where it is (the task you import into only places new tasks).
 - **Across boards:** a source id already imported into another board of the same tenant is skipped with a warning (no
-  move, no copy). Boards of other tenants are not looked at; fingerprint rows and the own format are board-local.
+  move, no copy); so is a row without an id whose fingerprint is already on another board of the tenant. Boards of
+  other tenants are not looked at; the own format (`taskboard_csv` / `taskboard_json`) is board- / task-local.
 - **Existing links (before 1.22) are matched without a data migration:** a link with no `import_source` whose label is
   the one older versions wrote (`clickup_csv #<id>`, `jira_csv #<id>`, `trello_json #<id>`, `taskboard_csv #<id>`, …)
   belongs to that tool and gets its scope on its first re-import. Optional one-off backfill (MySQL) instead:
@@ -142,8 +143,9 @@ duplicated); importing the same file twice changes nothing. Details: [docs/impor
   UPDATE task_board_task_links SET import_source = 'taskboard' WHERE import_source IS NULL AND (label = CONCAT('taskboard_csv #', external_id) OR label = CONCAT('taskboard_json #', external_id));
   ```
 
-  Subtasks imported *into a task* with the own format before 1.22 are not recognised (their scope was not recorded):
-  re-importing that file into the task creates them again; delete the old ones first if you need to.
+  **Not recognised:** subtasks imported *into a task* with the bundle's own format (`taskboard_csv` /
+  `taskboard_json`) before 1.22 — their scope (`taskboard@<task id>`) was not recorded. Re-importing that file into
+  the task **re-creates them** (the old ones stay); delete the old subtasks first if you do not want both.
 - **Deprecated, ignored:** `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and the command's
   `--force` (it prints a note). They stay for backward compatibility and will be removed in 2.0. The import form no
   longer has the **Skip tasks that were already imported** checkbox (`task_board.import.form.skip_existing` is kept,
@@ -152,6 +154,11 @@ duplicated); importing the same file twice changes nothing. Details: [docs/impor
   `skipped` now counts rows of another board and repeated ids of the file. The flash messages
   `task_board.flash.import_summary` / `subtask_import_summary` gained `%updated%` and `%unchanged%` (host overrides
   with the old placeholders keep working). The `TaskBoard import finished` log line has `updated` / `unchanged`.
+- **Start from the creation date:** a new task whose row has no start date starts on the source's creation date
+  (ClickUp `Date Created` / `date_created`, Jira `Created`), so its Gantt bar no longer starts on the import day. On
+  create only: a re-import never sets the start from the creation date.
+- **Assignees:** the source replaces the application's assignees of a matched task when the row names someone who
+  resolves (other member roles are untouched); otherwise they are kept.
 - **New mappings:** ClickUp CSV `Start Date`, `Date Created`, `Dependencies` / `Waiting On` / `Blocking`, assignees by
   name, millisecond and text dates; ClickUp JSON `start_date`, `date_created`, `dependencies`, assignee user names;
   Jira start date, `Created`, "Blocks" issue links, display names (and `Time Spent` is no longer read as an estimate);

@@ -31,7 +31,7 @@ The importer reads flexible header names. Include as many of these as your expor
 | Assignee Email | Assignee, Assignees | Assignee: e-mail via resolver, or names via the assignee provider (since 1.22) |
 | Start Date | Start date, Start Date Text | Start date — the Gantt bar's left end (since 1.22) |
 | Due Date | Due date, Due Date (date), Due Date Text | Due date |
-| Date Created | Created, Date Created Text | Fingerprint of rows without a Task ID (since 1.22) |
+| Date Created | Created, Date Created Text | Start date of a new task without Start Date; fingerprint of rows without a Task ID (since 1.22) |
 | Dependencies / Waiting On | — | "Blocked by" Gantt relations, by task id (since 1.22) |
 | Blocking | — | "Blocks" Gantt relations, by task id (since 1.22) |
 | Time Estimate | Time Estimated, Estimate, Time Estimated Text | Estimated minutes |
@@ -104,7 +104,7 @@ Or a JSON array of task objects at the root.
 | `assignees` / `assignee` | array or object with `email` (else `username`) | Assignee |
 | `start_date` | `startDate` | Start date (since 1.22) |
 | `due_date` | `dueDate` | Due date |
-| `date_created` | `dateCreated` | Fingerprint of tasks without an id (since 1.22) |
+| `date_created` | `dateCreated` | Start date of a new task without `start_date`; fingerprint of tasks without an id (since 1.22) |
 | `dependencies` | list of `{task_id, depends_on}` or ids | Gantt relations: blocked by what the task waits on, blocks what waits on it (since 1.22) |
 | `time_estimate` | `timeEstimate` | Estimate |
 | `tags` | array of names or `{ "name": "..." }` | Tags |

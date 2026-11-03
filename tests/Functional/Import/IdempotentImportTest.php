@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Import;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -268,6 +269,46 @@ final class IdempotentImportTest extends KernelTestCase
         $elsewhere = $this->import($other, TaskImportSource::ClickUpCsv, self::CLICKUP_CSV);
         self::assertSame(3, $elsewhere->created, 'another tenant is not looked at');
         self::assertSame(3 + 2 + 3, $this->rows(Task::class));
+    }
+
+    public function testRowsWithoutAnIdImportedIntoAnotherBoardOfTheTenantAreSkippedToo(): void
+    {
+        $first  = $this->board('First', 'acme');
+        $second = $this->board('Second', 'acme');
+        $other  = $this->board('Other tenant', 'globex');
+        $csv    = "Task Name,Status,Date Created\nWrite docs,To do,2026-10-01\nShip,To do,\n";
+        $this->import($first, TaskImportSource::ClickUpCsv, $csv);
+
+        $again = $this->import($second, TaskImportSource::ClickUpCsv, $csv . "New here,To do,\n");
+        self::assertSame(1, $again->created);
+        self::assertSame(2, $again->skipped);
+        self::assertTrue($this->hasWarning($again, '2 row(s) were already imported into another board'));
+
+        self::assertSame(2, $this->import($other, TaskImportSource::ClickUpCsv, $csv)->created, 'another tenant is not looked at');
+
+        $template = "title,status\nReview,To do\n";
+        $this->import($first, TaskImportSource::TaskBoardCsv, $template);
+        self::assertSame(1, $this->import($second, TaskImportSource::TaskBoardCsv, $template)->created, 'the own format stays board-local');
+    }
+
+    public function testTheCreationDateStartsTheGanttBarOfANewTaskOnly(): void
+    {
+        $board = $this->board('Plan');
+        $this->import($board, TaskImportSource::ClickUpCsv, "Task ID,Task Name,Date Created,Start Date\n1,No start,1790000000000,\n2,With start,1790000000000,1793534400000\n");
+
+        self::assertSame('2026-09-21', $this->task('No start')->getStartAt()?->format('Y-m-d'), 'Date Created when Start Date is missing');
+        self::assertSame('2026-11-01', $this->task('With start')->getStartAt()?->format('Y-m-d'));
+
+        $task = $this->task('No start');
+        $task->setStartAt(new DateTimeImmutable('2026-10-05'));
+        $this->em->flush();
+        $again = $this->import($board, TaskImportSource::ClickUpCsv, "Task ID,Task Name,Date Created,Start Date\n1,No start,1791000000000,\n");
+
+        self::assertSame(1, $again->unchanged, 'a re-import never sets the start from the creation date');
+        self::assertSame('2026-10-05', $this->task('No start')->getStartAt()?->format('Y-m-d'));
+
+        $this->import($board, TaskImportSource::JiraCsv, "Issue key,Summary,Created\nPRJ-1,Jira issue,01/Oct/26 10:15 AM\n");
+        self::assertSame('2026-10-01', $this->task('Jira issue')->getStartAt()?->format('Y-m-d'));
     }
 
     public function testTheLookupSeesBoardsWithoutTenantAndLegacyLinks(): void
