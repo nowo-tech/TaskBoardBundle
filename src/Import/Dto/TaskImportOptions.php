@@ -11,6 +11,10 @@ final readonly class TaskImportOptions
 {
     public function __construct(
         public bool $createMissingColumns = true,
+        /**
+         * @deprecated since 1.22, ignored: every import is an idempotent upsert — a row already imported (same source
+         *             and id, or same fingerprint) updates its task instead of being skipped or duplicated.
+         */
         public bool $skipExisting = true,
     ) {
     }

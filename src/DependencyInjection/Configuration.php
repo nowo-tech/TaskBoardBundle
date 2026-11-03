@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
+use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
+use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
@@ -489,6 +491,22 @@ final class Configuration implements ConfigurationInterface
                             ->defaultValue(self::DEFAULT_MAX_TASKS)
                             ->min(1)
                             ->info('Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded.')
+                        ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import')
+                    ->addDefaultsIfNotSet()
+                    ->info('Task import limits (since 1.22).')
+                    ->children()
+                        ->integerNode('max_rows')
+                            ->defaultValue(TaskImportOrchestrator::DEFAULT_MAX_ROWS)
+                            ->min(1)
+                            ->info('The most rows (tasks) one import file may hold; a larger file is refused.')
+                        ->end()
+                        ->integerNode('max_cell_length')
+                            ->defaultValue(DelimitedTableParser::DEFAULT_MAX_CELL_LENGTH)
+                            ->min(1)
+                            ->info('The longest CSV cell, in bytes; a file with a longer cell is refused.')
                         ->end()
                     ->end()
                 ->end()

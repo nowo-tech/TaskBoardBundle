@@ -443,10 +443,8 @@ final class TaskBoardManageController extends AbstractController
                 content: (string) file_get_contents($file->getPathname()),
                 filename: (string) $file->getClientOriginalName(),
                 actor: $user,
-                options: new TaskImportOptions(
-                    createMissingColumns: $data->createMissingColumns,
-                    skipExisting: $data->skipExisting,
-                ),
+                // Since 1.22 every import is an idempotent upsert; the deprecated skipExisting is not passed on.
+                options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns),
             );
 
             foreach ($result->errors as $error) {
@@ -459,9 +457,11 @@ final class TaskBoardManageController extends AbstractController
 
             if (!$result->hasErrors()) {
                 $this->addFlash('success', $this->translator->trans('task_board.flash.import_summary', [
-                    '%created%' => (string) $result->created,
-                    '%skipped%' => (string) $result->skipped,
-                    '%columns%' => (string) $result->columnsCreated,
+                    '%created%'   => (string) $result->created,
+                    '%updated%'   => (string) $result->updated,
+                    '%unchanged%' => (string) $result->unchanged,
+                    '%skipped%'   => (string) $result->skipped,
+                    '%columns%'   => (string) $result->columnsCreated,
                 ], 'NowoTaskBoardBundle'));
             }
 
@@ -501,16 +501,18 @@ final class TaskBoardManageController extends AbstractController
             content: (string) file_get_contents($file->getPathname()),
             filename: (string) $file->getClientOriginalName(),
             actor: $user,
-            options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns, skipExisting: $data->skipExisting),
+            options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns),
             parentTask: $task,
         );
-        $this->logWrite('task_import', ['task_id' => $taskId, 'created' => $result->created, 'errors' => count($result->errors)]);
+        $this->logWrite('task_import', ['task_id' => $taskId, 'created' => $result->created, 'updated' => $result->updated, 'errors' => count($result->errors)]);
         foreach ([...$result->errors, ...$result->warnings] as $index => $message) {
             $this->addFlash($index < count($result->errors) ? 'error' : 'warning', $message);
         }
         if (!$result->hasErrors()) {
             $this->addFlash('success', $this->translator->trans('task_board.flash.subtask_import_summary', [
                 '%created%'      => (string) $result->created,
+                '%updated%'      => (string) $result->updated,
+                '%unchanged%'    => (string) $result->unchanged,
                 '%skipped%'      => (string) $result->skipped,
                 '%dependencies%' => (string) $result->dependenciesCreated,
             ], 'NowoTaskBoardBundle'));

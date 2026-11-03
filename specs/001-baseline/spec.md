@@ -156,6 +156,35 @@ the board.
 - **FR-IMPORT-004**: CSV/delimited parsers and field mapper.
 - **FR-IMPORT-005**: ClickUp, Jira, Trello importers.
 - **FR-IMPORT-006**: Import result DTOs.
+- **FR-IMPORT-008** (1.22): every import is an idempotent upsert for every source. A row is matched on (import scope,
+  source id) stored on the task link (`task_board_task_links.import_source` + `external_id`); the scope is the tool
+  (`clickup`, `jira`, `trello`; CSV and JSON of one tool share it) or, for the bundle's own format, `taskboard` /
+  `taskboard@<task id>` (file-local ids). A match is updated (`ImportedTaskUpdater`: the source wins for every field it
+  has a value for, empty fields keep the application's value; parents follow the source's parent row; dependencies are
+  only added), anything else is created. Importing the same file twice changes nothing and `TaskImportResult` reports
+  created / updated / unchanged / skipped.
+- **FR-IMPORT-009** (1.22): rows without an id are matched by a deterministic fingerprint (scope, parent, normalized
+  title, source creation date; the n-th identical row gets `-n`) and the import warns that they are.
+- **FR-IMPORT-010** (1.22): cross-board rule (board imports) — a source id already imported into another board of the same tenant
+  (`TaskImportLinkLookupInterface`, `DoctrineTaskImportLinkLookup`) is skipped with a warning, never moved or copied;
+  fingerprint rows of those tools follow the same rule; the own format is board- / task-local.
+- **FR-IMPORT-011** (1.22): only links an import wrote (`import_source`) are matched; the link form cannot change an
+  import link's external id; pre-1.22 links need the documented one-off backfill.
+- **FR-IMPORT-012** (1.22): ClickUp CSV / JSON map start date, creation date (the start of a new task without a start
+  date, on create only), dependencies (Dependencies / Waiting On →
+  blocked by, Blocking → blocks; API `dependencies`) and assignees by name; Jira CSV maps start date, Created, "Blocks"
+  issue links and names; Trello maps `start` and members; names resolve through `TaskAssigneeProviderInterface` by
+  display name when exactly one user matches (`ImportAssigneeResolver`), else a warning. Dates read millisecond and
+  second timestamps, ISO, day-first / month-first numeric and ClickUp / Jira text formats deterministically; CSV cells
+  may span lines, a BOM is dropped and repeated headers join their values.
+- **FR-IMPORT-013** (1.22): `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and the command's
+  `--force` are deprecated and ignored; the import form has no "skip existing" checkbox.
+- **FR-IMPORT-014** (1.22, audit DL): an import updates, moves, re-assigns or links only tasks the actor may edit
+  (`TaskBoardResourceAccessChecker::canEditTask()`); others are skipped and counted without titles. An import into a
+  task uses scope `<provider>@<task id>` for every source. Warnings name no other board and no stored title; e-mail
+  assignees respect `canBeAssigned()`.
+- **FR-IMPORT-015** (1.22, audit DL): `import.max_rows` / `import.max_cell_length` limits, linear de-duplication,
+  iterative row ordering, exact ancestor check on moves, dates bounded to 1970-2200.
 - **FR-CLI-001**: `nowo:task-board:import` console command.
 
 ### HTTP UI

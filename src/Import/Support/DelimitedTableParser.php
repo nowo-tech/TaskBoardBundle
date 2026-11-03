@@ -4,58 +4,109 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Import\Support;
 
+use InvalidArgumentException;
+
 use function array_map;
+use function assert;
 use function count;
+use function fclose;
 use function fgetcsv;
+use function fopen;
+use function fwrite;
 use function is_resource;
 use function mb_strtolower;
-use function preg_split;
-use function str_getcsv;
+use function rewind;
+use function sprintf;
+use function str_starts_with;
+use function strlen;
+use function substr;
 use function trim;
 
 /**
  * CSV/TSV parsing helpers for vendor exports.
  */
-final class DelimitedTableParser
+final readonly class DelimitedTableParser
 {
+    /** Since 1.22: default `import.max_cell_length` (bytes). */
+    public const DEFAULT_MAX_CELL_LENGTH = 65536;
+
     /**
+     * @param int $maxRows the most data rows read (one more is refused, audit DL-L4)
+     * @param int $maxCellLength the longest cell in bytes (a longer one is refused)
+     */
+    public function __construct(
+        private int $maxRows = 5000,
+        private int $maxCellLength = self::DEFAULT_MAX_CELL_LENGTH,
+    ) {
+    }
+
+    /**
+     * The rows of a CSV / TSV export keyed by header. Since 1.22: a UTF-8 byte order mark (ClickUp, Excel) is dropped,
+     * quoted cells may span lines (multi-line descriptions), and a header that repeats (Jira writes one "Labels" or
+     * "Inward issue link (Blocks)" column per value) joins its non-empty values with ";".
+     *
      * @return list<array<string, string>>
      */
     public function parse(string $content, string $filename = ''): array
     {
+        $content   = trim(str_starts_with($content, "\xEF\xBB\xBF") ? substr($content, 3) : $content);
         $delimiter = $this->detectDelimiter($content, $filename);
-        $lines     = preg_split("/\r\n|\r|\n/", trim($content)) ?: [];
-        // str_getcsv() always yields at least one field, so an empty file simply produces no data rows.
-        $headers = $this->parseLine($lines[0] ?? '', $delimiter);
+        if ($content === '') {
+            return [];
+        }
+        $stream = fopen('php://temp', 'r+');
+        assert(is_resource($stream));
+        fwrite($stream, $content);
+        rewind($stream);
 
-        $rows = [];
-        for ($i = 1, $max = count($lines); $i < $max; ++$i) {
-            $line = trim($lines[$i]);
-            if ($line === '') {
+        $headers = array_map(static fn (?string $header): string => trim((string) $header), $this->readRecord($stream, $delimiter) ?? []);
+        $rows    = [];
+        while (($values = $this->readRecord($stream, $delimiter)) !== null) {
+            if ($values === [null]) {
                 continue;
             }
+            if (count($rows) >= $this->maxRows) {
+                fclose($stream);
 
-            $values     = $this->parseLine($line, $delimiter);
+                throw new InvalidArgumentException(sprintf('The file has more than %d rows; an import takes at most %d.', $this->maxRows, $this->maxRows));
+            }
+            foreach ($values as $value) {
+                if (strlen((string) $value) > $this->maxCellLength) {
+                    fclose($stream);
+
+                    throw new InvalidArgumentException(sprintf('A cell of the file is longer than %d bytes.', $this->maxCellLength));
+                }
+            }
+
             $normalized = [];
             foreach ($headers as $index => $header) {
-                $normalized[trim($header)] = trim((string) ($values[$index] ?? ''));
+                $value = trim((string) ($values[$index] ?? ''));
+                if (!isset($normalized[$header]) || $normalized[$header] === '') {
+                    $normalized[$header] = $value;
+                } elseif ($value !== '') {
+                    $normalized[$header] .= ';' . $value;
+                }
             }
 
             $rows[] = $normalized;
         }
+        fclose($stream);
 
         return $rows;
     }
 
     /**
-     * @return list<string>
+     * One CSV record (RFC 4180 quoting, no backslash escape); null at the end of the stream.
+     *
+     * @param resource $stream
+     *
+     * @return list<string|null>|null
      */
-    private function parseLine(string $line, string $delimiter): array
+    private function readRecord($stream, string $delimiter): ?array
     {
-        /** @var list<string|null> $fields */
-        $fields = str_getcsv($line, $delimiter);
+        $record = fgetcsv($stream, null, $delimiter, '"', '');
 
-        return array_map(static fn (?string $value): string => trim((string) $value), $fields);
+        return $record === false ? null : $record;
     }
 
     private function detectDelimiter(string $content, string $filename): string

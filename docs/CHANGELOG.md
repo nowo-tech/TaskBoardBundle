@@ -63,6 +63,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Idempotent task import from every source. See [UPGRADING](UPGRADING.md#unreleased) — **schema change**.
+
+### Added
+
+- Every import (ClickUp CSV / JSON, Jira CSV, Trello JSON, the bundle's CSV / JSON) is an idempotent upsert: rows are
+  matched on (import scope, source id) stored on the task link (`task_board_task_links.import_source`, new, with index
+  `idx_task_board_task_links_import`) and update their task; the same file twice is a no-op. The source wins for every
+  field it has a value for, empty fields keep the application's value (`ImportedTaskUpdater`).
+- Rows without an id are matched by a deterministic fingerprint (scope, parent, normalized title, creation date), with
+  a warning; a fingerprint already imported into another board of the tenant is skipped like an id.
+- A new task without a start date starts on the source's creation date (ClickUp `Date Created`, Jira `Created`); on
+  create only.
+- Cross-board rule: a source id already imported into another board of the tenant is skipped with a warning
+  (`TaskImportLinkLookupInterface`, `DoctrineTaskImportLinkLookup`).
+- `TaskImportResult::$updated` / `$unchanged` (+ withers); the flash messages, the command and the import log report
+  created / updated / unchanged / skipped.
+- ClickUp CSV: `Start Date` (Gantt), `Date Created`, `Dependencies` / `Waiting On` / `Blocking`; ClickUp JSON:
+  `start_date`, `date_created`, `dependencies`; Jira: start date, `Created`, "Blocks" issue links; Trello: `start`.
+  Dependencies resolve within the file and against tasks imported before.
+- Assignees given by name (ClickUp, Jira, Trello members, own format) resolve through `assignee_provider` when exactly
+  one assignable user has that display name (`ImportAssigneeResolver`); otherwise one warning per name.
+- `ImportFieldMapper::parseDate()` (millisecond / second timestamps, ISO, day-first and month-first numeric dates, Jira
+  and ClickUp text dates), `parseNames()`, `parseIdList()`, `mapDependencies()`; `Task::setParent()`;
+  `TaskImportSource::provider()`, `scope()`, `hasGlobalIds()`, `fromLegacyLabel()`.
+
+### Changed
+
+- Only links an import wrote (`import_source`) are matched; links from before 1.22 are not (one-off backfill SQL in
+  UPGRADING), and the link form can no longer change the external id of an import link (audit DL-L2).
+- A re-import moves a task under its source parent row when that changes (never under its own descendant); a row
+  without a parent keeps its task where it is.
+- An existing dependency met again on re-import is silently kept (it was a "duplicate or cycle" warning); a refused
+  one says why.
+- Dates without a time are midnight instead of the import time; 10-digit numbers are seconds timestamps.
+- CSV parsing drops a UTF-8 BOM (the first header was lost), keeps quoted multi-line cells, and joins repeated headers.
+- Jira `Time Spent` is no longer read as an estimate. The import form's help and the source descriptions mention the
+  new columns (7 locales).
+- The import form no longer renders the **Skip tasks that were already imported** checkbox.
+
+### Security (1.22 audit, Appendix DL)
+
+- An import only updates, moves, re-assigns or links tasks the importer may edit (`canEditTask`, so
+  `TASK_ACCESS_CHECK` / `markReadOnly()` apply); other matched rows are skipped and counted, never echoed (DL-M2).
+- **Import subtasks** matches only the tasks earlier imports put under that same task (`<provider>@<task id>` for every
+  source): the rights on one task no longer reach the rest of the board (DL-M1).
+- Cross-board and read-only warnings give counts only; an unknown and a non-assignable e-mail read the same, and
+  e-mails respect `assignee_provider::canBeAssigned()` (DL-L1, DL-L3).
+- `import.max_rows` (5000) and `import.max_cell_length` (65536), linear de-duplication, iterative parent ordering, an
+  exact ancestor check on moves, and dates bounded to 1970-2200 without relative input (DL-L4, DL-L5, DL-I2).
+
+### Deprecated
+
+- `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and `nowo:task-board:import --force`: ignored
+  since every import is an upsert.
+
 ## [1.21.0] - 2026-11-03
 
 Bounded board pages, injected clock and logger, repository hygiene. See [UPGRADING](UPGRADING.md#to-1210).
@@ -624,6 +679,17 @@ Allows nowo-tech/ui-kit-bundle 2.x (^1.4 || ^2.2) so hosts can move to UiKit 2.2
 - **List and Gantt views** hid completed (last-column) tasks although the Gantt draws completed bars and the list filters by column; both now include them, and Gantt subtasks whose parent is not on the timeline are shown at root level instead of disappearing.
 - `services.yaml` no longer registers entities, DTOs, events, enums, exceptions and value objects as autowired services.
 - Docs: routes table now lists `task_link_update`, `task_link_remove` and `task_member_remove`; documented that `TaskBoard::team` is assigned programmatically (no UI picker).
+
+### Security (1.22 audit, Appendix DL)
+
+- An import only updates, moves, re-assigns or links tasks the importer may edit (`canEditTask`, so
+  `TASK_ACCESS_CHECK` / `markReadOnly()` apply); other matched rows are skipped and counted, never echoed (DL-M2).
+- **Import subtasks** matches only the tasks earlier imports put under that same task (`<provider>@<task id>` for every
+  source): the rights on one task no longer reach the rest of the board (DL-M1).
+- Cross-board and read-only warnings give counts only; an unknown and a non-assignable e-mail read the same, and
+  e-mails respect `assignee_provider::canBeAssigned()` (DL-L1, DL-L3).
+- `import.max_rows` (5000) and `import.max_cell_length` (65536), linear de-duplication, iterative parent ordering, an
+  exact ancestor check on moves, and dates bounded to 1970-2200 without relative input (DL-L4, DL-L5, DL-I2).
 
 ### Deprecated
 

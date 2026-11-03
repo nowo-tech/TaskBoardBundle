@@ -72,6 +72,9 @@ php bin/console nowo:task-board:import <board-uuid> board-export.json --source=t
 - **One board per file:** Trello JSON is per board. Import each exported board into a separate TaskBoard board (or merge manually with multiple import runs).
 - **Checklists and attachments:** Standard JSON export includes checklists and attachments in separate sections; the built-in importer maps **cards** only. Copy checklist items manually or extend `TaskImporterInterface` for custom handling.
 - **Members:** Member data is not mapped by default. Use `TaskImportUserResolverInterface` in a custom workflow if you parse member fields from an extended export.
-- **Re-import:** Card IDs are stored as external IDs. Keep **Skip already imported tasks** enabled when re-running an import.
+- **Re-import:** Card IDs are the matching key: importing the board again updates the cards imported before (since
+  1.22, see [Re-importing](README.md#re-importing-idempotent-upsert-since-122)). Trello has no priority, so a re-import
+  keeps the priority set in the application.
+- **Since 1.22** the importer also reads the card `start` date (Gantt) and the card members by name (`members[].fullName`).
 
 [← Back to export guides index](README.md)

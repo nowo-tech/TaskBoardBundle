@@ -134,7 +134,7 @@ task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Pri
 task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
 task_board.import.help.supported_title: Supported formats
 task_board.flash.import_file_required: Please choose a file to import.
-task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'
+task_board.flash.import_summary: "Importação concluída: %created% criadas, %updated% atualizadas, %unchanged% sem alterações, %skipped% ignoradas; %columns% coluna(s) criada(s)."
 task_board.action.open_link: "Abrir link"
 task_board.action.remove_link: "Remover link"
 task_board.action.remove_member: "Remover membro"
@@ -339,17 +339,17 @@ task_board.import.help.dependencies: "Em depends_on, \"api\" significa que esta 
 task_board.import.help.example_csv: "Exemplo (CSV)"
 task_board.import.help.example_json: "Exemplo (JSON)"
 task_board.import.help.others_title: "Exportações de outras ferramentas"
-task_board.import.help.source_clickup_csv: "As tarefas de uma vista Lista ou Tabela do ClickUp exportadas em CSV (Task Name, Status, Priority, Assignee, Due Date, Task ID; Parent ID cria subtarefas)."
+task_board.import.help.source_clickup_csv: "As tarefas de uma vista Lista ou Tabela do ClickUp exportadas em CSV (Task Name, Status, Priority, Assignees, Start Date, Due Date, Date Created, Task ID, Dependencies / Waiting On / Blocking; Parent ID cria subtarefas)."
 task_board.import.help.source_clickup_json: "Tarefas da API do ClickUp ou de uma exportação JSON (nome, estado, prioridade, responsáveis, data limite, pai)."
 task_board.import.help.source_jira_csv: "Issues do Jira exportadas em CSV a partir da pesquisa (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key cria subtarefas)."
 task_board.import.help.source_trello_json: "Um quadro do Trello exportado em JSON (Menu → Imprimir e exportar → JSON): os cartões passam a tarefas, as listas a colunas e as checklists a subtarefas."
-task_board.import.help.options: "As linhas já importadas (mesmo id da mesma origem) são ignoradas enquanto \"Ignorar tarefas já importadas\" estiver marcado, por isso o mesmo ficheiro pode ser importado de novo sem duplicar. Ficheiros até 20 MB."
+task_board.import.help.options: "Importar de novo é seguro: uma linha já importada (mesmo id da mesma ferramenta ou, sem id, mesmo pai, título e data de criação) atualiza a sua tarefa com os valores do ficheiro em vez de a duplicar, e os campos que o ficheiro deixa vazios mantêm os valores definidos aqui. As linhas já importadas noutro quadro são ignoradas. Ficheiros até 20 MB."
 task_board.import.help.got_it: "Entendido"
 task_board.import.subtasks.action: "Importar subtarefas"
 task_board.import.subtasks.title: "Importar subtarefas"
 task_board.import.subtasks.help: "As tarefas do ficheiro passam a subtarefas de \"%title%\", com as suas próprias subtarefas e relações do Gantt."
 task_board.import.subtasks.submit: "Importar"
-task_board.flash.subtask_import_summary: "Importadas %created% subtarefa(s) e %dependencies% relação(ões) do Gantt; ignoradas %skipped%."
+task_board.flash.subtask_import_summary: "Subtarefas: %created% criadas, %updated% atualizadas, %unchanged% sem alterações, %skipped% ignoradas; %dependencies% relação(ões) do Gantt adicionada(s)."
 task_board.task.edit_description: "Editar descrição"
 # Since 1.20: previous / next task, remaining time, the estimate as a duration.
 task_board.nav.label: "Navegação entre tarefas"

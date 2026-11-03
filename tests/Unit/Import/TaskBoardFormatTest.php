@@ -141,11 +141,11 @@ final class TaskBoardFormatTest extends TestCase
             entityManager: $entityManager,
             dependencyManager: new TaskDependencyManager($taskRepository, new TaskChangeRecorder()),
         );
-        $csv    = self::CSV . "\nloop;;Loop;To do;;;;;;;release:blocks;\nloop2;;Loop again;To do;;;;;;;release:blocks;\ndup;;Twice;To do;;;;;;;design,design;";
+        $csv    = self::CSV . "\nloop;;Loop;To do;;;;;;;release:blocks;\nloop2;;Loop again;To do;;;;;;;release:blocks;\ndup;;Twice;To do;;;;;;;design,design;\nc1;;Cycle one;To do;;;;;;;c2;\nc2;;Cycle two;To do;;;;;;;c1;";
         $result = $orchestrator->import($board, TaskImportSource::TaskBoardCsv, $csv, 'plan.csv', $user, parentTask: $epic);
 
         self::assertFalse($result->hasErrors());
-        self::assertSame(7, $result->created);
+        self::assertSame(9, $result->created);
         $byTitle = [];
         foreach ($persisted as $task) {
             self::assertInstanceOf(Task::class, $task);
@@ -159,8 +159,9 @@ final class TaskBoardFormatTest extends TestCase
             [...$byTitle['Release']->getOutgoingDependencies()],
         );
         self::assertSame(['Design the screens:blocked_by', 'Build the API:related'], $relations);
-        self::assertSame(5, $result->dependenciesCreated, 'release → design, release → api, loop → release, loop2 → release, dup → design');
-        self::assertCount(1, array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'duplicate or cycle')));
+        self::assertSame(6, $result->dependenciesCreated, 'release → design, release → api, loop → release, loop2 → release, dup → design, c1 → c2');
+        self::assertCount(1, array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'would create a cycle')));
+        self::assertCount(0, array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'already have')), 'a duplicate is silent');
         self::assertCount(1, array_filter($result->warnings, static fn (string $w): bool => str_contains($w, '"ghost"')));
     }
 

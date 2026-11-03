@@ -15,6 +15,12 @@ use function trim;
 
 /**
  * Imports tasks from ClickUp CSV exports (Workspace export or List/Table view export).
+ *
+ * Since 1.22 also: Start Date (the Gantt bar), Date Created (start of a new task without Start Date, fingerprint of
+ * rows without a Task ID), Dependencies / Waiting On (blocked by) and Blocking (blocks) by task id, assignees by name,
+ * and ClickUp's dates (millisecond
+ * timestamps and the "Friday, March 1st 2024, 9:46:52 am" text). Time Spent has no target: logged time is made of
+ * time entries of a person in the host, which an export cannot name.
  */
 final readonly class ClickUpCsvImporter implements TaskImporterInterface
 {
@@ -57,13 +63,14 @@ final readonly class ClickUpCsvImporter implements TaskImporterInterface
                 'Assignees',
                 'assignee',
             );
+            $priority = $this->fieldMapper->pick($row, 'Priority', 'priority');
 
             $tasks[] = new ImportedTaskDto(
                 title: $title,
                 externalId: $externalId !== '' ? $externalId : null,
                 parentExternalId: $parentId !== '' ? $parentId : null,
                 status: $this->nullable($this->fieldMapper->pick($row, 'Status', 'status', 'Stage')),
-                priority: $this->fieldMapper->mapPriority($this->fieldMapper->pick($row, 'Priority', 'priority')),
+                priority: $this->fieldMapper->mapPriority($priority),
                 description: $this->nullable($this->fieldMapper->stripHtml($this->fieldMapper->pick(
                     $row,
                     'Task Content',
@@ -73,12 +80,13 @@ final readonly class ClickUpCsvImporter implements TaskImporterInterface
                     'description',
                 ))),
                 assigneeEmail: $this->fieldMapper->normalizeEmail($assigneeRaw),
-                dueAt: $this->fieldMapper->parseDueDate($this->fieldMapper->pick(
+                dueAt: $this->fieldMapper->parseDate($this->fieldMapper->pick(
                     $row,
                     'Due Date',
                     'Due date',
                     'due date',
                     'Due Date (date)',
+                    'Due Date Text',
                 )),
                 estimatedMinutes: $this->fieldMapper->parseEstimatedMinutes($this->fieldMapper->pick(
                     $row,
@@ -86,6 +94,7 @@ final readonly class ClickUpCsvImporter implements TaskImporterInterface
                     'Time Estimated',
                     'Estimate',
                     'Time estimate',
+                    'Time Estimated Text',
                 )),
                 tags: $this->fieldMapper->parseTags($this->fieldMapper->pick($row, 'Tags', 'tags')),
                 sourceUrl: $this->nullable($this->fieldMapper->pick(
@@ -95,6 +104,28 @@ final readonly class ClickUpCsvImporter implements TaskImporterInterface
                     'Link',
                     'task url',
                 )),
+                // Since 1.22: the Gantt fields of a List / Table view export.
+                startAt: $this->fieldMapper->parseDate($this->fieldMapper->pick(
+                    $row,
+                    'Start Date',
+                    'Start date',
+                    'start date',
+                    'Start Date Text',
+                )),
+                dependsOn: $this->fieldMapper->mapDependencies(
+                    $this->fieldMapper->pick($row, 'Dependencies', 'dependencies') . ';' . $this->fieldMapper->pick($row, 'Waiting On', 'Waiting on', 'waiting on'),
+                    $this->fieldMapper->pick($row, 'Blocking', 'blocking'),
+                    $externalId !== '' ? $externalId : null,
+                ),
+                createdAt: $this->fieldMapper->parseDate($this->fieldMapper->pick(
+                    $row,
+                    'Date Created',
+                    'Date created',
+                    'Created',
+                    'Date Created Text',
+                )),
+                assigneeNames: $this->fieldMapper->parseNames($assigneeRaw),
+                hasPriority: $priority !== '',
             );
         }
 

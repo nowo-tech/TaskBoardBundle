@@ -15,7 +15,6 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
-use function in_array;
 use function strtolower;
 
 #[ORM\Entity]
@@ -176,6 +175,27 @@ class Task
     public function getParent(): ?self
     {
         return $this->parent;
+    }
+
+    /**
+     * Since 1.22: moves the task under another task of the same board (null: to the root). The caller keeps the tree
+     * acyclic (an import refuses a parent that is the task itself or one of its descendants).
+     */
+    public function setParent(?self $parent): self
+    {
+        if ($this->parent === $parent) {
+            return $this;
+        }
+        $this->parent?->children->removeElement($this);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->parent = $parent;
+        if ($parent instanceof self && !$parent->children->contains($this)) {
+            $parent->children->add($this);
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
     }
 
     public function getDescription(): ?string
@@ -536,10 +556,12 @@ class Task
     {
         /** @var list<string> $normalized */
         $normalized = [];
+        $seen       = [];
 
         foreach ($tags as $tag) {
             $tag = trim((string) $tag);
-            if ($tag !== '' && !in_array($tag, $normalized, true)) {
+            if ($tag !== '' && !isset($seen[$tag])) {
+                $seen[$tag]   = true;
                 $normalized[] = $tag;
             }
         }

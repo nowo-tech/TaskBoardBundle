@@ -134,7 +134,7 @@ task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Pri
 task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
 task_board.import.help.supported_title: Supported formats
 task_board.flash.import_file_required: Please choose a file to import.
-task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'
+task_board.flash.import_summary: "Import done: %created% created, %updated% updated, %unchanged% unchanged, %skipped% skipped; %columns% column(s) created."
 task_board.action.open_link: "Open link"
 task_board.action.remove_link: "Remove link"
 task_board.action.remove_member: "Remove member"
@@ -339,17 +339,17 @@ task_board.import.help.dependencies: "In depends_on, \"api\" means this task wai
 task_board.import.help.example_csv: "Example (CSV)"
 task_board.import.help.example_json: "Example (JSON)"
 task_board.import.help.others_title: "Exports from other tools"
-task_board.import.help.source_clickup_csv: "Tasks of a ClickUp List or Table view exported as CSV (Task Name, Status, Priority, Assignee, Due Date, Task ID; Parent ID builds subtasks)."
+task_board.import.help.source_clickup_csv: "Tasks of a ClickUp List or Table view exported as CSV (Task Name, Status, Priority, Assignees, Start Date, Due Date, Date Created, Task ID, Dependencies / Waiting On / Blocking; Parent ID builds subtasks)."
 task_board.import.help.source_clickup_json: "Tasks from the ClickUp API or a JSON export (name, status, priority, assignees, due date, parent)."
 task_board.import.help.source_jira_csv: "Jira issues exported as CSV from the issue search (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key builds subtasks)."
 task_board.import.help.source_trello_json: "A Trello board exported as JSON (Menu → Print and export → JSON): cards become tasks, lists become columns, checklists become subtasks."
-task_board.import.help.options: "Rows already imported (same id from the same source) are skipped while \"Skip tasks that were already imported\" is ticked, so the same file can be imported again safely. Files up to 20 MB."
+task_board.import.help.options: "Importing again is safe: a row imported before (same id from the same tool or, without an id, same parent, title and creation date) updates its task with the file's values instead of creating a copy, and fields the file leaves empty keep the values set here. Rows already imported into another board are skipped. Files up to 20 MB."
 task_board.import.help.got_it: "Got it"
 task_board.import.subtasks.action: "Import subtasks"
 task_board.import.subtasks.title: "Import subtasks"
 task_board.import.subtasks.help: "The file's tasks become subtasks of \"%title%\", with their own subtasks and Gantt relations."
 task_board.import.subtasks.submit: "Import"
-task_board.flash.subtask_import_summary: "Imported %created% subtask(s) and %dependencies% Gantt relation(s), skipped %skipped%."
+task_board.flash.subtask_import_summary: "Subtasks: %created% created, %updated% updated, %unchanged% unchanged, %skipped% skipped; %dependencies% Gantt relation(s) added."
 task_board.task.edit_description: "Edit description"
 # Since 1.20: previous / next task, remaining time, the estimate as a duration.
 task_board.nav.label: "Task navigation"

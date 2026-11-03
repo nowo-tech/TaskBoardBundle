@@ -498,6 +498,35 @@ services:
         tags: [{ name: nowo_task_board.task_importer }]
 ```
 
+Since 1.22 every import is an idempotent upsert ([Re-importing](import/README.md#re-importing-idempotent-upsert-since-122)).
+A custom importer must return the same `ImportedTaskDto`s for the same file (read dates with
+`ImportFieldMapper::parseDate()`, never "now"), leave a field null / empty when the source has no value (a re-import
+then keeps the task's value), and set `hasPriority: false` when the row has no priority. Its rows are matched under the
+scope of the `TaskImportSource` it supports.
+
+### Assignees by name (since 1.22)
+
+Rows that name assignees instead of giving an e-mail (ClickUp, Jira, Trello, the own format) are resolved through
+`assignee_provider` (`TaskAssigneeProviderInterface::assignableUsers()` of the board): the one user whose display name
+(`UserLabel::of()`: `displayName`, `fullName`, e-mail, username, identifier) equals the name, ignoring case and
+spaces. Without an `assignee_provider`, names are not resolved and the import warns.
+
+### Import limits (since 1.22)
+
+```yaml
+nowo_task_board:
+    import:
+        max_rows: 5000          # rows (tasks) per file; a larger file is refused
+        max_cell_length: 65536  # bytes per CSV cell; a file with a longer cell is refused
+```
+
+### Cross-board lookup (since 1.22)
+
+`Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface` (default `DoctrineTaskImportLinkLookup`) tells the import
+which source ids (and fingerprints of rows without an id) are already imported into another board of the same
+tenant; those rows are skipped. The bundle's own format is not checked. Alias it to
+your own service to change the rule (return `[]` to allow copies across boards).
+
 ## Assets
 
 The bundle ships Stimulus controllers built to `src/Resources/public/js/task-board.js` (asset package `nowo_task_board`, installed under `public/bundles/taskboard/`).

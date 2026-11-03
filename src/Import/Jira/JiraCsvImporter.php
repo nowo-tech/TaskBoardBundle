@@ -13,6 +13,9 @@ use Nowo\TaskBoardBundle\Import\TaskImportSource;
 
 /**
  * Imports issues from Jira CSV exports.
+ *
+ * Since 1.22 also: the start date, "Inward issue link (Blocks)" (blocked by) and "Outward issue link (Blocks)"
+ * (blocks), Created (start of a new issue without a start date, fingerprint of rows without a key) and assignees by display name.
  */
 final readonly class JiraCsvImporter implements TaskImporterInterface
 {
@@ -41,36 +44,48 @@ final readonly class JiraCsvImporter implements TaskImporterInterface
                 continue;
             }
 
-            $externalId = $this->fieldMapper->pick($row, 'Issue key', 'Key', 'Issue Key', 'issue key');
-            $parentKey  = $this->fieldMapper->pick($row, 'Parent key', 'Parent', 'parent key');
-            $assignee   = $this->fieldMapper->normalizeEmail($this->fieldMapper->pick(
-                $row,
-                'Assignee',
-                'Assignee Id',
-                'assignee',
-            ));
+            $externalId  = $this->fieldMapper->pick($row, 'Issue key', 'Key', 'Issue Key', 'issue key');
+            $parentKey   = $this->fieldMapper->pick($row, 'Parent key', 'Parent', 'parent key');
+            $assigneeRaw = $this->fieldMapper->pick($row, 'Assignee', 'Assignee Id', 'assignee');
+            $priority    = $this->fieldMapper->pick($row, 'Priority', 'priority');
 
             $tasks[] = new ImportedTaskDto(
                 title: $title,
                 externalId: $externalId !== '' ? $externalId : null,
                 parentExternalId: $parentKey !== '' ? $parentKey : null,
                 status: $this->nullable($this->fieldMapper->pick($row, 'Status', 'status')),
-                priority: $this->fieldMapper->mapPriority($this->fieldMapper->pick($row, 'Priority', 'priority')),
+                priority: $this->fieldMapper->mapPriority($priority),
                 description: $this->nullable($this->fieldMapper->stripHtml($this->fieldMapper->pick(
                     $row,
                     'Description',
                     'description',
                 ))),
-                assigneeEmail: $assignee,
-                dueAt: $this->fieldMapper->parseDueDate($this->fieldMapper->pick($row, 'Due Date', 'duedate', 'Due date')),
+                assigneeEmail: $this->fieldMapper->normalizeEmail($assigneeRaw),
+                dueAt: $this->fieldMapper->parseDate($this->fieldMapper->pick($row, 'Due Date', 'duedate', 'Due date')),
+                // Since 1.22: "Time Spent" is logged time, not an estimate (it has no target).
                 estimatedMinutes: $this->fieldMapper->parseEstimatedMinutes($this->fieldMapper->pick(
                     $row,
                     'Original Estimate',
-                    'Time Spent',
                     'Remaining Estimate',
                 )),
                 tags: $this->fieldMapper->parseTags($this->fieldMapper->pick($row, 'Labels', 'labels')),
                 sourceUrl: $this->nullable($this->fieldMapper->pick($row, 'URL', 'Issue URL', 'url')),
+                // Since 1.22: the start date field, "Blocks" issue links (Gantt), the creation date and names.
+                startAt: $this->fieldMapper->parseDate($this->fieldMapper->pick(
+                    $row,
+                    'Start date',
+                    'Start Date',
+                    'Custom field (Start date)',
+                    'Custom field (Start Date)',
+                )),
+                dependsOn: $this->fieldMapper->mapDependencies(
+                    $this->fieldMapper->pick($row, 'Inward issue link (Blocks)'),
+                    $this->fieldMapper->pick($row, 'Outward issue link (Blocks)'),
+                    $externalId !== '' ? $externalId : null,
+                ),
+                createdAt: $this->fieldMapper->parseDate($this->fieldMapper->pick($row, 'Created', 'created')),
+                assigneeNames: $this->fieldMapper->parseNames($assigneeRaw),
+                hasPriority: $priority !== '',
             );
         }
 

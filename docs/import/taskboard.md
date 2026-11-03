@@ -51,3 +51,12 @@ A list of tasks, or `{"tasks": [...]}`, with the same keys; `subtasks` nests chi
 ```bash
 php bin/console nowo:task-board:import <board-uuid> plan.csv --source=taskboard_csv
 ```
+
+## Re-importing (since 1.22)
+
+Importing the file again updates the tasks it created (see
+[Re-importing](README.md#re-importing-idempotent-upsert-since-122)). The ids of this format belong to the file, not to a
+tool: they are matched within the board on a board import, and within the task on an import into a task, so the same
+template can be imported under several tasks. Rows without an `id` are matched by fingerprint (parent, title). An empty
+`priority` cell keeps the task's priority; `assignee` may be an e-mail or a display name.
+

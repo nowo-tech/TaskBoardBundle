@@ -134,7 +134,7 @@ task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Pri
 task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
 task_board.import.help.supported_title: Supported formats
 task_board.flash.import_file_required: Please choose a file to import.
-task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'
+task_board.flash.import_summary: "Importazione completata: %created% create, %updated% aggiornate, %unchanged% invariate, %skipped% saltate; %columns% colonna/e create."
 task_board.action.open_link: "Apri link"
 task_board.action.remove_link: "Rimuovi link"
 task_board.action.remove_member: "Rimuovi membro"
@@ -339,17 +339,17 @@ task_board.import.help.dependencies: "In depends_on, \"api\" significa che quest
 task_board.import.help.example_csv: "Esempio (CSV)"
 task_board.import.help.example_json: "Esempio (JSON)"
 task_board.import.help.others_title: "Esportazioni da altri strumenti"
-task_board.import.help.source_clickup_csv: "Le attività di una vista Elenco o Tabella di ClickUp esportate in CSV (Task Name, Status, Priority, Assignee, Due Date, Task ID; Parent ID crea sottoattività)."
+task_board.import.help.source_clickup_csv: "Le attività di una vista Elenco o Tabella di ClickUp esportate in CSV (Task Name, Status, Priority, Assignees, Start Date, Due Date, Date Created, Task ID, Dependencies / Waiting On / Blocking; Parent ID crea sottoattività)."
 task_board.import.help.source_clickup_json: "Attività dall’API di ClickUp o da un’esportazione JSON (nome, stato, priorità, assegnatari, scadenza, padre)."
 task_board.import.help.source_jira_csv: "Issue di Jira esportate in CSV dalla ricerca (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key crea sottoattività)."
 task_board.import.help.source_trello_json: "Una bacheca Trello esportata in JSON (Menu → Stampa ed esporta → JSON): le schede diventano attività, gli elenchi colonne, le checklist sottoattività."
-task_board.import.help.options: "Le righe già importate (stesso id dalla stessa fonte) vengono saltate finché \"Salta le attività già importate\" è attivo, quindi lo stesso file si può reimportare senza duplicati. File fino a 20 MB."
+task_board.import.help.options: "Reimportare è sicuro: una riga già importata (stesso id dello stesso strumento o, senza id, stesso padre, titolo e data di creazione) aggiorna la sua attività con i valori del file invece di duplicarla, e i campi che il file lascia vuoti mantengono i valori impostati qui. Le righe già importate in un'altra bacheca vengono saltate. File fino a 20 MB."
 task_board.import.help.got_it: "Ho capito"
 task_board.import.subtasks.action: "Importa sottoattività"
 task_board.import.subtasks.title: "Importa sottoattività"
 task_board.import.subtasks.help: "Le attività del file diventano sottoattività di \"%title%\", con le loro sottoattività e relazioni del Gantt."
 task_board.import.subtasks.submit: "Importa"
-task_board.flash.subtask_import_summary: "Importate %created% sottoattività e %dependencies% relazioni del Gantt, %skipped% saltate."
+task_board.flash.subtask_import_summary: "Sottoattività: %created% create, %updated% aggiornate, %unchanged% invariate, %skipped% saltate; %dependencies% relazione/i del Gantt aggiunte."
 task_board.task.edit_description: "Modifica descrizione"
 # Since 1.20: previous / next task, remaining time, the estimate as a duration.
 task_board.nav.label: "Navigazione tra le attività"

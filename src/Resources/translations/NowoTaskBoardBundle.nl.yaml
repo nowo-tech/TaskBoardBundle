@@ -134,7 +134,7 @@ task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Pri
 task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
 task_board.import.help.supported_title: Supported formats
 task_board.flash.import_file_required: Please choose a file to import.
-task_board.flash.import_summary: 'Imported %created% task(s), skipped %skipped%, created %columns% column(s).'
+task_board.flash.import_summary: "Import klaar: %created% aangemaakt, %updated% bijgewerkt, %unchanged% ongewijzigd, %skipped% overgeslagen; %columns% kolom(men) aangemaakt."
 task_board.action.open_link: "Link openen"
 task_board.action.remove_link: "Link verwijderen"
 task_board.action.remove_member: "Lid verwijderen"
@@ -339,17 +339,17 @@ task_board.import.help.dependencies: "In depends_on betekent \"api\" dat deze ta
 task_board.import.help.example_csv: "Voorbeeld (CSV)"
 task_board.import.help.example_json: "Voorbeeld (JSON)"
 task_board.import.help.others_title: "Exports uit andere tools"
-task_board.import.help.source_clickup_csv: "Taken uit een ClickUp-lijst- of tabelweergave, geëxporteerd als CSV (Task Name, Status, Priority, Assignee, Due Date, Task ID; Parent ID maakt subtaken)."
+task_board.import.help.source_clickup_csv: "Taken uit een ClickUp-lijst- of tabelweergave, geëxporteerd als CSV (Task Name, Status, Priority, Assignees, Start Date, Due Date, Date Created, Task ID, Dependencies / Waiting On / Blocking; Parent ID maakt subtaken)."
 task_board.import.help.source_clickup_json: "Taken uit de ClickUp-API of een JSON-export (naam, status, prioriteit, toegewezenen, vervaldatum, ouder)."
 task_board.import.help.source_jira_csv: "Jira-issues, als CSV geëxporteerd uit de zoekfunctie (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key maakt subtaken)."
 task_board.import.help.source_trello_json: "Een Trello-bord geëxporteerd als JSON (Menu → Afdrukken en exporteren → JSON): kaarten worden taken, lijsten kolommen, checklists subtaken."
-task_board.import.help.options: "Al geïmporteerde rijen (zelfde id uit dezelfde bron) worden overgeslagen zolang \"Al geïmporteerde taken overslaan\" aan staat, dus hetzelfde bestand kan veilig opnieuw worden geïmporteerd. Bestanden tot 20 MB."
+task_board.import.help.options: "Opnieuw importeren is veilig: een al geïmporteerde rij (zelfde id uit dezelfde tool of, zonder id, zelfde bovenliggende taak, titel en aanmaakdatum) werkt haar taak bij met de waarden uit het bestand in plaats van een kopie te maken, en velden die het bestand leeg laat behouden de waarden die hier zijn ingesteld. Rijen die al in een ander bord zijn geïmporteerd, worden overgeslagen. Bestanden tot 20 MB."
 task_board.import.help.got_it: "Begrepen"
 task_board.import.subtasks.action: "Subtaken importeren"
 task_board.import.subtasks.title: "Subtaken importeren"
 task_board.import.subtasks.help: "De taken van het bestand worden subtaken van \"%title%\", met hun eigen subtaken en Gantt-relaties."
 task_board.import.subtasks.submit: "Importeren"
-task_board.flash.subtask_import_summary: "%created% subtaak/subtaken en %dependencies% Gantt-relatie(s) geïmporteerd, %skipped% overgeslagen."
+task_board.flash.subtask_import_summary: "Subtaken: %created% aangemaakt, %updated% bijgewerkt, %unchanged% ongewijzigd, %skipped% overgeslagen; %dependencies% Gantt-relatie(s) toegevoegd."
 task_board.task.edit_description: "Beschrijving bewerken"
 # Since 1.20: previous / next task, remaining time, the estimate as a duration.
 task_board.nav.label: "Taaknavigatie"

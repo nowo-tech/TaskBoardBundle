@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-01 (1.21 development: every production file of `src/`, releases 1.10–1.21)
+**Last audited**: 2026-11-03 (1.22 development: every production file of `src/`, releases 1.10–1.22)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -13,14 +13,14 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Assignee/TaskAssigneeProviderInterface.php` | Assignable users per board (since 1.10) | FR-ASSIGNEE-001 |
 | `Bridge/TimeTrack/TaskBoardTaskProvider.php` | TimeTrack bridge | FR-BRIDGE-001 |
 | `Bridge/TimeTrack/TaskBoardTeamContextProvider.php` | TimeTrack bridge | FR-BRIDGE-001 |
-| `Command/TaskBoardImportCommand.php` | Import CLI | FR-CLI-001 |
+| `Command/TaskBoardImportCommand.php` | Import CLI (`--force` deprecated since 1.22) | FR-CLI-001, FR-IMPORT-013 |
 | `Comment/DefaultTaskMentionCandidatesResolver.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Comment/MentionCandidate.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Comment/TaskMentionCandidatesResolverInterface.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Controller/TaskBoardManageController.php` | Manage UI controller (bounded pages, logged writes since 1.21) | FR-CTRL-001, FR-PERF-001, FR-OBS-001 |
 | `DependencyInjection/Compiler/TwigPathsPass.php` | Twig namespace | FR-TWIG-001 |
-| `DependencyInjection/Configuration.php` | Config tree | FR-CFG-001 |
-| `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002 |
+| `DependencyInjection/Configuration.php` | Config tree (`import.*` since 1.22) | FR-CFG-001, FR-IMPORT-015 |
+| `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002, FR-IMPORT-015 |
 | `Doctrine/RecoveringFlusher.php` | FrankenPHP worker flush recovery | FR-DOCTRINE-002 |
 | `Doctrine/TaskBoardMetadataListener.php` | Table prefix | FR-DOCTRINE-001 |
 | `Dto/BoardColumnFormData.php` | Form/API DTO | FR-DTO-001 |
@@ -35,7 +35,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Dto/TaskGanttLink.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/TaskGanttSlot.php` | Gantt timeline column (since 1.15) | FR-DTO-001, FR-GANTT-001 |
 | `Dto/TaskGanttTimeline.php` | Form/API DTO | FR-DTO-001 |
-| `Dto/TaskImportFormData.php` | Form/API DTO | FR-DTO-001 |
+| `Dto/TaskImportFormData.php` | Form/API DTO | FR-DTO-001, FR-IMPORT-013 |
 | `Dto/TaskLinkFormData.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/TaskMemberFormData.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/TaskNavigation.php` | Previous / next task (since 1.20) | FR-DTO-001, FR-NAV-001 |
@@ -44,13 +44,13 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Dto/TaskWindow.php` | Shown / total tasks of a capped page (since 1.21) | FR-DTO-001, FR-PERF-001 |
 | `Entity/BoardColumn.php` | Domain entity | FR-ENTITY-001 |
 | `Entity/ColumnSet.php` | Domain entity: column set (since 1.11) | FR-ENTITY-012, FR-COLSET-001 |
-| `Entity/Task.php` | Domain entity | FR-ENTITY-002 |
+| `Entity/Task.php` | Domain entity (`setParent` since 1.22) | FR-ENTITY-002, FR-IMPORT-008 |
 | `Entity/TaskBoard.php` | Domain entity | FR-ENTITY-003 |
 | `Entity/TaskChangeHistory.php` | Domain entity | FR-ENTITY-004 |
 | `Entity/TaskComment.php` | Domain entity: task comment (since 1.16) | FR-ENTITY-013, FR-COMMENT-001 |
 | `Entity/TaskDependency.php` | Domain entity | FR-ENTITY-005 |
 | `Entity/TaskDocument.php` | Domain entity | FR-ENTITY-006 |
-| `Entity/TaskLink.php` | Domain entity | FR-ENTITY-007 |
+| `Entity/TaskLink.php` | Domain entity (`import_source` since 1.22) | FR-ENTITY-007, FR-IMPORT-008 |
 | `Entity/TaskMember.php` | Domain entity | FR-ENTITY-008 |
 | `Entity/TaskTimeEntry.php` | Domain entity | FR-ENTITY-009 |
 | `Entity/Team.php` | Domain entity | FR-ENTITY-010 |
@@ -93,7 +93,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Form/TaskCommentFormType.php` | Comment form type (since 1.16) | FR-FORM-001, FR-COMMENT-001 |
 | `Form/TaskDependencyFormType.php` | Dependency form type (since 1.15) | FR-FORM-001, FR-DEP-001 |
 | `Form/TaskFormType.php` | Form type | FR-FORM-001 |
-| `Form/TaskImportFormType.php` | Form type | FR-FORM-001 |
+| `Form/TaskImportFormType.php` | Form type | FR-FORM-001, FR-IMPORT-013 |
 | `Form/TaskLinkFormType.php` | Form type | FR-FORM-001 |
 | `Form/TaskListFilterType.php` | List view filters form (since 1.13) | FR-FORM-001, FR-UI-004 |
 | `Form/TaskMemberFormType.php` | Form type | FR-FORM-001 |
@@ -101,23 +101,27 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Form/TaskTimeEntryFormType.php` | Time entry form type (since 1.15) | FR-FORM-001, FR-TIME-001 |
 | `Gantt/ConfiguredWeekStartResolver.php` | Gantt week start resolver (since 1.15) | FR-GANTT-001 |
 | `Gantt/WeekStartResolverInterface.php` | Gantt week start resolver (since 1.15) | FR-GANTT-001 |
-| `Import/ClickUp/ClickUpCsvImporter.php` | External importers | FR-IMPORT-005 |
-| `Import/ClickUp/ClickUpJsonImporter.php` | External importers | FR-IMPORT-005 |
-| `Import/Dto/ImportedTaskDto.php` | Import DTOs | FR-IMPORT-006 |
-| `Import/Dto/TaskImportOptions.php` | Import DTOs | FR-IMPORT-006 |
-| `Import/Dto/TaskImportResult.php` | Import DTOs | FR-IMPORT-006 |
-| `Import/Jira/JiraCsvImporter.php` | External importers | FR-IMPORT-005 |
+| `Import/ClickUp/ClickUpCsvImporter.php` | External importers (Gantt fields, names since 1.22) | FR-IMPORT-005, FR-IMPORT-012 |
+| `Import/ClickUp/ClickUpJsonImporter.php` | External importers (Gantt fields, names since 1.22) | FR-IMPORT-005, FR-IMPORT-012 |
+| `Import/Dto/ImportedTaskDto.php` | Import DTOs | FR-IMPORT-006, FR-IMPORT-012 |
+| `Import/Dto/TaskImportOptions.php` | Import DTOs (`skipExisting` deprecated since 1.22) | FR-IMPORT-006, FR-IMPORT-013 |
+| `Import/Dto/TaskImportResult.php` | Import DTOs (updated / unchanged since 1.22) | FR-IMPORT-006, FR-IMPORT-008 |
+| `Import/Jira/JiraCsvImporter.php` | External importers | FR-IMPORT-005, FR-IMPORT-012 |
+| `Import/DoctrineTaskImportLinkLookup.php` | Cross-board lookup of imported ids (since 1.22) | FR-IMPORT-010, FR-IMPORT-011 |
+| `Import/ImportAssigneeResolver.php` | Assignees by e-mail or display name (since 1.22) | FR-IMPORT-012, FR-IMPORT-014 |
+| `Import/ImportedTaskUpdater.php` | Re-import precedence (since 1.22) | FR-IMPORT-008 |
 | `Import/NullTaskImportUserResolver.php` | Null user resolver | FR-IMPORT-003 |
-| `Import/Support/DelimitedTableParser.php` | Import parsers | FR-IMPORT-004 |
-| `Import/Support/ImportFieldMapper.php` | Import parsers | FR-IMPORT-004 |
+| `Import/Support/DelimitedTableParser.php` | Import parsers (row / cell limits since 1.22) | FR-IMPORT-004, FR-IMPORT-012, FR-IMPORT-015 |
+| `Import/Support/ImportFieldMapper.php` | Import parsers | FR-IMPORT-004, FR-IMPORT-012 |
 | `Import/TaskBoard/TaskBoardCsvImporter.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
 | `Import/TaskBoard/TaskBoardJsonImporter.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
-| `Import/TaskBoard/TaskBoardRowMapper.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
-| `Import/TaskImportOrchestrator.php` | Import orchestrator (logged since 1.21) | FR-IMPORT-001, FR-OBS-001 |
-| `Import/TaskImportSource.php` | Import contracts | FR-IMPORT-002 |
+| `Import/TaskBoard/TaskBoardRowMapper.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007, FR-IMPORT-012 |
+| `Import/TaskImportOrchestrator.php` | Import orchestrator (logged since 1.21, idempotent upsert since 1.22) | FR-IMPORT-001, FR-OBS-001, FR-IMPORT-008, FR-IMPORT-009, FR-IMPORT-010, FR-IMPORT-011, FR-IMPORT-014, FR-IMPORT-015 |
+| `Import/TaskImportLinkLookupInterface.php` | Import contracts (since 1.22) | FR-IMPORT-010 |
+| `Import/TaskImportSource.php` | Import contracts (provider / scope since 1.22) | FR-IMPORT-002, FR-IMPORT-008, FR-IMPORT-014 |
 | `Import/TaskImportUserResolverInterface.php` | Import contracts | FR-IMPORT-002 |
 | `Import/TaskImporterInterface.php` | Import contracts | FR-IMPORT-002 |
-| `Import/Trello/TrelloJsonImporter.php` | External importers | FR-IMPORT-005 |
+| `Import/Trello/TrelloJsonImporter.php` | External importers | FR-IMPORT-005, FR-IMPORT-012 |
 | `Link/TaskObjectBadge.php` | Links to host objects (since 1.10) | FR-LINK-001 |
 | `Link/TaskObjectLinkResolver.php` | Links to host objects (since 1.10) | FR-LINK-001 |
 | `Link/TaskObjectLinkResolverInterface.php` | Links to host objects (since 1.10) | FR-LINK-001 |
@@ -164,7 +168,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Service/TaskCommentManager.php` | Comments and mentions (since 1.16) | FR-COMMENT-001 |
 | `Service/TaskDependencyManager.php` | Task dependencies (since 1.15) | FR-DEP-001 |
 | `Service/TaskGanttBuilder.php` | Gantt timeline (clock-injected since 1.21) | FR-SVC-005, FR-GANTT-001, FR-CLOCK-001 |
-| `Service/TaskLinkAttacher.php` | Domain service | FR-SVC-006 |
+| `Service/TaskLinkAttacher.php` | Domain service (import links keep their key since 1.22) | FR-SVC-006, FR-IMPORT-011 |
 | `Service/TaskManager.php` | Domain service | FR-SVC-007 |
 | `Service/TaskMemberAssigner.php` | Domain service | FR-SVC-008 |
 | `Service/TaskTimeLogger.php` | Manual time entries (since 1.15) | FR-TIME-001 |

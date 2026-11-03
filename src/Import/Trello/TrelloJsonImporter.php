@@ -18,6 +18,9 @@ use function json_last_error_msg;
 
 /**
  * Imports cards from a Trello board JSON export.
+ *
+ * Since 1.22 also: the start date and the card members by name. Trello has no priority (a re-import keeps the task's)
+ * and no dependencies.
  */
 final readonly class TrelloJsonImporter implements TaskImporterInterface
 {
@@ -51,6 +54,14 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
             }
 
             $lists[$id] = $this->stringValue($list['name'] ?? 'List');
+        }
+
+        // Since 1.22: card members by name (Trello exports no e-mails).
+        $members = [];
+        foreach (($decoded['members'] ?? []) as $member) {
+            if (is_array($member) && $this->stringValue($member['id'] ?? null) !== '') {
+                $members[$this->stringValue($member['id'])] = $this->stringValue($member['fullName'] ?? $member['username'] ?? null);
+            }
         }
 
         $cards = $decoded['cards'] ?? [];
@@ -91,9 +102,12 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
                 status: $status,
                 priority: TaskPriority::Normal,
                 description: $this->nullable($this->fieldMapper->stripHtml($this->stringValue($card['desc'] ?? null))),
-                dueAt: $this->fieldMapper->parseDueDate($this->stringValue($card['due'] ?? null)),
+                dueAt: $this->fieldMapper->parseDate($this->stringValue($card['due'] ?? null)),
                 tags: $labels,
                 sourceUrl: $this->nullable($this->stringValue($card['shortUrl'] ?? $card['url'] ?? null)),
+                startAt: $this->fieldMapper->parseDate($this->stringValue($card['start'] ?? null)),
+                assigneeNames: $this->memberNames($card, $members),
+                hasPriority: false,
             );
         }
 
@@ -102,6 +116,25 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
         }
 
         return $tasks;
+    }
+
+    /**
+     * @param array<mixed> $card
+     * @param array<string, string> $members
+     *
+     * @return list<string>
+     */
+    private function memberNames(array $card, array $members): array
+    {
+        $names = [];
+        foreach (is_array($card['idMembers'] ?? null) ? $card['idMembers'] : [] as $id) {
+            $name = $members[$this->stringValue($id)] ?? '';
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return $names;
     }
 
     private function stringValue(mixed $value): string
