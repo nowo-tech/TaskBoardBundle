@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.22.0](#to-1220)
 - [To 1.21.0](#to-1210)
 - [To 1.20.1](#to-1201)
 - [To 1.20.0](#to-1200)
@@ -103,7 +104,13 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-From **1.21.0** (proposed 1.22.0): `composer update nowo-tech/task-board-bundle`.
+## To 1.22.0
+
+From **1.21.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 **Schema change (every host):** a nullable import scope on the task links, and an index for the matching key.
 Generate and run a migration (`php bin/console doctrine:migrations:diff` then `doctrine:migrations:migrate`), or apply
@@ -162,6 +169,10 @@ duplicated); importing the same file twice changes nothing. Details: [docs/impor
   it stamps leaves that set, so a second run (or a re-run of a migration that holds it) updates 0 rows; the other
   conditions never change between runs either. It is a single `UPDATE`, atomic on InnoDB, so it can run in a
   non-transactional migration right after the `ALTER TABLE` / `CREATE INDEX` above.
+
+  The SQL is for MySQL / MariaDB (`UPDATE … JOIN`, `TIMESTAMPDIFF`); adapt it for other platforms. It names the
+  default tables (`task_board_tasks`, `task_board_task_links`, …): replace them if you configured a table prefix. Its
+  "edited by hand" exclusion reads the task history, so run it before purging history.
 
   A task skipped by these conditions is created again by the next re-import (delete the old one if you do not want
   both). **Not recognised at all:** anything imported before 1.22 with the bundle's own format (`taskboard_csv` /
