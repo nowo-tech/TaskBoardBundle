@@ -522,7 +522,7 @@ final class Configuration implements ConfigurationInterface
                         ->integerNode('max_json_nodes')
                             ->defaultValue(JsonImportGuard::DEFAULT_MAX_NODES)
                             ->min(1)
-                            ->info('Since 1.22.1: the weight of a JSON import (every value counts 1, every object or list 10, every string 2 plus one per 32 bytes, every object member 4 more); a heavier file is refused before it is decoded.')
+                            ->info('Since 1.22.1: the weight of a JSON import (about 16 bytes of decoded memory per unit: every value 1, list 16, object 24, string 2 plus one per 16 bytes, object member 4 more; 6 000 000 takes a realistic export of about 3 000 tasks within a 128 MB memory_limit); a heavier file is refused before it is decoded.')
                         ->end()
                     ->end()
                 ->end()

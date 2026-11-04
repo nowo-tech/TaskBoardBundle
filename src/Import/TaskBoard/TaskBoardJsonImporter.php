@@ -58,7 +58,8 @@ final readonly class TaskBoardJsonImporter implements TaskImporterInterface
     private function walk(array $list, ?string $parentId, array &$tasks, int &$line): void
     {
         foreach ($list as $item) {
-            ++$line;
+            // Nested subtasks count against max_rows as they are walked (audit EB-I7).
+            $this->guard->assertRowCount(++$line);
             if (!is_array($item)) {
                 continue;
             }

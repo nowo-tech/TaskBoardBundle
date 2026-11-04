@@ -18,26 +18,36 @@ use function strpos;
 use const JSON_THROW_ON_ERROR;
 
 /**
- * Since 1.22.1 (audits EB-L3, EB-L5): bounds a JSON import before anything is built. {@see self::decode()} first weighs
- * the raw text (every value 1, every object or array 10, every string 2 plus one per 32 bytes, every object member 4
- * more — roughly what json_decode() would allocate) against `import.max_json_nodes`,
+ * Since 1.22.1 (audits EB-L3, EB-L5, EB-I7): bounds a JSON import before anything is built. {@see self::decode()} first
+ * weighs the raw text (about what json_decode() would allocate, in units of about 16 bytes) against
+ * `import.max_json_nodes`,
  * then decodes with a depth limit; {@see self::assertRows()} refuses more items than `import.max_rows` before they are
  * mapped to tasks.
  */
 final readonly class JsonImportGuard
 {
-    public const DEFAULT_MAX_NODES = 2_000_000;
+    public const DEFAULT_MAX_NODES = 6_000_000;
 
-    /** What one object or array weighs (a small PHP array costs about ten scalar values). */
-    private const CONTAINER_WEIGHT = 10;
+    /*
+     * The weights approximate what json_decode() allocates, in units of about 16 bytes (audits EB-L5, EB-I7): a value
+     * slot of a list 1, an object member 4 more (its hash bucket and slot), a list 16 and an object 24 (a PHP array with
+     * its minimum table), a string (key or value) 2 plus one per 16 bytes. The weight is then a memory budget: about
+     * 16 bytes per unit for every shape measured (realistic exports about 11, the worst shapes about 13).
+     */
 
-    /** What one string weighs before its bytes (a PHP string has a header; audit EB-L5). */
+    /** What one list (`[`) weighs. */
+    private const LIST_WEIGHT = 16;
+
+    /** What one object (`{`) weighs. */
+    private const OBJECT_WEIGHT = 24;
+
+    /** What one string weighs before its bytes. */
     private const STRING_WEIGHT = 2;
 
-    /** Bytes of a string per weight unit. */
-    private const STRING_BYTES_PER_UNIT = 32;
+    /** Bytes of a string per weight unit (quotes included, rounded up). */
+    private const STRING_BYTES_PER_UNIT = 16;
 
-    /** What one object member adds (its hash bucket; the key is weighed as a string). */
+    /** What one object member adds (`:`; the key is weighed as a string). */
     private const MEMBER_WEIGHT = 4;
 
     public function __construct(
@@ -77,9 +87,21 @@ final readonly class JsonImportGuard
     }
 
     /**
-     * One pass over the text: commas count 1, `[` and `{` count {@see self::CONTAINER_WEIGHT}, each string (a key or
-     * a value) {@see self::STRING_WEIGHT} plus its length / {@see self::STRING_BYTES_PER_UNIT}, each `:` (an object
-     * member) {@see self::MEMBER_WEIGHT}.
+     * Audit EB-I7: rows found while walking nested items (the own format's `subtasks`), checked one by one.
+     *
+     * @throws ImportLimitExceededException
+     */
+    public function assertRowCount(int $rows): void
+    {
+        if ($rows > $this->maxRows) {
+            throw ImportLimitExceededException::rows($this->maxRows);
+        }
+    }
+
+    /**
+     * One pass over the text: commas count 1, `[` {@see self::LIST_WEIGHT}, `{` {@see self::OBJECT_WEIGHT}, each string
+     * (a key or a value) {@see self::STRING_WEIGHT} plus one per {@see self::STRING_BYTES_PER_UNIT} bytes, each `:` (an
+     * object member) {@see self::MEMBER_WEIGHT}.
      */
     private function weigh(string $json): void
     {
@@ -92,13 +114,14 @@ final readonly class JsonImportGuard
             }
             if ($json[$i] === '"') {
                 $end = $this->stringEnd($json, $i);
-                $weight += self::STRING_WEIGHT + intdiv($end - $i, self::STRING_BYTES_PER_UNIT);
+                $weight += self::STRING_WEIGHT + intdiv($end - $i + self::STRING_BYTES_PER_UNIT - 1, self::STRING_BYTES_PER_UNIT);
                 $i = $end;
             } else {
                 $weight += match ($json[$i]) {
                     ','     => 1,
                     ':'     => self::MEMBER_WEIGHT,
-                    default => self::CONTAINER_WEIGHT,
+                    '['     => self::LIST_WEIGHT,
+                    default => self::OBJECT_WEIGHT,
                 };
                 ++$i;
             }

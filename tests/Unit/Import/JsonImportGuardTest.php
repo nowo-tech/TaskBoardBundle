@@ -23,10 +23,10 @@ final class JsonImportGuardTest extends TestCase
 {
     public function testTheWeightIsCheckedBeforeDecoding(): void
     {
-        $guard = new JsonImportGuard(maxNodes: 30, maxRows: 2);
+        $guard = new JsonImportGuard(maxNodes: 52, maxRows: 2);
 
-        // [ 10 + 2 commas + { 10 + key 2 + member 4 + short string 2 = 30: accepted; escaped quotes, brackets and
-        // commas inside a string are part of the string.
+        // [ 16 + 2 commas + { 24 + key 3 + member 4 + a 12-byte string 3 = 52: accepted; escaped quotes, brackets
+        // and commas inside a string are part of the string.
         self::assertSame([1, 2, ['a' => 'x\\"[{,,,']], $guard->decode('[1,2,{"a":"x\\\\\\"[{,,,"}]', 'Bad: '));
         try {
             $guard->decode('["never closed', 'Bad: ');
@@ -40,14 +40,14 @@ final class JsonImportGuardTest extends TestCase
             self::fail('too heavy');
         } catch (ImportLimitExceededException $exception) {
             self::assertSame(ImportLimitExceededException::JSON, $exception->translationKey);
-            self::assertSame('The JSON file is too large to import (more than 30 values; an object or a list counts 10).', $exception->getMessage());
+            self::assertSame('The JSON file is too large to import (its weight is over 52; an administrator can raise the limit).', $exception->getMessage());
         }
 
-        // Audit EB-L5: { 10 + key 2 + member 4 + a 95-byte string 2 + 2 = 20; one byte more makes 21.
-        $exact = new JsonImportGuard(maxNodes: 20);
-        self::assertSame(['k' => str_repeat('x', 93)], $exact->decode('{"k":"' . str_repeat('x', 93) . '"}', 'Bad: '));
+        // Audits EB-L5, EB-I7: { 24 + key 3 + member 4 + a 48-byte string 2 + 3 = 36; one byte more makes 37.
+        $exact = new JsonImportGuard(maxNodes: 36);
+        self::assertSame(['k' => str_repeat('x', 46)], $exact->decode('{"k":"' . str_repeat('x', 46) . '"}', 'Bad: '));
         $this->expectException(ImportLimitExceededException::class);
-        $exact->decode('{"k":"' . str_repeat('x', 94) . '"}', 'Bad: ');
+        $exact->decode('{"k":"' . str_repeat('x', 47) . '"}', 'Bad: ');
     }
 
     public function testInvalidJsonDepthAndRows(): void
@@ -77,6 +77,8 @@ final class JsonImportGuardTest extends TestCase
             [new ClickUpJsonImporter(new ImportFieldMapper(), $guard), '[{"name":"a"},{"name":"b"}]'],
             [new TrelloJsonImporter(new ImportFieldMapper(), $guard), '{"cards":[{"name":"a"},{"name":"b"}]}'],
             [new TaskBoardJsonImporter(new TaskBoardRowMapper(), $guard), '[{"title":"a"},{"title":"b"}]'],
+            // Audit EB-I7: nested subtasks count as they are walked.
+            [new TaskBoardJsonImporter(new TaskBoardRowMapper(), $guard), '[{"id":"a","title":"a","subtasks":[{"title":"b"}]}]'],
         ] as [$importer, $json]) {
             try {
                 $importer->parse($json, 'x.json');

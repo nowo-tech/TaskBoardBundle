@@ -76,9 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `import.max_cell_length`, before `fgetcsv()` splits a record; each record `fgetcsv()` builds is checked again (columns, cell length)
     before it is kept;
   - JSON (ClickUp, Trello, the own format): the text is weighed before `json_decode()` against
-    `import.max_json_nodes` (default 2 000 000: every value counts 1, every object or list 10, every string — key or
-    value — 2 plus one per 32 bytes, every object member 4 more; audit EB-L5), decoded with a depth
-    limit of 64, and the items are counted against `import.max_rows` before they are mapped to tasks;
+    `import.max_json_nodes` (default 6 000 000: every value 1, every list 16, every object 24, every string (key or value) 2 plus one per 16 bytes, every object member 4 more; about 16 bytes of memory per unit, audits EB-L5, EB-I7: a
+    realistic ClickUp or Trello export of about 3 000 tasks fits, see UPGRADING for 5 000), decoded with a depth
+    limit of 64, and the items (nested subtasks of the own format included) are counted against `import.max_rows` before they are
+    mapped to tasks;
   - `nowo:task-board:import` refuses a file over the upload form's 20 MB before reading it.
 
   The audit's memory PoCs (files just under 20 MB) are regression tests that run with `memory_limit=128M`.

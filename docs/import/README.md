@@ -115,9 +115,12 @@ that same task (scope `<provider>@<task id>`), so the rights on one task never r
 file is refused with an error. Since 1.22.1 a CSV is also refused when its header or a row has more than
 `import.max_columns` (default 512) columns, or when it holds more than `import.max_cells` (default 1 000 000) cells
 (columns × rows, empty cells included; blank lines count as rows), and a JSON file when it weighs more than
-`import.max_json_nodes` (default 2 000 000: every value 1, every object or list 10) or holds more than `import.max_rows`
-items. Every limit is checked before anything is built, and the error is shown in the user's language. Files are also
-limited to 20 MB by the upload form.
+`import.max_json_nodes` (default 6 000 000: every value 1, every list 16, every object 24, every string (key or value) 2 plus one per 16 bytes, every object member 4 more) or holds more than `import.max_rows` items (nested subtasks
+included). Every limit is checked before anything is built, and the error is shown in the user's language. Files are
+also limited to 20 MB by the upload form, but the other limits usually come first: the defaults take a realistic
+ClickUp or Trello JSON export of about 3 000 tasks and a Jira CSV of up to 512 columns and 1 000 000 cells. To import a
+5 000-task JSON export or a Jira "all fields" export (250+ columns × 5 000 rows), raise `max_json_nodes` (9 500 000)
+or `max_cells` (2 000 000) together with PHP's `memory_limit` (256 MB) — see [CONFIGURATION](../CONFIGURATION.md).
 
 ## Field mapping overview
 

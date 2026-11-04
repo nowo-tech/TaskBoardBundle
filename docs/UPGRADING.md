@@ -111,19 +111,26 @@ From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change
   - `import.max_cells` (default 1 000 000): the cells of a CSV file, **columns × rows, empty cells included**;
   - `import.max_rows` (unchanged, 5000) now also counts blank lines of a CSV and the items of a JSON file before they
     are mapped;
-  - `import.max_json_nodes` (default 2 000 000): the weight of a JSON file before it is decoded (every value counts 1,
-    every object or list 10, every string — key or value — 2 plus one per 32 bytes, every object member 4 more); JSON is decoded with a depth limit of 64.
+  - `import.max_json_nodes` (default 6 000 000): the weight of a JSON file before it is decoded (every value 1, every list 16, every object 24, every string (key or value) 2 plus one per 16 bytes, every object member 4 more; about 16 bytes of decoded memory per unit); JSON is decoded with a
+    depth limit of 64.
 
-  With these defaults an import stays well under 128 MB of memory. Real exports are below them (Jira's widest are a
-  few hundred columns × a few thousand rows; 300 columns × 3000 rows is 900 000 cells). If you import bigger files,
-  raise them together with PHP's `memory_limit`:
+  The defaults keep every import, including the worst shapes the audit measured, under a `memory_limit` of 128 MB.
+  What they accept:
+  - **JSON:** a realistic ClickUp API export of about 3 000–3 500 tasks (≈ 7 MB) or a Trello board export of about
+    3 000 cards. A 5 000-task export weighs about 8.5 M and needs about 90 MB to decode and map: raise
+    `max_json_nodes` to 9 500 000 **and** PHP's `memory_limit` to at least 256 MB.
+  - **CSV:** 512 columns and 1 000 000 cells (columns × rows, empty cells included). A Jira export with **all fields**
+    is wide: about 250–300 columns, so 5 000 rows of it are 1.25–1.5 M cells and are refused (`too_many_cells`); a
+    Jira export with more than 512 columns (many custom fields) is refused as `too_many_columns`. Export fewer
+    columns, split the file, or raise the limits together with PHP's `memory_limit` (a kept cell costs about
+    70 bytes: 2 000 000 cells need about 140 MB, so 256 MB).
 
   ```yaml
   nowo_task_board:
       import:
-          max_columns: 1024
-          max_cells: 2000000
-          max_json_nodes: 4000000
+          max_columns: 1024        # very wide Jira exports
+          max_cells: 2000000       # e.g. 300 columns × 5 000 rows = 1 500 000
+          max_json_nodes: 9500000  # 5 000-task ClickUp / Trello JSON; with memory_limit 256M
   ```
 - **`nowo:task-board:import`** refuses a file larger than the upload form's 20 MB (`TaskBoardImportCommand::MAX_FILE_BYTES`).
 - **Translated limit errors:** the limit errors use the new keys `task_board.import.error.too_many_rows`,

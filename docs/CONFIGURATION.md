@@ -520,13 +520,23 @@ nowo_task_board:
         max_cell_length: 65536  # bytes per CSV cell; a file with a longer cell is refused
         max_columns: 512        # since 1.22.1: columns of a CSV header or row; a wider file is refused
         max_cells: 1000000      # since 1.22.1: cells of a CSV file (columns × rows, empty ones too); a larger file is refused
-        max_json_nodes: 2000000 # since 1.22.1: weight of a JSON file before decoding (value 1, object or list 10, string 2 + 1 per 32 bytes, member +4)
+        max_json_nodes: 6000000 # since 1.22.1: weight of a JSON file before decoding (value 1, list 16, object 24, string 2 + 1 per 16 bytes, member +4)
 ```
 
 Every limit is checked before anything is built (CSV: one pass over the raw bytes; JSON: before `json_decode()`, and
 the items again before they are mapped). Blank CSV lines count as rows. With the defaults an import stays well under
 128 MB of memory; raise the limits together with PHP's `memory_limit`. The errors are translated
 (`task_board.import.error.*`).
+
+The defaults fit a PHP `memory_limit` of 128 MB, worst cases included. They accept a realistic ClickUp or Trello JSON
+export of about 3 000 tasks and a CSV of 512 columns × 1 000 000 cells. Two common exports need more:
+
+- **5 000-task JSON exports** (ClickUp API, Trello board): set `max_json_nodes: 9500000` and `memory_limit` ≥ 256 MB.
+- **Jira "all fields" CSV exports** (about 250–300 columns × 5 000 rows = 1.25–1.5 M cells): set
+  `max_cells: 2000000` (and `max_columns: 1024` past 512 columns) with `memory_limit` ≥ 256 MB, or export fewer
+  columns.
+
+See [UPGRADING](UPGRADING.md#unreleased) for the measurements.
 
 ### Cross-board lookup (since 1.22)
 

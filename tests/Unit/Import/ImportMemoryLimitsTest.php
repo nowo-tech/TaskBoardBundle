@@ -44,13 +44,29 @@ final class ImportMemoryLimitsTest extends TestCase
         yield 'EB-L5: 1.4 M keys in one card' => ['json-keys-nested', 'REFUSED ' . ImportLimitExceededException::JSON];
         yield 'a normal file still parses' => ['normal-csv', 'PARSED 5000'];
         yield 'a normal JSON export still parses' => ['normal-json', 'PARSED 5000'];
+        yield 'EB-I7: a realistic 3000-task ClickUp export parses' => ['clickup-realistic', 'PARSED 3000'];
+        yield 'EB-I7: lists at the default weight' => ['worst-lists-at-cap', 'REFUSED ' . ImportLimitExceededException::ROWS];
+        yield 'EB-I7: objects at the default weight' => ['worst-objects-at-cap', 'REFUSED ' . ImportLimitExceededException::ROWS];
+        yield 'EB-I7: short strings at the default weight' => ['worst-strings-at-cap', 'PARSED 1'];
     }
 
     #[DataProvider('cases')]
     public function testRefusedCleanlyAt128Megabytes(string $case, string $expected): void
     {
-        $output = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' -d memory_limit=128M ' . escapeshellarg(__DIR__ . '/../../Fixtures/Memory/import-limits.php') . ' ' . escapeshellarg($case) . ' 2>&1');
+        self::assertSame($expected, $this->runCase($case, '128M'));
+    }
 
-        self::assertSame($expected, trim($output));
+    /**
+     * Audit EB-I7: a realistic 5000-task export needs the documented raised limits (max_json_nodes 9 500 000,
+     * memory_limit 256M).
+     */
+    public function testARealistic5000TaskExportParsesWithTheRaisedLimits(): void
+    {
+        self::assertSame('PARSED 5000', $this->runCase('clickup-realistic-5000', '256M'));
+    }
+
+    private function runCase(string $case, string $memoryLimit): string
+    {
+        return trim((string) shell_exec(escapeshellarg(PHP_BINARY) . ' -d memory_limit=' . $memoryLimit . ' ' . escapeshellarg(__DIR__ . '/../../Fixtures/Memory/import-limits.php') . ' ' . escapeshellarg($case) . ' 2>&1'));
     }
 }

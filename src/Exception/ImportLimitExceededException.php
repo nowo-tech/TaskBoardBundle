@@ -65,7 +65,7 @@ final class ImportLimitExceededException extends InvalidArgumentException
     /** Since 1.22.1 (audit EB-L3): a JSON file heavier than `import.max_json_nodes`. */
     public static function jsonNodes(int $max): self
     {
-        return new self(sprintf('The JSON file is too large to import (more than %d values; an object or a list counts 10).', $max), self::JSON, ['%max%' => (string) $max]);
+        return new self(sprintf('The JSON file is too large to import (its weight is over %d; an administrator can raise the limit).', $max), self::JSON, ['%max%' => (string) $max]);
     }
 
     public function translatable(): TranslatableMessage
