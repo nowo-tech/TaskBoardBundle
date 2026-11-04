@@ -115,13 +115,13 @@ that same task (scope `<provider>@<task id>`), so the rights on one task never r
 file is refused with an error. Since 1.22.1 a CSV is also refused when its header or a row has more than
 `import.max_columns` (default 512) columns, or when it holds more than `import.max_cells` (default 1 000 000) cells
 (columns × rows, empty cells included; blank lines count as rows), and a JSON file when it weighs more than
-`import.max_json_nodes` (default 1 800 000: strings by their length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit) or holds more than `import.max_rows` items (nested subtasks
+`import.max_json_nodes` (default 4 000 000: strings by their length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit) or holds more than `import.max_rows` items (nested subtasks
 included). Every limit is checked before anything is built, and the error is shown in the user's language. Files are
-also limited to 20 MB by the upload form, but memory usually comes first: an import costs about 40 KB per task, so a
-128 MB `memory_limit` takes about 1 200 tasks (the JSON default weight takes a realistic ClickUp export of that size).
-For 5 000 tasks set `memory_limit` to 256 MB (CSV) or 512 MB with `max_json_nodes: 7500000` (JSON); for a Jira "all
-fields" export (250+ columns × 5 000 rows) also raise `max_cells` (2 000 000) — see
-[CONFIGURATION](../CONFIGURATION.md).
+also limited to 20 MB by the upload form. Since 1.22.2 an import writes its tasks in batches inside one transaction
+(memory stays flat; a failure keeps nothing): at a 128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards and
+5 000 tasks of the bundle's JSON import, and a ClickUp API export of about 2 700 tasks; a 5 000-task ClickUp export
+needs `max_json_nodes: 7500000` and 256 MB. For a Jira "all fields" export (250+ columns × 5 000 rows) also raise
+`max_cells` (2 000 000) — see [CONFIGURATION](../CONFIGURATION.md).
 
 ## Field mapping overview
 

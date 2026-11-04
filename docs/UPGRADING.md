@@ -105,6 +105,26 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.22.1**: `composer update nowo-tech/task-board-bundle`. No schema change.
+
+- **Imports are written in batches (audit EB-L7).** The import orchestrator flushes every 200 rows and lets those
+  tasks leave the entity manager, inside **one database transaction**: memory stays flat, and a failure anywhere rolls
+  the whole import back (as the single flush of 1.22 did). The board, its columns, the users and the task imported
+  into stay managed. A host listening to Doctrine flush events sees one flush per batch.
+- **`import.max_json_nodes` default 1 800 000 → 4 000 000.** The 1.22.1 figures (about 40 KB per task, 1 200 tasks at
+  128 MB, "lower `max_rows` to 1200") were measured on a debug kernel that logs every query; they no longer apply.
+  Measured through the import controller with a production kernel (no query logging) and an 18 MB request baseline,
+  a `memory_limit` of 128 MB now takes:
+  - **CSV:** 5 000 rows, the default `max_rows` (peak +32 MB);
+  - **Trello JSON:** 5 000 cards with their checklists (≈ 5.7 MB, weight ≈ 3.1 M; peak +68 MB);
+  - **the bundle's JSON:** 5 000 tasks;
+  - **ClickUp API JSON:** about 2 700 tasks (≈ 5.7 MB; peak +61 MB). A 5 000-task export (10.5 MB, weight ≈ 7.4 M)
+    is refused cleanly by the default weight: decoding it alone needs more than 128 MB. Import it with
+    `max_json_nodes: 7500000` and a `memory_limit` of 256 MB.
+  
+  The default `max_json_nodes` (4 000 000) keeps every hostile JSON shape the audits tried under +70 MB at that
+  limit.
+
 ## To 1.22.1
 
 From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change.

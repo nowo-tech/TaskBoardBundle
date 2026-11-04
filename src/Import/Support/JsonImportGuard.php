@@ -28,7 +28,7 @@ use const JSON_THROW_ON_ERROR;
  */
 final readonly class JsonImportGuard
 {
-    public const DEFAULT_MAX_NODES = 1_800_000;
+    public const DEFAULT_MAX_NODES = 4_000_000;
 
     /*
      * The weight approximates the peak memory of json_decode(), in units of 16 bytes (audits EB-L5, EB-I7, EB-L6):

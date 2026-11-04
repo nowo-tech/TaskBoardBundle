@@ -9,12 +9,15 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
+use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
@@ -56,6 +59,12 @@ final readonly class TaskImportOrchestrator
     /** Since 1.22: default `import.max_rows`. */
     public const DEFAULT_MAX_ROWS = 5000;
 
+    /** Since 1.22.2: rows written per flush; the batch's tasks then leave the entity manager (audit EB-L7). */
+    public const DEFAULT_BATCH_SIZE = 200;
+
+    /** The entities an import creates or loads per row: detached after each batch is written. */
+    private const BATCH_CLASSES = [Task::class, TaskLink::class, TaskMember::class, TaskChangeHistory::class, TaskDependency::class];
+
     /**
      * @param iterable<TaskImporterInterface> $importers
      */
@@ -79,6 +88,8 @@ final readonly class TaskImportOrchestrator
         private ?TaskBoardResourceAccessChecker $accessChecker = null,
         // Since 1.22 (audit DL-L4): the most rows one import accepts (`import.max_rows`).
         private int $maxRows = self::DEFAULT_MAX_ROWS,
+        // Since 1.22.2 (audit EB-L7): rows per flush; memory stays flat whatever the size of the file.
+        private int $batchSize = self::DEFAULT_BATCH_SIZE,
     ) {
     }
 
@@ -155,10 +166,59 @@ final readonly class TaskImportOrchestrator
             return new TaskImportResult(errors: [$exception->getMessage()]);
         }
 
-        $scope          = $source->scope($parentTask);
-        $existingTasks  = $this->taskRepository->findByBoard($board, true);
-        $known          = $this->indexImportedTasks($existingTasks, $scope);
-        $maxPositions   = $this->collectMaxPositions($existingTasks);
+        // Since 1.22.2 (audit EB-L7): the rows are written in batches (flush, then the batch's tasks leave the entity
+        // manager), inside one transaction: a failure anywhere leaves nothing behind.
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $result = $this->write($board, $source, $rows, $actor, $options, $parentTask);
+            $connection->commit();
+        } catch (Throwable $exception) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            // A failed flush already reopened a closed entity manager (RecoveringFlusher).
+            if ($this->entityManager->isOpen()) {
+                // What the rollback removed must not be written by a later flush of the request.
+                $this->detachBatch($parentTask);
+            }
+
+            throw $exception;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<ImportedTaskDto> $rows
+     */
+    private function write(TaskBoard $board, TaskImportSource $source, array $rows, object $actor, TaskImportOptions $options, ?Task $parentTask): TaskImportResult
+    {
+        $scope         = $source->scope($parentTask);
+        $existingTasks = $this->taskRepository->findByBoard($board, true);
+        $known         = $this->indexImportedTasks($existingTasks, $scope);
+        $maxPositions  = $this->collectMaxPositions($existingTasks);
+        // Since 1.22.2 the run keeps ids; the tasks of the current batch (the board's at first) are at hand, the others
+        // are found again after they left the entity manager.
+        /** @var array<string, Task|null> $batch */
+        $batch = [];
+        foreach ($existingTasks as $existing) {
+            $batch[$existing->getId()] = $existing;
+        }
+        unset($existingTasks);
+        $find = function (string $id) use (&$batch): ?Task {
+            return $batch[$id] ??= $this->entityManager->find(Task::class, $id);
+        };
+        /** @var bool $dirty whether the batch has something to write */
+        $dirty      = false;
+        $writeBatch = function () use (&$batch, &$dirty, $parentTask): void {
+            if ($dirty) {
+                RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
+            }
+            $this->detachBatch($parentTask);
+            $batch = [];
+            $dirty = false;
+        };
         $columnsByName  = $this->indexColumnsByName($board);
         $columnsCreated = 0;
         $warnings       = [];
@@ -181,10 +241,10 @@ final readonly class TaskImportOrchestrator
 
         $keyed     = $this->keyRows($this->orderRowsForHierarchy($rows), $scope, $parentTask);
         $elsewhere = $this->findOnOtherBoards($board, $source, $scope, $keyed, $known, $parentTask);
-        /** @var array<int, bool> $editable whether the actor may edit each task (by object id), asked once */
+        /** @var array<string, bool> $editable whether the actor may edit each task (by id), asked once */
         $editable = [];
         $canEdit  = function (Task $task) use (&$editable, $actor): bool {
-            return $editable[spl_object_id($task)] ??= !$this->accessChecker instanceof TaskBoardResourceAccessChecker
+            return $editable[$task->getId()] ??= !$this->accessChecker instanceof TaskBoardResourceAccessChecker
                 || $this->accessChecker->canEditTask($actor, $task);
         };
         $columns    = array_values($board->getColumns()->toArray());
@@ -193,17 +253,18 @@ final readonly class TaskImportOrchestrator
         };
         $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $board);
 
-        /** @var array<string, Task> $imported the tasks of this run by key (created or matched) */
+        /** @var array<string, string> $imported the task ids of this run by key (created or matched) */
         $imported = [];
-        /** @var array<int, bool> $matched whether each matched task (by object id) changed */
+        /** @var array<string, bool> $matched whether each matched task (by id) changed */
         $matched = [];
-        /** @var list<array{0: Task, 1: ImportedTaskDto}> $pendingDependencies */
+        /** @var list<array{0: string, 1: ImportedTaskDto}> $pendingDependencies */
         $pendingDependencies = [];
         $created             = 0;
         $skipped             = 0;
         $fingerprinted       = 0;
         $skippedElsewhere    = 0;
         $skippedReadOnly     = 0;
+        $inBatch             = 0;
 
         foreach ($keyed as $index => [$row, $key, $byFingerprint]) {
             if (isset($imported[$key])) {
@@ -216,7 +277,7 @@ final readonly class TaskImportOrchestrator
                 ++$skippedElsewhere;
                 continue;
             }
-            $task = $known[$key][0] ?? null;
+            $task = isset($known[$key]) ? $find($known[$key]) : null;
             if ($task instanceof Task && !$canEdit($task)) {
                 // Audit DL-M2: a task the actor may not edit is not rewritten (and its title is not echoed).
                 ++$skipped;
@@ -228,34 +289,42 @@ final readonly class TaskImportOrchestrator
             }
 
             if ($task instanceof Task) {
-                $changed                       = $this->updater->apply($task, $row, $this->matchColumn($columnsByName, $row->status), $positionIn, $columns, $actor);
-                $changed                       = $this->reparent($task, $row, $index, $imported, $known, $canEdit, $warnings) || $changed;
-                $changed                       = $this->updater->applyAssignees($task, $assignees->resolve($row), $actor) || $changed;
-                $matched[spl_object_id($task)] = $changed;
+                $changed                 = $this->updater->apply($task, $row, $this->matchColumn($columnsByName, $row->status), $positionIn, $columns, $actor);
+                $changed                 = $this->reparent($task, $row, $index, $imported, $known, $find, $canEdit, $warnings) || $changed;
+                $changed                 = $this->updater->applyAssignees($task, $assignees->resolve($row), $actor) || $changed;
+                $matched[$task->getId()] = $changed;
+                $dirty                   = $dirty || $changed;
             } else {
-                $task                           = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $canEdit, $warnings);
-                $editable[spl_object_id($task)] = true;
+                $task                     = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $find, $canEdit, $warnings);
+                $editable[$task->getId()] = true;
                 foreach ($assignees->resolve($row) as $user) {
                     $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
                 }
                 $this->changeRecorder->recordCreated($task, $actor);
                 $this->entityManager->persist($task);
+                $batch[$task->getId()] = $task;
+                $dirty                 = true;
                 ++$created;
             }
 
-            $imported[$key] = $task;
+            $imported[$key] = $task->getId();
             if ($row->dependsOn !== []) {
-                $pendingDependencies[] = [$task, $row];
+                $pendingDependencies[] = [$task->getId(), $row];
+            }
+            if (++$inBatch >= $this->batchSize) {
+                $writeBatch();
+                $inBatch = 0;
             }
         }
-
-        $updated = count(array_filter($matched));
-        if ($created > 0 || $updated > 0) {
+        // The last batch is written; its tasks stay at hand for the relations (they leave after them).
+        if ($dirty) {
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
+            $dirty = false;
         }
 
-        $dependenciesCreated = $this->linkDependencies($pendingDependencies, $imported, $known, $canEdit, $actor, $warnings, $matched);
-        $updated             = count(array_filter($matched));
+        $dependenciesCreated = $this->linkDependencies($pendingDependencies, $imported, $known, $find, $writeBatch, $canEdit, $actor, $warnings, $matched);
+        $writeBatch();
+        $updated = count(array_filter($matched));
 
         if ($fingerprinted > 0) {
             $warnings[] = sprintf('%d row(s) have no id: they are matched by fingerprint (source, parent, title and creation date), so a row renamed in the source is imported as a new task.', $fingerprinted);
@@ -280,13 +349,45 @@ final readonly class TaskImportOrchestrator
     }
 
     /**
+     * Since 1.22.2: after a batch is written its tasks (and their links, members, history and relations) leave the
+     * entity manager; the board, its columns, the users and the task imported into stay managed.
+     */
+    private function detachBatch(?Task $parentTask): void
+    {
+        $identityMap = $this->entityManager->getUnitOfWork()->getIdentityMap();
+        foreach (self::BATCH_CLASSES as $class) {
+            foreach ($identityMap[$class] ?? [] as $entity) {
+                if (!$this->belongsTo($entity, $parentTask)) {
+                    $this->entityManager->detach($entity);
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether an entity is the task imported into or hangs from it (its links, members, history, relations): those
+     * stay managed, or a later flush would cascade them as new rows.
+     */
+    private function belongsTo(object $entity, ?Task $parentTask): bool
+    {
+        if (!$parentTask instanceof Task) {
+            return false;
+        }
+
+        return $entity === $parentTask
+            || ($entity instanceof TaskDependency && ($entity->getSourceTask() === $parentTask || $entity->getTargetTask() === $parentTask))
+            || (($entity instanceof TaskLink || $entity instanceof TaskMember || $entity instanceof TaskChangeHistory) && $entity->getTask() === $parentTask);
+    }
+
+    /**
      * A new task for a row that matched none: in its status column (else the first), under its parent row (else the
      * task imported into, else the root), with the import link that carries its key.
      *
      * @param array<string, BoardColumn> $columnsByName
      * @param Closure(?BoardColumn): int $positionIn
-     * @param array<string, Task> $imported
-     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param array<string, string> $imported
+     * @param array<string, string> $known
+     * @param Closure(string): ?Task $find
      * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      */
@@ -304,13 +405,14 @@ final readonly class TaskImportOrchestrator
         Closure $positionIn,
         array $imported,
         array $known,
+        Closure $find,
         Closure $canEdit,
         array &$warnings,
     ): Task {
         // Since 1.18: importing into a task makes every top-level row (and every unresolved parent) its subtask.
         $parent = $parentTask;
         if ($row->parentExternalId !== null) {
-            $parent = $this->findParent($row->parentExternalId, $imported, $known, $canEdit);
+            $parent = $this->findParent($row->parentExternalId, $imported, $known, $find, $canEdit);
             if (!$parent instanceof Task) {
                 $parent     = $parentTask;
                 $warnings[] = sprintf(
@@ -363,17 +465,18 @@ final readonly class TaskImportOrchestrator
      * only places new tasks), and a move that would make the task its own ancestor is refused with a warning — the
      * whole ancestor chain is walked (audit DL-L5).
      *
-     * @param array<string, Task> $imported
-     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param array<string, string> $imported
+     * @param array<string, string> $known
+     * @param Closure(string): ?Task $find
      * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      */
-    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, Closure $canEdit, array &$warnings): bool
+    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, Closure $find, Closure $canEdit, array &$warnings): bool
     {
         if ($row->parentExternalId === null) {
             return false;
         }
-        $parent = $this->findParent($row->parentExternalId, $imported, $known, $canEdit);
+        $parent = $this->findParent($row->parentExternalId, $imported, $known, $find, $canEdit);
         if (!$parent instanceof Task) {
             $warnings[] = sprintf('Row %d ("%s"): parent "%s" was not found; the task keeps its parent.', $index + 1, $row->title, $row->parentExternalId);
 
@@ -400,13 +503,15 @@ final readonly class TaskImportOrchestrator
      * The task an id names — a row of this run or a task the scope imported before — when the actor may edit it;
      * null otherwise (the same answer for "missing" and "not yours", so the import reveals nothing).
      *
-     * @param array<string, Task> $imported
-     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param array<string, string> $imported
+     * @param array<string, string> $known
+     * @param Closure(string): ?Task $find
      * @param Closure(Task): bool $canEdit
      */
-    private function findParent(string $id, array $imported, array $known, Closure $canEdit): ?Task
+    private function findParent(string $id, array $imported, array $known, Closure $find, Closure $canEdit): ?Task
     {
-        $task = $imported[$id] ?? $known[$id][0] ?? null;
+        $taskId = $imported[$id] ?? $known[$id] ?? null;
+        $task   = $taskId === null ? null : $find($taskId);
 
         return $task instanceof Task && $canEdit($task) ? $task : null;
     }
@@ -448,7 +553,7 @@ final readonly class TaskImportOrchestrator
      * board- or task-local).
      *
      * @param list<array{0: ImportedTaskDto, 1: string, 2: bool}> $keyed
-     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param array<string, string> $known
      *
      * @return array<string, true>
      */
@@ -470,12 +575,12 @@ final readonly class TaskImportOrchestrator
     }
 
     /**
-     * The tasks of the board an earlier import of this scope created, by external id: only links whose
+     * The tasks of the board an earlier import of this scope created, as ids by external id: only links whose
      * `import_source` is the scope — written by the importer, never by the link form (audit DL-L2).
      *
      * @param list<Task> $existingTasks
      *
-     * @return array<string, array{0: Task, 1: TaskLink}>
+     * @return array<string, string>
      */
     private function indexImportedTasks(array $existingTasks, string $scope): array
     {
@@ -487,7 +592,7 @@ final readonly class TaskImportOrchestrator
                     continue;
                 }
                 if ($link->getImportSource() === $scope) {
-                    $index[$externalId] = [$task, $link];
+                    $index[$externalId] = $task->getId();
                 }
             }
         }
@@ -501,22 +606,29 @@ final readonly class TaskImportOrchestrator
      * is (silently: re-importing is a no-op), one to a task that cannot be found or that the rules refuse (cycle) is a
      * warning, and only relations are added — none is removed.
      *
-     * @param list<array{0: Task, 1: ImportedTaskDto}> $pending
-     * @param array<string, Task> $imported
-     * @param array<string, array{0: Task, 1: TaskLink}> $known
+     * @param list<array{0: string, 1: ImportedTaskDto}> $pending
+     * @param array<string, string> $imported
+     * @param array<string, string> $known
+     * @param Closure(string): ?Task $find
+     * @param Closure(): void $writeBatch
      * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
-     * @param array<int, bool> $matched
+     * @param array<string, bool> $matched
      */
-    private function linkDependencies(array $pending, array $imported, array $known, Closure $canEdit, object $actor, array &$warnings, array &$matched): int
+    private function linkDependencies(array $pending, array $imported, array $known, Closure $find, Closure $writeBatch, Closure $canEdit, object $actor, array &$warnings, array &$matched): int
     {
         if ($pending === [] || !$this->dependencyManager instanceof TaskDependencyManager) {
             return 0;
         }
         $created = 0;
-        foreach ($pending as [$task, $row]) {
+        foreach ($pending as $number => [$taskId, $row]) {
+            if ($number > 0 && $number % $this->batchSize === 0) {
+                // Each relation is saved by the dependency manager: the batch only leaves the entity manager.
+                $writeBatch();
+            }
+            $task = $find($taskId) ?? throw new LogicException(sprintf('The imported task "%s" disappeared during the import.', $taskId));
             foreach ($row->dependsOn as [$otherId, $type]) {
-                $other = $this->findParent($otherId, $imported, $known, $canEdit);
+                $other = $this->findParent($otherId, $imported, $known, $find, $canEdit);
                 if (!$other instanceof Task) {
                     $warnings[] = sprintf('"%s": the dependency on "%s" was skipped (that row was not imported).', $row->title, $otherId);
                     continue;
@@ -525,8 +637,8 @@ final readonly class TaskImportOrchestrator
                     // @igor-ignore - the dependency manager persists through Doctrine; it keeps no state of its own.
                     $this->dependencyManager->add($task, $other, $type, $actor);
                     ++$created;
-                    if (isset($matched[spl_object_id($task)])) {
-                        $matched[spl_object_id($task)] = true;
+                    if (isset($matched[$taskId])) {
+                        $matched[$taskId] = true;
                     }
                 } catch (InvalidTaskDependencyException $exception) {
                     if ($exception->reason !== InvalidTaskDependencyException::REASON_DUPLICATE) {
