@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.23.1](#to-1231)
 - [To 1.23.0](#to-1230)
   - [Schema change for every host: archived tasks](#schema-change-for-every-host-archived-tasks)
   - [Schema change with `sync.enabled: true` only: the sync tables](#schema-change-with-syncenabled-true-only-the-sync-tables)
@@ -111,6 +112,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.23.1
+
+From **1.23.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 ## To 1.23.0
 
