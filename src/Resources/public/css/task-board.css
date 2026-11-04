@@ -935,6 +935,7 @@ button.nowo-task-detail__priority-tag:hover {
 .nowo-task-dialog--native {
     width: min(32rem, calc(100vw - 2rem));
     max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
     padding: 0;
     border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
     border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
