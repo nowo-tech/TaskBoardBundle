@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardRowMapper;
 use Nowo\TaskBoardBundle\Import\Trello\TrelloJsonImporter;
 use PHPUnit\Framework\TestCase;
 
+use function array_fill;
+use function implode;
 use function str_repeat;
 
 /**
@@ -23,10 +25,10 @@ final class JsonImportGuardTest extends TestCase
 {
     public function testTheWeightIsCheckedBeforeDecoding(): void
     {
-        $guard = new JsonImportGuard(maxNodes: 52, maxRows: 2);
+        $guard = new JsonImportGuard(maxNodes: 42, maxRows: 2);
 
-        // [ 16 + 2 commas + { 24 + key 3 + member 4 + a 12-byte string 3 = 52: accepted; escaped quotes, brackets
-        // and commas inside a string are part of the string.
+        // [ 12 + { 24 + key 3 + a 12-byte string 3 = 42 (three elements fit the first table): accepted; escaped quotes,
+        // brackets and commas inside a string are part of the string.
         self::assertSame([1, 2, ['a' => 'x\\"[{,,,']], $guard->decode('[1,2,{"a":"x\\\\\\"[{,,,"}]', 'Bad: '));
         try {
             $guard->decode('["never closed', 'Bad: ');
@@ -40,14 +42,36 @@ final class JsonImportGuardTest extends TestCase
             self::fail('too heavy');
         } catch (ImportLimitExceededException $exception) {
             self::assertSame(ImportLimitExceededException::JSON, $exception->translationKey);
-            self::assertSame('The JSON file is too large to import (its weight is over 52; an administrator can raise the limit).', $exception->getMessage());
+            self::assertSame('The JSON file is too large to import (its weight is over 42; an administrator can raise the limit).', $exception->getMessage());
         }
 
-        // Audits EB-L5, EB-I7: { 24 + key 3 + member 4 + a 48-byte string 2 + 3 = 36; one byte more makes 37.
-        $exact = new JsonImportGuard(maxNodes: 36);
+        // Audits EB-L5, EB-I7: { 24 + key 3 + a 48-byte string 2 + 3 = 32; one byte more makes 33.
+        $exact = new JsonImportGuard(maxNodes: 32);
         self::assertSame(['k' => str_repeat('x', 46)], $exact->decode('{"k":"' . str_repeat('x', 46) . '"}', 'Bad: '));
         $this->expectException(ImportLimitExceededException::class);
         $exact->decode('{"k":"' . str_repeat('x', 47) . '"}', 'Bad: ');
+    }
+
+    /**
+     * Audit EB-L6: a list or an object that outgrows its table weighs the doubled table (the old one stays counted).
+     */
+    public function testTablesWeighTheirGrowth(): void
+    {
+        $guard = new JsonImportGuard(maxNodes: 48);
+        // 8 elements fit the first table: [ 12.
+        self::assertCount(8, $guard->decode('[' . implode(',', array_fill(0, 8, '0')) . ']', 'Bad: '));
+        // 8 members: { 24 + 8 keys of 3 = 48.
+        self::assertCount(8, $guard->decode('{"a":0,"b":0,"c":0,"d":0,"e":0,"f":0,"g":0,"h":0}', 'Bad: '));
+        foreach (['[' . implode(',', array_fill(0, 9, '0')) . ']', '{"a":0,"b":0,"c":0,"d":0,"e":0,"f":0,"g":0,"h":0,"i":0}'] as $json) {
+            try {
+                // 9 elements: + 16 slots (28); 9 members: + 16 buckets of 3 (99).
+                (new JsonImportGuard(maxNodes: 27))->decode($json, 'Bad: ');
+                self::fail($json);
+            } catch (ImportLimitExceededException $exception) {
+                self::assertSame(ImportLimitExceededException::JSON, $exception->translationKey);
+            }
+        }
+        self::assertCount(9, (new JsonImportGuard(maxNodes: 28))->decode('[' . implode(',', array_fill(0, 9, '0')) . ']', 'Bad: '));
     }
 
     public function testInvalidJsonDepthAndRows(): void

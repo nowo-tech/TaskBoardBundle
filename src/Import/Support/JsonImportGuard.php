@@ -8,6 +8,8 @@ use InvalidArgumentException;
 use JsonException;
 use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 
+use function array_key_last;
+use function array_pop;
 use function count;
 use function intdiv;
 use function json_decode;
@@ -18,37 +20,46 @@ use function strpos;
 use const JSON_THROW_ON_ERROR;
 
 /**
- * Since 1.22.1 (audits EB-L3, EB-L5, EB-I7): bounds a JSON import before anything is built. {@see self::decode()} first
- * weighs the raw text (about what json_decode() would allocate, in units of about 16 bytes) against
+ * Since 1.22.1 (audits EB-L3, EB-L5, EB-I7, EB-L6): bounds a JSON import before anything is built. {@see self::decode()} first
+ * weighs the raw text (the peak memory json_decode() would reach, in units of about 16 bytes) against
  * `import.max_json_nodes`,
  * then decodes with a depth limit; {@see self::assertRows()} refuses more items than `import.max_rows` before they are
  * mapped to tasks.
  */
 final readonly class JsonImportGuard
 {
-    public const DEFAULT_MAX_NODES = 6_000_000;
+    public const DEFAULT_MAX_NODES = 1_800_000;
 
     /*
-     * The weights approximate what json_decode() allocates, in units of about 16 bytes (audits EB-L5, EB-I7): a value
-     * slot of a list 1, an object member 4 more (its hash bucket and slot), a list 16 and an object 24 (a PHP array with
-     * its minimum table), a string (key or value) 2 plus one per 16 bytes. The weight is then a memory budget: about
-     * 16 bytes per unit for every shape measured (realistic exports about 11, the worst shapes about 13).
+     * The weight approximates the peak memory of json_decode(), in units of 16 bytes (audits EB-L5, EB-I7, EB-L6):
+     * - a list starts at 12 (a PHP array with its first 8 slots); a slot is 1 (16 bytes, the scalar inside included);
+     * - an object starts at 24 (a hash with its first 8 buckets); a bucket is 3 (32 bytes plus its hash slots);
+     * - a list or an object grows by doubling: each time its element count passes the table size, the new table is
+     *   added in full while the old one stays counted (PHP holds both while it copies), so a table of n elements weighs
+     *   about twice the next power of two of n;
+     * - a string (a key or a value) is 2 plus one per 16 bytes, quotes included.
      */
 
-    /** What one list (`[`) weighs. */
-    private const LIST_WEIGHT = 16;
+    /** What a new list (`[`) weighs: the array and its first table. */
+    private const LIST_WEIGHT = 12;
 
-    /** What one object (`{`) weighs. */
+    /** What a new object (`{`) weighs: the hash and its first table. */
     private const OBJECT_WEIGHT = 24;
+
+    /** The first table size of a PHP array. */
+    private const FIRST_TABLE = 8;
+
+    /** What one slot of a list table weighs. */
+    private const LIST_SLOT_WEIGHT = 1;
+
+    /** What one bucket of an object table weighs. */
+    private const OBJECT_SLOT_WEIGHT = 3;
 
     /** What one string weighs before its bytes. */
     private const STRING_WEIGHT = 2;
 
     /** Bytes of a string per weight unit (quotes included, rounded up). */
     private const STRING_BYTES_PER_UNIT = 16;
-
-    /** What one object member adds (`:`; the key is weighed as a string). */
-    private const MEMBER_WEIGHT = 4;
 
     public function __construct(
         private int $maxNodes = self::DEFAULT_MAX_NODES,
@@ -99,31 +110,37 @@ final readonly class JsonImportGuard
     }
 
     /**
-     * One pass over the text: commas count 1, `[` {@see self::LIST_WEIGHT}, `{` {@see self::OBJECT_WEIGHT}, each string
-     * (a key or a value) {@see self::STRING_WEIGHT} plus one per {@see self::STRING_BYTES_PER_UNIT} bytes, each `:` (an
-     * object member) {@see self::MEMBER_WEIGHT}.
+     * One pass over the text (see the weights above): strings by their length, lists and objects by their tables,
+     * which grow as their commas are counted.
      */
     private function weigh(string $json): void
     {
         $length = strlen($json);
         $weight = 0;
-        for ($i = 0; $i < $length;) {
-            $i += strcspn($json, '"[{,:', $i);
+        /** @var list<array{0: int, 1: int, 2: int}> $open the open containers: [slot weight, elements, table size] */
+        $open = [];
+        for ($i = 0; $i < $length; ++$i) {
+            $i += strcspn($json, '"[{,]}', $i);
             if ($i >= $length) {
                 return;
             }
-            if ($json[$i] === '"') {
+            $char = $json[$i];
+            if ($char === '"') {
                 $end = $this->stringEnd($json, $i);
                 $weight += self::STRING_WEIGHT + intdiv($end - $i + self::STRING_BYTES_PER_UNIT - 1, self::STRING_BYTES_PER_UNIT);
-                $i = $end;
+                $i = $end - 1;
+            } elseif ($char === '[' || $char === '{') {
+                $weight += $char === '[' ? self::LIST_WEIGHT : self::OBJECT_WEIGHT;
+                $open[] = [$char === '[' ? self::LIST_SLOT_WEIGHT : self::OBJECT_SLOT_WEIGHT, 1, self::FIRST_TABLE];
+            } elseif ($char === ',') {
+                $top = array_key_last($open);
+                if ($top !== null && ++$open[$top][1] > $open[$top][2]) {
+                    // The table doubles; the old one is still counted (both are held while PHP copies).
+                    $open[$top][2] *= 2;
+                    $weight += $open[$top][2] * $open[$top][0];
+                }
             } else {
-                $weight += match ($json[$i]) {
-                    ','     => 1,
-                    ':'     => self::MEMBER_WEIGHT,
-                    '['     => self::LIST_WEIGHT,
-                    default => self::OBJECT_WEIGHT,
-                };
-                ++$i;
+                array_pop($open);
             }
             if ($weight > $this->maxNodes) {
                 throw ImportLimitExceededException::jsonNodes($this->maxNodes);

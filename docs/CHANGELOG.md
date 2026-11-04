@@ -76,11 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `import.max_cell_length`, before `fgetcsv()` splits a record; each record `fgetcsv()` builds is checked again (columns, cell length)
     before it is kept;
   - JSON (ClickUp, Trello, the own format): the text is weighed before `json_decode()` against
-    `import.max_json_nodes` (default 6 000 000: every value 1, every list 16, every object 24, every string (key or value) 2 plus one per 16 bytes, every object member 4 more; about 16 bytes of memory per unit, audits EB-L5, EB-I7: a
-    realistic ClickUp or Trello export of about 3 000 tasks fits, see UPGRADING for 5 000), decoded with a depth
+    `import.max_json_nodes` (default 1 800 000: strings by their length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit;
+    audits EB-L5, EB-I7, EB-L6), decoded with a depth
     limit of 64, and the items (nested subtasks of the own format included) are counted against `import.max_rows` before they are
     mapped to tasks;
   - `nowo:task-board:import` refuses a file over the upload form's 20 MB before reading it.
+
+  Measured end to end at a 128 MB `memory_limit`, every hostile JSON shape is refused or imported cleanly, and about
+  1 200 realistic tasks import from any source (the import costs about 40 KB per task). See UPGRADING for the
+  settings of 5 000-task imports (`memory_limit` 256 MB for CSV, 512 MB and `max_json_nodes: 7500000` for JSON).
 
   The audit's memory PoCs (files just under 20 MB) are regression tests that run with `memory_limit=128M`.
 - **Import help link:** a `help_link` URL with white space, a control character or a backslash renders `#` (browsers
