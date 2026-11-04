@@ -1,0 +1,188 @@
+{
+  "tasks": [
+    {
+      "id": "86a1x1",
+      "custom_id": null,
+      "name": "Design the screens",
+      "text_content": "Mock-ups for the board.",
+      "description": "Mock-ups for the board.",
+      "markdown_description": "Mock-ups for the **board**.\n\n![shot](https://t000.p.clickup-attachments.com/fixture/1/shot.png)\n\n[spec](https://example.test/spec) <script>alert(1)</script> [bad](javascript:alert(1))",
+      "status": {
+        "status": "to do",
+        "color": "#d3d3d3",
+        "type": "custom",
+        "orderindex": 0
+      },
+      "date_created": "1793000000000",
+      "date_updated": "1793100000000",
+      "date_closed": null,
+      "archived": false,
+      "creator": {
+        "id": 1000001,
+        "username": "User 1",
+        "email": "user1@example.test",
+        "initials": "U1",
+        "color": "#000000",
+        "profilePicture": null
+      },
+      "assignees": [
+        {
+          "id": 1000001,
+          "username": "User 1",
+          "email": "user1@example.test",
+          "initials": "U1",
+          "color": "#000000",
+          "profilePicture": null
+        }
+      ],
+      "watchers": [],
+      "checklists": [],
+      "tags": [
+        {
+          "name": "ux",
+          "tag_fg": "#fff",
+          "tag_bg": "#000"
+        }
+      ],
+      "parent": null,
+      "priority": {
+        "id": "2",
+        "priority": "high",
+        "color": "#ffcc00"
+      },
+      "due_date": "1794139200000",
+      "start_date": "1793534400000",
+      "points": null,
+      "time_estimate": 3600000,
+      "custom_fields": [
+        {
+          "id": "cf-1",
+          "name": "Story points",
+          "type": "number",
+          "value": "5"
+        },
+        {
+          "id": "cf-2",
+          "name": "Empty",
+          "type": "short_text"
+        }
+      ],
+      "dependencies": [],
+      "linked_tasks": [],
+      "url": "https://app.clickup.com/t/86a1x1",
+      "attachments": [
+        {
+          "id": "att-1",
+          "title": "spec.pdf",
+          "extension": "pdf",
+          "size": 1234,
+          "mimetype": "application/pdf",
+          "url": "https://t000.p.clickup-attachments.com/fixture/2/spec.pdf",
+          "date": "1793100000000"
+        }
+      ]
+    },
+    {
+      "id": "86a1x2",
+      "custom_id": null,
+      "name": "Build the API",
+      "text_content": "",
+      "description": "",
+      "markdown_description": "",
+      "status": {
+        "status": "in progress",
+        "color": "#d3d3d3",
+        "type": "custom",
+        "orderindex": 0
+      },
+      "date_created": "1793000000000",
+      "date_updated": "1793200000000",
+      "date_closed": null,
+      "archived": false,
+      "creator": {
+        "id": 1000001,
+        "username": "User 1",
+        "email": "user1@example.test",
+        "initials": "U1",
+        "color": "#000000",
+        "profilePicture": null
+      },
+      "assignees": [
+        {
+          "id": 1000002,
+          "username": "User 2",
+          "email": "user2@example.test",
+          "initials": "U2",
+          "color": "#000000",
+          "profilePicture": null
+        }
+      ],
+      "watchers": [],
+      "checklists": [],
+      "tags": [],
+      "parent": null,
+      "priority": null,
+      "due_date": null,
+      "start_date": null,
+      "points": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "dependencies": [
+        {
+          "task_id": "86a1x2",
+          "depends_on": "86a1x1",
+          "type": 1
+        }
+      ],
+      "linked_tasks": [],
+      "url": "https://app.clickup.com/t/86a1x2",
+      "attachments": []
+    },
+    {
+      "id": "86a1x3",
+      "custom_id": null,
+      "name": "Sub build",
+      "text_content": "",
+      "description": "",
+      "markdown_description": "",
+      "status": {
+        "status": "in progress",
+        "color": "#d3d3d3",
+        "type": "custom",
+        "orderindex": 0
+      },
+      "date_created": "1793000000000",
+      "date_updated": "1793300000000",
+      "date_closed": null,
+      "archived": false,
+      "creator": {
+        "id": 1000001,
+        "username": "User 1",
+        "email": "user1@example.test",
+        "initials": "U1",
+        "color": "#000000",
+        "profilePicture": null
+      },
+      "assignees": [],
+      "watchers": [],
+      "checklists": [],
+      "tags": [],
+      "parent": "86a1x2",
+      "priority": {
+        "id": "4",
+        "priority": "low",
+        "color": "#d8d8d8"
+      },
+      "due_date": null,
+      "start_date": null,
+      "points": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "dependencies": [],
+      "linked_tasks": [],
+      "url": "https://app.clickup.com/t/86a1x3",
+      "attachments": []
+    }
+  ],
+  "last_page": true
+}

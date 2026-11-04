@@ -7,6 +7,9 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as DoctrineConfiguration;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
+use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
+use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\UiKitBundle\NowoUiKitBundle;
@@ -41,8 +44,9 @@ final class FunctionalKernel extends Kernel
 
     /**
      * @param array<string, mixed> $taskBoard
+     * @param bool $realHttpClient since 1.23: keep the bundle's own HTTP clients (audit EG-L4) instead of the fixtures
      */
-    public function __construct(private readonly array $taskBoard = [])
+    public function __construct(private readonly array $taskBoard = [], private readonly bool $realHttpClient = false)
     {
         // TASK_BOARD_TEST_DEBUG=0 builds the kernel as production does (no query logging or profiling): the memory
         // measurements of the import (audit EB-L7) use it.
@@ -68,7 +72,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -101,6 +105,9 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('logger', RecordingLogger::class)->public();
         $container->services()->set('app.assignee_provider', OwnerOnlyAssigneeProvider::class)->autowire();
         $container->services()->set('security.csrf.token_manager', PredictableCsrfTokenManager::class);
+        // Since 1.23: the host's avatar resolver (no picture unless a test sets one).
+        $container->services()->set('app.avatars', CountingAvatarResolver::class);
+        $container->services()->alias(TaskMemberAvatarResolverInterface::class, 'app.avatars');
         $container->extension('doctrine', [
             'dbal' => ['url' => self::databaseUrl()],
             'orm'  => [
@@ -119,6 +126,19 @@ final class FunctionalKernel extends Kernel
         ]);
         $container->extension('twig', ['strict_variables' => true]);
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + $this->taskBoard);
+        if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
+            // Since 1.23: the host side of the provider sync, with a scriptable provider and no network.
+            $services = $container->services();
+            $services->set('app.sync_credentials', TestCredentialResolver::class)->public();
+            $services->set('app.sync_storage', RecordingAttachmentStorage::class)->public();
+            $services->set('app.sync_limits', TestSyncLimitChecker::class)->public();
+            $services->set('app.memory_provider', InMemoryTaskProvider::class)->public()->tag('nowo_task_board.task_provider');
+            if (!$this->realHttpClient) {
+                $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
+            }
+            $services->set('app.import_users', BoardAwareUserResolver::class)->autowire();
+            $services->alias(TaskImportUserResolverInterface::class, 'app.import_users');
+        }
     }
 
     /**

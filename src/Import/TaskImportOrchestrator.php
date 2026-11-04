@@ -27,6 +27,7 @@ use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
+use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -194,10 +195,13 @@ final readonly class TaskImportOrchestrator
      */
     private function write(TaskBoard $board, TaskImportSource $source, array $rows, object $actor, TaskImportOptions $options, ?Task $parentTask): TaskImportResult
     {
-        $scope         = $source->scope($parentTask);
-        $existingTasks = $this->taskRepository->findByBoard($board, true);
-        $known         = $this->indexImportedTasks($existingTasks, $scope);
-        $maxPositions  = $this->collectMaxPositions($existingTasks);
+        $scope = $source->scope($parentTask);
+        // Since 1.23: archived tasks are matched too (a re-import never duplicates them; they stay archived).
+        $existingTasks = $this->taskRepository instanceof ArchiveAwareTaskRepositoryInterface
+            ? $this->taskRepository->findByBoardIncludingArchived($board)
+            : $this->taskRepository->findByBoard($board, true);
+        $known        = $this->indexImportedTasks($existingTasks, $scope);
+        $maxPositions = $this->collectMaxPositions($existingTasks);
         // Since 1.22.2 the run keeps ids; the tasks of the current batch (the board's at first) are at hand, the others
         // are found again after they left the entity manager.
         /** @var array<string, Task|null> $batch */

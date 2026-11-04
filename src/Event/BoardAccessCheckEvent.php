@@ -15,6 +15,15 @@ use Symfony\Contracts\EventDispatcher\Event;
  */
 final class BoardAccessCheckEvent extends Event
 {
+    /** Viewing (and, unless marked read-only, editing) the board: the historical meaning of the event. */
+    public const ACTION_VIEW = 'view';
+
+    /**
+     * Since 1.23: managing the board's provider connection (link, refresh, unlink). A listener that does not look at
+     * {@see self::getAction()} and grants every action widens it to "anyone who can edit the board".
+     */
+    public const ACTION_MANAGE_CONNECTION = 'manage_connection';
+
     private bool $granted = false;
 
     private bool $denied = false;
@@ -25,7 +34,15 @@ final class BoardAccessCheckEvent extends Event
         private readonly object $subject,
         private readonly TaskBoard $board,
         private readonly bool $defaultGranted = false,
+        // Since 1.23.
+        private readonly string $action = self::ACTION_VIEW,
     ) {
+    }
+
+    /** Since 1.23: what is being decided ({@see self::ACTION_VIEW} or {@see self::ACTION_MANAGE_CONNECTION}). */
+    public function getAction(): string
+    {
+        return $this->action;
     }
 
     public function getSubject(): object

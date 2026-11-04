@@ -16,6 +16,14 @@ function rules(selector: string): string {
 }
 
 describe('task-board.css', () => {
+  it('gives the connection badge a text colour with AA contrast (1.23)', () => {
+    expect(rules('.nowo-task-sync-badge .nowo-task-sync-badge__label')).toMatch(/color:\s*var\(--nowo-task-sync-badge-color,\s*#1c5d99\)\s*!important/);
+  });
+
+  it('gives tags a text colour with AA contrast over the framework utility (1.23)', () => {
+    expect(rules('.nowo-task-tags .nowo-task-tag')).toMatch(/color:\s*var\(--nowo-task-accent,\s*#7e22ce\)\s*!important/);
+  });
+
   it('keeps the history card content off the card edges (1.19.1)', () => {
     expect(rules('.nowo-task-detail__history > :not(summary)')).toMatch(/margin-inline:\s*1\.25rem/);
     expect(rules('.nowo-task-detail__history > :last-child')).toMatch(/margin-bottom:\s*1rem/);

@@ -1,0 +1,19 @@
+{#-
+    Since 1.23: one member chip — today's initial, with the member's picture over it when the host's
+    TaskMemberAvatarResolverInterface gives a URL (nowo_task_board_member_avatar_url). Override this file to draw
+    your own chip. Included with with_context = false. Variables: user (user_class or null), class (the chip class of
+    that place), size (24 or 32), labelled (true when no name is printed next to it: the wrapper is then the named
+    role="img"; otherwise the chip is aria-hidden). The <img> is always alt="" and a failed picture falls back to the
+    initial (task-board.js, no inline handler).
+-#}
+{%- import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi -%}
+{#- The label is the macro's own escaped output; the URL is cast to a string, never printed as Markup (audit DZ-L2). -#}
+{%- set _label = memberUi.member_label(user)|trim -%}
+{%- set _initial = _label|slice(0, 1)|upper -%}
+{%- set _url = nowo_task_board_member_avatar_url(user) -%}
+{%- set _url = _url is null ? null : _url ~ '' -%}
+{%- if _url -%}
+<span class="{{ class }} nowo-task-member-avatar has-image"{% if labelled|default(false) %} role="img" aria-label="{{ _label }}" title="{{ _label }}"{% else %} aria-hidden="true"{% endif %}>{{ _initial }}<img class="nowo-task-member-avatar__image" src="{{ _url }}" alt="" width="{{ size|default(32) }}" height="{{ size|default(32) }}" loading="lazy" decoding="async" referrerpolicy="same-origin"></span>
+{%- else -%}
+<span class="{{ class }}"{% if labelled|default(false) %} title="{{ _label }}"{% else %} aria-hidden="true"{% endif %}>{{ _initial }}</span>
+{%- endif -%}

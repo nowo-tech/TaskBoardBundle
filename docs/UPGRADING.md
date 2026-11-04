@@ -106,6 +106,166 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.22.x** (run the 1.22.0 migration and backfill first if you come from 1.21 or older):
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+`symfony/http-client` is now required (Composer installs it). Generate and run a migration
+(`php bin/console doctrine:migrations:diff`, then `doctrine:migrations:migrate`), or apply the SQL below. It assumes the
+default `table_prefix` (`task_board_`); replace the names if you configured another one.
+
+### Schema change for every host: archived tasks
+
+MySQL / MariaDB:
+
+```sql
+ALTER TABLE task_board_tasks ADD archived_at DATETIME DEFAULT NULL, ADD archive_reason VARCHAR(16) DEFAULT NULL;
+CREATE INDEX task_board_tasks_board_archived_idx ON task_board_tasks (board_id, archived_at);
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_tasks ADD archived_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD archive_reason VARCHAR(16) DEFAULT NULL;
+CREATE INDEX task_board_tasks_board_archived_idx ON task_board_tasks (board_id, archived_at);
+```
+
+Existing tasks stay active (`archived_at` is NULL). `findByBoard()`, `findByBoardWithin()`, `countByBoard()` and the
+TimeTrack task list now leave archived tasks out; a custom `TaskRepositoryInterface` should do the same (and may implement
+`ArchiveAwareTaskRepositoryInterface`, which imports and the sync use to see archived tasks).
+
+### Schema change with `sync.enabled: true` only: the sync tables
+
+These tables are mapped only when the sync is enabled. `<users>` is the table of your `user_class`, and its id type must
+match (`INT` here).
+
+MySQL / MariaDB:
+
+```sql
+CREATE TABLE task_board_connections (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, last_run_at DATETIME DEFAULT NULL, last_success_at DATETIME DEFAULT NULL, watermark DATETIME DEFAULT NULL, sync_cursor JSON DEFAULT NULL, running_run_id VARCHAR(36) DEFAULT NULL, heartbeat_at DATETIME DEFAULT NULL, provider VARCHAR(32) NOT NULL, import_scope VARCHAR(64) NOT NULL, connection_ref VARCHAR(191) NOT NULL, container_id VARCHAR(128) NOT NULL, container_label VARCHAR(255) NOT NULL, container_path JSON NOT NULL, options JSON NOT NULL, board_id VARCHAR(36) NOT NULL, created_by_id INT DEFAULT NULL, UNIQUE INDEX uniq_task_board_connections_board (board_id), INDEX IDX_947E513BB03A8386 (created_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_sync_items (id VARCHAR(36) NOT NULL, field_hashes JSON NOT NULL, conflict_hashes JSON NOT NULL, remote_archived_at DATETIME DEFAULT NULL, last_seen_run_id VARCHAR(36) DEFAULT NULL, board_id VARCHAR(36) NOT NULL, external_id VARCHAR(128) NOT NULL, remote_updated_at DATETIME NOT NULL, connection_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_sync_items_task (task_id), UNIQUE INDEX uniq_task_board_sync_items_board_ext (board_id, external_id), INDEX IDX_3BD8DF5ADD03F01 (connection_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_sync_runs (finished_at DATETIME DEFAULT NULL, heartbeat_at DATETIME DEFAULT NULL, status VARCHAR(16) NOT NULL, cancel_requested TINYINT NOT NULL, report JSON NOT NULL, run_order BIGINT NOT NULL, id VARCHAR(36) NOT NULL, board_id VARCHAR(36) NOT NULL, run_trigger VARCHAR(16) NOT NULL, mode VARCHAR(16) NOT NULL, dry_run TINYINT NOT NULL, started_at DATETIME NOT NULL, connection_id VARCHAR(36) NOT NULL, actor_id INT DEFAULT NULL, INDEX idx_task_board_sync_runs_board (board_id, started_at), INDEX IDX_26B4BC74DD03F01 (connection_id), INDEX IDX_26B4BC7410DAF24A (actor_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_sync_comments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, body_hash VARCHAR(64) NOT NULL, local_hash VARCHAR(64) NOT NULL, item_id VARCHAR(36) NOT NULL, comment_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_sync_comments_item_remote (item_id, remote_id), INDEX IDX_BDECD5F5126F525E (item_id), INDEX IDX_BDECD5F5F8697D13 (comment_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_sync_attachments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, remote_size BIGINT DEFAULT NULL, remote_updated_at DATETIME DEFAULT NULL, stored_ref VARCHAR(191) NOT NULL, stored_url VARCHAR(2048) NOT NULL, name VARCHAR(255) NOT NULL, mime VARCHAR(127) NOT NULL, size BIGINT NOT NULL, sha256 VARCHAR(64) DEFAULT NULL, item_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, link_id VARCHAR(36) DEFAULT NULL, UNIQUE INDEX uniq_task_board_sync_attachments_task_remote (task_id, remote_id), INDEX IDX_A44E84EF126F525E (item_id), INDEX IDX_A44E84EF8DB60186 (task_id), INDEX IDX_A44E84EFADA40271 (link_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513BE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513BB03A8386 FOREIGN KEY (created_by_id) REFERENCES <users> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5ADD03F01 FOREIGN KEY (connection_id) REFERENCES task_board_connections (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_runs ADD CONSTRAINT FK_26B4BC74DD03F01 FOREIGN KEY (connection_id) REFERENCES task_board_connections (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_runs ADD CONSTRAINT FK_26B4BC7410DAF24A FOREIGN KEY (actor_id) REFERENCES <users> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F5126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F5F8697D13 FOREIGN KEY (comment_id) REFERENCES task_board_task_comments (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EFADA40271 FOREIGN KEY (link_id) REFERENCES task_board_task_links (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+CREATE TABLE task_board_connections (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, last_run_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_success_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, watermark TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, sync_cursor JSON DEFAULT NULL, running_run_id VARCHAR(36) DEFAULT NULL, heartbeat_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, provider VARCHAR(32) NOT NULL, import_scope VARCHAR(64) NOT NULL, connection_ref VARCHAR(191) NOT NULL, container_id VARCHAR(128) NOT NULL, container_label VARCHAR(255) NOT NULL, container_path JSON NOT NULL, options JSON NOT NULL, board_id VARCHAR(36) NOT NULL, created_by_id INT DEFAULT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_connections_board ON task_board_connections (board_id);
+CREATE INDEX IDX_947E513BB03A8386 ON task_board_connections (created_by_id);
+CREATE TABLE task_board_sync_items (id VARCHAR(36) NOT NULL, field_hashes JSON NOT NULL, conflict_hashes JSON NOT NULL, remote_archived_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_seen_run_id VARCHAR(36) DEFAULT NULL, board_id VARCHAR(36) NOT NULL, external_id VARCHAR(128) NOT NULL, remote_updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, connection_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_items_task ON task_board_sync_items (task_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_items_board_ext ON task_board_sync_items (board_id, external_id);
+CREATE INDEX IDX_3BD8DF5ADD03F01 ON task_board_sync_items (connection_id);
+CREATE TABLE task_board_sync_runs (finished_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, heartbeat_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, status VARCHAR(16) NOT NULL, cancel_requested BOOLEAN NOT NULL, report JSON NOT NULL, run_order BIGINT NOT NULL, id VARCHAR(36) NOT NULL, board_id VARCHAR(36) NOT NULL, run_trigger VARCHAR(16) NOT NULL, mode VARCHAR(16) NOT NULL, dry_run BOOLEAN NOT NULL, started_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, connection_id VARCHAR(36) NOT NULL, actor_id INT DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_runs_board ON task_board_sync_runs (board_id, started_at);
+CREATE INDEX IDX_26B4BC74DD03F01 ON task_board_sync_runs (connection_id);
+CREATE INDEX IDX_26B4BC7410DAF24A ON task_board_sync_runs (actor_id);
+CREATE TABLE task_board_sync_comments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, body_hash VARCHAR(64) NOT NULL, local_hash VARCHAR(64) NOT NULL, item_id VARCHAR(36) NOT NULL, comment_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_sync_comments_item_remote ON task_board_sync_comments (item_id, remote_id);
+CREATE INDEX IDX_BDECD5F5126F525E ON task_board_sync_comments (item_id);
+CREATE INDEX IDX_BDECD5F5F8697D13 ON task_board_sync_comments (comment_id);
+CREATE TABLE task_board_sync_attachments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, remote_size BIGINT DEFAULT NULL, remote_updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, stored_ref VARCHAR(191) NOT NULL, stored_url VARCHAR(2048) NOT NULL, name VARCHAR(255) NOT NULL, mime VARCHAR(127) NOT NULL, size BIGINT NOT NULL, sha256 VARCHAR(64) DEFAULT NULL, item_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, link_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_sync_attachments_task_remote ON task_board_sync_attachments (task_id, remote_id);
+CREATE INDEX IDX_A44E84EF126F525E ON task_board_sync_attachments (item_id);
+CREATE INDEX IDX_A44E84EF8DB60186 ON task_board_sync_attachments (task_id);
+CREATE INDEX IDX_A44E84EFADA40271 ON task_board_sync_attachments (link_id);
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513BE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513BB03A8386 FOREIGN KEY (created_by_id) REFERENCES <users> (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5ADD03F01 FOREIGN KEY (connection_id) REFERENCES task_board_connections (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_sync_runs ADD CONSTRAINT FK_26B4BC74DD03F01 FOREIGN KEY (connection_id) REFERENCES task_board_connections (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_runs ADD CONSTRAINT FK_26B4BC7410DAF24A FOREIGN KEY (actor_id) REFERENCES <users> (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F5126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F5F8697D13 FOREIGN KEY (comment_id) REFERENCES task_board_task_comments (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EFADA40271 FOREIGN KEY (link_id) REFERENCES task_board_task_links (id) ON DELETE SET NULL NOT DEFERRABLE;
+```
+
+Boards imported earlier from a ClickUp CSV or JSON file are adopted by their first sync without duplicates, through the
+import links of 1.22 (`import_source` = `clickup`).
+
+### Provider sync (opt-in)
+
+Nothing changes until you set `sync.enabled: true` with a `credential_resolver`. See [sync.md](sync.md).
+
+- **Access listeners:** `BoardAccessCheckEvent` has an action (`getAction()`). Your `BOARD_ACCESS_CHECK` listener sees
+  `ACTION_MANAGE_CONNECTION` when someone links, refreshes or unlinks a board. A listener that grants every action
+  without looking at it lets everyone who can edit the board manage its connection: check the action.
+- **New routes** (`board_connection*`, only with the sync) and **`task_restore`** (always). A host that lists its routes
+  explicitly or overrides `routes.*` gets the defaults.
+- **Templates:** `board.html.twig`, `list.html.twig` and `gantt.html.twig` gained the block `nowo_task_board_connection`
+  (renders nothing without the sync), `list.html.twig` the folded "Archived tasks" section (`nowo_task_board_archived`)
+  and the task page an "archived" notice. Overrides of these pages should add them.
+- **Translations:** new keys `task_board.sync.*`, `task_board.history.type.sync_conflict|archived|restored`,
+  `task_board.link.attachment`, `task_board.list.archived`, `task_board.task.archive_reason.*`,
+  `task_board.task.archived_notice`, `task_board.task.restore`, `task_board.flash.task_restored` (7 locales).
+- **Test fixtures:** `tests/Fixtures/clickup/` moved to `tests/Fixtures/ClickUp/`.
+- **Rendering synced text:** if task text is rendered with league/commonmark, set `allow_unsafe_links: false` (and
+  `html_input: escape` or `strip`). The sanitizer empties unsafe link targets and removes raw HTML, but the renderer is
+  the first line of defence. See [SECURITY](SECURITY.md#provider-sync-host-duties-and-known-limits) for serving stored
+  files (`nosniff`, `attachment`), a custom `sync.http.client` (must not log URLs) and the other host duties.
+- **Run limits:** a second request into a running run is Busy (also a slice of the same run); a slice reads at most
+  `ceil(max_tasks_per_run / 100) + 1` task pages and a run at most `sync.max_pages_per_run` (new, 1000) over all its
+  slices, and fails with `response_too_large` beyond; a page that brings no new
+  task ends the list (warning `paging_stopped`, the watermark stays). Comments are read up to `max_comments_per_task`
+  rows.
+- **Synced text:** raw HTML in remote text is now escaped (shown as text) instead of removed, and an unsafe link or
+  reference definition stays as plain text.
+- **Assignees:** a row resolves at most 50 assignees (file import and sync); unresolved ones are listed up to 10, then
+  counted.
+- **Attachment hosts:** `sync.providers.clickup.attachment_hosts` refuses a pattern that is not a host of two labels at
+  least (`*.com` is refused at container build).
+
+### Known unconfirmed ClickUp behaviour
+
+The ClickUp adapter was built from the API v2 documentation; its request shapes are unconfirmed against the live API
+(owner decision 2026-11-04) and validated by Beacon after deploy. The adapter is defensive on each point:
+
+- **Order of the task pages** (`order_by=updated&reverse=true`, meant to list the oldest update first): the run does
+  not depend on it — the watermark is the newest date of all pages read, and the next run's overlap window re-reads the
+  edge.
+- **Attachments in the list answer and their fields:** only `id` and `url` are required; `title` / `name`, `size`,
+  `mimetype` and `date` are read when present, extra fields are ignored, and a task without an `attachments` list has
+  no files synced (no extra call).
+- **`last_page`:** used when the answer has it; otherwise paging goes on until an empty page (a short page is not
+  trusted to be the last), always within the run's page caps (`max_pages_per_run`).
+- **Comment paging:** the documented `start` / `start_id` of the oldest comment; it stops on a page shorter than 25,
+  an empty page, a cursor that does not move, or the comment caps.
+
+Unexpected answer shapes are logged at debug level with their keys only, never a value. The recording script
+(`make record-clickup-fixtures`) stays for a later confirmation.
+
+### Task member pictures (opt-in)
+
+With the default `NullTaskMemberAvatarResolver` the member chips are unchanged. To show pictures, alias
+`Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface` to your service ([USAGE](USAGE.md#task-member-pictures-since-123)).
+
+- The six templates with a member chip (`_task_card`, `list`, `_task_blocks`, `_task_members_modal`, `_task_comment`,
+  `_task_history_section`) now include `manage/_task_member_avatar.html.twig`. An override of one of them that copies the
+  old chip keeps working without pictures; include the partial to get them.
+- URLs must be `https://…` (no user info, no IPv6 literal, port 1–65535) or a same-origin path. `http:`, `data:`, relative
+  paths, `//…`, quotes and control characters are dropped (the initial stays).
+- Your CSP `img-src` must allow the origins your URLs point or redirect to. Nothing inline is added.
+- One more CSS block in `task-board.css` (`.nowo-task-member-avatar*`) and the fallback in `task-board.js`.
+
 ## To 1.22.2
 
 From **1.22.1**: `composer update nowo-tech/task-board-bundle`. No schema change.

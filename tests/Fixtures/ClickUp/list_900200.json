@@ -1,0 +1,14 @@
+{
+  "id": "900200",
+  "name": "List 2",
+  "task_count": 3,
+  "folder": {
+    "id": "90002",
+    "name": "Folder 1",
+    "hidden": false
+  },
+  "space": {
+    "id": "90001",
+    "name": "Space 1"
+  }
+}

@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter;
+use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpTaskMapper;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
-use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardJsonImporter;
 use Nowo\TaskBoardBundle\Import\Trello\TrelloJsonImporter;
@@ -107,7 +107,7 @@ try {
     $rows = match ($kind) {
         'csv'            => (new DelimitedTableParser())->parse($content, 'x.csv'),
         'clickup'        => (new ClickUpJsonImporter())->parse($content, 'x.json'),
-        'clickup-raised' => (new ClickUpJsonImporter(new ImportFieldMapper(), new JsonImportGuard(maxNodes: 9_500_000)))->parse($content, 'x.json'),
+        'clickup-raised' => (new ClickUpJsonImporter(new ClickUpTaskMapper(), new JsonImportGuard(maxNodes: 9_500_000)))->parse($content, 'x.json'),
         'trello'         => (new TrelloJsonImporter())->parse($content, 'x.json'),
         'taskboard'      => (new TaskBoardJsonImporter())->parse($content, 'x.json'),
     };

@@ -1,0 +1,1075 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Sync;
+
+use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
+use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Import\ImportAssigneeResolver;
+use Nowo\TaskBoardBundle\Import\ImportedTaskUpdater;
+use Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface;
+use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Service\BoardColumnManager;
+use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
+use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
+use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
+use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
+use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Stringable;
+use Symfony\Contracts\Translation\TranslatorInterface;
+use Throwable;
+
+use function array_filter;
+use function array_key_last;
+use function array_keys;
+use function array_map;
+use function array_unique;
+use function array_values;
+use function count;
+use function hash;
+use function implode;
+use function is_array;
+use function is_scalar;
+use function json_encode;
+use function max;
+use function mb_strtolower;
+use function method_exists;
+use function sha1;
+use function sort;
+use function sprintf;
+use function str_starts_with;
+use function trim;
+
+use const JSON_PRESERVE_ZERO_FRACTION;
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
+
+/**
+ * @internal since 1.23: writes remote pages to a board — the per-task rules of the contract (§3): create, adopt,
+ * update field by field with conflicts, archive and restore, files and comments. Stateless; the run state is the
+ * {@see SyncRunContext}.
+ */
+final readonly class SyncTaskWriter
+{
+    /** The synced fields. */
+    /** The longest description stored (bytes). */
+    public const MAX_DESCRIPTION_BYTES = 100_000;
+
+    public const FIELDS = ['title', 'description', 'priority', 'column', 'start', 'due', 'estimate', 'tags', 'assignees', 'parent'];
+
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private SyncStore $store,
+        private ArchiveAwareTaskRepositoryInterface $tasks,
+        private TaskBoardResourceAccessChecker $accessChecker,
+        private TaskImportUserResolverInterface $userResolver,
+        private BoardColumnManager $columnManager,
+        private RemoteFileFetcher $fetcher,
+        private TaskAttachmentStorageInterface $storage,
+        private InlineImageRewriterInterface $rewriter,
+        private SyncLimitCheckerInterface $limitChecker,
+        private TaskImportLinkLookupInterface $linkLookup,
+        private TaskDependencyManager $dependencyManager,
+        private ImportedTaskUpdater $updater = new ImportedTaskUpdater(),
+        private TaskChangeRecorder $changeRecorder = new TaskChangeRecorder(),
+        private RemoteContentSanitizer $sanitizer = new RemoteContentSanitizer(),
+        private ?TaskAssigneeProviderInterface $assigneeProvider = null,
+        private ?TranslatorInterface $translator = null,
+        private bool $storageEnabled = false,
+        private int $maxFileBytes = 26_214_400,
+    ) {
+    }
+
+    /**
+     * One page: plans every task, asks the host's limit, writes the tasks in one transaction (rolled back on a dry
+     * run), then the files and comments of the tasks it created or changed.
+     *
+     * @param list<RemoteTask> $remoteTasks
+     *
+     * @throws SyncRefusedException when the host's limit refuses the page (nothing is written)
+     */
+    public function writePage(SyncRunContext $ctx, array $remoteTasks): void
+    {
+        /** @var array<string, RemoteTask> $rows */
+        $rows = [];
+        foreach ($remoteTasks as $remote) {
+            $id = Text::cut($remote->externalId(), 128);
+            if (isset($ctx->seen[$id])) {
+                ++$ctx->skipRepeated;
+                continue;
+            }
+            $ctx->seen[$id] = true;
+            $rows[$id]      = $remote;
+            ++$ctx->tasksSeen;
+            if (!$ctx->highWatermark instanceof DateTimeImmutable || $remote->remoteUpdatedAt > $ctx->highWatermark) {
+                $ctx->highWatermark = $remote->remoteUpdatedAt;
+            }
+        }
+        if ($rows === []) {
+            return;
+        }
+
+        $ids   = array_map(strval(...), array_keys($rows));
+        $items = $this->store->itemsByExternalIds($ctx->connection, $ids);
+        $links = $this->tasks->findImportedByExternalIds($ctx->board, $ctx->scope, $ids);
+        $known = $links;
+        foreach ($items as $id => $item) {
+            $task = $item->getTask();
+            if ($task instanceof Task) {
+                $known[$id] = [$task, null];
+            }
+        }
+        $elsewhere = $this->elsewhere($ctx, $ids, $items, $links);
+        $related   = $this->relatedTasks($ctx, $rows, $known);
+
+        // Plan first (no write): the host's limit is asked with the page's new tasks.
+        $plan     = [];
+        $newTasks = 0;
+        foreach ($this->parentsFirst($rows) as $id => $remote) {
+            $item = $items[$id] ?? null;
+            if ($item instanceof TaskSyncItem && $item->isTombstone()) {
+                ++$ctx->skipLocallyDeleted;
+                continue;
+            }
+            $task = $known[$id][0] ?? null;
+            if (!$task instanceof Task) {
+                if (isset($elsewhere[$id])) {
+                    ++$ctx->skipElsewhere;
+                } elseif ($remote->archived) {
+                    ++$ctx->unchanged;
+                } else {
+                    $plan[] = ['create', $id, $remote, null, $item];
+                    ++$newTasks;
+                }
+                continue;
+            }
+            if (!$this->canEdit($ctx, $task)) {
+                ++$ctx->skipReadOnly;
+                continue;
+            }
+            if ($task->isArchived() && $task->getArchiveReason() !== Task::ARCHIVE_REASON_REMOTE) {
+                ++$ctx->skipLocallyArchived;
+                continue;
+            }
+            if ($task->isArchived() && $remote->archived) {
+                ++$ctx->unchanged;
+                continue;
+            }
+            if ($task->isArchived()) {
+                ++$newTasks;
+            }
+            $plan[] = [$task->isArchived() ? 'restore' : ($remote->archived ? 'archive' : 'update'), $id, $remote, $task, $item];
+        }
+
+        if ($newTasks > 0) {
+            $refusal = $this->limitChecker->check($ctx->board, $newTasks, 0);
+            if ($refusal instanceof LimitRefusal) {
+                throw new SyncRefusedException($refusal);
+            }
+        }
+
+        $post       = [];
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $columns   = $this->columns($ctx, $plan);
+            $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $ctx->board);
+            foreach ($plan as [$action, $id, $remote, $task, $item]) {
+                if ($action === 'create') {
+                    $post[] = $this->create($ctx, $id, $remote, $columns, $assignees, $related);
+                } elseif ($action === 'archive' && $task instanceof Task) {
+                    $this->markArchived($ctx, $task, $item ?? $this->adopt($ctx, $id, $task), $id);
+                } elseif ($task instanceof Task) {
+                    if ($action === 'restore') {
+                        $item ??= $this->adopt($ctx, $id, $task);
+                        $this->markRestored($ctx, $task, $item, $id);
+                    }
+                    $result = $this->update($ctx, $id, $remote, $task, $item, $columns, $assignees, $related, $action === 'restore');
+                    if ($result !== null) {
+                        $post[] = $result;
+                    }
+                }
+            }
+            $this->entityManager->flush();
+            if ($assignees->warnings() !== []) {
+                $ctx->warn('assignee_unresolved');
+            }
+            if ($ctx->options->dryRun) {
+                $connection->rollBack();
+                $ctx->taskEvents = [];
+                $ctx->pending    = [];
+                $this->entityManager->clear();
+
+                return;
+            }
+            $connection->commit();
+        } catch (Throwable $exception) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            $ctx->taskEvents = [];
+
+            throw $exception;
+        }
+
+        // Files, inline images, comments and the fields document of the tasks this page created or changed.
+        try {
+            foreach ($post as [$item, $task, $remote, $descriptionWritten]) {
+                $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees);
+            }
+        } finally {
+            $deletes          = $ctx->fileDeletes;
+            $ctx->fileDeletes = [];
+            $this->entityManager->flush();
+            // Audit EG-I3: a replaced or removed file leaves the host's storage once the rows no longer point at it.
+            foreach ($deletes as [$task, $stored]) {
+                $this->storage->delete($task, $stored);
+            }
+        }
+    }
+
+    /**
+     * The relations (parents, Gantt dependencies) whose other task arrived on a later page of the run.
+     */
+    public function resolvePending(SyncRunContext $ctx): void
+    {
+        if ($ctx->pending === []) {
+            return;
+        }
+        $others = $this->tasks->findImportedByExternalIds($ctx->board, $ctx->scope, array_values(array_unique(array_map(static fn (array $p): string => $p[1], $ctx->pending))));
+        foreach ($ctx->pending as [$taskId, $otherId, $type]) {
+            $task  = $this->entityManager->find(Task::class, $taskId);
+            $other = $others[$otherId][0] ?? null;
+            if (!$task instanceof Task || !$other instanceof Task || !$this->canEdit($ctx, $other)) {
+                $ctx->warn('relation_skipped');
+                continue;
+            }
+            if ($type === 'parent') {
+                $this->reparent($ctx, $task, $other);
+            } else {
+                $this->addDependency($ctx, $task, $other, TaskDependencyType::tryFrom($type) ?? TaskDependencyType::BlockedBy);
+            }
+        }
+        $ctx->pending = [];
+        $this->entityManager->flush();
+    }
+
+    /**
+     * The deletions phase: archives the linked tasks a complete id scan no longer lists and restores the ones that
+     * came back, behind the mass-archive guard.
+     *
+     * @param array<string, true> $remoteIds
+     */
+    public function applyDeletions(SyncRunContext $ctx, array $remoteIds, float $maxArchiveRatio): void
+    {
+        $linked  = $this->store->linkedItems($ctx->connection);
+        $active  = array_values(array_filter($linked, static fn (array $i): bool => !$i['archived']));
+        $missing = array_values(array_filter($active, static fn (array $i): bool => !isset($remoteIds[$i['externalId']])));
+        $back    = array_values(array_filter($linked, static fn (array $i): bool => $i['archived'] && $i['remoteArchived'] && $i['reason'] === Task::ARCHIVE_REASON_REMOTE && isset($remoteIds[$i['externalId']])));
+
+        if ($missing !== [] && !$ctx->options->allowMassArchive && ($remoteIds === [] || count($missing) > $maxArchiveRatio * count($active))) {
+            $ctx->warn('mass_archive_guard', ['%count%' => (string) count($missing), '%total%' => (string) count($active)]);
+            $missing = [];
+        }
+        if ($back !== [] && $this->limitChecker->check($ctx->board, count($back), 0) instanceof LimitRefusal) {
+            $ctx->warn('restore_refused');
+            $back = [];
+        }
+        if ($ctx->options->dryRun) {
+            $ctx->archived += count($missing);
+            $ctx->restored += count($back);
+
+            return;
+        }
+        foreach ([...array_map(static fn (array $i): array => [true, $i], $missing), ...array_map(static fn (array $i): array => [false, $i], $back)] as [$archive, $row]) {
+            $item = $this->store->findItem($row['id']);
+            $task = $item?->getTask();
+            if (!$item instanceof TaskSyncItem || !$task instanceof Task || !$this->canEdit($ctx, $task)) {
+                continue;
+            }
+            if ($archive) {
+                $this->markArchived($ctx, $task, $item, $row['externalId']);
+            } else {
+                $this->markRestored($ctx, $task, $item, $row['externalId']);
+            }
+        }
+        $this->entityManager->flush();
+    }
+
+    /**
+     * @param array{byName: array<string, BoardColumn>, list: list<BoardColumn>, fallback: BoardColumn|null} $columns
+     * @param array<string, Task> $related
+     *
+     * @return array{0: TaskSyncItem, 1: Task, 2: RemoteTask, 3: bool}
+     */
+    private function create(SyncRunContext $ctx, string $id, RemoteTask $remote, array $columns, ImportAssigneeResolver $assignees, array &$related): array
+    {
+        $row    = $remote->task;
+        $column = $this->columnOf($row->status, $columns) ?? $columns['fallback'] ?? ($columns['list'][0] ?? null);
+        $parent = $this->parentOf($ctx, $row, $related);
+        $task   = new Task(
+            board: $ctx->board,
+            title: $row->title,
+            creator: $ctx->actor,
+            column: $column,
+            parent: $parent,
+            priority: $row->priority,
+            position: $this->nextPosition($ctx, $column),
+            estimatedMinutes: $row->estimatedMinutes,
+            dueAt: $row->dueAt,
+            tags: $row->tags,
+        );
+        if ($this->description($row) !== null) {
+            // No provider URL is ever stored: the images are copied after the page, then rewritten again.
+            $task->setDescription($this->rewriter->rewrite($task, $this->description($row), []));
+        }
+        $startAt = $row->startAt ?? $row->createdAt;
+        if ($startAt instanceof DateTimeImmutable) {
+            $task->setStartAt($startAt);
+        }
+        $task->addLink(new TaskLink(
+            task: $task,
+            linkType: TaskLinkType::Other,
+            url: $row->sourceUrl !== null && $this->sanitizer->isSafeUrl($row->sourceUrl) ? $row->sourceUrl : sprintf('import://%s/%s', $ctx->scope, $id),
+            label: sprintf('%s #%s', $ctx->provider->id(), $id),
+            externalId: $id,
+            importSource: $ctx->scope,
+        ));
+        $users = $assignees->resolve($row);
+        foreach ($users as $user) {
+            $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
+        }
+        if ($column instanceof BoardColumn && $columns['list'] !== [] && $columns['list'][array_key_last($columns['list'])]->getId() === $column->getId()) {
+            $task->markCompleted();
+        }
+        $this->changeRecorder->recordCreated($task, $ctx->actor);
+        $this->entityManager->persist($task);
+        $related[$id] = $task;
+
+        // A row with an item is linked (planned as an update) or a tombstone (skipped): a new task has none.
+        $item = new TaskSyncItem($ctx->connection, $ctx->board->getId(), $task, $id, $remote->remoteUpdatedAt);
+        $this->entityManager->persist($item);
+        $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId);
+        foreach ($this->remoteValues($row, $column, $users, $parent) as $field => $value) {
+            if ($value !== null) {
+                $item->setBaseline($field, $this->hash($value), $this->hash($this->localValue($task, $field)));
+            }
+        }
+        $this->queueRelations($ctx, $task, $row, $related);
+        ++$ctx->created;
+
+        return [$item, $task, $remote, $this->description($row) !== null];
+    }
+
+    /**
+     * The per-field rule (§3.2) on a task already linked; `$restoring` counts the row as restored, not updated.
+     *
+     * @param array{byName: array<string, BoardColumn>, list: list<BoardColumn>, fallback: BoardColumn|null} $columns
+     * @param array<string, Task> $related
+     *
+     * @return array{0: TaskSyncItem, 1: Task, 2: RemoteTask, 3: bool}|null
+     */
+    private function update(SyncRunContext $ctx, string $id, RemoteTask $remote, Task $task, ?TaskSyncItem $item, array $columns, ImportAssigneeResolver $assignees, array &$related, bool $restoring): ?array
+    {
+        $related[$id] = $task;
+        if ($item instanceof TaskSyncItem && !$ctx->options->full && !$restoring && $remote->remoteUpdatedAt <= $item->getRemoteUpdatedAt()) {
+            $item->setLastSeenRunId($ctx->runId);
+            ++$ctx->unchanged;
+
+            return null;
+        }
+        $item ??= $this->adopt($ctx, $id, $task);
+        $row          = $remote->task;
+        $column       = $this->columnOf($row->status, $columns);
+        $parent       = $this->parentOf($ctx, $row, $related);
+        $users        = $assignees->resolve($row);
+        $remoteValues = $this->remoteValues($row, $column, $users, $parent);
+
+        /** @var array<string, true> $allowed */
+        $allowed   = [];
+        $conflicts = [];
+        foreach ($remoteValues as $field => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $remoteHash = $this->hash($value);
+            $localHash  = $this->hash($this->localValue($task, $field));
+            $baseline   = $item->baseline($field);
+            if ($baseline === null || ($remoteHash !== $baseline[0] && $localHash === $baseline[1])) {
+                $allowed[$field] = true;
+            } elseif ($remoteHash === $baseline[0]) {
+                continue;
+            } elseif ($localHash === $remoteHash) {
+                $item->setBaseline($field, $remoteHash, $localHash)->setConflictHash($field, null);
+            } elseif ($item->conflictHash($field) !== $remoteHash) {
+                $item->setConflictHash($field, $remoteHash);
+                $conflicts[$field] = $this->preview($field, $value, $column, $row);
+            }
+        }
+
+        $changed = $this->updater->apply(
+            $task,
+            $row,
+            $column,
+            fn (BoardColumn $target): int => $this->nextPosition($ctx, $target),
+            $columns['list'],
+            $ctx->actor,
+            static fn (string $field): bool => $field !== 'description' && isset($allowed[$field]),
+        );
+        if (isset($allowed['description'])) {
+            $description = $this->rewriter->rewrite($task, (string) $this->description($row), []);
+            if ($description !== $task->getDescription()) {
+                $this->changeRecorder->recordIfChanged($task, $ctx->actor, TaskChangeType::Description, $task->getDescription(), $description);
+                $task->setDescription($description);
+                $changed = true;
+            }
+        }
+        if (isset($allowed['assignees'])) {
+            $changed = $this->updater->applyAssignees($task, $users, $ctx->actor) || $changed;
+        }
+        if (isset($allowed['parent']) && $parent instanceof Task) {
+            $changed = $this->reparent($ctx, $task, $parent) || $changed;
+        }
+        foreach (array_keys($allowed) as $field) {
+            $item->setBaseline($field, $this->hash($remoteValues[$field]), $this->hash($this->localValue($task, $field)))->setConflictHash($field, null);
+        }
+        if ($conflicts !== []) {
+            $this->noteConflicts($ctx, $task, $id, $conflicts);
+        }
+        $this->queueRelations($ctx, $task, $row, $related);
+        $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId);
+        if (!$restoring) {
+            $changed ? ++$ctx->updated : ++$ctx->unchanged;
+        }
+
+        return [$item, $task, $remote, isset($allowed['description'])];
+    }
+
+    /** A sync item for a task an earlier file import (or an item-less link) put on the board. */
+    private function adopt(SyncRunContext $ctx, string $id, Task $task): TaskSyncItem
+    {
+        $item = new TaskSyncItem($ctx->connection, $ctx->board->getId(), $task, $id, new DateTimeImmutable('@0'));
+        $item->setLastSeenRunId($ctx->runId);
+        $this->entityManager->persist($item);
+
+        return $item;
+    }
+
+    private function markArchived(SyncRunContext $ctx, Task $task, TaskSyncItem $item, string $externalId): void
+    {
+        $task->archive(Task::ARCHIVE_REASON_REMOTE);
+        $item->setRemoteArchivedAt(new DateTimeImmutable());
+        $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::Archived, null, $ctx->provider->id());
+        $ctx->taskEvents[] = ['archived', $task->getId(), $externalId];
+        ++$ctx->archived;
+    }
+
+    private function markRestored(SyncRunContext $ctx, Task $task, TaskSyncItem $item, string $externalId): void
+    {
+        $task->restore();
+        $item->setRemoteArchivedAt(null);
+        $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::Restored, null, $ctx->provider->id());
+        $ctx->taskEvents[] = ['restored', $task->getId(), $externalId];
+        ++$ctx->restored;
+    }
+
+    /**
+     * One comment and one change-history entry listing the fields kept here although the provider changed them.
+     *
+     * @param array<string, string> $conflicts field => preview of the remote value
+     */
+    private function noteConflicts(SyncRunContext $ctx, Task $task, string $externalId, array $conflicts): void
+    {
+        $lines = [];
+        foreach ($conflicts as $field => $preview) {
+            $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $externalId, $field, $preview);
+            $lines[]          = sprintf('- **%s**: %s', $this->trans('task_board.sync.field.' . $field, $field), $preview === '' ? '—' : $preview);
+        }
+        $header = $this->trans('task_board.sync.conflict_note', 'Changed here and in %provider%: these values from %provider% were not applied.', ['%provider%' => $this->providerName($ctx)]);
+        $body   = $this->sanitizer->markdown($header . "\n\n" . implode("\n", $lines), TaskComment::MAX_LENGTH);
+        $this->entityManager->persist(new TaskComment($task, $ctx->actor, $body));
+        $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::SyncConflict, null, Text::cut(implode(', ', array_keys($conflicts)), 255), $ctx->provider->id());
+    }
+
+    /**
+     * Files, inline images, comments and the fields document of a task this page wrote. A provider error here defers
+     * the task to the next run (its remote date is reset) instead of losing its comments or files.
+     */
+    private function afterWrite(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, bool $descriptionWritten, ImportAssigneeResolver $assignees): void
+    {
+        $capabilities      = $ctx->provider->capabilities();
+        $remoteDescription = $this->description($remote->task);
+        if ($descriptionWritten && $remoteDescription !== null) {
+            $stored      = $remote->inlineImageUrls === [] ? [] : $this->storeImages($ctx, $task, $item, $remote->inlineImageUrls);
+            $description = $this->rewriter->rewrite($task, $remoteDescription, $stored);
+            if ($description !== $task->getDescription()) {
+                $task->setDescription($description);
+            }
+            $item->setBaseline('description', $this->hash($remoteDescription), $this->hash($task->getDescription()));
+        }
+        try {
+            if ($ctx->options->importAttachments && $capabilities->attachments) {
+                $this->syncAttachments($ctx, $task, $item, $remote->attachments);
+            }
+            if ($ctx->options->importComments && $capabilities->comments) {
+                $this->syncComments($ctx, $task, $item, $assignees);
+            }
+        } catch (ProviderException $exception) {
+            $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
+            $ctx->warn('task_deferred');
+
+            throw $exception;
+        }
+        if ($remote->customFieldsText !== null) {
+            $this->fieldsDocument($ctx, $task, $remote->customFieldsText);
+        }
+    }
+
+    /**
+     * @param list<RemoteAttachment> $attachments
+     */
+    private function syncAttachments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, array $attachments): void
+    {
+        $existing = $this->store->attachmentsOf($task);
+        $listed   = [];
+        foreach ($attachments as $attachment) {
+            $listed[$attachment->id] = true;
+            $known                   = $existing[$attachment->id] ?? null;
+            if ($known instanceof TaskSyncAttachment && $known->matches($attachment->size, $attachment->updatedAt)) {
+                ++$ctx->filesReused;
+                continue;
+            }
+            $stored = $this->download($ctx, $task, $attachment, false);
+            if (!$stored instanceof StoredAttachment) {
+                continue;
+            }
+            $link = $known?->getLink();
+            if ($link instanceof TaskLink) {
+                $link->setUrl($stored->url)->setLabel($stored->name);
+            } else {
+                $link = new TaskLink($task, TaskLinkType::Attachment, $stored->url, $stored->name);
+                $task->addLink($link);
+            }
+            if ($known instanceof TaskSyncAttachment) {
+                // Updated in place: a remove plus an insert of the same (task, remote id) would hit the unique key.
+                $ctx->fileDeletes[] = [$task, $known->stored()];
+                $known->replace($attachment->size, $attachment->updatedAt, $stored, Text::cut($stored->name, 255), Text::cut($stored->mime, 127), $link);
+                continue;
+            }
+            $this->entityManager->persist(new TaskSyncAttachment($item, $task, $attachment->id, $attachment->size, $attachment->updatedAt, $stored->ref, $stored->url, Text::cut($stored->name, 255), Text::cut($stored->mime, 127), $stored->size, $stored->sha256, $link));
+        }
+        // A file the provider no longer lists (only when it lists some: an empty list may just be absent).
+        if ($attachments === []) {
+            return;
+        }
+        foreach ($existing as $remoteId => $known) {
+            if (!isset($listed[$remoteId]) && !str_starts_with($remoteId, 'img:')) {
+                $ctx->fileDeletes[] = [$task, $known->stored()];
+                $link               = $known->getLink();
+                if ($link instanceof TaskLink) {
+                    $task->removeLink($link);
+                }
+                $this->entityManager->remove($known);
+            }
+        }
+    }
+
+    /**
+     * Inline images: each allowed URL copied once per task (key "img:<sha1 of the URL>").
+     *
+     * @param list<string> $urls
+     *
+     * @return array<string, StoredAttachment>
+     */
+    private function storeImages(SyncRunContext $ctx, Task $task, TaskSyncItem $item, array $urls): array
+    {
+        $existing = $this->store->attachmentsOf($task);
+        $stored   = [];
+        foreach ($urls as $url) {
+            $key   = 'img:' . sha1($url);
+            $known = $ctx->images[$task->getId() . '|' . $key] ?? ($existing[$key] ?? null)?->stored();
+            if ($known instanceof StoredAttachment) {
+                // The same image in the description and a comment (or twice) is stored once per task.
+                ++$ctx->filesReused;
+                $stored[$url] = $known;
+                continue;
+            }
+            $file = $this->download($ctx, $task, new RemoteAttachment($key, 'image', null, null, $url), true);
+            if ($file instanceof StoredAttachment) {
+                $stored[$url]                             = $file;
+                $ctx->images[$task->getId() . '|' . $key] = $file;
+                $this->entityManager->persist(new TaskSyncAttachment($item, $task, $key, null, null, $file->ref, $file->url, Text::cut($file->name, 255), Text::cut($file->mime, 127), $file->size, $file->sha256));
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * Fetches a remote file safely and hands it to the host's storage; null (counted as refused, with a warning that
+     * names the file and the reason only) when anything refuses it.
+     */
+    private function download(SyncRunContext $ctx, Task $task, RemoteAttachment $attachment, bool $imagesOnly): ?StoredAttachment
+    {
+        $name = $this->sanitizer->line($attachment->name, 120);
+        if (!$this->storageEnabled || $ctx->filesBlocked) {
+            ++$ctx->filesRefused;
+            $ctx->warn($this->storageEnabled ? 'file_quota' : 'storage_disabled');
+
+            return null;
+        }
+        $refusal = $this->limitChecker->check($ctx->board, 0, $attachment->size ?? $this->maxFileBytes);
+        if ($refusal instanceof LimitRefusal) {
+            $ctx->filesBlocked = true;
+            ++$ctx->filesRefused;
+            $ctx->warn('file_quota');
+
+            return null;
+        }
+        try {
+            $file = $this->fetcher->fetch($ctx->provider->capabilities()->attachmentHosts, $attachment->url, $attachment->name, $attachment->size, max(0, $ctx->budgetBytes - $ctx->bytes), $imagesOnly);
+        } catch (UnsafeRemoteFileException $exception) {
+            ++$ctx->filesRefused;
+            $ctx->warn('file_refused', ['%name%' => $name, '%reason%' => $exception->reason]);
+
+            return null;
+        }
+        try {
+            $stored = $this->storage->store($task, $attachment, $file->stream(...));
+        } catch (Throwable) {
+            ++$ctx->filesRefused;
+            $ctx->warn('file_store_failed', ['%name%' => $name]);
+
+            return null;
+        } finally {
+            $file->delete();
+        }
+        ++$ctx->filesCopied;
+        $ctx->bytes += $file->size;
+
+        return $stored;
+    }
+
+    private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, ImportAssigneeResolver $assignees): void
+    {
+        $existing = $this->store->commentsOf($item);
+        foreach ($ctx->provider->fetchComments($ctx->credential, $item->getExternalId()) as $remote) {
+            $remoteHash = $this->hash($remote->body);
+            $known      = $existing[$remote->id] ?? null;
+            if ($known instanceof TaskSyncComment && $known->getBodyHash() === $remoteHash) {
+                continue;
+            }
+            $author = $remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null;
+            $body   = $this->commentBody($ctx, $task, $item, $remote, $author === null);
+            if (!$known instanceof TaskSyncComment) {
+                $comment = new TaskComment($task, $author ?? $ctx->actor, $body);
+                $this->entityManager->persist($comment);
+                $this->entityManager->persist(new TaskSyncComment($item, $comment, Text::cut($remote->id, 128), $remoteHash, $this->hash($body)));
+                ++$ctx->commentsCreated;
+                continue;
+            }
+            $comment = $known->getComment();
+            if ($comment->isDeleted() || $this->hash($comment->getBody()) !== $known->getLocalHash()) {
+                $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $item->getExternalId(), 'comment', $this->sanitizer->line($remote->body, 200));
+                $known->written($remoteHash, $known->getLocalHash());
+                continue;
+            }
+            $comment->edit($body, []);
+            $known->written($remoteHash, $this->hash($body));
+            ++$ctx->commentsUpdated;
+        }
+    }
+
+    private function commentBody(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteComment $remote, bool $prefix): string
+    {
+        $body = $remote->body;
+        if ($remote->inlineImageUrls !== []) {
+            $body = $this->rewriter->rewrite($task, $body, $this->storeImages($ctx, $task, $item, $remote->inlineImageUrls));
+        }
+        if ($prefix) {
+            $body = $this->trans('task_board.sync.comment_prefix', '**%name%** (%provider%):', [
+                '%name%'     => $remote->authorName ?? '?',
+                '%provider%' => $this->providerName($ctx),
+            ]) . "\n\n" . $body;
+        }
+
+        return $this->sanitizer->markdown($body, TaskComment::MAX_LENGTH);
+    }
+
+    private function fieldsDocument(SyncRunContext $ctx, Task $task, string $text): void
+    {
+        $title = Text::cut(sprintf('%s (%s)', $this->trans('task_board.sync.fields_document', 'Fields'), $this->providerName($ctx)), 255);
+        foreach ($task->getDocuments() as $document) {
+            if ($document->getTitle() === $title) {
+                if ($document->getContent() !== $text) {
+                    $document->setContent($text);
+                }
+
+                return;
+            }
+        }
+        $document = new TaskDocument($task, $title, $text, $ctx->actor, count($task->getDocuments()));
+        $task->getDocuments()->add($document);
+        $this->entityManager->persist($document);
+    }
+
+    /**
+     * The value of each synced field the provider gives (null: no value, never written).
+     *
+     * @param list<object> $users
+     *
+     * @return array<string, mixed>
+     */
+    private function remoteValues(ImportedTaskDto $row, ?BoardColumn $column, array $users, ?Task $parent): array
+    {
+        $tags = $this->normalizedTags($row->tags);
+
+        return [
+            'title'       => Text::cut($row->title, Task::TITLE_MAX),
+            'description' => $this->description($row),
+            'priority'    => $row->hasPriority ? $row->priority->value : null,
+            'column'      => $column?->getId(),
+            'start'       => $row->startAt?->format('Y-m-d H:i:s'),
+            'due'         => $row->dueAt?->format('Y-m-d H:i:s'),
+            'estimate'    => $row->estimatedMinutes,
+            'tags'        => $tags === [] ? null : $tags,
+            'assignees'   => $users === [] ? null : $this->userIds($users),
+            'parent'      => $parent?->getId(),
+        ];
+    }
+
+    /**
+     * The remote description as it is stored: sanitized Markdown (whatever the provider adapter did), null when empty.
+     */
+    private function description(ImportedTaskDto $row): ?string
+    {
+        $description = $row->description === null ? '' : $this->sanitizer->markdown($row->description, self::MAX_DESCRIPTION_BYTES);
+
+        return $description === '' ? null : $description;
+    }
+
+    private function localValue(Task $task, string $field): mixed
+    {
+        return match ($field) {
+            'title'       => $task->getTitle(),
+            'description' => $task->getDescription(),
+            'priority'    => $task->getPriority()->value,
+            'column'      => $task->getColumn()?->getId(),
+            'start'       => $task->getStartAt()?->format('Y-m-d H:i:s'),
+            'due'         => $task->getDueAt()?->format('Y-m-d H:i:s'),
+            'estimate'    => $task->getEstimatedMinutes(),
+            'tags'        => $task->getTags(),
+            'assignees'   => $this->userIds(array_values(array_map(
+                static fn (TaskMember $member): object => $member->getUser(),
+                array_filter($task->getMembers()->toArray(), static fn (TaskMember $member): bool => $member->getMemberRole() === TaskMemberRole::Assignee),
+            ))),
+            default => $task->getParent()?->getId(),
+        };
+    }
+
+    /** What a conflict note shows of a remote value (at most 200 bytes, one line). */
+    private function preview(string $field, mixed $value, ?BoardColumn $column, ImportedTaskDto $row): string
+    {
+        return match ($field) {
+            'column'    => $this->sanitizer->line((string) $column?->getName(), 200),
+            'assignees' => $this->sanitizer->line(implode(', ', [...$row->assigneeEmails, ...$row->assigneeNames]), 200),
+            'parent'    => (string) $row->parentExternalId,
+            'tags'      => $this->sanitizer->line(implode(', ', is_array($value) ? array_map(strval(...), $value) : []), 200),
+            default     => $this->sanitizer->line(is_scalar($value) ? (string) $value : '', 200),
+        };
+    }
+
+    /**
+     * The board's columns by lower-cased name, in order, and the fallback; creates the missing status columns when
+     * the option is on.
+     *
+     * @param list<array{0: string, 1: string, 2: RemoteTask, 3: Task|null, 4: TaskSyncItem|null}> $plan
+     *
+     * @return array{byName: array<string, BoardColumn>, list: list<BoardColumn>, fallback: BoardColumn|null}
+     */
+    private function columns(SyncRunContext $ctx, array $plan): array
+    {
+        $byName   = [];
+        $fallback = null;
+        foreach ($ctx->board->getColumns() as $column) {
+            $byName[mb_strtolower(trim($column->getName()))] ??= $column;
+            if ($column->getId() === $ctx->options->fallbackColumnId) {
+                $fallback = $column;
+            }
+        }
+        foreach ($plan as [$action, , $remote]) {
+            $status = trim((string) $remote->task->status);
+            if ($action === 'archive' || $status === '' || isset($byName[mb_strtolower($status)])) {
+                continue;
+            }
+            if (!$ctx->options->createMissingColumns) {
+                $ctx->warn('status_without_column');
+                continue;
+            }
+            $column                         = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255)));
+            $byName[mb_strtolower($status)] = $column;
+            ++$ctx->columnsCreated;
+        }
+
+        return ['byName' => $byName, 'list' => array_values($ctx->board->getColumns()->toArray()), 'fallback' => $fallback];
+    }
+
+    /**
+     * @param array{byName: array<string, BoardColumn>, list: list<BoardColumn>, fallback: BoardColumn|null} $columns
+     */
+    private function columnOf(?string $status, array $columns): ?BoardColumn
+    {
+        $status = trim((string) $status);
+        if ($status === '') {
+            return null;
+        }
+
+        return $columns['byName'][mb_strtolower($status)] ?? $columns['fallback'];
+    }
+
+    private function nextPosition(SyncRunContext $ctx, ?BoardColumn $column): int
+    {
+        $key = $column?->getId() ?? '';
+        if (!isset($ctx->positions[$key])) {
+            $builder = $this->entityManager->createQueryBuilder()->select('MAX(t.position)')->from(Task::class, 't')->where('t.board = :board')->setParameter('board', $ctx->board);
+            if ($column instanceof BoardColumn) {
+                $builder->andWhere('t.column = :column')->setParameter('column', $column);
+            }
+            $max                  = $builder->getQuery()->getSingleScalarResult();
+            $ctx->positions[$key] = $max === null ? -1 : (int) $max;
+        }
+
+        return ++$ctx->positions[$key];
+    }
+
+    /**
+     * The parent a row names: a task of this page or of an earlier one, editable by the actor; null otherwise.
+     *
+     * @param array<string, Task> $related
+     */
+    private function parentOf(SyncRunContext $ctx, ImportedTaskDto $row, array $related): ?Task
+    {
+        $parent = $row->parentExternalId === null ? null : ($related[$row->parentExternalId] ?? null);
+
+        return $parent instanceof Task && $this->canEdit($ctx, $parent) ? $parent : null;
+    }
+
+    /**
+     * Parents and dependency targets the page names that are not in the page: one query.
+     *
+     * @param array<string, RemoteTask> $rows
+     * @param array<string, array{0: Task, 1: TaskLink|null}> $known
+     *
+     * @return array<string, Task>
+     */
+    private function relatedTasks(SyncRunContext $ctx, array $rows, array $known): array
+    {
+        $related = [];
+        foreach ($known as $id => [$task]) {
+            $related[(string) $id] = $task;
+        }
+        $wanted = [];
+        foreach ($rows as $remote) {
+            foreach ([$remote->task->parentExternalId, ...array_map(static fn (array $d): string => $d[0], $remote->task->dependsOn)] as $other) {
+                if ($other !== null && !isset($rows[$other]) && !isset($related[$other])) {
+                    $wanted[$other] = $other;
+                }
+            }
+        }
+        if ($wanted !== []) {
+            foreach ($this->tasks->findImportedByExternalIds($ctx->board, $ctx->scope, array_values($wanted)) as $id => [$task]) {
+                $related[(string) $id] = $task;
+            }
+        }
+
+        return $related;
+    }
+
+    /**
+     * Gantt relations and a parent whose other task is not on the board yet wait for the end of the tasks phase.
+     *
+     * @param array<string, Task> $related
+     */
+    private function queueRelations(SyncRunContext $ctx, Task $task, ImportedTaskDto $row, array $related): void
+    {
+        if ($row->parentExternalId !== null && !$task->getParent() instanceof Task && !isset($related[$row->parentExternalId])) {
+            $ctx->pending[] = [$task->getId(), $row->parentExternalId, 'parent'];
+        }
+        foreach ($row->dependsOn as [$otherId, $type]) {
+            $other = $related[$otherId] ?? null;
+            if ($other instanceof Task && $this->canEdit($ctx, $other)) {
+                $this->addDependency($ctx, $task, $other, $type);
+            } elseif (!$other instanceof Task) {
+                $ctx->pending[] = [$task->getId(), $otherId, $type->value];
+            }
+        }
+    }
+
+    private function addDependency(SyncRunContext $ctx, Task $task, Task $other, TaskDependencyType $type): void
+    {
+        try {
+            $this->dependencyManager->add($task, $other, $type, $ctx->actor);
+            ++$ctx->dependenciesCreated;
+        } catch (InvalidTaskDependencyException $exception) {
+            if ($exception->reason !== InvalidTaskDependencyException::REASON_DUPLICATE) {
+                $ctx->warn('relation_skipped');
+            }
+        }
+    }
+
+    /** Moves a task under a parent, unless that makes it its own ancestor. */
+    private function reparent(SyncRunContext $ctx, Task $task, Task $parent): bool
+    {
+        if ($parent === $task->getParent()) {
+            return false;
+        }
+        $seen = [];
+        for ($ancestor = $parent; $ancestor instanceof Task; $ancestor = $ancestor->getParent()) {
+            if ($ancestor === $task || isset($seen[$ancestor->getId()])) {
+                $ctx->warn('parent_cycle');
+
+                return false;
+            }
+            $seen[$ancestor->getId()] = true;
+        }
+        $task->setParent($parent);
+
+        return true;
+    }
+
+    /**
+     * Rows whose parent is on the same page come after it.
+     *
+     * @param array<string, RemoteTask> $rows
+     *
+     * @return array<string, RemoteTask>
+     */
+    private function parentsFirst(array $rows): array
+    {
+        $ordered = [];
+        $pending = $rows;
+        while ($pending !== []) {
+            $progress = false;
+            foreach ($pending as $id => $remote) {
+                $parent = $remote->task->parentExternalId;
+                if ($parent === null || !isset($pending[$parent]) || $parent === (string) $id) {
+                    $ordered[(string) $id] = $remote;
+                    unset($pending[$id]);
+                    $progress = true;
+                }
+            }
+            if (!$progress) {
+                // A cycle within the page: the rest in file order (reparent() refuses the closing move).
+                foreach ($pending as $id => $remote) {
+                    $ordered[(string) $id] = $remote;
+                }
+                break;
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * Ids of the page already imported into another board of the tenant (and on none of this one).
+     *
+     * @param list<string> $ids
+     * @param array<string, TaskSyncItem> $items
+     * @param array<string, array{0: Task, 1: TaskLink}> $links
+     *
+     * @return array<string, true>
+     */
+    private function elsewhere(SyncRunContext $ctx, array $ids, array $items, array $links): array
+    {
+        $unknown = array_values(array_filter($ids, static fn (string $id): bool => !isset($items[$id]) && !isset($links[$id])));
+
+        return $unknown === [] ? [] : $this->linkLookup->findOnOtherBoards($ctx->board, $ctx->scope, $unknown);
+    }
+
+    private function canEdit(SyncRunContext $ctx, Task $task): bool
+    {
+        return $this->accessChecker->canEditTask($ctx->actor, $task);
+    }
+
+    /**
+     * @param list<string> $tags
+     *
+     * @return list<string>
+     */
+    private function normalizedTags(array $tags): array
+    {
+        $normalized = array_values(array_unique(array_filter(array_map(trim(...), $tags), static fn (string $tag): bool => $tag !== '')));
+        sort($normalized);
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<object> $users
+     *
+     * @return list<string>
+     */
+    private function userIds(array $users): array
+    {
+        $ids = [];
+        foreach ($users as $user) {
+            $id    = method_exists($user, 'getId') ? $user->getId() : null;
+            $ids[] = is_scalar($id) || $id instanceof Stringable ? (string) $id : sha1(spl_object_hash($user));
+        }
+        sort($ids);
+
+        return $ids;
+    }
+
+    private function hash(mixed $value): string
+    {
+        return hash('sha256', (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    private function providerName(SyncRunContext $ctx): string
+    {
+        return $this->trans($ctx->provider->labelKey(), $ctx->provider->id());
+    }
+
+    /**
+     * @param array<string, string> $params
+     */
+    private function trans(string $key, string $fallback, array $params = []): string
+    {
+        $text = $this->translator?->trans($key, $params, 'NowoTaskBoardBundle');
+
+        return $text === null || $text === $key ? strtr($fallback, $params) : $text;
+    }
+}

@@ -36,12 +36,20 @@ services:
             - '../../Tenancy/SlugTaskBoardTenantResolver.php'
             - '../../Routing/TenantPathUrlGenerator.php'
             - '../../Assignee/'
+            # Since 1.23: the sync services are registered by services_sync.yaml (sync.enabled) and the avatar
+            # services explicitly below.
+            - '../../Sync/'
+            - '../../Avatar/'
+            - '../../Controller/TaskBoardConnectionController.php'
+            - '../../Command/TaskBoardSyncCommand.php'
             - '../../Link/TaskObjectLinkResolverInterface.php'
             - '../../Link/TaskObjectBadge.php'
             - '../../Comment/MentionCandidate.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
+        # Since 1.23: registered by services_sync.yaml (sync.enabled).
+        exclude: '../../Controller/TaskBoardConnectionController.php'
         public: true
 
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:
@@ -123,6 +131,7 @@ services:
             $filtersCollapse: '%nowo_task_board.templates.filters_collapse%'
             $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
             $textRenderer: '@Nowo\TaskBoardBundle\Text\TaskTextRendererInterface'
+            $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
 
     # Since 1.19: user text (comments, plain-text descriptions) → HTML; hosts alias the interface to their renderer.
     Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer: ~
@@ -155,3 +164,16 @@ services:
     Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver:
         arguments:
             $resolvers: !tagged_iterator nowo_task_board.object_link_resolver
+
+    # Since 1.23: task member avatars — the host aliases the resolver; the default gives the initial chips.
+    Nowo\TaskBoardBundle\Avatar\NullTaskMemberAvatarResolver: ~
+
+    Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface:
+        alias: Nowo\TaskBoardBundle\Avatar\NullTaskMemberAvatarResolver
+
+    Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars:
+        arguments:
+            $resolver: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface'
+            $logger: '@?logger'
+        tags: [{ name: kernel.reset, method: reset }]
+

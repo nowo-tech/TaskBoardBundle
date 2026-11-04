@@ -1,6 +1,6 @@
 # TaskBoard Bundle - Development
 SHELL := /bin/bash
-.PHONY: assets help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra check-no-raw-html-form
+.PHONY: assets help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra check-no-raw-html-form record-clickup-fixtures
 
 COMPOSE_FILE ?= docker-compose.yml
 # Prefer Compose V2; absolute docker path avoids shadowing by local docker/ when PATH has "." (REQ-MAKE-010).
@@ -160,3 +160,9 @@ strip-cursor-coauthor-from-history:
 
 twig-lint: ensure-up
 	@$(COMPOSE) exec -T $(SERVICE_PHP) composer twig:lint || $(COMPOSE) exec -T $(SERVICE_PHP) ./vendor/bin/twig-cs-fixer lint --config=.twig-cs-fixer.php
+
+# Since 1.23: records tests/Fixtures/ClickUp from a throwaway ClickUp workspace (token from the environment only).
+record-clickup-fixtures: ensure-up
+	@test -n "$$CLICKUP_RECORD_TOKEN" || { echo "Set CLICKUP_RECORD_TOKEN"; exit 2; }
+	@$(COMPOSE) exec -T -e CLICKUP_RECORD_TOKEN -e CLICKUP_RECORD_LIST -e CLICKUP_RECORD_TASK $(SERVICE_PHP) php scripts/record-clickup-fixtures.php
+

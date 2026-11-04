@@ -1,0 +1,13 @@
+{
+  "name": "task-board-demo-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright e2e with axe for the TaskBoard Bundle demo (provider connections: connect, browse, refresh, unlink)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1"
+  }
+}

@@ -54,8 +54,7 @@
             {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
             <span class="nowo-task-avatars">
                 {% for member in task.members|slice(0, 3) %}
-                    {% set _name = memberUi.member_label(member.user)|trim %}
-                    <span class="nowo-task-avatar" title="{{ _name }}">{{ _name|slice(0, 1)|upper }}</span>
+                    {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-avatar', size: 24, labelled: true}, with_context: false) }}
                 {% endfor %}
                 {% if task.members|length > 3 %}<span class="nowo-task-avatar nowo-task-avatar--more">+{{ task.members|length - 3 }}</span>{% endif %}
             </span>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
+use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
@@ -37,6 +38,7 @@ use Nowo\TaskBoardBundle\Repository\TaskMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Routing\TenantPaths;
 use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
@@ -45,8 +47,25 @@ use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
+use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
+use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
+use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
+use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
+use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
+use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -146,6 +165,75 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
+        $this->registerSync($container, $loader, $config['sync']);
+    }
+
+    /**
+     * Since 1.23: provider connections (`sync.*`), only when enabled — the routes, the services, the Doctrine mapping
+     * of the sync tables and the header block. A missing `credential_resolver` stops the container build.
+     *
+     * @param array<string, mixed> $sync
+     */
+    private function registerSync(ContainerBuilder $container, YamlFileLoader $loader, array $sync): void
+    {
+        $container->setParameter('nowo_task_board.sync.enabled', (bool) $sync['enabled']);
+        if (!$sync['enabled']) {
+            return;
+        }
+        $resolver = $sync['credential_resolver'];
+        if (!is_string($resolver) || $resolver === '') {
+            throw new LogicException('nowo_task_board.sync.enabled needs sync.credential_resolver: the service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialResolverInterface (the host keeps the provider tokens).');
+        }
+
+        $container->setParameter('nowo_task_board.sync.http.timeout', (float) $sync['http']['timeout']);
+        $container->setParameter('nowo_task_board.sync.http.max_duration', (float) $sync['http']['max_duration']);
+        $container->setParameter('nowo_task_board.sync.http.max_response_bytes', $sync['http']['max_response_bytes']);
+        $container->setParameter('nowo_task_board.sync.http.max_inline_wait', $sync['http']['max_inline_wait']);
+        $container->setParameter('nowo_task_board.sync.attachments.max_bytes', $sync['attachments']['max_bytes']);
+        $container->setParameter('nowo_task_board.sync.attachments.max_bytes_per_run', $sync['attachments']['max_bytes_per_run']);
+        $container->setParameter('nowo_task_board.sync.attachments.max_redirects', $sync['attachments']['max_redirects']);
+        $container->setParameter('nowo_task_board.sync.attachments.allowed_mime_types', array_values($sync['attachments']['allowed_mime_types']));
+        $container->setParameter('nowo_task_board.sync.storage_enabled', $sync['attachments']['enabled'] && is_string($sync['attachment_storage']) && $sync['attachment_storage'] !== '');
+        $container->setParameter('nowo_task_board.sync.max_tasks_per_run', $sync['max_tasks_per_run']);
+        $container->setParameter('nowo_task_board.sync.max_pages_per_run', $sync['max_pages_per_run']);
+        $container->setParameter('nowo_task_board.sync.max_archive_ratio', (float) $sync['max_archive_ratio']);
+        $container->setParameter('nowo_task_board.sync.history_keep', $sync['history_keep']);
+        $container->setParameter('nowo_task_board.sync.container_cache_ttl', $sync['container_cache_ttl']);
+        $container->setParameter('nowo_task_board.sync.inline_slice_pages', $sync['inline_slice_pages']);
+        $container->setParameter('nowo_task_board.sync.progress.poll_interval_ms', $sync['progress']['poll_interval_ms']);
+
+        $loader->load('services_sync.yaml');
+        $container->registerForAutoconfiguration(SyncTaskProviderInterface::class)->addTag('nowo_task_board.task_provider');
+        $client = $sync['http']['client'];
+        $container->setAlias('nowo_task_board.sync.api_client', is_string($client) && $client !== '' ? $client : 'nowo_task_board.sync.http_client');
+        $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
+        $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
+        $container->setAlias(SyncRunnerInterface::class, $this->serviceOr($sync['runner'], InlineSyncRunner::class));
+        $container->setAlias(SyncLimitCheckerInterface::class, $this->serviceOr($sync['limit_checker'], NullSyncLimitChecker::class));
+        $container->setAlias(InlineImageRewriterInterface::class, $this->serviceOr($sync['inline_image_rewriter'], MapInlineImageRewriter::class));
+        $container->setAlias(TaskAttachmentStorageInterface::class, $this->serviceOr($sync['attachments']['enabled'] ? $sync['attachment_storage'] : null, NullTaskAttachmentStorage::class));
+        if (class_exists(OutboundUrlGuard::class)) {
+            $container->setDefinition(OutboundUrlGuardAdapter::class, (new Definition(OutboundUrlGuardAdapter::class))
+                // The guard's own defaults (private and metadata addresses refused, DNS pinned).
+                ->setArgument('$guard', new Definition(OutboundUrlGuard::class)));
+            $container->setAlias(UrlGuardInterface::class, OutboundUrlGuardAdapter::class);
+        }
+        if ($sync['providers']['clickup']['enabled']) {
+            $container->setDefinition(ClickUpTaskProvider::class, (new Definition(ClickUpTaskProvider::class))
+                ->setAutowired(true)
+                ->setArgument('$attachmentHosts', array_values($sync['providers']['clickup']['attachment_hosts']))
+                ->setArgument('$maxComments', $sync['max_comments_per_task'])
+                ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
+                ->addTag('nowo_task_board.task_provider'));
+        }
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$connectionBadges', new Reference(ConnectionBadgeProvider::class));
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$syncEnabled', true);
+    }
+
+    private function serviceOr(mixed $id, string $default): string
+    {
+        return is_string($id) && $id !== '' ? $id : $default;
     }
 
     /**
@@ -210,6 +298,17 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
     }
 
+    private function syncEnabled(ContainerBuilder $container): bool
+    {
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config['sync'] ?? null) && ($config['sync']['enabled'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getAlias(): string
     {
         return Configuration::ALIAS;
@@ -237,6 +336,23 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                         'TaskBoardBundle' => [
                             'type'      => 'attribute',
                             'is_bundle' => true,
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        // Since 1.23: the sync tables are mapped only with sync.enabled.
+        if ($container->hasExtension('doctrine') && $this->syncEnabled($container)) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardSync' => [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Sync/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Sync\\Entity',
+                            'alias'     => 'TaskBoardSync',
                         ],
                     ],
                 ],

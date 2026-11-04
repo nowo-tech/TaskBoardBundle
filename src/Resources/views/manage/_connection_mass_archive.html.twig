@@ -1,0 +1,21 @@
+{#
+    Since 1.23: the mass-archive guard held tasks back — a translated refusal, and for managers an explicit
+    "Refresh and archive anyway" behind a confirm dialog (its own CSRF token id). massArchiveForm, massArchiveCount.
+#}
+<div class="alert alert-warning" role="alert" data-testid="nowo-task-sync-mass-archive" data-controller="nowo-task-board-dialog">
+    <p class="mb-2">{{ 'task_board.sync.mass_archive.text'|trans({'%count%': massArchiveCount.count|default('?'), '%total%': massArchiveCount.total|default('?')}, 'NowoTaskBoardBundle') }}</p>
+    <button type="button" class="btn btn-outline-danger btn-sm" data-action="nowo-task-board-dialog#open" data-dialog="mass-archive">{{ 'task_board.sync.mass_archive.action'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="mass-archive" aria-labelledby="nowo-task-sync-mass-archive-title">
+        <div class="nowo-task-dialog__header">
+            <h2 class="nowo-task-dialog__title" id="nowo-task-sync-mass-archive-title">{{ 'task_board.sync.mass_archive.confirm_title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
+        </div>
+        {{ form_start(massArchiveForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+            <p>{{ 'task_board.sync.mass_archive.confirm_text'|trans({'%count%': massArchiveCount.count|default('?')}, 'NowoTaskBoardBundle') }}</p>
+            <div class="nowo-task-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" class="btn btn-danger" data-testid="nowo-task-sync-mass-archive-confirm">{{ 'task_board.sync.mass_archive.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            </div>
+        {{ form_end(massArchiveForm) }}
+    </dialog>
+</div>

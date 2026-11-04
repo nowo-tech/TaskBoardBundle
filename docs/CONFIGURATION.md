@@ -27,6 +27,7 @@
 - [Task import](#task-import)
   - [Assignee resolver](#assignee-resolver)
   - [Custom importers](#custom-importers)
+- [Provider sync (since 1.23)](#provider-sync-since-123)
 - [Assets](#assets)
 
 ## Required
@@ -556,6 +557,54 @@ See [UPGRADING](UPGRADING.md#unreleased) for the measurements.
 which source ids (and fingerprints of rows without an id) are already imported into another board of the same
 tenant; those rows are skipped. The bundle's own format is not checked. Alias it to
 your own service to change the rule (return `[]` to allow copies across boards).
+
+## Provider sync (since 1.23)
+
+Opt-in: with `enabled: false` (the default) there are no sync routes, services, Doctrine mapping or header change. See
+[sync.md](sync.md).
+
+```yaml
+nowo_task_board:
+    sync:
+        enabled: false
+        credential_resolver: ~        # REQUIRED when enabled: ProviderCredentialResolverInterface service id
+        attachment_storage: ~         # TaskAttachmentStorageInterface; null = files refused (storage_disabled)
+        inline_image_rewriter: ~      # InlineImageRewriterInterface; null = MapInlineImageRewriter
+        limit_checker: ~              # SyncLimitCheckerInterface (host quotas); null = none
+        runner: ~                     # SyncRunnerInterface (e.g. Messenger); null = InlineSyncRunner
+        actor_resolver: ~             # SyncActorResolverInterface; null = request user, else who linked the board
+        providers:
+            clickup:
+                enabled: true
+                attachment_hosts: ['*.clickup-attachments.com', 'attachments.clickup.com', 'attachments2.clickup.com']
+        http:
+            client: ~                 # an untraced HttpClientInterface service (proxy); null = the bundle's own client
+            timeout: 10               # idle seconds per API call
+            max_duration: 30          # seconds per API call
+            max_response_bytes: 8388608
+            max_inline_wait: 30       # a longer rate-limit wait pauses the run (rate_limited, resumable)
+        attachments:
+            enabled: true
+            max_bytes: 26214400       # per file
+            max_bytes_per_run: 1073741824
+            max_redirects: 3
+            allowed_mime_types: [image/png, image/jpeg, image/gif, image/webp, application/pdf, text/plain, text/csv, …]
+        max_tasks_per_run: 5000       # reaching it pauses the slice (resumable)
+        max_pages_per_run: 1000       # since audit EG-L2: task pages of one run over all its slices; past it the run fails
+        max_comments_per_task: 500
+        max_description_length: 100000
+        max_archive_ratio: 0.5        # the mass-archive guard
+        history_keep: 50              # runs kept per board
+        container_cache_ttl: 300      # seconds a level of the container browser is cached (cache.app)
+        inline_slice_pages: 5         # task pages the inline runner writes per request
+        progress:
+            poll_interval_ms: 2000
+```
+
+New routes (configurable like the others, copied under `tenancy.tenant_paths`): `board_connection` (GET),
+`board_connection_containers`, `board_connection_link`, `board_connection_refresh`, `board_connection_cancel`,
+`board_connection_unlink` (POST, CSRF), `board_connection_progress` (GET, JSON), and `task_restore` (POST, always on).
+New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`.
 
 ## Assets
 

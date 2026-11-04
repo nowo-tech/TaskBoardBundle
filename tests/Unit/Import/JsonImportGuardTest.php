@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter;
+use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpTaskMapper;
 use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardJsonImporter;
@@ -98,7 +99,7 @@ final class JsonImportGuardTest extends TestCase
     {
         $guard = new JsonImportGuard(maxRows: 1);
         foreach ([
-            [new ClickUpJsonImporter(new ImportFieldMapper(), $guard), '[{"name":"a"},{"name":"b"}]'],
+            [new ClickUpJsonImporter(new ClickUpTaskMapper(), $guard), '[{"name":"a"},{"name":"b"}]'],
             [new TrelloJsonImporter(new ImportFieldMapper(), $guard), '{"cards":[{"name":"a"},{"name":"b"}]}'],
             [new TaskBoardJsonImporter(new TaskBoardRowMapper(), $guard), '[{"title":"a"},{"title":"b"}]'],
             // Audit EB-I7: nested subtasks count as they are walked.

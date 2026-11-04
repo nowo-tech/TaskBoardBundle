@@ -1,0 +1,47 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Tests\Unit\Sync;
+
+use PHPUnit\Framework\TestCase;
+
+use function file_get_contents;
+use function glob;
+use function preg_match_all;
+
+/**
+ * Since 1.23: the ClickUp fixtures (recorded or provisional) never hold a real token, workspace name, e-mail, avatar
+ * or signed URL, and only use the fixture hosts.
+ */
+final class ScrubbedFixturesTest extends TestCase
+{
+    private const HOSTS = ['app.clickup.com', 't000.p.clickup-attachments.com', 'example.test'];
+
+    public function testTheFixturesAreScrubbed(): void
+    {
+        $files = glob(__DIR__ . '/../../Fixtures/ClickUp/*.json') ?: [];
+        self::assertNotEmpty($files);
+        foreach ($files as $file) {
+            $text = (string) file_get_contents($file);
+            self::assertDoesNotMatchRegularExpression('/pk_(?!REDACTED)[A-Za-z0-9_]{8,}/', $text, $file . ': a token');
+            self::assertDoesNotMatchRegularExpression('/Bearer\s+(?!REDACTED)\S+/i', $text, $file . ': a bearer token');
+            preg_match_all('/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+)/', $text, $emails);
+            foreach ($emails[1] as $domain) {
+                self::assertSame('example.test', $domain, $file . ': a real e-mail domain');
+            }
+            preg_match_all('#https?://([^/\s"?]+)[^\s"]*#', $text, $urls);
+            foreach ($urls[1] as $index => $host) {
+                self::assertContains($host, self::HOSTS, $file . ': an unexpected host');
+                self::assertStringNotContainsString('?', $urls[0][$index], $file . ': a query string (signature?)');
+            }
+            self::assertDoesNotMatchRegularExpression('/"(profilePicture|avatar)"\s*:\s*"/', $text, $file . ': an avatar');
+            preg_match_all('/"name"\s*:\s*"([^"]*)"/', $text, $names);
+            if (str_starts_with(basename($file), 'team.')) {
+                foreach ($names[1] as $name) {
+                    self::assertMatchesRegularExpression('/^Workspace \d+$/', $name, $file . ': a workspace name');
+                }
+            }
+        }
+    }
+}

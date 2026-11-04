@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Twig;
 
+use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Twig\Extension\AbstractExtension;
@@ -54,7 +57,29 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?string $filtersCollapse = null,
         private readonly string $filtersFormClass = '',
         private readonly TaskTextRendererInterface $textRenderer = new PlainTaskTextRenderer(),
+        // Since 1.23: the provider connection of a board (null when `sync.enabled` is false).
+        private readonly ?ConnectionBadgeProvider $connectionBadges = null,
+        // Since 1.23: the avatar URLs of the request (null: no pictures).
+        private readonly ?TaskMemberAvatars $avatars = null,
     ) {
+    }
+
+    /**
+     * Since 1.23: the sanitized, memoised picture URL of a task member; null = the initial chip.
+     */
+    public function memberAvatarUrl(?object $user): ?string
+    {
+        return $this->avatars?->urlOf($user);
+    }
+
+    /**
+     * Since 1.23: what the board header shows about the board's provider connection; null = nothing.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function connection(TaskBoard $board): ?array
+    {
+        return $this->connectionBadges?->forBoard($board);
     }
 
     public function getFunctions(): array
@@ -69,6 +94,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_ancestors', self::ancestors(...)),
             new TwigFunction('nowo_task_board_comment_body', $this->renderCommentBody(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_text', $this->renderText(...), ['is_safe' => ['html']]),
+            new TwigFunction('nowo_task_board_connection', $this->connection(...)),
+            new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
         ];
     }
 

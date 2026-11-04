@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Routing;
 
+use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
@@ -32,6 +33,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly array $routes,
         private readonly string $routePrefix,
         private readonly array $tenancy = [],
+        // Since 1.23: the provider connection routes exist only with `sync.enabled`.
+        private readonly bool $syncEnabled = false,
     ) {
     }
 
@@ -75,6 +78,17 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, 'task_comment', 'addComment', ['POST']);
         $this->addRoute($collection, 'task_comment_edit', 'editComment', ['POST']);
         $this->addRoute($collection, 'task_comment_delete', 'deleteComment', ['POST']);
+        // Since 1.23.
+        $this->addRoute($collection, 'task_restore', 'restoreTask', ['POST']);
+        if ($this->syncEnabled) {
+            $this->addRoute($collection, 'board_connection', 'connection', ['GET'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_containers', 'containers', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_link', 'link', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_refresh', 'refresh', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_progress', 'progress', ['GET'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_cancel', 'cancel', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_unlink', 'unlink', ['POST'], TaskBoardConnectionController::class);
+        }
 
         $this->addTenantCopies($collection);
 
@@ -89,7 +103,7 @@ final class TaskBoardRouteLoader extends Loader
     /**
      * @param list<string> $methods
      */
-    private function addRoute(RouteCollection $collection, string $key, string $action, array $methods): void
+    private function addRoute(RouteCollection $collection, string $key, string $action, array $methods, string $controller = TaskBoardManageController::class): void
     {
         if (!isset($this->routes[$key])) {
             return;
@@ -99,7 +113,7 @@ final class TaskBoardRouteLoader extends Loader
             $this->routes[$key]['name'],
             new Route(
                 $this->routePrefix . $this->routes[$key]['path'],
-                ['_controller' => TaskBoardManageController::class . '::' . $action],
+                ['_controller' => $controller . '::' . $action],
                 [],
                 [],
                 '',

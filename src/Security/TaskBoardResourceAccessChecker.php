@@ -63,6 +63,25 @@ final readonly class TaskBoardResourceAccessChecker
         return $this->isBoardViewable($event) && !$event->isReadOnly();
     }
 
+    /**
+     * Since 1.23: whether the user may manage the board's provider connection (link a remote list, refresh, unlink).
+     * Needs {@see self::canEditBoard()} and the {@see BoardAccessCheckEvent::ACTION_MANAGE_CONNECTION} decision of
+     * BOARD_ACCESS_CHECK, whose default is the board's creator or a `security.manage_roles` holder (listeners may
+     * grant or deny it).
+     */
+    public function canManageBoardConnection(object $user, TaskBoard $board): bool
+    {
+        if (!$this->canEditBoard($user, $board)) {
+            return false;
+        }
+
+        $default = !$this->scopingEnabled || $this->hasManageRole() || $this->sameUser($user, $board->getCreator());
+        $event   = new BoardAccessCheckEvent($user, $board, $default, BoardAccessCheckEvent::ACTION_MANAGE_CONNECTION);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
+        return $this->isBoardViewable($event);
+    }
+
     public function canViewTask(object $user, Task $task): bool
     {
         return $this->resolveTaskAccess($user, $task)->isGranted();

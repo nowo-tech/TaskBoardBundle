@@ -1,0 +1,11 @@
+{
+  "teams": [
+    {
+      "id": "9000001",
+      "name": "Workspace 1",
+      "color": "#7b68ee",
+      "avatar": null,
+      "members": []
+    }
+  ]
+}

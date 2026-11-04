@@ -1,0 +1,57 @@
+{#
+    Since 1.23: the run history (newest first) with each run's summary, its conflicts (task, field) and its
+    warnings / errors as messages. runs, summaries. Override with templates.connection_history.
+#}
+{% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as labels %}
+<section class="card" aria-labelledby="nowo-task-sync-history-title" data-testid="nowo-task-sync-history">
+    <div class="card-header">
+        <h2 class="card-title" id="nowo-task-sync-history-title">{{ 'task_board.sync.history.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+    </div>
+    {% if runs is empty %}
+        <div class="card-body text-secondary">{{ 'task_board.sync.history.empty'|trans({}, 'NowoTaskBoardBundle') }}</div>
+    {% else %}
+        {#- A scrolling region is reachable with the keyboard (WCAG 2.1.1, axe scrollable-region-focusable). -#}
+        <div class="table-responsive" tabindex="0" role="region" aria-labelledby="nowo-task-sync-history-title">
+            <table class="table card-table table-vcenter">
+                <caption class="visually-hidden">{{ 'task_board.sync.history.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">{{ 'task_board.sync.history.started'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.sync.history.by'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.sync.history.status'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                        <th scope="col">{{ 'task_board.sync.history.result'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                        {% set report = run.report %}
+                        <tr>
+                            <td><time datetime="{{ run.startedAt|date('c') }}">{{ run.startedAt|date('Y-m-d H:i') }}</time></td>
+                            <td>{{ ('task_board.sync.trigger.' ~ run.trigger)|trans({}, 'NowoTaskBoardBundle') }}{% if run.actor %} · {{ labels.member_label(run.actor) }}{% endif %}</td>
+                            <td>{{ ('task_board.sync.status.' ~ run.status.value)|trans({}, 'NowoTaskBoardBundle') }}{% if run.dryRun %} ({{ 'task_board.sync.history.dry_run'|trans({}, 'NowoTaskBoardBundle') }}){% endif %}</td>
+                            <td>
+                                {{ summaries[loop.index0]|default('') }}
+                                {% if report and (report.conflicts is not empty or report.warnings is not empty or report.errors is not empty or report.refusalCode) %}
+                                    <details class="nowo-task-sync__details">
+                                        <summary>{{ 'task_board.sync.history.details'|trans({}, 'NowoTaskBoardBundle') }}</summary>
+                                        <ul class="mb-0">
+                                            {% for conflict in report.conflicts %}
+                                                <li>{{ 'task_board.sync.history.conflict'|trans({'%task%': conflict.taskTitle, '%field%': ('task_board.sync.field.' ~ conflict.field)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</li>
+                                            {% endfor %}
+                                            {% for item in report.warnings|merge(report.errors) %}
+                                                <li>{{ item.messageKey|trans(item.params, 'NowoTaskBoardBundle') }}</li>
+                                            {% endfor %}
+                                            {% if report.refusalCode %}
+                                                <li>{{ ('task_board.sync.refusal.' ~ report.refusalCode)|trans({}, 'NowoTaskBoardBundle') }}</li>
+                                            {% endif %}
+                                        </ul>
+                                    </details>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</section>

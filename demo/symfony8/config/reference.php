@@ -471,7 +471,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     disallow_search_engine_index?: bool|Param, // Enabled by default when debug is enabled. // Default: true
  *     http_client?: bool|array{ // HTTP Client configuration
- *         enabled?: bool|Param, // Default: false
+ *         enabled?: bool|Param, // Default: true
  *         max_host_connections?: int|Param, // The maximum number of connections to a single host.
  *         default_options?: array{
  *             headers?: array<string, mixed>,
@@ -1406,6 +1406,38 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time/{entryId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time_remove"
  *         },
+ *         task_restore?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/restore"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_restore"
+ *         },
+ *         board_connection?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection"
+ *         },
+ *         board_connection_containers?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/containers"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_containers"
+ *         },
+ *         board_connection_link?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/link"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_link"
+ *         },
+ *         board_connection_refresh?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/refresh"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_refresh"
+ *         },
+ *         board_connection_progress?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/progress/{runId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_progress"
+ *         },
+ *         board_connection_cancel?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/cancel/{runId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_cancel"
+ *         },
+ *         board_connection_unlink?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/unlink"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_unlink"
+ *         },
  *     },
  *     templates?: array{
  *         layout?: scalar|Param|null, // Twig layout extended by manage pages via global nowo_task_board_layout (REQ-UI-001). Host apps set this to the project layout or a one-file bridge. Default is the bundle demo layout (Tabler CDN). // Default: "@NowoTaskBoardBundle/layout.html.twig"
@@ -1416,6 +1448,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         gantt?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/gantt.html.twig"
  *         task?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task.html.twig"
  *         import?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import.html.twig"
+ *         connection?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/connection.html.twig"
+ *         connection_containers?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_containers.html.twig"
+ *         connection_badge?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_badge.html.twig"
+ *         connection_progress?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_progress.html.twig"
+ *         connection_history?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_history.html.twig"
  *         task_panel?: scalar|Param|null, // Task editing panel without layout (since 1.11), served by the task_panel route for side drawers. // Default: "@NowoTaskBoardBundle/manage/task_panel.html.twig"
  *         filters_collapse?: scalar|Param|null, // Since 1.17: a host partial that folds the list view filters (e.g. UiKit partials/_filters_collapse.html.twig or the host wrapper of it), included as the first child of the filter form with key, fold_key, form and filter_form. Null keeps the bundle "Filters" toggle. Twig global nowo_task_board_filters_collapse. // Default: null
  *         filters_form_class?: scalar|Param|null, // Since 1.17: extra classes on the list view filter form (the host filter card, e.g. "issue-filters panel"). Twig global nowo_task_board_filters_form_class. // Default: ""
@@ -1459,6 +1496,46 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     gantt?: array{ // Gantt view (since 1.15).
  *         week_start?: "monday"|"sunday"|Param, // First day of the week: the Weeks scale columns and the week separators of the Days scale. // Default: "monday"
  *         week_start_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface answering the week start per request (e.g. a user preference). null = week_start. // Default: null
+ *     },
+ *     sync?: array{ // Since 1.23: provider connections (ClickUp first). Opt-in: false = no routes, services, mapping or header change.
+ *         enabled?: bool|Param, // Default: false
+ *         credential_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface. Required when enabled: the host keeps the tokens. // Default: null
+ *         attachment_storage?: scalar|Param|null, // Service id of a TaskAttachmentStorageInterface. null = files are counted as refused (storage_disabled). // Default: null
+ *         inline_image_rewriter?: scalar|Param|null, // Service id of an InlineImageRewriterInterface. null = MapInlineImageRewriter. // Default: null
+ *         limit_checker?: scalar|Param|null, // Service id of a SyncLimitCheckerInterface (host quotas). null = no host limit. // Default: null
+ *         runner?: scalar|Param|null, // Service id of a SyncRunnerInterface (e.g. Messenger). null = InlineSyncRunner (one slice per request, the progress page advances the run). // Default: null
+ *         actor_resolver?: scalar|Param|null, // Service id of a SyncActorResolverInterface. null = the user of the request, else the user who linked the board. // Default: null
+ *         providers?: array{
+ *             clickup?: array{
+ *                 enabled?: bool|Param, // Default: true
+ *                 attachment_hosts?: list<scalar|Param|null>,
+ *             },
+ *         },
+ *         http?: array{
+ *             client?: scalar|Param|null, // Service id of an untraced HttpClientInterface (e.g. through a proxy). null = the bundle's own client (never the profiler-traced http_client). // Default: null
+ *             timeout?: float|Param, // Default: 10.0
+ *             max_duration?: float|Param, // Default: 30.0
+ *             max_response_bytes?: int|Param, // Default: 8388608
+ *             max_inline_wait?: int|Param, // Seconds a rate-limited call waits inline; a longer wait pauses the run (RateLimited, resumable). // Default: 30
+ *         },
+ *         attachments?: array{
+ *             enabled?: bool|Param, // Default: true
+ *             max_bytes?: int|Param, // Default: 26214400
+ *             max_bytes_per_run?: int|Param, // Default: 1073741824
+ *             max_redirects?: int|Param, // Default: 3
+ *             allowed_mime_types?: list<scalar|Param|null>,
+ *         },
+ *         max_tasks_per_run?: int|Param, // Default: 5000
+ *         max_pages_per_run?: int|Param, // Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices; past it the run fails with response_too_large. // Default: 1000
+ *         max_comments_per_task?: int|Param, // Default: 500
+ *         max_description_length?: int|Param, // Default: 100000
+ *         max_archive_ratio?: float|Param, // Default: 0.5
+ *         history_keep?: int|Param, // Default: 50
+ *         container_cache_ttl?: int|Param, // Default: 300
+ *         inline_slice_pages?: int|Param, // Task pages the inline runner writes per request. // Default: 5
+ *         progress?: array{
+ *             poll_interval_ms?: int|Param, // Default: 2000
+ *         },
  *     },
  * }
  * @psalm-type NowoUiKitConfig = array{
