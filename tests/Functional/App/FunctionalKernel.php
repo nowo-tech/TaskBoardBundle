@@ -48,7 +48,9 @@ final class FunctionalKernel extends Kernel
      */
     public function __construct(private readonly array $taskBoard = [], private readonly bool $realHttpClient = false)
     {
-        parent::__construct('test', true);
+        // TASK_BOARD_TEST_DEBUG=0 builds the kernel as production does (no query logging or profiling): the memory
+        // measurements of the import (audit EB-L7) use it.
+        parent::__construct('test', getenv('TASK_BOARD_TEST_DEBUG') !== '0');
     }
 
     public function registerBundles(): iterable
@@ -70,7 +72,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->realHttpClient])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient])) . '/cache';
     }
 
     public function getLogDir(): string

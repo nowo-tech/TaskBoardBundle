@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.22.2] - 2026-11-04](#1222---2026-11-04)
 - [[1.22.1] - 2026-11-04](#1221---2026-11-04)
 - [[1.22.0] - 2026-11-03](#1220---2026-11-03)
 - [[1.21.0] - 2026-11-03](#1210---2026-11-03)
@@ -143,6 +144,20 @@ Provider connections and sync (ClickUp first). See [sync.md](sync.md) and [UPGRA
 - **EG-I10:** the host's credential page link is shown only for an `https://` URL or a same-origin path.
 - Documented in SECURITY: serving stored files (EG-I2), the heartbeat window (EG-I4), the actor's roles (EG-I5), the
   outbound guard defaults (EG-I6) and the progress poll (EG-I7).
+
+## [1.22.2] - 2026-11-04
+
+### Fixed
+
+- **Imports keep a flat memory (audit EB-L7).** The import orchestrator writes its tasks in batches of 200 (flush,
+  then they leave the entity manager) inside one database transaction, so a failure anywhere still keeps nothing. At a
+  128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards (an export without actions) and 5 000 tasks of the
+  bundle's JSON now import, and a ClickUp API export of about 2 700 tasks. 1.22.1 could not import 5 000 rows at
+  128 MB from any source (about 26 KB per task; its "about 40 KB per task" was measured with query logging on).
+- **`import.max_json_nodes` default 1 800 000 → 4 000 000**, calibrated through the import controller on a
+  production kernel: every hostile JSON shape the audits tried stays under +70 MB at 128 MB. A 5 000-task ClickUp API
+  export needs `max_json_nodes: 7500000` and 256 MB, a 5 000-card Trello export with its actions
+  `max_json_nodes: 4500000` (see UPGRADING); hosts with a request baseline above about 55 MB should lower it.
 
 ## [1.22.1] - 2026-11-04
 
@@ -1128,7 +1143,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.22.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.22.2...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

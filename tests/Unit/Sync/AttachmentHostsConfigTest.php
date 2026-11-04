@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Sync;
 
+use App\Entity\User;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
@@ -16,10 +17,10 @@ final class AttachmentHostsConfigTest extends TestCase
 {
     public function testABareTldWildcardIsRefused(): void
     {
-        $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => 'App\\Entity\\User', 'sync' => ['providers' => ['clickup' => ['attachment_hosts' => ['*.files.example.com', 'cdn.example.com']]]]]]);
+        $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class, 'sync' => ['providers' => ['clickup' => ['attachment_hosts' => ['*.files.example.com', 'cdn.example.com']]]]]]);
         self::assertSame(['*.files.example.com', 'cdn.example.com'], $config['sync']['providers']['clickup']['attachment_hosts']);
 
         $this->expectException(InvalidConfigurationException::class);
-        (new Processor())->processConfiguration(new Configuration(), [['user_class' => 'App\\Entity\\User', 'sync' => ['providers' => ['clickup' => ['attachment_hosts' => ['*.com']]]]]]);
+        (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class, 'sync' => ['providers' => ['clickup' => ['attachment_hosts' => ['*.com']]]]]]);
     }
 }

@@ -90,7 +90,7 @@ $cases       = [
         return ['trello', rtrim($json, ',') . '}}]}'];
     },
     // Audit EB-I7: a realistic ClickUp API export within the default weight, and 5000 of them with the raised limit.
-    'clickup-realistic'      => static fn (): array => ['clickup', '{"tasks":[' . implode(',', array_map($clickUpTask, range(1, 1200))) . ']}'],
+    'clickup-realistic'      => static fn (): array => ['clickup', '{"tasks":[' . implode(',', array_map($clickUpTask, range(1, 2700))) . ']}'],
     'clickup-realistic-5000' => static fn (): array => ['clickup-raised', '{"tasks":[' . implode(',', array_map($clickUpTask, range(1, 5000))) . ']}'],
     // The heaviest shapes per unit, sized just under the default weight: refused or parsed, never a fatal error.
     'worst-lists-at-cap'   => static fn (): array => ['clickup', $atCap(static fn (int $n): string => '[' . rtrim(str_repeat('[0],', $n), ',') . ']')],

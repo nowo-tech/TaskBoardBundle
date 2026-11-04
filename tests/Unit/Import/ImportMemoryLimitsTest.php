@@ -44,7 +44,7 @@ final class ImportMemoryLimitsTest extends TestCase
         yield 'EB-L5: 1.4 M keys in one card' => ['json-keys-nested', 'REFUSED ' . ImportLimitExceededException::JSON];
         yield 'a normal file still parses' => ['normal-csv', 'PARSED 5000'];
         yield 'a normal JSON export still parses' => ['normal-json', 'PARSED 5000'];
-        yield 'EB-I7: a realistic 1200-task ClickUp export parses' => ['clickup-realistic', 'PARSED 1200'];
+        yield 'EB-I7: a realistic 2700-task ClickUp export parses' => ['clickup-realistic', 'PARSED 2700'];
         yield 'EB-I7: lists at the default weight' => ['worst-lists-at-cap', 'REFUSED ' . ImportLimitExceededException::ROWS];
         yield 'EB-I7: objects at the default weight' => ['worst-objects-at-cap', 'REFUSED ' . ImportLimitExceededException::ROWS];
         yield 'EB-I7: short strings at the default weight' => ['worst-strings-at-cap', 'PARSED 1'];
