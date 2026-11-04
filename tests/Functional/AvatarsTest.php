@@ -150,6 +150,7 @@ final class AvatarsTest extends FunctionalTestCase
 
     private function html(Crawler $node): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', $node->outerHtml()));
+        // The DOM serializer writes an empty attribute as `alt` (PHP < 8.4) or `alt=""` (PHP 8.4 HTML5 DOM): one form.
+        return trim((string) preg_replace(['/\s+/', '/ alt=""/'], [' ', ' alt'], $node->outerHtml()));
     }
 }
