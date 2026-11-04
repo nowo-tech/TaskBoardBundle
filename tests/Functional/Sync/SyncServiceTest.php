@@ -98,7 +98,7 @@ final class SyncServiceTest extends SyncFunctionalTestCase
         $design = $this->taskTitled('Design');
         self::assertSame('In review', $design->getColumn()?->getName());
         self::assertStringNotContainsString('clickup-attachments', (string) $design->getDescription());
-        self::assertStringNotContainsString('javascript:', (string) $design->getDescription());
+        self::assertDoesNotMatchRegularExpression('/\]\(\s*javascript:/i', (string) $design->getDescription(), 'an unsafe link keeps no target');
         self::assertStringContainsString('/files/', (string) $design->getDescription());
         self::assertSame(['ux'], $design->getTags());
         $attachment = array_values(array_filter($design->getLinks()->toArray(), static fn (TaskLink $l): bool => $l->getLinkType() === TaskLinkType::Attachment));

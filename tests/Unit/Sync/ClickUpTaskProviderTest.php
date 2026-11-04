@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
+use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -96,8 +97,9 @@ final class ClickUpTaskProviderTest extends TestCase
         self::assertSame('2026-11-01', $design->task->startAt?->format('Y-m-d'));
         self::assertSame(1793100000, $design->remoteUpdatedAt->getTimestamp());
         self::assertStringContainsString('**board**', (string) $design->task->description);
-        self::assertStringNotContainsString('<script>', (string) $design->task->description);
-        self::assertStringNotContainsString('javascript:', (string) $design->task->description);
+        // Audit EG-L3: raw HTML is escaped (the text stays), an unsafe link loses its target.
+        self::assertDoesNotMatchRegularExpression('/(?<!\\\\)<script/', (string) $design->task->description);
+        self::assertDoesNotMatchRegularExpression('/\]\(\s*javascript:/i', (string) $design->task->description);
         self::assertStringContainsString('[spec](https://example.test/spec)', (string) $design->task->description);
         self::assertSame(['https://t000.p.clickup-attachments.com/fixture/1/shot.png'], $design->inlineImageUrls);
         self::assertSame('att-1', $design->attachments[0]->id);
@@ -154,6 +156,37 @@ final class ClickUpTaskProviderTest extends TestCase
             self::fail('endless paging');
         } catch (ProviderException $exception) {
             self::assertSame(ProviderErrorCode::ResponseTooLarge, $exception->errorCode);
+        }
+    }
+
+    /**
+     * Unconfirmed against the live API (owner decision 2026-11-04): without `last_page` the paging goes on until an
+     * empty page, missing attachment fields are tolerated, and an unexpected shape is logged with its keys only.
+     */
+    public function testUnconfirmedShapesAreHandledDefensively(): void
+    {
+        $logger = new RecordingLogger();
+        $routes = [
+            'list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'a1', 'name' => 'Short page', 'secret_field' => 'VALUE_NOT_LOGGED', 'attachments' => [['id' => 'f1', 'url' => 'https://t000.p.clickup-attachments.com/f1'], 'junk']]]])),
+            'list/L/task?page=1' => new MockResponse((string) json_encode(['tasks' => []])),
+            'list/L/task?page=2' => new MockResponse((string) json_encode(['unexpected' => 'VALUE_NOT_LOGGED'])),
+        ];
+        $provider   = $this->provider($routes, logger: $logger);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+
+        $first = $provider->fetchTasks($credential, 'L', null, null);
+        self::assertFalse($first->lastPage, 'a short page without last_page is not trusted to be the last');
+        self::assertCount(1, $first->tasks);
+        self::assertSame('file', $first->tasks[0]->attachments[0]->name, 'missing attachment fields are tolerated');
+        self::assertNull($first->tasks[0]->attachments[0]->size);
+        self::assertTrue($provider->fetchTasks($credential, 'L', null, '1')->lastPage, 'an empty page ends the list');
+        self::assertTrue($provider->fetchTasks($credential, 'L', null, '2')->lastPage);
+        self::assertSame(['a1'], iterator_to_array($provider->existingTaskIds($credential, 'L'), false));
+
+        self::assertNotSame([], $logger->records);
+        foreach ($logger->records as $record) {
+            self::assertSame('debug', $record['level']);
+            self::assertStringNotContainsString('VALUE_NOT_LOGGED', (string) json_encode($record));
         }
     }
 
@@ -238,7 +271,7 @@ final class ClickUpTaskProviderTest extends TestCase
     /**
      * @param array<string, MockResponse|string> $routes
      */
-    private function provider(array $routes, int $maxComments = 500): ClickUpTaskProvider
+    private function provider(array $routes, int $maxComments = 500, ?RecordingLogger $logger = null): ClickUpTaskProvider
     {
         $this->routes   = $routes;
         $this->requests = [];
@@ -270,6 +303,7 @@ final class ClickUpTaskProviderTest extends TestCase
         return new ClickUpTaskProvider(
             new ProviderHttpClient($client, new RecordingSleeper(), new MockClock()),
             maxComments: $maxComments,
+            logger: $logger ?? new RecordingLogger(),
         );
     }
 }

@@ -223,12 +223,35 @@ Nothing changes until you set `sync.enabled: true` with a `credential_resolver`.
   the first line of defence. See [SECURITY](SECURITY.md#provider-sync-host-duties-and-known-limits) for serving stored
   files (`nosniff`, `attachment`), a custom `sync.http.client` (must not log URLs) and the other host duties.
 - **Run limits:** a second request into a running run is Busy (also a slice of the same run); a slice reads at most
-  `ceil(max_tasks_per_run / 100) + 1` task pages and fails with `response_too_large` beyond; a page that brings no new
-  task ends the list (warning `paging_stopped`). Comments are read up to `max_comments_per_task` rows.
+  `ceil(max_tasks_per_run / 100) + 1` task pages and a run at most `sync.max_pages_per_run` (new, 1000) — fewer on an
+  initial or full run of a list of known size — and fails with `response_too_large` beyond; a page that brings no new
+  task ends the list (warning `paging_stopped`, the watermark stays). Comments are read up to `max_comments_per_task`
+  rows.
+- **Synced text:** raw HTML in remote text is now escaped (shown as text) instead of removed, and an unsafe link or
+  reference definition stays as plain text.
 - **Assignees:** a row resolves at most 50 assignees (file import and sync); unresolved ones are listed up to 10, then
   counted.
 - **Attachment hosts:** `sync.providers.clickup.attachment_hosts` refuses a pattern that is not a host of two labels at
   least (`*.com` is refused at container build).
+
+### Known unconfirmed ClickUp behaviour
+
+The ClickUp adapter was built from the API v2 documentation; its request shapes are unconfirmed against the live API
+(owner decision 2026-11-04) and validated by Beacon after deploy. The adapter is defensive on each point:
+
+- **Order of the task pages** (`order_by=updated&reverse=true`, meant to list the oldest update first): the run does
+  not depend on it — the watermark is the newest date of all pages read, and the next run's overlap window re-reads the
+  edge.
+- **Attachments in the list answer and their fields:** only `id` and `url` are required; `title` / `name`, `size`,
+  `mimetype` and `date` are read when present, extra fields are ignored, and a task without an `attachments` list has
+  no files synced (no extra call).
+- **`last_page`:** used when the answer has it; otherwise paging goes on until an empty page (a short page is not
+  trusted to be the last), always within the run's page caps (`max_pages_per_run`).
+- **Comment paging:** the documented `start` / `start_id` of the oldest comment; it stops on a page shorter than 25,
+  an empty page, a cursor that does not move, or the comment caps.
+
+Unexpected answer shapes are logged at debug level with their keys only, never a value. The recording script
+(`make record-clickup-fixtures`) stays for a later confirmation.
 
 ### Task member pictures (opt-in)
 

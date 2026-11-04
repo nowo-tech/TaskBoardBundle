@@ -75,6 +75,7 @@ services:
         arguments:
             $eventDispatcher: '@?event_dispatcher'
             $maxTasksPerRun: '%nowo_task_board.sync.max_tasks_per_run%'
+            $maxPagesPerRun: '%nowo_task_board.sync.max_pages_per_run%'
             $maxArchiveRatio: '%nowo_task_board.sync.max_archive_ratio%'
             $historyKeep: '%nowo_task_board.sync.history_keep%'
             $maxBytesPerRun: '%nowo_task_board.sync.attachments.max_bytes_per_run%'

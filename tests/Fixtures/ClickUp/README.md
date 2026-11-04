@@ -1,7 +1,7 @@
 # ClickUp API v2 fixtures
 
 **Status: PROVISIONAL.** These files were written by hand from the ClickUp API v2 documentation (2026-11-04). They
-are not a recording yet. The owner records them once with a throwaway workspace:
+are not a recording: unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy. The owner records them once with a throwaway workspace:
 
 ```bash
 CLICKUP_RECORD_TOKEN=pk_… make record-clickup-fixtures       # or: php scripts/record-clickup-fixtures.php
@@ -29,16 +29,26 @@ outside the fixture allowlist.
 | `task_{id}.json` (after recording) | `GET task/{id}?include_markdown_description=true` |
 | `task_{id}_comment_page2.json` (after recording, 25+ comments) | `GET task/{id}/comment?start=<date>&start_id=<id>` of the oldest comment |
 
-## TO CONFIRM with the recording (contract Q-O4)
+## Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy
+
+The adapter is defensive on each point (see UPGRADING, "Known unconfirmed ClickUp behaviour"). The recording script
+stays for a later confirmation.
 
 1. **Attachment hosts.** The default allowlist is `*.clickup-attachments.com`, `attachments.clickup.com` and
-   `attachments2.clickup.com`. Confirm every host the recorded `attachments[].url` and inline image URLs use.
+   `attachments2.clickup.com`; a file on another host is refused (`host_not_allowed`) and a host application adds more with
+   `sync.providers.clickup.attachment_hosts`.
 2. **`attachments` in the list endpoint.** These fixtures put `attachments` on each task of `GET list/{id}/task`. If the
-   recording shows the list answer has none, the adapter must call `GET task/{id}` for the tasks it creates or
-   updates.
-3. **Attachment fields.** `title`, `size`, `mimetype` and `date` are assumed.
-4. **`last_page`.** Assumed on `GET list/{id}/task`; the adapter also stops on a page shorter than 100.
-5. **Ordering.** `order_by=updated&reverse=true` is assumed to list the oldest update first (the contract says
-   `reverse=false`): compare `…_task_page0.json` and `…_task_page0_reverse_false.json`.
-6. **Comment paging.** `start` (date) and `start_id` of the oldest comment are assumed to return the older ones,
-   25 at a time.
+   list answer has none, the tasks simply have no attachments synced (no extra call); Beacon's validation after deploy
+   decides whether `GET task/{id}` is needed.
+3. **Attachment fields.** `title` (or `name`), `size`, `mimetype` and `date` are read when present; only `id` and `url`
+   are required, anything else is optional and extra fields are ignored.
+4. **`last_page`.** Used when the answer has it; without it the adapter pages on until an empty page (a short page is
+   not trusted to be the last), within the run's page caps.
+5. **Ordering.** `order_by=updated&reverse=true` is meant to list the oldest update first (the contract text said
+   `reverse=false`). The run does not depend on the order: the watermark is the newest date of all pages read and the
+   next run's overlap window re-reads the edge.
+6. **Comment paging.** The documented `start` (date) and `start_id` of the oldest comment; paging stops on a page
+   shorter than 25, an empty page, a cursor that does not move, or the comment caps.
+
+Unexpected answer shapes (a missing `tasks` / `comments` / `attachments` list, items that are not objects, no
+`last_page`) are logged at debug level with their keys only, never a value.

@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
+use function addcslashes;
 use function class_exists;
 use function html_entity_decode;
 use function implode;
@@ -23,8 +24,6 @@ use function str_contains;
 use function str_replace;
 use function strcspn;
 use function strlen;
-use function strpos;
-use function strspn;
 use function strtolower;
 use function substr;
 use function trim;
@@ -35,12 +34,16 @@ use const PREG_OFFSET_CAPTURE;
 
 /**
  * Since 1.23: makes provider text safe to store as Markdown. The host's {@see TaskTextRendererInterface}
- * still escapes or sanitizes when it renders; this is the second line of defence:
+ * still escapes or sanitizes when it renders; this is the second line of defence (audit EG-L3, delta):
  *
- * - raw HTML is removed outside code spans and fences (its text stays); code spans and fences are found as CommonMark
- *   finds them (a backtick run closed by a run of the same length, not escaped; fences at the start of a line);
- * - every link and image destination (`](…)`, whatever the label looks like, and reference definitions, the target
- *   on the next line included) keeps only https:, http: and mailto: — any other target is emptied (audit EG-L3);
+ * - fenced code blocks (``` or ~~~ at the very start of a line) keep their text; everything else, inline code spans
+ *   included, is prose (a span's extent depends on the block structure, so it is never trusted to hide HTML);
+ * - in prose every `<` is escaped (no raw HTML, no autolink: the text stays readable), every inline link or image
+ *   target that is not http, https or mailto loses its link (`](` is escaped) whatever the label looks like, and every
+ *   `]:` whose target is
+ *   not one of those is escaped (no reference definition, also in a list item, a quote or after a code-span label);
+ * - the result is sanitized again until it no longer changes (a change may move code spans); without a fixed point
+ *   the text is escaped as plain text;
  * - NUL, C0 controls other than tab and newline, and Unicode bidi overrides are removed;
  * - the text is cut to a byte budget at a UTF-8 boundary.
  */
@@ -50,22 +53,35 @@ final readonly class RemoteContentSanitizer
 
     private const ALLOWED_SCHEMES = ['http', 'https', 'mailto'];
 
+    /** Rounds of {@see self::markdown()} before the text is escaped as plain text. */
+    public const MAX_ROUNDS = 8;
+
     /**
-     * What CommonMark reads as raw HTML (it wins over a code span that starts inside it): comments, processing
-     * instructions, CDATA, declarations and tags — autolinks `<scheme:…>` look like tags and go too.
+     * @param int<1, max> $maxRounds
      */
-    private const HTML = '<!--.*?(?:-->|$)|<\\?.*?(?:\\?>|$)|<!\\[CDATA\\[.*?(?:\\]\\]>|$)|<![A-Za-z][^>]*>|<\\/?[a-zA-Z][^>]*>';
+    public function __construct(private int $maxRounds = self::MAX_ROUNDS)
+    {
+    }
 
     public function markdown(string $text, int $maxBytes): string
     {
-        $text = $this->clean(str_replace(["\r\n", "\r"], "\n", $text));
-        // Prose is cleaned; code spans and fences keep their text (CommonMark escapes HTML inside code).
-        $out = [];
-        foreach ($this->segments($text) as [$isCode, $part]) {
-            $out[] = $isCode ? $part : $this->prose($part);
+        $text     = $this->clean(str_replace(["\r\n", "\r"], "\n", $text));
+        $original = $text;
+        for ($round = 0; $round < $this->maxRounds; ++$round) {
+            // Prose is neutralised; code spans and fences keep their text (CommonMark escapes HTML inside code).
+            $out = [];
+            foreach ($this->segments($text) as [$isCode, $part]) {
+                $out[] = $isCode ? $part : $this->prose($part);
+            }
+            $next = $this->cut(trim(implode('', $out)), $maxBytes);
+            if ($next === $text) {
+                return $text;
+            }
+            $text = $next;
         }
 
-        return $this->cut(trim(implode('', $out)), $maxBytes);
+        // No fixed point: every Markdown punctuation is escaped, the text is shown as it is.
+        return $this->cut(addcslashes($original, '\\`*_[]()<>!#~:&|'), $maxBytes);
     }
 
     /**
@@ -111,33 +127,32 @@ final readonly class RemoteContentSanitizer
 
     private function prose(string $text): string
     {
-        $text = (string) preg_replace('/' . self::HTML . '/s', '', $text);
-        // Inline link and image destinations: `](` then optional white space (new lines too) and the target, in
-        // angle brackets or bare. The label is not parsed (nested brackets and new lines are legal): any unsafe target
-        // is emptied.
+        // Inline link and image targets: `](`, optional white space (new lines too), then the target in angle brackets
+        // or bare. The label is not parsed (nested brackets and new lines are legal): before an unsafe or empty target the
+        // parenthesis is escaped, so neither a link nor an image remains (the text shows as it is).
         $text = (string) preg_replace_callback(
             '/\]\(([ \t\n]*)(<[^>\n]*>|[^\s)]*)/',
-            fn (array $m): string => $m[2] === '' || $this->isSafeUrl(trim($m[2], '<>')) ? $m[0] : '](' . $m[1],
+            fn (array $m): string => $this->isSafeUrl(trim($m[2], '<>')) ? $m[0] : ']\\(' . $m[1] . $m[2],
             $text,
         );
-
-        // Reference definitions: [label]: target, the target possibly on the next line.
+        // Reference definitions, wherever `]:` is (a list item, a quote, after a code-span label, the target on the
+        // next line): unless the target is safe, the colon is escaped and no definition remains.
         $text = (string) preg_replace_callback(
-            '/^( {0,3}\[(?:[^\]\\\\]|\\\\.)+\]:)([ \t]*\n?[ \t]*)(<[^>\n]*>|\S+)(.*)$/m',
-            fn (array $m): string => $this->isSafeUrl(trim($m[3], '<>')) ? $m[0] : '',
+            '/\]:([ \t]*\n?[ \t]*)(<[^>\n]*>|\S*)/',
+            fn (array $m): string => $m[2] !== '' && $this->isSafeUrl(trim($m[2], '<>')) ? $m[0] : ']\\:' . $m[1] . $m[2],
             $text,
         );
 
-        // A `<` left that could still open HTML (an unclosed tag or declaration) is escaped: CommonMark shows it.
-        return (string) preg_replace('/<(?=[A-Za-z!?\/])/', '\\<', $text);
+        // Every `<` not escaped yet is escaped: no raw HTML, comment, declaration or autolink (the text stays).
+        return (string) preg_replace('/(?<!\\\\)((?:\\\\\\\\)*)</', '$1\\\\<', $text);
     }
 
     /**
-     * The text cut into prose and code the way CommonMark finds code: fenced blocks (``` or ~~~, three or more, at the
-     * start of a line, up to a closing fence of the same kind and at least the same length, or the end) and code spans
-     * (a backtick run not preceded by a backslash, closed by the next run of exactly the same length on the same line;
-     * without one the backticks are plain text). Raw HTML that starts first wins, as in CommonMark. Anything this
-     * reads as prose while CommonMark reads code is only cleaned more than needed.
+     * The fenced code blocks of the text (``` or ~~~, three or more, at the very start of a line, up to a closing fence
+     * of the same kind and at least the same length indented by three spaces at most, or the end): CommonMark finds
+     * exactly these, whatever comes before (a column-0 fence closes any list item or quote). Everything else is prose,
+     * inline code spans too: how CommonMark pairs backtick runs depends on the block structure (spans cross lines),
+     * so a span is never trusted to hide raw HTML (audit EG-L3, delta) — a `<` in it shows its backslash.
      *
      * @return list<array{0: bool, 1: string}>
      */
@@ -148,7 +163,7 @@ final readonly class RemoteContentSanitizer
         $length   = strlen($text);
         for ($i = 0; $i < $length;) {
             $lineStart = $i === 0 || $text[$i - 1] === "\n";
-            if ($lineStart && preg_match('/\G {0,3}(`{3,}|~{3,})[^\n]*/', $text, $fence, 0, $i) === 1 && ($fence[1][0] === '~' || !str_contains(substr($fence[0], strlen($fence[1])), '`'))) {
+            if ($lineStart && preg_match('/\G(`{3,}|~{3,})[^\n]*/', $text, $fence, 0, $i) === 1 && ($fence[1][0] === '~' || !str_contains(substr($fence[0], strlen($fence[1])), '`'))) {
                 $close = preg_match('/^ {0,3}' . preg_quote($fence[1][0], '/') . '{' . strlen($fence[1]) . ',}[ \t]*$/m', $text, $match, PREG_OFFSET_CAPTURE, $i + strlen($fence[0])) === 1
                     ? $match[0][1] + strlen($match[0][0])
                     : $length;
@@ -158,48 +173,14 @@ final readonly class RemoteContentSanitizer
                 $i          = $close;
                 continue;
             }
-            if ($text[$i] === '`') {
-                $run     = strspn($text, '`', $i);
-                $lineEnd = strpos($text, "\n", $i);
-                // A span closed on the same line only: one spread over lines (or paragraphs) stays prose.
-                if (!$this->escaped($text, $i) && preg_match('/(?<!`)`{' . $run . '}(?!`)/', $text, $match, PREG_OFFSET_CAPTURE, $i + $run) === 1 && ($lineEnd === false || $match[0][1] < $lineEnd)) {
-                    $end        = $match[0][1] + $run;
-                    $segments[] = [false, $prose];
-                    $segments[] = [true, substr($text, $i, $end - $i)];
-                    $prose      = '';
-                    $i          = $end;
-                    continue;
-                }
-                // No closing run (or an escaped opener): the backticks are plain text.
-                $prose .= substr($text, $i, $run);
-                $i += $run;
-                continue;
-            }
-            if ($text[$i] === '<') {
-                // Raw HTML that starts before a backtick wins over the code span (CommonMark): it is prose, removed.
-                $html = preg_match('/\\G(?:' . self::HTML . ')/s', $text, $match, 0, $i) === 1 ? $match[0] : '<';
-                $prose .= $html;
-                $i += strlen($html);
-                continue;
-            }
-            $next = strcspn($text, "`\n<", $i);
-            $prose .= substr($text, $i, $next + ($i + $next < $length && $text[$i + $next] === "\n" ? 1 : 0));
-            $i += $next + ($i + $next < $length && $text[$i + $next] === "\n" ? 1 : 0);
+            $next = strcspn($text, "\n", $i);
+            $step = $next + ($i + $next < $length && $text[$i + $next] === "\n" ? 1 : 0);
+            $prose .= substr($text, $i, $step);
+            $i += $step;
         }
         $segments[] = [false, $prose];
 
         return $segments;
-    }
-
-    /** Whether the character at `$offset` is escaped (an odd number of backslashes before it). */
-    private function escaped(string $text, int $offset): bool
-    {
-        $backslashes = 0;
-        for ($k = $offset - 1; $k >= 0 && $text[$k] === '\\'; --$k) {
-            ++$backslashes;
-        }
-
-        return $backslashes % 2 === 1;
     }
 
     private function clean(string $text): string

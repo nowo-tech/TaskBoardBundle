@@ -31,6 +31,10 @@ final readonly class SyncCursor
         public int $pagesDone = 0,
         public SyncMode $mode = SyncMode::Initial,
         public array $pendingDependencies = [],
+        /** Since audit EG-L2: tasks seen by the run so far (across its slices). */
+        public int $tasksSeen = 0,
+        /** Since audit EG-L2: the most task pages this run reads (0: the configured default). */
+        public int $pageCap = 0,
     ) {
     }
 
@@ -48,6 +52,8 @@ final readonly class SyncCursor
             'pagesDone'           => $this->pagesDone,
             'mode'                => $this->mode->value,
             'pendingDependencies' => array_slice($this->pendingDependencies, 0, self::MAX_PENDING),
+            'tasksSeen'           => $this->tasksSeen,
+            'pageCap'             => $this->pageCap,
         ];
     }
 
@@ -73,6 +79,8 @@ final readonly class SyncCursor
             pagesDone: SyncValues::int($data['pagesDone'] ?? 0),
             mode: SyncMode::tryFrom(SyncValues::string($data['mode'] ?? '')) ?? SyncMode::Initial,
             pendingDependencies: array_slice($pending, 0, self::MAX_PENDING),
+            tasksSeen: SyncValues::int($data['tasksSeen'] ?? 0),
+            pageCap: SyncValues::int($data['pageCap'] ?? 0),
         );
     }
 }

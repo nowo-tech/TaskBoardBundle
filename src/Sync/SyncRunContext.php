@@ -27,26 +27,30 @@ use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
  */
 final class SyncRunContext
 {
-    public int $created                      = 0;
-    public int $updated                      = 0;
-    public int $unchanged                    = 0;
-    public int $archived                     = 0;
-    public int $restored                     = 0;
-    public int $columnsCreated               = 0;
-    public int $dependenciesCreated          = 0;
-    public int $commentsCreated              = 0;
-    public int $commentsUpdated              = 0;
-    public int $skipReadOnly                 = 0;
-    public int $skipElsewhere                = 0;
-    public int $skipLocallyDeleted           = 0;
-    public int $skipLocallyArchived          = 0;
-    public int $skipRepeated                 = 0;
-    public int $filesCopied                  = 0;
-    public int $filesReused                  = 0;
-    public int $filesRefused                 = 0;
-    public int $bytes                        = 0;
-    public int $pagesDone                    = 0;
-    public int $tasksSeen                    = 0;
+    public int $created             = 0;
+    public int $updated             = 0;
+    public int $unchanged           = 0;
+    public int $archived            = 0;
+    public int $restored            = 0;
+    public int $columnsCreated      = 0;
+    public int $dependenciesCreated = 0;
+    public int $commentsCreated     = 0;
+    public int $commentsUpdated     = 0;
+    public int $skipReadOnly        = 0;
+    public int $skipElsewhere       = 0;
+    public int $skipLocallyDeleted  = 0;
+    public int $skipLocallyArchived = 0;
+    public int $skipRepeated        = 0;
+    public int $filesCopied         = 0;
+    public int $filesReused         = 0;
+    public int $filesRefused        = 0;
+    public int $bytes               = 0;
+    public int $pagesDone           = 0;
+    public int $tasksSeen           = 0;
+    /** Since audit EG-L2: the most task pages of the run (0: the configured default). */
+    public int $pageCap = 0;
+    /** Since audit EG-I11: the task list stopped advancing; the watermark must not move past unseen tasks. */
+    public bool $pagingStopped               = false;
     public bool $filesBlocked                = false;
     public ?string $refusalCode              = null;
     public ?int $retryAfter                  = null;
@@ -151,6 +155,8 @@ final class SyncRunContext
             pagesDone: $this->pagesDone,
             mode: $this->mode,
             pendingDependencies: $this->pending,
+            tasksSeen: $this->tasksSeen,
+            pageCap: $this->pageCap,
         );
     }
 

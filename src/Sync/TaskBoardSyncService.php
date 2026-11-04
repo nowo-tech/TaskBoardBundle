@@ -46,7 +46,9 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
+use function ceil;
 use function intdiv;
+use function min;
 
 /**
  * Since 1.23: links a board to a remote list and keeps it in sync — an idempotent upsert keyed by the same
@@ -77,6 +79,8 @@ final readonly class TaskBoardSyncService
         private LoggerInterface $logger = new NullLogger(),
         private ClockInterface $clock = new NativeClock(),
         private int $maxTasksPerRun = 5000,
+        // Since audit EG-L2: the most task pages one run reads over all its slices (`sync.max_pages_per_run`).
+        private int $maxPagesPerRun = 1000,
         private float $maxArchiveRatio = 0.5,
         private int $historyKeep = 50,
         private int $maxBytesPerRun = 1_073_741_824,
@@ -212,9 +216,13 @@ final readonly class TaskBoardSyncService
             } else {
                 $run = new TaskSyncRun($runId, $connection, $board->getId(), $this->managedUser($options->actor), $options->trigger->value, $ctx->mode->value, $options->dryRun, $now);
                 $this->entityManager->persist($run);
-                if ($ctx->mode === SyncMode::Initial) {
+                if ($ctx->mode === SyncMode::Initial || $ctx->mode === SyncMode::Full) {
                     $ctx->total = $provider->findContainer($credential, $listId)?->taskCount;
                 }
+                // Audit EG-L2: a run reads at most max_pages_per_run task pages, fewer when the list's size is known.
+                $ctx->pageCap = $ctx->total !== null
+                    ? min($this->maxPagesPerRun, (int) ceil(1.1 * $ctx->total / self::PAGE_SIZE) + 2)
+                    : $this->maxPagesPerRun;
             }
             $connection->markRun($now);
             $run->record($ctx->report(SyncStatus::Running), $now);
@@ -254,6 +262,8 @@ final readonly class TaskBoardSyncService
             $ctx->providerCursor = $resume->providerCursor;
             $ctx->highWatermark  = $resume->highWatermark;
             $ctx->pagesDone      = $resume->pagesDone;
+            $ctx->tasksSeen      = $resume->tasksSeen;
+            $ctx->pageCap        = $resume->pageCap;
             $ctx->pending        = $resume->pendingDependencies;
         }
 
@@ -268,14 +278,17 @@ final readonly class TaskBoardSyncService
         try {
             if ($ctx->phase === SyncPhase::Tasks) {
                 $slicePages = 0;
+                $sliceSeen  = $ctx->tasksSeen;
                 $deadline   = $ctx->options->timeBudgetSeconds !== null ? $this->clock->now()->getTimestamp() + $ctx->options->timeBudgetSeconds : null;
-                // Audit EG-L2 (contract §4): a slice reads at most ceil(max_tasks_per_run / 100) + 1 pages.
+                // Audit EG-L2 (contract §4): a slice reads at most ceil(max_tasks_per_run / 100) + 1 pages, and the
+                // run (all its slices: the page count is kept in the cursor) at most its page cap.
                 $pageCap = intdiv($this->maxTasksPerRun + self::PAGE_SIZE - 1, self::PAGE_SIZE) + 1;
+                $runCap  = $ctx->pageCap > 0 ? $ctx->pageCap : $this->maxPagesPerRun;
                 while (true) {
                     if ($this->store->isCancelRequested($ctx->runId)) {
                         return SyncStatus::Cancelled;
                     }
-                    if ($slicePages >= $pageCap) {
+                    if ($slicePages >= $pageCap || $ctx->pagesDone >= $runCap) {
                         throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
                     }
                     $page    = $ctx->provider->fetchTasks($ctx->credential, $ctx->connection->getContainerId(), $ctx->updatedSince, $ctx->providerCursor);
@@ -292,12 +305,13 @@ final readonly class TaskBoardSyncService
                     if ($ctx->tasksSeen === $seenWas) {
                         // A page that brings no new task (empty, or only ids already read): the list does not advance.
                         $ctx->warn('paging_stopped');
+                        $ctx->pagingStopped = true;
                         break;
                     }
                     $this->progress($ctx);
                     if (($ctx->options->maxPages !== null && $slicePages >= $ctx->options->maxPages)
                         || ($deadline !== null && $this->clock->now()->getTimestamp() >= $deadline)
-                        || $ctx->tasksSeen >= $this->maxTasksPerRun) {
+                        || $ctx->tasksSeen - $sliceSeen >= $this->maxTasksPerRun) {
                         return SyncStatus::Paused;
                     }
                 }
@@ -352,7 +366,9 @@ final readonly class TaskBoardSyncService
             if (!$ctx->options->dryRun) {
                 $ctx->connection->setCursor($status->isResumable() ? $ctx->cursor() : null);
                 if ($status === SyncStatus::Succeeded) {
-                    $ctx->connection->markSuccess($now, $ctx->highWatermark);
+                    // Audit EG-I11: a list that stopped advancing keeps the previous watermark (the next run reads again
+                    // what this one may have missed).
+                    $ctx->connection->markSuccess($now, $ctx->pagingStopped ? null : $ctx->highWatermark);
                 }
             }
             $run = $this->store->findRun($ctx->runId);

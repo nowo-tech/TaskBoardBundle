@@ -195,6 +195,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.attachments.allowed_mime_types', array_values($sync['attachments']['allowed_mime_types']));
         $container->setParameter('nowo_task_board.sync.storage_enabled', $sync['attachments']['enabled'] && is_string($sync['attachment_storage']) && $sync['attachment_storage'] !== '');
         $container->setParameter('nowo_task_board.sync.max_tasks_per_run', $sync['max_tasks_per_run']);
+        $container->setParameter('nowo_task_board.sync.max_pages_per_run', $sync['max_pages_per_run']);
         $container->setParameter('nowo_task_board.sync.max_archive_ratio', (float) $sync['max_archive_ratio']);
         $container->setParameter('nowo_task_board.sync.history_keep', $sync['history_keep']);
         $container->setParameter('nowo_task_board.sync.container_cache_ttl', $sync['container_cache_ttl']);

@@ -119,17 +119,42 @@ Provider connections and sync (ClickUp first). See [sync.md](sync.md) and [UPGRA
   gets the same treatment (`--nowo-task-sync-badge-color`).
 - A sync run's lock is shown as free as soon as the run ends, also on a connection already loaded in the request.
 
+### Known unconfirmed ClickUp behaviour
+
+The ClickUp adapter was built from the API v2 documentation; its request shapes are unconfirmed against the live API
+(owner decision 2026-11-04) and validated by Beacon after deploy. The adapter is defensive on each point:
+
+- **Order of the task pages** (`order_by=updated&reverse=true`, meant to list the oldest update first): the run does
+  not depend on it — the watermark is the newest date of all pages read, and the next run's overlap window re-reads the
+  edge.
+- **Attachments in the list answer and their fields:** only `id` and `url` are required; `title` / `name`, `size`,
+  `mimetype` and `date` are read when present, extra fields are ignored, and a task without an `attachments` list has
+  no files synced (no extra call).
+- **`last_page`:** used when the answer has it; otherwise paging goes on until an empty page (a short page is not
+  trusted to be the last), always within the run's page caps (`max_pages_per_run`).
+- **Comment paging:** the documented `start` / `start_id` of the oldest comment; it stops on a page shorter than 25,
+  an empty page, a cursor that does not move, or the comment caps.
+
+Unexpected answer shapes are logged at debug level with their keys only, never a value. The recording script
+(`make record-clickup-fixtures`) stays for a later confirmation.
+
 ### Security (1.23 audit, Appendix EG)
 
 - **EG-L1:** the run lock is no longer re-entrant: a second request into a running run (a slice of the same run too)
   gets Busy and writes nothing.
-- **EG-L2:** a slice reads at most `ceil(max_tasks_per_run / 100) + 1` task pages (`response_too_large` beyond), a page
-  that brings no new task ends the list (`paging_stopped`), and ClickUp comments are paged by raw rows, at most
+- **EG-L2:** a slice reads at most `ceil(max_tasks_per_run / 100) + 1` task pages, and a run at most
+  `sync.max_pages_per_run` (new, default 1000) over all its slices — `ceil(1.1 × tasks / 100) + 2` on an initial or
+  full run of a list of known size; past either cap the run fails with `response_too_large` and its cursor is cleared.
+  The task counter carries over the slices. A page that brings no new task ends the list (`paging_stopped`; the
+  watermark is then not moved, EG-I11), and ClickUp comments are paged by raw rows, at most
   `ceil(max_comments_per_task / 25) + 1` pages, stopping when the cursor does not move.
-- **EG-L3:** `RemoteContentSanitizer` finds code the way CommonMark does (backtick runs of equal length, not escaped,
-  on one line; fences at the start of a line; raw HTML that starts first wins), empties every unsafe link or image
-  target whatever its label looks like (nested brackets, new lines) and reference definitions with the target on the
-  next line, and escapes any `<` that could still open HTML. Tested by rendering with league/commonmark.
+- **EG-L3:** `RemoteContentSanitizer` keeps only fenced code blocks that start at column 0 as code (CommonMark finds
+  exactly these); everything else, inline code spans included (their extent depends on the block structure), is
+  escaped instead of deleted: every `<`, the `(` of an unsafe or empty link or image target whatever its label looks
+  like, and the `:` of every `]:` with an unsafe target (also in a list item, a quote or after a code-span label); it
+  sanitizes again until the text no longer changes. A `<` inside an inline code span therefore shows a backslash. Tested by
+  rendering with league/commonmark (raw HTML and unsafe links allowed): the auditor's 40 cases and a differential
+  fuzz (3 000 inputs in the suite; 3 × 100 000 locally) find nothing.
 - **EG-L4:** the bundle's HTTP clients are not autoconfigured, so they never get the application logger (which logs
   URLs with their query); the private-network client keeps an explicit `kernel.reset` tag.
 - **EG-L5:** a GET of the connection page reads the provider's top level only (cached); the opened levels of the

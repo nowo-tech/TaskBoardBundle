@@ -61,11 +61,33 @@ final class SyncAuditEgTest extends SyncFunctionalTestCase
         $empty = $this->sync($board, new RepeatingProvider($this->provider, repeat: false, endless: 'empty'), full: true);
         self::assertSame(1, $empty->pagesDone);
 
-        // max_tasks_per_run 5000: at most ceil(5000 / 100) + 1 = 51 pages in a slice.
+        // A full run of a list of known size (3 tasks): at most ceil(1.1 × 3 / 100) + 2 = 3 pages.
         $endless = $this->sync($board, new RepeatingProvider($this->provider, repeat: false, endless: 'new'), full: true);
         self::assertSame(SyncStatus::Failed, $endless->status);
         self::assertSame('response_too_large', $endless->errors[0]->code);
-        self::assertSame(51, $endless->pagesDone);
+        self::assertSame(3, $endless->pagesDone);
+    }
+
+    /**
+     * EG-L2 (delta): a provider that keeps sending fresh tasks never ends a run however its callers resume it — the
+     * page count is kept across slices and the initial run of a list of known size stops at ceil(1.1 × size / 100) + 2.
+     */
+    public function testFreshIdsForeverAcrossSlicesStop(): void
+    {
+        $board   = $this->board();
+        $runaway = new RepeatingProvider($this->provider, repeat: false, endless: 'new');
+        $slices  = 0;
+        do {
+            // What the console loop, the progress poll and a Messenger re-dispatch do.
+            $report = $this->sync($board, $runaway, maxPages: 1);
+        } while ($report->status === SyncStatus::Paused && ++$slices < 30);
+
+        self::assertSame(SyncStatus::Failed, $report->status);
+        self::assertSame('response_too_large', $report->errors[0]->code);
+        self::assertSame(3, $report->pagesDone, 'the list says 3 tasks: ceil(3.3 / 100) + 2 = 3 pages');
+        self::assertCount(3, $this->tasksOf($board));
+        $this->em->clear();
+        self::assertNull($this->connectionOf($board)?->getCursor(), 'the run is over: no cursor to resume');
     }
 
     /** EG-I10: the host's credential page is linked only when it is an https URL or a same-origin path. */

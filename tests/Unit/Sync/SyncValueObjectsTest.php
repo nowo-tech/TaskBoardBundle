@@ -79,18 +79,19 @@ final class SyncValueObjectsTest extends TestCase
             . "`<script>kept in code</script>`\n```\n<b>fence</b>\n```\n<javascript:alert(1)>";
         $clean = $sanitizer->markdown($markdown, 10_000);
 
-        self::assertStringContainsString('Hello bold', $clean);
-        self::assertStringNotContainsString('<b', str_replace(['`<script>kept in code</script>`', '<b>fence</b>'], '', $clean));
+        // Since audit EG-L3 (delta) unsafe markup is escaped, not deleted: the text shows as it is.
+        self::assertStringContainsString('Hello \\<b onclick="x">bold\\</b> \\<!-- hidden -->evil', $clean);
         self::assertStringNotContainsString("\u{202E}", $clean);
         self::assertStringNotContainsString("\x07", $clean);
-        self::assertStringNotContainsString('hidden', $clean);
         self::assertStringContainsString('[ok](https://example.test)', $clean);
         self::assertStringContainsString('[mail](mailto:a@example.test)', $clean);
-        self::assertStringNotContainsString('javascript', $clean);
-        self::assertStringNotContainsString('//evil.test', $clean);
-        self::assertStringNotContainsString('data:', $clean);
+        self::assertStringContainsString('[bad]\\(javascript:alert(1))', $clean);
+        self::assertStringContainsString('[rel]\\(//evil.test)', $clean);
+        self::assertStringContainsString('![img]\\(data:image/png;base64,AAA)', $clean);
+        self::assertStringContainsString('[id]\\: javascript:alert(1)', $clean);
+        self::assertStringContainsString('\\<javascript:alert(1)>', $clean);
         self::assertStringContainsString('[good]: https://example.test', $clean);
-        self::assertStringContainsString('`<script>kept in code</script>`', $clean);
+        self::assertStringContainsString('`\\<script>kept in code\\</script>`', $clean);
         self::assertStringContainsString('<b>fence</b>', $clean);
 
         $long = $sanitizer->markdown(str_repeat('é', 100), 21);

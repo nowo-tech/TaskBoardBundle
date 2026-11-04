@@ -21,8 +21,14 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
+use function array_key_exists;
+use function array_keys;
+use function array_map;
 use function array_reverse;
+use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
@@ -63,7 +69,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
     /** Comments per page of GET task/{id}/comment. */
     public const COMMENT_PAGE_SIZE = 25;
 
-    /** TO CONFIRM against recorded fixtures (Q-O4). */
+    /** Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy. */
     public const DEFAULT_ATTACHMENT_HOSTS = ['*.clickup-attachments.com', 'attachments.clickup.com', 'attachments2.clickup.com'];
 
     private const ID_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/D';
@@ -81,6 +87,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
         private array $attachmentHosts = self::DEFAULT_ATTACHMENT_HOSTS,
         private int $maxComments = 500,
         private int $maxDescriptionLength = 100_000,
+        // Since 1.23: unexpected answer shapes are logged at debug level (keys only).
+        private LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -170,7 +178,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             'include_closed'               => 'true',
             'include_markdown_description' => 'true',
             'order_by'                     => 'updated',
-            // TO CONFIRM (Q-O4): reverse=true lists the oldest update first.
+            // Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy.
+            // reverse=true is meant to list the oldest update first, so a task updated during the scan moves to a later
+            // page instead of shifting the pages not read yet. The run does not depend on it: the watermark is the
+            // newest date of all pages, and the overlap window of the next run re-reads the edge.
             'reverse' => 'true',
         ];
         if ($updatedSince instanceof DateTimeImmutable) {
@@ -185,7 +196,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             }
         }
         $rows = count($this->items($data, 'tasks'));
-        $last = ($data['last_page'] ?? null) === true || $rows < self::PAGE_SIZE;
+        $last = $this->lastPage($data, $rows);
 
         return new RemoteTaskPage($tasks, $last ? null : (string) ($page + 1), $last);
     }
@@ -207,7 +218,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
                 }
             }
             $oldest = $rows === [] ? [] : $rows[count($rows) - 1];
-            // Older comments: start = the oldest date seen, start_id = its id. TO CONFIRM (Q-O4).
+            // Older comments: start = the oldest date seen, start_id = its id (the documented paging). Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy.
             $next = ['start' => $this->stringOf($oldest['date'] ?? null), 'start_id' => $this->itemId($oldest)];
             if (count($rows) < self::COMMENT_PAGE_SIZE || $next['start_id'] === '' || $next === $query || $pages >= $pageCap || $rowsRead >= $this->maxComments) {
                 break;
@@ -235,7 +246,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
                     yield $id;
                 }
             }
-            if (($data['last_page'] ?? null) === true || count($rows) < self::PAGE_SIZE) {
+            if ($this->lastPage($data, count($rows))) {
                 return;
             }
         }
@@ -352,7 +363,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             if ($id === '' || $url === '') {
                 continue;
             }
-            // TO CONFIRM (Q-O4): title, size, mimetype and date of an attachment.
+            // Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy. Every field but id and url may be missing.
             $files[] = new RemoteAttachment(
                 id: $id,
                 name: $this->stringOf($file['title'] ?? $file['name'] ?? null) ?: 'file',
@@ -453,14 +464,53 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
      */
     private function items(array $data, string $key): array
     {
+        if (!is_array($data[$key] ?? null)) {
+            $this->unexpected($key, $data);
+
+            return [];
+        }
         $items = [];
-        foreach (is_array($data[$key] ?? null) ? $data[$key] : [] as $item) {
+        foreach ($data[$key] as $item) {
             if (is_array($item)) {
                 $items[] = $item;
+            } else {
+                $this->unexpected($key . '[]', $data);
             }
         }
 
         return $items;
+    }
+
+    /**
+     * Whether a task page is the last one. Unconfirmed against the live API (owner decision 2026-11-04); validated by Beacon after deploy. `last_page` is used when the answer has it; without it the paging
+     * goes on until an empty page (a short page is not trusted to be the last: the page size is not confirmed either).
+     * The run's page caps (audit EG-L2) bound it in every case.
+     *
+     * @param array<mixed> $data
+     */
+    private function lastPage(array $data, int $rows): bool
+    {
+        if (array_key_exists('last_page', $data)) {
+            return $data['last_page'] === true || $rows === 0;
+        }
+        $this->unexpected('last_page', $data);
+
+        return $rows === 0;
+    }
+
+    /**
+     * An answer that does not have the expected shape: logged at debug level with its keys only, never a value.
+     *
+     * @param array<mixed> $data
+     */
+    private function unexpected(string $what, array $data): void
+    {
+        $this->logger->debug('TaskBoard sync: unexpected ClickUp answer shape', [
+            'bundle'   => 'nowo_task_board',
+            'provider' => self::ID,
+            'field'    => $what,
+            'keys'     => array_slice(array_map(strval(...), array_keys($data)), 0, 30),
+        ]);
     }
 
     /**
