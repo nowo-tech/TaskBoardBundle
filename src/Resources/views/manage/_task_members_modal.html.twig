@@ -25,7 +25,7 @@
                 {% for member in task.members %}
                     {% set _name = memberUi.member_label(member.user)|trim %}
                     <li class="nowo-task-members__item">
-                        <span class="nowo-task-members__avatar" aria-hidden="true">{{ _name|slice(0, 1)|upper }}</span>
+                        {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-members__avatar', size: 32, labelled: false}, with_context: false) }}
                         <span class="nowo-task-members__name">{{ _name }}</span>
                         <span class="nowo-task-members__role nowo-task-members__role--{{ member.memberRole.value }}">{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
                         {% set member_remove_form = memberRemoveForms[member.id] %}

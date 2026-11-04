@@ -59,7 +59,7 @@ final class TaskImportOrchestratorTest extends TestCase
         $result = $orchestrator->import(
             board: $board,
             source: TaskImportSource::ClickUpCsv,
-            content: (string) file_get_contents(__DIR__ . '/../../Fixtures/clickup/sample.csv'),
+            content: (string) file_get_contents(__DIR__ . '/../../Fixtures/ClickUp/sample.csv'),
             filename: 'clickup.csv',
             actor: $user,
             options: new TaskImportOptions(createMissingColumns: true, skipExisting: true),
@@ -107,7 +107,7 @@ final class TaskImportOrchestratorTest extends TestCase
         $result = $orchestrator->import(
             board: $board,
             source: TaskImportSource::ClickUpCsv,
-            content: (string) file_get_contents(__DIR__ . '/../../Fixtures/clickup/sample.csv'),
+            content: (string) file_get_contents(__DIR__ . '/../../Fixtures/ClickUp/sample.csv'),
             filename: 'clickup.csv',
             actor: $user,
             // Deprecated and ignored since 1.22.

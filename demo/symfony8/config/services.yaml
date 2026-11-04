@@ -8,3 +8,14 @@ services:
         exclude:
             - '../src/Entity/'
             - '../src/Kernel.php'
+
+    # Since 1.23: the provider sync of the demo — an in-memory "ClickUp" (no account, no network) and a fake connection.
+    app.demo_clickup:
+        class: Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider
+        factory: ['App\Sync\DemoTaskProviderFactory', 'create']
+        tags: ['nowo_task_board.task_provider']
+
+    # Since 1.23: member pictures (public/avatars; one URL broken on purpose).
+    Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface:
+        alias: App\Sync\DemoAvatarResolver
+

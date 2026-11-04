@@ -30,7 +30,7 @@ final class TaskBoardRoutesTest extends KernelTestCase
         self::bootKernel();
         $twig = self::getContainer()->get('twig');
 
-        foreach (['index', 'board', 'list', 'gantt', 'task', 'import'] as $page) {
+        foreach (['index', 'board', 'list', 'gantt', 'task', 'import', 'connection', '_connection_containers', '_connection_badge'] as $page) {
             $twig->load('@NowoTaskBoardBundle/manage/' . $page . '.html.twig');
         }
 

@@ -9,15 +9,22 @@ use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use SortDirection;
 
+use function array_chunk;
+use function array_unique;
+use function array_values;
 use function max;
 
-final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface, BoundedTaskRepositoryInterface
+final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface, BoundedTaskRepositoryInterface, ArchiveAwareTaskRepositoryInterface
 {
+    /** Since 1.23: ids per query of {@see self::findImportedByExternalIds()}. */
+    private const ID_CHUNK = 500;
+
     /** Collections of the task page => the to-one relation of each element fetched with it. */
     private const DETAIL_RELATIONS = [
         'members'              => 'user',
@@ -52,6 +59,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->select('t')
             ->from(Task::class, 't')
             ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NULL')
             ->setParameter('board', $board)
             ->orderBy('t.position', SortDirection::Ascending);
 
@@ -71,6 +79,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->select('t')
             ->from(Task::class, 't')
             ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NULL')
             ->setParameter('board', $board)
             ->orderBy('t.position', SortDirection::Ascending)
             ->addOrderBy('t.id', SortDirection::Ascending)
@@ -104,6 +113,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->select('COUNT(t.id)')
             ->from(Task::class, 't')
             ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NULL')
             ->setParameter('board', $board);
 
         if (!$includeCompleted) {
@@ -160,6 +170,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->leftJoin('tm.user', 'tmUser')
             ->where('assignee.id = :userId OR tmUser.id = :userId')
             ->andWhere('t.completedAt IS NULL')
+            ->andWhere('t.archivedAt IS NULL')
             ->setParameter('assigneeRole', TaskMemberRole::Assignee)
             ->setParameter('userId', $userId)
             ->orderBy('t.createdAt', SortDirection::Descending)
@@ -195,5 +206,64 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->getResult();
 
         return $result;
+    }
+
+    public function findByBoardIncludingArchived(TaskBoard $board): array
+    {
+        /** @var list<Task> $result */
+        $result = $this->entityManager->createQueryBuilder()
+            ->select('t')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')
+            ->setParameter('board', $board)
+            ->orderBy('t.position', SortDirection::Ascending)
+            ->getQuery()
+            ->getResult();
+
+        return $result;
+    }
+
+    public function findArchivedByBoard(TaskBoard $board, int $limit): array
+    {
+        /** @var list<Task> $result */
+        $result = $this->entityManager->createQueryBuilder()
+            ->select('t')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NOT NULL')
+            ->setParameter('board', $board)
+            ->orderBy('t.archivedAt', SortDirection::Descending)
+            ->addOrderBy('t.id', SortDirection::Ascending)
+            ->setMaxResults(max(1, $limit))
+            ->getQuery()
+            ->getResult();
+
+        return $result;
+    }
+
+    public function findImportedByExternalIds(TaskBoard $board, string $scope, array $externalIds): array
+    {
+        $found = [];
+        foreach (array_chunk(array_values(array_unique($externalIds)), self::ID_CHUNK) as $chunk) {
+            /** @var list<TaskLink> $links */
+            $links = $this->entityManager->createQueryBuilder()
+                ->select('l', 't')
+                ->from(TaskLink::class, 'l')
+                ->innerJoin('l.task', 't')
+                ->where('t.board = :board')
+                ->andWhere('l.importSource = :scope')
+                ->andWhere('l.externalId IN (:ids)')
+                ->setParameter('board', $board)
+                ->setParameter('scope', $scope)
+                ->setParameter('ids', $chunk)
+                ->orderBy('l.createdAt', SortDirection::Ascending)
+                ->getQuery()
+                ->getResult();
+            foreach ($links as $link) {
+                $found[(string) $link->getExternalId()] ??= [$link->getTask(), $link];
+            }
+        }
+
+        return $found;
     }
 }

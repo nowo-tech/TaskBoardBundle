@@ -7,7 +7,7 @@
 #}
 {% set _mine = viewerId|default(null) and comment.mentions(viewerId) %}
 <li class="nowo-task-activity__item nowo-task-comment{{ comment.deleted ? ' is-deleted' : '' }}{{ _mine ? ' is-mentioning-me' : '' }}" data-kind="comment" data-comment-id="{{ comment.id }}">
-    <span class="nowo-task-detail__history-avatar" aria-hidden="true">{{ memberUi.member_label(comment.author)|trim|slice(0, 1)|upper }}</span>
+    {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: comment.author, class: 'nowo-task-detail__history-avatar', size: 32, labelled: false}, with_context: false) }}
     <div class="nowo-task-activity__body nowo-task-comment__body">
         <div class="nowo-task-detail__history-summary">
             <strong>{{ memberUi.member_label(comment.author)|trim }}</strong>

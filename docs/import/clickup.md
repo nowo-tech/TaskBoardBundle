@@ -51,7 +51,7 @@ warning. **Time Spent** is not imported (see [the overview](README.md#field-mapp
 Task ID,Task Name,Status,Priority,Task Content,Assignee Email,Due Date,Time Estimate,Tags,Parent ID,Task URL
 ```
 
-See [tests/Fixtures/clickup/sample.csv](../../tests/Fixtures/clickup/sample.csv) in this repository for a valid sample.
+See [tests/Fixtures/ClickUp/sample.csv](../../tests/Fixtures/ClickUp/sample.csv) in this repository for a valid sample.
 
 ### Import
 

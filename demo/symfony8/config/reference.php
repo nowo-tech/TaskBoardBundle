@@ -471,7 +471,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     disallow_search_engine_index?: bool|Param, // Enabled by default when debug is enabled. // Default: true
  *     http_client?: bool|array{ // HTTP Client configuration
- *         enabled?: bool|Param, // Default: false
+ *         enabled?: bool|Param, // Default: true
  *         max_host_connections?: int|Param, // The maximum number of connections to a single host.
  *         default_options?: array{
  *             headers?: array<string, mixed>,
@@ -1406,6 +1406,38 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time/{entryId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time_remove"
  *         },
+ *         task_restore?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/restore"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_restore"
+ *         },
+ *         board_connection?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection"
+ *         },
+ *         board_connection_containers?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/containers"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_containers"
+ *         },
+ *         board_connection_link?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/link"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_link"
+ *         },
+ *         board_connection_refresh?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/refresh"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_refresh"
+ *         },
+ *         board_connection_progress?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/progress/{runId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_progress"
+ *         },
+ *         board_connection_cancel?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/cancel/{runId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_cancel"
+ *         },
+ *         board_connection_unlink?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/unlink"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_unlink"
+ *         },
  *     },
  *     templates?: array{
  *         layout?: scalar|Param|null, // Twig layout extended by manage pages via global nowo_task_board_layout (REQ-UI-001). Host apps set this to the project layout or a one-file bridge. Default is the bundle demo layout (Tabler CDN). // Default: "@NowoTaskBoardBundle/layout.html.twig"
@@ -1416,6 +1448,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         gantt?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/gantt.html.twig"
  *         task?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task.html.twig"
  *         import?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import.html.twig"
+ *         connection?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/connection.html.twig"
+ *         connection_containers?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_containers.html.twig"
+ *         connection_badge?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_badge.html.twig"
+ *         connection_progress?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_progress.html.twig"
+ *         connection_history?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_history.html.twig"
  *         task_panel?: scalar|Param|null, // Task editing panel without layout (since 1.11), served by the task_panel route for side drawers. // Default: "@NowoTaskBoardBundle/manage/task_panel.html.twig"
  *         filters_collapse?: scalar|Param|null, // Since 1.17: a host partial that folds the list view filters (e.g. UiKit partials/_filters_collapse.html.twig or the host wrapper of it), included as the first child of the filter form with key, fold_key, form and filter_form. Null keeps the bundle "Filters" toggle. Twig global nowo_task_board_filters_collapse. // Default: null
  *         filters_form_class?: scalar|Param|null, // Since 1.17: extra classes on the list view filter form (the host filter card, e.g. "issue-filters panel"). Twig global nowo_task_board_filters_form_class. // Default: ""
@@ -1443,6 +1480,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         }>,
  *         column_icons?: list<scalar|Param|null>,
  *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
+ *         max_tasks?: int|Param, // Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded. // Default: 500
+ *     },
+ *     import?: array{ // Task import limits (since 1.22).
+ *         max_rows?: int|Param, // The most rows (tasks) one import file may hold; a larger file is refused. // Default: 5000
+ *         max_cell_length?: int|Param, // The longest CSV cell, in bytes; a file with a longer cell is refused. // Default: 65536
  *     },
  *     comments?: array{ // Task comments and @mentions (since 1.16).
  *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment. // Default: true
@@ -1452,11 +1494,51 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         week_start?: "monday"|"sunday"|Param, // First day of the week: the Weeks scale columns and the week separators of the Days scale. // Default: "monday"
  *         week_start_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface answering the week start per request (e.g. a user preference). null = week_start. // Default: null
  *     },
+ *     sync?: array{ // Since 1.23: provider connections (ClickUp first). Opt-in: false = no routes, services, mapping or header change.
+ *         enabled?: bool|Param, // Default: false
+ *         credential_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface. Required when enabled: the host keeps the tokens. // Default: null
+ *         attachment_storage?: scalar|Param|null, // Service id of a TaskAttachmentStorageInterface. null = files are counted as refused (storage_disabled). // Default: null
+ *         inline_image_rewriter?: scalar|Param|null, // Service id of an InlineImageRewriterInterface. null = MapInlineImageRewriter. // Default: null
+ *         limit_checker?: scalar|Param|null, // Service id of a SyncLimitCheckerInterface (host quotas). null = no host limit. // Default: null
+ *         runner?: scalar|Param|null, // Service id of a SyncRunnerInterface (e.g. Messenger). null = InlineSyncRunner (one slice per request, the progress page advances the run). // Default: null
+ *         actor_resolver?: scalar|Param|null, // Service id of a SyncActorResolverInterface. null = the user of the request, else the user who linked the board. // Default: null
+ *         providers?: array{
+ *             clickup?: array{
+ *                 enabled?: bool|Param, // Default: true
+ *                 attachment_hosts?: list<scalar|Param|null>,
+ *             },
+ *         },
+ *         http?: array{
+ *             client?: scalar|Param|null, // Service id of an untraced HttpClientInterface (e.g. through a proxy). null = the bundle's own client (never the profiler-traced http_client). // Default: null
+ *             timeout?: float|Param, // Default: 10.0
+ *             max_duration?: float|Param, // Default: 30.0
+ *             max_response_bytes?: int|Param, // Default: 8388608
+ *             max_inline_wait?: int|Param, // Seconds a rate-limited call waits inline; a longer wait pauses the run (RateLimited, resumable). // Default: 30
+ *         },
+ *         attachments?: array{
+ *             enabled?: bool|Param, // Default: true
+ *             max_bytes?: int|Param, // Default: 26214400
+ *             max_bytes_per_run?: int|Param, // Default: 1073741824
+ *             max_redirects?: int|Param, // Default: 3
+ *             allowed_mime_types?: list<scalar|Param|null>,
+ *         },
+ *         max_tasks_per_run?: int|Param, // Default: 5000
+ *         max_comments_per_task?: int|Param, // Default: 500
+ *         max_description_length?: int|Param, // Default: 100000
+ *         max_archive_ratio?: float|Param, // Default: 0.5
+ *         history_keep?: int|Param, // Default: 50
+ *         container_cache_ttl?: int|Param, // Default: 300
+ *         inline_slice_pages?: int|Param, // Task pages the inline runner writes per request. // Default: 5
+ *         progress?: array{
+ *             poll_interval_ms?: int|Param, // Default: 2000
+ *         },
+ *     },
  * }
  * @psalm-type NowoUiKitConfig = array{
  *     css_framework?: "bootstrap"|"bootstrap5"|"bootstrap4"|"tailwind"|"foundation"|"custom"|"tabler"|"none"|Param, // Host CSS stack: bootstrap5|bootstrap4|tailwind|foundation|custom|none|tabler (bootstrap alias → bootstrap5). // Default: "bootstrap5"
  *     icon_set?: "bootstrap-icons"|"tabler-icons"|"ux_icon"|"svg_inline"|"none"|Param, // Icon rendering: bootstrap-icons|tabler-icons|ux_icon|svg_inline|none. // Default: "bootstrap-icons"
  *     row_actions_display?: "icon"|"text"|"icon_text"|Param, // Table/list row actions: icon (glyph only) | text (label only) | icon_text (both). // Default: "icon"
+ *     row_actions_confirm?: "inline"|"native"|"dialog"|Param, // confirm_message of 1.x row_actions POST hashes (2.22, REQ-UI-003): inline = onsubmit="return confirm(…)" (default, unchanged markup); native | dialog = no inline handler, the confirm-submit Stimulus peer asks (window.confirm or the kit <dialog>). native / dialog need the confirm-submit peer registered. // Default: "inline"
  *     panel_path_rewrites?: array<string, scalar|Param|null>,
  *     release_check?: array{ // Optional GitHub release-version checker (footer dialog + JSON endpoint). Off by default.
  *         enabled?: bool|Param, // Register the checker service + controller. Also import @NowoUiKitBundle/Resources/config/routes/release_check.yaml. // Default: false
@@ -1465,6 +1547,8 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         cache_ttl?: int|Param, // Seconds to cache the GitHub answer (cache.app). Default 12h. // Default: 43200
  *         default_branch?: scalar|Param|null, // Branch used as compare target when the installed version is already the latest. // Default: "main"
  *         user_agent?: scalar|Param|null, // User-Agent sent to api.github.com. // Default: "nowo-ui-kit-release-check"
+ *         timeout?: float|Param, // Idle timeout in seconds of the GitHub "releases/latest" request (HttpClient "timeout"). Keep it below PHP max_execution_time (REQ-RUNTIME-001). // Default: 5.0
+ *         releases_timeout?: float|Param, // Idle timeout in seconds of the GitHub "releases" listing used to count versions behind. Keep it below PHP max_execution_time (REQ-RUNTIME-001). // Default: 8.0
  *     },
  *     route_links?: array{ // Route (or route prefix) → link map read by nowo_ui_route_link(), e.g. for the page-edge "manual" tab (partials/_edge_tab.html.twig). A prefix matches the route itself or any route starting with "<prefix>_"; the longest prefix wins.
  *         base_url?: scalar|Param|null, // Prepended to every relative path (paths starting with "/", "//", "http://" or "https://" are used as is). // Default: ""
@@ -1473,6 +1557,15 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null,
  *             testid?: scalar|Param|null, // Default: null
  *         }>,
+ *     },
+ *     font_preload?: array{ // 2.21: <link rel="preload" as="font" crossorigin> tags printed in the <head> of the document and error layouts (Twig nowo_ui_font_preload()) for the fonts painted above the fold. Empty = no tags.
+ *         fonts?: list<scalar|Param|null>,
+ *         manifest?: array{ // Hashed builds: pick the fonts from a Vite manifest (.vite/manifest.json). A missing manifest (dev server) prints nothing.
+ *             path?: scalar|Param|null, // Absolute path of the manifest, e.g. "%kernel.project_dir%/public/build/.vite/manifest.json"; null = off. // Default: null
+ *             entry?: scalar|Param|null, // Manifest entry whose "assets" list holds the fonts. // Default: "assets/app.js"
+ *             prefixes?: list<scalar|Param|null>,
+ *             base?: scalar|Param|null, // Public URL prefix of the manifest assets. // Default: "/build/"
+ *         },
  *     },
  *     appearance?: array{ // Optional site appearance SPI (presets, --nowo-ui-* token emitter, Twig functions). Off by default.
  *         enabled?: bool|Param, // Default: false
@@ -1535,6 +1628,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         tokens_dark?: array<string, mixed>,
  *         confirm_message_in_header?: bool|Param, // Confirm dialogs and the full-page confirm render the message inside the header, under the title (hosts whose dialog header is title + message). View\Confirm::messageInHeader wins when set. // Default: false
  *         popover_menus?: bool|Param, // 2.4: menu / kebab / row-action menus render their panel as a native [popover] (browser top layer: never clipped by table scrollers or cards; nowo-ui-popover.js places it). The partial option `popover` wins. // Default: false
+ *         form_errors_after_widget?: bool|Param, // 2.10: the UiKit form theme (form/nowo_ui_layout.html.twig) prints a field's errors after its widget (and before the help), instead of Symfony's order (label, errors, widget, help). // Default: false
  *         bundles?: array<string, array{ // Default: []
  *             framework_defaults?: bool|Param, // Override of theme.framework_defaults for this bundle (unset = inherit).
  *             classes?: array<string, mixed>,
@@ -1555,6 +1649,35 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             header_actions_in_filters?: bool|Param, // list only: render the page-header actions at the end of the filter row instead of the page header (ListPage::headerActionsInFilters wins when set; unset = false).
  *         }>,
  *     },
+ *     error_pages?: array{ // Kit error pages (2.6): templates/bundles/TwigBundle/Exception/error.html.twig = {% extends '@NowoUiKit/error/status.html.twig' %}.
+ *         layout_template?: scalar|Param|null, // Document the status template extends: the kit layout, or a host template extending it (own <head> assets, brand, chat dock…). // Default: "@NowoUiKit/error/layout.html.twig"
+ *         translation_domain?: scalar|Param|null, // Domain of the page texts (e.g. messages). Keys missing there fall back to UiKit's own NowoUiKitBundle error.* texts. // Default: "NowoUiKitBundle"
+ *         translation_prefix?: scalar|Param|null, // Key prefix: <prefix>.<code>.title|lead|hint|image_alt, <prefix>.generic.*, <prefix>.home|retry|back|retry_after|auto_retry|skip_to_content. // Default: "error"
+ *         home_path?: scalar|Param|null, // Href of the "Back to home" button. // Default: "/"
+ *         illustrations?: array<string, Param|string|array{ // Default: []
+ *             path?: scalar|Param|null,
+ *             width?: int|Param, // Default: null
+ *             height?: int|Param, // Default: null
+ *             webp?: bool|Param|null, // Default: null
+ *             extension?: scalar|Param|null, // Default: null
+ *         }>,
+ *         illustration_width?: int|Param, // Default intrinsic width of the illustrations. // Default: 1024
+ *         illustration_height?: int|Param, // Default intrinsic height of the illustrations. // Default: 683
+ *         webp?: bool|Param, // Illustrations ship a .webp next to the fallback image (<source type="image/webp">). // Default: true
+ *         retry_statuses?: list<int|Param>,
+ *         back_link_statuses?: list<int|Param>,
+ *         auto_retry_seconds?: int|Param, // A 5xx on GET reloads itself after this many seconds (REQ-ERROR-001 item 10; 0 = never). Never on POST. // Default: 600
+ *         theme_storage?: scalar|Param|null, // localStorage key of the theme (data-nowo-ui-theme-storage on <html> and the toggle), e.g. the host's beacon-theme. // Default: "nowo-ui-theme"
+ *         theme_toggle?: bool|Param, // Render the light / dark toggle in the top controls. // Default: true
+ *         html_attributes?: array<string, mixed>,
+ *     },
+ *     shell?: array{ // Signed-in app shell (2.6, @NowoUiKit/shell/_open|_close|_shell|_burger.html.twig; Twig global nowo_ui_kit_shell).
+ *         kit_styles?: bool|Param, // Add the kit shell classes (nowo-ui-shell, nowo-ui-header, nowo-ui-aside…) painted by nowo-ui.css and driven by nowo-ui-shell.js. false: only the app_* slot classes (host shell CSS / JS). // Default: true
+ *         sidebar_cookie?: scalar|Param|null, // Cookie holding the desktop aside mode (e.g. beacon_sidebar), read server-side so the first paint is already collapsed / rail; null = expanded unless the template passes collapsed. // Default: null
+ *         sidebar_hidden_value?: scalar|Param|null, // Cookie value of the hidden aside. // Default: "collapsed"
+ *         sidebar_rail_value?: scalar|Param|null, // Cookie value of the icons-only rail. // Default: "rail"
+ *         sidebar_storage?: scalar|Param|null, // localStorage key of the aside mode (data-nowo-ui-sidebar-storage on the shell root; kit_styles + rail only). // Default: null
+ *     },
  * }
  * @psalm-type NowoTagInputConfig = array{
  *     value_format?: "array"|"string"|Param, // Default: "array"
@@ -1569,6 +1692,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  * }
  * @psalm-type NowoTiptapEditorConfig = array{
  *     default_profile?: scalar|Param|null, // Profile name used when the form field omits the "config" option (form option key remains "config" for BC). // Default: "default"
+ *     stylesheet?: bool|Param, // 1.7: when true the widget links tiptap-editor.css (asset package nowo_tiptap_editor, with the request attribute csp_nonce as nonce). Set false when your layout loads that file (or your own styles) itself. // Default: true
  *     html_sanitizer?: scalar|Param|null, // Optional service id implementing TiptapHtmlSanitizerInterface, or the special value "allowlist" for the built-in allowlist sanitizer. Null (default) disables server-side sanitization (BC). // Default: null
  *     profiles?: array<string, array{ // Default: []
  *         toolbar?: bool|Param, // When true, the frontend shows a compact formatting toolbar (bold, lists, undo, etc.). // Default: true
@@ -1576,6 +1700,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         form_theme?: scalar|Param|null, // Base Symfony form layout (must match twig.form_themes in your app). // Default: "form_div_layout.html.twig"
  *         debug?: bool|Param, // When true, the browser console receives detailed logs from the bundle script. // Default: false
  *         variant?: scalar|Param|null, // Editor UX preset: default, simple, notion, agent, headless (see EditorVariant). // Default: "default"
+ *         toolbar_display?: "text"|"icon"|Param, // 1.7: toolbar buttons as text glyphs (text, 1.x look) or icons (icon: built-in SVG or the host <template data-tiptap-icon> markup); both get translated aria-label / title. // Default: "text"
  *         theme?: scalar|Param|null, // Chrome palette: light, dark, or auto (follows prefers-color-scheme). // Default: "light"
  *     }>,
  *     ...<string, mixed>

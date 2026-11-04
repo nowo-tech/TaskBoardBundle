@@ -26,7 +26,7 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 final class TaskBoardImportCommandTest extends TestCase
 {
-    private const FIXTURE = __DIR__ . '/../../Fixtures/clickup/sample.csv';
+    private const FIXTURE = __DIR__ . '/../../Fixtures/ClickUp/sample.csv';
 
     private TaskBoard $board;
 

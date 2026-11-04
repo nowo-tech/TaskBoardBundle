@@ -20,10 +20,17 @@ use function strtolower;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_tasks')]
 #[ORM\Index(name: 'task_board_tasks_board_idx', columns: ['board_id'])]
+#[ORM\Index(name: 'task_board_tasks_board_archived_idx', columns: ['board_id', 'archived_at'])]
 class Task
 {
     /** Since 1.16: the longest title (column length); longer ones are cut. */
     public const TITLE_MAX = 255;
+
+    /** Since 1.23: archived by a person (a provider sync never restores it). */
+    public const ARCHIVE_REASON_USER = 'user';
+
+    /** Since 1.23: archived by a provider sync because the remote task is gone (restored when it comes back). */
+    public const ARCHIVE_REASON_REMOTE = 'remote';
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
@@ -44,6 +51,14 @@ class Task
     /** Since 1.15: the day work starts — the Gantt bar starts here instead of the creation day (null = createdAt). */
     #[ORM\Column(name: 'start_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $startAt = null;
+
+    /** Since 1.23: when the task was archived (hidden from the board, the list and the Gantt); null = active. */
+    #[ORM\Column(name: 'archived_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $archivedAt = null;
+
+    /** Since 1.23: {@see self::ARCHIVE_REASON_USER} or {@see self::ARCHIVE_REASON_REMOTE}. */
+    #[ORM\Column(name: 'archive_reason', type: 'string', length: 16, nullable: true)]
+    private ?string $archiveReason = null;
 
     /** Since 1.14: the task's own colour (#rrggbb), e.g. its Gantt bar; null keeps the priority colours. */
     #[ORM\Column(type: 'string', length: 7, nullable: true)]
@@ -364,6 +379,56 @@ class Task
     public function getCompletedAt(): ?DateTimeImmutable
     {
         return $this->completedAt;
+    }
+
+    /**
+     * Since 1.23: hides the task from the board, the list and the Gantt (nothing is deleted). An archived task keeps
+     * its first archive reason.
+     */
+    public function archive(string $reason = self::ARCHIVE_REASON_USER): self
+    {
+        if ($this->archivedAt instanceof DateTimeImmutable) {
+            return $this;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->archivedAt = new DateTimeImmutable();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->archiveReason = $reason === self::ARCHIVE_REASON_REMOTE ? self::ARCHIVE_REASON_REMOTE : self::ARCHIVE_REASON_USER;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    /** Since 1.23: makes an archived task active again. */
+    public function restore(): self
+    {
+        if (!$this->archivedAt instanceof DateTimeImmutable) {
+            return $this;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->archivedAt = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->archiveReason = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archivedAt instanceof DateTimeImmutable;
+    }
+
+    public function getArchivedAt(): ?DateTimeImmutable
+    {
+        return $this->archivedAt;
+    }
+
+    public function getArchiveReason(): ?string
+    {
+        return $this->archiveReason;
     }
 
     /** @return Collection<int, Task> */

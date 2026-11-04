@@ -46,15 +46,22 @@ final class ImportAssigneeResolver
      */
     public function resolve(ImportedTaskDto $row): array
     {
-        $users = [];
-        if ($row->assigneeEmail !== null) {
+        $users  = [];
+        $emails = $row->assigneeEmail !== null ? [$row->assigneeEmail] : [];
+        foreach ($row->assigneeEmails as $email) {
+            // Since 1.23: every e-mail of the row, each once.
+            if (!in_array($email, $emails, true)) {
+                $emails[] = $email;
+            }
+        }
+        foreach ($emails as $email) {
             // Audit DL-L3: an e-mail assigns only someone the board's assignee provider accepts, and "unknown" and
             // "not assignable here" read the same (no e-mail existence oracle).
-            $user = $this->userResolver->resolveByEmail($row->assigneeEmail);
-            if ($user !== null && (!$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($this->board, $user))) {
+            $user = $this->userByEmail($email);
+            if ($user !== null && !in_array($user, $users, true)) {
                 $users[] = $user;
-            } else {
-                $this->warnings[] = sprintf('Assignee "%s" for "%s" cannot be assigned on this board.', $row->assigneeEmail, $row->title);
+            } elseif ($user === null) {
+                $this->warnings[] = sprintf('Assignee "%s" for "%s" cannot be assigned on this board.', $email, $row->title);
             }
         }
         foreach ($row->assigneeNames as $name) {
@@ -69,6 +76,19 @@ final class ImportAssigneeResolver
         }
 
         return $users;
+    }
+
+    /**
+     * Since 1.23: the user of an e-mail who may be assigned on the board (the board-aware resolver when the host
+     * implements it), null otherwise — the same answer for "unknown" and "not assignable here".
+     */
+    public function userByEmail(string $email): ?object
+    {
+        $user = $this->userResolver instanceof BoardAwareTaskImportUserResolverInterface
+            ? $this->userResolver->resolveByEmailForBoard($email, $this->board)
+            : $this->userResolver->resolveByEmail($email);
+
+        return $user !== null && (!$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($this->board, $user)) ? $user : null;
     }
 
     /**

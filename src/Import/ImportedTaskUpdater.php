@@ -43,33 +43,36 @@ final readonly class ImportedTaskUpdater
      * @param BoardColumn|null $column the column of the row's status (null: no status, or one the board lacks)
      * @param Closure(BoardColumn): int $positionIn the next free position of a column
      * @param list<BoardColumn> $columns the board's columns in order (the last one completes a task)
+     * @param (Closure(string): bool)|null $mayWrite since 1.23: whether a field (title, description, priority, column,
+     *                                               start, due, estimate, tags) may be written; null = every field
      *
      * @return bool whether the task changed
      */
-    public function apply(Task $task, ImportedTaskDto $row, ?BoardColumn $column, Closure $positionIn, array $columns, object $actor): bool
+    public function apply(Task $task, ImportedTaskDto $row, ?BoardColumn $column, Closure $positionIn, array $columns, object $actor, ?Closure $mayWrite = null): bool
     {
         $changed = false;
+        $mayWrite ??= static fn (string $field): bool => true;
 
         $title = Text::cut($row->title, Task::TITLE_MAX);
-        if ($title !== $task->getTitle()) {
+        if ($title !== $task->getTitle() && $mayWrite('title')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::Title, $task->getTitle(), $title);
             $task->setTitle($title);
             $changed = true;
         }
 
-        if ($row->description !== null && $row->description !== $task->getDescription()) {
+        if ($row->description !== null && $row->description !== $task->getDescription() && $mayWrite('description')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::Description, $task->getDescription(), $row->description);
             $task->setDescription($row->description);
             $changed = true;
         }
 
-        if ($row->hasPriority && $row->priority !== $task->getPriority()) {
+        if ($row->hasPriority && $row->priority !== $task->getPriority() && $mayWrite('priority')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::Priority, $task->getPriority(), $row->priority);
             $task->setPriority($row->priority);
             $changed = true;
         }
 
-        if ($column instanceof BoardColumn && $column->getId() !== $task->getColumn()?->getId()) {
+        if ($column instanceof BoardColumn && $column->getId() !== $task->getColumn()?->getId() && $mayWrite('column')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::Column, $task->getColumn(), $column);
             $task->setColumn($column);
             $task->setPosition($positionIn($column));
@@ -77,25 +80,25 @@ final readonly class ImportedTaskUpdater
             $changed = true;
         }
 
-        if ($row->startAt instanceof DateTimeImmutable && !$this->sameMoment($row->startAt, $task->getStartAt())) {
+        if ($row->startAt instanceof DateTimeImmutable && !$this->sameMoment($row->startAt, $task->getStartAt()) && $mayWrite('start')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::StartDate, $task->getStartAt(), $row->startAt);
             $task->setStartAt($row->startAt);
             $changed = true;
         }
 
-        if ($row->dueAt instanceof DateTimeImmutable && !$this->sameMoment($row->dueAt, $task->getDueAt())) {
+        if ($row->dueAt instanceof DateTimeImmutable && !$this->sameMoment($row->dueAt, $task->getDueAt()) && $mayWrite('due')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::DueDate, $task->getDueAt(), $row->dueAt);
             $task->setDueAt($row->dueAt);
             $changed = true;
         }
 
-        if ($row->estimatedMinutes !== null && $row->estimatedMinutes !== $task->getEstimatedMinutes()) {
+        if ($row->estimatedMinutes !== null && $row->estimatedMinutes !== $task->getEstimatedMinutes() && $mayWrite('estimate')) {
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::EstimatedMinutes, $task->getEstimatedMinutes(), $row->estimatedMinutes);
             $task->setEstimatedMinutes($row->estimatedMinutes);
             $changed = true;
         }
 
-        if ($row->tags !== [] && $this->normalizedTags($row->tags) !== $task->getTags()) {
+        if ($row->tags !== [] && $this->normalizedTags($row->tags) !== $task->getTags() && $mayWrite('tags')) {
             $old = $task->getTags();
             $task->setTags($row->tags);
             $this->changeRecorder->recordIfChanged($task, $actor, TaskChangeType::Tags, $old, $task->getTags());

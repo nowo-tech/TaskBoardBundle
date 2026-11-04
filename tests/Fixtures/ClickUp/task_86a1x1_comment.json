@@ -1,0 +1,69 @@
+{
+  "comments": [
+    {
+      "id": "90010001",
+      "comment": [
+        {
+          "text": "Looks "
+        },
+        {
+          "text": "good",
+          "attributes": {
+            "bold": true
+          }
+        },
+        {
+          "text": " see ",
+          "attributes": {}
+        },
+        {
+          "text": "spec",
+          "attributes": {
+            "link": "https://example.test/spec"
+          }
+        },
+        {
+          "type": "tag",
+          "user": {
+            "id": 1000001,
+            "username": "User 1"
+          }
+        },
+        {
+          "type": "image",
+          "image": {
+            "name": "pic.png",
+            "url": "https://t000.p.clickup-attachments.com/fixture/3/pic.png"
+          }
+        }
+      ],
+      "comment_text": "Looks good see spec @User 1",
+      "user": {
+        "id": 1000002,
+        "username": "User 2",
+        "email": "user2@example.test",
+        "initials": "U2",
+        "color": "#000000",
+        "profilePicture": null
+      },
+      "resolved": false,
+      "assignee": null,
+      "reactions": [],
+      "date": "1793200000000"
+    },
+    {
+      "id": "90010002",
+      "comment": [],
+      "comment_text": "Plain text comment",
+      "user": {
+        "id": 1000003,
+        "username": "User 3",
+        "email": "user3@example.test",
+        "initials": "U3",
+        "color": "#000",
+        "profilePicture": null
+      },
+      "date": "1793210000000"
+    }
+  ]
+}

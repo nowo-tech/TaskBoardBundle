@@ -36,7 +36,7 @@ final class TaskImportLoggingTest extends TestCase
         $board  = new TaskBoard('Demo', 'demo', $user);
         $board->addColumn(new BoardColumn($board, 'To do', 0));
 
-        $content = (string) file_get_contents(__DIR__ . '/../../Fixtures/clickup/sample.csv');
+        $content = (string) file_get_contents(__DIR__ . '/../../Fixtures/ClickUp/sample.csv');
         $result  = $this->orchestrator($logger)->import($board, TaskImportSource::ClickUpCsv, $content, 'secret-client-list.csv', $user);
 
         self::assertFalse($result->hasErrors());

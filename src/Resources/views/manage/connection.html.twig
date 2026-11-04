@@ -1,0 +1,128 @@
+{% extends nowo_task_board_layout %}
+{#
+    Since 1.23: the provider connection of a board. Unlinked: provider, stored connection, the container browser and
+    the import options. Linked: status, Refresh, progress, history, Unlink. Override with templates.connection.
+#}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
+
+{% block title %}{{ 'task_board.sync.page.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+
+{% block body %}
+    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
+        pageTitle: 'task_board.sync.page.title'|trans({}, 'NowoTaskBoardBundle'),
+        pageSubtitle: 'task_board.sync.page.subtitle'|trans({}, 'NowoTaskBoardBundle'),
+        breadcrumbRoute: nowo_task_board_route('board'),
+        breadcrumbParams: {boardId: board.id},
+        breadcrumbLabel: board.name,
+        headerActions: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+        ],
+        dashboardRoute: dashboardRoute|default(null),
+    }) }}
+
+    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+
+    {% if connection %}
+        {% block nowo_task_board_connection_linked %}
+            <div class="row row-cards nowo-task-sync" data-testid="nowo-task-sync-linked">
+                <div class="col-12 col-lg-8">
+                    <section class="card" aria-labelledby="nowo-task-sync-status-title">
+                        <div class="card-header">
+                            <h2 class="card-title" id="nowo-task-sync-status-title">
+                                {{ (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') }} · {{ connection.containerLabel }}
+                            </h2>
+                        </div>
+                        <div class="card-body">
+                            {% if connection.containerPath is not empty %}
+                                <p class="text-secondary small mb-2">{{ connection.containerPath|join(' › ') }}</p>
+                            {% endif %}
+                            <p class="mb-3">
+                                {% if connection.lastSuccessAt %}
+                                    {{ 'task_board.sync.status.last_sync'|trans({'%date%': connection.lastSuccessAt|date('Y-m-d H:i')}, 'NowoTaskBoardBundle') }}
+                                {% else %}
+                                    {{ 'task_board.sync.status.never'|trans({}, 'NowoTaskBoardBundle') }}
+                                {% endif %}
+                            </p>
+
+                            {% if massArchiveForm %}
+                                {{ include('@NowoTaskBoardBundle/manage/_connection_mass_archive.html.twig') }}
+                            {% endif %}
+
+                            {% if activeRun %}
+                                {{ include(templates.connection_progress) }}
+                            {% elseif latestSummary %}
+                                <p class="nowo-task-sync__summary" data-testid="nowo-task-sync-summary">{{ latestSummary }}</p>
+                            {% endif %}
+
+                            <div class="d-flex flex-wrap gap-2 align-items-end">
+                                {{ form_start(refreshForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-sync__refresh d-flex flex-wrap gap-2 align-items-center'}}) }}
+                                    {% for child in refreshForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                                    <button type="submit" class="btn btn-primary" data-testid="nowo-task-sync-refresh"{% if activeRun %} disabled aria-disabled="true"{% endif %}>
+                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'refresh'}) }}{{ 'task_board.sync.refresh.action'|trans({'%provider%': (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
+                                    </button>
+                                {{ form_end(refreshForm) }}
+                                {{ include('@NowoTaskBoardBundle/manage/_connection_unlink_dialog.html.twig') }}
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <div class="col-12">
+                    {{ include(templates.connection_history) }}
+                </div>
+            </div>
+        {% endblock %}
+    {% else %}
+        {% block nowo_task_board_connection_connect %}
+            <div class="row row-cards nowo-task-sync" data-testid="nowo-task-sync-connect">
+                <div class="col-12 col-lg-8">
+                    <section class="card" aria-labelledby="nowo-task-sync-connect-title">
+                        <div class="card-header">
+                            <h2 class="card-title" id="nowo-task-sync-connect-title">{{ 'task_board.sync.connect.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+                        </div>
+                        <div class="card-body">
+                            {{ include('@NowoTaskBoardBundle/manage/_connection_provider_picker.html.twig') }}
+
+                            {% if provider and choice and linkForm %}
+                                {{ form_start(linkForm, {method: 'POST', attr: {class: 'nowo-task-sync__link', 'data-controller': 'nowo-task-board-container-browser', 'data-nowo-task-board-container-browser-url-value': path(nowo_task_board_route('board_connection_containers'), {boardId: board.id}), 'data-nowo-task-board-container-browser-loading-value': 'task_board.sync.browser.loading'|trans({}, 'NowoTaskBoardBundle'), 'data-nowo-task-board-container-browser-loaded-value': 'task_board.sync.browser.loaded'|trans({}, 'NowoTaskBoardBundle'), 'data-nowo-task-board-container-browser-failed-value': 'task_board.sync.browser.failed'|trans({}, 'NowoTaskBoardBundle')}}) }}
+                                    {{ form_widget(linkForm.provider) }}
+                                    {{ form_widget(linkForm.connection) }}
+                                    {# The flat CSRF token of the container browser (its script posts it; so do the no-script buttons). #}
+                                    {{ form_widget(containersForm._token) }}
+                                    {% do linkForm.container.setRendered() %}
+                                    <fieldset class="nowo-task-tree mb-3" aria-describedby="nowo-task-tree-help">
+                                        <legend class="form-label">{{ 'task_board.sync.browser.legend'|trans({}, 'NowoTaskBoardBundle') }}</legend>
+                                        <p class="text-secondary small" id="nowo-task-tree-help">{{ 'task_board.sync.browser.help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                                        <p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-nowo-task-board-container-browser-target="status"></p>
+                                        {% if treeError %}
+                                            {{ include('@NowoTaskBoardBundle/manage/_connection_tree_error.html.twig', {error: treeError}) }}
+                                        {% elseif tree is not null %}
+                                            {{ include(templates.connection_containers, {level: tree[''], levelForm: levelForms[''], parent: '', depth: 1}) }}
+                                        {% endif %}
+                                        {{ form_errors(linkForm.container) }}
+                                    </fieldset>
+                                    <fieldset class="mb-3">
+                                        <legend class="form-label">{{ 'task_board.sync.option.legend'|trans({}, 'NowoTaskBoardBundle') }}</legend>
+                                        {% for child in linkForm %}{% if not child.rendered and child.vars.name != '_token' %}{{ form_row(child) }}{% endif %}{% endfor %}
+                                    </fieldset>
+                                    <button type="submit" class="btn btn-primary" data-testid="nowo-task-sync-import">
+                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'download'}) }}{{ 'task_board.sync.connect.submit'|trans({}, 'NowoTaskBoardBundle') }}
+                                    </button>
+                                {{ form_end(linkForm) }}
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </div>
+        {% endblock %}
+    {% endif %}
+{% endblock %}

@@ -3424,7 +3424,8 @@ a.nowo-task-nav__step:focus-visible {
 .nowo-task-tags .nowo-task-tag {
     border-color: transparent;
     background: var(--nowo-task-accent-soft, var(--tblr-purple-lt, #f3e8ff));
-    color: var(--nowo-task-accent, var(--tblr-purple, #7e22ce));
+    /* 1.23: AA contrast on the soft background; wins over the framework's `text-purple` utility (#ae3ec9, 4:1). */
+    color: var(--nowo-task-accent, #7e22ce) !important;
 }
 
 /* Colour swatches stay round; the picked one gets a ring and a check (never a bigger square). */
@@ -3557,4 +3558,79 @@ a.nowo-task-nav__step:focus-visible {
   background: var(--nowo-ui-surface-muted, #f8fafc);
   color: var(--nowo-ui-text-muted, #475569);
   font-size: 0.875rem;
+}
+
+/* Since 1.23: provider connections — the container browser, progress and header badge. */
+.nowo-task-tree__group {
+    margin: 0;
+    padding-left: 0;
+}
+
+.nowo-task-tree__group .nowo-task-tree__group {
+    padding-left: 1.25rem;
+    border-left: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+}
+
+.nowo-task-tree__node {
+    margin: 0.125rem 0;
+}
+
+.nowo-task-tree__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.375rem;
+    text-decoration: none;
+}
+
+.nowo-task-tree__toggle[aria-expanded='true'] {
+    font-weight: 600;
+}
+
+.nowo-task-tree__children[aria-busy='true'] {
+    opacity: 0.6;
+}
+
+.nowo-task-tree__node--list {
+    padding-left: 1.75rem;
+}
+
+.nowo-task-sync__bar {
+    width: 100%;
+    height: 0.75rem;
+}
+
+.nowo-task-sync__details summary {
+    cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nowo-task-sync__bar {
+        animation: none;
+    }
+}
+
+/* Since 1.23: task member pictures over the initial chips (the fallback in task-board.js brings the initial back). */
+.nowo-task-member-avatar {
+    position: relative;
+    overflow: hidden;
+}
+
+.nowo-task-member-avatar__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
+}
+
+.nowo-task-member-avatar.has-image {
+    color: transparent;
+}
+
+/* Since 1.23: the connection badge's text keeps AA contrast on its soft background (the framework's azure text is 3:1). */
+.nowo-task-sync-badge .nowo-task-sync-badge__label {
+    color: var(--nowo-task-sync-badge-color, #1c5d99) !important;
 }

@@ -20,14 +20,17 @@ enum TaskLinkType: string
     case Other         = 'other';
     /** A host object (issue, order, ticket…) named by `objectType` / `objectId` (since 1.10). */
     case HostObject = 'host_object';
+    /** Since 1.23: a file a provider sync copied into the host's storage (the URL is the stored copy). */
+    case Attachment = 'attachment';
 
     /**
-     * The types a user picks in the link form (host object links are created by the host).
+     * The types a user picks in the link form (host object links are created by the host, attachment links by a
+     * provider sync).
      *
      * @return list<self>
      */
     public static function userChoices(): array
     {
-        return array_values(array_filter(self::cases(), static fn (self $type): bool => $type !== self::HostObject));
+        return array_values(array_filter(self::cases(), static fn (self $type): bool => $type !== self::HostObject && $type !== self::Attachment));
     }
 }

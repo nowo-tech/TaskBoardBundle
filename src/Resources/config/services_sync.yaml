@@ -1,0 +1,96 @@
+# Since 1.23: provider connections and sync — loaded only with `sync.enabled: true`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    # Own HTTP clients (never the profiler-traced `http_client`: it records request headers).
+    nowo_task_board.sync.base_http_client:
+        class: Symfony\Contracts\HttpClient\HttpClientInterface
+        factory: ['Symfony\Component\HttpClient\HttpClient', 'create']
+
+    nowo_task_board.sync.http_client:
+        class: Symfony\Component\HttpClient\NoPrivateNetworkHttpClient
+        arguments: ['@nowo_task_board.sync.base_http_client']
+
+    Nowo\TaskBoardBundle\Sync\Http\SleeperInterface:
+        alias: Nowo\TaskBoardBundle\Sync\Http\SystemSleeper
+
+    Nowo\TaskBoardBundle\Sync\Http\SystemSleeper: ~
+
+    Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient:
+        arguments:
+            $client: '@nowo_task_board.sync.api_client'
+            $timeout: '%nowo_task_board.sync.http.timeout%'
+            $maxDuration: '%nowo_task_board.sync.http.max_duration%'
+            $maxResponseBytes: '%nowo_task_board.sync.http.max_response_bytes%'
+            $maxInlineWait: '%nowo_task_board.sync.http.max_inline_wait%'
+
+    Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer: ~
+
+    Nowo\TaskBoardBundle\Import\ClickUp\ClickUpTaskMapper: ~
+
+    Nowo\TaskBoardBundle\Sync\File\NullUrlGuard: ~
+
+    Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface:
+        alias: Nowo\TaskBoardBundle\Sync\File\NullUrlGuard
+
+    Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher:
+        arguments:
+            $client: '@nowo_task_board.sync.http_client'
+            $maxBytes: '%nowo_task_board.sync.attachments.max_bytes%'
+            $allowedMimeTypes: '%nowo_task_board.sync.attachments.allowed_mime_types%'
+            $maxRedirects: '%nowo_task_board.sync.attachments.max_redirects%'
+
+    Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry:
+        arguments:
+            $providers: !tagged_iterator nowo_task_board.task_provider
+
+    Nowo\TaskBoardBundle\Sync\Repository\SyncStore: ~
+
+    Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage: ~
+    Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter: ~
+    Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker: ~
+
+    Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver:
+        arguments:
+            $userClass: '%nowo_task_board.user_class%'
+
+    Nowo\TaskBoardBundle\Sync\SyncTaskWriter:
+        arguments:
+            $tasks: '@Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface'
+            $assigneeProvider: '@?Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface'
+            $translator: '@?translator'
+            $storageEnabled: '%nowo_task_board.sync.storage_enabled%'
+            $maxFileBytes: '%nowo_task_board.sync.attachments.max_bytes%'
+
+    Nowo\TaskBoardBundle\Sync\TaskBoardSyncService:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
+            $maxTasksPerRun: '%nowo_task_board.sync.max_tasks_per_run%'
+            $maxArchiveRatio: '%nowo_task_board.sync.max_archive_ratio%'
+            $historyKeep: '%nowo_task_board.sync.history_keep%'
+            $maxBytesPerRun: '%nowo_task_board.sync.attachments.max_bytes_per_run%'
+
+    Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner:
+        arguments:
+            $slicePages: '%nowo_task_board.sync.inline_slice_pages%'
+
+    Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider:
+        arguments:
+            $security: '@?security.helper'
+
+    Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $dashboardRoute: '%nowo_task_board.dashboard_route%'
+            $cache: '@?cache.app'
+            $containerCacheTtl: '%nowo_task_board.sync.container_cache_ttl%'
+            $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
+        tags: ['controller.service_arguments']
+
+    Nowo\TaskBoardBundle\Command\TaskBoardSyncCommand: ~

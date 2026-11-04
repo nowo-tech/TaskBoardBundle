@@ -13,7 +13,7 @@ final class ClickUpCsvImporterTest extends TestCase
 {
     public function testParsesClickUpCsvExport(): void
     {
-        $content = (string) file_get_contents(__DIR__ . '/../../Fixtures/clickup/sample.csv');
+        $content = (string) file_get_contents(__DIR__ . '/../../Fixtures/ClickUp/sample.csv');
         $tasks   = (new ClickUpCsvImporter())->parse($content, 'clickup.csv');
 
         self::assertCount(3, $tasks);

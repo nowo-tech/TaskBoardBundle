@@ -64,6 +64,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Provider connections and sync (ClickUp first). See [sync.md](sync.md) and [UPGRADING](UPGRADING.md#unreleased) —
+**schema change**.
+
+### Added
+
+- **Provider sync (opt-in, `sync.enabled`):** link a board to a remote list and keep it up to date — an idempotent
+  upsert keyed by the same (import scope, external id) the file imports use, per-field conflict detection (the local
+  value wins and one note lists the provider's values), remote deletions archived and restored behind a mass-archive
+  guard, comments, attachments and inline images copied through the host's storage, resumable runs (time slices, rate
+  limits) with a run history, `nowo:task-board:sync <boardId> [--full] [--dry-run]`.
+- `TaskProviderInterface` and the ClickUp API v2 adapter (`ClickUpTaskProvider`: fixed base URI, no redirects, 429 /
+  `Retry-After` back-off, response caps), `ProviderCredential`, `TaskBoardSyncService`, `SyncReport`, `SyncCursor`, the
+  host hooks (`ProviderCredentialResolverInterface`, `TaskAttachmentStorageInterface`, `InlineImageRewriterInterface`,
+  `SyncLimitCheckerInterface`, `SyncRunnerInterface`, `SyncActorResolverInterface`) and the events `SYNC_STARTED`,
+  `SYNC_PAGE_DONE`, `SYNC_FINISHED`, `SYNC_FAILED`, `TASK_REMOTE_ARCHIVED`, `TASK_REMOTE_RESTORED`,
+  `BOARD_CONNECTION_LINKED`, `BOARD_CONNECTION_UNLINKED`.
+- `RemoteFileFetcher` (SSRF-safe downloads) and `RemoteContentSanitizer` (Markdown without raw HTML or unsafe links).
+- The connection page, the container browser (disclosure pattern + radio group, works without script), the progress
+  display (polite live region) and the header badge; strings in the 7 locales.
+- `Sync\Testing\InMemoryTaskProvider`, a scriptable provider for tests and demos; the demo uses it and its Playwright
+  suite checks the flow with axe.
+- **Archived tasks (every host):** `Task::archive()` / `restore()` / `isArchived()`, hidden from the board, list, Gantt and
+  counts; an "Archived tasks" section with *Restore* in the list view (route `task_restore`).
+- `TaskBoardResourceAccessChecker::canManageBoardConnection()` and `BoardAccessCheckEvent::getAction()`
+  (`ACTION_VIEW`, `ACTION_MANAGE_CONNECTION`).
+- `ImportedTaskDto::$assigneeEmails` (every assignee e-mail), `BoardAwareTaskImportUserResolverInterface`,
+  `ImportedTaskUpdater::apply(…, ?Closure $mayWrite)`, `ArchiveAwareTaskRepositoryInterface`, `TaskLinkType::Attachment`,
+  `TaskChangeType::SyncConflict` / `Archived` / `Restored`, `Import\ClickUp\ClickUpTaskMapper` (shared by the ClickUp
+  JSON import and the sync).
+- **Task member pictures:** `Avatar\TaskMemberAvatarResolverInterface` (`urlFor()` / `urlsFor()`, keyed by
+  `TaskMemberKey::of()`, size 32; default `NullTaskMemberAvatarResolver` by alias), resolved once per page after the
+  access checks (board, list: the 3 chips each card shows; task page / panel: members, comment authors, history users).
+  The overridable partial `manage/_task_member_avatar.html.twig` and `nowo_task_board_member_avatar_url()` draw the chips
+  of cards, the list, the task members, the members dialog, comments and history (classes unchanged). URLs must be
+  `https://` without user info or a same-origin path (`AvatarUrlPolicy`); a broken picture falls back to the initial
+  through one capturing `error` listener in `task-board.js` (no inline handler). Without a resolver the markup is
+  unchanged.
+- `scripts/record-clickup-fixtures.php` / `make record-clickup-fixtures`: records the ClickUp API fixtures, redacted.
+
+### Changed
+
+- `symfony/http-client` is now required. `symfony/html-sanitizer`, `nowo-tech/outbound-url-guard-bundle` and
+  `symfony/mercure` are suggested.
+- `findByBoard()`, `findByBoardWithin()`, `countByBoard()` and the TimeTrack task list leave archived tasks out.
+- The test fixtures moved from `tests/Fixtures/clickup` to `tests/Fixtures/ClickUp`.
+
+### Fixed
+
+- Task tags keep a WCAG AA text contrast on Tabler: the framework's `text-purple` utility (4:1 on the soft
+  background) no longer overrides the bundle's tag colour (found by the new demo axe run). The new connection badge
+  gets the same treatment (`--nowo-task-sync-badge-color`).
+- A sync run's lock is shown as free as soon as the run ends, also on a connection already loaded in the request.
+
 ## [1.22.0] - 2026-11-03
 
 Idempotent import from every source

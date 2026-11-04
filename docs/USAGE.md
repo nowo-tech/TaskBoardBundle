@@ -40,6 +40,8 @@
   - [Gantt scales and week start](#gantt-scales-and-week-start)
   - [Start date, parent path, sorting and tall columns](#start-date-parent-path-sorting-and-tall-columns)
   - [Collapsible sections](#collapsible-sections)
+- [Provider connections and archived tasks (since 1.23)](#provider-connections-and-archived-tasks-since-123)
+- [Task member pictures (since 1.23)](#task-member-pictures-since-123)
 - [Translations](#translations)
 
 ## Manage UI
@@ -634,6 +636,72 @@ button (register UiKit's `disclosure-icon` peer for the animation; the static ic
 **Theming.** New optional tokens: `--nowo-task-gantt-spent` (the spent fill), `--nowo-task-overrun` (over-estimate
 marks, default the danger colour), `--nowo-task-on-track` and `--nowo-task-under` (deviation colours, default success
 and warning). **Icons** (`ux_icon` hosts): `tabler:hourglass`, `tabler:filter` and `tabler:calendar-event`.
+
+## Provider connections and archived tasks (since 1.23)
+
+A board can follow a list of another tool (ClickUp first): the first run imports it, later runs create, update,
+archive and restore its tasks. It is opt-in (`sync.enabled`) and the host keeps the tokens. Everything — hooks,
+configuration, the field and conflict rules, the mass-archive guard, files, background runs, the command, the UI and
+the events — is in [sync.md](sync.md).
+
+**Archived tasks** (every host): `Task::archive()` / `restore()` / `isArchived()`. An archived task is hidden from the
+board, the list, the Gantt and the counts (`findByBoard()`, `findByBoardWithin()`, `countByBoard()`); the list view shows
+the archived tasks in a folded "Archived tasks" section with *Restore* for editors (route `task_restore`, CSRF token id
+`task_board_task_restore`), and an archived task opened by URL says so. File imports match archived tasks too (they are
+updated, never duplicated, and stay archived).
+
+## Task member pictures (since 1.23)
+
+The member chips (cards, list, task members, the members dialog, comments, history) show the initial. To show
+pictures, alias `Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface` to your service:
+
+```php
+use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
+use Nowo\TaskBoardBundle\Avatar\TaskMemberKey;
+
+final class ProfilePictures implements TaskMemberAvatarResolverInterface
+{
+    public function urlFor(object $user, int $size): ?string
+    {
+        return $this->urlsFor([$user], $size)[TaskMemberKey::of($user)] ?? null;
+    }
+
+    /** One call per page: load the pictures of all these users in one query. */
+    public function urlsFor(array $users, int $size): array
+    {
+        $urls = [];
+        foreach ($this->pictures->forUsers($users) as $user => $fileId) {   // your storage
+            $urls[TaskMemberKey::of($user)] = '/files/' . $fileId . '/s64';  // stable, access-checked when fetched
+        }
+
+        return $urls;
+    }
+}
+```
+
+```yaml
+# config/services.yaml
+Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface:
+    alias: App\Tasks\ProfilePictures
+```
+
+- The bundle asks for size 32 (its chips are 24 and 32 px), once per page, after its access checks: the board and the
+  list resolve only the 3 chips each card shows; the task page and panel resolve its members, comment authors and
+  history users. Key your answer with `TaskMemberKey::of($user)`.
+- Allowed URLs: `https://host[:port]/…` without user info, or a path on the site starting with one `/`. Anything else
+  is dropped and the initial stays: `http:`, `data:` (also `data:image`), `javascript:`, `blob:`, `//…`, relative paths
+  (`avatars/1.png`, `./a.png`), IPv6 literals, a port that is empty or outside 1–65535, backslashes, quotes, `<`, `>`,
+  backticks, control characters or white space (a trailing line feed too), and more than 2048 bytes (UTF-8). An
+  `asset()` package with a protocol-relative `base_urls` gives `//…` and falls back too. **Never pass a URL a user
+  typed:** every viewer's browser fetches it. Return a **stable** URL: a page that is open for a while asks for it again (a short `private, max-age` on a
+  redirect to a signed link is fine).
+- A picture that fails to load (403, 404, expired link) goes back to the initial: `task-board.js` has one capturing
+  `error` listener and does not retry that URL while the page is open. No inline handler, so CSP stays strict. Your
+  `img-src` must allow the origins your URLs point or redirect to.
+- Accessibility: the `<img>` is always `alt=""`. Card and list chips (no name next to them) are `role="img"` with the
+  member's name as `aria-label`; chips next to a printed name are `aria-hidden`.
+- Draw your own chip: override `templates/bundles/NowoTaskBoardBundle/manage/_task_member_avatar.html.twig` (variables
+  `user`, `class`, `size`, `labelled`) or call `nowo_task_board_member_avatar_url(user)` in your templates.
 
 ## Translations
 

@@ -118,7 +118,14 @@ final class TaskBoardDemoFixtures extends Fixture implements DependentFixtureInt
             label: 'API design notes',
         ));
         $taskApi->addMember(new TaskMember($taskApi, $user, TaskMemberRole::Assignee));
-        $taskApi->addMember(new TaskMember($taskApi, $user, TaskMemberRole::Reviewer));
+        // Since 1.23: Ada (with a picture) and Grace (whose picture URL is broken) on the same card, as its only other
+        // members so that the three are always the visible ones (the card shows three).
+        foreach (['ada@example.com', 'grace@example.com'] as $email) {
+            $member = $manager->getRepository(User::class)->findOneBy(['email' => $email]);
+            if ($member instanceof User) {
+                $taskApi->addMember(new TaskMember($taskApi, $member, TaskMemberRole::Watcher));
+            }
+        }
 
         $subtaskOpenApi = new Task(
             board: $board,

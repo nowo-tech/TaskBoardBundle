@@ -1,0 +1,47 @@
+{#
+    Since 1.23: one level of the container browser (APG disclosure + radio group, not role=tree): containers are
+    disclosure buttons (a submit to the containers route without script, a lazy fetch with it), lists are radios of
+    task_board_sync_link[container]. Vars: level (ContainerPage), levelForm, parent, depth, tree / levelForms / open
+    (the opened levels of a no-script page), board, provider, choice. Override with templates.connection_containers.
+#}
+{% set tree = tree|default({}) %}
+{% set levelForms = levelForms|default({}) %}
+{% set depth = depth|default(1) %}
+{% if error|default(null) %}
+    {{ include('@NowoTaskBoardBundle/manage/_connection_tree_error.html.twig', {error: error}) }}
+{% elseif level.items is empty %}
+    <p class="text-secondary small mb-0" data-testid="nowo-task-sync-empty">{{ 'task_board.sync.browser.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+{% else %}
+    <ul class="nowo-task-tree__group list-unstyled" data-depth="{{ depth }}">
+        {% for item in level.items %}
+            {% if not item.selectable %}
+                {% set groupId = 'nowo-task-tree-' ~ item.id|replace({':': '-'}) %}
+                {% set isOpen = tree[item.id] is defined %}
+                <li class="nowo-task-tree__node">
+                    <button type="submit" class="btn btn-link nowo-task-tree__toggle"
+                        formaction="{{ path(nowo_task_board_route('board_connection_containers'), {boardId: board.id, open: open|default([])}) }}"
+                        formmethod="post" formnovalidate name="parent" value="{{ item.id }}"
+                        aria-expanded="{{ isOpen ? 'true' : 'false' }}" aria-controls="{{ groupId }}"
+                        data-action="nowo-task-board-container-browser#toggle" data-parent="{{ item.id }}" data-label="{{ item.name }}">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: item.type.value == 'workspace' ? 'building' : (item.type.value == 'space' ? 'layout-grid' : 'folder')}) }}{{ item.name }}
+                        <span class="visually-hidden">({{ ('task_board.sync.browser.type.' ~ item.type.value)|trans({}, 'NowoTaskBoardBundle') }})</span>
+                    </button>
+                    <div id="{{ groupId }}" class="nowo-task-tree__children" aria-busy="false"{% if not isOpen %} hidden{% endif %} data-loaded="{{ isOpen ? '1' : '0' }}">
+                        {% if isOpen %}
+                            {{ include(templates.connection_containers, {level: tree[item.id], levelForm: levelForms[item.id], parent: item.id, depth: depth + 1}) }}
+                        {% endif %}
+                    </div>
+                </li>
+            {% endif %}
+        {% endfor %}
+        {% for radio in levelForm.container %}
+            <li class="nowo-task-tree__node nowo-task-tree__node--list form-check">
+                {{ form_widget(radio, {attr: {class: 'form-check-input', 'data-testid': 'nowo-task-sync-list'}}) }}
+                {{ form_label(radio, null, {label_attr: {class: 'form-check-label'}}) }}
+            </li>
+        {% endfor %}
+    </ul>
+    {% if level.nextCursor %}
+        <p class="text-secondary small">{{ 'task_board.sync.browser.more'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {% endif %}
+{% endif %}

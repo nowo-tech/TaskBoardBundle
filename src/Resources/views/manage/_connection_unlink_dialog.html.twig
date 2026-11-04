@@ -1,0 +1,19 @@
+{# Since 1.23: Unlink behind a confirm dialog (the tasks stay). unlinkForm, board, connection. #}
+<div data-controller="nowo-task-board-dialog">
+    <button type="button" class="btn btn-outline-danger" data-action="nowo-task-board-dialog#open" data-dialog="unlink" data-testid="nowo-task-sync-unlink">
+        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'unlink'}) }}{{ 'task_board.sync.unlink.action'|trans({}, 'NowoTaskBoardBundle') }}
+    </button>
+    <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="unlink" aria-labelledby="nowo-task-sync-unlink-title">
+        <div class="nowo-task-dialog__header">
+            <h2 class="nowo-task-dialog__title" id="nowo-task-sync-unlink-title">{{ 'task_board.sync.unlink.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
+        </div>
+        {{ form_start(unlinkForm, {action: path(nowo_task_board_route('board_connection_unlink'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+            <p>{{ 'task_board.sync.unlink.text'|trans({'%list%': connection.containerLabel}, 'NowoTaskBoardBundle') }}</p>
+            <div class="nowo-task-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" class="btn btn-danger" data-testid="nowo-task-sync-unlink-confirm">{{ 'task_board.sync.unlink.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            </div>
+        {{ form_end(unlinkForm) }}
+    </dialog>
+</div>

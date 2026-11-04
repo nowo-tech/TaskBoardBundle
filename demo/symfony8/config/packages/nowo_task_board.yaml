@@ -1,3 +1,11 @@
 nowo_task_board:
     user_class: App\Entity\User
     table_prefix: task_board_
+    # Since 1.23: provider connections. The demo replaces ClickUp by an in-memory provider (see config/services.yaml).
+    sync:
+        enabled: true
+        credential_resolver: App\Sync\DemoCredentialResolver
+        providers:
+            clickup:
+                enabled: false
+

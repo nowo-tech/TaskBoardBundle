@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Controller;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
@@ -50,6 +51,7 @@ use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
@@ -90,6 +92,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 use function array_key_exists;
+use function array_slice;
 use function count;
 use function is_object;
 use function is_string;
@@ -143,6 +146,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly int $maxTasks = Configuration::DEFAULT_MAX_TASKS,
         private readonly ClockInterface $clock = new NativeClock(),
         private readonly LoggerInterface $logger = new NullLogger(),
+        // Since 1.23: the members' picture URLs, resolved once per page after the access checks.
+        private readonly ?TaskMemberAvatars $avatars = null,
     ) {
     }
 
@@ -214,11 +219,13 @@ final class TaskBoardManageController extends AbstractController
 
         [$allTasks, $taskWindow] = $this->boardTasks($board);
         $taskTree                = TaskTree::fromTasks($allTasks);
+        $cards                   = $this->topLevelOnly ? $taskTree->roots() : $allTasks;
+        $this->primeAvatars($cards);
 
         return $this->render($this->templates['board'], [
             'board' => $board,
             // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
-            'tasks'          => $this->topLevelOnly ? $taskTree->roots() : $allTasks,
+            'tasks'          => $cards,
             'taskTree'       => $taskTree,
             'canEditBoard'   => $canEditBoard,
             'columnForm'     => $columnForm->createView(),
@@ -541,6 +548,13 @@ final class TaskBoardManageController extends AbstractController
 
         $priorityNames = array_map(strval(...), array_keys($priorities));
         $columnNames   = array_map(strval(...), array_keys($columns));
+        $this->primeAvatars($tasks);
+        // Since 1.23: the archived tasks of the board, each with its Restore form (editors).
+        $archived     = $this->taskRepository instanceof ArchiveAwareTaskRepositoryInterface ? $this->taskRepository->findArchivedByBoard($board, $this->maxTasks) : [];
+        $restoreForms = [];
+        foreach ($canEditBoard ? $archived : [] as $archivedTask) {
+            $restoreForms[$archivedTask->getId()] = $this->csrfActionForm('task_board_task_restore')->createView();
+        }
 
         return $this->render($this->templates['list'], [
             'board'       => $board,
@@ -559,7 +573,29 @@ final class TaskBoardManageController extends AbstractController
             'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $this->buildColumnChoices($board)) : [],
             'commentCounts'   => $this->commentCounts($tasks),
             'taskWindow'      => $taskWindow,
+            // Since 1.23: the archived tasks of the board (most recent first) and their Restore form.
+            'archivedTasks' => $archived,
+            'restoreForms'  => $restoreForms,
         ]);
+    }
+
+    /**
+     * Since 1.23: makes an archived task active again (any archive reason; editors of the task only). A task a
+     * provider sync archived is archived again by the next sync if the provider still does not list it.
+     */
+    public function restoreTask(string $taskId, Request $request): RedirectResponse
+    {
+        $user = $this->requireUser();
+        $task = $this->findTask($taskId, $user, true);
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_restore'));
+        if ($task->isArchived()) {
+            $task->restore();
+            $this->taskManager->recordRestored($task, $user);
+            $this->logWrite('task_restore', ['task_id' => $taskId]);
+            $this->addFlash('success', 'task_board.flash.task_restored');
+        }
+
+        return $this->redirectToRoute($this->routes['list']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
     public function ganttView(string $boardId): Response
@@ -1166,7 +1202,55 @@ final class TaskBoardManageController extends AbstractController
             'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
             'deviation'           => TaskDeviation::of($task),
             'subtaskDeviation'    => $descendants === [] ? null : TaskDeviation::sum($descendants),
-        ] + $this->commentViewData($task, $user, $routeExtra);
+        ] + $this->withAvatars($task, $this->commentViewData($task, $user, $routeExtra));
+    }
+
+    /**
+     * Since 1.23: one avatar call for the board or list — the first 3 members of each shown card / row (the chips
+     * shown; the rest is "+N").
+     *
+     * @param iterable<Task> $tasks
+     */
+    private function primeAvatars(iterable $tasks): void
+    {
+        if (!$this->avatars instanceof TaskMemberAvatars) {
+            return;
+        }
+        $users = [];
+        foreach ($tasks as $task) {
+            foreach (array_slice($task->getMembers()->toArray(), 0, 3) as $member) {
+                $users[] = $member->getUser();
+            }
+        }
+        $this->avatars->prime($users);
+    }
+
+    /**
+     * Since 1.23: one avatar call for the task page / panel — its members, the comment authors and the history users.
+     *
+     * @param array<string, mixed> $commentData
+     *
+     * @return array<string, mixed>
+     */
+    private function withAvatars(Task $task, array $commentData): array
+    {
+        if ($this->avatars instanceof TaskMemberAvatars) {
+            $users = [];
+            foreach ($task->getMembers() as $member) {
+                $users[] = $member->getUser();
+            }
+            foreach (is_iterable($commentData['comments'] ?? null) ? $commentData['comments'] : [] as $comment) {
+                if ($comment instanceof TaskComment) {
+                    $users[] = $comment->getAuthor();
+                }
+            }
+            foreach ($task->getChangeHistory() as $entry) {
+                $users[] = $entry->getUser();
+            }
+            $this->avatars->prime($users);
+        }
+
+        return $commentData;
     }
 
     /**

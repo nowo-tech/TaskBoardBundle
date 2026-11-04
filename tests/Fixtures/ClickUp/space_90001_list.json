@@ -1,0 +1,10 @@
+{
+  "lists": [
+    {
+      "id": "900100",
+      "name": "List 1",
+      "task_count": 2,
+      "archived": false
+    }
+  ]
+}

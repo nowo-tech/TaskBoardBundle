@@ -7,6 +7,10 @@
 #}
 {% block nowo_task_body %}
     {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+    {# Since 1.23: an archived task (opened by URL) says so; it is restored from the list view. #}
+    {% if task.archived|default(false) %}
+        <div class="alert alert-secondary" role="status" data-testid="nowo-task-archived-notice">{{ 'task_board.task.archived_notice'|trans({}, 'NowoTaskBoardBundle') }}</div>
+    {% endif %}
 
     {% set subtaskTotal = subtaskTotal|default(task.subtasks|length) %}
     {% set subtaskDone = subtaskDone|default(0) %}
@@ -113,7 +117,7 @@
                         >
                             {% for member in task.members %}
                                 <span class="nowo-task-detail__member-chip" title="{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}">
-                                    <span class="nowo-task-detail__member-chip-avatar" aria-hidden="true">{{ memberUi.member_label(member.user)|trim|slice(0, 1)|upper }}</span>
+                                    {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-detail__member-chip-avatar', size: 24, labelled: false}, with_context: false) }}
                                     <span class="nowo-task-detail__member-chip-name">{{ memberUi.member_label(member.user) }}</span>
                                 </span>
                             {% else %}

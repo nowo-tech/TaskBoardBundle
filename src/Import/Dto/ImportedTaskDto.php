@@ -53,6 +53,13 @@ final readonly class ImportedTaskDto
          * the task's priority). Custom importers that leave it out keep the old meaning: the priority is the source's.
          */
         public bool $hasPriority = true,
+        /**
+         * Since 1.23: every assignee e-mail of the row (a provider sync, the ClickUp JSON export). `assigneeEmail`
+         * stays the first one; both are resolved, each user once.
+         *
+         * @var list<string>
+         */
+        public array $assigneeEmails = [],
     ) {
     }
 }

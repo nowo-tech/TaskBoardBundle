@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
+use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -151,8 +152,11 @@ final readonly class TaskImportOrchestrator
             return new TaskImportResult(errors: [sprintf('The file has %d rows; an import takes at most %d.', count($rows), $this->maxRows)]);
         }
 
-        $scope          = $source->scope($parentTask);
-        $existingTasks  = $this->taskRepository->findByBoard($board, true);
+        $scope = $source->scope($parentTask);
+        // Since 1.23: archived tasks are matched too (a re-import never duplicates them; they stay archived).
+        $existingTasks = $this->taskRepository instanceof ArchiveAwareTaskRepositoryInterface
+            ? $this->taskRepository->findByBoardIncludingArchived($board)
+            : $this->taskRepository->findByBoard($board, true);
         $known          = $this->indexImportedTasks($existingTasks, $scope);
         $maxPositions   = $this->collectMaxPositions($existingTasks);
         $columnsByName  = $this->indexColumnsByName($board);

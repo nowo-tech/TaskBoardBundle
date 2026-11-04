@@ -30,4 +30,10 @@ enum TaskChangeType: string
     case DependencyRemoved = 'dependency_removed';
     case TimeLogged        = 'time_logged';
     case TimeRemoved       = 'time_removed';
+    /** Since 1.23: a provider sync kept a field edited here and the provider changed it too. */
+    case SyncConflict = 'sync_conflict';
+    /** Since 1.23. */
+    case Archived = 'archived';
+    /** Since 1.23. */
+    case Restored = 'restored';
 }

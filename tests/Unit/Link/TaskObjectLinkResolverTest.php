@@ -73,7 +73,7 @@ final class TaskObjectLinkResolverTest extends TestCase
         self::assertFalse($link->isHostObjectOf('issue', '13'));
         self::assertFalse((new TaskLink($this->task, TaskLinkType::Url, 'https://example.com'))->isHostObject());
         self::assertNotContains(TaskLinkType::HostObject, TaskLinkType::userChoices());
-        self::assertCount(count(TaskLinkType::cases()) - 1, TaskLinkType::userChoices());
+        self::assertCount(count(TaskLinkType::cases()) - 2, TaskLinkType::userChoices(), 'host object and (since 1.23) attachment links are not typed by users');
     }
 
     private function resolver(string $type, ?string $label, ?string $url): TaskObjectLinkResolverInterface

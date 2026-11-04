@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Event;
 
+use Nowo\TaskBoardBundle\Sync\Event\BoardConnectionEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncFailedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncFinishedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteArchivedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
+
 /**
  * Event names for TaskBoardBundle extensibility hooks.
  */
@@ -54,4 +62,28 @@ final class TaskBoardEvents
 
     /** {@see ColumnSetAccessCheckEvent}: who may delete a column set (since 1.11). */
     public const COLUMN_SET_ACCESS_CHECK = 'nowo_task_board.column_set_access_check';
+
+    /** {@see SyncStartedEvent} (since 1.23). */
+    public const SYNC_STARTED = 'nowo_task_board.sync_started';
+
+    /** {@see SyncPageDoneEvent} (since 1.23). */
+    public const SYNC_PAGE_DONE = 'nowo_task_board.sync_page_done';
+
+    /** {@see SyncFinishedEvent} (since 1.23). */
+    public const SYNC_FINISHED = 'nowo_task_board.sync_finished';
+
+    /** {@see SyncFailedEvent} (since 1.23). */
+    public const SYNC_FAILED = 'nowo_task_board.sync_failed';
+
+    /** {@see TaskRemoteArchivedEvent}, after flush (since 1.23). */
+    public const TASK_REMOTE_ARCHIVED = 'nowo_task_board.task_remote_archived';
+
+    /** {@see TaskRemoteRestoredEvent}, after flush (since 1.23). */
+    public const TASK_REMOTE_RESTORED = 'nowo_task_board.task_remote_restored';
+
+    /** {@see BoardConnectionEvent} (since 1.23). */
+    public const BOARD_CONNECTION_LINKED = 'nowo_task_board.board_connection_linked';
+
+    /** {@see BoardConnectionEvent} (since 1.23). */
+    public const BOARD_CONNECTION_UNLINKED = 'nowo_task_board.board_connection_unlinked';
 }

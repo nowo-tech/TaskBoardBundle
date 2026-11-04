@@ -17,6 +17,8 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 
 use function array_replace_recursive;
 use function ltrim;
@@ -55,6 +57,9 @@ final readonly class TaskBoardMetadataListener
             TaskTimeEntry::class     => ['user'],
             ColumnSet::class         => ['createdBy'],
             TaskComment::class       => ['author'],
+            // Since 1.23 (sync tables, mapped with sync.enabled).
+            TaskBoardConnection::class => ['createdBy'],
+            TaskSyncRun::class         => ['actor'],
         ];
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {

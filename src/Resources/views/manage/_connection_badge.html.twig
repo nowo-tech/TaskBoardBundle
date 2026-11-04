@@ -1,0 +1,34 @@
+{#
+    Since 1.23: the provider connection in the board header (board, list and Gantt views). sync = the result of
+    nowo_task_board_connection(board): null shows nothing. Override with templates.connection_badge.
+#}
+{% if sync %}
+    <div class="nowo-task-sync-badge d-flex flex-wrap align-items-center gap-2 mb-3" data-testid="nowo-task-sync-badge">
+        {% if sync.linked %}
+            <span class="badge bg-azure-lt nowo-task-sync-badge__label">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plug-connected'}) }}{{ sync.providerLabelKey|trans({}, 'NowoTaskBoardBundle') }} · {{ sync.containerLabel }}
+            </span>
+            <span class="text-secondary small">
+                {% if sync.running %}
+                    {{ 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') }}
+                {% elseif sync.lastSuccessAt %}
+                    {{ 'task_board.sync.status.last_sync'|trans({'%date%': sync.lastSuccessAt|date('Y-m-d H:i')}, 'NowoTaskBoardBundle') }}
+                {% else %}
+                    {{ 'task_board.sync.status.never'|trans({}, 'NowoTaskBoardBundle') }}
+                {% endif %}
+            </span>
+            {% if sync.canManage %}
+                {{ form_start(sync.refreshForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
+                    <button type="submit" class="btn btn-sm btn-outline-primary" data-testid="nowo-task-sync-header-refresh"{% if sync.running %} disabled aria-disabled="true"{% endif %}>
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'refresh'}) }}{{ 'task_board.sync.refresh.action'|trans({'%provider%': sync.providerLabelKey|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
+                    </button>
+                {{ form_end(sync.refreshForm) }}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}">{{ 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle') }}</a>
+            {% endif %}
+        {% elseif sync.canManage %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" data-testid="nowo-task-sync-connect-link">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plug'}) }}{{ 'task_board.sync.connect.action'|trans({}, 'NowoTaskBoardBundle') }}
+            </a>
+        {% endif %}
+    </div>
+{% endif %}

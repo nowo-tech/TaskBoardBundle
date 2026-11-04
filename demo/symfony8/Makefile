@@ -8,7 +8,7 @@ endif
 DC := :; $(COMPOSE)
 SERVICE_PHP = php
 
-.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify release-check
+.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify release-check test-e2e
 
 help:
 	@echo "TaskBoard Bundle — Symfony 8.1 Demo"
@@ -19,6 +19,7 @@ help:
 	@echo "  test           update-bundle + demo PHPUnit suite"
 	@echo "  verify         REQ-TEST-011: HTTP 200 on /tools/task-board"
 	@echo "  release-check  up + update-bundle + test + verify (REQ-DEMO-007)"
+	@echo "  test-e2e       Playwright + axe: the provider connection flow (demo must be up)"
 
 ensure-env:
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
@@ -118,3 +119,16 @@ release-check: up
 	@$(MAKE) --no-print-directory update-bundle
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory verify
+
+# Since 1.23: Playwright e2e with axe (the official Playwright image; the demo must be up).
+PLAYWRIGHT_IMAGE ?= mcr.microsoft.com/playwright:v1.64.1-jammy
+
+test-e2e:
+	@mkdir -p e2e/node_modules
+	@PORT=$$(grep "^PORT=" .env 2>/dev/null | cut -d= -f2 | tr -d '\r'); \
+	[ -z "$$PORT" ] && PORT=$$(grep "^PORT=" .env.example 2>/dev/null | cut -d= -f2 | tr -d '\r'); \
+	docker run --rm --network host --ipc=host \
+		-v "$(CURDIR)/e2e:/e2e" -w /e2e \
+		-e DEMO_BASE_URL=http://127.0.0.1:$$PORT \
+		$(PLAYWRIGHT_IMAGE) \
+		bash -lc 'npm install --no-fund --no-audit && npx playwright test $(PW_ARGS)'

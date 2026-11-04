@@ -1,0 +1,34 @@
+import { defineConfig, devices } from '@playwright/test';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+/** The demo PORT from the sibling .env / .env.example (demo/symfony8). */
+function resolvePort(fallback = 8024): number {
+  for (const file of ['.env', '.env.example']) {
+    const path = resolve(__dirname, '..', file);
+    if (!existsSync(path)) {
+      continue;
+    }
+    const match = readFileSync(path, 'utf8').match(/^PORT=(\d+)/m);
+    if (match) {
+      return Number(match[1]);
+    }
+  }
+  return fallback;
+}
+
+const baseURL = process.env.DEMO_BASE_URL || `http://127.0.0.1:${resolvePort()}`;
+
+export default defineConfig({
+  testDir: './tests',
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: 0,
+  workers: 1,
+  reporter: [['list']],
+  use: { baseURL, trace: 'retain-on-failure', viewport: { width: 1280, height: 900 } },
+  projects: [
+    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    { name: 'phone', use: { ...devices['Pixel 7'] } },
+  ],
+});

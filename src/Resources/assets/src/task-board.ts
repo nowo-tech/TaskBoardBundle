@@ -20,7 +20,10 @@ import OptionFilterController from './option-filter-controller';
 import FilterCollapseController from './filter-collapse-controller';
 import MentionController from './mention-controller';
 import ActivityFilterController from './activity-filter-controller';
+import ContainerBrowserController from './container-browser-controller';
+import SyncProgressController from './sync-progress-controller';
 import { observeCssVars } from './css-vars';
+import { installAvatarFallback } from './avatar-fallback';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
 
@@ -47,6 +50,12 @@ application.register('nowo-task-board-filter-collapse', FilterCollapseController
 application.register('nowo-task-board-mention', MentionController);
 application.register('nowo-task-board-activity-filter', ActivityFilterController);
 application.register('nowo-task-board-task-nav', TaskNavController);
+// Since 1.23: provider connections.
+application.register('nowo-task-board-container-browser', ContainerBrowserController);
+application.register('nowo-task-board-sync-progress', SyncProgressController);
+
+// Since 1.23: member pictures fall back to the initial chip (one capturing error listener, no inline handler).
+installAvatarFallback(document);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

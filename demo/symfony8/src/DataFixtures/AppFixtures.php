@@ -19,6 +19,10 @@ final class AppFixtures extends Fixture
             ->setRoles(['ROLE_USER']);
 
         $manager->persist($demo);
+        // Since 1.23: two more people, so the demo shows member pictures (and one broken picture) on shared tasks.
+        foreach (['ada@example.com', 'grace@example.com'] as $email) {
+            $manager->persist((new User())->setEmail($email)->setPassword('')->setRoles(['ROLE_USER']));
+        }
         $manager->flush();
     }
 }

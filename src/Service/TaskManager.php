@@ -384,4 +384,13 @@ final readonly class TaskManager
 
         return $max + 1;
     }
+
+    /**
+     * Since 1.23: records and saves a restored task.
+     */
+    public function recordRestored(Task $task, object $user): void
+    {
+        $this->changeRecorder->record($task, $user, TaskChangeType::Restored, null, 'manual');
+        $this->taskRepository->save($task);
+    }
 }
