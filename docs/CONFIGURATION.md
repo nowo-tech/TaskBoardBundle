@@ -532,19 +532,21 @@ Measured through the import controller with a production kernel (no query loggin
 an import keeps a flat memory since 1.22.2 (tasks are written in batches of 200), and a `memory_limit` of 128 MB takes:
 
 - **CSV:** 5 000 rows, the default `max_rows` (peak +32 MB);
-- **Trello JSON:** 5 000 cards with their checklists (≈ 5.7 MB, weight ≈ 3.1 M; peak +68 MB);
+- **Trello JSON:** 5 000 cards with their checklists and no actions (≈ 5.7 MB, weight ≈ 3.1 M; peak +68 MB);
+  a board export with its actions (Trello adds the last 1 000 by default) weighs more: 5 000 cards plus 1 000 actions weigh about 4.3 M and are refused cleanly; export without actions, or set `max_json_nodes: 4500000` with a `memory_limit` of 256 MB;
 - **the bundle's JSON:** 5 000 tasks;
 - **ClickUp API JSON:** about 2 700 tasks (≈ 5.7 MB; peak +61 MB). A 5 000-task export (10.5 MB, weight ≈ 7.4 M)
   is refused cleanly by the default weight: decoding it alone needs more than 128 MB. Import it with
   `max_json_nodes: 7500000` and a `memory_limit` of 256 MB.
 
 The default `max_json_nodes` (4 000 000) keeps every hostile JSON shape the audits tried under +70 MB at that limit.
+A host whose requests already use more than about 55 MB before the import should lower `max_json_nodes` (to about 2 500 000) or raise `memory_limit`.
 
 - **Jira "all fields" CSV exports** (about 250–300 columns × 5 000 rows = 1.25–1.5 M cells): `max_cells: 2000000`
   (and `max_columns: 1024` past 512 columns), or export fewer columns; a kept cell costs about 70 bytes, so raise
   `memory_limit` with it.
 
-An import runs in one database transaction: if it fails anywhere, nothing of it is kept.
+An import runs in one database transaction: if it fails anywhere, nothing of it is kept. Two imports into the same board at the same time can each create a task for the same source id (they do not lock the board; this was already so before 1.22.2): import one file at a time.
 
 See [UPGRADING](UPGRADING.md#unreleased) for the measurements.
 

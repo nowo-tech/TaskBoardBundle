@@ -118,9 +118,10 @@ file is refused with an error. Since 1.22.1 a CSV is also refused when its heade
 `import.max_json_nodes` (default 4 000 000: strings by their length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit) or holds more than `import.max_rows` items (nested subtasks
 included). Every limit is checked before anything is built, and the error is shown in the user's language. Files are
 also limited to 20 MB by the upload form. Since 1.22.2 an import writes its tasks in batches inside one transaction
-(memory stays flat; a failure keeps nothing): at a 128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards and
-5 000 tasks of the bundle's JSON import, and a ClickUp API export of about 2 700 tasks; a 5 000-task ClickUp export
-needs `max_json_nodes: 7500000` and 256 MB. For a Jira "all fields" export (250+ columns × 5 000 rows) also raise
+(memory stays flat; a failure keeps nothing): at a 128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards (an
+export without actions; with Trello's 1 000 actions set `max_json_nodes: 4500000`) and 5 000 tasks of the bundle's JSON
+import, and a ClickUp API export of about 2 700 tasks; a 5 000-task ClickUp export needs `max_json_nodes: 7500000`
+and 256 MB. Import one file at a time into a board: two concurrent imports can create the same source id twice. For a Jira "all fields" export (250+ columns × 5 000 rows) also raise
 `max_cells` (2 000 000) — see [CONFIGURATION](../CONFIGURATION.md).
 
 ## Field mapping overview

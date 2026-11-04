@@ -69,11 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Imports keep a flat memory (audit EB-L7).** The import orchestrator writes its tasks in batches of 200 (flush,
   then they leave the entity manager) inside one database transaction, so a failure anywhere still keeps nothing. At a
-  128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards and 5 000 tasks of the bundle's JSON now import (they
-  exhausted it before), and a ClickUp API export of about 2 700 tasks.
+  128 MB `memory_limit` 5 000 CSV rows, 5 000 Trello cards (an export without actions) and 5 000 tasks of the
+  bundle's JSON now import, and a ClickUp API export of about 2 700 tasks. 1.22.1 could not import 5 000 rows at
+  128 MB from any source (about 26 KB per task; its "about 40 KB per task" was measured with query logging on).
 - **`import.max_json_nodes` default 1 800 000 → 4 000 000**, calibrated through the import controller on a
   production kernel: every hostile JSON shape the audits tried stays under +70 MB at 128 MB. A 5 000-task ClickUp API
-  export needs `max_json_nodes: 7500000` and 256 MB (see UPGRADING).
+  export needs `max_json_nodes: 7500000` and 256 MB, a 5 000-card Trello export with its actions
+  `max_json_nodes: 4500000` (see UPGRADING); hosts with a request baseline above about 55 MB should lower it.
 
 ## [1.22.1] - 2026-11-04
 
