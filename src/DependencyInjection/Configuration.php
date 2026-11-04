@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
@@ -572,6 +573,21 @@ final class Configuration implements ConfigurationInterface
                             ->defaultValue(DelimitedTableParser::DEFAULT_MAX_CELL_LENGTH)
                             ->min(1)
                             ->info('The longest CSV cell, in bytes; a file with a longer cell is refused.')
+                        ->end()
+                        ->integerNode('max_columns')
+                            ->defaultValue(DelimitedTableParser::DEFAULT_MAX_COLUMNS)
+                            ->min(1)
+                            ->info('Since 1.22.1: the most columns of a CSV header or row; a wider file is refused before its rows are read.')
+                        ->end()
+                        ->integerNode('max_cells')
+                            ->defaultValue(DelimitedTableParser::DEFAULT_MAX_CELLS)
+                            ->min(1)
+                            ->info('Since 1.22.1: the most cells of a CSV file (columns × rows, empty cells included); a larger file is refused before it is parsed.')
+                        ->end()
+                        ->integerNode('max_json_nodes')
+                            ->defaultValue(JsonImportGuard::DEFAULT_MAX_NODES)
+                            ->min(1)
+                            ->info('Since 1.22.1: the weight of a JSON import (about 16 bytes of peak decoded memory per unit: strings by their length, list and object tables at their doubled size; 1 800 000 takes a realistic export of about 1 200 tasks within a 128 MB memory_limit, 7 500 000 with 512 MB takes 5 000); a heavier file is refused before it is decoded.')
                         ->end()
                     ->end()
                 ->end()

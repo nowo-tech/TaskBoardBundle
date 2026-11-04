@@ -112,6 +112,32 @@ editors only) imports a file as that task's subtask tree, with its Gantt relatio
 
 **Export guides (English):** [docs/import/](import/README.md) — step-by-step instructions for [ClickUp](import/clickup.md), [Jira](import/jira.md), and [Trello](import/trello.md).
 
+**Your own help under the source select (since 1.22.1).** Both import forms have a place for the host's help right
+under the **Source** select:
+
+- The board import page has an empty `import_help` block. Point `templates.import` at a page that extends the bundle's
+  and fills only that block:
+
+  ```twig
+  {# templates/tasks/import.html.twig — nowo_task_board.templates.import: 'tasks/import.html.twig' #}
+  {% extends '@NowoTaskBoardBundle/manage/import.html.twig' %}
+
+  {% block import_help %}
+      <p><a href="{{ path('app_manual', {page: 'import'}) }}">Format and examples</a></p>
+  {% endblock %}
+  ```
+- The **Import subtasks** dialog is included in the task page, so its block cannot be overridden from outside. Both
+  forms also render an optional link `{url, label}`: the `help_link` include parameter, or the Twig global
+  `nowo_task_board_import_help_link` for every page at once. The label is escaped, and the URL must be http(s) or a path
+  on the site (`/…`); anything else becomes `#`.
+
+  ```yaml
+  # config/packages/twig.yaml
+  twig:
+      globals:
+          nowo_task_board_import_help_link: { url: '/manual/tasks/import', label: 'Format and examples' }
+  ```
+
 ## Custom access control
 
 Two layers:

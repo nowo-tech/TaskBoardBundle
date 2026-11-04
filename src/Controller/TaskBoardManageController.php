@@ -49,6 +49,7 @@ use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
+use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
@@ -454,7 +455,7 @@ final class TaskBoardManageController extends AbstractController
                 options: new TaskImportOptions(createMissingColumns: $data->createMissingColumns),
             );
 
-            foreach ($result->errors as $error) {
+            foreach ($this->importErrors($result) as $error) {
                 $this->addFlash('error', $error);
             }
 
@@ -512,7 +513,7 @@ final class TaskBoardManageController extends AbstractController
             parentTask: $task,
         );
         $this->logWrite('task_import', ['task_id' => $taskId, 'created' => $result->created, 'updated' => $result->updated, 'errors' => count($result->errors)]);
-        foreach ([...$result->errors, ...$result->warnings] as $index => $message) {
+        foreach ([...$this->importErrors($result), ...$result->warnings] as $index => $message) {
             $this->addFlash($index < count($result->errors) ? 'error' : 'warning', $message);
         }
         if (!$result->hasErrors()) {
@@ -1597,6 +1598,22 @@ final class TaskBoardManageController extends AbstractController
         return $this->formFactory()->createNamed('', TaskPriorityFormType::class, ['priority' => $task->getPriority()->value], [
             'action' => $this->generateUrl($this->routes['task_priority']['name'], ['taskId' => $task->getId()] + $routeExtra),
         ]);
+    }
+
+    /**
+     * Since 1.22.1: the errors of an import, translated when the result carries their translation (limits).
+     *
+     * @return list<string>
+     */
+    private function importErrors(TaskImportResult $result): array
+    {
+        $errors = [];
+        foreach ($result->errors as $index => $error) {
+            $translation = $result->errorTranslations[$index] ?? null;
+            $errors[]    = $translation?->trans($this->translator) ?? $error;
+        }
+
+        return $errors;
     }
 
     /**

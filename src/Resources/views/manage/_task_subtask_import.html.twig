@@ -1,7 +1,9 @@
 {#
     Since 1.18: "Import subtasks" on a task — a file of tasks becomes this task's subtask tree with its Gantt relations;
     the help modal documents the format. Editors only (subtaskImportForm is null otherwise).
-    Variables: task, subtaskImportForm.
+    Variables: task, subtaskImportForm; since 1.22.1 optional help_link ({url, label}, default: the Twig global
+    nowo_task_board_import_help_link) rendered as an escaped link under the source select, and the empty block
+    import_help at the same place (for a template that embeds this one).
 #}
 {% if subtaskImportForm|default(null) %}
     <div class="nowo-task-subtask-import" data-controller="nowo-task-board-dialog">
@@ -17,6 +19,10 @@
             </div>
             {{ form_start(subtaskImportForm, {method: 'POST', attr: {class: 'nowo-task-dialog__body', enctype: 'multipart/form-data'}}) }}
                 <p class="nowo-task-dialog__help">{{ 'task_board.import.subtasks.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
+                <div class="nowo-task-field">{{ form_row(subtaskImportForm.source) }}</div>
+                {# Since 1.22.1: a place for the host's help under the source select (block, or the help_link parameter). #}
+                {% block import_help %}{% endblock %}
+                {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(null))}) }}
                 {% for child in subtaskImportForm %}
                     {% if not child.rendered %}
                         <div class="nowo-task-field">{{ form_row(child) }}</div>

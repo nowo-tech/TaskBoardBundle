@@ -6,12 +6,11 @@ namespace Nowo\TaskBoardBundle\Import\ClickUp;
 
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImporterInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 
 use function is_array;
-use function json_decode;
-use function json_last_error_msg;
 
 /**
  * Imports tasks from ClickUp JSON exports.
@@ -21,6 +20,8 @@ final readonly class ClickUpJsonImporter implements TaskImporterInterface
     public function __construct(
         // Since 1.23: the mapping is shared with the ClickUp provider sync.
         private ClickUpTaskMapper $mapper = new ClickUpTaskMapper(),
+        // Since 1.22.1 (audit EB-L3): weighed before json_decode(), items counted before they are mapped.
+        private JsonImportGuard $guard = new JsonImportGuard(),
     ) {
     }
 
@@ -31,13 +32,13 @@ final readonly class ClickUpJsonImporter implements TaskImporterInterface
 
     public function parse(string $content, string $filename): array
     {
-        /** @var mixed $decoded */
-        $decoded = json_decode($content, true);
+        $decoded = $this->guard->decode($content, 'Invalid ClickUp JSON: ');
         if (!is_array($decoded)) {
-            throw new InvalidArgumentException('Invalid ClickUp JSON: ' . json_last_error_msg());
+            throw new InvalidArgumentException('Invalid ClickUp JSON: an object or a list is expected.');
         }
 
         $rows = $this->extractTaskRows($decoded);
+        $this->guard->assertRows($rows);
         if ($rows === []) {
             throw new InvalidArgumentException('No tasks found in the ClickUp JSON export.');
         }
