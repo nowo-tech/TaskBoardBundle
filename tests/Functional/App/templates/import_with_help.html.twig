@@ -1,0 +1,4 @@
+{# A host page for the board import (templates.import) that only adds its help under the source select (since 1.22.1). #}
+{% extends '@NowoTaskBoardBundle/manage/import.html.twig' %}
+
+{% block import_help %}<p><a href="/manual/import" data-testid="host-import-help">Format and examples</a></p>{% endblock %}

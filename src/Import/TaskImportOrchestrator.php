@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
@@ -144,11 +145,14 @@ final readonly class TaskImportOrchestrator
 
         try {
             $rows = $importer->parse($content, $filename);
+            if (count($rows) > $this->maxRows) {
+                throw ImportLimitExceededException::rows($this->maxRows, count($rows));
+            }
+        } catch (ImportLimitExceededException $exception) {
+            // Since 1.22.1: a limit error also carries its translation (the flash is shown in the user's language).
+            return new TaskImportResult(errors: [$exception->getMessage()], errorTranslations: [$exception->translatable()]);
         } catch (InvalidArgumentException $exception) {
             return new TaskImportResult(errors: [$exception->getMessage()]);
-        }
-        if (count($rows) > $this->maxRows) {
-            return new TaskImportResult(errors: [sprintf('The file has %d rows; an import takes at most %d.', count($rows), $this->maxRows)]);
         }
 
         $scope          = $source->scope($parentTask);

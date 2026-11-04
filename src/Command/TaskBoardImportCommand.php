@@ -28,6 +28,9 @@ use function sprintf;
 )]
 final class TaskBoardImportCommand extends Command
 {
+    /** Since 1.22.1: the upload form's cap (20 MB), applied to the command too. */
+    public const MAX_FILE_BYTES = 20_000_000;
+
     public function __construct(
         private readonly TaskBoardRepositoryInterface $boardRepository,
         private readonly TaskImportOrchestrator $importOrchestrator,
@@ -60,6 +63,12 @@ final class TaskBoardImportCommand extends Command
         $filePath = (string) $input->getArgument('file');
         if (!is_readable($filePath)) {
             $io->error(sprintf('File "%s" is not readable.', $filePath));
+
+            return Command::FAILURE;
+        }
+        // Since 1.22.1 (audit EB-I5): the same byte cap as the upload form, before the file is read.
+        if ((int) filesize($filePath) > self::MAX_FILE_BYTES) {
+            $io->error(sprintf('File "%s" is larger than 20 MB; an import takes at most 20 MB.', $filePath));
 
             return Command::FAILURE;
         }

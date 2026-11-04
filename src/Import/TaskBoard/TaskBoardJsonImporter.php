@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Import\TaskBoard;
 
 use InvalidArgumentException;
-use JsonException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImporterInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 
@@ -14,8 +14,6 @@ use function array_is_list;
 use function is_array;
 use function json_decode;
 use function sprintf;
-
-use const JSON_THROW_ON_ERROR;
 
 /**
  * Since 1.18: the bundle's own JSON — a list of tasks (or `{"tasks": [...]}`) with the {@see TaskBoardRowMapper} keys;
@@ -25,6 +23,8 @@ final readonly class TaskBoardJsonImporter implements TaskImporterInterface
 {
     public function __construct(
         private TaskBoardRowMapper $rowMapper = new TaskBoardRowMapper(),
+        // Since 1.22.1 (audit EB-L3): weighed before json_decode(), items counted before they are mapped.
+        private JsonImportGuard $guard = new JsonImportGuard(),
     ) {
     }
 
@@ -35,15 +35,12 @@ final readonly class TaskBoardJsonImporter implements TaskImporterInterface
 
     public function parse(string $content, string $filename): array
     {
-        try {
-            $data = json_decode($content, true, 64, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            throw new InvalidArgumentException('The file is not valid JSON.');
-        }
+        $data = $this->guard->decode($content, 'The file is not valid JSON: ');
         $list = is_array($data) && isset($data['tasks']) ? $data['tasks'] : $data;
         if (!is_array($list) || !array_is_list($list)) {
             throw new InvalidArgumentException('The JSON must be a list of tasks or an object with a "tasks" list.');
         }
+        $this->guard->assertRows($list);
         $tasks = [];
         $line  = 0;
         $this->walk($list, null, $tasks, $line);
@@ -61,7 +58,8 @@ final readonly class TaskBoardJsonImporter implements TaskImporterInterface
     private function walk(array $list, ?string $parentId, array &$tasks, int &$line): void
     {
         foreach ($list as $item) {
-            ++$line;
+            // Nested subtasks count against max_rows as they are walked (audit EB-I7).
+            $this->guard->assertRowCount(++$line);
             if (!is_array($item)) {
                 continue;
             }

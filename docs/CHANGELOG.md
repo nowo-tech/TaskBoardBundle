@@ -64,6 +64,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Bounded imports (audits DL-L6, EB).** A wide CSV, a single line of 20 MB of commas, a grid of empty cells or a
+  JSON file with millions of items could exhaust the memory of the request before the 1.22 row cap was checked. Every
+  limit is now checked before anything is built:
+  - CSV: one pass over the raw bytes (records, quotes and leading blanks found exactly as `fgetcsv()` finds them: a
+    lone `\r` is part of a cell, `\v` / `\f` before a quote open it; audit EB-L4) refuses a header or a row with more than
+    `import.max_columns` (default 512) columns, more than `import.max_cells` (default 1 000 000) cells — columns ×
+    rows, empty cells included —, more than `import.max_rows` rows (blank lines count) and a cell longer than
+    `import.max_cell_length`, before `fgetcsv()` splits a record; each record `fgetcsv()` builds is checked again (columns, cell length)
+    before it is kept;
+  - JSON (ClickUp, Trello, the own format): the text is weighed before `json_decode()` against
+    `import.max_json_nodes` (default 1 800 000: strings by their length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit;
+    audits EB-L5, EB-I7, EB-L6), decoded with a depth
+    limit of 64, and the items (nested subtasks of the own format included) are counted against `import.max_rows` before they are
+    mapped to tasks;
+  - `nowo:task-board:import` refuses a file over the upload form's 20 MB before reading it.
+
+  Measured end to end at a 128 MB `memory_limit`, every hostile JSON shape is refused or imported cleanly, and about
+  1 200 realistic tasks import from any source (the import costs about 40 KB per task). See UPGRADING for the
+  settings of 5 000-task imports (`memory_limit` 256 MB for CSV, 512 MB and `max_json_nodes: 7500000` for JSON).
+
+  The audit's memory PoCs (files just under 20 MB) are regression tests that run with `memory_limit=128M`.
+- **Import help link:** a `help_link` URL with white space, a control character or a backslash renders `#` (browsers
+  drop tabs and line breaks, so `/\t/evil.test` would become `//evil.test`).
+
+### Added
+
+- **Host help under the import source select:** an empty `import_help` block on the board import page and the
+  Import subtasks dialog, and an optional escaped link `{url, label}` in both (the `help_link` include parameter or the
+  Twig global `nowo_task_board_import_help_link`), so a host adds "Format and examples" without copying the templates.
+  See [USAGE](USAGE.md#import-tasks-from-clickup-jira-or-trello).
+
+### Changed
+
+- Import limit errors (`max_rows`, `max_cell_length`, `max_columns`, `max_cells`, `max_json_nodes`) are now shown in the user's language:
+  new keys `task_board.import.error.*` in the 7 locales. The English text and the console output are unchanged.
+  `TaskImportResult` gained `errorTranslations` (the translation of an error, by its index in `errors`), and the
+  parser throws `Nowo\TaskBoardBundle\Exception\ImportLimitExceededException` (an `InvalidArgumentException`).
+- JSON import errors read `Invalid ClickUp JSON: <reason>`, `Invalid Trello JSON: <reason>` and
+  `The file is not valid JSON: <reason>`; a valid document of the wrong kind (a number, a string) says what is
+  expected.
+
 ## [1.22.0] - 2026-11-03
 
 Idempotent import from every source

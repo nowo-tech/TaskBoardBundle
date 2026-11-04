@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
@@ -103,6 +104,85 @@ final class ImportMappingTest extends TestCase
             self::assertSame('A cell of the file is longer than 3 bytes.', $exception->getMessage());
         }
         self::assertCount(1, (new DelimitedTableParser(maxRows: 1, maxCellLength: 3))->parse("a\n123\n", 'x.csv'));
+    }
+
+    /**
+     * Since 1.22.1 (audit DL-L6): a wide header, a wide row and too many filled cells are refused while reading.
+     */
+    public function testTheCsvParserRefusesTooManyColumnsAndCells(): void
+    {
+        $refusal = static function (DelimitedTableParser $parser, string $csv): ImportLimitExceededException {
+            try {
+                $parser->parse($csv, 'x.csv');
+            } catch (ImportLimitExceededException $exception) {
+                return $exception;
+            }
+            self::fail('not refused');
+        };
+
+        $header = $refusal(new DelimitedTableParser(maxColumns: 2), "a,b,c\n1,2,3\n");
+        self::assertSame('The file has more than 2 columns; an import takes at most 2.', $header->getMessage());
+        self::assertSame(ImportLimitExceededException::COLUMNS, $header->translationKey);
+        self::assertSame(['%max%' => '2'], $header->parameters);
+
+        $row = $refusal(new DelimitedTableParser(maxColumns: 2), "a,b\n1,2\n1,2,3\n");
+        self::assertSame(ImportLimitExceededException::COLUMNS, $row->translationKey);
+
+        $cells = $refusal(new DelimitedTableParser(maxCells: 3), "a,b\n1,2\n3,4\n");
+        self::assertSame('The file has more than 3 cells; an import takes at most 3.', $cells->getMessage());
+        self::assertSame(ImportLimitExceededException::CELLS, $cells->translationKey);
+
+        $rows = $refusal(new DelimitedTableParser(maxRows: 1), "a\n1\n2\n");
+        self::assertSame(ImportLimitExceededException::ROWS, $rows->translationKey);
+        $cell = $refusal(new DelimitedTableParser(maxCellLength: 1), "a\n12\n");
+        self::assertSame(ImportLimitExceededException::CELL, $cell->translationKey);
+
+        // Audit EB-L2: empty cells count too (columns × rows); exactly at the limits is accepted.
+        self::assertSame(ImportLimitExceededException::CELLS, $refusal(new DelimitedTableParser(maxCells: 3), "a,b\n1,\n,\n")->translationKey);
+        self::assertCount(3, (new DelimitedTableParser(maxColumns: 2, maxCells: 6))->parse("a,b\n1,\n,2\n,\n", 'x.csv'));
+        self::assertCount(1, (new DelimitedTableParser(maxColumns: 2, maxCells: 2))->parse("a,b\n1,2\n", 'x.csv'));
+    }
+
+    /**
+     * Since 1.22.1 (audit EB): the raw bytes are checked before fgetcsv() builds a record — quotes as fgetcsv() reads
+     * them, blank lines as rows, \r\n once.
+     */
+    public function testTheRawPrescanReadsQuotesLikeFgetcsv(): void
+    {
+        $refusal = static function (DelimitedTableParser $parser, string $csv): string {
+            try {
+                $parser->parse($csv, 'x.csv');
+            } catch (ImportLimitExceededException $exception) {
+                return $exception->translationKey;
+            }
+
+            return 'accepted';
+        };
+
+        // Delimiters and line breaks inside a quoted cell are not columns or rows; a doubled quote stays inside it.
+        self::assertCount(1, (new DelimitedTableParser(maxRows: 1, maxColumns: 2))->parse("a,b\n\"x,y,\nz\"\"\",1\n", 'x.csv'));
+        self::assertSame([['a' => 'x,y,' . "\n" . 'z"', 'b' => '1']], (new DelimitedTableParser(maxColumns: 2))->parse("a,b\n\"x,y,\nz\"\"\",1\n", 'x.csv'));
+        // A quote after other characters of a cell is a plain one: the delimiters after it count.
+        self::assertSame(ImportLimitExceededException::COLUMNS, $refusal(new DelimitedTableParser(maxColumns: 2), "a,b\nx\",y,z,w\n"));
+        // A quoted cell that never closes still has a length.
+        self::assertSame(ImportLimitExceededException::CELL, $refusal(new DelimitedTableParser(maxCellLength: 5), "a\n\"" . str_repeat('x', 10)));
+        self::assertSame(ImportLimitExceededException::CELL, $refusal(new DelimitedTableParser(maxCellLength: 5), "a,b\n\"xxxxxxxx\",1"));
+        // Audit EB-I1: blank lines count toward the row cap; \r\n is one line break.
+        self::assertSame(ImportLimitExceededException::ROWS, $refusal(new DelimitedTableParser(maxRows: 2), "a\n1\n\n\n\n2"));
+        self::assertCount(2, (new DelimitedTableParser(maxRows: 2))->parse("a\r\n1\r\n2\r\n", 'x.csv'));
+        // Audit EB-L1: a single line of delimiters is refused before it is split.
+        self::assertSame(ImportLimitExceededException::COLUMNS, $refusal(new DelimitedTableParser(maxColumns: 512), str_repeat(',', 100_000) . "\nx"));
+    }
+
+    public function testALimitErrorTranslatesInTheBundleDomain(): void
+    {
+        $translatable = ImportLimitExceededException::columns(512)->translatable();
+
+        self::assertSame(ImportLimitExceededException::COLUMNS, $translatable->getMessage());
+        self::assertSame(['%max%' => '512'], $translatable->getParameters());
+        self::assertSame('NowoTaskBoardBundle', $translatable->getDomain());
+        self::assertSame('The file has 7 rows; an import takes at most 5.', ImportLimitExceededException::rows(5, 7)->getMessage());
+        self::assertSame(['%max%' => '5'], ImportLimitExceededException::rows(5, 7)->parameters);
     }
 
     public function testClickUpCsvReadsTheListViewColumns(): void
@@ -220,6 +300,10 @@ final class ImportMappingTest extends TestCase
 
         $result = (new TaskImportResult())->withUpdated(2)->withUnchanged(3)->withCreated(1);
         self::assertSame([1, 2, 3], [$result->created, $result->updated, $result->unchanged]);
+        // Since 1.22.1: error translations follow their errors (replacing the errors drops them).
+        $limited = new TaskImportResult(errors: ['x'], errorTranslations: [ImportLimitExceededException::cells(1)->translatable()]);
+        self::assertCount(1, $limited->withCreated(0)->errorTranslations);
+        self::assertSame([], $limited->withErrors(['y'])->errorTranslations);
         self::assertSame(TaskPriority::Normal, (new ImportFieldMapper())->mapPriority(''));
     }
 }

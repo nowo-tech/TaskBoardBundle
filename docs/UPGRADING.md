@@ -104,6 +104,49 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change.
+
+- **New import limits (audits DL-L6, EB), checked before anything is built:**
+  - `import.max_columns` (default 512): the columns of a CSV header or row;
+  - `import.max_cells` (default 1 000 000): the cells of a CSV file, **columns × rows, empty cells included**;
+  - `import.max_rows` (unchanged, 5000) now also counts blank lines of a CSV and the items of a JSON file before they
+    are mapped;
+  - `import.max_json_nodes` (default 1 800 000): the weight of a JSON file before it is decoded (strings by their
+    length, list and object tables counted at their doubled size, as PHP grows them; about 16 bytes of decoded memory per unit); JSON is decoded with a depth limit of 64.
+
+  **Memory.** Measured end to end through the import controller (an 18 MB request baseline included), the defaults keep
+  every JSON shape the audits tried, including lists that grow past a power of two, under a `memory_limit` of 128 MB.
+  The import itself (tasks, history, links) costs about 40 KB per task whatever the source, so a 128 MB request takes
+  **about 1 200 tasks**:
+  - **JSON:** the default weight takes a realistic ClickUp API export of about 1 200 tasks (≈ 2.6 MB); a heavier file is
+    refused (`json_too_large`). A 5 000-task export weighs about 7.4 M: set `max_json_nodes: 7500000` **and**
+    `memory_limit` to 512 MB (it peaks above 230 MB; 256 MB is not enough).
+  - **CSV:** `max_rows` stays 5000, but a 128 MB request imports about 1 200–1 500 rows (3 000 rows exhaust it); 5 000 rows
+    need a `memory_limit` of 256 MB (peak about 220 MB). Hosts on 128 MB should lower `max_rows` to 1200.
+  - **Wide CSV:** 512 columns and 1 000 000 cells (columns × rows, empty cells included). A Jira export with **all
+    fields** is wide: about 250–300 columns, so 5 000 rows of it are 1.25–1.5 M cells and are refused
+    (`too_many_cells`); a Jira export with more than 512 columns (many custom fields) is refused as
+    `too_many_columns`. Export fewer columns, split the file, or raise the limits together with PHP's `memory_limit`
+    (a kept cell costs about 70 bytes on top of the tasks).
+  
+  ```yaml
+  nowo_task_board:
+      import:
+          max_columns: 1024        # very wide Jira exports
+          max_cells: 2000000       # e.g. 300 columns × 5 000 rows = 1 500 000; with memory_limit 512M
+          max_json_nodes: 7500000  # 5 000-task ClickUp / Trello JSON; with memory_limit 512M
+  ```
+- **`nowo:task-board:import`** refuses a file larger than the upload form's 20 MB (`TaskBoardImportCommand::MAX_FILE_BYTES`).
+- **Translated limit errors:** the limit errors use the new keys `task_board.import.error.too_many_rows`,
+  `cell_too_long`, `too_many_columns`, `too_many_cells` and `json_too_large` (parameter `%max%`). A host overriding the
+  catalogue should add them; without them the English text is shown.
+- **JSON error texts** changed slightly (`Invalid ClickUp JSON: Syntax error`, `The file is not valid JSON: Syntax
+  error`); hosts that match them should match the prefix.
+- A custom `DelimitedTableParser` service definition should pass `$maxColumns` / `$maxCells`, and a custom JSON
+  importer definition the `JsonImportGuard` service, or they keep the defaults.
+- **`help_link`** (and the `nowo_task_board_import_help_link` global): a URL with white space, a control character or a
+  backslash renders `#`.
+
 ## To 1.22.0
 
 From **1.21.0**:

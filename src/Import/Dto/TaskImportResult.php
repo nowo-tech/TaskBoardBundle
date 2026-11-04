@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Import\Dto;
 
+use Symfony\Contracts\Translation\TranslatableInterface;
+
 /**
  * Outcome summary for a board import run.
  *
@@ -26,6 +28,13 @@ final readonly class TaskImportResult
         public int $updated = 0,
         /** Since 1.22: rows that matched a task of the board that already had their values. */
         public int $unchanged = 0,
+        /**
+         * Since 1.22.1: the translation of some errors, by their index in `errors` (an error without one is shown as
+         * it is).
+         *
+         * @var array<int, TranslatableInterface>
+         */
+        public array $errorTranslations = [],
     ) {
     }
 
@@ -97,6 +106,7 @@ final readonly class TaskImportResult
             dependenciesCreated: $this->dependenciesCreated,
             updated: $updated ?? $this->updated,
             unchanged: $unchanged ?? $this->unchanged,
+            errorTranslations: $errors === null ? $this->errorTranslations : [],
         );
     }
 }
