@@ -129,7 +129,7 @@ final class ImportMappingTest extends TestCase
         self::assertSame(ImportLimitExceededException::COLUMNS, $row->translationKey);
 
         $cells = $refusal(new DelimitedTableParser(maxCells: 3), "a,b\n1,2\n3,4\n");
-        self::assertSame('The file has more than 3 filled cells; an import takes at most 3.', $cells->getMessage());
+        self::assertSame('The file has more than 3 cells; an import takes at most 3.', $cells->getMessage());
         self::assertSame(ImportLimitExceededException::CELLS, $cells->translationKey);
 
         $rows = $refusal(new DelimitedTableParser(maxRows: 1), "a\n1\n2\n");
@@ -137,9 +137,41 @@ final class ImportMappingTest extends TestCase
         $cell = $refusal(new DelimitedTableParser(maxCellLength: 1), "a\n12\n");
         self::assertSame(ImportLimitExceededException::CELL, $cell->translationKey);
 
-        // Empty cells do not count; exactly at the limits is accepted.
-        self::assertCount(3, (new DelimitedTableParser(maxColumns: 2, maxCells: 3))->parse("a,b\n1,\n,2\n,\n", 'x.csv'));
+        // Audit EB-L2: empty cells count too (columns × rows); exactly at the limits is accepted.
+        self::assertSame(ImportLimitExceededException::CELLS, $refusal(new DelimitedTableParser(maxCells: 3), "a,b\n1,\n,\n")->translationKey);
+        self::assertCount(3, (new DelimitedTableParser(maxColumns: 2, maxCells: 6))->parse("a,b\n1,\n,2\n,\n", 'x.csv'));
         self::assertCount(1, (new DelimitedTableParser(maxColumns: 2, maxCells: 2))->parse("a,b\n1,2\n", 'x.csv'));
+    }
+
+    /**
+     * Since 1.22.1 (audit EB): the raw bytes are checked before fgetcsv() builds a record — quotes as fgetcsv() reads
+     * them, blank lines as rows, \r\n once.
+     */
+    public function testTheRawPrescanReadsQuotesLikeFgetcsv(): void
+    {
+        $refusal = static function (DelimitedTableParser $parser, string $csv): string {
+            try {
+                $parser->parse($csv, 'x.csv');
+            } catch (ImportLimitExceededException $exception) {
+                return $exception->translationKey;
+            }
+
+            return 'accepted';
+        };
+
+        // Delimiters and line breaks inside a quoted cell are not columns or rows; a doubled quote stays inside it.
+        self::assertCount(1, (new DelimitedTableParser(maxRows: 1, maxColumns: 2))->parse("a,b\n\"x,y,\nz\"\"\",1\n", 'x.csv'));
+        self::assertSame([['a' => 'x,y,' . "\n" . 'z"', 'b' => '1']], (new DelimitedTableParser(maxColumns: 2))->parse("a,b\n\"x,y,\nz\"\"\",1\n", 'x.csv'));
+        // A quote after other characters of a cell is a plain one: the delimiters after it count.
+        self::assertSame(ImportLimitExceededException::COLUMNS, $refusal(new DelimitedTableParser(maxColumns: 2), "a,b\nx\",y,z,w\n"));
+        // A quoted cell that never closes still has a length.
+        self::assertSame(ImportLimitExceededException::CELL, $refusal(new DelimitedTableParser(maxCellLength: 5), "a\n\"" . str_repeat('x', 10)));
+        self::assertSame(ImportLimitExceededException::CELL, $refusal(new DelimitedTableParser(maxCellLength: 5), "a,b\n\"xxxxxxxx\",1"));
+        // Audit EB-I1: blank lines count toward the row cap; \r\n is one line break.
+        self::assertSame(ImportLimitExceededException::ROWS, $refusal(new DelimitedTableParser(maxRows: 2), "a\n1\n\n\n\n2"));
+        self::assertCount(2, (new DelimitedTableParser(maxRows: 2))->parse("a\r\n1\r\n2\r\n", 'x.csv'));
+        // Audit EB-L1: a single line of delimiters is refused before it is split.
+        self::assertSame(ImportLimitExceededException::COLUMNS, $refusal(new DelimitedTableParser(maxColumns: 512), str_repeat(',', 100_000) . "\nx"));
     }
 
     public function testALimitErrorTranslatesInTheBundleDomain(): void

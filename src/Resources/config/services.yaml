@@ -102,6 +102,12 @@ services:
             $maxColumns: '%nowo_task_board.import.max_columns%'
             $maxCells: '%nowo_task_board.import.max_cells%'
 
+    # Since 1.22.1 (audit EB-L3): JSON imports are weighed before they are decoded; the JSON importers get this instance.
+    Nowo\TaskBoardBundle\Import\Support\JsonImportGuard:
+        arguments:
+            $maxNodes: '%nowo_task_board.import.max_json_nodes%'
+            $maxRows: '%nowo_task_board.import.max_rows%'
+
     # Since 1.22: source ids already imported into another board of the tenant (cross-board rule of the import).
     Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface:
         alias: Nowo\TaskBoardBundle\Import\DoctrineTaskImportLinkLookup

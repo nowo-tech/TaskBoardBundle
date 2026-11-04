@@ -113,8 +113,10 @@ that same task (scope `<provider>@<task id>`), so the rights on one task never r
 
 `import.max_rows` (default 5000) rows per file and `import.max_cell_length` (default 65536 bytes) per CSV cell; a larger
 file is refused with an error. Since 1.22.1 a CSV is also refused when its header or a row has more than
-`import.max_columns` (default 512) columns, or when it holds more than `import.max_cells` (default 1 000 000) non-empty
-cells. Every limit is checked while the file is read, and the error is shown in the user's language. Files are also
+`import.max_columns` (default 512) columns, or when it holds more than `import.max_cells` (default 1 000 000) cells
+(columns × rows, empty cells included; blank lines count as rows), and a JSON file when it weighs more than
+`import.max_json_nodes` (default 2 000 000: every value 1, every object or list 10) or holds more than `import.max_rows`
+items. Every limit is checked before anything is built, and the error is shown in the user's language. Files are also
 limited to 20 MB by the upload form.
 
 ## Field mapping overview

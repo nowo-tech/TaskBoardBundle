@@ -52,7 +52,7 @@ final class ImportHelpTest extends FunctionalTestCase
         // The Twig global works the same; unsafe URLs become "#"; an incomplete link renders nothing.
         $global = $render(['nowo_task_board_import_help_link' => ['url' => 'https://docs.example.test/import', 'label' => 'Docs']]);
         self::assertSame('https://docs.example.test/import', $global->filter('[data-testid="nowo-task-import-help-link"]')->attr('href'));
-        foreach (['javascript:alert(1)', '//evil.test/x', '/\evil.test'] as $unsafe) {
+        foreach (['javascript:alert(1)', '//evil.test/x', '/\evil.test', "/\t/evil.test", "/\n/evil.test", "/\r/evil.test", '/a b', "https://docs.example.test/\tx"] as $unsafe) {
             self::assertSame('#', $render(['help_link' => ['url' => $unsafe, 'label' => 'x']])->filter('[data-testid="nowo-task-import-help-link"]')->attr('href'), $unsafe);
         }
         self::assertCount(0, $render(['help_link' => ['url' => '/x']])->filter('[data-testid="nowo-task-import-help-link"]'));

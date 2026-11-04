@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
@@ -516,7 +517,12 @@ final class Configuration implements ConfigurationInterface
                         ->integerNode('max_cells')
                             ->defaultValue(DelimitedTableParser::DEFAULT_MAX_CELLS)
                             ->min(1)
-                            ->info('Since 1.22.1: the most non-empty cells of a CSV file; a larger file is refused while it is read.')
+                            ->info('Since 1.22.1: the most cells of a CSV file (columns × rows, empty cells included); a larger file is refused before it is parsed.')
+                        ->end()
+                        ->integerNode('max_json_nodes')
+                            ->defaultValue(JsonImportGuard::DEFAULT_MAX_NODES)
+                            ->min(1)
+                            ->info('Since 1.22.1: the weight of a JSON import (every value counts 1, every object or list 10); a heavier file is refused before it is decoded.')
                         ->end()
                     ->end()
                 ->end()

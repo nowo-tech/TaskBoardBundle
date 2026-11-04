@@ -19,6 +19,7 @@ final class ImportLimitExceededException extends InvalidArgumentException
     public const CELL    = 'task_board.import.error.cell_too_long';
     public const COLUMNS = 'task_board.import.error.too_many_columns';
     public const CELLS   = 'task_board.import.error.too_many_cells';
+    public const JSON    = 'task_board.import.error.json_too_large';
 
     /**
      * @param array<string, string> $parameters
@@ -55,10 +56,16 @@ final class ImportLimitExceededException extends InvalidArgumentException
         return new self(sprintf('The file has more than %d columns; an import takes at most %d.', $max, $max), self::COLUMNS, ['%max%' => (string) $max]);
     }
 
-    /** More non-empty cells than `import.max_cells`. */
+    /** More cells than `import.max_cells` (columns × rows, empty cells included). */
     public static function cells(int $max): self
     {
-        return new self(sprintf('The file has more than %d filled cells; an import takes at most %d.', $max, $max), self::CELLS, ['%max%' => (string) $max]);
+        return new self(sprintf('The file has more than %d cells; an import takes at most %d.', $max, $max), self::CELLS, ['%max%' => (string) $max]);
+    }
+
+    /** Since 1.22.1 (audit EB-L3): a JSON file heavier than `import.max_json_nodes`. */
+    public static function jsonNodes(int $max): self
+    {
+        return new self(sprintf('The JSON file is too large to import (more than %d values; an object or a list counts 10).', $max), self::JSON, ['%max%' => (string) $max]);
     }
 
     public function translatable(): TranslatableMessage

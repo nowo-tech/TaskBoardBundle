@@ -8,7 +8,6 @@ use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 
 use function array_map;
 use function assert;
-use function count;
 use function fclose;
 use function fgetcsv;
 use function fopen;
@@ -32,14 +31,14 @@ final readonly class DelimitedTableParser
     /** Since 1.22.1: default `import.max_columns`. */
     public const DEFAULT_MAX_COLUMNS = 512;
 
-    /** Since 1.22.1: default `import.max_cells` (non-empty cells per file). */
+    /** Since 1.22.1: default `import.max_cells` (cells per file: columns × rows, empty cells included). */
     public const DEFAULT_MAX_CELLS = 1_000_000;
 
     /**
      * @param int $maxRows the most data rows read (one more is refused, audit DL-L4)
      * @param int $maxCellLength the longest cell in bytes (a longer one is refused)
      * @param int $maxColumns since 1.22.1: the most columns of the header or of any row (audit DL-L6)
-     * @param int $maxCells since 1.22.1: the most non-empty cells of the file
+     * @param int $maxCells since 1.22.1: the most cells of the file (columns × rows, empty cells included)
      */
     public function __construct(
         private int $maxRows = 5000,
@@ -54,8 +53,9 @@ final readonly class DelimitedTableParser
      * quoted cells may span lines (multi-line descriptions), and a header that repeats (Jira writes one "Labels" or
      * "Inward issue link (Blocks)" column per value) joins its non-empty values with ";".
      *
-     * Since 1.22.1 (audit DL-L6) every limit is checked while the file is read, before a row is kept: a header or a row
-     * with more than `maxColumns` columns, and more than `maxCells` non-empty cells, are refused.
+     * Since 1.22.1 (audits DL-L6, EB) every limit is checked on the raw bytes before any record is built: a header or a
+     * row with more than `maxColumns` columns, more than `maxCells` cells (columns × rows, empty cells included), more
+     * than `maxRows` rows (blank lines included) and a cell longer than `maxCellLength` are refused.
      *
      * @throws ImportLimitExceededException
      *
@@ -68,6 +68,9 @@ final readonly class DelimitedTableParser
         if ($content === '') {
             return [];
         }
+        // Audit EB-L1 / EB-L2 / EB-I1: the shape of the file is checked on the raw bytes, before fgetcsv() builds a
+        // single record (one line of delimiters would otherwise become one array entry per delimiter).
+        $this->prescan($content, $delimiter);
         $stream = fopen('php://temp', 'r+');
         assert(is_resource($stream));
         fwrite($stream, $content);
@@ -81,37 +84,90 @@ final readonly class DelimitedTableParser
     }
 
     /**
+     * One pass over the raw CSV, without building anything: counts the columns of each record (delimiters outside
+     * quotes), the cells, the records (blank lines too) and the length of each cell, and throws at the first limit
+     * passed. Quoted cells (which may hold delimiters and line breaks) are skipped in one step.
+     *
+     * @throws ImportLimitExceededException
+     */
+    private function prescan(string $content, string $delimiter): void
+    {
+        $length    = strlen($content);
+        $stops     = $delimiter . "\"\r\n";
+        $columns   = 1;
+        $records   = 0;
+        $cells     = 0;
+        $cellStart = 0;
+        $filled    = false;
+        // Up to $length included: the end of the text closes the last record (trim() left no line break after it).
+        for ($i = 0; $i <= $length;) {
+            $skip = strcspn($content, $stops, $i);
+            // Whether the cell already has a character other than a space or a tab (a quote then is a plain one).
+            $filled = $filled || strspn($content, " \t", $i, $skip) < $skip;
+            $i += $skip;
+            $char = $content[$i] ?? "\n";
+            if ($char === '"') {
+                if ($filled) {
+                    // A quote inside a cell is a plain character (as for fgetcsv(): only a cell's start opens one).
+                    ++$i;
+                    continue;
+                }
+                // A quoted cell, which may hold delimiters and line breaks: its end is the next quote not doubled.
+                for ($from = $i + 1;; $from = $close + 2) {
+                    $close = strpos($content, '"', $from);
+                    if ($close === false || ($content[$close + 1] ?? '') !== '"') {
+                        break;
+                    }
+                }
+                $i      = $close === false ? $length : $close + 1;
+                $filled = true;
+                if ($i - $cellStart > $this->maxCellLength) {
+                    throw ImportLimitExceededException::cellLength($this->maxCellLength);
+                }
+                continue;
+            }
+            if ($i - $cellStart > $this->maxCellLength) {
+                throw ImportLimitExceededException::cellLength($this->maxCellLength);
+            }
+            if ($char === $delimiter) {
+                if (++$columns > $this->maxColumns) {
+                    throw ImportLimitExceededException::columns($this->maxColumns);
+                }
+                $cellStart = ++$i;
+                $filled    = false;
+                continue;
+            }
+            // End of a record (\r\n counts once); the header is not a row, a blank line is.
+            if ($records > 0) {
+                if ($records > $this->maxRows) {
+                    throw ImportLimitExceededException::rows($this->maxRows);
+                }
+                $cells += $columns;
+                if ($cells > $this->maxCells) {
+                    throw ImportLimitExceededException::cells($this->maxCells);
+                }
+            }
+            ++$records;
+            $columns = 1;
+            $filled  = false;
+            $i += $char === "\r" && ($content[$i + 1] ?? '') === "\n" ? 2 : 1;
+            $cellStart = $i;
+        }
+    }
+
+    /**
      * @param resource $stream
      *
      * @return list<array<string, string>>
      */
     private function readRows($stream, string $delimiter): array
     {
-        $header = $this->readRecord($stream, $delimiter) ?? [];
-        if (count($header) > $this->maxColumns) {
-            throw ImportLimitExceededException::columns($this->maxColumns);
-        }
-        $headers = array_map(static fn (?string $header): string => trim((string) $header), $header);
+        // The limits were checked by prescan() on the raw bytes.
+        $headers = array_map(static fn (?string $header): string => trim((string) $header), $this->readRecord($stream, $delimiter) ?? []);
         $rows    = [];
-        $cells   = 0;
         while (($values = $this->readRecord($stream, $delimiter)) !== null) {
             if ($values === [null]) {
                 continue;
-            }
-            if (count($rows) >= $this->maxRows) {
-                throw ImportLimitExceededException::rows($this->maxRows);
-            }
-            if (count($values) > $this->maxColumns) {
-                throw ImportLimitExceededException::columns($this->maxColumns);
-            }
-            foreach ($values as $value) {
-                $length = strlen((string) $value);
-                if ($length > $this->maxCellLength) {
-                    throw ImportLimitExceededException::cellLength($this->maxCellLength);
-                }
-                if ($length > 0 && ++$cells > $this->maxCells) {
-                    throw ImportLimitExceededException::cells($this->maxCells);
-                }
             }
 
             $normalized = [];

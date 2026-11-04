@@ -8,13 +8,12 @@ use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImporterInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 
 use function is_array;
 use function is_string;
-use function json_decode;
-use function json_last_error_msg;
 
 /**
  * Imports cards from a Trello board JSON export.
@@ -26,6 +25,8 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
 {
     public function __construct(
         private ImportFieldMapper $fieldMapper = new ImportFieldMapper(),
+        // Since 1.22.1 (audit EB-L3): weighed before json_decode(), cards counted before they are mapped.
+        private JsonImportGuard $guard = new JsonImportGuard(),
     ) {
     }
 
@@ -36,10 +37,9 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
 
     public function parse(string $content, string $filename): array
     {
-        /** @var mixed $decoded */
-        $decoded = json_decode($content, true);
+        $decoded = $this->guard->decode($content, 'Invalid Trello JSON: ');
         if (!is_array($decoded)) {
-            throw new InvalidArgumentException('Invalid Trello JSON: ' . json_last_error_msg());
+            throw new InvalidArgumentException('Invalid Trello JSON: an object is expected.');
         }
 
         $lists = [];
@@ -68,6 +68,7 @@ final readonly class TrelloJsonImporter implements TaskImporterInterface
         if (!is_array($cards) || $cards === []) {
             throw new InvalidArgumentException('No cards found in the Trello JSON export.');
         }
+        $this->guard->assertRows($cards);
 
         $tasks = [];
         foreach ($cards as $card) {

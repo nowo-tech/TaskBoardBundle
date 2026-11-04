@@ -106,21 +106,35 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change.
 
-- **New import limits (audit DL-L6):** `import.max_columns` (default 512) and `import.max_cells` (default 1 000 000
-  non-empty cells). A CSV over either limit is refused with an error flash, before any row is imported. Real exports
-  are far below them (Jira's widest are a few hundred columns); raise them if you import bigger files:
+- **New import limits (audits DL-L6, EB), checked before anything is built:**
+  - `import.max_columns` (default 512): the columns of a CSV header or row;
+  - `import.max_cells` (default 1 000 000): the cells of a CSV file, **columns × rows, empty cells included**;
+  - `import.max_rows` (unchanged, 5000) now also counts blank lines of a CSV and the items of a JSON file before they
+    are mapped;
+  - `import.max_json_nodes` (default 2 000 000): the weight of a JSON file before it is decoded (every value counts 1,
+    every object or list 10); JSON is decoded with a depth limit of 64.
+
+  With these defaults an import stays well under 128 MB of memory. Real exports are below them (Jira's widest are a
+  few hundred columns × a few thousand rows; 300 columns × 3000 rows is 900 000 cells). If you import bigger files,
+  raise them together with PHP's `memory_limit`:
 
   ```yaml
   nowo_task_board:
       import:
           max_columns: 1024
           max_cells: 2000000
+          max_json_nodes: 4000000
   ```
-- **Translated limit errors:** the four limit errors use the new keys `task_board.import.error.too_many_rows`,
-  `cell_too_long`, `too_many_columns` and `too_many_cells` (parameter `%max%`). A host overriding the catalogue should
-  add them; without them the English text is shown.
-- A custom `DelimitedTableParser` service definition should pass `$maxColumns` / `$maxCells`, or it keeps the
-  defaults.
+- **`nowo:task-board:import`** refuses a file larger than the upload form's 20 MB (`TaskBoardImportCommand::MAX_FILE_BYTES`).
+- **Translated limit errors:** the limit errors use the new keys `task_board.import.error.too_many_rows`,
+  `cell_too_long`, `too_many_columns`, `too_many_cells` and `json_too_large` (parameter `%max%`). A host overriding the
+  catalogue should add them; without them the English text is shown.
+- **JSON error texts** changed slightly (`Invalid ClickUp JSON: Syntax error`, `The file is not valid JSON: Syntax
+  error`); hosts that match them should match the prefix.
+- A custom `DelimitedTableParser` service definition should pass `$maxColumns` / `$maxCells`, and a custom JSON
+  importer definition the `JsonImportGuard` service, or they keep the defaults.
+- **`help_link`** (and the `nowo_task_board_import_help_link` global): a URL with white space, a control character or a
+  backslash renders `#`.
 
 ## To 1.22.0
 

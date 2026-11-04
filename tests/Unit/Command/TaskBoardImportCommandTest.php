@@ -78,6 +78,25 @@ final class TaskBoardImportCommandTest extends TestCase
         }
     }
 
+    /** Since 1.22.1 (audit EB-I5): the upload form's 20 MB cap applies to the command too, before the file is read. */
+    public function testAFileOverTheUploadCapIsRefusedBeforeItIsRead(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'tb');
+        self::assertIsString($file);
+        $handle = fopen($file, 'w');
+        self::assertIsResource($handle);
+        ftruncate($handle, TaskBoardImportCommand::MAX_FILE_BYTES + 1);
+        fclose($handle);
+
+        try {
+            $tester = $this->tester(authenticated: true);
+            self::assertSame(Command::FAILURE, $tester->execute(['board-id' => $this->board->getId(), 'file' => $file]));
+            self::assertStringContainsString('larger than 20 MB', $tester->getDisplay());
+        } finally {
+            unlink($file);
+        }
+    }
+
     /** @return iterable<string, array{array<string, mixed>, bool, string}> */
     public static function failures(): iterable
     {
