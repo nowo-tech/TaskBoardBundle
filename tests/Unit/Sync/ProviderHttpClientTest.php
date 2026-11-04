@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Sync;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
@@ -17,6 +18,7 @@ use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
+use function rtrim;
 use function str_repeat;
 
 /**
@@ -114,6 +116,23 @@ final class ProviderHttpClientTest extends TestCase
         $this->assertCode(ProviderErrorCode::InvalidResponse, [new MockResponse(str_repeat('[', 70) . str_repeat(']', 70))]);
         $this->assertCode(ProviderErrorCode::Transport, [new MockResponse([new TransportException('cut mid-body')])]);
         $this->assertCode(ProviderErrorCode::Transport, [new MockResponse(['{', new TimeoutException('idle')])]);
+    }
+
+    /** Audit EG-I8: a body is weighed (the import budget) before json_decode(). */
+    public function testAHeavyBodyIsRefusedBeforeDecoding(): void
+    {
+        $client = new ProviderHttpClient(
+            new MockHttpClient([new MockResponse('{"tasks":[' . rtrim(str_repeat('{},', 10), ',') . ']}')]),
+            new RecordingSleeper(),
+            new MockClock(new DateTimeImmutable('@1790000000')),
+            guard: new JsonImportGuard(maxNodes: 100),
+        );
+        try {
+            $client->getJson('https://api.clickup.com/api/v2/x', [], []);
+            self::fail('too heavy');
+        } catch (ProviderException $exception) {
+            self::assertSame(ProviderErrorCode::ResponseTooLarge, $exception->errorCode);
+        }
     }
 
     public function testEveryCodeHasAFixedMessage(): void

@@ -217,6 +217,17 @@ Nothing changes until you set `sync.enabled: true` with a `credential_resolver`.
   `task_board.link.attachment`, `task_board.list.archived`, `task_board.task.archive_reason.*`,
   `task_board.task.archived_notice`, `task_board.task.restore`, `task_board.flash.task_restored` (7 locales).
 - **Test fixtures:** `tests/Fixtures/clickup/` moved to `tests/Fixtures/ClickUp/`.
+- **Rendering synced text:** if task text is rendered with league/commonmark, set `allow_unsafe_links: false` (and
+  `html_input: escape` or `strip`). The sanitizer empties unsafe link targets and removes raw HTML, but the renderer is
+  the first line of defence. See [SECURITY](SECURITY.md#provider-sync-host-duties-and-known-limits) for serving stored
+  files (`nosniff`, `attachment`), a custom `sync.http.client` (must not log URLs) and the other host duties.
+- **Run limits:** a second request into a running run is Busy (also a slice of the same run); a slice reads at most
+  `ceil(max_tasks_per_run / 100) + 1` task pages and fails with `response_too_large` beyond; a page that brings no new
+  task ends the list (warning `paging_stopped`). Comments are read up to `max_comments_per_task` rows.
+- **Assignees:** a row resolves at most 50 assignees (file import and sync); unresolved ones are listed up to 10, then
+  counted.
+- **Attachment hosts:** `sync.providers.clickup.attachment_hosts` refuses a pattern that is not a host of two labels at
+  least (`*.com` is refused at container build).
 
 ### Task member pictures (opt-in)
 

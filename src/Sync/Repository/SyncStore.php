@@ -44,14 +44,14 @@ final readonly class SyncStore
     }
 
     /**
-     * Takes the run lock of a connection (one run per board): free, stale (no heartbeat since `$staleBefore`) or
-     * already ours.
+     * Takes the run lock of a connection (one run per board) when it is free or stale (no heartbeat since
+     * `$staleBefore`). Since audit EG-L1 never when the same run holds it: a second slice of a running run is Busy.
      */
     public function acquireLock(TaskBoardConnection $connection, string $runId, DateTimeImmutable $now, DateTimeImmutable $staleBefore): bool
     {
         $updated = $this->entityManager->createQuery(
             'UPDATE ' . TaskBoardConnection::class . ' c SET c.runningRunId = :run, c.heartbeatAt = :now
-             WHERE c.id = :id AND (c.runningRunId IS NULL OR c.runningRunId = :run OR c.heartbeatAt IS NULL OR c.heartbeatAt < :stale)',
+             WHERE c.id = :id AND (c.runningRunId IS NULL OR c.heartbeatAt IS NULL OR c.heartbeatAt < :stale)',
         )
             ->setParameter('run', $runId)
             ->setParameter('now', $now, 'datetime_immutable')

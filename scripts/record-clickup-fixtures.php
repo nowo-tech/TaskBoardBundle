@@ -6,7 +6,7 @@ declare(strict_types=1);
 /**
  * Records the ClickUp API v2 fixtures of tests/Fixtures/ClickUp from a throwaway workspace, redacted.
  *
- *   CLICKUP_RECORD_TOKEN=pk_… [CLICKUP_RECORD_LIST=<list id>] php scripts/record-clickup-fixtures.php
+ *   CLICKUP_RECORD_TOKEN=pk_… [CLICKUP_RECORD_LIST=<list id>] [CLICKUP_RECORD_TASK=<task id>] php scripts/record-clickup-fixtures.php
  *   CLICKUP_RECORD_TOKEN=pk_… make record-clickup-fixtures
  *
  * The token is read from the environment only (never from argv, never from a file of the repository) and is never
@@ -160,10 +160,22 @@ foreach (['folder', 'space'] as $parent) {
     }
 }
 $write('list_' . $fakeId($listId) . '.json', $list);
-$tasks = $get('list/' . $listId . '/task', ['page' => 0, 'subtasks' => 'true', 'include_closed' => 'true', 'include_markdown_description' => 'true', 'order_by' => 'updated', 'reverse' => 'true']);
+$taskQuery = ['subtasks' => 'true', 'include_closed' => 'true', 'include_markdown_description' => 'true', 'order_by' => 'updated'];
+$tasks     = $get('list/' . $listId . '/task', ['page' => 0, ...$taskQuery, 'reverse' => 'true']);
 $write('list_' . $fakeId($listId) . '_task_page0.json', $tasks);
-$taskId = (string) ($tasks['tasks'][0]['id'] ?? '');
-if ($taskId !== '') {
-    $write('task_' . $fakeId($taskId) . '_comment.json', $get('task/' . $taskId . '/comment'));
+// Q-O4: the same page with reverse=false (which order is oldest-first), and the second page (last_page, page size).
+$write('list_' . $fakeId($listId) . '_task_page0_reverse_false.json', $get('list/' . $listId . '/task', ['page' => 0, ...$taskQuery, 'reverse' => 'false']));
+$write('list_' . $fakeId($listId) . '_task_page1.json', $get('list/' . $listId . '/task', ['page' => 1, ...$taskQuery, 'reverse' => 'true']));
+$taskId = (string) (getenv('CLICKUP_RECORD_TASK') ?: ($tasks['tasks'][0]['id'] ?? ''));
+if ($taskId !== '' && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $taskId) === 1) {
+    // Q-O4: one task in full (are attachments in the list answer, and with which fields?).
+    $write('task_' . $fakeId($taskId) . '.json', $get('task/' . $taskId, ['include_markdown_description' => 'true']));
+    $comments = $get('task/' . $taskId . '/comment');
+    $write('task_' . $fakeId($taskId) . '_comment.json', $comments);
+    // Q-O4: the next comment page from the oldest comment of the first one (start = its date, start_id = its id).
+    $oldest = $comments['comments'][count($comments['comments'] ?? []) - 1] ?? null;
+    if (count($comments['comments'] ?? []) >= 25 && is_array($oldest)) {
+        $write('task_' . $fakeId($taskId) . '_comment_page2.json', $get('task/' . $taskId . '/comment', ['start' => (string) ($oldest['date'] ?? ''), 'start_id' => (string) ($oldest['id'] ?? '')]));
+    }
 }
 fwrite(\STDERR, sprintf("%d requests. Review the files, run the ScrubbedFixturesTest, then mark tests/Fixtures/ClickUp/README.md as RECORDED.\n", $requests));

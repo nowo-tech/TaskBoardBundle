@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Dto\FileCounts;
 use Nowo\TaskBoardBundle\Sync\Dto\SkipCounts;
@@ -77,6 +78,9 @@ final class SyncRunContext
 
     /** @var array<string, int> highest position per column id ('' = no column) */
     public array $positions = [];
+
+    /** @var list<array{0: Task, 1: StoredAttachment}> files to delete from the host's storage once the page is flushed */
+    public array $fileDeletes = [];
 
     public function __construct(
         public string $runId,

@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "The user of this sync may no longer ma
 task_board.sync.error.board_linked_elsewhere: "The board is linked to another list."
 task_board.sync.error.mass_archive_guard: "%count% of %total% linked tasks were not archived: the provider no longer lists them."
 task_board.sync.error.deletions_skipped: "Deleted tasks were not checked this time (the provider's list could not be read completely)."
+task_board.sync.error.paging_stopped: "The provider's list stopped advancing (a page brought no new task); the rest was not read."
 task_board.sync.error.restore_refused: "Tasks back in the provider were not restored: a limit refused them."
 task_board.sync.error.relation_skipped: "Some parent or dependency relations were skipped (the other task is missing or not editable)."
 task_board.sync.error.parent_cycle: "A parent change was refused: it would make a task its own ancestor."

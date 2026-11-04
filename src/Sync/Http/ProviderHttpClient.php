@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\Http;
 
-use JsonException;
+use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
+use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
@@ -18,14 +20,11 @@ use Throwable;
 use function ctype_digit;
 use function is_array;
 use function is_string;
-use function json_decode;
 use function max;
 use function min;
 use function random_int;
 use function strlen;
 use function trim;
-
-use const JSON_THROW_ON_ERROR;
 
 /**
  * Since 1.23: the GET-JSON client of provider adapters. Every call: fixed base URI (the adapter's constant), no
@@ -53,6 +52,8 @@ final readonly class ProviderHttpClient
         private float $maxDuration = 30.0,
         private int $maxResponseBytes = 8_388_608,
         private int $maxInlineWait = 30,
+        // Audit EG-I8: a response is weighed (the import budget) before json_decode().
+        private JsonImportGuard $guard = new JsonImportGuard(),
     ) {
     }
 
@@ -163,8 +164,10 @@ final readonly class ProviderHttpClient
     private function decode(string $body): array
     {
         try {
-            $data = json_decode($body, true, 64, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
+            $data = $this->guard->decode($body, '');
+        } catch (ImportLimitExceededException) {
+            throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
+        } catch (InvalidArgumentException) {
             throw new ProviderException(ProviderErrorCode::InvalidResponse);
         }
         if (!is_array($data)) {

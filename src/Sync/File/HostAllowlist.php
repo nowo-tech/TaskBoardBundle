@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\File;
 
 use function preg_match;
 use function rtrim;
+use function str_contains;
 use function str_ends_with;
 use function str_starts_with;
 use function strlen;
@@ -15,6 +16,8 @@ use function substr;
 /**
  * Since 1.23: whether a host is on a provider's attachment allowlist — an exact host, or "*.suffix" for one or more
  * extra labels in front of the suffix (never the bare suffix). Hosts are compared lower-cased; non-ASCII hosts never match.
+ * Since audit EG-I9 a pattern must name a host of two labels at least (`*.` + at least two labels): `*.com` or a
+ * single label never matches anything ({@see self::isValidPattern()}).
  */
 final readonly class HostAllowlist
 {
@@ -29,6 +32,9 @@ final readonly class HostAllowlist
         }
 
         foreach ($patterns as $pattern) {
+            if (!self::isValidPattern($pattern)) {
+                continue;
+            }
             $pattern = strtolower(rtrim($pattern, '.'));
             if (str_starts_with($pattern, '*.')) {
                 $suffix = substr($pattern, 1);
@@ -41,6 +47,18 @@ final readonly class HostAllowlist
         }
 
         return false;
+    }
+
+    /**
+     * Whether a pattern may be used: an ASCII host of two labels or more, optionally behind `*.` (so `*.com`,
+     * `*`, `*.*.com` and a single label are refused).
+     */
+    public static function isValidPattern(string $pattern): bool
+    {
+        $pattern = strtolower(rtrim($pattern, '.'));
+        $host    = self::normalize(str_starts_with($pattern, '*.') ? substr($pattern, 2) : $pattern);
+
+        return $host !== null && str_contains($host, '.');
     }
 
     /**

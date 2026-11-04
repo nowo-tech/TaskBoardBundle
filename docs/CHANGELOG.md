@@ -118,6 +118,32 @@ Provider connections and sync (ClickUp first). See [sync.md](sync.md) and [UPGRA
   gets the same treatment (`--nowo-task-sync-badge-color`).
 - A sync run's lock is shown as free as soon as the run ends, also on a connection already loaded in the request.
 
+### Security (1.23 audit, Appendix EG)
+
+- **EG-L1:** the run lock is no longer re-entrant: a second request into a running run (a slice of the same run too)
+  gets Busy and writes nothing.
+- **EG-L2:** a slice reads at most `ceil(max_tasks_per_run / 100) + 1` task pages (`response_too_large` beyond), a page
+  that brings no new task ends the list (`paging_stopped`), and ClickUp comments are paged by raw rows, at most
+  `ceil(max_comments_per_task / 25) + 1` pages, stopping when the cursor does not move.
+- **EG-L3:** `RemoteContentSanitizer` finds code the way CommonMark does (backtick runs of equal length, not escaped,
+  on one line; fences at the start of a line; raw HTML that starts first wins), empties every unsafe link or image
+  target whatever its label looks like (nested brackets, new lines) and reference definitions with the target on the
+  next line, and escapes any `<` that could still open HTML. Tested by rendering with league/commonmark.
+- **EG-L4:** the bundle's HTTP clients are not autoconfigured, so they never get the application logger (which logs
+  URLs with their query); the private-network client keeps an explicit `kernel.reset` tag.
+- **EG-L5:** a GET of the connection page reads the provider's top level only (cached); the opened levels of the
+  browser without script are rendered by its CSRF-protected POST, never by a redirect to a GET.
+- **EG-L6:** a row resolves at most 50 assignees (keyed, each e-mail once), and unresolved assignees are listed up to
+  10 then counted (file import and sync).
+- **EG-I1:** the avatar URL policy refuses invalid UTF-8, Unicode separators and control / format characters, and a
+  port with a leading zero (PHP and JS, shared table).
+- **EG-I3:** a replaced or removed attachment leaves the host's storage after the page is flushed.
+- **EG-I8:** provider responses are weighed with the import JSON budget before `json_decode()`.
+- **EG-I9:** attachment host patterns must name a host of two labels at least (`*.com` is refused).
+- **EG-I10:** the host's credential page link is shown only for an `https://` URL or a same-origin path.
+- Documented in SECURITY: serving stored files (EG-I2), the heartbeat window (EG-I4), the actor's roles (EG-I5), the
+  outbound guard defaults (EG-I6) and the progress poll (EG-I7).
+
 ## [1.22.1] - 2026-11-04
 
 Import limits: CSV/JSON caps hardened, memory-aware JSON budget

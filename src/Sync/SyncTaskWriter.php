@@ -250,7 +250,13 @@ final readonly class SyncTaskWriter
                 $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees);
             }
         } finally {
+            $deletes          = $ctx->fileDeletes;
+            $ctx->fileDeletes = [];
             $this->entityManager->flush();
+            // Audit EG-I3: a replaced or removed file leaves the host's storage once the rows no longer point at it.
+            foreach ($deletes as [$task, $stored]) {
+                $this->storage->delete($task, $stored);
+            }
         }
     }
 
@@ -578,7 +584,7 @@ final readonly class SyncTaskWriter
             }
             if ($known instanceof TaskSyncAttachment) {
                 // Updated in place: a remove plus an insert of the same (task, remote id) would hit the unique key.
-                $this->storage->delete($task, $known->stored());
+                $ctx->fileDeletes[] = [$task, $known->stored()];
                 $known->replace($attachment->size, $attachment->updatedAt, $stored, Text::cut($stored->name, 255), Text::cut($stored->mime, 127), $link);
                 continue;
             }
@@ -590,8 +596,8 @@ final readonly class SyncTaskWriter
         }
         foreach ($existing as $remoteId => $known) {
             if (!isset($listed[$remoteId]) && !str_starts_with($remoteId, 'img:')) {
-                $this->storage->delete($task, $known->stored());
-                $link = $known->getLink();
+                $ctx->fileDeletes[] = [$task, $known->stored()];
+                $link               = $known->getLink();
                 if ($link instanceof TaskLink) {
                     $task->removeLink($link);
                 }

@@ -19,6 +19,8 @@ final class TestCredentialResolver implements ProviderCredentialResolverInterfac
 
     public static bool $available = true;
 
+    public static string $formUrl = '/settings/connections/clickup';
+
     /** @var list<ConnectionChoice>|null */
     public static ?array $choices = null;
 
@@ -34,13 +36,14 @@ final class TestCredentialResolver implements ProviderCredentialResolverInterfac
 
     public function credentialFormUrl(TaskBoard $board, string $provider): string
     {
-        return '/settings/connections/' . $provider;
+        return self::$formUrl;
     }
 
     public static function reset(): void
     {
         self::$secret    = 'pk_test_token';
         self::$available = true;
+        self::$formUrl   = '/settings/connections/clickup';
         self::$choices   = null;
     }
 }

@@ -202,5 +202,41 @@
  {
   "url": "HTTPS:\\\\x",
   "allowed": false
+ },
+ {
+  "url": "https://cdn.example.test:443/a",
+  "allowed": true
+ },
+ {
+  "url": "https://cdn.example.test:0443/a",
+  "allowed": false
+ },
+ {
+  "url": "https://cdn.example.test:00443/a",
+  "allowed": false
+ },
+ {
+  "url": "https://cdn.example.test:0/a",
+  "allowed": false
+ },
+ {
+  "url": "https://cdn.example.test/a b",
+  "allowed": false
+ },
+ {
+  "url": "/files/a b",
+  "allowed": false
+ },
+ {
+  "url": "/files/a‎b",
+  "allowed": false
+ },
+ {
+  "url": "https://cdn.example.test/﻿a",
+  "allowed": false
+ },
+ {
+  "url": "/files/café/s64",
+  "allowed": true
  }
 ]

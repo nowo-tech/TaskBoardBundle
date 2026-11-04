@@ -44,8 +44,9 @@ final class FunctionalKernel extends Kernel
 
     /**
      * @param array<string, mixed> $taskBoard
+     * @param bool $realHttpClient since 1.23: keep the bundle's own HTTP clients (audit EG-L4) instead of the fixtures
      */
-    public function __construct(private readonly array $taskBoard = [])
+    public function __construct(private readonly array $taskBoard = [], private readonly bool $realHttpClient = false)
     {
         parent::__construct('test', true);
     }
@@ -69,7 +70,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->realHttpClient])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -130,7 +131,9 @@ final class FunctionalKernel extends Kernel
             $services->set('app.sync_storage', RecordingAttachmentStorage::class)->public();
             $services->set('app.sync_limits', TestSyncLimitChecker::class)->public();
             $services->set('app.memory_provider', InMemoryTaskProvider::class)->public()->tag('nowo_task_board.task_provider');
-            $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
+            if (!$this->realHttpClient) {
+                $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
+            }
             $services->set('app.import_users', BoardAwareUserResolver::class)->autowire();
             $services->alias(TaskImportUserResolverInterface::class, 'app.import_users');
         }

@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "De gebruiker van deze synchronisatie m
 task_board.sync.error.board_linked_elsewhere: "Het bord is aan een andere lijst gekoppeld."
 task_board.sync.error.mass_archive_guard: "%count% van de %total% gekoppelde taken zijn niet gearchiveerd: de provider toont ze niet meer."
 task_board.sync.error.deletions_skipped: "Verwijderde taken zijn deze keer niet gecontroleerd (de lijst van de provider kon niet volledig worden gelezen)."
+task_board.sync.error.paging_stopped: "De lijst van de provider kwam niet verder (een pagina bracht geen nieuwe taak); de rest is niet gelezen."
 task_board.sync.error.restore_refused: "Taken die terug zijn bij de provider zijn niet hersteld: een limiet weigerde dat."
 task_board.sync.error.relation_skipped: "Sommige ouder- of afhankelijkheidsrelaties zijn overgeslagen (de andere taak ontbreekt of is niet bewerkbaar)."
 task_board.sync.error.parent_cycle: "Een ouderwijziging is geweigerd: een taak zou haar eigen voorouder worden."

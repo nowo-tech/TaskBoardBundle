@@ -18,6 +18,7 @@ use stdClass;
 use Stringable;
 use Twig\Markup;
 
+use function bin2hex;
 use function file_get_contents;
 use function json_decode;
 use function json_encode;
@@ -48,6 +49,14 @@ final class TaskMemberAvatarsTest extends TestCase
     {
         self::assertSame($allowed ? $url : null, AvatarUrlPolicy::sanitize($url));
         self::assertNull(AvatarUrlPolicy::sanitize(null));
+    }
+
+    /** Audit EG-I1: invalid UTF-8 (JSON cannot carry it, so not in the shared table) is refused. */
+    public function testInvalidUtf8IsRefused(): void
+    {
+        foreach (["/files/a\xff/s64", "https://h\xc3/x", "/files/\xed\xa0\x80", "/files/\xc0\xaf"] as $url) {
+            self::assertNull(AvatarUrlPolicy::sanitize($url), bin2hex($url));
+        }
     }
 
     public function testTheUserKey(): void

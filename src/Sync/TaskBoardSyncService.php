@@ -29,6 +29,7 @@ use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteArchivedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
+use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
@@ -45,6 +46,8 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
+use function intdiv;
+
 /**
  * Since 1.23: links a board to a remote list and keeps it in sync — an idempotent upsert keyed by the same
  * (import scope, external id) the file imports use, resumable from a cursor, one run per board.
@@ -59,6 +62,9 @@ final readonly class TaskBoardSyncService
 
     /** The incremental window starts this long before the watermark (clock skew; the upsert is idempotent). */
     private const OVERLAP_SECONDS = 120;
+
+    /** The page size the safety cap counts with (contract §4). */
+    private const PAGE_SIZE = 100;
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -263,11 +269,17 @@ final readonly class TaskBoardSyncService
             if ($ctx->phase === SyncPhase::Tasks) {
                 $slicePages = 0;
                 $deadline   = $ctx->options->timeBudgetSeconds !== null ? $this->clock->now()->getTimestamp() + $ctx->options->timeBudgetSeconds : null;
+                // Audit EG-L2 (contract §4): a slice reads at most ceil(max_tasks_per_run / 100) + 1 pages.
+                $pageCap = intdiv($this->maxTasksPerRun + self::PAGE_SIZE - 1, self::PAGE_SIZE) + 1;
                 while (true) {
                     if ($this->store->isCancelRequested($ctx->runId)) {
                         return SyncStatus::Cancelled;
                     }
-                    $page = $ctx->provider->fetchTasks($ctx->credential, $ctx->connection->getContainerId(), $ctx->updatedSince, $ctx->providerCursor);
+                    if ($slicePages >= $pageCap) {
+                        throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
+                    }
+                    $page    = $ctx->provider->fetchTasks($ctx->credential, $ctx->connection->getContainerId(), $ctx->updatedSince, $ctx->providerCursor);
+                    $seenWas = $ctx->tasksSeen;
                     $this->writer->writePage($ctx, $page->tasks);
                     $this->dispatchTaskEvents($ctx);
                     $this->reload($ctx);
@@ -275,6 +287,11 @@ final readonly class TaskBoardSyncService
                     ++$slicePages;
                     $ctx->providerCursor = $page->nextCursor;
                     if ($page->lastPage || $page->nextCursor === null) {
+                        break;
+                    }
+                    if ($ctx->tasksSeen === $seenWas) {
+                        // A page that brings no new task (empty, or only ids already read): the list does not advance.
+                        $ctx->warn('paging_stopped');
                         break;
                     }
                     $this->progress($ctx);

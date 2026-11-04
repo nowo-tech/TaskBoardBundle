@@ -6,9 +6,11 @@ namespace Nowo\TaskBoardBundle\Import\ClickUp;
 
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Import\ImportAssigneeResolver;
 use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
 
-use function in_array;
+use function array_keys;
+use function count;
 use function is_array;
 use function is_numeric;
 use function is_string;
@@ -85,13 +87,17 @@ final readonly class ClickUpTaskMapper
         if (is_array($assignees)) {
             foreach ($assignees as $assignee) {
                 $email = is_array($assignee) ? $this->fieldMapper->normalizeEmail($this->stringValue($assignee['email'] ?? null)) : null;
-                if ($email !== null && !in_array($email, $emails, true)) {
-                    $emails[] = $email;
+                if ($email !== null) {
+                    $emails[$email] = true;
+                }
+                // Audit EG-L6: one more than the cap, so the import can say the rest was dropped.
+                if (count($emails) > ImportAssigneeResolver::MAX_ASSIGNEES_PER_ROW) {
+                    break;
                 }
             }
         }
 
-        return $emails;
+        return array_keys($emails);
     }
 
     /**

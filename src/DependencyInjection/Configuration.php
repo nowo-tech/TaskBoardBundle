@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Sync\File\HostAllowlist;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
@@ -639,9 +640,14 @@ final class Configuration implements ConfigurationInterface
                                     ->children()
                                         ->booleanNode('enabled')->defaultTrue()->end()
                                         ->arrayNode('attachment_hosts')
-                                            ->scalarPrototype()->end()
+                                            ->scalarPrototype()
+                                                ->validate()
+                                                    ->ifTrue(static fn (mixed $pattern): bool => !is_string($pattern) || !HostAllowlist::isValidPattern($pattern))
+                                                    ->thenInvalid('An attachment host must be a host name of two labels at least, optionally behind "*." (not "*.com"): %s')
+                                                ->end()
+                                            ->end()
                                             ->defaultValue(ClickUpTaskProvider::DEFAULT_ATTACHMENT_HOSTS)
-                                            ->info('Hosts ClickUp attachments and inline images may be downloaded from (exact, or *.suffix).')
+                                            ->info('Hosts ClickUp attachments and inline images may be downloaded from (exact, or *.suffix of two labels at least).')
                                         ->end()
                                     ->end()
                                 ->end()

@@ -24,6 +24,10 @@ outside the fixture allowlist.
 | `list_900200.json` | `GET list/{id}` |
 | `list_900200_task_page0.json` | `GET list/{id}/task?page=0&subtasks=true&include_closed=true&include_markdown_description=true&order_by=updated&reverse=true` |
 | `task_86a1x1_comment.json` | `GET task/{id}/comment` |
+| `list_{id}_task_page0_reverse_false.json` (after recording) | the same task page with `reverse=false` |
+| `list_{id}_task_page1.json` (after recording) | `page=1` of the same list (`last_page`, page size) |
+| `task_{id}.json` (after recording) | `GET task/{id}?include_markdown_description=true` |
+| `task_{id}_comment_page2.json` (after recording, 25+ comments) | `GET task/{id}/comment?start=<date>&start_id=<id>` of the oldest comment |
 
 ## TO CONFIRM with the recording (contract Q-O4)
 
@@ -34,6 +38,7 @@ outside the fixture allowlist.
    updates.
 3. **Attachment fields.** `title`, `size`, `mimetype` and `date` are assumed.
 4. **`last_page`.** Assumed on `GET list/{id}/task`; the adapter also stops on a page shorter than 100.
-5. **Ordering.** `order_by=updated&reverse=true` is assumed to list the oldest update first.
+5. **Ordering.** `order_by=updated&reverse=true` is assumed to list the oldest update first (the contract says
+   `reverse=false`): compare `…_task_page0.json` and `…_task_page0_reverse_false.json`.
 6. **Comment paging.** `start` (date) and `start_id` of the oldest comment are assumed to return the older ones,
    25 at a time.

@@ -5,14 +5,19 @@ services:
         autoconfigure: true
         public: false
 
-    # Own HTTP clients (never the profiler-traced `http_client`: it records request headers).
+    # Own HTTP clients (never the profiler-traced `http_client`: it records request headers). Not autoconfigured
+    # (audit EG-L4): autoconfiguration would hand them the application logger, which logs every URL with its query
+    # (signed attachment URLs). The reset tag keeps the DNS cache of the private-network guard per request.
     nowo_task_board.sync.base_http_client:
         class: Symfony\Contracts\HttpClient\HttpClientInterface
         factory: ['Symfony\Component\HttpClient\HttpClient', 'create']
+        autoconfigure: false
 
     nowo_task_board.sync.http_client:
         class: Symfony\Component\HttpClient\NoPrivateNetworkHttpClient
         arguments: ['@nowo_task_board.sync.base_http_client']
+        autoconfigure: false
+        tags: [{ name: kernel.reset, method: reset }]
 
     Nowo\TaskBoardBundle\Sync\Http\SleeperInterface:
         alias: Nowo\TaskBoardBundle\Sync\Http\SystemSleeper

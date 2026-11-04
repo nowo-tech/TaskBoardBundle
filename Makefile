@@ -164,5 +164,5 @@ twig-lint: ensure-up
 # Since 1.23: records tests/Fixtures/ClickUp from a throwaway ClickUp workspace (token from the environment only).
 record-clickup-fixtures: ensure-up
 	@test -n "$$CLICKUP_RECORD_TOKEN" || { echo "Set CLICKUP_RECORD_TOKEN"; exit 2; }
-	@$(COMPOSE) exec -T -e CLICKUP_RECORD_TOKEN -e CLICKUP_RECORD_LIST $(SERVICE_PHP) php scripts/record-clickup-fixtures.php
+	@$(COMPOSE) exec -T -e CLICKUP_RECORD_TOKEN -e CLICKUP_RECORD_LIST -e CLICKUP_RECORD_TASK $(SERVICE_PHP) php scripts/record-clickup-fixtures.php
 

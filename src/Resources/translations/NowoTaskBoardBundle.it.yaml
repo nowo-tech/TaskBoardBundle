@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "L'utente di questa sincronizzazione no
 task_board.sync.error.board_linked_elsewhere: "La bacheca è collegata a un altro elenco."
 task_board.sync.error.mass_archive_guard: "%count% delle %total% attività collegate non sono state archiviate: il provider non le elenca più."
 task_board.sync.error.deletions_skipped: "Questa volta le attività eliminate non sono state verificate (l'elenco del provider non è stato letto per intero)."
+task_board.sync.error.paging_stopped: "L'elenco del fornitore ha smesso di avanzare (una pagina non ha portato nuove attività); il resto non è stato letto."
 task_board.sync.error.restore_refused: "Le attività tornate nel provider non sono state ripristinate: un limite lo ha impedito."
 task_board.sync.error.relation_skipped: "Alcune relazioni padre o di dipendenza sono state saltate (l'altra attività manca o non è modificabile)."
 task_board.sync.error.parent_cycle: "Un cambio di padre è stato rifiutato: un'attività diventerebbe antenata di sé stessa."

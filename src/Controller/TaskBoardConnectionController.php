@@ -104,10 +104,22 @@ final class TaskBoardConnectionController extends AbstractController
             return $this->render($this->templates['connection'], $this->linkedView($board, $connection));
         }
 
-        $provider  = $this->pickProvider((string) $request->query->get('provider', ''));
+        $provider = $this->pickProvider((string) $request->query->get('provider', ''));
+        $choice   = $provider instanceof TaskProviderInterface ? $this->pickConnection($this->credentials->connectionsFor($board, $user, $provider->id()), (string) $request->query->get('connection', '')) : null;
+
+        // Audit EG-L5: a GET (no CSRF token) reads the top level only, from the cache when it is there; the opened
+        // levels are rendered by the browser's POST.
+        return $this->connectionPage($board, $user, $provider, $choice, []);
+    }
+
+    /**
+     * The connection page of a board not linked yet, with the levels in `$open` opened (each a provider call).
+     *
+     * @param list<string> $open
+     */
+    private function connectionPage(TaskBoard $board, UserInterface $user, ?TaskProviderInterface $provider, ?ConnectionChoice $choice, array $open): Response
+    {
         $choices   = $provider instanceof TaskProviderInterface ? $this->credentials->connectionsFor($board, $user, $provider->id()) : [];
-        $choice    = $this->pickConnection($choices, (string) $request->query->get('connection', ''));
-        $open      = array_values(array_filter($request->query->all('open'), static fn (mixed $id): bool => is_string($id) && preg_match(self::CONTAINER_ID, $id) === 1));
         $linkForm  = $provider instanceof TaskProviderInterface && $choice instanceof ConnectionChoice ? $this->linkForm($board, $provider, $choice) : null;
         $tree      = null;
         $treeError = null;
@@ -126,7 +138,7 @@ final class TaskBoardConnectionController extends AbstractController
             'provider'          => $provider,
             'choices'           => $choices,
             'choice'            => $choice,
-            'credentialFormUrl' => $provider instanceof TaskProviderInterface ? $this->credentials->credentialFormUrl($board, $provider->id()) : null,
+            'credentialFormUrl' => $provider instanceof TaskProviderInterface ? $this->credentialFormUrl($board, $provider) : null,
             'linkForm'          => $linkForm?->createView(),
             'tree'              => $tree,
             'levelForms'        => array_map(fn (ContainerPage $level): FormView => $this->levelForm($level)->createView(), $tree ?? []),
@@ -161,12 +173,14 @@ final class TaskBoardConnectionController extends AbstractController
         }
 
         if (!$request->isXmlHttpRequest()) {
+            // Without script: the page itself with that level open, answered to this POST (audit EG-L5: never a
+            // redirect to a GET that would call the provider without a CSRF token).
             $open = array_values(array_filter($request->query->all('open'), static fn (mixed $id): bool => is_string($id) && preg_match(self::CONTAINER_ID, $id) === 1));
             if ($parent !== '' && !in_array($parent, $open, true)) {
                 $open[] = $parent;
             }
 
-            return $this->redirectToRoute($this->routes['board_connection']['name'], ['boardId' => $boardId, 'provider' => $provider->id(), 'connection' => $choice->ref, 'open' => $open], Response::HTTP_SEE_OTHER);
+            return $this->connectionPage($board, $user, $provider, $choice, $open);
         }
 
         try {
@@ -185,7 +199,7 @@ final class TaskBoardConnectionController extends AbstractController
             'level'             => $page,
             'levelForm'         => $this->levelForm($page)->createView(),
             'error'             => $error,
-            'credentialFormUrl' => $this->credentials->credentialFormUrl($board, $provider->id()),
+            'credentialFormUrl' => $this->credentialFormUrl($board, $provider),
             'containersForm'    => $this->csrfForm('task_board_connection_containers')->createView(),
             'open'              => [],
             'templates'         => $this->templates,
@@ -517,6 +531,16 @@ final class TaskBoardConnectionController extends AbstractController
         }
 
         return $this->redirectToRoute($this->routes['board_connection']['name'], $params);
+    }
+
+    /**
+     * The host's page to add or replace a token (audit EG-I10): an `https://` URL or a same-origin path, else none.
+     */
+    private function credentialFormUrl(TaskBoard $board, TaskProviderInterface $provider): ?string
+    {
+        $url = $this->credentials->credentialFormUrl($board, $provider->id());
+
+        return $url !== null && preg_match('~^(?:https://[^\s/?#@\\\\]+|/(?![/\\\\]))[^\s\x00-\x1f\x7f\\\\]*$~Di', $url) === 1 ? $url : null;
     }
 
     private function requireUser(): UserInterface

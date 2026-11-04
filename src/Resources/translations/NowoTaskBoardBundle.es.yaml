@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "El usuario de esta sincronización ya 
 task_board.sync.error.board_linked_elsewhere: "El tablero está vinculado a otra lista."
 task_board.sync.error.mass_archive_guard: "No se han archivado %count% de %total% tareas vinculadas: el proveedor ya no las lista."
 task_board.sync.error.deletions_skipped: "Esta vez no se han comprobado las tareas borradas (no se ha podido leer la lista completa del proveedor)."
+task_board.sync.error.paging_stopped: "La lista del proveedor dejó de avanzar (una página no trajo tareas nuevas); el resto no se leyó."
 task_board.sync.error.restore_refused: "No se han restaurado tareas que vuelven a estar en el proveedor: un límite lo ha impedido."
 task_board.sync.error.relation_skipped: "Se han omitido algunas relaciones de tarea padre o dependencia (falta la otra tarea o no se puede editar)."
 task_board.sync.error.parent_cycle: "Se ha rechazado un cambio de tarea padre: haría que una tarea fuese su propio antecesor."

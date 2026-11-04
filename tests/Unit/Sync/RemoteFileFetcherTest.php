@@ -192,6 +192,13 @@ final class RemoteFileFetcherTest extends TestCase
         self::assertTrue(HostAllowlist::allows(self::HOSTS, 'T1.ClickUp-Attachments.com.'));
         self::assertTrue(HostAllowlist::allows(self::HOSTS, 'a.b.clickup-attachments.com'));
         self::assertTrue(HostAllowlist::allows(self::HOSTS, 'attachments.clickup.com'));
+        // Audit EG-I9: a bare TLD wildcard, a lone wildcard or a single label never allows anything.
+        foreach (['*.com', '*', '*.', 'localhost', '*.*.com', '*.com.'] as $pattern) {
+            self::assertFalse(HostAllowlist::isValidPattern($pattern), $pattern);
+        }
+        self::assertFalse(HostAllowlist::allows(['*.com', 'localhost'], 'evil.com'));
+        self::assertFalse(HostAllowlist::allows(['*.com', 'localhost'], 'localhost'));
+        self::assertTrue(HostAllowlist::isValidPattern('*.example.com'));
         self::assertFalse(HostAllowlist::allows(self::HOSTS, 'xattachments.clickup.com'));
         self::assertFalse(HostAllowlist::allows(self::HOSTS, ''));
         self::assertFalse(HostAllowlist::allows([], 'attachments.clickup.com'));

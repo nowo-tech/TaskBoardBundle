@@ -28,6 +28,7 @@ use function array_values;
 use function count;
 use function ctype_digit;
 use function implode;
+use function intdiv;
 use function is_array;
 use function is_bool;
 use function is_numeric;
@@ -194,20 +195,24 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
         $path     = sprintf('task/%s/comment', $this->checkId($taskId));
         $comments = [];
         $query    = [];
-        while (count($comments) < $this->maxComments) {
+        // Audit EG-L2: raw rows count, at most ceil(max / 25) + 1 pages, and a page that does not move stops.
+        $pageCap = intdiv($this->maxComments + self::COMMENT_PAGE_SIZE - 1, self::COMMENT_PAGE_SIZE) + 1;
+        for ($pages = 1, $rowsRead = 0; count($comments) < $this->maxComments; ++$pages) {
             $rows = $this->items($this->get($credential, $path, $query), 'comments');
+            $rowsRead += count($rows);
             foreach ($rows as $row) {
                 $comment = $this->toRemoteComment($row);
                 if ($comment instanceof RemoteComment && count($comments) < $this->maxComments) {
                     $comments[] = $comment;
                 }
             }
-            $oldest = $rows === [] ? null : $rows[count($rows) - 1];
-            if (count($rows) < self::COMMENT_PAGE_SIZE || !is_array($oldest)) {
+            $oldest = $rows === [] ? [] : $rows[count($rows) - 1];
+            // Older comments: start = the oldest date seen, start_id = its id. TO CONFIRM (Q-O4).
+            $next = ['start' => $this->stringOf($oldest['date'] ?? null), 'start_id' => $this->itemId($oldest)];
+            if (count($rows) < self::COMMENT_PAGE_SIZE || $next['start_id'] === '' || $next === $query || $pages >= $pageCap || $rowsRead >= $this->maxComments) {
                 break;
             }
-            // Older comments: start = the oldest date seen, start_id = its id. TO CONFIRM (Q-O4).
-            $query = ['start' => $this->stringOf($oldest['date'] ?? null), 'start_id' => $this->itemId($oldest)];
+            $query = $next;
         }
 
         // The API answers newest first.

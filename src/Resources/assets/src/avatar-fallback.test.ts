@@ -25,6 +25,12 @@ describe('isSafeAvatarUrl', () => {
     it('refuses null', () => {
         expect(isSafeAvatarUrl(null)).toBe(false);
     });
+
+    it('refuses a lone surrogate (invalid UTF-16, audit EG-I1)', () => {
+        expect(isSafeAvatarUrl('/files/a\uD800b')).toBe(false);
+        expect(isSafeAvatarUrl('/files/a\uDC00b')).toBe(false);
+        expect(isSafeAvatarUrl('/files/\u{1F600}')).toBe(true);
+    });
 });
 
 describe('installAvatarFallback', () => {

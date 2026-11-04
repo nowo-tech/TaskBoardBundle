@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 
+use function array_slice;
+use function count;
 use function json_decode;
 
 /**
@@ -63,13 +65,18 @@ final class ConnectionControllerTest extends SyncFunctionalTestCase
         self::assertStringContainsString('Backlog — 3 tasks', (string) $this->client->getResponse()->getContent());
         self::assertStringContainsString('name="task_board_sync_link[container]"', (string) $this->client->getResponse()->getContent());
 
-        // Without script: a redirect to the page with the level open.
-        $this->client->request('POST', self::BASE . $board->getId() . '/connection/containers?open[]=w:1', [
+        // Without script: the page itself, with the level open, answers the POST (audit EG-L5: no redirect to a GET).
+        $crawler = $this->client->request('POST', self::BASE . $board->getId() . '/connection/containers?open[]=w:1', [
             '_token' => PredictableCsrfTokenManager::value('task_board_connection_containers'), 'task_board_sync_link' => ['provider' => 'clickup', 'connection' => 'conn-1'], 'parent' => 's:1',
         ]);
-        self::assertResponseStatusCodeSame(303);
-        $crawler = $this->client->followRedirect();
+        self::assertResponseIsSuccessful();
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-sync-list"]'));
+
+        // A GET (no CSRF token) reads the top level only, whatever it asks to open.
+        $calls = count($this->provider->calls);
+        $this->client->request('GET', self::BASE . $board->getId() . '/connection?provider=clickup&connection=conn-1&open[]=w:1&open[]=s:1&open[]=s:2&open[]=s:3');
+        self::assertResponseIsSuccessful();
+        self::assertSame(['listContainers:'], array_slice($this->provider->calls, $calls));
 
         // Missing CSRF on the browser: 403; a bad parent: 404.
         $this->client->request('POST', self::BASE . $board->getId() . '/connection/containers', ['provider' => 'clickup', 'connection' => 'conn-1']);

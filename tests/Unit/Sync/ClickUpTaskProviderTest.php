@@ -157,6 +157,45 @@ final class ClickUpTaskProviderTest extends TestCase
         }
     }
 
+    /** Audit EG-L2: comment pages that do not move, or rows without a valid id, end the paging. */
+    public function testCommentPagingAlwaysEnds(): void
+    {
+        $same = [];
+        for ($i = 0; $i < 25; ++$i) {
+            $same[] = ['id' => 'c' . $i, 'comment_text' => 'C' . $i, 'date' => '1793000000000'];
+        }
+        $provider = $this->provider([
+            'task/T/comment?'      => new MockResponse((string) json_encode(['comments' => $same])),
+            'task/T/comment?start' => new MockResponse((string) json_encode(['comments' => $same])),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+        self::assertCount(50, $provider->fetchComments($credential, 'T'));
+        self::assertCount(2, $this->requests, 'the second page asks for the same place: stop');
+
+        $invalid = [];
+        for ($i = 0; $i < 25; ++$i) {
+            $invalid[] = ['id' => 'bad id ' . $i, 'comment_text' => 'X'];
+        }
+        $provider = $this->provider(['task/T/comment?' => new MockResponse((string) json_encode(['comments' => $invalid]))]);
+        self::assertSame([], $provider->fetchComments($credential, 'T'));
+        self::assertCount(1, $this->requests, 'no valid id to continue from');
+
+        // A moving cursor still stops at ceil(max / 25) + 1 pages.
+        $page   = 0;
+        $moving = new MockHttpClient(static function () use (&$page): MockResponse {
+            $rows = [];
+            for ($i = 0; $i < 25; ++$i) {
+                $rows[] = ['id' => 'p' . $page . 'c' . $i, 'comment_text' => ' ', 'date' => '1793000000000'];
+            }
+            ++$page;
+
+            return new MockResponse((string) json_encode(['comments' => $rows]));
+        });
+        $capped = new ClickUpTaskProvider(new ProviderHttpClient($moving, new RecordingSleeper(), new MockClock()), maxComments: 50);
+        self::assertCount(50, $capped->fetchComments($credential, 'T'));
+        self::assertSame(2, $page, 'raw rows count: 50 rows read, no third page');
+    }
+
     public function testCommentCapAndOddPayloads(): void
     {
         $provider = $this->provider([

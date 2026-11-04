@@ -5,6 +5,7 @@
 - [Attack surface](#attack-surface)
 - [Threats and mitigations](#threats-and-mitigations)
 - [Access control model](#access-control-model)
+- [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
 - [Logging and personal data](#logging-and-personal-data)
 - [Dependencies](#dependencies)
 - [Reporting](#reporting)
@@ -46,6 +47,32 @@
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
 3. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+
+## Provider sync: host duties and known limits
+
+Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does not do:
+
+- **Render remote Markdown safely.** `RemoteContentSanitizer` empties every link target that is not http, https or
+  mailto and removes raw HTML outside code (EG-L3), but it is the second line of defence. A host rendering task text
+  with league/commonmark must set `allow_unsafe_links: false` (and `html_input: escape` or `strip`), or sanitize the
+  HTML afterwards (symfony/html-sanitizer).
+- **Serve stored files safely (EG-I2).** `TaskAttachmentStorageInterface::store()` gets the sniffed MIME type, which
+  depends on libmagic: HTML after a long text prefix can be sniffed as `text/plain`. Serve stored files with the stored
+  type, `X-Content-Type-Options: nosniff`, and `Content-Disposition: attachment` for anything that is not an image.
+- **Keep URLs out of logs (EG-L4).** The bundle's own HTTP clients get no logger. A client given through
+  `sync.http.client` must not log URLs either (signed attachment URLs carry their signature in the query).
+- **Long pages and the lock (EG-I4).** The run's heartbeat is written between pages. A page of 100 tasks with many
+  large files can exceed the 10-minute stale window; a concurrent run may then take the lock (the database keys still
+  prevent duplicates). Keep `sync.attachments.max_bytes_per_run` and the time slice (`inline_slice_pages`) modest.
+- **The actor's rights (EG-I5).** `canManageBoardConnection()` checks the board creator and `security.manage_roles`
+  through the **session** user's roles. A custom `SyncActorResolverInterface` that returns another user than the one
+  clicking inherits the clicking user's role check; per-task writes still require `canEditTask()` for the actor.
+  Worker runs (no session) only pass for the board creator.
+- **Outbound guard settings (EG-I6).** `OutboundUrlGuardAdapter` builds `OutboundUrlGuard` with its own (strict)
+  defaults, not the host's configured guard service: host allow / deny lists of that bundle do not apply to synced files.
+- **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
+  It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
+  effect.
 
 ## Logging and personal data
 

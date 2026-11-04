@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "L'utilisateur de cette synchronisation
 task_board.sync.error.board_linked_elsewhere: "Le tableau est lié à une autre liste."
 task_board.sync.error.mass_archive_guard: "%count% des %total% tâches liées n'ont pas été archivées : le fournisseur ne les liste plus."
 task_board.sync.error.deletions_skipped: "Les tâches supprimées n'ont pas été vérifiées cette fois (la liste du fournisseur n'a pas pu être lue en entier)."
+task_board.sync.error.paging_stopped: "La liste du fournisseur n’avançait plus (une page n’apportait aucune nouvelle tâche) ; la suite n’a pas été lue."
 task_board.sync.error.restore_refused: "Des tâches revenues chez le fournisseur n'ont pas été restaurées : une limite l'a refusé."
 task_board.sync.error.relation_skipped: "Certaines relations parent ou dépendance ont été ignorées (l'autre tâche manque ou n'est pas modifiable)."
 task_board.sync.error.parent_cycle: "Un changement de parent a été refusé : une tâche deviendrait son propre ancêtre."

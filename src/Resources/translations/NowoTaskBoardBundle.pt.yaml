@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "O utilizador desta sincronização já
 task_board.sync.error.board_linked_elsewhere: "O quadro está ligado a outra lista."
 task_board.sync.error.mass_archive_guard: "%count% das %total% tarefas ligadas não foram arquivadas: o fornecedor já não as lista."
 task_board.sync.error.deletions_skipped: "Desta vez as tarefas eliminadas não foram verificadas (não foi possível ler a lista completa do fornecedor)."
+task_board.sync.error.paging_stopped: "A lista do fornecedor deixou de avançar (uma página não trouxe tarefas novas); o resto não foi lido."
 task_board.sync.error.restore_refused: "Tarefas que voltaram ao fornecedor não foram restauradas: um limite recusou-o."
 task_board.sync.error.relation_skipped: "Algumas relações de tarefa principal ou dependência foram ignoradas (a outra tarefa falta ou não é editável)."
 task_board.sync.error.parent_cycle: "Uma alteração de tarefa principal foi recusada: uma tarefa seria o seu próprio antecessor."

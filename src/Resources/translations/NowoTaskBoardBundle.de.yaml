@@ -488,6 +488,7 @@ task_board.sync.error.actor_not_allowed: "Der Benutzer dieser Synchronisierung d
 task_board.sync.error.board_linked_elsewhere: "Das Board ist mit einer anderen Liste verknüpft."
 task_board.sync.error.mass_archive_guard: "%count% von %total% verknüpften Aufgaben wurden nicht archiviert: Der Anbieter listet sie nicht mehr."
 task_board.sync.error.deletions_skipped: "Gelöschte Aufgaben wurden diesmal nicht geprüft (die Liste des Anbieters war nicht vollständig lesbar)."
+task_board.sync.error.paging_stopped: "Die Liste des Anbieters kam nicht weiter (eine Seite brachte keine neue Aufgabe); der Rest wurde nicht gelesen."
 task_board.sync.error.restore_refused: "Wieder vorhandene Aufgaben wurden nicht wiederhergestellt: Ein Limit hat es verhindert."
 task_board.sync.error.relation_skipped: "Einige Eltern- oder Abhängigkeitsbeziehungen wurden übersprungen (die andere Aufgabe fehlt oder ist nicht bearbeitbar)."
 task_board.sync.error.parent_cycle: "Eine Elternänderung wurde abgelehnt: Eine Aufgabe wäre ihr eigener Vorfahre."

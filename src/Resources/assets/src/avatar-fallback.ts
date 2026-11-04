@@ -9,16 +9,17 @@ const IMAGE = 'img.nowo-task-member-avatar__image';
 /**
  * The client copy of the URL policy (AvatarUrlPolicy): `https://host[:port]/…` without user info, IPv6 literal or a
  * bad port, or a same-origin path with one leading "/"; no controls, white space, backslash, quotes, `<`, `>` or
- * backtick; at most 2048 UTF-8 bytes. Both copies run tests/Fixtures/avatar-urls.json.
+ * backtick, Unicode separators or control / format / lone surrogate characters, no port with a leading zero; at most
+ * 2048 UTF-8 bytes. Both copies run tests/Fixtures/avatar-urls.json.
  */
 export function isSafeAvatarUrl(url: string | null): boolean {
-    if (url === null || url === '' || new TextEncoder().encode(url).length > 2048 || /[\u0000-\u0020\u007F\\"'<>`]/.test(url)) {
+    if (url === null || url === '' || new TextEncoder().encode(url).length > 2048 || /[\u0000-\u0020\u007F\\"'<>`]/.test(url) || /[\p{Z}\p{C}]/u.test(url)) {
         return false;
     }
     if (url.startsWith('/')) {
         return !url.startsWith('//');
     }
-    const match = /^https:\/\/[^/?#@:[\]]+(?::(\d{1,5}))?(?:[/?#].*)?$/is.exec(url);
+    const match = /^https:\/\/[^/?#@:[\]]+(?::([1-9]\d{0,4}))?(?:[/?#].*)?$/is.exec(url);
     if (match === null) {
         return false;
     }
