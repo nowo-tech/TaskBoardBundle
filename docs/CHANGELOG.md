@@ -67,6 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Native dialogs on iOS Safari** (found by symfony-beacon on iPhone): `.nowo-task-dialog--native` adds
+  `max-height: calc(100dvh - 2rem)` after its `100vh` fallback, so the dialog fits the visible viewport.
+
 ## [1.23.0] - 2026-11-04
 
 Provider connections and sync (ClickUp first). See [sync.md](sync.md) and [UPGRADING](UPGRADING.md#to-1230) —
