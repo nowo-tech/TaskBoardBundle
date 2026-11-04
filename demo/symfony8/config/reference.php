@@ -1526,7 +1526,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             allowed_mime_types?: list<scalar|Param|null>,
  *         },
  *         max_tasks_per_run?: int|Param, // Default: 5000
- *         max_pages_per_run?: int|Param, // Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices (fewer when the list size is known: ceil(1.1 × tasks / 100) + 2); past it the run fails with response_too_large. // Default: 1000
+ *         max_pages_per_run?: int|Param, // Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices; past it the run fails with response_too_large. // Default: 1000
  *         max_comments_per_task?: int|Param, // Default: 500
  *         max_description_length?: int|Param, // Default: 100000
  *         max_archive_ratio?: float|Param, // Default: 0.5

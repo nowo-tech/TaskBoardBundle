@@ -169,7 +169,7 @@ final class ClickUpTaskProviderTest extends TestCase
         $routes = [
             'list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'a1', 'name' => 'Short page', 'secret_field' => 'VALUE_NOT_LOGGED', 'attachments' => [['id' => 'f1', 'url' => 'https://t000.p.clickup-attachments.com/f1'], 'junk']]]])),
             'list/L/task?page=1' => new MockResponse((string) json_encode(['tasks' => []])),
-            'list/L/task?page=2' => new MockResponse((string) json_encode(['unexpected' => 'VALUE_NOT_LOGGED'])),
+            'list/L/task?page=2' => new MockResponse((string) json_encode(['unexpected' => 'VALUE_NOT_LOGGED', "\e[31mred" . str_repeat('k', 5000) => 1])),
         ];
         $provider   = $this->provider($routes, logger: $logger);
         $credential = new ProviderCredential('pk_test_token', 'conn-1');
@@ -187,7 +187,13 @@ final class ClickUpTaskProviderTest extends TestCase
         foreach ($logger->records as $record) {
             self::assertSame('debug', $record['level']);
             self::assertStringNotContainsString('VALUE_NOT_LOGGED', (string) json_encode($record));
+            // Audit EG-I12: keys without control characters, 64 bytes at most.
+            foreach ($record['context']['keys'] as $key) {
+                self::assertLessThanOrEqual(64, strlen($key));
+                self::assertDoesNotMatchRegularExpression('/[\x00-\x1F\x7F]/', $key);
+            }
         }
+        self::assertContains('[31mred' . str_repeat('k', 57), array_merge(...array_map(static fn (array $r): array => $r['context']['keys'], $logger->records)));
     }
 
     /** Audit EG-L2: comment pages that do not move, or rows without a valid id, end the paging. */

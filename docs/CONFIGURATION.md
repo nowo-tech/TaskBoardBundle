@@ -590,7 +590,7 @@ nowo_task_board:
             max_redirects: 3
             allowed_mime_types: [image/png, image/jpeg, image/gif, image/webp, application/pdf, text/plain, text/csv, …]
         max_tasks_per_run: 5000       # reaching it pauses the slice (resumable)
-        max_pages_per_run: 1000       # since audit EG-L2: task pages of one run over all its slices (fewer when the list size is known); past it the run fails
+        max_pages_per_run: 1000       # since audit EG-L2: task pages of one run over all its slices; past it the run fails
         max_comments_per_task: 500
         max_description_length: 100000
         max_archive_ratio: 0.5        # the mass-archive guard

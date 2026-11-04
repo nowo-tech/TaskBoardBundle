@@ -46,9 +46,7 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
-use function ceil;
 use function intdiv;
-use function min;
 
 /**
  * Since 1.23: links a board to a remote list and keeps it in sync — an idempotent upsert keyed by the same
@@ -219,10 +217,9 @@ final readonly class TaskBoardSyncService
                 if ($ctx->mode === SyncMode::Initial || $ctx->mode === SyncMode::Full) {
                     $ctx->total = $provider->findContainer($credential, $listId)?->taskCount;
                 }
-                // Audit EG-L2: a run reads at most max_pages_per_run task pages, fewer when the list's size is known.
-                $ctx->pageCap = $ctx->total !== null
-                    ? min($this->maxPagesPerRun, (int) ceil(1.1 * $ctx->total / self::PAGE_SIZE) + 2)
-                    : $this->maxPagesPerRun;
+                // Audit EG-L2: a run reads at most max_pages_per_run task pages. Audit EG-L7: never fewer from the list's
+                // task count, which may leave out the subtasks and closed tasks the pages hold.
+                $ctx->pageCap = $this->maxPagesPerRun;
             }
             $connection->markRun($now);
             $run->record($ctx->report(SyncStatus::Running), $now);

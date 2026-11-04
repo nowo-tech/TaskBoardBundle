@@ -41,8 +41,10 @@ use function is_numeric;
 use function is_scalar;
 use function is_string;
 use function json_encode;
+use function mb_strcut;
 use function preg_match;
 use function preg_match_all;
+use function preg_replace;
 use function sprintf;
 use function strlen;
 use function substr;
@@ -499,7 +501,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
     }
 
     /**
-     * An answer that does not have the expected shape: logged at debug level with its keys only, never a value.
+     * An answer that does not have the expected shape: logged at debug level with its keys only, never a value. Since
+     * audit EG-I12 each key loses its control characters and is cut to 64 bytes (at most 30 keys).
      *
      * @param array<mixed> $data
      */
@@ -509,7 +512,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             'bundle'   => 'nowo_task_board',
             'provider' => self::ID,
             'field'    => $what,
-            'keys'     => array_slice(array_map(strval(...), array_keys($data)), 0, 30),
+            'keys'     => array_map(
+                static fn (int|string $key): string => mb_strcut((string) preg_replace('/[\x00-\x1F\x7F]|\xC2[\x80-\x9F]/', '', (string) $key), 0, 64, 'UTF-8'),
+                array_slice(array_keys($data), 0, 30),
+            ),
         ]);
     }
 

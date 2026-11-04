@@ -12,13 +12,15 @@ use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function array_map;
+use function ceil;
 use function count;
 
 /**
  * Since 1.23 — regressions of the 1.23 audit (Appendix EG): one slice of a run at a time (EG-L1), a task list that
- * never ends (EG-L2), and the host's credential page link (EG-I10).
+ * never ends (EG-L2), a list larger than its task count (EG-L7), and the host's credential page link (EG-I10).
  */
 final class SyncAuditEgTest extends SyncFunctionalTestCase
 {
@@ -61,33 +63,42 @@ final class SyncAuditEgTest extends SyncFunctionalTestCase
         $empty = $this->sync($board, new RepeatingProvider($this->provider, repeat: false, endless: 'empty'), full: true);
         self::assertSame(1, $empty->pagesDone);
 
-        // A full run of a list of known size (3 tasks): at most ceil(1.1 × 3 / 100) + 2 = 3 pages.
+        // max_tasks_per_run 5000: a slice reads at most ceil(5000 / 100) + 1 = 51 pages.
         $endless = $this->sync($board, new RepeatingProvider($this->provider, repeat: false, endless: 'new'), full: true);
         self::assertSame(SyncStatus::Failed, $endless->status);
         self::assertSame('response_too_large', $endless->errors[0]->code);
-        self::assertSame(3, $endless->pagesDone);
+        self::assertSame(51, $endless->pagesDone);
     }
 
     /**
-     * EG-L2 (delta): a provider that keeps sending fresh tasks never ends a run however its callers resume it — the
-     * page count is kept across slices and the initial run of a list of known size stops at ceil(1.1 × size / 100) + 2.
+     * EG-L7: a list whose task count leaves out subtasks and closed tasks (the list says 3, the pages hold 330 or 600
+     * rows) is read in full: no cap comes from the count, only `max_pages_per_run`.
+     *
+     * @return iterable<string, array{0: int}>
      */
-    public function testFreshIdsForeverAcrossSlicesStop(): void
+    public static function listSizes(): iterable
     {
-        $board   = $this->board();
-        $runaway = new RepeatingProvider($this->provider, repeat: false, endless: 'new');
-        $slices  = 0;
-        do {
-            // What the console loop, the progress poll and a Messenger re-dispatch do.
-            $report = $this->sync($board, $runaway, maxPages: 1);
-        } while ($report->status === SyncStatus::Paused && ++$slices < 30);
+        yield '330 rows' => [330];
+        yield '600 rows' => [600];
+    }
 
-        self::assertSame(SyncStatus::Failed, $report->status);
-        self::assertSame('response_too_large', $report->errors[0]->code);
-        self::assertSame(3, $report->pagesDone, 'the list says 3 tasks: ceil(3.3 / 100) + 2 = 3 pages');
-        self::assertCount(3, $this->tasksOf($board));
+    #[DataProvider('listSizes')]
+    public function testAListLargerThanItsTaskCountIsReadInFull(int $rows): void
+    {
+        $board = $this->board();
+        $big   = new InMemoryTaskProvider();
+        $big->addContainer(new RemoteContainer(self::LIST, 'Backlog', ContainerType::List, null, true, false, 3));
+        for ($i = 1; $i <= $rows; ++$i) {
+            $big->putTask(self::LIST, $this->remote('r' . $i, 'Task ' . $i, $i, parent: $i > 30 ? 'r' . (($i % 30) + 1) : null));
+        }
+
+        $report = $this->sync($board, $big);
+
+        self::assertSame(SyncStatus::Succeeded, $report->status);
+        self::assertSame($rows, $report->created);
+        self::assertSame((int) ceil($rows / 100), $report->pagesDone);
         $this->em->clear();
-        self::assertNull($this->connectionOf($board)?->getCursor(), 'the run is over: no cursor to resume');
+        self::assertNotNull($this->connectionOf($board)?->getWatermark(), 'the next run is incremental');
     }
 
     /** EG-I10: the host's credential page is linked only when it is an https URL or a same-origin path. */

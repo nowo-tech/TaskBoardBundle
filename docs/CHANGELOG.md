@@ -143,8 +143,9 @@ Unexpected answer shapes are logged at debug level with their keys only, never a
 - **EG-L1:** the run lock is no longer re-entrant: a second request into a running run (a slice of the same run too)
   gets Busy and writes nothing.
 - **EG-L2:** a slice reads at most `ceil(max_tasks_per_run / 100) + 1` task pages, and a run at most
-  `sync.max_pages_per_run` (new, default 1000) over all its slices — `ceil(1.1 × tasks / 100) + 2` on an initial or
-  full run of a list of known size; past either cap the run fails with `response_too_large` and its cursor is cleared.
+  `sync.max_pages_per_run` (new, default 1000) over all its slices; past either cap the run fails with
+  `response_too_large` and its cursor is cleared. No cap is derived from the list's task count (EG-L7: ClickUp's
+  `task_count` may leave out the subtasks and closed tasks the pages hold).
   The task counter carries over the slices. A page that brings no new task ends the list (`paging_stopped`; the
   watermark is then not moved, EG-I11), and ClickUp comments are paged by raw rows, at most
   `ceil(max_comments_per_task / 25) + 1` pages, stopping when the cursor does not move.

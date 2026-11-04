@@ -112,15 +112,13 @@ cursor; a 429 that asks to wait longer than `sync.http.max_inline_wait` ends it 
 `runLinked()` resumes from the cursor under the same run id. Every run clears the entity manager after each page, so
 entities loaded before the call are detached afterwards.
 
-A run never reads more than `sync.max_pages_per_run` task pages (1 000 by default) over all its slices — on an initial
-or full run whose list size is known, at most `ceil(1.1 × tasks / 100) + 2` — and a slice at most
+A run never reads more than `sync.max_pages_per_run` task pages (1 000 by default) over all its slices, and a slice at
+most
 `ceil(max_tasks_per_run / 100) + 1`; past either cap the run fails with `response_too_large` and its cursor is
 cleared. A page that brings no new task ends the list with the warning `paging_stopped`: the run is reported as
 succeeded with that warning, and the watermark is not moved, so the next run reads again from where this one started.
-Unconfirmed against the live API (owner decision 2026-11-04; validated by Beacon after deploy): whether ClickUp's
-list `task_count` includes subtasks. If it does not, an
-initial or full run of a list with many subtasks could reach the tighter cap; incremental runs are bounded by
-`max_pages_per_run` only.
+The list's task count is not used as a cap (audit EG-L7): ClickUp's `task_count` may leave out the subtasks and closed
+tasks the pages hold.
 
 Identity: a synced task carries the same task link a file import writes (`import_source` = `clickup`, `external_id` =
 the ClickUp task id). A board that was imported from a ClickUp CSV or JSON file is adopted by its first sync without

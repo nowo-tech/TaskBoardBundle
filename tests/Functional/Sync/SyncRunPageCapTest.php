@@ -20,6 +20,25 @@ final class SyncRunPageCapTest extends SyncFunctionalTestCase
         return $config;
     }
 
+    /** EG-L2 (delta): a provider that keeps sending fresh tasks ends the run however its callers resume it. */
+    public function testFreshIdsForeverAcrossSlicesStop(): void
+    {
+        $board   = $this->board();
+        $runaway = new RepeatingProvider($this->provider, repeat: false, endless: 'new');
+        $slices  = 0;
+        do {
+            // What the console loop, the progress poll and a Messenger re-dispatch do.
+            $report = $this->sync($board, $runaway, maxPages: 1);
+        } while ($report->status === SyncStatus::Paused && ++$slices < 30);
+
+        self::assertSame(SyncStatus::Failed, $report->status);
+        self::assertSame('response_too_large', $report->errors[0]->code);
+        self::assertSame(5, $report->pagesDone);
+        self::assertCount(5, $this->tasksOf($board));
+        $this->em->clear();
+        self::assertNull($this->connectionOf($board)?->getCursor(), 'the run is over: no cursor to resume');
+    }
+
     public function testAnIncrementalRunStopsAtTheConfiguredCap(): void
     {
         $board = $this->board();

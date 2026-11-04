@@ -223,8 +223,8 @@ Nothing changes until you set `sync.enabled: true` with a `credential_resolver`.
   the first line of defence. See [SECURITY](SECURITY.md#provider-sync-host-duties-and-known-limits) for serving stored
   files (`nosniff`, `attachment`), a custom `sync.http.client` (must not log URLs) and the other host duties.
 - **Run limits:** a second request into a running run is Busy (also a slice of the same run); a slice reads at most
-  `ceil(max_tasks_per_run / 100) + 1` task pages and a run at most `sync.max_pages_per_run` (new, 1000) — fewer on an
-  initial or full run of a list of known size — and fails with `response_too_large` beyond; a page that brings no new
+  `ceil(max_tasks_per_run / 100) + 1` task pages and a run at most `sync.max_pages_per_run` (new, 1000) over all its
+  slices, and fails with `response_too_large` beyond; a page that brings no new
   task ends the list (warning `paging_stopped`, the watermark stays). Comments are read up to `max_comments_per_task`
   rows.
 - **Synced text:** raw HTML in remote text is now escaped (shown as text) instead of removed, and an unsafe link or

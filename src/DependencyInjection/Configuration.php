@@ -679,7 +679,7 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                         ->integerNode('max_tasks_per_run')->defaultValue(5000)->min(1)->end()
                         ->integerNode('max_pages_per_run')->defaultValue(1000)->min(1)
-                            ->info('Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices (fewer when the list size is known: ceil(1.1 × tasks / 100) + 2); past it the run fails with response_too_large.')
+                            ->info('Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices; past it the run fails with response_too_large.')
                         ->end()
                         ->integerNode('max_comments_per_task')->defaultValue(500)->min(0)->end()
                         ->integerNode('max_description_length')->defaultValue(100_000)->min(1000)->end()
