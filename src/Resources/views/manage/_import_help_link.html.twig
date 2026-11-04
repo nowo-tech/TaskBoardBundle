@@ -1,0 +1,8 @@
+{#
+    Since 1.22.1: an optional help link under the source select of the import forms. link = {url, label} or null;
+    both values are escaped and only an http(s) URL or a path on this site ("/…") is used (anything else renders "#").
+#}
+{% if link is iterable and link.url|default('') is not empty and link.label|default('') is not empty %}
+    {% set _url = link.url starts with '/' and not (link.url starts with '//') and not (link.url starts with '/\\') ? link.url : link.url|nowo_task_board_safe_url %}
+    <p class="nowo-task-import__help-link small mb-2"><a href="{{ _url }}" data-testid="nowo-task-import-help-link">{{ link.label }}</a></p>
+{% endif %}

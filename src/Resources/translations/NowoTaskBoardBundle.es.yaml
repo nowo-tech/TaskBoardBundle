@@ -343,6 +343,11 @@ task_board.import.help.source_clickup_csv: "Las tareas de una vista Lista o Tabl
 task_board.import.help.source_clickup_json: "Tareas de la API de ClickUp o de una exportación JSON (nombre, estado, prioridad, asignados, fecha límite, padre)."
 task_board.import.help.source_jira_csv: "Incidencias de Jira exportadas en CSV desde la búsqueda (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key crea subtareas)."
 task_board.import.help.source_trello_json: "Un tablero de Trello exportado en JSON (Menú → Imprimir y exportar → JSON): las tarjetas pasan a tareas, las listas a columnas y los checklists a subtareas."
+# Since 1.22.1: import limits (audit DL-L6).
+task_board.import.error.too_many_rows: "El archivo tiene más de %max% filas; una importación admite como máximo %max%."
+task_board.import.error.cell_too_long: "Una celda del archivo ocupa más de %max% bytes."
+task_board.import.error.too_many_columns: "El archivo tiene más de %max% columnas; una importación admite como máximo %max%."
+task_board.import.error.too_many_cells: "El archivo tiene más de %max% celdas con datos; una importación admite como máximo %max%."
 task_board.import.help.options: "Se puede volver a importar sin miedo: una fila ya importada (mismo id de la misma herramienta o, sin id, mismo padre, título y fecha de creación) actualiza su tarea con los valores del fichero en lugar de duplicarla, y los campos que el fichero deja vacíos conservan lo que se puso aquí. Las filas ya importadas en otro tablero se omiten. Ficheros de hasta 20 MB."
 task_board.import.help.got_it: "Entendido"
 task_board.import.subtasks.action: "Importar subtareas"

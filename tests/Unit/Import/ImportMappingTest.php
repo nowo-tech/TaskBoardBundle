@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpJsonImporter;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
@@ -103,6 +104,53 @@ final class ImportMappingTest extends TestCase
             self::assertSame('A cell of the file is longer than 3 bytes.', $exception->getMessage());
         }
         self::assertCount(1, (new DelimitedTableParser(maxRows: 1, maxCellLength: 3))->parse("a\n123\n", 'x.csv'));
+    }
+
+    /**
+     * Since 1.22.1 (audit DL-L6): a wide header, a wide row and too many filled cells are refused while reading.
+     */
+    public function testTheCsvParserRefusesTooManyColumnsAndCells(): void
+    {
+        $refusal = static function (DelimitedTableParser $parser, string $csv): ImportLimitExceededException {
+            try {
+                $parser->parse($csv, 'x.csv');
+            } catch (ImportLimitExceededException $exception) {
+                return $exception;
+            }
+            self::fail('not refused');
+        };
+
+        $header = $refusal(new DelimitedTableParser(maxColumns: 2), "a,b,c\n1,2,3\n");
+        self::assertSame('The file has more than 2 columns; an import takes at most 2.', $header->getMessage());
+        self::assertSame(ImportLimitExceededException::COLUMNS, $header->translationKey);
+        self::assertSame(['%max%' => '2'], $header->parameters);
+
+        $row = $refusal(new DelimitedTableParser(maxColumns: 2), "a,b\n1,2\n1,2,3\n");
+        self::assertSame(ImportLimitExceededException::COLUMNS, $row->translationKey);
+
+        $cells = $refusal(new DelimitedTableParser(maxCells: 3), "a,b\n1,2\n3,4\n");
+        self::assertSame('The file has more than 3 filled cells; an import takes at most 3.', $cells->getMessage());
+        self::assertSame(ImportLimitExceededException::CELLS, $cells->translationKey);
+
+        $rows = $refusal(new DelimitedTableParser(maxRows: 1), "a\n1\n2\n");
+        self::assertSame(ImportLimitExceededException::ROWS, $rows->translationKey);
+        $cell = $refusal(new DelimitedTableParser(maxCellLength: 1), "a\n12\n");
+        self::assertSame(ImportLimitExceededException::CELL, $cell->translationKey);
+
+        // Empty cells do not count; exactly at the limits is accepted.
+        self::assertCount(3, (new DelimitedTableParser(maxColumns: 2, maxCells: 3))->parse("a,b\n1,\n,2\n,\n", 'x.csv'));
+        self::assertCount(1, (new DelimitedTableParser(maxColumns: 2, maxCells: 2))->parse("a,b\n1,2\n", 'x.csv'));
+    }
+
+    public function testALimitErrorTranslatesInTheBundleDomain(): void
+    {
+        $translatable = ImportLimitExceededException::columns(512)->translatable();
+
+        self::assertSame(ImportLimitExceededException::COLUMNS, $translatable->getMessage());
+        self::assertSame(['%max%' => '512'], $translatable->getParameters());
+        self::assertSame('NowoTaskBoardBundle', $translatable->getDomain());
+        self::assertSame('The file has 7 rows; an import takes at most 5.', ImportLimitExceededException::rows(5, 7)->getMessage());
+        self::assertSame(['%max%' => '5'], ImportLimitExceededException::rows(5, 7)->parameters);
     }
 
     public function testClickUpCsvReadsTheListViewColumns(): void
@@ -220,6 +268,10 @@ final class ImportMappingTest extends TestCase
 
         $result = (new TaskImportResult())->withUpdated(2)->withUnchanged(3)->withCreated(1);
         self::assertSame([1, 2, 3], [$result->created, $result->updated, $result->unchanged]);
+        // Since 1.22.1: error translations follow their errors (replacing the errors drops them).
+        $limited = new TaskImportResult(errors: ['x'], errorTranslations: [ImportLimitExceededException::cells(1)->translatable()]);
+        self::assertCount(1, $limited->withCreated(0)->errorTranslations);
+        self::assertSame([], $limited->withErrors(['y'])->errorTranslations);
         self::assertSame(TaskPriority::Normal, (new ImportFieldMapper())->mapPriority(''));
     }
 }

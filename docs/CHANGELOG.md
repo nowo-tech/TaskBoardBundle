@@ -64,6 +64,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **CSV column and cell caps (audit DL-L6).** A very wide CSV could exhaust memory before the 1.22 row cap was
+  reached: every row was kept with one entry per header. Two new limits are checked while the file is read, before a
+  row is kept:
+  - `import.max_columns` (default 512) refuses a header, or any row, with more columns;
+  - `import.max_cells` (default 1 000 000) refuses a file with more non-empty cells.
+
+### Added
+
+- **Host help under the import source select:** an empty `import_help` block on the board import page and the
+  Import subtasks dialog, and an optional escaped link `{url, label}` in both (the `help_link` include parameter or the
+  Twig global `nowo_task_board_import_help_link`), so a host adds "Format and examples" without copying the templates.
+  See [USAGE](USAGE.md#import-tasks-from-clickup-jira-or-trello).
+
+### Changed
+
+- Import limit errors (`max_rows`, `max_cell_length`, `max_columns`, `max_cells`) are now shown in the user's language:
+  new keys `task_board.import.error.*` in the 7 locales. The English text and the console output are unchanged.
+  `TaskImportResult` gained `errorTranslations` (the translation of an error, by its index in `errors`), and the
+  parser throws `Nowo\TaskBoardBundle\Exception\ImportLimitExceededException` (an `InvalidArgumentException`).
+
 ## [1.22.0] - 2026-11-03
 
 Idempotent import from every source

@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
@@ -34,8 +35,11 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
 use function array_filter;
+use function array_map;
 use function array_slice;
 use function count;
+use function implode;
+use function range;
 use function str_contains;
 use function str_starts_with;
 
@@ -218,7 +222,26 @@ final class TaskImportUpsertTest extends TestCase
         $result = $this->importCsv("id,title\n1,a\n2,b\n3,c\n", source: TaskImportSource::TaskBoardCsv, maxRows: 2);
 
         self::assertSame(['The file has 3 rows; an import takes at most 2.'], $result->errors);
+        self::assertSame(ImportLimitExceededException::ROWS, $result->errorTranslations[0]->getMessage());
         self::assertSame([], $this->tasks);
+    }
+
+    public function testAWideCsvIsRefusedWithATranslatableError(): void
+    {
+        $columns = implode(',', array_map(static fn (int $i): string => 'c' . $i, range(1, 600)));
+        $result  = $this->importCsv('Task ID,Task Name,' . $columns . "\nA,a\n");
+
+        self::assertSame(['The file has more than 512 columns; an import takes at most 512.'], $result->errors);
+        self::assertSame(ImportLimitExceededException::COLUMNS, $result->errorTranslations[0]->getMessage());
+        self::assertSame([], $this->tasks);
+    }
+
+    public function testAnInvalidFileErrorHasNoTranslation(): void
+    {
+        $result = $this->importCsv('', source: TaskImportSource::ClickUpCsv);
+
+        self::assertNotSame([], $result->errors);
+        self::assertSame([], $result->errorTranslations);
     }
 
     public function testNamesResolveOnCreateAndTheOptionStatusColumnIsKeptWhenMissing(): void

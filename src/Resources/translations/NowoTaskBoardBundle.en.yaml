@@ -343,6 +343,11 @@ task_board.import.help.source_clickup_csv: "Tasks of a ClickUp List or Table vie
 task_board.import.help.source_clickup_json: "Tasks from the ClickUp API or a JSON export (name, status, priority, assignees, due date, parent)."
 task_board.import.help.source_jira_csv: "Jira issues exported as CSV from the issue search (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key builds subtasks)."
 task_board.import.help.source_trello_json: "A Trello board exported as JSON (Menu → Print and export → JSON): cards become tasks, lists become columns, checklists become subtasks."
+# Since 1.22.1: import limits (audit DL-L6).
+task_board.import.error.too_many_rows: "The file has more than %max% rows; an import takes at most %max%."
+task_board.import.error.cell_too_long: "A cell of the file is longer than %max% bytes."
+task_board.import.error.too_many_columns: "The file has more than %max% columns; an import takes at most %max%."
+task_board.import.error.too_many_cells: "The file has more than %max% filled cells; an import takes at most %max%."
 task_board.import.help.options: "Importing again is safe: a row imported before (same id from the same tool or, without an id, same parent, title and creation date) updates its task with the file's values instead of creating a copy, and fields the file leaves empty keep the values set here. Rows already imported into another board are skipped. Files up to 20 MB."
 task_board.import.help.got_it: "Got it"
 task_board.import.subtasks.action: "Import subtasks"

@@ -104,6 +104,24 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change.
+
+- **New import limits (audit DL-L6):** `import.max_columns` (default 512) and `import.max_cells` (default 1 000 000
+  non-empty cells). A CSV over either limit is refused with an error flash, before any row is imported. Real exports
+  are far below them (Jira's widest are a few hundred columns); raise them if you import bigger files:
+
+  ```yaml
+  nowo_task_board:
+      import:
+          max_columns: 1024
+          max_cells: 2000000
+  ```
+- **Translated limit errors:** the four limit errors use the new keys `task_board.import.error.too_many_rows`,
+  `cell_too_long`, `too_many_columns` and `too_many_cells` (parameter `%max%`). A host overriding the catalogue should
+  add them; without them the English text is shown.
+- A custom `DelimitedTableParser` service definition should pass `$maxColumns` / `$maxCells`, or it keeps the
+  defaults.
+
 ## To 1.22.0
 
 From **1.21.0**:

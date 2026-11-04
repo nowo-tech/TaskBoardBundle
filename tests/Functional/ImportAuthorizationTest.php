@@ -16,7 +16,10 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
+use function array_map;
 use function file_put_contents;
+use function implode;
+use function range;
 use function sys_get_temp_dir;
 use function tempnam;
 
@@ -111,6 +114,26 @@ final class ImportAuthorizationTest extends FunctionalTestCase
         self::assertSame('Attacker task', $attacker?->getTitle());
         self::assertNull($attacker?->getDescription());
         self::assertInstanceOf(Task::class, $this->em->getRepository(Task::class)->findOneBy(['title' => 'Secret plan']), 'a task of its own');
+    }
+
+    /** Since 1.22.1 (DL-L6): a too-wide file is refused before any row is kept, with a translated flash, on both routes. */
+    public function testATooWideFileIsRefusedWithATranslatedFlash(): void
+    {
+        $board = $this->board(columns: ['To do']);
+        $task  = $this->task($board, 'Parent');
+        $this->login($this->owner);
+        $wide = 'Issue key,Summary,' . implode(',', array_map(static fn (int $i): string => 'c' . $i, range(1, 600))) . "\nPRJ-1,Spec\n";
+
+        $this->post('/board/' . $board->getId() . '/import', ['task_import_form' => ['source' => 'jira_csv', '_token' => $this->csrf()]], ['task_import_form' => ['file' => $this->upload($wide)]]);
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'The file has more than 512 columns; an import takes at most 512.');
+
+        $this->post('/task/' . $task->getId() . '/import', ['task_import_form' => ['source' => 'jira_csv', '_token' => $this->csrf()]], ['task_import_form' => ['file' => $this->upload($wide)]]);
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'The file has more than 512 columns; an import takes at most 512.');
+
+        $this->em->clear();
+        self::assertCount(1, $this->em->getRepository(Task::class)->findAll(), 'nothing was imported');
     }
 
     private function importBoard(string $boardId, string $csv): void

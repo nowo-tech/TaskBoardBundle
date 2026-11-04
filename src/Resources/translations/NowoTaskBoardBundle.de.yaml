@@ -343,6 +343,11 @@ task_board.import.help.source_clickup_csv: "Aufgaben einer ClickUp-Listen- oder 
 task_board.import.help.source_clickup_json: "Aufgaben aus der ClickUp-API oder einem JSON-Export (Name, Status, Priorität, Zuständige, Fälligkeit, Eltern)."
 task_board.import.help.source_jira_csv: "Jira-Vorgänge, als CSV aus der Vorgangssuche exportiert (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key erzeugt Unteraufgaben)."
 task_board.import.help.source_trello_json: "Ein Trello-Board als JSON (Menü → Drucken und exportieren → JSON): Karten werden Aufgaben, Listen Spalten, Checklisten Unteraufgaben."
+# Since 1.22.1: import limits (audit DL-L6).
+task_board.import.error.too_many_rows: "Die Datei hat mehr als %max% Zeilen; ein Import nimmt höchstens %max% an."
+task_board.import.error.cell_too_long: "Eine Zelle der Datei ist länger als %max% Bytes."
+task_board.import.error.too_many_columns: "Die Datei hat mehr als %max% Spalten; ein Import nimmt höchstens %max% an."
+task_board.import.error.too_many_cells: "Die Datei hat mehr als %max% gefüllte Zellen; ein Import nimmt höchstens %max% an."
 task_board.import.help.options: "Ein erneuter Import ist sicher: eine bereits importierte Zeile (gleiche ID aus demselben Tool oder, ohne ID, gleiche Elternaufgabe, gleicher Titel und gleiches Erstelldatum) aktualisiert ihre Aufgabe mit den Werten der Datei statt eine Kopie anzulegen; Felder, die die Datei leer lässt, behalten die hier gesetzten Werte. Bereits in ein anderes Board importierte Zeilen werden übersprungen. Dateien bis 20 MB."
 task_board.import.help.got_it: "Verstanden"
 task_board.import.subtasks.action: "Unteraufgaben importieren"

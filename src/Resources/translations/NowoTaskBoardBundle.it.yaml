@@ -343,6 +343,11 @@ task_board.import.help.source_clickup_csv: "Le attività di una vista Elenco o T
 task_board.import.help.source_clickup_json: "Attività dall’API di ClickUp o da un’esportazione JSON (nome, stato, priorità, assegnatari, scadenza, padre)."
 task_board.import.help.source_jira_csv: "Issue di Jira esportate in CSV dalla ricerca (Summary, Status, Priority, Assignee, Due Date, Issue key; Parent key crea sottoattività)."
 task_board.import.help.source_trello_json: "Una bacheca Trello esportata in JSON (Menu → Stampa ed esporta → JSON): le schede diventano attività, gli elenchi colonne, le checklist sottoattività."
+# Since 1.22.1: import limits (audit DL-L6).
+task_board.import.error.too_many_rows: "Il file ha più di %max% righe; un'importazione ne accetta al massimo %max%."
+task_board.import.error.cell_too_long: "Una cella del file supera i %max% byte."
+task_board.import.error.too_many_columns: "Il file ha più di %max% colonne; un'importazione ne accetta al massimo %max%."
+task_board.import.error.too_many_cells: "Il file ha più di %max% celle compilate; un'importazione ne accetta al massimo %max%."
 task_board.import.help.options: "Reimportare è sicuro: una riga già importata (stesso id dello stesso strumento o, senza id, stesso padre, titolo e data di creazione) aggiorna la sua attività con i valori del file invece di duplicarla, e i campi che il file lascia vuoti mantengono i valori impostati qui. Le righe già importate in un'altra bacheca vengono saltate. File fino a 20 MB."
 task_board.import.help.got_it: "Ho capito"
 task_board.import.subtasks.action: "Importa sottoattività"

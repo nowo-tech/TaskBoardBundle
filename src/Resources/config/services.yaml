@@ -94,10 +94,13 @@ services:
             $maxRows: '%nowo_task_board.import.max_rows%'
 
     # Since 1.22 (audit DL-L4): CSV row and cell limits (`import.*`); the CSV importers get this instance.
+    # Since 1.22.1 (audit DL-L6): column and filled-cell limits too.
     Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser:
         arguments:
             $maxRows: '%nowo_task_board.import.max_rows%'
             $maxCellLength: '%nowo_task_board.import.max_cell_length%'
+            $maxColumns: '%nowo_task_board.import.max_columns%'
+            $maxCells: '%nowo_task_board.import.max_cells%'
 
     # Since 1.22: source ids already imported into another board of the tenant (cross-board rule of the import).
     Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface:

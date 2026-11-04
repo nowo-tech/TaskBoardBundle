@@ -518,7 +518,12 @@ nowo_task_board:
     import:
         max_rows: 5000          # rows (tasks) per file; a larger file is refused
         max_cell_length: 65536  # bytes per CSV cell; a file with a longer cell is refused
+        max_columns: 512        # since 1.22.1: columns of a CSV header or row; a wider file is refused
+        max_cells: 1000000      # since 1.22.1: non-empty cells of a CSV file; a larger file is refused
 ```
+
+Every limit is checked while the file is read, before a row is kept. The errors are translated
+(`task_board.import.error.*`).
 
 ### Cross-board lookup (since 1.22)
 
