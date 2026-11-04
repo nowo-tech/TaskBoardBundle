@@ -36,7 +36,14 @@ final class ImportMemoryLimitsTest extends TestCase
         yield 'EB-L3: ClickUp, 10 M integers' => ['json-clickup-ints', 'REFUSED ' . ImportLimitExceededException::JSON];
         yield 'EB-L3: Trello, 1.5 M cards' => ['json-trello', 'REFUSED ' . ImportLimitExceededException::JSON];
         yield 'EB-L3: own format, 6.6 M empty objects' => ['json-taskboard', 'REFUSED ' . ImportLimitExceededException::JSON];
+        yield 'EB-L4: a 19 MB cell cut by lone CRs' => ['cr-split-cell', 'REFUSED ' . ImportLimitExceededException::CELL];
+        yield 'EB-L4: 960 000 columns cut by lone CRs' => ['cr-split-wide', 'REFUSED ' . ImportLimitExceededException::COLUMNS];
+        yield 'EB-L4: a 996 000-column header cut by lone CRs' => ['cr-wide-header', 'REFUSED ' . ImportLimitExceededException::COLUMNS];
+        yield 'EB-L5: 2 M short strings' => ['json-strings', 'REFUSED ' . ImportLimitExceededException::JSON];
+        yield 'EB-L5: one object of 1.4 M keys' => ['json-keys', 'REFUSED ' . ImportLimitExceededException::JSON];
+        yield 'EB-L5: 1.4 M keys in one card' => ['json-keys-nested', 'REFUSED ' . ImportLimitExceededException::JSON];
         yield 'a normal file still parses' => ['normal-csv', 'PARSED 5000'];
+        yield 'a normal JSON export still parses' => ['normal-json', 'PARSED 5000'];
     }
 
     #[DataProvider('cases')]

@@ -36,8 +36,38 @@ $cases = [
     'json-clickup-ints' => static fn (): array => ['clickup', '[' . rtrim(str_repeat('0,', intdiv($size, 2)), ',') . ']'],
     'json-trello'       => static fn (): array => ['trello', '{"cards":[' . rtrim(str_repeat('{"name":"t"},', intdiv($size, 13)), ',') . ']}'],
     'json-taskboard'    => static fn (): array => ['taskboard', '[' . rtrim(str_repeat('{},', intdiv($size, 3)), ',') . ']'],
-    // What the limits still accept: 5000 rows of 20 filled columns.
-    'normal-csv' => static fn (): array => ['csv', implode(',', array_map(static fn (int $i): string => 'h' . $i, range(1, 20))) . "\n" . str_repeat(implode(',', array_fill(0, 20, 'value')) . "\n", 5000)],
+    // Audit EB-L4: a lone "\r" does not end a record for fgetcsv(), so it does not for the pre-pass either.
+    'cr-split-cell'  => static fn (): array => ['csv', "a\n" . rtrim(str_repeat(str_repeat('x', 60000) . "\r", 330))],
+    'cr-split-wide'  => static fn (): array => ['csv', "a,b\n" . rtrim(str_repeat(str_repeat(',', 400) . "\r", 2400))],
+    'cr-wide-header' => static function (): array {
+        $header = '';
+        for ($i = 1; $i <= 1950 * 511; ++$i) {
+            $header .= 'h' . $i . ($i % 511 === 0 ? "\r" : ',');
+        }
+
+        return ['csv', rtrim($header, "\r,") . "\n" . str_repeat("x\n", 40)];
+    },
+    // Audit EB-L5: keys and short strings are weighed.
+    'json-strings' => static fn (): array => ['clickup', '[' . rtrim(str_repeat('"ab",', 1_999_990), ',') . ']'],
+    'json-keys'    => static function (): array {
+        $json = '{"cards":{';
+        for ($i = 1; $i <= 1_400_000; ++$i) {
+            $json .= '"' . dechex($i) . '":"",';
+        }
+
+        return ['trello', rtrim($json, ',') . '}}'];
+    },
+    'json-keys-nested' => static function (): array {
+        $json = '{"cards":[{"name":"t","labels":{';
+        for ($i = 1; $i <= 1_400_000; ++$i) {
+            $json .= '"' . dechex($i) . '":"",';
+        }
+
+        return ['trello', rtrim($json, ',') . '}}]}'];
+    },
+    // What the limits still accept: 5000 rows of 20 filled columns, and 5000 ClickUp tasks of 20 fields.
+    'normal-json' => static fn (): array => ['clickup', '[' . rtrim(str_repeat('{"name":"Task","status":"to do",' . implode(',', array_map(static fn (int $i): string => '"field' . $i . '":"value ' . $i . '"', range(1, 18))) . '},', 5000), ',') . ']'],
+    'normal-csv'  => static fn (): array => ['csv', implode(',', array_map(static fn (int $i): string => 'h' . $i, range(1, 20))) . "\n" . str_repeat(implode(',', array_fill(0, 20, 'value')) . "\n", 5000)],
 ];
 
 [$kind, $content] = $cases[$argv[1] ?? '']();

@@ -520,7 +520,7 @@ nowo_task_board:
         max_cell_length: 65536  # bytes per CSV cell; a file with a longer cell is refused
         max_columns: 512        # since 1.22.1: columns of a CSV header or row; a wider file is refused
         max_cells: 1000000      # since 1.22.1: cells of a CSV file (columns × rows, empty ones too); a larger file is refused
-        max_json_nodes: 2000000 # since 1.22.1: weight of a JSON file before decoding (value 1, object or list 10)
+        max_json_nodes: 2000000 # since 1.22.1: weight of a JSON file before decoding (value 1, object or list 10, string 2 + 1 per 32 bytes, member +4)
 ```
 
 Every limit is checked before anything is built (CSV: one pass over the raw bytes; JSON: before `json_decode()`, and

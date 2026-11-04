@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 
 use function array_map;
 use function assert;
+use function count;
 use function fclose;
 use function fgetcsv;
 use function fopen;
@@ -15,6 +16,7 @@ use function fwrite;
 use function is_resource;
 use function mb_strtolower;
 use function rewind;
+use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -25,6 +27,9 @@ use function trim;
  */
 final readonly class DelimitedTableParser
 {
+    /** The blanks PHP's CSV parser skips before an opening quote (isspace(); a line break ends the record first). */
+    private const BLANKS = " \t\r\x0B\x0C";
+
     /** Since 1.22: default `import.max_cell_length` (bytes). */
     public const DEFAULT_MAX_CELL_LENGTH = 65536;
 
@@ -88,12 +93,17 @@ final readonly class DelimitedTableParser
      * quotes), the cells, the records (blank lines too) and the length of each cell, and throws at the first limit
      * passed. Quoted cells (which may hold delimiters and line breaks) are skipped in one step.
      *
+     * Audit EB-L4: records and quotes are found exactly as fgetcsv() finds them. A record ends at "\n" only (a lone
+     * "\r" is part of the cell, "\r\n" ends the record), and a quote opens a cell when only PHP's leading blanks
+     * (space, "\t", "\r", "\v", "\f", except the delimiter) come before it in the cell.
+     *
      * @throws ImportLimitExceededException
      */
     private function prescan(string $content, string $delimiter): void
     {
         $length    = strlen($content);
-        $stops     = $delimiter . "\"\r\n";
+        $stops     = $delimiter . "\"\n";
+        $blanks    = str_replace($delimiter, '', self::BLANKS);
         $columns   = 1;
         $records   = 0;
         $cells     = 0;
@@ -102,8 +112,8 @@ final readonly class DelimitedTableParser
         // Up to $length included: the end of the text closes the last record (trim() left no line break after it).
         for ($i = 0; $i <= $length;) {
             $skip = strcspn($content, $stops, $i);
-            // Whether the cell already has a character other than a space or a tab (a quote then is a plain one).
-            $filled = $filled || strspn($content, " \t", $i, $skip) < $skip;
+            // Whether the cell already has a character other than a leading blank (a quote then is a plain one).
+            $filled = $filled || strspn($content, $blanks, $i, $skip) < $skip;
             $i += $skip;
             $char = $content[$i] ?? "\n";
             if ($char === '"') {
@@ -126,7 +136,9 @@ final readonly class DelimitedTableParser
                 }
                 continue;
             }
-            if ($i - $cellStart > $this->maxCellLength) {
+            // fgetcsv() drops the "\r" of a "\r\n" that ends the record.
+            $end = $char === "\n" && $i > $cellStart && $content[$i - 1] === "\r" ? $i - 1 : $i;
+            if ($end - $cellStart > $this->maxCellLength) {
                 throw ImportLimitExceededException::cellLength($this->maxCellLength);
             }
             if ($char === $delimiter) {
@@ -137,7 +149,7 @@ final readonly class DelimitedTableParser
                 $filled    = false;
                 continue;
             }
-            // End of a record (\r\n counts once); the header is not a row, a blank line is.
+            // End of a record; the header is not a row, a blank line is.
             if ($records > 0) {
                 if ($records > $this->maxRows) {
                     throw ImportLimitExceededException::rows($this->maxRows);
@@ -148,10 +160,9 @@ final readonly class DelimitedTableParser
                 }
             }
             ++$records;
-            $columns = 1;
-            $filled  = false;
-            $i += $char === "\r" && ($content[$i + 1] ?? '') === "\n" ? 2 : 1;
-            $cellStart = $i;
+            $columns   = 1;
+            $filled    = false;
+            $cellStart = ++$i;
         }
     }
 
@@ -162,13 +173,14 @@ final readonly class DelimitedTableParser
      */
     private function readRows($stream, string $delimiter): array
     {
-        // The limits were checked by prescan() on the raw bytes.
-        $headers = array_map(static fn (?string $header): string => trim((string) $header), $this->readRecord($stream, $delimiter) ?? []);
+        // The limits were checked by prescan() on the raw bytes; each record is checked again (defence in depth).
+        $headers = array_map(static fn (?string $header): string => trim((string) $header), $this->checked($this->readRecord($stream, $delimiter) ?? []));
         $rows    = [];
         while (($values = $this->readRecord($stream, $delimiter)) !== null) {
             if ($values === [null]) {
                 continue;
             }
+            $this->checked($values);
 
             $normalized = [];
             foreach ($headers as $index => $header) {
@@ -184,6 +196,29 @@ final readonly class DelimitedTableParser
         }
 
         return $rows;
+    }
+
+    /**
+     * Audit EB-L4: the record fgetcsv() built, checked again against the column and cell limits before it is kept.
+     *
+     * @param list<string|null> $record
+     *
+     * @throws ImportLimitExceededException
+     *
+     * @return list<string|null>
+     */
+    private function checked(array $record): array
+    {
+        if (count($record) > $this->maxColumns) {
+            throw ImportLimitExceededException::columns($this->maxColumns);
+        }
+        foreach ($record as $value) {
+            if (strlen((string) $value) > $this->maxCellLength) {
+                throw ImportLimitExceededException::cellLength($this->maxCellLength);
+            }
+        }
+
+        return $record;
     }
 
     /**

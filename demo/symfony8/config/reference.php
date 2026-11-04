@@ -1450,7 +1450,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         max_cell_length?: int|Param, // The longest CSV cell, in bytes; a file with a longer cell is refused. // Default: 65536
  *         max_columns?: int|Param, // Since 1.22.1: the most columns of a CSV header or row; a wider file is refused before its rows are read. // Default: 512
  *         max_cells?: int|Param, // Since 1.22.1: the most cells of a CSV file (columns × rows, empty cells included); a larger file is refused before it is parsed. // Default: 1000000
- *         max_json_nodes?: int|Param, // Since 1.22.1: the weight of a JSON import (every value counts 1, every object or list 10); a heavier file is refused before it is decoded. // Default: 2000000
+ *         max_json_nodes?: int|Param, // Since 1.22.1: the weight of a JSON import (every value counts 1, every object or list 10, every string 2 plus one per 32 bytes, every object member 4 more); a heavier file is refused before it is decoded. // Default: 2000000
  *     },
  *     comments?: array{ // Task comments and @mentions (since 1.16).
  *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment. // Default: true

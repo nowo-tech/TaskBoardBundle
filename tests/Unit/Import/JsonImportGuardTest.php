@@ -23,9 +23,10 @@ final class JsonImportGuardTest extends TestCase
 {
     public function testTheWeightIsCheckedBeforeDecoding(): void
     {
-        $guard = new JsonImportGuard(maxNodes: 25, maxRows: 2);
+        $guard = new JsonImportGuard(maxNodes: 30, maxRows: 2);
 
-        // [ 10 + 2 commas + { 10 = 22: accepted; strings (escaped quotes, brackets and commas inside) weigh nothing.
+        // [ 10 + 2 commas + { 10 + key 2 + member 4 + short string 2 = 30: accepted; escaped quotes, brackets and
+        // commas inside a string are part of the string.
         self::assertSame([1, 2, ['a' => 'x\\"[{,,,']], $guard->decode('[1,2,{"a":"x\\\\\\"[{,,,"}]', 'Bad: '));
         try {
             $guard->decode('["never closed', 'Bad: ');
@@ -39,8 +40,14 @@ final class JsonImportGuardTest extends TestCase
             self::fail('too heavy');
         } catch (ImportLimitExceededException $exception) {
             self::assertSame(ImportLimitExceededException::JSON, $exception->translationKey);
-            self::assertSame('The JSON file is too large to import (more than 25 values; an object or a list counts 10).', $exception->getMessage());
+            self::assertSame('The JSON file is too large to import (more than 30 values; an object or a list counts 10).', $exception->getMessage());
         }
+
+        // Audit EB-L5: { 10 + key 2 + member 4 + a 95-byte string 2 + 2 = 20; one byte more makes 21.
+        $exact = new JsonImportGuard(maxNodes: 20);
+        self::assertSame(['k' => str_repeat('x', 93)], $exact->decode('{"k":"' . str_repeat('x', 93) . '"}', 'Bad: '));
+        $this->expectException(ImportLimitExceededException::class);
+        $exact->decode('{"k":"' . str_repeat('x', 94) . '"}', 'Bad: ');
     }
 
     public function testInvalidJsonDepthAndRows(): void

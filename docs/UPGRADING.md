@@ -112,7 +112,7 @@ From **1.22.0**: `composer update nowo-tech/task-board-bundle`. No schema change
   - `import.max_rows` (unchanged, 5000) now also counts blank lines of a CSV and the items of a JSON file before they
     are mapped;
   - `import.max_json_nodes` (default 2 000 000): the weight of a JSON file before it is decoded (every value counts 1,
-    every object or list 10); JSON is decoded with a depth limit of 64.
+    every object or list 10, every string — key or value — 2 plus one per 32 bytes, every object member 4 more); JSON is decoded with a depth limit of 64.
 
   With these defaults an import stays well under 128 MB of memory. Real exports are below them (Jira's widest are a
   few hundred columns × a few thousand rows; 300 columns × 3000 rows is 900 000 cells). If you import bigger files,

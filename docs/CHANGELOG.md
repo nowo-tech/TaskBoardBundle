@@ -69,12 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bounded imports (audits DL-L6, EB).** A wide CSV, a single line of 20 MB of commas, a grid of empty cells or a
   JSON file with millions of items could exhaust the memory of the request before the 1.22 row cap was checked. Every
   limit is now checked before anything is built:
-  - CSV: one pass over the raw bytes (quotes read as `fgetcsv()` reads them) refuses a header or a row with more than
+  - CSV: one pass over the raw bytes (records, quotes and leading blanks found exactly as `fgetcsv()` finds them: a
+    lone `\r` is part of a cell, `\v` / `\f` before a quote open it; audit EB-L4) refuses a header or a row with more than
     `import.max_columns` (default 512) columns, more than `import.max_cells` (default 1 000 000) cells — columns ×
     rows, empty cells included —, more than `import.max_rows` rows (blank lines count) and a cell longer than
-    `import.max_cell_length`, before `fgetcsv()` splits a record;
+    `import.max_cell_length`, before `fgetcsv()` splits a record; each record `fgetcsv()` builds is checked again (columns, cell length)
+    before it is kept;
   - JSON (ClickUp, Trello, the own format): the text is weighed before `json_decode()` against
-    `import.max_json_nodes` (default 2 000 000: every value counts 1, every object or list 10), decoded with a depth
+    `import.max_json_nodes` (default 2 000 000: every value counts 1, every object or list 10, every string — key or
+    value — 2 plus one per 32 bytes, every object member 4 more; audit EB-L5), decoded with a depth
     limit of 64, and the items are counted against `import.max_rows` before they are mapped to tasks;
   - `nowo:task-board:import` refuses a file over the upload form's 20 MB before reading it.
 
