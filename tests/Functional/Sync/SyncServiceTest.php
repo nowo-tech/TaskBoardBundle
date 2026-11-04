@@ -107,7 +107,8 @@ final class SyncServiceTest extends SyncFunctionalTestCase
         $document = $this->em->getRepository(TaskDocument::class)->findOneBy(['task' => $design]);
         self::assertInstanceOf(TaskDocument::class, $document);
         self::assertSame('Fields (ClickUp)', $document->getTitle());
-        $comments = $this->em->getRepository(TaskComment::class)->findBy(['task' => $design], ['createdAt' => 'ASC']);
+        // Both comments are written in the same second (MySQL keeps whole seconds): ordered by their body here.
+        $comments = $this->em->getRepository(TaskComment::class)->findBy(['task' => $design], ['body' => 'DESC']);
         self::assertCount(2, $comments);
         self::assertSame('Looks good', $comments[0]->getBody());
         self::assertSame('owner@example.com', $comments[0]->getAuthor()->getUserIdentifier());
