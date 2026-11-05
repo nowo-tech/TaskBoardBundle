@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use PHPUnit\Framework\TestCase;
@@ -28,9 +29,12 @@ final class TaskTimeLoggerTest extends TestCase
         $task = new Task(new TaskBoard('Board', 'board', $user), 'Task', $user);
         $repo = $this->createMock(TaskRepositoryInterface::class);
         $repo->expects(self::exactly(4))->method('save')->with($task);
-        $logger = new TaskTimeLogger($repo, new TaskChangeRecorder());
+        $entries = $this->createMock(TaskTimeEntryRepositoryInterface::class);
+        $logger  = new TaskTimeLogger($repo, new TaskChangeRecorder(), $entries);
 
-        $first  = $logger->log($task, $user, 90, new DateTimeImmutable('2026-10-27'), '  Pairing  ');
+        $first = $logger->log($task, $user, 90, new DateTimeImmutable('2026-10-27'), '  Pairing  ');
+        // Since 1.23.2: removing an entry deletes it explicitly (no orphan removal on the task any more).
+        $entries->expects(self::once())->method('remove')->with($first);
         $second = $logger->log($task, $user, 30, new DateTimeImmutable('2026-10-28'), '   ');
 
         self::assertSame('Pairing', $first->getDescription());
@@ -50,7 +54,7 @@ final class TaskTimeLoggerTest extends TestCase
         self::assertSame(TaskChangeType::TimeRemoved, $entry->getChangeType());
         self::assertSame('90', $entry->getOldValue());
 
-        self::assertNull((new TaskTimeLogger($repo, new TaskChangeRecorder()))->log($task, $user, 5, new DateTimeImmutable('2026-10-28'))->getDescription());
+        self::assertNull((new TaskTimeLogger($repo, new TaskChangeRecorder(), $entries))->log($task, $user, 5, new DateTimeImmutable('2026-10-28'))->getDescription());
     }
 
     public function testAddingTheSameEntryTwiceKeepsOne(): void

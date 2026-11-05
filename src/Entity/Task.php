@@ -11,6 +11,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
@@ -21,6 +22,7 @@ use function strtolower;
 #[ORM\Table(name: 'task_board_tasks')]
 #[ORM\Index(name: 'task_board_tasks_board_idx', columns: ['board_id'])]
 #[ORM\Index(name: 'task_board_tasks_board_archived_idx', columns: ['board_id', 'archived_at'])]
+#[ORM\HasLifecycleCallbacks]
 class Task
 {
     /** Since 1.16: the longest title (column length); longer ones are cut. */
@@ -93,8 +95,13 @@ class Task
     #[ORM\OneToMany(targetEntity: TaskDocument::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $documents;
 
-    /** @var Collection<int, TaskTimeEntry> */
-    #[ORM\OneToMany(targetEntity: TaskTimeEntry::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    /**
+     * Since 1.23.2 no `remove` cascade and no orphan removal: deleting the task never deletes tracked time — the
+     * entries are detached ({@see self::detachTimeEntries()}, `ON DELETE SET NULL`) and keep their snapshots.
+     *
+     * @var Collection<int, TaskTimeEntry>
+     */
+    #[ORM\OneToMany(targetEntity: TaskTimeEntry::class, mappedBy: 'task', cascade: ['persist'])]
     private Collection $timeEntries;
 
     public function __construct(
@@ -159,8 +166,14 @@ class Task
 
     public function setTitle(string $title): self
     {
+        $title   = Text::cut($title, self::TITLE_MAX);
+        $renamed = $title !== $this->title;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->title = Text::cut($title, self::TITLE_MAX);
+        $this->title = $title;
+        if ($renamed) {
+            // Since 1.23.2: the time entries keep the current title as their snapshot.
+            $this->refreshTimeEntrySnapshots();
+        }
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 
@@ -604,12 +617,53 @@ class Task
         return $this;
     }
 
-    /** Since 1.15. */
+    /**
+     * Since 1.15. Since 1.23.2 only drops the entry from the collection: the caller deletes it explicitly
+     * ({@see TaskTimeLogger::remove()}); there is no orphan removal any more.
+     */
     public function removeTimeEntry(TaskTimeEntry $entry): self
     {
         $this->timeEntries->removeElement($entry);
 
         return $this;
+    }
+
+    /**
+     * Since 1.23.2: the external id of an imported / synced task — the first link an import or a provider sync wrote
+     * (`importSource` + `externalId`); null for a native task.
+     */
+    public function getExternalId(): ?string
+    {
+        foreach ($this->links as $link) {
+            if ($link->getImportSource() !== null && $link->getExternalId() !== null) {
+                return $link->getExternalId();
+            }
+        }
+
+        return null;
+    }
+
+    /** Since 1.23.2: copies the title, board id and external id of the task into each of its time entries. */
+    public function refreshTimeEntrySnapshots(): self
+    {
+        foreach ($this->timeEntries as $entry) {
+            $entry->refreshTaskSnapshot();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Since 1.23.2: before the task is removed (directly, or by the board's `remove` cascade) its time entries are
+     * detached with fresh snapshots instead of being deleted. Deletes that bypass the ORM (DQL / SQL, the database
+     * cascades of a parent task or a board) rely on `ON DELETE SET NULL` and the snapshots kept since creation.
+     */
+    #[ORM\PreRemove]
+    public function detachTimeEntries(): void
+    {
+        foreach ($this->timeEntries as $entry) {
+            $entry->detachFromTask();
+        }
     }
 
     /**

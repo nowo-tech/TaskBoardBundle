@@ -68,6 +68,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Planned as **1.23.2** — data-loss fix, **schema change** (see [UPGRADING](UPGRADING.md#unreleased)).
+
+### Fixed
+
+- **Deleting a task deleted its tracked time** (since 1.15): `Task::$timeEntries` was mapped with
+  `cascade: ['persist', 'remove']` and `orphanRemoval: true`, and `task_board_task_time_entries.task_id` was
+  `NOT NULL … ON DELETE CASCADE`, so removing a task (directly, through its board, its parent task or a bulk delete)
+  removed every manual `TaskTimeEntry` logged on it. Deleting a task now never deletes tracked time:
+  - `TaskTimeEntry.task` is nullable with `ON DELETE SET NULL`; `Task::$timeEntries` keeps `persist` only (no
+    `remove` cascade, no orphan removal). Before a task is removed through the ORM (`Task` `#[PreRemove]`, also on the
+    board's `remove` cascade) its entries are detached with fresh snapshots; deletes that bypass the ORM (DQL / SQL,
+    the database cascades of `parent_id` and `board_id`) keep the entries through `ON DELETE SET NULL`.
+  - New nullable snapshot columns on `task_board_task_time_entries`: `task_title_snapshot`, `board_id_snapshot`,
+    `task_external_id` — filled when the entry is created, refreshed when the task is renamed (`Task::setTitle()`,
+    so the edit form, imports and provider syncs) and right before the task is removed. Read a detached entry with
+    `TaskTimeEntry::getTaskTitle()` / `getBoardId()` / `getTaskExternalId()` (live values while the task exists,
+    snapshots after); `isDetached()` tells them apart. `TaskTimeEntry::getTask()` now returns `?Task`.
+  - Removing one entry from the task detail still deletes it, now explicitly:
+    `TaskTimeEntryRepositoryInterface::remove()` (new method) called by `TaskTimeLogger::remove()`, which takes the
+    repository as a third constructor argument (autowired).
+  - Provider syncs never deleted tasks (a task gone remotely is archived, unlinking removes only the sync state);
+    tests now pin that the time stays through archive, rename and unlink.
+
 ## [1.23.1] - 2026-11-04
 
 ### Fixed

@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 
 use function trim;
 
@@ -21,6 +22,7 @@ final readonly class TaskTimeLogger
     public function __construct(
         private TaskRepositoryInterface $taskRepository,
         private TaskChangeRecorder $changeRecorder,
+        private TaskTimeEntryRepositoryInterface $timeEntryRepository,
     ) {
     }
 
@@ -37,7 +39,8 @@ final readonly class TaskTimeLogger
     }
 
     /**
-     * Removes a manual entry of the task; false when the task has none with that id.
+     * Removes a manual entry of the task; false when the task has none with that id. Since 1.23.2 the entry is deleted
+     * explicitly (no orphan removal on the task any more: deleting a task keeps its time).
      */
     public function remove(Task $task, string $entryId, object $user): bool
     {
@@ -47,6 +50,7 @@ final readonly class TaskTimeLogger
             }
 
             $task->removeTimeEntry($entry);
+            $this->timeEntryRepository->remove($entry);
             $this->changeRecorder->record($task, $user, TaskChangeType::TimeRemoved, (string) $entry->getMinutes(), null, $entry->getLoggedAt()->format('Y-m-d'));
             $this->taskRepository->save($task);
 

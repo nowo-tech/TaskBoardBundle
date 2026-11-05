@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Time entries survive their task (planned 1.23.2)](#time-entries-survive-their-task-planned-1232)
 - [To 1.23.1](#to-1231)
 - [To 1.23.0](#to-1230)
   - [Schema change for every host: archived tasks](#schema-change-for-every-host-archived-tasks)
@@ -112,6 +113,100 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+### Time entries survive their task (planned 1.23.2)
+
+From **1.23.x**. Deleting a task used to delete its manual time entries (`task_board_task_time_entries`); it now
+detaches them (`task_id` = NULL) and keeps the task title, board id and external id as snapshots. **Every host must run
+a migration** — generate one (`php bin/console doctrine:migrations:diff`, then `doctrine:migrations:migrate`) and add the
+backfill below to it, or apply the SQL below. It assumes the default `table_prefix` (`task_board_`); replace the names if
+you configured another one. `FK_180A3E3A8DB60186` is the name Doctrine generates for `task_id`; check yours
+(`SHOW CREATE TABLE` / `\d`) if the table was created another way.
+
+MySQL / MariaDB:
+
+```sql
+ALTER TABLE task_board_task_time_entries DROP FOREIGN KEY FK_180A3E3A8DB60186;
+ALTER TABLE task_board_task_time_entries ADD task_title_snapshot VARCHAR(255) DEFAULT NULL, ADD board_id_snapshot VARCHAR(36) DEFAULT NULL, ADD task_external_id VARCHAR(128) DEFAULT NULL, CHANGE task_id task_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ADD CONSTRAINT FK_180A3E3A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+
+-- Backfill the snapshots of the existing rows.
+UPDATE task_board_task_time_entries e
+    INNER JOIN task_board_tasks t ON t.id = e.task_id
+    SET e.task_title_snapshot = t.title, e.board_id_snapshot = t.board_id
+    WHERE e.task_title_snapshot IS NULL;
+UPDATE task_board_task_time_entries e
+    INNER JOIN (SELECT task_id, MIN(external_id) AS external_id FROM task_board_task_links
+                WHERE import_source IS NOT NULL AND external_id IS NOT NULL GROUP BY task_id) l ON l.task_id = e.task_id
+    SET e.task_external_id = l.external_id
+    WHERE e.task_external_id IS NULL;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_time_entries DROP CONSTRAINT FK_180A3E3A8DB60186;
+ALTER TABLE task_board_task_time_entries ADD task_title_snapshot VARCHAR(255) DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ADD board_id_snapshot VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ADD task_external_id VARCHAR(128) DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ALTER task_id DROP NOT NULL;
+ALTER TABLE task_board_task_time_entries ADD CONSTRAINT FK_180A3E3A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL NOT DEFERRABLE;
+
+-- Backfill the snapshots of the existing rows.
+UPDATE task_board_task_time_entries e
+    SET task_title_snapshot = t.title, board_id_snapshot = t.board_id
+    FROM task_board_tasks t
+    WHERE t.id = e.task_id AND e.task_title_snapshot IS NULL;
+UPDATE task_board_task_time_entries e
+    SET task_external_id = l.external_id
+    FROM (SELECT task_id, MIN(external_id) AS external_id FROM task_board_task_links
+          WHERE import_source IS NOT NULL AND external_id IS NOT NULL GROUP BY task_id) l
+    WHERE l.task_id = e.task_id AND e.task_external_id IS NULL;
+```
+
+SQLite (a foreign key cannot be altered: the table is rebuilt; `<users>` is the table of your `user_class`, and
+`FK_180A3E3AA76ED395` / `IDX_180A3E3AA76ED395` the generated names for `user_id`):
+
+```sql
+PRAGMA foreign_keys = OFF;
+BEGIN;
+CREATE TABLE task_board_task_time_entries_new (id VARCHAR(36) NOT NULL, task_title_snapshot VARCHAR(255) DEFAULT NULL, board_id_snapshot VARCHAR(36) DEFAULT NULL, task_external_id VARCHAR(128) DEFAULT NULL, minutes INTEGER NOT NULL, logged_at DATETIME NOT NULL, description VARCHAR(512) DEFAULT NULL, task_id VARCHAR(36) DEFAULT NULL, user_id INTEGER NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_180A3E3A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_180A3E3AA76ED395 FOREIGN KEY (user_id) REFERENCES <users> (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+-- Copy the rows and backfill the snapshots in one go.
+INSERT INTO task_board_task_time_entries_new (id, task_title_snapshot, board_id_snapshot, task_external_id, minutes, logged_at, description, task_id, user_id)
+    SELECT e.id, t.title, t.board_id,
+           (SELECT MIN(l.external_id) FROM task_board_task_links l WHERE l.task_id = e.task_id AND l.import_source IS NOT NULL AND l.external_id IS NOT NULL),
+           e.minutes, e.logged_at, e.description, e.task_id, e.user_id
+    FROM task_board_task_time_entries e LEFT JOIN task_board_tasks t ON t.id = e.task_id;
+DROP TABLE task_board_task_time_entries;
+ALTER TABLE task_board_task_time_entries_new RENAME TO task_board_task_time_entries;
+CREATE INDEX IDX_180A3E3A8DB60186 ON task_board_task_time_entries (task_id);
+CREATE INDEX IDX_180A3E3AA76ED395 ON task_board_task_time_entries (user_id);
+COMMIT;
+PRAGMA foreign_keys = ON;
+```
+
+SQLite applies `ON DELETE SET NULL` only with `PRAGMA foreign_keys = ON` on the connection; deletes through the ORM
+detach the entries either way.
+
+What changes for host code:
+
+- **Queries over time entries must not inner-join the task.** A detached entry has `task_id` = NULL: a timesheet,
+  report or export that does `INNER JOIN task_board_tasks` (DQL `JOIN e.task t`) silently drops it. Use a left join
+  (`LEFT JOIN e.task t`) and read the title / board from `TaskTimeEntry::getTaskTitle()` / `getBoardId()` (live values,
+  or the snapshots once the task is gone), or the `task_title_snapshot` / `board_id_snapshot` columns in SQL. Filter a
+  board's time on `board_id_snapshot` (with `t.board_id` as a fallback for rows you did not backfill) instead of
+  `t.board_id` alone.
+- `TaskTimeEntry::getTask()` returns `?Task`: guard every `$entry->getTask()->…` (Twig: `entry.task.title` on a
+  detached entry renders empty — use `entry.taskTitle`).
+- The bundle's own pages read entries only through `task.timeEntries` (the task detail), so they never meet a detached
+  entry.
+- `TaskTimeEntryRepositoryInterface` gained `remove(TaskTimeEntry $entry): void`, and `TaskTimeLogger` takes it as a
+  third constructor argument (autowired; only hosts that build the logger or implement the interface themselves must
+  adapt). `Task::removeTimeEntry()` no longer deletes the entry on flush (no orphan removal): delete it with the
+  repository.
+- Deleting a board (`TaskBoardRepositoryInterface::remove()`) keeps the time of its tasks the same way.
+- TimeTrackBundle's `TimeEntry` (timers) already kept `task_title_snapshot` / `board_id_snapshot` and survived the
+  task; manual entries now behave the same.
 
 ## To 1.23.1
 
