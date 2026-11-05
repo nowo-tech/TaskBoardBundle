@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.25.2](#to-1252)
 - [To 1.25.1](#to-1251)
 - [To 1.25.0](#to-1250)
   - [Behaviour changes for sync hosts](#behaviour-changes-for-sync-hosts)
@@ -123,6 +124,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.25.2
+
+From **1.25.1**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 No schema change; the default output is unchanged. New option `sync.badge.connect_link` (default `true`): a host that
 copied `_connection_badge.html.twig` only to drop the *Connect provider* link of an unlinked board can delete its copy
