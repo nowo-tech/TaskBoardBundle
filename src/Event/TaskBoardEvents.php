@@ -86,4 +86,13 @@ final class TaskBoardEvents
 
     /** {@see BoardConnectionEvent} (since 1.23). */
     public const BOARD_CONNECTION_UNLINKED = 'nowo_task_board.board_connection_unlinked';
+
+    /** {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). */
+    public const TASK_ERASED = 'nowo_task_board.task_erased';
+
+    /** {@see BoardErasedEvent}, once the board is empty (since 1.25). */
+    public const BOARD_EMPTIED = 'nowo_task_board.board_emptied';
+
+    /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
+    public const BOARD_DELETED = 'nowo_task_board.board_deleted';
 }

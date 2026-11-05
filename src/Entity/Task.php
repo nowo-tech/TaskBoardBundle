@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
+use function max;
 use function strtolower;
 
 #[ORM\Entity]
@@ -474,6 +475,24 @@ class Task
         if ($seconds > 0) {
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->totalTimeSeconds += $seconds;
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->updatedAt = new DateTimeImmutable();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: removes aggregated TimeTrack seconds (imported entries deleted in TimeTrack); the total never goes
+     * below 0. Values ≤ 0 are ignored.
+     *
+     * @internal used by the TimeTrack bridge
+     */
+    public function subtractTimeSeconds(int $seconds): self
+    {
+        if ($seconds > 0) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->totalTimeSeconds = max(0, $this->totalTimeSeconds - $seconds);
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->updatedAt = new DateTimeImmutable();
         }

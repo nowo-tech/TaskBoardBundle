@@ -70,6 +70,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Part of 1.25.0 (ClickUp full import, contract v1.0 §15.6 / §10.3) and the 1.23.2 / 1.24.0 audit follow-ups. **Owner rule:
+deleting tasks or boards keeps all tracked time.** See [UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- `Service\TaskBoardEraser::emptyBoard()` / `deleteBoard()`: empty or delete a board in resumable slices (`EraseCursor`,
+  `EraseProgress`). The provider connection is unlinked first, tasks go leaf-first in flushed batches (default 200, time
+  budget 20 s), then `deleteBoard()` removes the columns and the board. Manual time entries are detached (never deleted)
+  and TimeTrack entries are never touched. Authorised by the new
+  `TaskBoardResourceAccessChecker::canManageBoard()` (board creator or `security.manage_roles`, then
+  `BOARD_ACCESS_CHECK` action `manage`); `AccessDeniedException` otherwise.
+- Events `TASK_ERASED` (`TaskErasedEvent`: task id, board id, title, the storage refs of the files a sync stored, the
+  number of manual time entries) before each batch is flushed, and `BOARD_EMPTIED` / `BOARD_DELETED`
+  (`BoardErasedEvent`: board id, counts, actor id) once at the end.
+- `Bridge\TimeTrack\ImportedTimeAggregatorListener`: with TimeTrack ≥ 1.11 the task total follows imported entries
+  (`TIME_ENTRY_IMPORTED` adds `duration − previousDuration`, moves between tasks; `TIME_ENTRIES_REMOVED` subtracts per
+  task). Not registered with TimeTrack 1.10. New `@internal Task::subtractTimeSeconds()` (clamped at 0).
+- `Service\TaskTimeEntrySnapshotPurger` (audit FA-L2 / EX-D2): count and clear the task title / external id snapshots
+  of detached manual time entries (per board, logged before a date); the time itself stays.
+
+### Changed
+
+- `TaskBoard::$tasks` no longer uses `orphanRemoval` (audit FA-L1): removing a task from the collection inside a flush
+  skipped the `PreRemove` time detach. Delete tasks with `EntityManager::remove()` or the eraser.
+- The connection page's link, refresh and progress actions refuse (403, logged `actor_id_missing`) a logged-in user whose
+  id cannot be read, instead of running the sync as the board's linker (audit EX-D1).
+- `require-dev` `nowo-tech/time-track-bundle` `^1.11` (the bundle still works with TimeTrack 1.10: `suggest` only).
+
 ## [1.24.0] - 2026-11-05
 
 Beacon's v1.122.0 audit (KIT-67, KIT-74, DATA-TASK-TOKEN-ERASURE): hosts no longer need request listeners or template copies for the board

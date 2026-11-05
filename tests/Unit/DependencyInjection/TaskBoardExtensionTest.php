@@ -8,6 +8,7 @@ use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
@@ -43,6 +44,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
+
+use function array_column;
 
 final class TaskBoardExtensionTest extends TestCase
 {
@@ -80,6 +83,30 @@ final class TaskBoardExtensionTest extends TestCase
             self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
             self::assertFalse($container->hasAlias('nowo_task_board.team_context_provider'));
         }
+    }
+
+    /** Since 1.25: the imported-time totals listener exists only with TimeTrack >= 1.11 (its events). */
+    public function testImportedTimeAggregatorNeedsTheTimeTrackImportEvents(): void
+    {
+        $with = new ContainerBuilder();
+        $with->setParameter('kernel.environment', 'test');
+        $with->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $with);
+        self::assertTrue($with->hasDefinition(ImportedTimeAggregatorListener::class));
+        self::assertFalse($with->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('container.excluded'));
+        $tags = $with->getDefinition(ImportedTimeAggregatorListener::class)->getTag('kernel.event_listener');
+        self::assertSame(['onImported', 'onRemoved'], array_column($tags, 'method'));
+        self::assertSame(['nowo_time_track.time_entry.imported', 'nowo_time_track.time_entries.removed'], array_column($tags, 'event'));
+
+        // TimeTrack 1.10: the bridge loads, the listener does not.
+        $without = new ContainerBuilder();
+        $without->setParameter('kernel.environment', 'test');
+        $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension(timeTrackImportedEvent: 'Nowo\\TimeTrackBundle\\Event\\MissingImportedEvent'))->load([['user_class' => User::class]], $without);
+        self::assertTrue($without->hasDefinition(TaskBoardTaskProvider::class));
+        // The resource exclusion leaves only Symfony's "excluded" marker, never a listener.
+        self::assertTrue(!$without->hasDefinition(ImportedTimeAggregatorListener::class) || $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('container.excluded'));
+        self::assertFalse($without->hasDefinition(ImportedTimeAggregatorListener::class) && $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('kernel.event_listener'));
     }
 
     public function testWeekStartResolverFollowsTheGanttConfig(): void
