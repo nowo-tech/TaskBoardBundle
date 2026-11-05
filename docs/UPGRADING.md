@@ -11,6 +11,7 @@
   - [Schema change for every host: task creator and comment author (audit FP-M1)](#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1)
   - [Schema change with `sync.enabled: true` only](#schema-change-with-syncenabled-true-only)
   - [After the update (sync hosts)](#after-the-update-sync-hosts)
+  - [Board eraser, imported-time totals and audit fixes (every host)](#board-eraser-imported-time-totals-and-audit-fixes-every-host)
 - [To 1.24.0](#to-1240)
 - [To 1.23.2](#to-1232)
   - [Time entries survive their task](#time-entries-survive-their-task)
@@ -121,9 +122,6 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
-
-The next release is **1.25.0**: see [To 1.25.0](#to-1250) (ClickUp full import: people, creator, watchers, checklists,
-tracked time through a host sink, status types).
 
 ## To 1.25.0
 
