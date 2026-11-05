@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Support\Like;
 use SortDirection;
 
 use function array_chunk;
@@ -178,8 +179,9 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->setFirstResult(max(0, $offset));
 
         if ($search !== null && $search !== '') {
-            $qb->andWhere('LOWER(t.title) LIKE :search')
-                ->setParameter('search', '%' . mb_strtolower($search) . '%');
+            // Since 1.25 (audit FP-I12): `%`, `_` and `!` in the search match literally (ESCAPE '!').
+            $qb->andWhere("LOWER(t.title) LIKE :search ESCAPE '!'")
+                ->setParameter('search', '%' . Like::literal(mb_strtolower($search)) . '%');
         }
 
         /** @var list<Task> $result */

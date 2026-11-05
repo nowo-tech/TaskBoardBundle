@@ -6,7 +6,9 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
@@ -58,6 +60,9 @@ final class SyncAccountErasureTest extends SyncReassignTestCase
         $this->em->persist($own);
         $said = new TaskComment($own, $bob, 'Bob says');
         $this->em->persist($said);
+        $bobsBoard = $this->board('Bob board', creator: $bob);
+        $bobsDoc   = new TaskDocument($own, 'Bob doc', 'text', $bob);
+        $this->em->persist($bobsDoc);
         $this->em->flush();
         $ownId  = $own->getId();
         $saidId = $said->getId();
@@ -66,6 +71,7 @@ final class SyncAccountErasureTest extends SyncReassignTestCase
         $this->reassigner()->detachUser($bob, $this->owner, true);
         self::assertNull($said->getAuthor());
         self::assertNull($said->getAuthorName());
+        self::assertSame([null, null, null, null], [$bobsBoard->getCreator(), $bobsBoard->getCreatorName(), $bobsDoc->getCreator(), $bobsDoc->getCreatorName()]);
         $this->em->clear();
         $saidKept = $this->em->find(TaskComment::class, $saidId);
         self::assertInstanceOf(TaskComment::class, $saidKept);
@@ -79,6 +85,52 @@ final class SyncAccountErasureTest extends SyncReassignTestCase
         $this->deleteUserRow($alice);
         self::assertInstanceOf(Task::class, $this->em->find(Task::class, $taskId), 'task kept');
         self::assertInstanceOf(Task::class, $this->em->find(Task::class, $subId), 'subtask kept');
+    }
+
+    public function testDeletingABoardCreatorsAccountKeepsTheBoardAndEveryonesTasks(): void
+    {
+        $carol = $this->user('carol@example.com');
+        $board = $this->board('Carol board', creator: $carol);
+        $this->viewer($board, $this->owner);
+        $ownerTask                  = $this->task($board, 'Owner task');
+        $subtask                    = $this->task($board, 'Owner subtask', 0, $ownerTask);
+        [$boardId, $taskId, $subId] = [$board->getId(), $ownerTask->getId(), $subtask->getId()];
+        $other                      = $this->board('Other board', creator: $carol);
+        $otherId                    = $other->getId();
+        $doc                        = new TaskDocument($ownerTask, 'Spec', 'Carol wrote it', $carol);
+        $this->em->persist($doc);
+        $this->em->flush();
+        $docId = $doc->getId();
+
+        // Audit FP-L7: detachUser() detaches the boards too (loaded ones follow), keeping the name.
+        $report = $this->reassigner()->detachUser($carol, $this->owner);
+        self::assertSame([2, 1], [$report->boards, $report->documents]);
+        self::assertNull($board->getCreator());
+        self::assertNull($doc->getCreator());
+        $this->deleteUserRow($carol);
+        $kept = $this->em->find(TaskBoard::class, $boardId);
+        self::assertInstanceOf(TaskBoard::class, $kept, 'board kept');
+        self::assertNull($kept->getCreator());
+        self::assertSame('carol@example.com', $kept->getCreatorName());
+        self::assertInstanceOf(Task::class, $this->em->find(Task::class, $taskId), 'owner task kept');
+        self::assertInstanceOf(Task::class, $this->em->find(Task::class, $subId), 'owner subtask kept');
+        self::assertInstanceOf(TaskBoard::class, $this->em->find(TaskBoard::class, $otherId));
+        $keptDoc = $this->em->find(TaskDocument::class, $docId);
+        self::assertInstanceOf(TaskDocument::class, $keptDoc, 'document kept');
+        self::assertSame('carol@example.com', $keptDoc->getCreatorName());
+
+        // A board without creator: its viewers still see it; nobody is its creator.
+        $this->login($this->owner);
+        $this->client->request('GET', '/tools/task-board/board/' . $boardId . '?view=board');
+        self::assertResponseIsSuccessful();
+
+        // Without detachUser(): the database keeps the board (ON DELETE SET NULL).
+        $dave  = $this->user('dave@example.com');
+        $daves = $this->board('Dave board', creator: $dave);
+        $this->task($daves, 'Dave task');
+        $davesId = $daves->getId();
+        $this->deleteUserRow($dave);
+        self::assertInstanceOf(TaskBoard::class, $this->em->find(TaskBoard::class, $davesId), 'board kept without detach');
     }
 
     /**

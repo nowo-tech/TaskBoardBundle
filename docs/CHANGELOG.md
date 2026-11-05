@@ -198,16 +198,20 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   scoped to its candidates; re-association is explicit, re-checked per board and audited by events.
 - Every provider call stays `GET` to the constant ClickUp base URI; no token, avatar URL or time-entry description is
   stored or logged by the bundle; person names and e-mails stay in the person rows and are never logged.
-- **Erasing an account never deletes tasks or comments** (audit FP-M1). `task_board_tasks.creator_id` and
+- **Erasing an account never deletes boards, tasks, documents or comments** (audits FP-M1, FP-L7).
+  `task_board_boards.creator_id`, `task_board_tasks.creator_id`, `task_board_task_documents.creator_id` and
   `task_board_task_comments.author_id` are nullable `ON DELETE SET NULL` with a name snapshot (`creator_name` /
-  `author_name`); **schema change for every host**, SQL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1).
-  `Task::getCreator()` / `TaskComment::getAuthor()` return `?object`; new `getCreatorName()` / `getAuthorName()`.
-  `TaskSyncPeopleReassigner::detachUser()` also detaches every task and comment of the user that no sync row leads to
-  (after an unlink, the user's imported tasks and their subtree were deleted with the user).
+  `author_name`); memberships, the user's history entries and their own manual time still go with the account;
+  **schema change for every host** (on SQLite run the rebuild with foreign keys off, FP-L6), SQL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1).
+  `TaskBoard::getCreator()`, `Task::getCreator()`, `TaskDocument::getCreator()` / `TaskComment::getAuthor()` return
+  `?object`; new `getCreatorName()` / `getAuthorName()`. `TaskSyncPeopleReassigner::detachUser()` also detaches every
+  board, task, document and comment of the user (new `ReassignReport::$boards` / `$documents`); before, an unlinked
+  board's imported tasks with their subtree, or a creator's whole board, were deleted with the user. A user deleted
+  without `detachUser(anonymise: true)` keeps their name in the snapshots (FP-I11).
 - **Checklist subtasks go through the host's quota** (audit FP-L1): `sync.limit_checker` and the new
   `sync.checklists.max_items_per_run` (default 2000); held-back items come with a later run.
-- **LIKE searches escape with `!` everywhere** (audit FP-L2): `PersonFilter::$q` and the checklist prefix queries use
-  `ESCAPE '!'` on MySQL, PostgreSQL and SQLite; `first_last@…`, `%` and `!` match literally.
+- **LIKE searches escape with `!` everywhere** (audits FP-L2, FP-I12): `PersonFilter::$q`, the checklist prefix
+  queries and the "my tasks" title search (`findTrackableForUser()`) use `ESCAPE '!'` on MySQL, PostgreSQL and SQLite; `first_last@…`, `%` and `!` match literally.
 - **The time phase has a call budget** (audit FP-L4): `sync.time_entries.max_calls_per_run` (default 500); a dense
   window is delivered split by split and the cursor keeps the split position, so the budget, a deadline or a rate
   limit resume from the last delivered split instead of the start of the window.

@@ -237,8 +237,7 @@ final readonly class TaskBoardResourceAccessChecker
 
     private function isTaskParticipant(object $user, Task $task): bool
     {
-        $creator = $task->getCreator(); // since 1.25: null once the creator's account was erased
-        if ($creator !== null && $this->sameUser($user, $creator)) {
+        if ($this->sameUser($user, $task->getCreator())) {
             return true;
         }
 
@@ -290,8 +289,12 @@ final readonly class TaskBoardResourceAccessChecker
         return false;
     }
 
-    private function sameUser(object $a, object $b): bool
+    /** `$b` null: an erased account (since 1.25, a board or task creator may be null) is nobody. */
+    private function sameUser(object $a, ?object $b): bool
     {
+        if ($b === null) {
+            return false;
+        }
         if ($a === $b) {
             return true;
         }

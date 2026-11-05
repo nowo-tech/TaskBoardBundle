@@ -19,6 +19,10 @@ final readonly class ReassignReport
         public int $notProjected = 0,
         public int $busyBoards = 0,
         public ?ReassignCursor $cursor = null,
+        /** Since 1.25 (audit FP-L7): boards whose creator `detachUser()` detached. */
+        public int $boards = 0,
+        /** Since 1.25 (audit FP-L7): task documents whose creator `detachUser()` detached. */
+        public int $documents = 0,
     ) {
     }
 
@@ -40,13 +44,15 @@ final readonly class ReassignReport
             $this->notProjected + $other->notProjected,
             $this->busyBoards + $other->busyBoards,
             $other->cursor,
+            $this->boards + $other->boards,
+            $this->documents + $other->documents,
         );
     }
 
     /** The same counts with another cursor. */
     public function withCursor(?ReassignCursor $cursor): self
     {
-        return new self($this->tasks, $this->creators, $this->comments, $this->membersRemoved, $this->membersAdded, $this->notProjected, $this->busyBoards, $cursor);
+        return new self($this->tasks, $this->creators, $this->comments, $this->membersRemoved, $this->membersAdded, $this->notProjected, $this->busyBoards, $cursor, $this->boards, $this->documents);
     }
 
     /**
@@ -54,6 +60,6 @@ final readonly class ReassignReport
      */
     public function toArray(): array
     {
-        return ['tasks' => $this->tasks, 'creators' => $this->creators, 'comments' => $this->comments, 'membersRemoved' => $this->membersRemoved, 'membersAdded' => $this->membersAdded, 'notProjected' => $this->notProjected, 'busyBoards' => $this->busyBoards];
+        return ['tasks' => $this->tasks, 'creators' => $this->creators, 'comments' => $this->comments, 'membersRemoved' => $this->membersRemoved, 'membersAdded' => $this->membersAdded, 'notProjected' => $this->notProjected, 'busyBoards' => $this->busyBoards, 'boards' => $this->boards, 'documents' => $this->documents];
     }
 }

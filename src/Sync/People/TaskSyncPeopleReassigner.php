@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\Text;
@@ -151,8 +152,8 @@ final readonly class TaskSyncPeopleReassigner
     /**
      * Account erasure (run it **before** the user is deleted): every person mapped or suggested to `$user` becomes
      * external (optionally anonymised) and what was written for them goes back to `$actor` plus the person reference.
-     * Then (audit FP-M1) every task the user created and every comment they wrote, on any board, synced, unlinked or
-     * never synced, stops pointing at the user: it keeps the name snapshot (`creator_name` / `author_name`, forgotten
+     * Then (audits FP-M1 / FP-L7) every board and task the user created and every comment they wrote, synced, unlinked
+     * or never synced, stops pointing at the user: it keeps the name snapshot (`creator_name` / `author_name`, forgotten
      * with `$anonymise`), so deleting the user deletes no task, subtask or comment. No authorization check: a host
      * erasure path calls it.
      */
@@ -185,7 +186,7 @@ final readonly class TaskSyncPeopleReassigner
     {
         $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $counts = [];
-        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName']] as [$class, $field, $name]) {
+        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName']] as [$class, $field, $name]) {
             // Rows written before 1.25 have no snapshot yet: they get the current name first.
             $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
                 ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
@@ -199,6 +200,11 @@ final readonly class TaskSyncPeopleReassigner
                 $task->detachCreator($forgetName);
             }
         }
+        foreach ([...$map[TaskBoard::class] ?? [], ...$map[TaskDocument::class] ?? []] as $row) {
+            if (($row instanceof TaskBoard || $row instanceof TaskDocument) && SyncUser::same($row->getCreator(), $user)) {
+                $row->detachCreator($forgetName);
+            }
+        }
         foreach ($map[TaskComment::class] ?? [] as $comment) {
             if ($comment instanceof TaskComment && SyncUser::same($comment->getAuthor(), $user)) {
                 $comment->detachAuthor($forgetName);
@@ -206,7 +212,7 @@ final readonly class TaskSyncPeopleReassigner
         }
         $this->entityManager->flush();
 
-        return new ReassignReport(creators: $counts[0], comments: $counts[1]);
+        return new ReassignReport(creators: $counts[0], comments: $counts[1], boards: $counts[2], documents: $counts[3]);
     }
 
     /**
