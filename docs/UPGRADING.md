@@ -283,6 +283,14 @@ No schema change and no required configuration for this part.
   `TaskBoardResourceAccessChecker::canManageBoard()`: the board creator or a `security.manage_roles` holder by default;
   a `BOARD_ACCESS_CHECK` listener decides the action `BoardAccessCheckEvent::ACTION_MANAGE` (`'manage'`). A listener
   that grants every action without looking at `getAction()` now also lets those users erase boards.
+- **The erase cursor is signed; keep it server-side** (audit FP-L3). Pass back the cursor the eraser returned (or
+  `EraseCursor::fromArray($cursor->toArray())`, which keeps the `signature`), for the same board, the same actor and the
+  same operation; carry it in a Messenger message or the server session, never through a browser. An unsigned cursor (one
+  built with `new EraseCursor(...)`), an altered one, or one of another board, actor or operation is refused with
+  `Nowo\TaskBoardBundle\Exception\InvalidEraseCursorException` before anything is touched: start a fresh run with
+  `$cursor = null` instead. The container signs with `%kernel.secret%`, so changing the secret invalidates running
+  cursors. Code that builds `TaskBoardEraser` by hand should pass `cursorSecret:`; without it a random per-instance key
+  is used and cursors resume only through that instance.
 - **Your `TASK_ERASED` listener must not delete time.** Remove the task's stored files (`attachmentRefs`), mentions or
   search entries; manual entries are detached and TimeTrack entries keep their task id and snapshots. Imported time is
   deleted only by an explicit manager action in TimeTrack (`ImportedTimeEntryWriter::remove*()`), never on a task or

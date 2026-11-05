@@ -13,22 +13,31 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\BoardErasedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskErasedEvent;
+use Nowo\TaskBoardBundle\Exception\InvalidEraseCursorException;
+use Nowo\TaskBoardBundle\Security\EraseCursorSigner;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use SensitiveParameter;
 use Stringable;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function array_flip;
+use function array_intersect_key;
+use function array_keys;
+use function array_map;
+use function bin2hex;
 use function count;
 use function is_scalar;
 use function max;
 use function method_exists;
 use function min;
+use function random_bytes;
 
 /**
  * Since 1.25: empties or deletes a board in resumable slices (Beacon "vaciar tablero" / delete board).
@@ -41,11 +50,18 @@ use function min;
  * bring tasks back), then the tasks go leaf-first (subtasks before their parents) in batches flushed one by one, each
  * announced by {@see TaskErasedEvent}; `deleteBoard()` then removes the columns and the board. A call stops after its
  * time budget and returns a cursor: call again until `done`. {@see BoardErasedEvent} is dispatched once at the end.
+ *
+ * The returned cursor is signed ({@see EraseCursorSigner}, audit FP-L3) for the board, the actor and the operation with
+ * the application secret (`%kernel.secret%` in the container). On resume an unsigned or altered cursor, or one of
+ * another board, actor or operation, is refused with {@see InvalidEraseCursorException} before anything is touched.
+ * Keep the cursor server-side (e.g. a Messenger message) all the same.
  */
 final readonly class TaskBoardEraser
 {
     /** The largest batch a call accepts. */
     public const MAX_BATCH = 1000;
+
+    private EraseCursorSigner $cursorSigner;
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -55,13 +71,18 @@ final readonly class TaskBoardEraser
         private ClockInterface $clock = new NativeClock(),
         private LoggerInterface $logger = new NullLogger(),
         private int $timeBudgetSeconds = 20,
+        #[SensitiveParameter]
+        ?string $cursorSecret = null,
     ) {
+        // Without a secret (manual construction), cursors resume only through this instance.
+        $this->cursorSigner = new EraseCursorSigner($cursorSecret !== null && $cursorSecret !== '' ? $cursorSecret : bin2hex(random_bytes(32)));
     }
 
     /**
      * Deletes every task of the board (time kept, detached); the board and its columns stay.
      *
      * @throws AccessDeniedException when the actor may not manage the board
+     * @throws InvalidEraseCursorException when `$cursor` is not the signed cursor of this board, actor and operation
      */
     public function emptyBoard(TaskBoard $board, object $actor, int $batchSize = 200, ?EraseCursor $cursor = null): EraseProgress
     {
@@ -72,6 +93,7 @@ final readonly class TaskBoardEraser
      * Deletes every task (time kept, detached), then the columns and the board.
      *
      * @throws AccessDeniedException when the actor may not manage the board
+     * @throws InvalidEraseCursorException when `$cursor` is not the signed cursor of this board, actor and operation
      */
     public function deleteBoard(TaskBoard $board, object $actor, int $batchSize = 200, ?EraseCursor $cursor = null): EraseProgress
     {
@@ -84,14 +106,15 @@ final readonly class TaskBoardEraser
             throw new AccessDeniedException('The board may not be erased.');
         }
         $batchSize = max(1, min($batchSize, self::MAX_BATCH));
-        $cursor ??= new EraseCursor();
-        $boardId  = $board->getId();
-        $refs     = $cursor->attachmentRefs;
-        $tasks    = $cursor->tasksDeleted;
-        $columns  = $cursor->columnsDeleted;
-        $phase    = $cursor->phase;
-        $deleted  = 0;
-        $deadline = $this->clock->now()->getTimestamp() + max(1, $this->timeBudgetSeconds);
+        $boardId   = $board->getId();
+        $actorId   = $this->idOf($actor);
+        $cursor    = $cursor instanceof EraseCursor ? $this->resume($board, $actorId, $cursor, $deleteBoard) : new EraseCursor();
+        $refs      = $cursor->attachmentRefs;
+        $tasks     = $cursor->tasksDeleted;
+        $columns   = $cursor->columnsDeleted;
+        $phase     = $cursor->phase;
+        $deleted   = 0;
+        $deadline  = $this->clock->now()->getTimestamp() + max(1, $this->timeBudgetSeconds);
 
         if ($phase === EraseCursor::PHASE_TASKS) {
             $refs += $this->unlink($board, $actor);
@@ -132,18 +155,63 @@ final readonly class TaskBoardEraser
         }
 
         if ($phase !== EraseCursor::PHASE_BOARD) {
-            return new EraseProgress($deleted, $this->remaining($board), false, new EraseCursor($phase, $tasks, $columns, $refs));
+            return new EraseProgress($deleted, $this->remaining($board), false, $this->cursorSigner->sign(new EraseCursor($phase, $tasks, $columns, $refs), $boardId, $actorId, $deleteBoard));
         }
 
         if ($deleteBoard) {
             $this->entityManager->remove($board);
             $this->entityManager->flush();
         }
-        $actorId = $this->idOf($actor);
         $this->eventDispatcher?->dispatch(new BoardErasedEvent($boardId, $tasks, $columns, $deleteBoard, $actorId), $deleteBoard ? TaskBoardEvents::BOARD_DELETED : TaskBoardEvents::BOARD_EMPTIED);
         $this->logger->info('TaskBoard board erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $tasks, 'columns' => $columns, 'board_deleted' => $deleteBoard]);
 
         return new EraseProgress($deleted, 0, true, null);
+    }
+
+    /**
+     * Verifies a cursor handed back by the caller (audit FP-L3) and returns the state to resume from:
+     * - the signature must match this board, actor and operation, and the cursor's phase, counts and refs;
+     * - `emptyBoard()` has no column phase: `PHASE_COLUMNS` resumes as `PHASE_BOARD` (it could never return `done`);
+     * - a phase past the tasks is allowed only once the board has no task left and no ref is pending;
+     * - refs are kept only for task ids that still belong to the board.
+     *
+     * @throws InvalidEraseCursorException
+     */
+    private function resume(TaskBoard $board, ?string $actorId, EraseCursor $cursor, bool $deleteBoard): EraseCursor
+    {
+        $this->cursorSigner->verify($cursor, $board->getId(), $actorId, $deleteBoard);
+        $phase = !$deleteBoard && $cursor->phase === EraseCursor::PHASE_COLUMNS ? EraseCursor::PHASE_BOARD : $cursor->phase;
+        if ($phase !== EraseCursor::PHASE_TASKS && ($cursor->attachmentRefs !== [] || $this->remaining($board) > 0)) {
+            throw InvalidEraseCursorException::phaseNotAllowed($cursor->phase);
+        }
+
+        return new EraseCursor($phase, $cursor->tasksDeleted, $cursor->columnsDeleted, $this->refsOnBoard($board, $cursor->attachmentRefs));
+    }
+
+    /**
+     * Keeps the refs of the task ids that still belong to the board.
+     *
+     * @param array<string, list<string>> $refs
+     *
+     * @return array<string, list<string>>
+     */
+    private function refsOnBoard(TaskBoard $board, array $refs): array
+    {
+        if ($refs === []) {
+            return [];
+        }
+        /** @var list<array{id: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('t.id AS id')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')
+            ->andWhere('t.id IN (:ids)')
+            ->setParameter('board', $board)
+            ->setParameter('ids', array_keys($refs))
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_intersect_key($refs, array_flip(array_map(static fn (array $row): string => (string) $row['id'], $rows)));
     }
 
     /**

@@ -192,6 +192,16 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   scoped to its candidates; re-association is explicit, re-checked per board and audited by events.
 - Every provider call stays `GET` to the constant ClickUp base URI; no token, avatar URL or time-entry description is
   stored or logged by the bundle; person names and e-mails stay in the person rows and are never logged.
+- **The erase cursor is signed** (audit FP-L3). `EraseCursor` gains an optional `signature` (round-tripped by
+  `toArray()` / `fromArray()`): an HMAC-SHA256 (label `nowo_task_board.erase_cursor.v1`, keyed by `%kernel.secret%`
+  through the new optional `TaskBoardEraser` argument `$cursorSecret`) bound to the board id, the actor id and the
+  operation (empty or delete) and covering the phase, both counts and the attachment refs. On resume the eraser checks
+  it with `hash_equals()` and throws the new `Exception\InvalidEraseCursorException` (an `InvalidArgumentException`)
+  before touching anything when the cursor is unsigned, altered, or belongs to another board, actor or operation. A
+  host that round-tripped the cursor through a browser let the user inject storage refs into `TASK_ERASED`, skip the
+  unlink and `TASK_ERASED` with `phase=board`, loop `emptyBoard()` forever with `phase=columns`, or forge the counts of
+  `BoardErasedEvent`. Also: refs are kept only for task ids still on the board, `emptyBoard()` resumes a column phase as
+  the board phase, and a phase past the tasks is refused while the board still has tasks or pending refs.
 
 ## [1.24.0] - 2026-11-05
 
