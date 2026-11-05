@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.24.0](#to-1240)
 - [To 1.23.2](#to-1232)
   - [Time entries survive their task](#time-entries-survive-their-task)
 - [To 1.23.1](#to-1231)
@@ -115,7 +116,9 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Planned as **1.24.0**. From **1.23.2** (on 1.23.1 or older, apply [To 1.23.2](#to-1232) first, it has a schema
+## To 1.24.0
+
+From **1.23.2** (on 1.23.1 or older, apply [To 1.23.2](#to-1232) first, it has a schema
 change): `composer update nowo-tech/task-board-bundle`; no schema change, no required configuration.
 
 - **Single-board tenancy (`tenancy.single_board`).** The tenant's first board is created on the index only for a user
