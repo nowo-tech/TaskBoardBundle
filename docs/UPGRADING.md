@@ -245,7 +245,7 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
 ### After the update (sync hosts)
 
 - **Legacy comments (one-off).** Call `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize,
-  $afterId)` per connection, again with the returned `lastId` until `done`. A comment whose prefix name matches exactly
+  $afterId)` per connection, again with the returned `MigrateReport::$lastId` until `$done`. A comment whose prefix name matches exactly
   one person of the directory loses the line and points at the person; others stay unchanged. Idempotent.
 - **People resolver.** Implement `SyncPersonResolverInterface` and set `sync.people.resolver` to share one directory
   per tenant scope and to supply `verified` (see [sync.md](sync.md#people-directory-since-125)).

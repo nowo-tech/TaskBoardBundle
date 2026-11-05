@@ -39,6 +39,10 @@ final readonly class SyncOptions
         public ?DateTimeImmutable $timeFrom = null,
         /** Since 1.25: member token only — read the legacy per-task intervals (explicit action, never automatic). */
         public bool $timeFallbackPerTask = false,
+        /** Since 1.25: import watchers in this run (also needs `sync.watchers.enabled` and the provider's data). */
+        public bool $watchers = true,
+        /** Since 1.25: import checklists as subtasks in this run (also needs `sync.checklists.enabled`). */
+        public bool $checklists = true,
     ) {
     }
 }

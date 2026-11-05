@@ -115,6 +115,9 @@ final class PeopleUnitTest extends TestCase
         self::assertEquals(new SyncPersonMatch($verified, true), $strict->autoMatch($board, $ref, 'one@example.test'));
         self::assertEquals(new SyncPersonMatch($plain, false), $strict->autoMatch($board, $ref, 'two@example.test'), 'no isVerified(): only suggested by default');
         self::assertNull($strict->autoMatch($board, $ref, 'nobody@example.test'));
+        // The contract's two-argument call: the e-mail is normalised from the person.
+        self::assertEquals(new SyncPersonMatch($verified, true), $strict->autoMatch($board, new RemotePersonRef('9001', 'User 1', '  ONE@Example.TEST ')));
+        self::assertNull($strict->autoMatch($board, new RemotePersonRef('9002', 'User 2')), 'no e-mail: no match');
         self::assertSame($plain, $strict->candidateById($board, '2'));
         self::assertNull($strict->candidateById($board, '3'));
 

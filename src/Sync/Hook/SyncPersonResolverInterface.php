@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Hook;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 
@@ -30,8 +31,12 @@ interface SyncPersonResolverInterface
     /**
      * Exactly one candidate for the person's normalised e-mail (trimmed, NFC, lower-case), or null. Disabled or
      * anonymised accounts never match.
+     *
+     * `$normalizedEmail` is what the bundle passes (deliberate addition to the contract's two-argument call, which still
+     * works): when it is null, the implementation derives it from `$person->email` with
+     * {@see SyncUser::normalizeEmail()} and matches nothing without an e-mail.
      */
-    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, string $normalizedEmail): ?SyncPersonMatch;
+    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, ?string $normalizedEmail = null): ?SyncPersonMatch;
 
     /** A candidate by id (the picker posts ids); null when unknown or not a candidate of the board. */
     public function candidateById(TaskBoard $board, string $userId): ?object;

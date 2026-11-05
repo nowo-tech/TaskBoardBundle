@@ -51,8 +51,9 @@ final readonly class SyncReport
         public DateTimeImmutable $startedAt = new DateTimeImmutable(),
         public ?DateTimeImmutable $syncedAt = null,
         /**
-         * Since 1.25: counters of the people, checklist and time phases (e.g. "people.autoMatched", "time.entries",
-         * "skipStatus"), all ints.
+         * Since 1.25: generic counters of the run that have no typed property (e.g. "checklist.created",
+         * "detail.calls", "skipStatus"), all ints. The people and time counters are {@see self::$people} /
+         * {@see self::$time}, never repeated here.
          *
          * @var array<string, int>
          */
@@ -63,8 +64,10 @@ final readonly class SyncReport
          * @var array<string, int>
          */
         public array $perColumn = [],
-        /** Since 1.25: the time mode of the run's time phase (admin / member / fallback), null = none. */
-        public ?string $timeMode = null,
+        /** Since 1.25: the people directory counters. */
+        public PeopleCounts $people = new PeopleCounts(),
+        /** Since 1.25: the time phase (mode and counters). */
+        public TimeCounts $time = new TimeCounts(),
     ) {
     }
 
@@ -144,7 +147,8 @@ final readonly class SyncReport
             'written'             => $this->written(),
             'stats'               => $this->stats,
             'perColumn'           => $this->perColumn,
-            'timeMode'            => $this->timeMode,
+            'people'              => $this->people->toArray(),
+            'time'                => $this->time->toArray(),
         ];
     }
 
@@ -185,7 +189,8 @@ final readonly class SyncReport
             syncedAt: SyncValues::date($data['syncedAt'] ?? null),
             stats: self::intMap($list('stats')),
             perColumn: self::intMap($list('perColumn')),
-            timeMode: isset($data['timeMode']) ? SyncValues::string($data['timeMode']) : null,
+            people: PeopleCounts::fromArray($list('people')),
+            time: TimeCounts::fromArray($list('time')),
         );
     }
 

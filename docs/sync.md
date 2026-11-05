@@ -280,7 +280,9 @@ identities may map to the same user: old and new e-mails). The scope comes from
 **Automatic matching** runs when people are seen (the workspace members at the start of a run, refs in tasks,
 comments, checklists and time, and a persisting pre-scan) for persons no human decided. The bundle normalises the
 e-mail (trim, NFC when `ext-intl` is loaded, lower case) and asks `autoMatch()` for exactly one **candidate**: verified
-→ `auto`, unverified → `suggested`, none → `unmatched`. A person without e-mail is never matched. Name and e-mail are
+→ `auto`, unverified → `suggested`, none → `unmatched`. A person without e-mail is never matched. The bundle passes the
+normalised e-mail as the optional third argument `$normalizedEmail`; a host resolver called with two arguments (the
+contract's signature) derives it with `SyncUser::normalizeEmail($person->email)`. Name and e-mail are
 refreshed on every run; a changed e-mail sets `email_changed_at`. `manual` and `external` are never overridden; an
 `auto` person whose e-mail changed (or whose user is gone) becomes `unmatched` with the warning
 `person_auto_unmatched`, and nothing already imported moves. An anonymised person is never refreshed or matched again.
@@ -309,6 +311,12 @@ the People step was not saved (`markReviewed()`).
 Privacy: `anonymise()` turns the name into "Former <provider> user #n" (stored as the token `former:<n>`, translated at
 display) and clears the e-mail; references stay. `pruneDirectory()` (run on the last unlink) deletes unreferenced
 people and anonymises the rest. Export: `TaskSyncPersonRepository::exportFor($user)` / `exportDirectory($directory)`.
+
+**People page queries:** `TaskSyncPersonRepository::forDirectory($directory, PersonFilter $filter, $limit, $offset)`
+with `new PersonFilter(mappings: [...], q: 'text', changed: true, changedSince: $date)`: mapping states (empty =
+all), `q` matches part of the name or the e-mail (case-insensitive, at most 120 characters, LIKE wildcards literal),
+`changed` keeps people whose e-mail changed in the provider, `changedSince` those whose e-mail changed at or after the
+date. `PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, ...)` is the shortcut for states only.
 No avatar URL is stored.
 
 ## Creator, assignees, watchers, checklists and comments (since 1.25)
@@ -323,6 +331,8 @@ No avatar URL is stored.
   `TaskMemberAddedEvent` is dispatched (no notification during a sync). When a list row has no `watchers` /
   `checklists` key, `GET task/{id}` (E5) completes it for tasks created or changed in the run, at most
   `sync.watchers.max_detail_calls_per_run` per run.
+- **Per run:** `SyncOptions::$watchers` / `$checklists` (default `true`) leave watchers or checklists out of one run;
+  both also need their `sync.*.enabled` option. A run without either asks no task detail (E5) for it.
 - **Checklists** (`sync.checklists.enabled`). Each item is a subtask of its task (external id `<task>#<item>`, tag
   `checklist:<name>`, checklist order then item order, nested items flattened in tree order). Resolved items are done:
   they go to the column the status map gives the first `closed` (else `done`) status, else the last column. The item
@@ -330,7 +340,8 @@ No avatar URL is stored.
   task was fetched with its checklists and the item is gone. An item deleted here is never recreated.
 - **Comments.** The author is the projected user, else the actor, with `task_board_sync_comments.author_person_id`; no
   prefix line (the comment template renders *name (ClickUp)*), and the comment keeps its ClickUp date.
-  `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize, $afterId)` removes the 1.23 prefix line once
+  `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize, $afterId)` returns a `MigrateReport`
+  (`connectionId`, `directoryId`, `migrated`, `skipped`, `lastId`, `done`) and removes the 1.23 prefix line once
   where the name matches exactly one person (see [UPGRADING](UPGRADING.md#after-the-update-sync-hosts)).
 - **Twig:** `task_board_sync_creator(task)`, `task_board_sync_comment_author(comment)`,
   `task_board_sync_unmatched(task, 'assignee'|'watcher')` return `SyncPersonView` (`name`, `provider`, `external`,
@@ -373,10 +384,15 @@ The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set an
   again, down to one hour (then `response_too_large`). The phase resumes per window and chunk.
 - **The sink** gets `accept($board, $directory, $window, $access, $entries, $windowComplete)` once per window and chunk:
   `ImportedTimeEntryCandidate {entry, person, ?task}` (`task` null when the remote task is not linked on this board).
-  Running timers and entries without a task are counted (`time.skippedRunning`, `time.skippedTaskless`), never
+  Running timers and entries without a task are counted (`$report->time->skippedRunning`, `skippedTaskless`), never
   delivered. `$windowComplete` is true on the window's last chunk: the host may tombstone what it had for that window.
   Beacon stages the entries and writes them with TimeTrack's `ImportedTimeEntryWriter` under
   `externalSource = clickup:<directory id>`.
+- **Report:** `SyncReport::$time` (`TimeCounts`: `mode` admin / member / fallback or null, `windows`, `windowsSplit`,
+  `entries`, `skippedRunning`, `skippedTaskless`, `fallbackTasks`) and `SyncReport::$people` (`PeopleCounts`: `seen`,
+  `created`, `autoMatched`, `suggested`, `unmatchedNew`, `changedEmail`, `autoUnmatched`). Other counters
+  (`checklist.*`, `detail.calls`, `skipStatus`) stay in `SyncReport::$stats` / `stat()`; the typed ones are not
+  repeated there.
 
 **TO CONFIRM** against a real workspace (handled defensively): the row cap per answer, the `assignee` list length,
 whether guests can track time, and what a member token gets when `assignee` lists others (the adapter sends none).

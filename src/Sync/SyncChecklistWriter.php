@@ -85,7 +85,7 @@ final readonly class SyncChecklistWriter
             if ($task->isArchived() && $task->getArchiveReason() === Task::ARCHIVE_REASON_REMOTE) {
                 $task->restore();
             }
-            $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId);
+            $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId); // @igor-ignore - a sync row entity, not a service
             if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter) {
                 $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Assignee, $entry->assignee === null ? [] : [$entry->assignee], TaskSyncPerson::KIND_CHECKLIST, $ctx->actor);
             }

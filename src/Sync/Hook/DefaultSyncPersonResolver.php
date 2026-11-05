@@ -64,8 +64,12 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
         return !$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($board, $user);
     }
 
-    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, string $normalizedEmail): ?SyncPersonMatch
+    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, ?string $normalizedEmail = null): ?SyncPersonMatch
     {
+        $normalizedEmail ??= SyncUser::normalizeEmail($person->email);
+        if ($normalizedEmail === null) {
+            return null;
+        }
         $user = $this->userResolver instanceof BoardAwareTaskImportUserResolverInterface
             ? $this->userResolver->resolveByEmailForBoard($normalizedEmail, $board)
             : $this->userResolver->resolveByEmail($normalizedEmail);

@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Sync\Event\SyncPersonAnonymisedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
 use Nowo\TaskBoardBundle\Sync\People\InvalidMappingException;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingDeniedException;
+use Nowo\TaskBoardBundle\Sync\People\PersonFilter;
 use Nowo\TaskBoardBundle\Sync\People\PersonMappingDecision;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
@@ -29,6 +30,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use stdClass;
 
+use function array_map;
 use function json_encode;
 use function str_contains;
 
@@ -98,7 +100,7 @@ final class PeopleDirectoryTest extends PeopleFunctionalTestCase
         $again = $service->session($directory, $board);
         self::assertSame($auto->getId(), $again->person(new RemotePerson('9001', 'User 1', 'user1@example.test'), TaskSyncPerson::KIND_MEMBER)->getId());
         self::assertSame($suggested->getId(), $again->person(new RemotePerson('9002', 'User 2', 'user2@example.test'), TaskSyncPerson::KIND_MEMBER)->getId());
-        self::assertSame([], $again->stats);
+        self::assertSame(['people.seen' => 2], $again->stats, 'seen, nothing else');
         self::assertCount(4, $this->repository()->forDirectory($directory));
     }
 
@@ -137,8 +139,19 @@ final class PeopleDirectoryTest extends PeopleFunctionalTestCase
         self::assertNull($manual->getEmailChangedAt(), 'the first e-mail is no change');
         self::assertSame(TaskSyncPersonMapping::Unmatched, $gone->getMapping());
         self::assertSame(2, $next->stats['people.autoUnmatched']);
-        self::assertSame(1, $next->stats['people.emailChanged']);
+        self::assertSame(1, $next->stats['people.changedEmail']);
         self::assertSame(['person_auto_unmatched'], $next->warnings);
+        self::assertSame(3, $next->stats['people.seen']);
+
+        // The People page filters (contract §2.2): q on the name or the e-mail, e-mail changed [since].
+        $ids = fn (PersonFilter $filter): array => array_map(static fn (TaskSyncPerson $p): string => $p->getProviderUserId(), $this->repository()->forDirectory($directory, $filter));
+        self::assertSame(['9001'], $ids(new PersonFilter(q: ' RENAMED ')));
+        self::assertSame(['9001', '9005'], $ids(new PersonFilter(q: 'User3@')));
+        self::assertSame([], $ids(new PersonFilter(q: '%')), 'LIKE wildcards are literal');
+        self::assertSame(['9001'], $ids(new PersonFilter(q: 'user', changed: true)));
+        self::assertSame(['9001'], $ids(new PersonFilter(changedSince: new DateTimeImmutable('-1 hour'))));
+        self::assertSame([], $ids(new PersonFilter(changedSince: new DateTimeImmutable('+1 hour'))));
+        self::assertSame(['9001'], $ids(new PersonFilter([TaskSyncPersonMapping::Unmatched], 'user 1')));
 
         // A person whose e-mail changed is never matched automatically again.
         $later = $service->session($directory, $board);
@@ -349,9 +362,9 @@ final class PeopleDirectoryTest extends PeopleFunctionalTestCase
         self::assertCount(2, $people);
         self::assertSame(['owner', 'guest'], [$people[0]->getRemoteRole(), $people[1]->getRemoteRole()]);
         self::assertTrue($people[0]->hasSeenKind(TaskSyncPerson::KIND_MEMBER));
-        self::assertCount(1, $this->repository()->forDirectory($directory, [], 1, 1));
-        self::assertCount(2, $this->repository()->forDirectory($directory, [TaskSyncPersonMapping::Unmatched]));
-        self::assertSame([], $this->repository()->forDirectory($directory, [TaskSyncPersonMapping::Manual]));
+        self::assertCount(1, $this->repository()->forDirectory($directory, new PersonFilter(), 1, 1));
+        self::assertCount(2, $this->repository()->forDirectory($directory, PersonFilter::mappings(TaskSyncPersonMapping::Unmatched)));
+        self::assertSame([], $this->repository()->forDirectory($directory, PersonFilter::mappings(TaskSyncPersonMapping::Manual)));
     }
 
     public function testPruneDeletesUnreferencedPeopleAndAnonymisesTheRest(): void

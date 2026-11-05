@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
+use ReflectionProperty;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -67,8 +68,13 @@ final class SyncPeopleViewTest extends PeopleFunctionalTestCase
         self::assertSame('user:1', (new SyncPeopleViewProvider($this->em, $this->accessChecker()))->tokenLabel('user:1'));
         self::assertSame('user:', $views->tokenLabel('user:'));
         self::assertSame('plain', $views->tokenLabel('plain'));
-        // The task's sync row is read once per request.
+        // The task's sync row is read once per request; kernel.reset forgets it (worker mode).
         self::assertNotNull($views->creatorOf($task));
+        $memo = new ReflectionProperty(SyncPeopleViewProvider::class, 'items');
+        self::assertNotSame([], $memo->getValue($views));
+        $views->reset();
+        self::assertSame([], $memo->getValue($views));
+        self::assertSame('Former ClickUp user #1', $views->creatorOf($task)?->name, 'read again after the reset');
     }
 
     public function testTheTaskPageShowsTheRemotePeople(): void

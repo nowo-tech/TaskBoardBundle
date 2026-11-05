@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Dto\FileCounts;
+use Nowo\TaskBoardBundle\Sync\Dto\PeopleCounts;
 use Nowo\TaskBoardBundle\Sync\Dto\SkipCounts;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncCursor;
@@ -17,10 +18,16 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncPhase;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
+use Nowo\TaskBoardBundle\Sync\Dto\TimeCounts;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+
+use function array_filter;
+use function str_starts_with;
+
+use const ARRAY_FILTER_USE_KEY;
 
 /**
  * @internal since 1.23: the mutable state of one run slice (the service itself is stateless)
@@ -86,7 +93,7 @@ final class SyncRunContext
     /** @var list<array{0: Task, 1: StoredAttachment}> files to delete from the host's storage once the page is flushed */
     public array $fileDeletes = [];
 
-    /** @var array<string, int> since 1.25: people / checklist / time counters ({@see SyncReport::$stats}) */
+    /** @var array<string, int> since 1.25: people / checklist / time counters (split into {@see SyncReport::$people}, {@see SyncReport::$time} and {@see SyncReport::$stats}) */
     public array $stats = [];
 
     /** @var array<string, int> since 1.25: tasks per column after the run */
@@ -145,7 +152,7 @@ final class SyncRunContext
         $this->warnings            = $previous->warnings;
         $this->total               = $previous->total;
         $this->startedAt           = $previous->startedAt;
-        $this->stats               = $previous->stats;
+        $this->stats               = $previous->stats + $previous->people->toCounters() + $previous->time->toCounters();
     }
 
     /** Since 1.25: adds to a counter of {@see self::$stats}. */
@@ -216,9 +223,10 @@ final class SyncRunContext
             total: $this->total,
             startedAt: $this->startedAt,
             syncedAt: $syncedAt,
-            stats: $this->stats,
+            stats: array_filter($this->stats, static fn (string $name): bool => !str_starts_with($name, PeopleCounts::PREFIX) && !str_starts_with($name, TimeCounts::PREFIX), ARRAY_FILTER_USE_KEY),
             perColumn: $this->perColumn,
-            timeMode: $this->timeMode,
+            people: PeopleCounts::fromCounters($this->stats),
+            time: TimeCounts::fromCounters($this->timeMode, $this->stats),
         );
     }
 }

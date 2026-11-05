@@ -99,7 +99,7 @@ abstract class SyncReassignTestCase extends SyncFunctionalTestCase
                 return !$user instanceof AppUser || !in_array($user->getEmail(), $this->test->nonCandidateEmails(), true);
             }
 
-            public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, string $normalizedEmail): ?SyncPersonMatch
+            public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, ?string $normalizedEmail = null): ?SyncPersonMatch
             {
                 return null;
             }

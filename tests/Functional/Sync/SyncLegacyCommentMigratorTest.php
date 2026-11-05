@@ -53,9 +53,9 @@ final class SyncLegacyCommentMigratorTest extends SyncPeopleFunctionalTestCase
         $this->sync($board);
 
         $first  = $this->migrator()->migrate($this->connection($board), 3);
-        $second = $this->migrator()->migrate($this->connection($board), 3, $first['lastId']);
-        self::assertSame([false, true], [$first['done'], $second['done']], 'resumable by the last id');
-        self::assertSame([1, 2], [$first['migrated'] + $second['migrated'], $first['skipped'] + $second['skipped']]);
+        $second = $this->migrator()->migrate($this->connection($board), 3, $first->lastId);
+        self::assertSame([false, true], [$first->done, $second->done], 'resumable by the last id');
+        self::assertSame([1, 2], [$first->migrated + $second->migrated, $first->skipped + $second->skipped]);
 
         $bodies = $this->bodies();
         self::assertSame('From one', $bodies['c1']);
@@ -66,7 +66,8 @@ final class SyncLegacyCommentMigratorTest extends SyncPeopleFunctionalTestCase
 
         // Idempotent, and the next sync sees no conflict.
         $again = $this->migrator()->migrate($this->connection($board));
-        self::assertSame([0, 2, true], [$again['migrated'], $again['skipped'], $again['done']]);
+        self::assertSame([0, 2, true], [$again->migrated, $again->skipped, $again->done]);
+        self::assertSame($this->connection($board)->getDirectory()?->getId(), $again->directoryId);
         $report = $this->sync($board, full: true);
         self::assertSame([], $report->conflicts);
         self::assertSame('From one', $this->bodies()['c1']);
@@ -79,7 +80,9 @@ final class SyncLegacyCommentMigratorTest extends SyncPeopleFunctionalTestCase
         $this->provider->setComments('t1', [new RemoteComment('c1', 'Hi', null, 'User 9001', new DateTimeImmutable('@1700000000'))]);
         $this->sync($board, people: false);
         $result = $this->migrator()->migrate($this->connection($board), 0);
-        self::assertSame([0, 1], [$result['migrated'], $result['skipped']]);
+        self::assertSame([0, 1], [$result->migrated, $result->skipped]);
+        self::assertNull($result->directoryId);
+        self::assertSame($this->connection($board)->getId(), $result->connectionId);
     }
 
     /**

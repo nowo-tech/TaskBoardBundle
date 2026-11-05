@@ -52,7 +52,7 @@ final class PeopleSession
             return $known;
         }
 
-        return $this->people[$remote->providerUserId] = $this->directoryService->upsertPerson($this, $remote, $kind);
+        return $this->people[$remote->providerUserId] = $this->directoryService->upsertPerson($this, $remote, $kind); // @igor-ignore - one object per page, never a service
     }
 
     /** The user to write for the person on this board: mapped (auto / manual) and allowed to view the board; else null. */
@@ -64,7 +64,7 @@ final class PeopleSession
         }
         $id = SyncUser::id($user) ?? '';
 
-        return ($this->viewers[$id] ??= $this->accessChecker->canViewBoard($user, $this->board)) ? $user : null;
+        return ($this->viewers[$id] ??= $this->accessChecker->canViewBoard($user, $this->board)) ? $user : null; // @igor-ignore - one object per page, never a service
     }
 
     /** Adds to a counter. */

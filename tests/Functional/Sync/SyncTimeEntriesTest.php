@@ -30,6 +30,7 @@ use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingTimeSink;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 
+use function array_filter;
 use function array_map;
 use function array_merge;
 use function array_unique;
@@ -37,6 +38,9 @@ use function array_values;
 use function count;
 use function json_encode;
 use function range;
+use function str_starts_with;
+
+use const ARRAY_FILTER_USE_KEY;
 
 /**
  * Since 1.25 (§2.5, §3 E7/E8, §5.1, §13.1 Sink): the `time_entries` phase hands tracked time to the host's sink,
@@ -60,8 +64,8 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 
         $report = $this->sync($board, timeEntries: true, timeFrom: $now->sub(new DateInterval('P45D')));
         self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
-        self::assertSame('admin', $report->timeMode);
-        self::assertSame([2, 2, 1, 1], [$report->stat('time.entries'), $report->stat('time.windows'), $report->stat('time.skippedRunning'), $report->stat('time.skippedTaskless')]);
+        self::assertSame('admin', $report->time->mode);
+        self::assertSame([2, 2, 1, 1], [$report->time->entries, $report->time->windows, $report->time->skippedRunning, $report->time->skippedTaskless]);
         self::assertSame([false, true, false, true], array_map(static fn (array $c): bool => $c['complete'], RecordingTimeSink::$calls), 'complete on the last chunk of each window');
         self::assertSame(['admin'], array_values(array_unique(array_map(static fn (array $c): string => $c['access']->mode->value, RecordingTimeSink::$calls))));
 
@@ -88,9 +92,9 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 
         $report = $this->sync($board, timeEntries: true);
         self::assertSame(SyncStatus::Succeeded, $report->status);
-        self::assertSame('member', $report->timeMode);
+        self::assertSame('member', $report->time->mode);
         self::assertContains('time_member_mode', array_map(static fn (SyncError $w): string => $w->code, $report->warnings));
-        self::assertSame(1, $report->stat('people.created') - 1, 'the member, then the token user from its entries');
+        self::assertSame(1, $report->people->created - 1, 'the member, then the token user from its entries');
         self::assertCount(1, RecordingTimeSink::$calls, 'an empty board reads one 30-day window');
         self::assertTrue(RecordingTimeSink::$calls[0]['complete']);
         self::assertSame(['e1'], array_map(static fn (ImportedTimeEntryCandidate $c): string => $c->entry->id, RecordingTimeSink::$calls[0]['entries']));
@@ -106,8 +110,8 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 
         $report = $this->sync($board, timeEntries: true, timeFrom: $start);
         self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
-        self::assertSame(12, $report->stat('time.entries'));
-        self::assertGreaterThan(0, $report->stat('time.windowsSplit'));
+        self::assertSame(12, $report->time->entries);
+        self::assertGreaterThan(0, $report->time->windowsSplit);
 
         // Ten entries inside one hour cannot be split further: the run fails, nothing half-read is delivered as complete.
         $other = $this->boardWithColumns('To do');
@@ -142,7 +146,7 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
         $report = $this->sync($board, timeEntries: true);
         self::assertSame(SyncStatus::Succeeded, $report->status);
         self::assertSame(RecordingTimeSink::$calls[5]['window']->from->getTimestamp(), $cursor->timeWindowStart?->getTimestamp());
-        self::assertSame(count(RecordingTimeSink::$calls), $report->stat('time.windows'));
+        self::assertSame(count(RecordingTimeSink::$calls), $report->time->windows);
     }
 
     public function testATimeBudgetPausesAfterAWindowAndARateLimitResumesTheSameChunk(): void
@@ -191,12 +195,14 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 
         $report = $this->sync($board, timeEntries: true, timeFallbackPerTask: true);
         self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
-        self::assertSame('fallback', $report->timeMode);
+        self::assertSame('fallback', $report->time->mode);
         $codes = array_map(static fn (SyncError $w): string => $w->code, $report->warnings);
         self::assertContains('time_fallback_partial', $codes);
         self::assertContains('time_member_mode', $codes);
         self::assertCount(2, RecordingTimeSink::$calls, 'capped at fallback_max_tasks_per_run');
-        self::assertSame(2, $report->stat('time.entries'));
+        self::assertSame(2, $report->time->entries);
+        self::assertSame(2, $report->time->fallbackTasks);
+        self::assertSame([], array_filter($report->stats, static fn (string $name): bool => str_starts_with($name, 'time.') || str_starts_with($name, 'people.'), ARRAY_FILTER_USE_KEY), 'typed counters are not repeated in stats');
 
         foreach (['t1', 't2', 't3'] as $task) {
             $this->provider->withTaskIntervals($task, null);

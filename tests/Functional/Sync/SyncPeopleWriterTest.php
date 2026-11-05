@@ -248,6 +248,32 @@ final class SyncPeopleWriterTest extends SyncPeopleFunctionalTestCase
         self::assertSame('One', $this->taskTitled('Step one')->getParent()?->getTitle());
     }
 
+    public function testTheRunCanLeaveOutWatchersAndChecklists(): void
+    {
+        $this->viewer('carol@example.test');
+        $provider = new DetailTaskProvider();
+        $provider->withWorkspace(self::WORKSPACE);
+        $board = $this->boardWithColumns('To do', 'Done');
+        $provider->putTask(self::LIST, $this->row('t1', 'One', 1));
+        $provider->withTaskDetail($this->row('t1', 'One', 1, watchers: [self::ref('9001', 'carol@example.test')], checklists: [new RemoteChecklist('cl1', 'Steps', 0, [new RemoteChecklistItem('i1', 'Step one', 0)])]));
+
+        // Neither: the row's missing keys need no detail call.
+        $report = $this->sync($board, $provider, watchers: false, checklists: false);
+        self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
+        self::assertSame(0, $report->stat('detail.calls'));
+        $this->em->clear();
+        self::assertSame([], $this->members($this->taskTitled('One')));
+        self::assertSame(1, $this->rows(Task::class), 'no checklist subtask');
+
+        // Checklists only: the detail is read for them, its watchers are left out.
+        $provider->putTask(self::LIST, $this->row('t1', 'One', 2));
+        $report = $this->sync($board, $provider, watchers: false);
+        self::assertSame(1, $report->stat('detail.calls'));
+        $this->em->clear();
+        self::assertSame([], $this->members($this->taskTitled('One')));
+        self::assertSame('One', $this->taskTitled('Step one')->getParent()?->getTitle());
+    }
+
     /**
      * @return array<string, int>
      */

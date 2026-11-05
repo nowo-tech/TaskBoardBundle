@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
+use Nowo\TaskBoardBundle\Sync\People\PersonFilter;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
@@ -108,7 +109,7 @@ final readonly class TimeEntryPhase
         $start    = $ctx->timeWindowStart ?? $ctx->options->timeFrom ?? $this->oldest($ctx);
         $chunks   = $access->mode === TimeAccessMode::Admin ? $this->assigneeChunks($directory) : [null];
         for ($windows = 0; $start < $now && $windows < $this->maxWindowsPerRun; ++$windows) {
-            $end    = min($start->add(new DateInterval('P' . $this->windowDays . 'D')), $now);
+            $end    = min($start->add(new DateInterval('P' . $this->windowDays . 'D')), $now); // @igor-ignore - DateTimeImmutable
             $window = new TimeWindow($start, $end, $location);
             for ($chunk = $ctx->timeChunk; $chunk < count($chunks); ++$chunk) {
                 $entries = $this->read($provider, $ctx, new TimeEntryQuery($directory->getWorkspaceId(), $location, $start, $end, $chunks[$chunk]));
@@ -190,7 +191,7 @@ final readonly class TimeEntryPhase
     private function fallback(SyncRunContext $ctx, TaskSyncDirectory $directory, TimeEntryProviderInterface $provider): void
     {
         $now    = $this->clock->now();
-        $window = new TimeWindow($now->setTimestamp(0), $now, $ctx->connection->getLocation());
+        $window = new TimeWindow($now->setTimestamp(0), $now, $ctx->connection->getLocation()); // @igor-ignore - DateTimeImmutable
         /** @var list<TaskSyncItem> $items */
         $items = $this->entityManager->createQueryBuilder()->select('i')->from(TaskSyncItem::class, 'i')
             ->where('i.connection = :c')->andWhere('i.task IS NOT NULL')->andWhere('i.itemKind = :kind')
@@ -209,6 +210,7 @@ final readonly class TimeEntryPhase
 
                 return;
             }
+            $ctx->count('time.fallbackTasks');
             $entries = [];
             foreach ($intervals as $entry) {
                 $entries[] = $entry;
@@ -225,7 +227,7 @@ final readonly class TimeEntryPhase
     private function assigneeChunks(TaskSyncDirectory $directory): array
     {
         $ids = [];
-        foreach ($this->people->forDirectory($directory, [], 100_000) as $person) {
+        foreach ($this->people->forDirectory($directory, new PersonFilter(), 100_000) as $person) {
             $ids[] = $person->getProviderUserId();
         }
 

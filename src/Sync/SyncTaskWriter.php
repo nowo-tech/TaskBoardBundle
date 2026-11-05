@@ -32,6 +32,7 @@ use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
+use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
@@ -628,10 +629,10 @@ final readonly class SyncTaskWriter
                 $this->syncComments($ctx, $task, $item, $assignees, $session);
             }
             $detail = $this->detail($ctx, $item, $remote);
-            if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $this->watchersEnabled && $detail->watchersKnown) {
+            if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $this->watchers($ctx) && $detail->watchersKnown) {
                 $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Watcher, $detail->watchers, TaskSyncPerson::KIND_WATCHER, $ctx->actor);
             }
-            if ($this->checklistsEnabled && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
+            if ($this->checklists($ctx) && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
                 $this->checklistWriter->sync($ctx, $session, $item, $task, $detail);
             }
         } catch (ProviderException $exception) {
@@ -969,13 +970,25 @@ final readonly class SyncTaskWriter
     private function detail(SyncRunContext $ctx, TaskSyncItem $item, RemoteTask $remote): RemoteTask
     {
         $provider = $ctx->provider;
-        $missing  = ($this->watchersEnabled && !$remote->watchersKnown) || ($this->checklistsEnabled && !$remote->checklistsKnown);
+        $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown);
         if (!$missing || !$provider instanceof TaskDetailProviderInterface || ($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {
             return $remote;
         }
         $ctx->count('detail.calls');
 
         return $provider->fetchTaskDetail($ctx->credential, $item->getExternalId()) ?? $remote;
+    }
+
+    /** Since 1.25: watchers are imported — `sync.watchers.enabled` and the run's {@see SyncOptions::$watchers}. */
+    private function watchers(SyncRunContext $ctx): bool
+    {
+        return $this->watchersEnabled && $ctx->options->watchers;
+    }
+
+    /** Since 1.25: checklists are imported — `sync.checklists.enabled` and the run's {@see SyncOptions::$checklists}. */
+    private function checklists(SyncRunContext $ctx): bool
+    {
+        return $this->checklistsEnabled && $ctx->options->checklists;
     }
 
     /** Since 1.25: whether assignees go through the people directory (a session and person refs on the row). */

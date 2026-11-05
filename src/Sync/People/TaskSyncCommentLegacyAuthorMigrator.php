@@ -40,10 +40,7 @@ final readonly class TaskSyncCommentLegacyAuthorMigrator
     ) {
     }
 
-    /**
-     * @return array{migrated: int, skipped: int, lastId: string, done: bool}
-     */
-    public function migrate(TaskBoardConnection $connection, int $batchSize = 500, string $afterId = ''): array
+    public function migrate(TaskBoardConnection $connection, int $batchSize = 500, string $afterId = ''): MigrateReport
     {
         $directory = $connection->getDirectory();
         $batchSize = max(1, $batchSize);
@@ -76,7 +73,7 @@ final readonly class TaskSyncCommentLegacyAuthorMigrator
         }
         $this->entityManager->flush();
 
-        return ['migrated' => $migrated, 'skipped' => $skipped, 'lastId' => $last, 'done' => count($comments) < $batchSize];
+        return new MigrateReport($connection->getId(), $directory?->getId(), $migrated, $skipped, $last, count($comments) < $batchSize);
     }
 
     /**
@@ -87,7 +84,7 @@ final readonly class TaskSyncCommentLegacyAuthorMigrator
     private function byName(TaskSyncDirectory $directory): array
     {
         $names = [];
-        foreach ($this->people->forDirectory($directory, [], 100_000) as $person) {
+        foreach ($this->people->forDirectory($directory, new PersonFilter(), 100_000) as $person) {
             $name         = trim($person->getName());
             $names[$name] = isset($names[$name]) ? false : $person;
         }

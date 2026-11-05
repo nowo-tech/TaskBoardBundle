@@ -49,8 +49,9 @@ final class PeopleStubResolver implements SyncPersonResolverInterface
         return !in_array(SyncUser::id($user), $this->notCandidates, true);
     }
 
-    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, string $normalizedEmail): ?SyncPersonMatch
+    public function autoMatch(TaskBoard $board, RemotePerson|RemotePersonRef $person, ?string $normalizedEmail = null): ?SyncPersonMatch
     {
+        $normalizedEmail ??= SyncUser::normalizeEmail($person->email) ?? '';
         $this->asked[] = $normalizedEmail;
         $match         = $this->matches[$normalizedEmail] ?? null;
 

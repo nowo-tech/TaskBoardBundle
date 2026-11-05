@@ -88,7 +88,8 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   unlink. Many remote identities may map to one user; one identity never maps to two.
 - **Host hook `sync.people.resolver`** (`Sync\Hook\SyncPersonResolverInterface`: `directoryScope()`, `candidates()`,
   `isCandidate()`, `autoMatch()`, `candidateById()`). Without it, `DefaultSyncPersonResolver` keeps 1.23 e-mail
-  matching with one directory per board.
+  matching with one directory per board. `autoMatch($board, $person, ?string $normalizedEmail = null)`: the bundle
+  passes the normalised e-mail; without it the resolver derives it from the person.
 - **Automatic e-mail matching** only creates a mapping for a person no human decided: a verified account → `auto`, an
   unverified one → `suggested` (needs a confirmation). A changed e-mail never re-maps automatically.
 - **Projection rule:** a mapped user who cannot view the board is never written as creator, member or comment author
@@ -100,7 +101,8 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
 - **Checklists** become subtasks (`<task>#<item>`, tag `checklist:<name>`, nested items flattened in tree order); the
   deletions scan never archives them, a checklist that drops an item does.
 - **Comment authors** as person references (`task_board_sync_comments.author_person_id`) and the ClickUp comment date.
-  `TaskSyncCommentLegacyAuthorMigrator::migrate()` strips the 1.23 "**name** (ClickUp):" line once.
+  `TaskSyncCommentLegacyAuthorMigrator::migrate()` strips the 1.23 "**name** (ClickUp):" line once and returns a
+  `MigrateReport` (`connectionId`, `directoryId`, `migrated`, `skipped`, `lastId`, `done`).
 - **Status types decide "done"** (`closed` / `done`); the last-column rule is only a fallback without types. A
   done → not-done change reopens the task.
 - **Status → column map** on the connection (`TaskBoardSyncService::link(..., $statusColumnMap)`,
@@ -116,6 +118,12 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   with an admin token, the token user's own entries with a member token (warning `time_member_mode`), and the legacy
   per-task intervals only on request (`SyncOptions::$timeFallbackPerTask`). Running timers and task-less entries are
   counted, not delivered. The bundle never writes TimeTrack data.
+- **Typed run counters:** `SyncReport::$people` (`PeopleCounts`: `seen`, `created`, `autoMatched`, `suggested`,
+  `unmatchedNew`, `changedEmail`, `autoUnmatched`) and `SyncReport::$time` (`TimeCounts`: `mode`, `windows`,
+  `windowsSplit`, `entries`, `skippedRunning`, `skippedTaskless`, `fallbackTasks`); `SyncReport::$stats` keeps only the
+  other counters (`checklist.*`, `detail.calls`, `skipStatus`).
+- **Per-run options** `SyncOptions::$watchers` / `$checklists` (default `true`, on top of `sync.watchers.enabled` /
+  `sync.checklists.enabled`).
 - **Pre-scans for the connection dialog:** `TaskSyncPeopleScanner::scan()` (members, first task pages, first comments,
   one time window; ≤ 15 calls) and `TaskSyncSourceScanner::scan()` (source, workspace, statuses with types, people with
   `boardAccess`, time mode).
@@ -128,6 +136,8 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
 - **View models and Twig functions** `task_board_sync_creator(task)`, `task_board_sync_comment_author(comment)`,
   `task_board_sync_unmatched(task, role)`, `task_board_sync_token(token)`; the task panel and comments show them.
 - **Export helpers** `TaskSyncPersonRepository::exportFor($user)` / `exportDirectory($directory)`.
+- **People page filter** `Sync\People\PersonFilter` for `TaskSyncPersonRepository::forDirectory()`: mapping states, `q`
+  (name or e-mail), `changed` and `changedSince` (e-mail changed in the provider).
 - **Import access decision:** `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (`import_tasks`, granted by default),
   `TaskBoardResourceAccessChecker::canImportTasks()` / `canImportIntoTask()`; file imports and
   `canManageBoardConnection()` ask it.
@@ -159,6 +169,22 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
 - The connection page's link, refresh and progress actions refuse (403, logged `actor_id_missing`) a logged-in user whose
   id cannot be read, instead of running the sync as the board's linker (audit EX-D1).
 - `require-dev` `nowo-tech/time-track-bundle` `^1.11` (the bundle still works with TimeTrack 1.10: `suggest` only).
+
+### Fixed
+
+- `TaskBoardSyncService::run()` hands the access check, its `BOARD_ACCESS_CHECK` listeners and `SYNC_STARTED` the
+  managed actor when the caller passes one detached by an earlier `EntityManager::clear()`. With Doctrine ORM 3 native
+  lazy objects (PHP 8.4+), a listener reading a detached, uninitialised user proxy threw
+  `EntityIdentityCollisionException`.
+
+### Deviations from contract clickup-import-1.24 v1.0 (accepted by the owner)
+
+- `TaskSyncPeopleReassigner` / `TaskSyncPeopleProjector` return `ReassignReport` / take `ReassignCursor` (no separate
+  `ProjectionReport` / `ProjectionCursor`).
+- `SyncPersonResolverInterface::autoMatch()` has a third, optional `?string $normalizedEmail = null`; the contract's
+  two-argument call works.
+- There is no separate `people` phase: the workspace members are refreshed at the start of the tasks phase.
+- Folder sources read the folder's lists with ClickUp `project_ids[]`.
 
 ### Security
 

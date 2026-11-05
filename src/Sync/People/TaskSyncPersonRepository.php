@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\People;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -15,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use SortDirection;
 
+use function addcslashes;
 use function array_map;
 use function max;
 
@@ -46,21 +48,29 @@ final readonly class TaskSyncPersonRepository
     }
 
     /**
-     * The people of a directory, by name; `$mappings` keeps only those states (empty = every state).
-     *
-     * @param list<TaskSyncPersonMapping> $mappings
+     * The people of a directory, by name, narrowed by the filter (mapping states, `q` on name or e-mail, e-mail
+     * changed [since a date]). The search text is bound as a parameter with LIKE wildcards escaped.
      *
      * @return list<TaskSyncPerson>
      */
-    public function forDirectory(TaskSyncDirectory $directory, array $mappings = [], int $limit = 200, int $offset = 0): array
+    public function forDirectory(TaskSyncDirectory $directory, PersonFilter $filter = new PersonFilter(), int $limit = 200, int $offset = 0): array
     {
         $builder = $this->entityManager->createQueryBuilder()
             ->select('p')->from(TaskSyncPerson::class, 'p')
             ->where('p.directory = :directory')->setParameter('directory', $directory)
             ->orderBy('p.name', SortDirection::Ascending)->addOrderBy('p.id', SortDirection::Ascending)
             ->setFirstResult(max(0, $offset))->setMaxResults(max(1, $limit));
-        if ($mappings !== []) {
-            $builder->andWhere('p.mapping IN (:mappings)')->setParameter('mappings', $mappings);
+        if ($filter->mappings !== []) {
+            $builder->andWhere('p.mapping IN (:mappings)')->setParameter('mappings', $filter->mappings);
+        }
+        if ($filter->q !== '') {
+            $builder->andWhere("(LOWER(p.name) LIKE :q ESCAPE '!' OR p.emailNormalized LIKE :q ESCAPE '!')")
+                ->setParameter('q', '%' . addcslashes($filter->q, '%_!') . '%');
+        }
+        if ($filter->changedSince instanceof DateTimeImmutable) {
+            $builder->andWhere('p.emailChangedAt >= :changedSince')->setParameter('changedSince', $filter->changedSince);
+        } elseif ($filter->changed) {
+            $builder->andWhere('p.emailChangedAt IS NOT NULL');
         }
 
         /** @var list<TaskSyncPerson> $people */

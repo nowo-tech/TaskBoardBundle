@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 use function explode;
@@ -20,9 +21,10 @@ use function explode;
 /**
  * Since 1.25: view models of the remote people of a synced task (Twig `task_board_sync_creator(task)`,
  * `task_board_sync_comment_author(comment)`, `task_board_sync_unmatched(task, role)`). Reads the sync rows only;
- * memoised per request. Names are shown, never logged.
+ * memoised per request (cleared by `kernel.reset`, so a worker never serves an earlier request's rows). Names are
+ * shown, never logged.
  */
-final class SyncPeopleViewProvider
+final class SyncPeopleViewProvider implements ResetInterface
 {
     /** @var array<string, false|TaskSyncItem> */
     private array $items = [];
@@ -95,6 +97,11 @@ final class SyncPeopleViewProvider
         }
 
         return $token;
+    }
+
+    public function reset(): void
+    {
+        $this->items = [];
     }
 
     private function item(Task $task): ?TaskSyncItem

@@ -133,13 +133,14 @@ final readonly class TaskSyncPeopleDirectoryService
         $name       = Text::cut($remote->name, 120);
         $person     = $this->people->findOneByProviderUserId($directory, $remote->providerUserId);
         $new        = !$person instanceof TaskSyncPerson;
+        $session->count('people.seen');
         if (!$person instanceof TaskSyncPerson) {
             $person = new TaskSyncPerson($directory, $remote->providerUserId, $name, $now);
             $this->entityManager->persist($person);
             $session->count('people.created');
         }
         if ($person->refresh($name, $normalized === null ? null : Text::cut((string) $remote->email, 254), $normalized === null ? null : Text::cut($normalized, 254), $role, $kind, $now)) {
-            $session->count('people.emailChanged');
+            $session->count('people.changedEmail');
         }
         if ($person->isAnonymised() || $person->getMapping()->isHumanDecision()) {
             return $person;
@@ -264,7 +265,7 @@ final readonly class TaskSyncPeopleDirectoryService
         }
         $deleted = 0;
         $kept    = 0;
-        foreach ($this->people->forDirectory($directory, [], 100_000) as $person) {
+        foreach ($this->people->forDirectory($directory, new PersonFilter(), 100_000) as $person) {
             if ($this->people->isReferenced($person)) {
                 $this->forget($person, null);
                 ++$kept;

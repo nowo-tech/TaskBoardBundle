@@ -133,7 +133,7 @@ final readonly class TaskBoardSyncService
         $map = StatusColumns::clean($statusColumnMap, $board);
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
-                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)));
+                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);
@@ -160,7 +160,7 @@ final readonly class TaskBoardSyncService
         $map = StatusColumns::clean($statusColumnMap, $board);
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
-                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)));
+                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);
@@ -241,6 +241,8 @@ final readonly class TaskBoardSyncService
             timeEntries: $options->timeEntries,
             timeFrom: $options->timeFrom,
             timeFallbackPerTask: $options->timeFallbackPerTask,
+            watchers: $options->watchers,
+            checklists: $options->checklists,
         ));
     }
 
@@ -250,13 +252,16 @@ final readonly class TaskBoardSyncService
      */
     public function run(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, string $listId, SyncOptions $options, ?SyncCursor $resume = null): SyncReport
     {
-        if (!$this->accessChecker->canManageBoardConnection($options->actor, $board)) {
+        // A caller may pass an actor detached by an earlier clear (e.g. an uninitialised proxy): the access check and
+        // its BOARD_ACCESS_CHECK listeners get the managed instance, which they may read safely.
+        $actor = $this->attached($options->actor);
+        if (!$this->accessChecker->canManageBoardConnection($actor, $board)) {
             return $this->bare($board, $provider->id(), SyncStatus::Failed, 'actor_not_allowed');
         }
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             $container  = $provider->findContainer($credential, $listId) ?? new RemoteContainer($listId, $listId, ContainerType::List, null, true, false);
-            $connection = $this->link($board, $provider, $credential, $container, $options->actor);
+            $connection = $this->link($board, $provider, $credential, $container, $actor);
         } elseif ($connection->getProvider() !== $provider->id() || $connection->getContainerId() !== $listId) {
             return $this->bare($board, $provider->id(), SyncStatus::Failed, 'board_linked_elsewhere');
         }
@@ -288,7 +293,7 @@ final readonly class TaskBoardSyncService
             $connection->markRun($now);
             $run->record($ctx->report(SyncStatus::Running), $now);
             $this->entityManager->flush();
-            $this->eventDispatcher?->dispatch(new SyncStartedEvent($board, $runId, $provider->id(), $ctx->mode, $options->trigger, $options->actor, $options->dryRun), TaskBoardEvents::SYNC_STARTED);
+            $this->eventDispatcher?->dispatch(new SyncStartedEvent($board, $runId, $provider->id(), $ctx->mode, $options->trigger, $ctx->actor, $options->dryRun), TaskBoardEvents::SYNC_STARTED);
             $this->logger->info('TaskBoard sync started', $this->logContext($ctx));
 
             $status = $this->execute($ctx);
@@ -590,10 +595,18 @@ final readonly class TaskBoardSyncService
     /** A caller may pass an actor detached by an earlier clear: the run records the managed instance. */
     private function attach(SyncRunContext $ctx): void
     {
-        $actor = $this->identity($ctx->actor);
-        if ($actor !== null && !$this->entityManager->contains($ctx->actor)) {
-            $ctx->actor = $this->entityManager->find($actor[0], $actor[1]) ?? $ctx->actor;
+        $ctx->actor = $this->attached($ctx->actor);
+    }
+
+    /** The managed instance of a mapped entity that is not managed (detached by a clear); else the object itself. */
+    private function attached(object $actor): object
+    {
+        $identity = $this->identity($actor);
+        if ($identity === null || $this->entityManager->contains($actor)) {
+            return $actor;
         }
+
+        return $this->entityManager->find($identity[0], $identity[1]) ?? $actor;
     }
 
     /**
