@@ -790,6 +790,21 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringNotContainsString('nowo-task-detail__parents', $page);
     }
 
+    /**
+     * Since 1.25.1: the task page (not the panel fragment, which has its own hook) is wrapped in a stable
+     * .nowo-task-page element carrying the task id, for integrations such as the TimeTrack browser extension.
+     */
+    public function testTheTaskPageHasAStableHookForIntegrations(): void
+    {
+        $page = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($this->task));
+        self::assertSame(1, substr_count($page, 'class="nowo-task-page"'));
+        self::assertStringContainsString('<div class="nowo-task-page" data-task-id="' . $this->task->getId() . '">', $page);
+
+        $panel = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['panel' => true, 'panelTargetPath' => '/board', 'taskRouteExtra' => ['_target_path' => '/board']]);
+        self::assertStringNotContainsString('nowo-task-page', $panel);
+        self::assertStringContainsString('data-task-id="' . $this->task->getId() . '"', $panel);
+    }
+
     public function testLongTitlesAndAStartAfterTheDueDateAreFormErrors(): void
     {
         $form = $this->factory()->create(TaskFormType::class, new TaskFormData(), ['column_choices' => ['Todo' => $this->todo->getId()], 'rich_description' => false, 'tag_input' => false]);

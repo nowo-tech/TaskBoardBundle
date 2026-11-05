@@ -17,5 +17,9 @@
 {% block container_class %}container container-narrow{% endblock %}
 
 {% block body %}
-    {{ block('nowo_task_body') }}
+    {# Since 1.25.1: stable hook of the task page for integrations (e.g. the TimeTrack browser extension). Only the
+       page has it: the panel fragment (task_panel.html.twig) carries its own .nowo-task-panel-fragment hook. #}
+    <div class="nowo-task-page" data-task-id="{{ task.id }}">
+        {{ block('nowo_task_body') }}
+    </div>
 {% endblock %}
