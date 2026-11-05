@@ -5,7 +5,8 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
-  - [Time entries survive their task (planned 1.23.2)](#time-entries-survive-their-task-planned-1232)
+- [To 1.23.2](#to-1232)
+  - [Time entries survive their task](#time-entries-survive-their-task)
 - [To 1.23.1](#to-1231)
 - [To 1.23.0](#to-1230)
   - [Schema change for every host: archived tasks](#schema-change-for-every-host-archived-tasks)
@@ -114,7 +115,15 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-### Time entries survive their task (planned 1.23.2)
+## To 1.23.2
+
+From **1.23.1**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+### Time entries survive their task
 
 From **1.23.x**. Deleting a task used to delete its manual time entries (`task_board_task_time_entries`); it now
 detaches them (`task_id` = NULL) and keeps the task title, board id and external id as snapshots. **Every host must run
