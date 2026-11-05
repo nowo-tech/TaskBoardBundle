@@ -72,6 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`sync.badge.connect_link`** (bool, default `true`): `false` hides the connection badge of an **unlinked** board on
+  the board, list and Gantt headers — no *Connect provider* link and no empty strip — without overriding
+  `templates.connection_badge`. A linked board keeps its badge (provider · list, last sync, *Refresh*, *Connection*).
+  Exposed to Twig as the global `nowo_task_board_sync_badge_connect_link`. The default output is byte-identical to
+  1.25.1.
+
 ## [1.25.1] - 2026-11-05
 
 Patch release. See [UPGRADING](UPGRADING.md#to-1251).

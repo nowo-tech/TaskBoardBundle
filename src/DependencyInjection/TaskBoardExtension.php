@@ -141,6 +141,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
         $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
         $container->setParameter('nowo_task_board.templates.connection_badge', $config['templates']['connection_badge']);
+        // Since 1.25.2: read by the Twig globals even without sync.enabled (the badge is then never rendered).
+        $container->setParameter('nowo_task_board.sync.badge.connect_link', (bool) $config['sync']['badge']['connect_link']);
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);

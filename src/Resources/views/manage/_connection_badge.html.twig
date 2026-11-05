@@ -1,8 +1,9 @@
 {#
     Since 1.23: the provider connection in the board header (board, list and Gantt views). sync = the result of
     nowo_task_board_connection(board): null shows nothing. Override with templates.connection_badge.
+    Since 1.25.2: sync.badge.connect_link false = an unlinked board shows nothing (no Connect link, no empty strip).
 #}
-{% if sync %}
+{% if sync and (sync.linked or (nowo_task_board_sync_badge_connect_link ?? true)) %}
     <div class="nowo-task-sync-badge d-flex flex-wrap align-items-center gap-2 mb-3" data-testid="nowo-task-sync-badge">
         {% if sync.linked %}
             <span class="badge bg-azure-lt nowo-task-sync-badge__label">

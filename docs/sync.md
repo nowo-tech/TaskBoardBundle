@@ -233,7 +233,9 @@ rate-limited (resumable), 4 refused by a limit, 5 busy. It never prints a token 
 
 - Board, list and Gantt headers: *Connect provider* for managers; once linked, the badge "ClickUp · <list>", the last
   sync time and, for managers, *Refresh from ClickUp* and *Connection* (block `nowo_task_board_connection`, template
-  `_connection_badge.html.twig`). Readers see the badge only.
+  `_connection_badge.html.twig`). Readers see the badge only. Since 1.25.2, `sync.badge.connect_link: false` drops
+  the *Connect provider* link: an unlinked board shows nothing in the header (the connection page stays reachable at
+  `board_connection` for the host to link from elsewhere); a linked board is unchanged.
 - The connection page (`board_connection`, template `templates.connection`): provider, stored connection (with a link
   to the host's credential form), the container browser, the import options; once linked, status, progress, history,
   *Refresh*, the mass-archive confirmation and *Unlink*.

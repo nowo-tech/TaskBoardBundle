@@ -39,12 +39,22 @@ final class SyncExtensionTest extends TestCase
         $container = $this->load([]);
 
         self::assertFalse($container->getParameter('nowo_task_board.sync.enabled'));
+        self::assertTrue($container->getParameter('nowo_task_board.sync.badge.connect_link'), 'since 1.25.2: the Connect link is shown by default');
         self::assertFalse($container->hasDefinition(ClickUpTaskProvider::class));
         self::assertFalse($container->hasAlias(ProviderCredentialResolverInterface::class));
         self::assertArrayNotHasKey('$connectionBadges', $container->getDefinition(TaskBoardTwigExtension::class)->getArguments());
         $routes = $this->routes([]);
         self::assertNull($routes->get('nowo_task_board_board_connection'));
         self::assertNotNull($routes->get('nowo_task_board_task_restore'), 'restoring an archived task is always available');
+    }
+
+    /** Since 1.25.2: sync.badge.connect_link reaches the Twig globals (the badge partial reads it). */
+    public function testTheConnectLinkSwitchReachesTheTwigExtension(): void
+    {
+        $container = $this->load(['badge' => ['connect_link' => false]]);
+
+        self::assertFalse($container->getParameter('nowo_task_board.sync.badge.connect_link'));
+        self::assertSame('%nowo_task_board.sync.badge.connect_link%', $container->getDefinition(TaskBoardTwigExtension::class)->getArgument('$syncBadgeConnectLink'));
     }
 
     /**

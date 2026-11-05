@@ -124,6 +124,17 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+No schema change; the default output is unchanged. New option `sync.badge.connect_link` (default `true`): a host that
+copied `_connection_badge.html.twig` only to drop the *Connect provider* link of an unlinked board can delete its copy
+(and its `templates.connection_badge` setting) and set:
+
+```yaml
+nowo_task_board:
+    sync:
+        badge:
+            connect_link: false
+```
+
 ## To 1.25.1
 
 From **1.25.0**:
