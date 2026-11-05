@@ -107,12 +107,12 @@ final class TaskBoardEvents
     /** Since 1.25: {@see SyncPeopleReprojectedEvent} — references became real rows. */
     public const SYNC_PEOPLE_REPROJECTED = 'nowo_task_board.sync_people_reprojected';
 
-    /** Since 1.25: {@see TaskErasedEvent} — a task is about to be deleted by the board eraser. */
+    /** {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). */
     public const TASK_ERASED = 'nowo_task_board.task_erased';
 
-    /** Since 1.25: {@see BoardErasedEvent} — a board was emptied. */
+    /** {@see BoardErasedEvent}, once the board is empty (since 1.25). */
     public const BOARD_EMPTIED = 'nowo_task_board.board_emptied';
 
-    /** Since 1.25: {@see BoardErasedEvent} — a board was deleted. */
+    /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
     public const BOARD_DELETED = 'nowo_task_board.board_deleted';
 }

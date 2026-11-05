@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -32,6 +33,12 @@ final class BoardAccessCheckEvent extends Event
      */
     public const ACTION_IMPORT_TASKS = 'import_tasks';
 
+    /**
+     * Since 1.25: managing the board itself — emptying or deleting it ({@see TaskBoardEraser}).
+     * Default: the board's creator or a `security.manage_roles` holder.
+     */
+    public const ACTION_MANAGE = 'manage';
+
     private bool $granted = false;
 
     private bool $denied = false;
@@ -47,7 +54,7 @@ final class BoardAccessCheckEvent extends Event
     ) {
     }
 
-    /** Since 1.23: what is being decided ({@see self::ACTION_VIEW} or {@see self::ACTION_MANAGE_CONNECTION}). */
+    /** Since 1.23: what is being decided ({@see self::ACTION_VIEW}, {@see self::ACTION_MANAGE_CONNECTION} or {@see self::ACTION_MANAGE}). */
     public function getAction(): string
     {
         return $this->action;

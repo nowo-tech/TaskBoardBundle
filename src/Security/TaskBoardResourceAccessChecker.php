@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Event\ColumnSetAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Stringable;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -106,6 +107,24 @@ final readonly class TaskBoardResourceAccessChecker
     private function importDecision(object $user, TaskBoard $board): bool
     {
         $event = new BoardAccessCheckEvent($user, $board, true, BoardAccessCheckEvent::ACTION_IMPORT_TASKS);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
+        return $this->isBoardViewable($event);
+    }
+
+    /**
+     * Since 1.25: whether the user may empty or delete the board ({@see TaskBoardEraser}).
+     * Needs {@see self::canEditBoard()} and the {@see BoardAccessCheckEvent::ACTION_MANAGE} decision of
+     * BOARD_ACCESS_CHECK, whose default is the board's creator or a `security.manage_roles` holder.
+     */
+    public function canManageBoard(object $user, TaskBoard $board): bool
+    {
+        if (!$this->canEditBoard($user, $board)) {
+            return false;
+        }
+
+        $default = !$this->scopingEnabled || $this->hasManageRole() || $this->sameUser($user, $board->getCreator());
+        $event   = new BoardAccessCheckEvent($user, $board, $default, BoardAccessCheckEvent::ACTION_MANAGE);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
         return $this->isBoardViewable($event);

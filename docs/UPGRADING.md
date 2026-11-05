@@ -273,6 +273,32 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
   entries (imported ones included) are untouched. Imported time is deleted only by an explicit manager action
   (spec 208 FR-017), never as a side effect.
 
+### Board eraser, imported-time totals and audit fixes (every host)
+
+No schema change and no required configuration for this part.
+
+- **Empty or delete a board without losing time.** `Nowo\TaskBoardBundle\Service\TaskBoardEraser::emptyBoard($board,
+  $actor)` / `deleteBoard(...)` return an `EraseProgress`; call again with `$progress->cursor` until `done` (a Messenger
+  handler can carry `EraseCursor::toArray()` / `fromArray()`). The actor needs
+  `TaskBoardResourceAccessChecker::canManageBoard()`: the board creator or a `security.manage_roles` holder by default;
+  a `BOARD_ACCESS_CHECK` listener decides the action `BoardAccessCheckEvent::ACTION_MANAGE` (`'manage'`). A listener
+  that grants every action without looking at `getAction()` now also lets those users erase boards.
+- **Your `TASK_ERASED` listener must not delete time.** Remove the task's stored files (`attachmentRefs`), mentions or
+  search entries; manual entries are detached and TimeTrack entries keep their task id and snapshots. Imported time is
+  deleted only by an explicit manager action in TimeTrack (`ImportedTimeEntryWriter::remove*()`), never on a task or
+  board delete.
+- **Orphan removal is gone on `TaskBoard::$tasks`** (audit FA-L1). Code that deleted a task with
+  `$board->getTasks()->removeElement($task)` must call `$entityManager->remove($task)` instead (the board's `remove`
+  cascade is unchanged).
+- **Erasure of task titles kept on detached time** (audit FA-L2 / EX-D2): since 1.23.2 deleting a task no longer erases
+  its title from the manual time entries logged on it. A host that must honour an erasure request calls
+  `TaskTimeEntrySnapshotPurger::purge($boardId, $loggedBefore)` (both optional), which clears the title and external id
+  snapshots of detached entries and keeps the minutes, date, user and board id.
+- **Task totals with imported time.** With TimeTrack ≥ 1.11 `ImportedTimeAggregatorListener` is registered
+  automatically and keeps `total_time_seconds` in step with imported entries; with TimeTrack 1.10 nothing changes.
+- **Web sync requests need a readable user id** (audit EX-D1): a user class whose `getId()` is missing or not scalar /
+  `Stringable` gets 403 on link, refresh and progress instead of a run as the board's linker.
+
 ## To 1.24.0
 
 From **1.23.2** (on 1.23.1 or older, apply [To 1.23.2](#to-1232) first, it has a schema

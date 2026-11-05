@@ -6,6 +6,8 @@ services:
 
     Nowo\TaskBoardBundle\Bridge\TimeTrack\:
         resource: '../../Bridge/TimeTrack/'
+        # Since 1.25: registered by the extension only with TimeTrack >= 1.11 (its events exist).
+        exclude: '../../Bridge/TimeTrack/ImportedTimeAggregatorListener.php'
 
     Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener: ~
 

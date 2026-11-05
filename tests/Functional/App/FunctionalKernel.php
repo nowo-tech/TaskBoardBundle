@@ -9,6 +9,8 @@ use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
+use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
@@ -111,6 +113,9 @@ final class FunctionalKernel extends Kernel
         // Since 1.24: a tenant-aware create check and a default board view, used when a test configures them.
         $container->services()->set('app.tenant_create_checker', TenantCreateChecker::class)->public();
         $container->services()->set('app.default_view', PreferredViewResolver::class)->public();
+        // Since 1.25: host-facing services no bundle code calls (the host does), kept public for the tests.
+        $container->services()->alias('app.board_eraser', TaskBoardEraser::class)->public();
+        $container->services()->alias('app.snapshot_purger', TaskTimeEntrySnapshotPurger::class)->public();
         $container->extension('doctrine', [
             'dbal' => ['url' => self::databaseUrl()],
             'orm'  => [

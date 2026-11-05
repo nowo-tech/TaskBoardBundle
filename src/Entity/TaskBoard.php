@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
@@ -40,8 +41,14 @@ class TaskBoard
     #[ORM\OrderBy(['position' => SortDirection::Ascending])]
     private Collection $columns;
 
-    /** @var Collection<int, Task> */
-    #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    /**
+     * Since 1.25 no orphan removal (audit FA-L1): removing a task from this collection inside a flush skipped the task's
+     * `PreRemove` time detach. Delete tasks with `EntityManager::remove()` (or {@see TaskBoardEraser});
+     * the `remove` cascade of a board delete still detaches every task's time.
+     *
+     * @var Collection<int, Task>
+     */
+    #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'board', cascade: ['persist', 'remove'])]
     private Collection $tasks;
 
     public function __construct(

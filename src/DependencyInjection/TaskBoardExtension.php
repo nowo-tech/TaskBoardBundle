@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
@@ -75,6 +76,8 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
+use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -86,6 +89,7 @@ use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 
 use function array_key_exists;
+use function class_exists;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -104,9 +108,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     /**
      * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
+     * @param string $timeTrackImportedEvent Since 1.25: event class whose presence (TimeTrack >= 1.11) enables the
+     *                                       imported-time aggregation
      */
     public function __construct(
         private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
+        private readonly string $timeTrackImportedEvent = TimeEntryImportedEvent::class,
     ) {
     }
 
@@ -351,6 +358,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $loader->load('services_timetrack.yaml');
         $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskProvider::class);
         $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
+
+        // Since 1.25: totals of imported entries (TimeTrack >= 1.11); TimeTrack 1.10 has no such events.
+        if (class_exists($this->timeTrackImportedEvent)) {
+            $container->register(ImportedTimeAggregatorListener::class, ImportedTimeAggregatorListener::class)
+                ->setAutowired(true)
+                ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRY_IMPORTED, 'method' => 'onImported'])
+                ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRIES_REMOVED, 'method' => 'onRemoved']);
+        }
     }
 
     private function syncEnabled(ContainerBuilder $container): bool
