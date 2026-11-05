@@ -61,6 +61,8 @@ services:
     Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver:
         arguments:
             $userClass: '%nowo_task_board.user_class%'
+            # Since 1.24: set from sync.actor_checker by the extension.
+            $userChecker: null
 
     Nowo\TaskBoardBundle\Sync\SyncTaskWriter:
         arguments:

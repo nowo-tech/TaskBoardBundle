@@ -21,6 +21,7 @@ export default defineConfig({
                 'src/Resources/assets/src/task-nav-utils.ts',
                 'src/Resources/assets/src/sync-utils.ts',
                 'src/Resources/assets/src/avatar-fallback.ts',
+                'src/Resources/assets/src/anchor-utils.ts',
             ],
             thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
             exclude: ['**/*.test.ts', '**/node_modules/**'],

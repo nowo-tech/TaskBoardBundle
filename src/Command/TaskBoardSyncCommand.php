@@ -85,7 +85,7 @@ final class TaskBoardSyncCommand extends Command
         }
         $actor = $this->actors->actorFor($board);
         if ($actor === null) {
-            $io->error('No user to run the sync as (the user who linked the board is gone).');
+            $io->error('No user to run the sync as (the user who linked the board is gone, disabled or erased).');
 
             return self::EXIT_INVALID;
         }

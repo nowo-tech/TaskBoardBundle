@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Security;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
+use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
@@ -23,6 +24,9 @@ final class SecurityComponentsTest extends TestCase
 
         self::assertTrue($checker->canAccess($user));
         self::assertFalse($checker->canCreateBoard($user));
+        // Since 1.24 the tenant is accepted and ignored by the role rule.
+        self::assertFalse($checker->canCreateBoard($user, 'acme'));
+        self::assertInstanceOf(TenantAwareTaskBoardAccessCheckerInterface::class, $checker);
         self::assertTrue($checker->canListBoards($user));
     }
 
@@ -33,6 +37,7 @@ final class SecurityComponentsTest extends TestCase
 
         self::assertTrue($checker->canAccess($user));
         self::assertTrue($checker->canCreateBoard($user));
+        self::assertTrue($checker->canCreateBoard($user, 'acme'));
         self::assertTrue($checker->canListBoards($user));
     }
 

@@ -1,0 +1,25 @@
+{#
+    Since 1.24: the New board form, one partial for the index dialog, its <noscript> copy and the 422 answer of an
+    invalid create in a host dialog (board.create_dialog_header). Values and errors of an invalid submission are kept.
+    Variables: form (the TaskBoardFormType view, posted to the board_create route of the current tenant);
+    in_dialog (default false: adds Cancel, which closes the surrounding nowo-task-board-dialog);
+    id_prefix (default '': prefixes the field ids, so a second copy of the form on the page keeps its labels).
+#}
+{% set _in_dialog = in_dialog|default(false) %}
+{% set _id_prefix = id_prefix|default('') %}
+{{ form_start(form, {action: path(nowo_task_board_route('board_create')), method: 'POST', attr: {class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': 'nowo-task-board-create-form'}}) }}
+    {{ form_errors(form) }}
+    {% for child in form %}
+        {% if not child.rendered %}
+            {{ _id_prefix is empty or 'hidden' in child.vars.block_prefixes ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
+        {% endif %}
+    {% endfor %}
+    <div class="nowo-task-dialog__actions">
+        {% if _in_dialog %}
+            <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endif %}
+        <button type="submit" class="btn btn-primary" data-testid="nowo-task-board-create-submit">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+    </div>
+{{ form_end(form) }}

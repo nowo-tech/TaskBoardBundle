@@ -33,7 +33,8 @@ The bundle **never stores a token**. The host keeps the credentials and gives on
 | `inline_image_rewriter`: `InlineImageRewriterInterface` | no | `MapInlineImageRewriter` (stored copy, else the text "[image not copied]") |
 | `limit_checker`: `SyncLimitCheckerInterface` | no | no host limit |
 | `runner`: `SyncRunnerInterface` | no | `InlineSyncRunner` (one slice per request; the progress page continues it) |
-| `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board |
+| `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board; since 1.24 a disabled user (`isEnabled()` false) or one `actor_checker` refuses is never the actor, and a refused named user is not replaced by the linker |
+| `actor_checker`: Symfony `UserCheckerInterface` (since 1.24) | no | none: only `isEnabled()` is checked |
 
 ```php
 use Nowo\TaskBoardBundle\Entity\TaskBoard;

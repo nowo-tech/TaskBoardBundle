@@ -4,6 +4,8 @@ import { Controller } from '@hotwired/stimulus';
  * Native <dialog> elements (since 1.11, column sets): open(event) shows the dialog whose data-dialog matches the
  * button's data-dialog (or the first one) with showModal() — focus trap, Escape and the top layer come from the
  * browser — and returns the focus to the button when it closes; confirm(event) asks before a destructive submit.
+ * Since 1.24 a dialog with `data-open-on-connect` opens as soon as it connects (the board index reopens New board
+ * with the errors of an invalid submission, or on `?new=1`).
  */
 export default class DialogController extends Controller<HTMLElement> {
     static targets = ['dialog'];
@@ -11,6 +13,13 @@ export default class DialogController extends Controller<HTMLElement> {
     declare readonly dialogTargets: HTMLDialogElement[];
 
     private opener: HTMLElement | null = null;
+
+    dialogTargetConnected(dialog: HTMLDialogElement): void {
+        if (dialog.hasAttribute('data-open-on-connect') && !dialog.open) {
+            dialog.addEventListener('click', this.closeOnBackdrop);
+            dialog.showModal();
+        }
+    }
 
     open(event: Event): void {
         const trigger = event.currentTarget as HTMLElement;

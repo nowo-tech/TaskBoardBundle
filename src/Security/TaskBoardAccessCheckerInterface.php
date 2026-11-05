@@ -6,6 +6,9 @@ namespace Nowo\TaskBoardBundle\Security;
 
 /**
  * Global access control for TaskBoard manage UI.
+ *
+ * Since 1.24 a checker may implement {@see TenantAwareTaskBoardAccessCheckerInterface} instead, whose
+ * canCreateBoard() also receives the tenant key of the request.
  */
 interface TaskBoardAccessCheckerInterface
 {

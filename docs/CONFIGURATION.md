@@ -168,7 +168,7 @@ Default role configuration:
 
 | Option | Default | Purpose |
 |--------|---------|---------|
-| `security.access_checker` | `null` | Custom `TaskBoardAccessCheckerInterface` service id |
+| `security.access_checker` | `null` | Custom `TaskBoardAccessCheckerInterface` service id (since 1.24 a `TenantAwareTaskBoardAccessCheckerInterface` also gets the tenant key in `canCreateBoard()`) |
 | `security.access_roles` | `[ROLE_USER]` | Open manage UI (hosts may set `ROLE_ADMIN` for admin-only) |
 | `security.create_roles` | `[ROLE_USER]` | Create boards |
 | `security.list_roles` | `[ROLE_USER]` | List boards |
@@ -362,6 +362,8 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `board.column_icons` | 30 Tabler icons (`Configuration::DEFAULT_COLUMN_ICONS`) | Since 1.11: icons offered in the add / edit column dialogs, as `<set>:<name>` (e.g. `tabler:bug`), rendered through UiKit `components/_icon` (`ux_icon()` with `icon_set: ux_icon`, the bare name with the webfont sets). `[]` = no icon field |
 | `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
 | `board.max_tasks` | `500` | Since 1.21 ([REQ-PERF-001](#query-budget-since-121)): the most tasks the board, list, Gantt and task pages load per board |
+| `board.default_view_resolver` | `null` | Since 1.24: service id of a `TaskBoardDefaultViewResolverInterface` (the view a board opens in for a user: `board`, `list` or `gantt`). The plain board route redirects to the list / Gantt route; `?view=board`, XHR and links from the same board keep the board view. `null` = always the board view |
+| `board.create_dialog_header` | `null` | Since 1.24: request header of the host's dialogs (e.g. `X-Beacon-Dialog`). An invalid *New board* carrying it answers `422` with only `manage/_board_create_form.html.twig`; without it, `422` with the index page and the dialog open |
 
 Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
 
@@ -572,7 +574,8 @@ nowo_task_board:
         inline_image_rewriter: ~      # InlineImageRewriterInterface; null = MapInlineImageRewriter
         limit_checker: ~              # SyncLimitCheckerInterface (host quotas); null = none
         runner: ~                     # SyncRunnerInterface (e.g. Messenger); null = InlineSyncRunner
-        actor_resolver: ~             # SyncActorResolverInterface; null = request user, else who linked the board
+        actor_resolver: ~             # SyncActorResolverInterface; null = request user, else who linked the board (disabled users refused, 1.24)
+        actor_checker: ~              # since 1.24: UserCheckerInterface run with checkPreAuth() on the default resolver's actor
         providers:
             clickup:
                 enabled: true

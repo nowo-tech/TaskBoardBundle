@@ -113,6 +113,36 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+Planned as **1.24.0**. From **1.23.1**: `composer update nowo-tech/task-board-bundle`; no schema change, no required
+configuration.
+
+- **Invalid New board answers 422.** A host listener that rewrote the create redirect (e.g. adding `?new=1` and a flash
+  to the index redirect) is no longer needed and no longer fires: an invalid form is now a `422` page with the dialog
+  open, values and errors kept. Remove such listeners. Tests that expected a redirect for an invalid form expect `422`.
+- **Index page.** `manage/index.html.twig` is now a list page with a *New board* dialog. Overrides of the
+  `nowo_task_board_toolbar` block keep working; a page that replaced the whole `body` block can drop its copy and fill
+  `index_actions`, `index_board_item` or `index_empty` instead. The template gets `canCreateBoard`, `boardFormFallback`
+  and `openCreateBoard` (an override that renders `boardForm` itself is unaffected). The create form is no longer
+  shown to users the create check refuses.
+- **Tenant-aware create check (opt-in).** To decide "may create a board in this tenant", implement
+  `Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface` in the `security.access_checker` service
+  and drop any request listener on the create route. Checkers implementing only `TaskBoardAccessCheckerInterface` keep
+  working unchanged.
+- **Default view (opt-in).** Set `board.default_view_resolver` to a `TaskBoardDefaultViewResolverInterface` service and
+  drop any `kernel.request` redirect of the board route. Links that must open the board view add `?view=board`.
+- **Dialog header (opt-in).** `board.create_dialog_header: X-…` answers an invalid create from a host dialog with only
+  `manage/_board_create_form.html.twig` (`422`).
+- **Import help anchor (opt-in).** Add `anchor_from: source` to `help_link` / `nowo_task_board_import_help_link`; a
+  template override that only kept the link's anchor on the selected source (e.g. `_task_subtask_import.html.twig`)
+  can go.
+- **Sync actor (security, `sync.enabled` only).** The default actor resolver now refuses a disabled user
+  (`isEnabled()` false) and does not fall back to the board's linker when the named user is refused: such runs end with
+  no actor instead of acting as that person. To add the host's own account checks (e.g. anonymised users), set
+  `sync.actor_checker` to a `UserCheckerInterface` service (e.g. `security.user_checker.main`); a custom
+  `sync.actor_resolver` (such as a host wrapper doing the same) keeps working and can be dropped once the default covers
+  its rules.
+- `js/task-board.js` and `css/task-board.css` changed: run `assets:install` (or your asset pipeline) after updating.
+
 ## To 1.23.1
 
 From **1.23.0**:

@@ -48,6 +48,7 @@ use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
+use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
@@ -95,6 +96,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
 use function count;
+use function func_num_args;
 use function in_array;
 
 /**
@@ -634,6 +636,46 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(302, $response->getStatusCode());
     }
 
+    /**
+     * Since 1.24: a checker that only implements the 1.x interface is asked without the tenant, and the index hides
+     * New board from whoever it refuses.
+     */
+    public function testAPlainAccessCheckerIsAskedWithoutTheTenant(): void
+    {
+        $checker = new class implements TaskBoardAccessCheckerInterface {
+            /** @var list<int> */
+            public array $arguments = [];
+
+            public function canAccess(object $user): bool
+            {
+                return true;
+            }
+
+            public function canCreateBoard(object $user): bool
+            {
+                $this->arguments[] = func_num_args();
+
+                return false;
+            }
+
+            public function canListBoards(object $user): bool
+            {
+                return true;
+            }
+        };
+
+        $this->controller($this->owner, accessChecker: $checker)->index();
+        self::assertFalse($this->rendered['canCreateBoard']);
+        self::assertFalse($this->rendered['openCreateBoard']);
+
+        try {
+            $this->controller($this->owner, formData: new TaskBoardFormData(name: 'Nope'), accessChecker: $checker)->createBoard(Request::create('/', 'POST'));
+            self::fail('The create was not refused.');
+        } catch (AccessDeniedException) {
+        }
+        self::assertSame([1, 1], $checker->arguments);
+    }
+
     public function testDuplicateSetNamesKeepEverySetInChoices(): void
     {
         $a = new ColumnSet('Kanban');
@@ -1028,7 +1070,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -1060,7 +1102,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class));
 
         $controller = new TaskBoardManageController(
-            accessChecker: new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),
+            accessChecker: $accessChecker ?? new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),
             boardRepository: $boardRepository,
             taskRepository: $taskRepository,
             boardCreator: new TaskBoardCreator($boardRepository),

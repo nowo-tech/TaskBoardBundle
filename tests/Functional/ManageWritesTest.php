@@ -212,8 +212,9 @@ final class ManageWritesTest extends FunctionalTestCase
     public function testBoardCreationNeedsTheCreateRoleAndAValidForm(): void
     {
         $this->login($this->owner);
+        // Since 1.24 an invalid form answers 422 with the errors (BoardIndexTest), no longer a redirect that drops them.
         $this->post('/create', ['task_board_form' => ['name' => '', '_token' => $this->csrf('task_board_form')]]);
-        self::assertResponseRedirects(self::BASE);
+        self::assertResponseStatusCodeSame(422);
 
         self::$taskBoardConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
         self::ensureKernelShutdown();

@@ -7,14 +7,14 @@ namespace Nowo\TaskBoardBundle\Security;
 /**
  * Permissive checker used only when security.allow_unauthenticated is true (demo/dev).
  */
-final class AllowAllTaskBoardAccessChecker implements TaskBoardAccessCheckerInterface
+final class AllowAllTaskBoardAccessChecker implements TenantAwareTaskBoardAccessCheckerInterface
 {
     public function canAccess(object $user): bool
     {
         return true;
     }
 
-    public function canCreateBoard(object $user): bool
+    public function canCreateBoard(object $user, ?string $tenantKey = null): bool
     {
         return true;
     }

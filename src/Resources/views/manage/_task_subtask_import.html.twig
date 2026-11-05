@@ -3,7 +3,8 @@
     the help modal documents the format. Editors only (subtaskImportForm is null otherwise).
     Variables: task, subtaskImportForm; since 1.22.1 optional help_link ({url, label}, default: the Twig global
     nowo_task_board_import_help_link) rendered as an escaped link under the source select, and the empty block
-    import_help at the same place (for a template that embeds this one).
+    import_help at the same place (for a template that embeds this one). Since 1.24 help_link.anchor_from: 'source'
+    makes the link's #anchor follow the selected source.
 #}
 {% if subtaskImportForm|default(null) %}
     <div class="nowo-task-subtask-import" data-controller="nowo-task-board-dialog">
@@ -22,7 +23,7 @@
                 <div class="nowo-task-field">{{ form_row(subtaskImportForm.source) }}</div>
                 {# Since 1.22.1: a place for the host's help under the source select (block, or the help_link parameter). #}
                 {% block import_help %}{% endblock %}
-                {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(null))}) }}
+                {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(null)), source: subtaskImportForm.source.vars.value|default('')}) }}
                 {% for child in subtaskImportForm %}
                     {% if not child.rendered %}
                         <div class="nowo-task-field">{{ form_row(child) }}</div>

@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Form\FormFactoryInterface;
 use Twig\Environment;
@@ -58,6 +59,42 @@ final class ImportHelpTest extends FunctionalTestCase
         self::assertCount(0, $render(['help_link' => ['url' => '/x']])->filter('[data-testid="nowo-task-import-help-link"]'));
         self::assertCount(0, $render(['help_link' => 'not a link'])->filter('[data-testid="nowo-task-import-help-link"]'));
         self::assertInstanceOf(Task::class, $task);
+    }
+
+    /**
+     * Since 1.24 (Beacon audit KIT-74): help_link.anchor_from = 'source' points the link at the selected source.
+     */
+    public function testTheHelpLinkAnchorCanFollowTheSelectedSource(): void
+    {
+        $board = $this->board();
+        $task  = $this->task($board, 'Parent');
+        $twig  = self::getContainer()->get('twig');
+        self::assertInstanceOf(Environment::class, $twig);
+        $factory = self::getContainer()->get('form.factory');
+        self::assertInstanceOf(FormFactoryInterface::class, $factory);
+        $render = static fn (array $link, TaskImportSource $source = TaskImportSource::ClickUpCsv): Crawler => new Crawler($twig->render('@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig', [
+            'task'              => $task,
+            'subtaskImportForm' => $factory->create(TaskImportFormType::class, new TaskImportFormData(source: $source))->createView(),
+            'help_link'         => $link,
+        ]));
+
+        $follow = $render(['url' => '/manual/import#old', 'label' => 'Format and examples', 'anchor_from' => 'source'], TaskImportSource::TaskBoardJson);
+        $link   = $follow->filter('[data-testid="nowo-task-import-help-link"]');
+        self::assertSame('/manual/import#taskboard-json', $link->attr('href'));
+        self::assertSame('link', $link->attr('data-nowo-task-board-select-anchor-target'));
+        $wrapper = $follow->filter('[data-controller="nowo-task-board-select-anchor"]');
+        self::assertCount(1, $wrapper);
+        self::assertSame("select[name$='[source]']", $wrapper->attr('data-nowo-task-board-select-anchor-selector-value'));
+        self::assertSame('https://docs.example.test/import#clickup-csv', $render(['url' => 'https://docs.example.test/import', 'label' => 'Docs', 'anchor_from' => 'source'])->filter('[data-testid="nowo-task-import-help-link"]')->attr('href'));
+
+        // Default (no anchor_from): the URL as given, no controller; an unsafe URL stays "#".
+        $plain = $render(['url' => '/manual/import#intro', 'label' => 'Docs']);
+        self::assertSame('/manual/import#intro', $plain->filter('[data-testid="nowo-task-import-help-link"]')->attr('href'));
+        self::assertCount(0, $plain->filter('[data-controller="nowo-task-board-select-anchor"]'));
+        $unsafe = $render(['url' => 'javascript:alert(1)', 'label' => 'x', 'anchor_from' => 'source']);
+        self::assertSame('#', $unsafe->filter('[data-testid="nowo-task-import-help-link"]')->attr('href'));
+        self::assertCount(0, $unsafe->filter('[data-controller="nowo-task-board-select-anchor"]'));
+
     }
 
     /**

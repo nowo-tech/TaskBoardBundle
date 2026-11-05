@@ -68,6 +68,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon's v1.122.0 audit (KIT-67, KIT-74, DATA-TASK-TOKEN-ERASURE): hosts no longer need request listeners or template copies for the board
+index, the create check, an invalid create, the default view or the import help anchor. Planned as **1.24.0** (new
+API, backwards compatible). See [UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- **Tenant on the create check:** `Security\TenantAwareTaskBoardAccessCheckerInterface` with
+  `canCreateBoard(object $user, ?string $tenantKey = null)`; the index and the create action pass the tenant of the
+  request. The bundle's checkers implement it and ignore the tenant; a 1.x checker is asked without it.
+- **Default view per user:** `board.default_view_resolver` (`View\TaskBoardDefaultViewResolverInterface`, default
+  `NullTaskBoardDefaultViewResolver`): the plain board route redirects to the list or Gantt route, except with
+  `?view=board`, XHR or a same-origin `Referer` from the same board. The Board links of the index, list and Gantt pages
+  carry `?view=board`.
+- **Board index as a list page:** header actions with *New board* (only for whoever may create a board here), one
+  panel with the boards or an empty state, a **New board** dialog and a `<noscript>` copy of the form; blocks
+  `index_actions`, `index_board_item`, `index_empty`; partials `manage/_board_list.html.twig`,
+  `manage/_board_list_item.html.twig` (Board / List / Gantt with icons and `aria-label`) and
+  `manage/_board_create_form.html.twig`. New template variables `canCreateBoard`, `boardFormFallback`,
+  `openCreateBoard`; `?new=1` opens the dialog.
+- `board.create_dialog_header`: an invalid create from a host dialog answers `422` with only the create form.
+- **Import help anchor:** `help_link.anchor_from: source` (also on the `nowo_task_board_import_help_link` global) — the
+  link's `#anchor` follows the selected import source (`taskboard_json` → `#taskboard-json`), rendered server-side and
+  kept up to date by the `nowo-task-board-select-anchor` Stimulus controller.
+- `nowo-task-board-dialog`: a dialog with `data-open-on-connect` opens when it connects.
+- Strings `task_board.index.new_board`, `.empty_hint`, `.views_of`, `.open_board`, `.open_list`, `.open_gantt` and
+  `task_board.flash.board_invalid` in the 7 locales.
+
+### Changed
+
+- **Invalid New board:** the create action answers `422` with the index page, the dialog open and the submitted values
+  and errors (plus an error flash), instead of a redirect to the index that lost them. A POST without the form still
+  redirects to the index. `TaskBoardManageController::createBoard()` now returns `Response`.
+- The index no longer shows the create form to users the create check refuses.
+
+### Security
+
+- **A sync never runs as a disabled or erased user** (Beacon audit DATA-TASK-TOKEN-ERASURE): the default
+  `ConnectionCreatorActorResolver` refuses (null, the `no_actor` path) a user whose `isEnabled()` answers false, or that
+  the new `sync.actor_checker` (a Symfony `UserCheckerInterface` service id, run with `checkPreAuth()`) refuses; any
+  error of the checks refuses too. A refused named user is not replaced by the user who linked the board. Scheduled,
+  queued and console runs (`nowo:task-board:sync` exits with an error) stop instead of acting with that person's token.
+  A host `sync.actor_resolver` still replaces the default resolver.
+
 ## [1.23.1] - 2026-11-04
 
 ### Fixed
