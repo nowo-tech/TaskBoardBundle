@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.25.1] - 2026-11-05](#1251---2026-11-05)
 - [[1.25.0] - 2026-11-05](#1250---2026-11-05)
 - [[1.24.0] - 2026-11-05](#1240---2026-11-05)
 - [[1.23.2] - 2026-11-05](#1232---2026-11-05)
@@ -71,7 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Planned 1.25.1.
+## [1.25.1] - 2026-11-05
+
+Patch release. See [UPGRADING](UPGRADING.md#to-1251).
 
 ### Added
 
@@ -1443,7 +1446,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.25.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.25.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

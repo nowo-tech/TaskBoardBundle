@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.25.1](#to-1251)
 - [To 1.25.0](#to-1250)
   - [Behaviour changes for sync hosts](#behaviour-changes-for-sync-hosts)
   - [Import access decision (every host)](#import-access-decision-every-host)
@@ -122,6 +123,16 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.25.1
+
+From **1.25.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No schema or configuration change. The full task page now wraps its content in `<div class="nowo-task-page" data-task-id="…">`, a stable hook for integrations such as the TimeTrack browser extension.
 
 ## To 1.25.0
 
