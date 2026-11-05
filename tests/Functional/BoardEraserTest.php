@@ -27,9 +27,15 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 use function array_map;
 use function count;
+use function hash_hmac;
 use function ksort;
+use function serialize;
 use function sort;
 use function str_repeat;
+use function strlen;
+use function time;
+
+use const SORT_STRING;
 
 /**
  * Since 1.25: {@see TaskBoardEraser} empties or deletes a board in resumable slices, leaf-first, and never deletes
@@ -73,14 +79,19 @@ final class BoardEraserTest extends FunctionalTestCase
         self::assertSame(EraseCursor::PHASE_TASKS, $progress->cursor->phase);
         self::assertNotNull($progress->cursor->signature);
 
+        $runId = $progress->cursor->runId;
+        self::assertIsString($runId);
+        self::assertSame(32, strlen($runId));
         $calls = 1;
         while (!$progress->done) {
             // A worker passes the cursor through a message: it survives the array round trip.
             $progress = $eraser->emptyBoard($board, $this->owner, 2, EraseCursor::fromArray($progress->cursor?->toArray() ?? []));
             ++$calls;
+            // The run id is kept across slices (audit FP-I9).
+            self::assertSame($runId, $progress->cursor?->runId ?? $runId);
         }
-        // [Grandchild, Other], [Child], [Parent], then the empty check.
-        self::assertSame(4, $calls);
+        // [Grandchild, Other], [Child], [Parent] (the board is then empty: the last slice finishes at once).
+        self::assertSame(3, $calls);
         self::assertSame(0, $progress->remaining);
         self::assertNull($progress->cursor);
 
@@ -104,6 +115,7 @@ final class BoardEraserTest extends FunctionalTestCase
         self::assertSame(0, $done[0]->columnsDeleted);
         self::assertFalse($done[0]->boardDeleted);
         self::assertSame((string) $this->owner->getId(), $done[0]->actorId);
+        self::assertSame($runId, $done[0]->runId);
         self::assertSame([], $this->eventsOf(TaskBoardEvents::BOARD_DELETED));
 
         $this->em->clear();
@@ -160,20 +172,23 @@ final class BoardEraserTest extends FunctionalTestCase
     {
         $board = $this->board();
         $this->task($board, 'Only');
+        $this->task($board, 'Other');
 
         $eraser = $this->eraser(new SteppingClock());
         $first  = $eraser->deleteBoard($board, $this->owner, 1);
         self::assertFalse($first->done);
         self::assertSame(1, $first->deleted);
+        self::assertSame(1, $first->remaining);
         self::assertSame(EraseCursor::PHASE_TASKS, $first->cursor?->phase);
 
-        // The next call finds no task left, removes the columns and the board.
+        // The next call deletes the last task, then removes the columns and the board.
         $last = $eraser->deleteBoard($board, $this->owner, 1, $first->cursor);
         self::assertTrue($last->done);
-        self::assertSame(0, $last->deleted);
+        self::assertSame(1, $last->deleted);
         $event = $this->eventsOf(TaskBoardEvents::BOARD_DELETED)[0] ?? null;
         self::assertInstanceOf(BoardErasedEvent::class, $event);
-        self::assertSame(1, $event->tasksDeleted);
+        self::assertSame(2, $event->tasksDeleted);
+        self::assertSame($first->cursor?->runId, $event->runId);
 
         // A (signed) cursor already past the tasks goes straight to the board.
         $board2 = $this->board('Second', []);
@@ -269,8 +284,11 @@ final class BoardEraserTest extends FunctionalTestCase
         self::assertEquals(new EraseCursor(), EraseCursor::fromArray(['phase' => 'nope', 'tasksDeleted' => 'x', 'attachmentRefs' => 'x', 'signature' => '']));
         $cursor = EraseCursor::fromArray(['phase' => EraseCursor::PHASE_COLUMNS, 'tasksDeleted' => 4, 'columnsDeleted' => 1, 'attachmentRefs' => ['t1' => ['a', 3, 'b'], 5 => ['c'], 't2' => 'd'], 'signature' => 'abc']);
         self::assertEquals(new EraseCursor(EraseCursor::PHASE_COLUMNS, 4, 1, ['t1' => ['a', 'b']], 'abc'), $cursor);
-        self::assertSame(['phase' => 'columns', 'tasksDeleted' => 4, 'columnsDeleted' => 1, 'attachmentRefs' => ['t1' => ['a', 'b']], 'signature' => 'abc'], $cursor->toArray());
+        self::assertSame(['phase' => 'columns', 'tasksDeleted' => 4, 'columnsDeleted' => 1, 'attachmentRefs' => ['t1' => ['a', 'b']], 'signature' => 'abc', 'runId' => null, 'issuedAt' => null, 'anchorTaskId' => null], $cursor->toArray());
         self::assertNull(EraseCursor::fromArray(['signature' => 5])->signature);
+        $full = new EraseCursor(EraseCursor::PHASE_TASKS, 1, 0, [], 'sig', 'run', 1_790_000_000, 'task-1');
+        self::assertEquals($full, EraseCursor::fromArray($full->toArray()));
+        self::assertEquals(new EraseCursor(), EraseCursor::fromArray(['runId' => '', 'issuedAt' => '1', 'anchorTaskId' => 3]));
     }
 
     /**
@@ -428,7 +446,7 @@ final class BoardEraserTest extends FunctionalTestCase
             $mine->getId()    => ['stored/mine.png'],
             $foreign->getId() => ['stored/foreign.png'],
             'gone-task-id'    => ['stored/gone.png'],
-        ]), $board, false);
+        ], anchorTaskId: $mine->getId()), $board, false);
 
         self::assertTrue($this->eraser()->emptyBoard($board, $this->owner, 10, $cursor)->done);
         $erased = $this->eventsOf(TaskBoardEvents::TASK_ERASED);
@@ -440,12 +458,116 @@ final class BoardEraserTest extends FunctionalTestCase
         self::assertInstanceOf(Task::class, $this->em->find(Task::class, $foreign->getId()));
     }
 
+    /**
+     * Audit FP-I9: a cursor older than the TTL is refused before anything is touched.
+     */
+    public function testAnExpiredCursorIsRefused(): void
+    {
+        $board = $this->board();
+        $this->task($board, 'One');
+        $this->task($board, 'Two');
+        // The stepping clock moves 10 minutes per read: the next call sees the cursor at least 10 minutes old.
+        $eraser = $this->eraser(new SteppingClock(), ttl: 300);
+        $cursor = $eraser->emptyBoard($board, $this->owner, 1)->cursor;
+        self::assertInstanceOf(EraseCursor::class, $cursor);
+        self::assertIsInt($cursor->issuedAt);
+        $this->events = [];
+
+        try {
+            $eraser->emptyBoard($board, $this->owner, 1, $cursor);
+            self::fail('An expired cursor must be refused.');
+        } catch (InvalidEraseCursorException $exception) {
+            self::assertStringContainsString('expired', $exception->getMessage());
+        }
+        self::assertSame([], $this->events);
+        self::assertCount(1, $this->em->getRepository(Task::class)->findBy(['board' => $board->getId()]));
+
+        // A signed cursor without run id or issue time (never issued by the eraser) is refused too.
+        $bare = (new EraseCursorSigner(self::SECRET))->sign(new EraseCursor(), $board->getId(), (string) $this->owner->getId(), false);
+        $this->expectException(InvalidEraseCursorException::class);
+        $this->expectExceptionMessage('no run id or issue time');
+        $this->eraser()->emptyBoard($board, $this->owner, 1, $bare);
+    }
+
+    /**
+     * Audit FP-I9 PoC: a cursor of an earlier, finished run used to add its counts to a new run's BoardErasedEvent
+     * (3 reported where 2 tasks were deleted). Its anchor task is gone, so it is refused.
+     */
+    public function testACursorOfAFinishedRunIsRefused(): void
+    {
+        $board = $this->board();
+        $this->task($board, 'Old 1');
+        $this->task($board, 'Old 2');
+        $eraser = $this->eraser(new SteppingClock());
+        $stale  = $eraser->emptyBoard($board, $this->owner, 1)->cursor;
+        self::assertInstanceOf(EraseCursor::class, $stale);
+        self::assertSame(1, $stale->tasksDeleted);
+        self::assertTrue($eraser->emptyBoard($board, $this->owner, 1, $stale)->done);
+
+        // Replaying it on the now empty board is refused (no second BOARD_EMPTIED).
+        $this->events = [];
+        try {
+            $eraser->emptyBoard($board, $this->owner, 1, $stale);
+            self::fail('A cursor of a finished run must be refused.');
+        } catch (InvalidEraseCursorException $exception) {
+            self::assertStringContainsString('is over', $exception->getMessage());
+        }
+
+        // The board is filled again: replaying the old cursor still fails, a fresh run reports the true count.
+        $this->task($board, 'New 1');
+        $this->task($board, 'New 2');
+        try {
+            $eraser->emptyBoard($board, $this->owner, 10, $stale);
+            self::fail('A cursor of a finished run must be refused.');
+        } catch (InvalidEraseCursorException $exception) {
+            self::assertStringContainsString('is over', $exception->getMessage());
+        }
+        self::assertSame([], $this->events);
+        self::assertCount(2, $this->em->getRepository(Task::class)->findBy(['board' => $board->getId()]));
+
+        self::assertTrue($this->eraser()->emptyBoard($board, $this->owner, 10)->done);
+        $done = $this->eventsOf(TaskBoardEvents::BOARD_EMPTIED);
+        self::assertCount(1, $done);
+        self::assertInstanceOf(BoardErasedEvent::class, $done[0]);
+        self::assertSame(2, $done[0]->tasksDeleted);
+        self::assertNotSame($stale->runId, $done[0]->runId);
+    }
+
+    /**
+     * Audit FP-I10: the HMAC key is a subkey derived from the secret, not the raw secret.
+     */
+    public function testTheSigningKeyIsDerivedFromTheSecret(): void
+    {
+        $board   = $this->board();
+        $actorId = (string) $this->owner->getId();
+        $cursor  = new EraseCursor(EraseCursor::PHASE_TASKS, 1, 0, ['t1' => ['r']], null, 'run-1', 1_790_000_000, 't1');
+        $refs    = $cursor->attachmentRefs;
+        ksort($refs, SORT_STRING);
+        $message = serialize([EraseCursorSigner::LABEL, 'empty', $board->getId(), $actorId, 'run-1', 1_790_000_000, 't1', EraseCursor::PHASE_TASKS, 1, 0, $refs]);
+        $signer  = new EraseCursorSigner(self::SECRET);
+        $with    = static fn (string $signature): EraseCursor => new EraseCursor($cursor->phase, 1, 0, $refs, $signature, 'run-1', 1_790_000_000, 't1');
+
+        // The derived key reproduces the signer's signature (the message format above is the signer's).
+        $derived = hash_hmac('sha256', $message, hash_hmac('sha256', EraseCursorSigner::KEY_CONTEXT, self::SECRET, true));
+        self::assertSame($derived, $signer->sign($cursor, $board->getId(), $actorId, false)->signature);
+        $signer->verify($with($derived), $board->getId(), $actorId, false);
+
+        $this->expectException(InvalidEraseCursorException::class);
+        $this->expectExceptionMessage('signature does not match');
+        $signer->verify($with(hash_hmac('sha256', $message, self::SECRET)), $board->getId(), $actorId, false);
+    }
+
+    /**
+     * Signs a hand-made cursor as the eraser would (run id and issue time filled in when missing).
+     */
     private function signed(EraseCursor $cursor, TaskBoard $board, bool $deleteBoard): EraseCursor
     {
+        $cursor = new EraseCursor($cursor->phase, $cursor->tasksDeleted, $cursor->columnsDeleted, $cursor->attachmentRefs, null, $cursor->runId ?? 'test-run', $cursor->issuedAt ?? time(), $cursor->anchorTaskId);
+
         return (new EraseCursorSigner(self::SECRET))->sign($cursor, $board->getId(), (string) $this->owner->getId(), $deleteBoard);
     }
 
-    private function eraser(?ClockInterface $clock = null, string $secret = self::SECRET): TaskBoardEraser
+    private function eraser(?ClockInterface $clock = null, string $secret = self::SECRET, int $ttl = 3600): TaskBoardEraser
     {
         $checker    = self::getContainer()->get(TaskBoardResourceAccessChecker::class);
         $dispatcher = self::getContainer()->get('event_dispatcher');
@@ -453,8 +575,8 @@ final class BoardEraserTest extends FunctionalTestCase
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
 
         return $clock instanceof ClockInterface
-            ? new TaskBoardEraser($this->em, $checker, $dispatcher, null, $clock, timeBudgetSeconds: 1, cursorSecret: $secret)
-            : new TaskBoardEraser($this->em, $checker, $dispatcher, cursorSecret: $secret);
+            ? new TaskBoardEraser($this->em, $checker, $dispatcher, null, $clock, timeBudgetSeconds: 1, cursorSecret: $secret, cursorTtlSeconds: $ttl)
+            : new TaskBoardEraser($this->em, $checker, $dispatcher, cursorSecret: $secret, cursorTtlSeconds: $ttl);
     }
 
     /**

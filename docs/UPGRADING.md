@@ -413,6 +413,12 @@ No schema change and no required configuration for this part.
   `$cursor = null` instead. The container signs with `%kernel.secret%`, so changing the secret invalidates running
   cursors. Code that builds `TaskBoardEraser` by hand should pass `cursorSecret:`; without it a random per-instance key
   is used and cursors resume only through that instance.
+- **Erase cursors expire and belong to one run** (audit FP-I9). A cursor older than `$cursorTtlSeconds` (new optional
+  `TaskBoardEraser` argument, default 3600 seconds) is refused with `InvalidEraseCursorException` (`expired()`): start
+  again with `$cursor = null`; the tasks already erased stay erased. A cursor of a run that already finished, or whose
+  anchor task was deleted between slices, is refused the same way. `BoardErasedEvent::$runId` identifies the run in
+  your audit row. When the board is empty, the last slice now finishes in the same call instead of returning one more
+  cursor.
 - **Your `TASK_ERASED` listener must not delete time.** Remove the task's stored files (`attachmentRefs`), mentions or
   search entries; manual entries are detached and TimeTrack entries keep their task id and snapshots. Imported time is
   deleted only by an explicit manager action in TimeTrack (`ImportedTimeEntryWriter::remove*()`), never on a task or
