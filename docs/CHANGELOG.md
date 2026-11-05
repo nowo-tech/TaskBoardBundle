@@ -98,6 +98,19 @@ deleting tasks or boards keeps all tracked time.** See [UPGRADING](UPGRADING.md#
   id cannot be read, instead of running the sync as the board's linker (audit EX-D1).
 - `require-dev` `nowo-tech/time-track-bundle` `^1.11` (the bundle still works with TimeTrack 1.10: `suggest` only).
 
+### Security
+
+- **The erase cursor is signed** (audit FP-L3). `EraseCursor` gains an optional `signature` (round-tripped by
+  `toArray()` / `fromArray()`): an HMAC-SHA256 (label `nowo_task_board.erase_cursor.v1`, keyed by `%kernel.secret%`
+  through the new optional `TaskBoardEraser` argument `$cursorSecret`) bound to the board id, the actor id and the
+  operation (empty or delete) and covering the phase, both counts and the attachment refs. On resume the eraser checks
+  it with `hash_equals()` and throws the new `Exception\InvalidEraseCursorException` (an `InvalidArgumentException`)
+  before touching anything when the cursor is unsigned, altered, or belongs to another board, actor or operation. A
+  host that round-tripped the cursor through a browser let the user inject storage refs into `TASK_ERASED`, skip the
+  unlink and `TASK_ERASED` with `phase=board`, loop `emptyBoard()` forever with `phase=columns`, or forge the counts of
+  `BoardErasedEvent`. Also: refs are kept only for task ids still on the board, `emptyBoard()` resumes a column phase as
+  the board phase, and a phase past the tasks is refused while the board still has tasks or pending refs.
+
 ## [1.24.0] - 2026-11-05
 
 Beacon's v1.122.0 audit (KIT-67, KIT-74, DATA-TASK-TOKEN-ERASURE): hosts no longer need request listeners or template copies for the board

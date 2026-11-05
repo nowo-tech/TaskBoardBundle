@@ -32,6 +32,8 @@ services:
             - '../../Security/TaskBoardTeamMembershipResolverInterface.php'
             - '../../Security/NullTaskBoardTeamMembershipResolver.php'
             - '../../Security/TaskBoardResourceAccessChecker.php'
+            # Since 1.25: built by TaskBoardEraser from its cursor secret (audit FP-L3).
+            - '../../Security/EraseCursorSigner.php'
             - '../../Tenancy/TaskBoardTenant.php'
             - '../../Tenancy/TaskBoardTenantResolverInterface.php'
             - '../../Tenancy/SlugTaskBoardTenantResolver.php'
@@ -162,6 +164,11 @@ services:
     Nowo\TaskBoardBundle\Service\TaskBoardCreator:
         arguments:
             $defaultColumns: '%nowo_task_board.board.default_columns%'
+
+    # Since 1.25: the erase cursor is signed with the application secret (audit FP-L3).
+    Nowo\TaskBoardBundle\Service\TaskBoardEraser:
+        arguments:
+            $cursorSecret: '%kernel.secret%'
 
     # Since 1.10: host object links (TaskLinkType::HostObject) resolved by the host's resolvers.
     Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver:
