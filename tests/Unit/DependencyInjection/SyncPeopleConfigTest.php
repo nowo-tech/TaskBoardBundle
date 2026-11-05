@@ -40,8 +40,8 @@ final class SyncPeopleConfigTest extends TestCase
 
         self::assertSame(['resolver' => null, 'require_verified_email' => true, 'reassign_batch_size' => 500, 'scan' => ['max_task_pages' => 1, 'max_comment_tasks' => 10, 'time_window' => true]], $sync['people']);
         self::assertSame(['enabled' => true, 'max_detail_calls_per_run' => 500], $sync['watchers']);
-        self::assertSame(['enabled' => true], $sync['checklists']);
-        self::assertSame(['sink' => null, 'window_days' => 30, 'max_assignees_per_call' => 25, 'max_entries_per_window' => 10_000, 'max_windows_per_run' => 200, 'fallback_max_tasks_per_run' => 500], $sync['time_entries']);
+        self::assertSame(['enabled' => true, 'max_items_per_run' => 2000], $sync['checklists']);
+        self::assertSame(['sink' => null, 'window_days' => 30, 'max_assignees_per_call' => 25, 'max_entries_per_window' => 10_000, 'max_windows_per_run' => 200, 'fallback_max_tasks_per_run' => 500, 'max_calls_per_run' => 500], $sync['time_entries']);
         self::assertFalse($sync['list_as_tag']);
         self::assertSame(['cache_pool' => null], $sync['lookup']);
     }

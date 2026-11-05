@@ -34,7 +34,6 @@ use Symfony\Component\Clock\NativeClock;
 use function array_chunk;
 use function array_keys;
 use function array_map;
-use function array_merge;
 use function array_values;
 use function count;
 use function intdiv;
@@ -67,6 +66,8 @@ final readonly class TimeEntryPhase
         private int $maxEntriesPerWindow = 10_000,
         private int $maxWindowsPerRun = 200,
         private int $fallbackMaxTasks = 500,
+        // Since 1.25 (audit FP-L4): provider calls one slice of the time phase may spend (splits included).
+        private int $maxCallsPerRun = 500,
     ) {
     }
 
@@ -108,19 +109,22 @@ final readonly class TimeEntryPhase
         $now      = $this->clock->now();
         $start    = $ctx->timeWindowStart ?? $ctx->options->timeFrom ?? $this->oldest($ctx);
         $chunks   = $access->mode === TimeAccessMode::Admin ? $this->assigneeChunks($directory) : [null];
+        $calls    = 0;
         for ($windows = 0; $start < $now && $windows < $this->maxWindowsPerRun; ++$windows) {
             $end    = min($start->add(new DateInterval('P' . $this->windowDays . 'D')), $now); // @igor-ignore - DateTimeImmutable
             $window = new TimeWindow($start, $end, $location);
             for ($chunk = $ctx->timeChunk; $chunk < count($chunks); ++$chunk) {
-                $entries = $this->read($provider, $ctx, new TimeEntryQuery($directory->getWorkspaceId(), $location, $start, $end, $chunks[$chunk]));
-                $this->deliver($ctx, $directory, $window, $access, $entries, $chunk === count($chunks) - 1);
+                $query = new TimeEntryQuery($directory->getWorkspaceId(), $location, $start, $end, $chunks[$chunk]);
+                if (!$this->readWindow($provider, $ctx, $directory, $window, $access, $query, $chunk === count($chunks) - 1, $calls, $deadline)) {
+                    return false; // the call budget or the deadline: the cursor holds the split position
+                }
                 $ctx->timeChunk = $chunk + 1;
             }
             $ctx->timeChunk       = 0;
             $start                = $end;
             $ctx->timeWindowStart = $start;
             $ctx->count('time.windows');
-            if ($this->store->isCancelRequested($ctx->runId) || ($deadline !== null && $this->clock->now()->getTimestamp() >= $deadline)) {
+            if ($this->stop($ctx, $deadline)) {
                 return $start >= $now;
             }
         }
@@ -129,30 +133,51 @@ final readonly class TimeEntryPhase
     }
 
     /**
-     * The entries of one query; a window at the row cap is halved and read again (down to one hour).
-     *
-     * @return list<RemoteTimeEntry>
+     * One window and chunk, split by split (audit FP-L4): a split at the row cap is halved and read again (down to one
+     * hour); every complete split is delivered at once (memory stays at one split), and the position is kept in the
+     * cursor, so a rate limit, the call budget or the deadline resume from the last delivered split. False = paused.
      */
-    private function read(TimeEntryProviderInterface $provider, SyncRunContext $ctx, TimeEntryQuery $query): array
+    private function readWindow(TimeEntryProviderInterface $provider, SyncRunContext $ctx, TaskSyncDirectory $directory, TimeWindow $window, TimeAccess $access, TimeEntryQuery $query, bool $lastChunk, int &$calls, ?int $deadline): bool
     {
-        $entries = [];
-        foreach ($provider->fetchTimeEntries($ctx->credential, $query) as $entry) {
-            $entries[] = $entry;
-        }
-        if (count($entries) < $this->maxEntriesPerWindow) {
-            return $entries;
-        }
-        $seconds = $query->to->getTimestamp() - $query->from->getTimestamp();
-        if ($seconds <= self::MIN_WINDOW_SECONDS) {
-            throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
-        }
-        $middle = $query->from->add(new DateInterval('PT' . intdiv($seconds, 2) . 'S'));
-        $ctx->count('time.windowsSplit');
+        $end      = $query->to->getTimestamp();
+        $position = $ctx->timeSplitStart ?? $query->from;
+        $span     = $ctx->timeSplitSeconds > 0 ? $ctx->timeSplitSeconds : $end - $query->from->getTimestamp();
+        while ($position->getTimestamp() < $end) {
+            // The call budget always; the deadline (and a cancel) inside a split window, after at least one call.
+            if ($calls > 0 && ($calls >= $this->maxCallsPerRun || ($ctx->timeSplitSeconds > 0 && $this->stop($ctx, $deadline)))) {
+                $ctx->warn('time_paused');
 
-        return array_merge(
-            $this->read($provider, $ctx, new TimeEntryQuery($query->workspaceId, $query->location, $query->from, $middle, $query->assigneeIds)),
-            $this->read($provider, $ctx, new TimeEntryQuery($query->workspaceId, $query->location, $middle, $query->to, $query->assigneeIds)),
-        );
+                return false;
+            }
+            $to = $position->setTimestamp(min($position->getTimestamp() + $span, $end)); // @igor-ignore - DateTimeImmutable
+            ++$calls;
+            $entries = [];
+            foreach ($provider->fetchTimeEntries($ctx->credential, new TimeEntryQuery($query->workspaceId, $query->location, $position, $to, $query->assigneeIds)) as $entry) {
+                $entries[] = $entry;
+            }
+            $seconds = $to->getTimestamp() - $position->getTimestamp();
+            if (count($entries) >= $this->maxEntriesPerWindow) {
+                if ($seconds <= self::MIN_WINDOW_SECONDS) {
+                    throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
+                }
+                $span                  = intdiv($seconds, 2);
+                $ctx->timeSplitStart   = $position;
+                $ctx->timeSplitSeconds = $span;
+                $ctx->count('time.windowsSplit');
+                continue;
+            }
+            $this->deliver($ctx, $directory, $window, $access, $entries, $lastChunk && $to->getTimestamp() >= $end);
+            $position              = $to;
+            $ctx->timeSplitStart   = $position->getTimestamp() < $end ? $position : null;
+            $ctx->timeSplitSeconds = $position->getTimestamp() < $end ? $span : 0;
+        }
+
+        return true;
+    }
+
+    private function stop(SyncRunContext $ctx, ?int $deadline): bool
+    {
+        return $this->store->isCancelRequested($ctx->runId) || ($deadline !== null && $this->clock->now()->getTimestamp() >= $deadline);
     }
 
     /**
@@ -178,8 +203,14 @@ final readonly class TimeEntryPhase
         $items = $taskIds === [] ? [] : $this->store->itemsByExternalIds($ctx->connection, array_map(static fn (int|string $id): string => Text::cut((string) $id, 128), array_keys($taskIds)));
         $list  = [];
         foreach ($candidates as $entry) {
+            $person = $session->person($entry->person, TaskSyncPerson::KIND_TIME_ENTRY);
+            // Audit FP-I2: only people mapped to a user (auto / manual) are handed to the host; the others are counted.
+            if (!$person->getMapping()->isMapped() || $person->getMappedUser() === null) {
+                $ctx->count('time.skippedUnmapped');
+                continue;
+            }
             $task   = $items[(string) $entry->taskId] ?? null;
-            $list[] = new ImportedTimeEntryCandidate($entry, $session->person($entry->person, TaskSyncPerson::KIND_TIME_ENTRY), $task instanceof TaskSyncItem ? $task->getTask() : null);
+            $list[] = new ImportedTimeEntryCandidate($entry, $person, $task instanceof TaskSyncItem ? $task->getTask() : null);
         }
         $this->entityManager->flush();
         $this->close($ctx, $session);

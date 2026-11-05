@@ -10,10 +10,14 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteChecklistItem;
@@ -22,9 +26,12 @@ use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use SortDirection;
 
-use function addcslashes;
+use function array_diff_key;
 use function array_key_last;
+use function count;
 use function in_array;
+use function max;
+use function min;
 use function sprintf;
 
 /**
@@ -43,6 +50,9 @@ final readonly class SyncChecklistWriter
         private ?SyncPeopleWriter $peopleWriter = null,
         private RemoteContentSanitizer $sanitizer = new RemoteContentSanitizer(),
         private TaskChangeRecorder $changeRecorder = new TaskChangeRecorder(),
+        // Since 1.25 (audit FP-L1): new checklist subtasks go through the host's quota and a per-run cap.
+        private SyncLimitCheckerInterface $limitChecker = new NullSyncLimitChecker(),
+        private int $maxItemsPerRun = 2000,
     ) {
     }
 
@@ -60,6 +70,7 @@ final readonly class SyncChecklistWriter
             }
         }
         $existing = $this->existing($ctx, $parentItem->getExternalId());
+        $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing)));
         $position = 0;
         foreach ($wanted as $externalId => [$entry, $tag]) {
             $item = $existing[$externalId] ?? null;
@@ -67,8 +78,12 @@ final readonly class SyncChecklistWriter
             if ($item instanceof TaskSyncItem && !$task instanceof Task) {
                 continue; // deleted here: never recreated
             }
+            if (!$task instanceof Task && $allowed <= 0) {
+                continue; // over the run cap or the host's quota (warned once); a later run creates it
+            }
             if (!$task instanceof Task) {
-                $task = new Task(board: $ctx->board, title: $this->title($entry), creator: $parent->getCreator(), column: $entry->resolved ? $done : $open, parent: $parent, position: $position, tags: [$tag]);
+                --$allowed;
+                $task = new Task(board: $ctx->board, title: $this->title($entry), creator: $parent->getCreator() ?? $ctx->actor, column: $entry->resolved ? $done : $open, parent: $parent, position: $position, tags: [$tag]);
                 $this->entityManager->persist($task);
                 $this->changeRecorder->recordCreated($task, $ctx->actor);
                 $item = (new TaskSyncItem($ctx->connection, $ctx->board->getId(), $task, $externalId, $remote->remoteUpdatedAt))->setItemKind(TaskSyncItem::KIND_CHECKLIST_ITEM);
@@ -100,6 +115,28 @@ final readonly class SyncChecklistWriter
             }
         }
         $this->entityManager->flush();
+    }
+
+    /**
+     * How many of `$new` checklist subtasks may be created now: within `max_items_per_run` for the run, then as the
+     * host's limit checker allows (all or none, as for a page of tasks).
+     */
+    private function allowedNew(SyncRunContext $ctx, int $new): int
+    {
+        if ($new === 0) {
+            return 0;
+        }
+        $allowed = min($new, max(0, $this->maxItemsPerRun - $ctx->stat('checklist.created')));
+        if ($allowed < $new) {
+            $ctx->warn('checklist_items_capped');
+        }
+        if ($allowed > 0 && $this->limitChecker->check($ctx->board, $allowed, 0) instanceof LimitRefusal) {
+            $ctx->warn('checklist_items_refused');
+
+            return 0;
+        }
+
+        return $allowed;
     }
 
     private function apply(SyncRunContext $ctx, Task $task, RemoteChecklistItem $entry, string $tag, ?BoardColumn $done, ?BoardColumn $open): bool
@@ -141,9 +178,9 @@ final readonly class SyncChecklistWriter
     {
         /** @var list<TaskSyncItem> $items */
         $items = $this->store->entityManager()->createQueryBuilder()->select('i', 't')->from(TaskSyncItem::class, 'i')->leftJoin('i.task', 't')
-            ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere('i.externalId LIKE :prefix')
+            ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere("i.externalId LIKE :prefix ESCAPE '!'")
             ->setParameter('board', $ctx->board->getId())->setParameter('kind', TaskSyncItem::KIND_CHECKLIST_ITEM)
-            ->setParameter('prefix', addcslashes($parentExternalId, '%_\\') . '#%')
+            ->setParameter('prefix', Like::literal($parentExternalId) . '#%')
             ->orderBy('i.externalId', SortDirection::Ascending)->getQuery()->getResult();
         $byId = [];
         foreach ($items as $item) {

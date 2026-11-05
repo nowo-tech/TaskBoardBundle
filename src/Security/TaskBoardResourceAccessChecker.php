@@ -237,7 +237,8 @@ final readonly class TaskBoardResourceAccessChecker
 
     private function isTaskParticipant(object $user, Task $task): bool
     {
-        if ($this->sameUser($user, $task->getCreator())) {
+        $creator = $task->getCreator(); // since 1.25: null once the creator's account was erased
+        if ($creator !== null && $this->sameUser($user, $creator)) {
             return true;
         }
 

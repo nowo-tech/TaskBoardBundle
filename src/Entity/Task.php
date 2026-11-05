@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -23,6 +25,8 @@ use function strtolower;
 #[ORM\Table(name: 'task_board_tasks')]
 #[ORM\Index(name: 'task_board_tasks_board_idx', columns: ['board_id'])]
 #[ORM\Index(name: 'task_board_tasks_board_archived_idx', columns: ['board_id', 'archived_at'])]
+// Since 1.25 (KIT-74): open tasks of a board by due date (due-date alerts and reminders).
+#[ORM\Index(name: 'task_board_tasks_board_open_due_idx', columns: ['board_id', 'completed_at', 'due_at'])]
 #[ORM\HasLifecycleCallbacks]
 class Task
 {
@@ -34,6 +38,9 @@ class Task
 
     /** Since 1.23: archived by a provider sync because the remote task is gone (restored when it comes back). */
     public const ARCHIVE_REASON_REMOTE = 'remote';
+
+    /** Since 1.25: the longest creator / author name snapshot (column length). */
+    public const USER_NAME_MAX = 180;
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
@@ -47,6 +54,10 @@ class Task
 
     #[ORM\Column(name: 'completed_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $completedAt = null;
+
+    /** Since 1.25 (audit FP-M1): the creator's name, kept when the account is erased (`creator_id` SET NULL). */
+    #[ORM\Column(name: 'creator_name', type: 'string', length: 180, nullable: true)]
+    private ?string $creatorName;
 
     #[ORM\Column(name: 'total_time_seconds', type: 'integer')]
     private int $totalTimeSeconds = 0;
@@ -111,9 +122,10 @@ class Task
         private TaskBoard $board,
         #[ORM\Column(type: 'string', length: 255)]
         private string $title,
+        // Since 1.25 (audit FP-M1): nullable, ON DELETE SET NULL; the name stays in `creator_name`.
         #[ORM\ManyToOne(targetEntity: User::class)]
-        #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-        private object $creator,
+        #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+        private ?object $creator,
         #[ORM\ManyToOne(targetEntity: BoardColumn::class, inversedBy: 'tasks')]
         #[ORM\JoinColumn(name: 'column_id', nullable: true, onDelete: 'SET NULL')]
         private ?BoardColumn $column = null,
@@ -150,6 +162,7 @@ class Task
         $this->children             = new ArrayCollection();
         $this->documents            = new ArrayCollection();
         $this->timeEntries          = new ArrayCollection();
+        $this->creatorName          = $creator === null ? null : Text::cut(UserLabel::of($creator), self::USER_NAME_MAX);
     }
 
     public function getId(): string
@@ -183,9 +196,34 @@ class Task
         return $this;
     }
 
-    public function getCreator(): object
+    /** The creator; null once the account was erased (since 1.25, see {@see self::getCreatorName()}). */
+    public function getCreator(): ?object
     {
         return $this->creator;
+    }
+
+    /** Since 1.25: the creator's name when the task was created or last re-assigned (kept when the account goes). */
+    public function getCreatorName(): ?string
+    {
+        return $this->creatorName;
+    }
+
+    /**
+     * Since 1.25 (audit FP-M1): the account is being erased — the task keeps its name snapshot (null with
+     * `$forgetName`) and no longer points at the user, so deleting the user deletes nothing of the board.
+     *
+     * @internal used by the account erasure helper ({@see TaskSyncPeopleReassigner::detachUser()})
+     */
+    public function detachCreator(bool $forgetName = false): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creator = null;
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->creatorName = null;
+        }
+
+        return $this;
     }
 
     public function getColumn(): ?BoardColumn
@@ -379,6 +417,8 @@ class Task
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->creator = $creator;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creatorName = Text::cut(UserLabel::of($creator), self::USER_NAME_MAX);
 
         return $this;
     }

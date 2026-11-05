@@ -26,6 +26,8 @@ final readonly class TimeCounts
         public int $skippedRunning = 0,
         public int $skippedTaskless = 0,
         public int $fallbackTasks = 0,
+        /** Since 1.25 (audit FP-I2): entries of people not mapped to a user, never handed to the sink. */
+        public int $skippedUnmapped = 0,
     ) {
     }
 
@@ -64,7 +66,7 @@ final readonly class TimeCounts
     }
 
     /**
-     * @return array{mode: string|null, windows: int, windowsSplit: int, entries: int, skippedRunning: int, skippedTaskless: int, fallbackTasks: int}
+     * @return array{mode: string|null, windows: int, windowsSplit: int, entries: int, skippedRunning: int, skippedTaskless: int, fallbackTasks: int, skippedUnmapped: int}
      */
     public function toArray(): array
     {
@@ -76,6 +78,7 @@ final readonly class TimeCounts
             'skippedRunning'  => $this->skippedRunning,
             'skippedTaskless' => $this->skippedTaskless,
             'fallbackTasks'   => $this->fallbackTasks,
+            'skippedUnmapped' => $this->skippedUnmapped,
         ];
     }
 
@@ -92,6 +95,7 @@ final readonly class TimeCounts
             SyncValues::int($data['skippedRunning'] ?? 0),
             SyncValues::int($data['skippedTaskless'] ?? 0),
             SyncValues::int($data['fallbackTasks'] ?? 0),
+            SyncValues::int($data['skippedUnmapped'] ?? 0),
         );
     }
 }

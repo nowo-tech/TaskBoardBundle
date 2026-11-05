@@ -84,6 +84,9 @@ final readonly class TaskCommentManager
     public static function isAuthor(TaskComment $comment, object $user): bool
     {
         $author = $comment->getAuthor();
+        if ($author === null) {
+            return false; // since 1.25: the author's account was erased
+        }
         if ($author === $user) {
             return true;
         }

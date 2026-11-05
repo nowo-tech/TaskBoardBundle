@@ -29,6 +29,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
@@ -61,7 +62,6 @@ use Stringable;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
-use function addcslashes;
 use function array_filter;
 use function array_key_last;
 use function array_keys;
@@ -565,9 +565,9 @@ final readonly class SyncTaskWriter
     {
         /** @var list<Task> $tasks */
         $tasks = $this->entityManager->createQueryBuilder()->select('t')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
-            ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere('i.externalId LIKE :prefix')
+            ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere("i.externalId LIKE :prefix ESCAPE '!'")
             ->setParameter('board', $ctx->board->getId())->setParameter('kind', TaskSyncItem::KIND_CHECKLIST_ITEM)
-            ->setParameter('prefix', addcslashes($parentExternalId, '%_\\') . '#%')
+            ->setParameter('prefix', Like::literal($parentExternalId) . '#%')
             ->getQuery()->getResult();
 
         return $tasks;

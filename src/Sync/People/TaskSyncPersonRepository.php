@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
@@ -16,7 +17,6 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use SortDirection;
 
-use function addcslashes;
 use function array_map;
 use function max;
 
@@ -65,7 +65,7 @@ final readonly class TaskSyncPersonRepository
         }
         if ($filter->q !== '') {
             $builder->andWhere("(LOWER(p.name) LIKE :q ESCAPE '!' OR p.emailNormalized LIKE :q ESCAPE '!')")
-                ->setParameter('q', '%' . addcslashes($filter->q, '%_!') . '%');
+                ->setParameter('q', '%' . Like::literal($filter->q) . '%');
         }
         if ($filter->changedSince instanceof DateTimeImmutable) {
             $builder->andWhere('p.emailChangedAt >= :changedSince')->setParameter('changedSince', $filter->changedSince);

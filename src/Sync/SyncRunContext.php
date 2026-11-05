@@ -107,6 +107,11 @@ final class SyncRunContext
 
     public int $timeChunk = 0;
 
+    /** Since 1.25 (audit FP-L4): the split position inside the current window and chunk. */
+    public ?DateTimeImmutable $timeSplitStart = null;
+
+    public int $timeSplitSeconds = 0;
+
     public ?string $timeMode = null;
 
     public function __construct(
@@ -155,6 +160,12 @@ final class SyncRunContext
         $this->stats               = $previous->stats + $previous->people->toCounters() + $previous->time->toCounters();
     }
 
+    /** Since 1.25: one counter of {@see self::$stats} (0 when absent). */
+    public function stat(string $name): int
+    {
+        return $this->stats[$name] ?? 0;
+    }
+
     /** Since 1.25: adds to a counter of {@see self::$stats}. */
     public function count(string $name, int $by = 1): void
     {
@@ -190,6 +201,8 @@ final class SyncRunContext
             timeWindowStart: $this->timeWindowStart,
             timeChunk: $this->timeChunk,
             timeMode: $this->timeMode,
+            timeSplitStart: $this->timeSplitStart,
+            timeSplitSeconds: $this->timeSplitSeconds,
         );
     }
 

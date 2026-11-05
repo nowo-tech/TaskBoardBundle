@@ -48,10 +48,12 @@ use const ARRAY_FILTER_USE_KEY;
  */
 final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 {
+    use MapsTimePeople;
+
     public function testAdminTimeIsReadPerWindowAndAssigneeChunk(): void
     {
         $board = $this->boardWithColumns('To do', 'Done');
-        $this->workspace([self::member('9001', 'a@example.test'), self::member('9002'), self::member('9003')]);
+        $this->workspace([self::member('9001'), self::member('9002'), self::member('9003')]);
         $this->put($this->row('t1', 'Task', 1));
         $now = new DateTimeImmutable();
         $this->provider->withTimeEntries([
@@ -181,6 +183,33 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
         $report = $this->sync($other, $limited, timeEntries: true);
         self::assertSame(SyncStatus::Succeeded, $report->status);
         self::assertSame([false, true], array_map(static fn (array $c): bool => $c['complete'], RecordingTimeSink::$calls));
+    }
+
+    public function testOnlyPeopleMappedToAUserReachTheSink(): void
+    {
+        $board = $this->boardWithColumns('To do', 'Done');
+        $this->workspace([self::member('9001'), self::member('9007', 'nobody@example.test')]);
+        $now = new DateTimeImmutable();
+        $this->provider->withTimeEntries([$this->entry('e1', '9001', 't1', $now->sub(new DateInterval('P2D'))), $this->entry('e7', '9007', 't1', $now->sub(new DateInterval('P2D')))]);
+
+        $report = $this->sync($board, timeEntries: true);
+        self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
+        self::assertSame([1, 1], [$report->time->entries, $report->time->skippedUnmapped]);
+        $delivered = array_merge(...array_map(static fn (array $c): array => $c['entries'], RecordingTimeSink::$calls));
+        self::assertSame(['e1'], array_map(static fn (ImportedTimeEntryCandidate $c): string => $c->entry->id, $delivered));
+    }
+
+    public function testATokenUserFirstSeenInTheTimePhaseAndUnmappedGetsNothingDelivered(): void
+    {
+        $board = $this->boardWithColumns('To do', 'Done');
+        $this->provider->withWorkspace(self::WORKSPACE, [self::member('9001')], new TimeAccess(TimeAccessMode::Member, '9008'));
+        $this->provider->withTimeEntries([$this->entry('e8', '9008', 't1', (new DateTimeImmutable())->sub(new DateInterval('P2D')))]);
+
+        $report = $this->sync($board, timeEntries: true);
+        self::assertSame(SyncStatus::Succeeded, $report->status, (string) json_encode($report->toArray()));
+        self::assertSame([0, 1], [$report->time->entries, $report->time->skippedUnmapped]);
+        self::assertContains('people_unmatched_new', array_map(static fn (SyncError $w): string => $w->code, $report->warnings));
+        self::assertSame([], array_merge(...array_map(static fn (array $c): array => $c['entries'], RecordingTimeSink::$calls)));
     }
 
     public function testTheMemberFallbackReadsPerTaskIntervalsWhenAsked(): void

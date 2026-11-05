@@ -35,7 +35,7 @@ final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepo
         $comments = $this->entityManager->createQueryBuilder()
             ->select('c', 'a')
             ->from(TaskComment::class, 'c')
-            ->join('c.author', 'a')
+            ->leftJoin('c.author', 'a') // since 1.25: an erased author is null
             ->where('c.task = :task')
             ->setParameter('task', $task)
             ->orderBy('c.createdAt', 'ASC')

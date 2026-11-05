@@ -67,6 +67,7 @@ use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
@@ -139,6 +140,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.templates.css_framework', $config['templates']['css_framework']);
         $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
         $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
+        $container->setParameter('nowo_task_board.templates.connection_badge', $config['templates']['connection_badge']);
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);
@@ -267,7 +269,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     {
         /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
         $people = $sync['people'];
-        /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int} $time */
+        /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int, max_calls_per_run: int} $time */
         $time = $sync['time_entries'];
         $container->getDefinition(DefaultSyncPersonResolver::class)->setArgument('$requireVerifiedEmail', $people['require_verified_email']);
         $container->setAlias(SyncPersonResolverInterface::class, $this->serviceOr($people['resolver'], DefaultSyncPersonResolver::class));
@@ -283,7 +285,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call'])
             ->setArgument('$maxEntriesPerWindow', $time['max_entries_per_window'])
             ->setArgument('$maxWindowsPerRun', $time['max_windows_per_run'])
-            ->setArgument('$fallbackMaxTasks', $time['fallback_max_tasks_per_run']);
+            ->setArgument('$fallbackMaxTasks', $time['fallback_max_tasks_per_run'])
+            ->setArgument('$maxCallsPerRun', $time['max_calls_per_run']);
+        $container->getDefinition(SyncChecklistWriter::class)
+            ->setArgument('$maxItemsPerRun', (int) $sync['checklists']['max_items_per_run']);
         $container->getDefinition(SyncTaskWriter::class)
             ->setArgument('$listAsTag', (bool) $sync['list_as_tag'])
             ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])

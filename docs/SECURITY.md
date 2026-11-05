@@ -80,6 +80,25 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
   Worker runs (no session) only pass for the board creator.
 - **Outbound guard settings (EG-I6).** `OutboundUrlGuardAdapter` builds `OutboundUrlGuard` with its own (strict)
   defaults, not the host's configured guard service: host allow / deny lists of that bundle do not apply to synced files.
+- **Candidates without a resolver (FP-I1).** Without `sync.people.resolver` and without `assignee_provider`,
+  `DefaultSyncPersonResolver::isCandidate()` is true for every user and `candidateById()` finds any user id: a board
+  manager can map a remote person, and so route imported time through the sink, to any account of the host.
+  Multi-tenant hosts must set `sync.people.resolver` (or at least `assignee_provider`).
+- **Time and auto-matching (FP-I2).** Only people mapped to a user reach the time sink. Auto-matching trusts the
+  provider's (validated, ASCII) e-mail: a linked workspace's admin can attribute time to a verified candidate of the
+  board. Hosts that want time only for human decisions accept only `manual` mappings in their sink.
+- **Listeners that grant everything (FP-I3).** A `BOARD_ACCESS_CHECK` listener that calls `grant()` without reading
+  `getAction()` also grants `manage` (empty or delete a board, since 1.25) and `import_tasks`. With scoping off,
+  `manage` defaults to every editor. Check the action.
+- **The eraser and the connection (FP-I4).** `TaskBoardEraser` unlinks the board after `canManageBoard()` (`manage`)
+  only, without asking `manage_connection`: the board goes (or is emptied) anyway. Deny `manage` to whoever must not
+  drop the link that way.
+- **CLI imports are operator-trusted (FP-I5).** `nowo:task-board:import` runs as the console operator: it asks neither
+  `import_tasks` nor `canEditBoard()`. Do not expose it to untrusted callers (e.g. through a web-triggered process).
+- **Shared lookup cache (FP-I6).** The list-search cache is keyed by `connectionRef`; keep that unique per stored
+  token across tenants that share `sync.lookup.cache_pool`.
+- **The erase cursor (FP-L3).** It is signed (HMAC, `kernel.secret`) and bound to the board, the actor and the
+  operation; still keep it server-side (a Messenger message), never in a browser round trip.
 - **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.

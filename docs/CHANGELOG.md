@@ -157,6 +157,10 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   task). Not registered with TimeTrack 1.10. New `@internal Task::subtractTimeSeconds()` (clamped at 0).
 - `Service\TaskTimeEntrySnapshotPurger` (audit FA-L2 / EX-D2): count and clear the task title / external id snapshots
   of detached manual time entries (per board, logged before a date); the time itself stays.
+- Index `task_board_tasks_board_open_due_idx` `(board_id, completed_at, due_at)` for due-date scans of open tasks
+  (KIT-74; DDL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1)).
+  The other KIT-74 item, `help_link.anchor_from: source` on the import help link (board import and the subtask
+  import of `_task_subtask_import`), already shipped in 1.24.0.
 
 ### Changed
 
@@ -172,6 +176,8 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
 
 ### Fixed
 
+- `templates.connection_badge` is used by the board, list and Gantt pages (they included the bundle's partial by a
+  fixed path, so the option had no effect there). New Twig global `nowo_task_board_connection_badge_template`.
 - `TaskBoardSyncService::run()` hands the access check, its `BOARD_ACCESS_CHECK` listeners and `SYNC_STARTED` the
   managed actor when the caller passes one detached by an earlier `EntityManager::clear()`. With Doctrine ORM 3 native
   lazy objects (PHP 8.4+), a listener reading a detached, uninitialised user proxy threw
@@ -192,6 +198,24 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
   scoped to its candidates; re-association is explicit, re-checked per board and audited by events.
 - Every provider call stays `GET` to the constant ClickUp base URI; no token, avatar URL or time-entry description is
   stored or logged by the bundle; person names and e-mails stay in the person rows and are never logged.
+- **Erasing an account never deletes tasks or comments** (audit FP-M1). `task_board_tasks.creator_id` and
+  `task_board_task_comments.author_id` are nullable `ON DELETE SET NULL` with a name snapshot (`creator_name` /
+  `author_name`); **schema change for every host**, SQL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1).
+  `Task::getCreator()` / `TaskComment::getAuthor()` return `?object`; new `getCreatorName()` / `getAuthorName()`.
+  `TaskSyncPeopleReassigner::detachUser()` also detaches every task and comment of the user that no sync row leads to
+  (after an unlink, the user's imported tasks and their subtree were deleted with the user).
+- **Checklist subtasks go through the host's quota** (audit FP-L1): `sync.limit_checker` and the new
+  `sync.checklists.max_items_per_run` (default 2000); held-back items come with a later run.
+- **LIKE searches escape with `!` everywhere** (audit FP-L2): `PersonFilter::$q` and the checklist prefix queries use
+  `ESCAPE '!'` on MySQL, PostgreSQL and SQLite; `first_last@…`, `%` and `!` match literally.
+- **The time phase has a call budget** (audit FP-L4): `sync.time_entries.max_calls_per_run` (default 500); a dense
+  window is delivered split by split and the cursor keeps the split position, so the budget, a deadline or a rate
+  limit resume from the last delivered split instead of the start of the window.
+- **`unlink()` takes the sync lock and is one transaction** (audit FP-L5): a running sync refuses it
+  (`SyncBusyException`; the page says *Another sync is running*); loaded sync rows can no longer leave a half-done
+  unlink (connection gone, directory not pruned, no `BOARD_CONNECTION_UNLINKED`).
+- **Only mapped people's time reaches the sink** (audit FP-I2); the others are counted in
+  `SyncReport::$time->skippedUnmapped`. FP-I1 / I3 / I4 / I5 / I6 are documented in [SECURITY](SECURITY.md).
 - **The erase cursor is signed** (audit FP-L3). `EraseCursor` gains an optional `signature` (round-tripped by
   `toArray()` / `fromArray()`): an HMAC-SHA256 (label `nowo_task_board.erase_cursor.v1`, keyed by `%kernel.secret%`
   through the new optional `TaskBoardEraser` argument `$cursorSecret`) bound to the board id, the actor id and the

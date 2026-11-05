@@ -148,6 +148,7 @@ final class PeopleDirectoryTest extends PeopleFunctionalTestCase
         self::assertSame(['9001'], $ids(new PersonFilter(q: ' RENAMED ')));
         self::assertSame(['9001', '9005'], $ids(new PersonFilter(q: 'User3@')));
         self::assertSame([], $ids(new PersonFilter(q: '%')), 'LIKE wildcards are literal');
+        self::assertSame([], $ids(new PersonFilter(q: 'user_')), '"_" is literal, not one character');
         self::assertSame(['9001'], $ids(new PersonFilter(q: 'user', changed: true)));
         self::assertSame(['9001'], $ids(new PersonFilter(changedSince: new DateTimeImmutable('-1 hour'))));
         self::assertSame([], $ids(new PersonFilter(changedSince: new DateTimeImmutable('+1 hour'))));
@@ -345,6 +346,27 @@ final class PeopleDirectoryTest extends PeopleFunctionalTestCase
                 return null;
             }
         }, $credential));
+    }
+
+    public function testTheSearchMatchesUnderscorePercentAndBangLiterally(): void
+    {
+        $board     = $this->board();
+        $service   = $this->directories();
+        $directory = $service->directoryForDraft($board, 'clickup', self::WS);
+        $session   = $service->session($directory, $board);
+        $session->person(new RemotePerson('9101', 'First Last', 'first_last@example.test'), TaskSyncPerson::KIND_MEMBER);
+        $session->person(new RemotePerson('9102', 'FirstXLast', 'firstxlast@example.test'), TaskSyncPerson::KIND_MEMBER);
+        $session->person(new RemotePerson('9103', '100% done!'), TaskSyncPerson::KIND_MEMBER);
+        $session->person(new RemotePerson('9104', '100 percent'), TaskSyncPerson::KIND_MEMBER);
+        $this->em->flush();
+        $ids = fn (string $q): array => array_map(static fn (TaskSyncPerson $p): string => $p->getProviderUserId(), $this->repository()->forDirectory($directory, new PersonFilter(q: $q)));
+
+        self::assertSame(['9101'], $ids('first_last@'), 'an underscore in an e-mail is found, and only literally');
+        self::assertSame(['9101', '9102'], $ids('first'));
+        self::assertSame(['9103'], $ids('100%'));
+        self::assertSame(['9103'], $ids('done!'));
+        self::assertSame(['9103'], $ids('% done!'));
+        self::assertSame([], $ids('!%'));
     }
 
     public function testMembersAreReadPageByPage(): void

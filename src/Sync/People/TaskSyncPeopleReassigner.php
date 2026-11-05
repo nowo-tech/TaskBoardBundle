@@ -6,9 +6,13 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 
 use DateInterval;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
@@ -145,9 +149,12 @@ final readonly class TaskSyncPeopleReassigner
     }
 
     /**
-     * Account erasure (run it **before** the user is deleted: tasks, comments and members cascade with the user): every
-     * person mapped or suggested to `$user` becomes external (optionally anonymised) and what was written for them goes
-     * back to `$actor` plus the person reference. No authorization check: a host erasure path calls it.
+     * Account erasure (run it **before** the user is deleted): every person mapped or suggested to `$user` becomes
+     * external (optionally anonymised) and what was written for them goes back to `$actor` plus the person reference.
+     * Then (audit FP-M1) every task the user created and every comment they wrote, on any board, synced, unlinked or
+     * never synced, stops pointing at the user: it keeps the name snapshot (`creator_name` / `author_name`, forgotten
+     * with `$anonymise`), so deleting the user deletes no task, subtask or comment. No authorization check: a host
+     * erasure path calls it.
      */
     public function detachUser(object $user, object $actor, bool $anonymise = false, ?int $batchSize = null, ?ReassignCursor $cursor = null): ReassignReport
     {
@@ -167,7 +174,39 @@ final readonly class TaskSyncPeopleReassigner
             $this->entityManager->flush();
         }
 
-        return $total;
+        return $total->plus($this->detachContent($user, $anonymise));
+    }
+
+    /**
+     * Audit FP-M1: tasks and comments of the user that no sync row leads to (an unlinked board, a manual task) keep their
+     * name snapshot and lose the user reference. Idempotent; loaded rows follow.
+     */
+    private function detachContent(object $user, bool $forgetName): ReassignReport
+    {
+        $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        $counts = [];
+        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName']] as [$class, $field, $name]) {
+            // Rows written before 1.25 have no snapshot yet: they get the current name first.
+            $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
+                ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
+            $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
+                ->setParameter('user', $user)->execute();
+        }
+        // The bulk updates bypass the identity map: loaded tasks and comments follow.
+        $map = $this->entityManager->getUnitOfWork()->getIdentityMap();
+        foreach ($map[Task::class] ?? [] as $task) {
+            if ($task instanceof Task && SyncUser::same($task->getCreator(), $user)) {
+                $task->detachCreator($forgetName);
+            }
+        }
+        foreach ($map[TaskComment::class] ?? [] as $comment) {
+            if ($comment instanceof TaskComment && SyncUser::same($comment->getAuthor(), $user)) {
+                $comment->detachAuthor($forgetName);
+            }
+        }
+        $this->entityManager->flush();
+
+        return new ReassignReport(creators: $counts[0], comments: $counts[1]);
     }
 
     /**

@@ -1305,7 +1305,7 @@ final class TaskBoardManageController extends AbstractController
                 $users[] = $member->getUser();
             }
             foreach (is_iterable($commentData['comments'] ?? null) ? $commentData['comments'] : [] as $comment) {
-                if ($comment instanceof TaskComment) {
+                if ($comment instanceof TaskComment && $comment->getAuthor() !== null) {
                     $users[] = $comment->getAuthor();
                 }
             }

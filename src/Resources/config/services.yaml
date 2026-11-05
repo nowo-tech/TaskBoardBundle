@@ -137,6 +137,7 @@ services:
             $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
             $textRenderer: '@Nowo\TaskBoardBundle\Text\TaskTextRendererInterface'
             $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
+            $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
 
     # Since 1.19: user text (comments, plain-text descriptions) → HTML; hosts alias the interface to their renderer.
     Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer: ~

@@ -35,6 +35,7 @@ use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
+use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
@@ -178,10 +179,28 @@ final readonly class TaskBoardSyncService
         }
         $event     = new BoardConnectionEvent($board, $connection->getProvider(), $connection->getContainerId(), $connection->getContainerLabel(), $connection->getConnectionRef(), $actor);
         $directory = $connection->getDirectory();
-        $this->store->deleteConnection($connection);
-        // Since 1.25: the people directory goes (anonymised where still referenced) with its last connection.
-        if ($directory instanceof TaskSyncDirectory && $this->people instanceof TaskSyncPeopleDirectoryService) {
-            $this->people->pruneDirectory($directory);
+        // Since 1.25 (audit FP-L5): the unlink holds the board's sync lock, so a running sync is refused (and refuses
+        // us), and it is one transaction: the connection, its sync rows and the directory prune go together or not at all.
+        $now    = $this->clock->now();
+        $lockId = TaskSyncRun::newId();
+        if (!$this->store->acquireLock($connection, $lockId, $now, $now->sub(new DateInterval(self::STALE_AFTER)))) {
+            throw new SyncBusyException($board->getId());
+        }
+        $connectionId = $connection->getId();
+        $db           = $this->entityManager->getConnection();
+        $db->beginTransaction();
+        try {
+            $this->store->deleteConnection($connection);
+            // Since 1.25: the people directory goes (anonymised where still referenced) with its last connection.
+            if ($directory instanceof TaskSyncDirectory && $this->people instanceof TaskSyncPeopleDirectoryService) {
+                $this->people->pruneDirectory($directory);
+            }
+            $db->commit();
+        } catch (Throwable $exception) {
+            $db->rollBack();
+            $this->store->releaseLock($connectionId, $lockId);
+
+            throw $exception;
         }
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_CONNECTION_UNLINKED);
         $this->logger->info('TaskBoard sync unlinked', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'provider' => $event->provider]);
@@ -324,16 +343,18 @@ final readonly class TaskBoardSyncService
         $since     = $resume instanceof SyncCursor ? $resume->updatedSince : ($mode === SyncMode::Incremental && $watermark instanceof DateTimeImmutable ? $watermark->sub(new DateInterval('PT' . self::OVERLAP_SECONDS . 'S')) : null);
         $ctx       = new SyncRunContext($runId, $board, $connection, $provider, $credential, $options, $options->actor, $mode, $since, $now, $connection->getImportScope(), $this->maxBytesPerRun);
         if ($resume instanceof SyncCursor) {
-            $ctx->phase           = $resume->phase;
-            $ctx->providerCursor  = $resume->providerCursor;
-            $ctx->highWatermark   = $resume->highWatermark;
-            $ctx->pagesDone       = $resume->pagesDone;
-            $ctx->tasksSeen       = $resume->tasksSeen;
-            $ctx->pageCap         = $resume->pageCap;
-            $ctx->pending         = $resume->pendingDependencies;
-            $ctx->timeWindowStart = $resume->timeWindowStart;
-            $ctx->timeChunk       = $resume->timeChunk;
-            $ctx->timeMode        = $resume->timeMode;
+            $ctx->phase            = $resume->phase;
+            $ctx->providerCursor   = $resume->providerCursor;
+            $ctx->highWatermark    = $resume->highWatermark;
+            $ctx->pagesDone        = $resume->pagesDone;
+            $ctx->tasksSeen        = $resume->tasksSeen;
+            $ctx->pageCap          = $resume->pageCap;
+            $ctx->pending          = $resume->pendingDependencies;
+            $ctx->timeWindowStart  = $resume->timeWindowStart;
+            $ctx->timeChunk        = $resume->timeChunk;
+            $ctx->timeSplitStart   = $resume->timeSplitStart;
+            $ctx->timeSplitSeconds = $resume->timeSplitSeconds;
+            $ctx->timeMode         = $resume->timeMode;
         }
         // Since 1.25: people (and so tracked time) go through the directory only when the run asks for them.
         $ctx->directoryId = $options->people ? $connection->getDirectory()?->getId() : null;

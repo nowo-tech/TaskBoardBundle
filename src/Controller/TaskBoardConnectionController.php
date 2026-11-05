@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
@@ -345,7 +346,14 @@ final class TaskBoardConnectionController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findManagedBoard($boardId, $user);
         $this->denyUnlessValidCsrf($request, 'task_board_connection_unlink');
-        $this->sync->unlink($board, $user);
+        try {
+            $this->sync->unlink($board, $user);
+        } catch (SyncBusyException) {
+            // Audit FP-L5: a running sync holds the lock; nothing was changed.
+            $this->addFlash('error', $this->translator->trans('task_board.sync.status.busy', [], 'NowoTaskBoardBundle'));
+
+            return $this->backToPage($boardId);
+        }
         $this->logWrite('sync_unlink', ['board_id' => $boardId]);
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.unlinked', [], 'NowoTaskBoardBundle'));
 

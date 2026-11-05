@@ -32,7 +32,7 @@ final class SyncCountsTest extends TestCase
     {
         $time = TimeCounts::fromCounters('admin', ['time.windows' => 2, 'time.windowsSplit' => 1, 'time.entries' => 7, 'time.skippedRunning' => 1, 'time.skippedTaskless' => 1, 'time.fallbackTasks' => 0, 'people.seen' => 3]);
 
-        self::assertSame(['mode' => 'admin', 'windows' => 2, 'windowsSplit' => 1, 'entries' => 7, 'skippedRunning' => 1, 'skippedTaskless' => 1, 'fallbackTasks' => 0], $time->toArray());
+        self::assertSame(['mode' => 'admin', 'windows' => 2, 'windowsSplit' => 1, 'entries' => 7, 'skippedRunning' => 1, 'skippedTaskless' => 1, 'fallbackTasks' => 0, 'skippedUnmapped' => 0], $time->toArray());
         self::assertSame(['time.windows' => 2, 'time.windowsSplit' => 1, 'time.entries' => 7, 'time.skippedRunning' => 1, 'time.skippedTaskless' => 1], $time->toCounters());
         self::assertEquals($time, TimeCounts::fromArray($time->toArray()));
         self::assertNull(TimeCounts::fromArray(['mode' => 5])->mode);

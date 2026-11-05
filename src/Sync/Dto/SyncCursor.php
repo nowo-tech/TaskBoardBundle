@@ -41,6 +41,10 @@ final readonly class SyncCursor
         public int $timeChunk = 0,
         /** Since 1.25: the time mode chosen at the start of the time phase. */
         public ?string $timeMode = null,
+        /** Since 1.25 (audit FP-L4): where the current window and chunk continue (after its last delivered split). */
+        public ?DateTimeImmutable $timeSplitStart = null,
+        /** Since 1.25 (audit FP-L4): the split length in seconds the window was halved to (0 = the whole window). */
+        public int $timeSplitSeconds = 0,
     ) {
     }
 
@@ -63,6 +67,8 @@ final readonly class SyncCursor
             'timeWindowStart'     => $this->timeWindowStart?->format(DateTimeInterface::ATOM),
             'timeChunk'           => $this->timeChunk,
             'timeMode'            => $this->timeMode,
+            'timeSplitStart'      => $this->timeSplitStart?->format(DateTimeInterface::ATOM),
+            'timeSplitSeconds'    => $this->timeSplitSeconds,
         ];
     }
 
@@ -93,6 +99,8 @@ final readonly class SyncCursor
             timeWindowStart: SyncValues::date($data['timeWindowStart'] ?? null),
             timeChunk: SyncValues::int($data['timeChunk'] ?? 0),
             timeMode: isset($data['timeMode']) ? SyncValues::string($data['timeMode']) : null,
+            timeSplitStart: SyncValues::date($data['timeSplitStart'] ?? null),
+            timeSplitSeconds: SyncValues::int($data['timeSplitSeconds'] ?? 0),
         );
     }
 }

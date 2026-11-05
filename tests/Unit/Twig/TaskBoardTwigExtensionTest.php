@@ -22,10 +22,11 @@ final class TaskBoardTwigExtensionTest extends TestCase
         $extension = new TaskBoardTwigExtension('@NowoTaskBoardBundle/layout.html.twig', 'tabler');
 
         self::assertSame([
-            'nowo_task_board_layout'             => '@NowoTaskBoardBundle/layout.html.twig',
-            'nowo_task_board_css_framework'      => 'tabler',
-            'nowo_task_board_filters_collapse'   => null,
-            'nowo_task_board_filters_form_class' => '',
+            'nowo_task_board_layout'                    => '@NowoTaskBoardBundle/layout.html.twig',
+            'nowo_task_board_css_framework'             => 'tabler',
+            'nowo_task_board_filters_collapse'          => null,
+            'nowo_task_board_filters_form_class'        => '',
+            'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         ], $extension->getGlobals());
     }
 
@@ -34,10 +35,11 @@ final class TaskBoardTwigExtensionTest extends TestCase
         $extension = new TaskBoardTwigExtension('base.html.twig', 'custom', [], new TaskObjectLinkResolver(), 'shared/_filters_collapse.html.twig', 'issue-filters panel');
 
         self::assertSame([
-            'nowo_task_board_layout'             => 'base.html.twig',
-            'nowo_task_board_css_framework'      => 'custom',
-            'nowo_task_board_filters_collapse'   => 'shared/_filters_collapse.html.twig',
-            'nowo_task_board_filters_form_class' => 'issue-filters panel',
+            'nowo_task_board_layout'                    => 'base.html.twig',
+            'nowo_task_board_css_framework'             => 'custom',
+            'nowo_task_board_filters_collapse'          => 'shared/_filters_collapse.html.twig',
+            'nowo_task_board_filters_form_class'        => 'issue-filters panel',
+            'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         ], $extension->getGlobals());
     }
 

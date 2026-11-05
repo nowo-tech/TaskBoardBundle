@@ -619,6 +619,7 @@ nowo_task_board:
             max_detail_calls_per_run: 500   # GET task/{id} (E5) for rows without watchers / checklists
         checklists:
             enabled: true
+            max_items_per_run: 2000   # new checklist subtasks per run (also asked from sync.limit_checker)
         time_entries:
             sink: ~                   # ImportedTimeEntrySinkInterface; null = the time phase never runs
             window_days: 30           # 1–30
@@ -626,6 +627,7 @@ nowo_task_board:
             max_entries_per_window: 10000  # at or above it the window is halved (upstream cap TO CONFIRM)
             max_windows_per_run: 200
             fallback_max_tasks_per_run: 500
+            max_calls_per_run: 500    # time-entry requests per slice, splits included (then the run pauses)
 ```
 
 Since 1.25 the sync tables gain a people directory (schema in [UPGRADING — To 1.25.0](UPGRADING.md#schema-change-with-syncenabled-true-only)).

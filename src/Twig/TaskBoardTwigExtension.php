@@ -65,6 +65,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskMemberAvatars $avatars = null,
         // Since 1.25: remote people of synced tasks (null when `sync.enabled` is false).
         private readonly ?SyncPeopleViewProvider $syncPeople = null,
+        // Since 1.25: templates.connection_badge (the board, list and Gantt headers include it).
+        private readonly string $connectionBadgeTemplate = '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
     ) {
     }
 
@@ -295,6 +297,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             // Since 1.17: the host's filter fold partial and filter card classes for the list view.
             'nowo_task_board_filters_collapse'   => $this->filtersCollapse,
             'nowo_task_board_filters_form_class' => $this->filtersFormClass,
+            // Since 1.25: the configured connection badge partial (templates.connection_badge).
+            'nowo_task_board_connection_badge_template' => $this->connectionBadgeTemplate,
         ];
     }
 }
