@@ -500,6 +500,12 @@ In the task panel only the subtask steps render (`.nowo-task-nav--panel`), with 
 a drawer opens them in place, and can use them for its own ‹ › when the open task is not one of its view's. Cards, list
 rows and Gantt bars carry `data-title` and `data-column-name` for a drawer's heading and position.
 
+### Task page hook (since 1.25.1)
+
+The full task page wraps its content in `<div class="nowo-task-page" data-task-id="…">`, a stable hook for
+integrations (for example the TimeTrack browser extension) to find the open task. The panel fragment keeps its own
+`.nowo-task-panel-fragment[data-task-id]` hook and does not carry `.nowo-task-page`. The wrapper has no styles.
+
 ### No inline styles
 
 The templates carry no `style=""` (CSP without `'unsafe-inline'`): colours, Gantt positions and depths are CSS custom

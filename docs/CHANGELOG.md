@@ -71,6 +71,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Planned 1.25.1.
+
+### Added
+
+- Task page: stable task-page hook for integrations — `manage/task.html.twig` wraps its body in
+  `<div class="nowo-task-page" data-task-id="…">` (the panel fragment keeps its own `.nowo-task-panel-fragment` hook).
+  No layout or CSS change.
+
 ## [1.25.0] - 2026-11-05
 
 ClickUp full import for provider sync (`sync.enabled` only; contract v1.0 with Beacon spec 208): people, creator and
