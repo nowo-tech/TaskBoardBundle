@@ -97,8 +97,14 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
   `import_tasks` nor `canEditBoard()`. Do not expose it to untrusted callers (e.g. through a web-triggered process).
 - **Shared lookup cache (FP-I6).** The list-search cache is keyed by `connectionRef`; keep that unique per stored
   token across tenants that share `sync.lookup.cache_pool`.
-- **The erase cursor (FP-L3).** It is signed (HMAC, `kernel.secret`) and bound to the board, the actor and the
-  operation; still keep it server-side (a Messenger message), never in a browser round trip.
+- **The erase cursor (FP-L3, FP-I9, FP-I10).** It is signed (HMAC with a key derived from `kernel.secret`) and bound
+  to the board, the actor, the operation and its run (run id, issue time, TTL); still keep it server-side (a
+  Messenger message), never in a browser round trip.
+- **Erase-cursor residuals (FP-I13).** The TTL counts from the issuing node's clock (a node whose clock runs ahead
+  extends it by the skew; keep worker clocks in sync). Within the TTL, an unfinished run resumed after new tasks were
+  added erases them too (`canManageBoard()` is re-checked on every call, so never more than a fresh run by the same
+  actor could). Two copies of one cursor resumed in parallel may undercount, or dispatch `BOARD_EMPTIED` /
+  `BOARD_DELETED` twice: de-duplicate `BoardErasedEvent` by its `runId`.
 - **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.

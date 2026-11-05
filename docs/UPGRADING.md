@@ -245,15 +245,19 @@ The same release adds an index for due-date scans of open tasks (KIT-74), on eve
 CREATE INDEX task_board_tasks_board_open_due_idx ON task_board_tasks (board_id, completed_at, due_at);
 ```
 
-Optional back-fill of the names of existing rows (MySQL syntax; use your user table's display column).
-`detachUser()` fills a missing name itself before it detaches a user:
+Optional back-fill of the names of existing rows: one portable correlated `UPDATE` per table (MySQL, MariaDB,
+PostgreSQL and SQLite; audit FP-I14). Replace `<user_table>` and use your user table's display column instead of
+`email` when you have one. `detachUser()` fills a missing name itself before it detaches a user:
 
 ```sql
-UPDATE task_board_tasks t JOIN <user_table> u ON u.id = t.creator_id SET t.creator_name = u.email WHERE t.creator_name IS NULL;
-UPDATE task_board_task_comments c JOIN <user_table> u ON u.id = c.author_id SET c.author_name = u.email WHERE c.author_name IS NULL;
-UPDATE task_board_boards b JOIN <user_table> u ON u.id = b.creator_id SET b.creator_name = u.email WHERE b.creator_name IS NULL;
-UPDATE task_board_task_documents d JOIN <user_table> u ON u.id = d.creator_id SET d.creator_name = u.email WHERE d.creator_name IS NULL;
+UPDATE task_board_tasks SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_tasks.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
+UPDATE task_board_task_comments SET author_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_task_comments.author_id) WHERE author_name IS NULL AND author_id IS NOT NULL;
+UPDATE task_board_boards SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_boards.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
+UPDATE task_board_task_documents SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_task_documents.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
 ```
+
+The display value is cut to 180 characters by the bundle, not by this SQL: keep the column you copy within that
+length (e-mails are).
 
 ### Schema change with `sync.enabled: true` only
 
