@@ -116,7 +116,9 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 Planned as **1.24.0**. From **1.23.1**: `composer update nowo-tech/task-board-bundle`; no schema change, no required
 configuration.
 
-- **Invalid New board answers 422.** A host listener that rewrote the create redirect (e.g. adding `?new=1` and a flash
+- **Single-board tenancy (`tenancy.single_board`).** The tenant's first board is created on the index only for a user
+  the create check accepts; others see the empty index.
+- **Invalid New board answers 422** (`Cache-Control: no-store, private`). A host listener that rewrote the create redirect (e.g. adding `?new=1` and a flash
   to the index redirect) is no longer needed and no longer fires: an invalid form is now a `422` page with the dialog
   open, values and errors kept. Remove such listeners. Tests that expected a redirect for an invalid form expect `422`.
 - **Index page.** `manage/index.html.twig` is now a list page with a *New board* dialog. Overrides of the
@@ -137,7 +139,11 @@ configuration.
   can go.
 - **Sync actor (security, `sync.enabled` only).** The default actor resolver now refuses a disabled user
   (`isEnabled()` false) and does not fall back to the board's linker when the named user is refused: such runs end with
-  no actor instead of acting as that person. To add the host's own account checks (e.g. anonymised users), set
+  no actor instead of acting as that person. **The 1.23 fallback is gone for named actors:** a request that names an
+  actor id that no longer resolves (deleted or erased user) or whose lookup fails is refused too; only runs without an
+  actor id (console, schedules that pass none) act as the user who linked the board. A Messenger handler must resolve
+  the actor with `SyncActorResolverInterface::actorFor($board, $actorId)` and stop on `null` (see
+  [sync.md](sync.md#running-it-in-the-background)); loading the user itself bypasses the refusal. To add the host's own account checks (e.g. anonymised users), set
   `sync.actor_checker` to a `UserCheckerInterface` service (e.g. `security.user_checker.main`); a custom
   `sync.actor_resolver` (such as a host wrapper doing the same) keeps working and can be dropped once the default covers
   its rules.

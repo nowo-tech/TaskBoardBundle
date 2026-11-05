@@ -17,12 +17,13 @@ use function method_exists;
 
 /**
  * Since 1.23: the default {@see SyncActorResolverInterface} — the user named by the request (the one who pressed the
- * button) when it is the board's user class, else the user who linked the board.
+ * button), else (no named user) the user who linked the board.
  *
  * Since 1.24 (Beacon audit DATA-TASK-TOKEN-ERASURE) a run never acts as a disabled or erased account: a user whose
  * `isEnabled()` answers false, or that the `sync.actor_checker` user checker refuses in `checkPreAuth()`, is refused
- * (null, the `no_actor` path). A refused named user is not replaced by the connection's creator: deny, do not
- * substitute.
+ * (null, the `no_actor` path). A refused named user — disabled, refused, no longer found, or whose lookup fails — is
+ * not replaced by the connection's creator: deny, do not substitute. Only a run without a named actor acts as the
+ * user who linked the board.
  */
 final readonly class ConnectionCreatorActorResolver implements SyncActorResolverInterface
 {
@@ -40,14 +41,15 @@ final readonly class ConnectionCreatorActorResolver implements SyncActorResolver
     public function actorFor(TaskBoard $board, ?string $actorId = null): ?object
     {
         if ($actorId !== null && $actorId !== '') {
+            // Audit EX-L2: a named actor that no longer resolves (deleted, erased) or whose lookup fails is refused;
+            // the user who linked the board never acts in their place.
             try {
                 $user = $this->entityManager->find($this->userClass, $actorId);
             } catch (Throwable) {
-                $user = null;
+                return null;
             }
-            if ($user !== null) {
-                return $this->isActive($user) ? $user : null;
-            }
+
+            return $user !== null && $this->isActive($user) ? $user : null;
         }
         $creator = $this->entityManager->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board])?->getCreatedBy();
 

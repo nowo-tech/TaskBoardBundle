@@ -89,14 +89,19 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
+use function array_filter;
 use function array_key_exists;
 use function array_slice;
 use function count;
+use function http_build_query;
+use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
@@ -106,11 +111,17 @@ use function reset;
 use function sprintf;
 use function str_starts_with;
 
+use const ARRAY_FILTER_USE_KEY;
+use const PHP_QUERY_RFC3986;
+
 /**
  * Manage UI for task boards, kanban, list, and task detail.
  */
 final class TaskBoardManageController extends AbstractController
 {
+    /** Route variables never forwarded from the query by the default-view redirect (audit EX-L1). */
+    private const DEFAULT_VIEW_DROPPED_KEYS = ['boardId', 'board', 'tenantSlug', 'taskId'];
+
     /**
      * @param array<string, array{path: string, name: string}> $routes
      * @param array<string, string> $templates
@@ -165,10 +176,15 @@ final class TaskBoardManageController extends AbstractController
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
         if ($tenant instanceof TaskBoardTenant && $this->tenantContext?->isSingleBoard() === true) {
-            $board = $this->boardRepository->findOneByTenant($tenant->key)
-                ?? $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
-
-            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            $board = $this->boardRepository->findOneByTenant($tenant->key);
+            // Since 1.24 (audit EX-I2): the first board is created only for a user the create check accepts; the
+            // others see the (empty) index.
+            if (!$board instanceof TaskBoard && $this->canCreateBoard($user, $tenant->key)) {
+                $board = $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
+            }
+            if ($board instanceof TaskBoard) {
+                return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            }
         }
 
         $form = $this->createBoardForm($user, $tenant?->key);
@@ -210,13 +226,10 @@ final class TaskBoardManageController extends AbstractController
         }
 
         if ($this->isDialogRequest($request)) {
-            $response = $this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
+            return $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
                 'form'      => $form->createView(),
                 'in_dialog' => true,
-            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
-            $response->setVary((string) $this->createDialogHeader, false);
-
-            return $response;
+            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY)));
         }
 
         // The <noscript> copy of the form shows the same values and errors.
@@ -224,7 +237,23 @@ final class TaskBoardManageController extends AbstractController
         $fallback->handleRequest($request);
         $this->addFlash('error', 'task_board.flash.board_invalid');
 
-        return $this->renderIndex($user, $tenant, $form, $fallback, true, Response::HTTP_UNPROCESSABLE_ENTITY);
+        return $this->unstorable($this->renderIndex($user, $tenant, $form, $fallback, true, Response::HTTP_UNPROCESSABLE_ENTITY));
+    }
+
+    /**
+     * Audit EX-I1: a 422 answer holds the user's submitted values — `no-store, private` (kept by the session
+     * listener), and `Vary` on the dialog header in both modes when one is configured.
+     */
+    private function unstorable(Response $response): Response
+    {
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
+        $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
+        if ($this->createDialogHeader !== null && $this->createDialogHeader !== '') {
+            $response->setVary($this->createDialogHeader, false);
+        }
+
+        return $response;
     }
 
     public function board(string $boardId): Response
@@ -1577,12 +1606,26 @@ final class TaskBoardManageController extends AbstractController
             return null;
         }
 
-        $boardPath = $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]);
-        if ($this->comesFromBoard($request, $boardPath)) {
+        try {
+            $boardPath = $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            if ($this->comesFromBoard($request, $boardPath)) {
+                return null;
+            }
+            $target = $this->generateUrl($this->routes[$view]['name'], ['boardId' => $board->getId()]);
+        } catch (RoutingExceptionInterface) {
+            // Audit EX-L1: a route the router cannot build keeps the board view instead of answering 500.
             return null;
         }
 
-        return $this->redirectToRoute($this->routes[$view]['name'], ['boardId' => $board->getId()] + $request->query->all());
+        // Audit EX-L1: the query is appended to the generated path, never merged into the route parameters, and
+        // without route variables or reserved `_` keys (`_fragment`, `_locale`…).
+        $query = array_filter(
+            $request->query->all(),
+            static fn (int|string $key): bool => !in_array((string) $key, self::DEFAULT_VIEW_DROPPED_KEYS, true) && !str_starts_with((string) $key, '_'),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        return $this->redirect($query === [] ? $target : $target . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986));
     }
 
     /**

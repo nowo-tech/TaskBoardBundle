@@ -18,22 +18,28 @@ use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * Since 1.23: an actor id the user class cannot load (a lookup error) falls back to the user who linked the board.
  * Since 1.24 (Beacon audit DATA-TASK-TOKEN-ERASURE): a disabled or erased user never acts, and a refused named user is
  * not replaced by the creator.
  */
 final class ConnectionCreatorActorResolverTest extends TestCase
 {
-    public function testALookupErrorFallsBackToTheConnection(): void
+    /**
+     * Since 1.24 (audit EX-L2): this used to fall back to the user who linked the board (1.23); a named actor whose
+     * lookup fails, or that no longer exists, is now refused (fail closed).
+     */
+    public function testALookupErrorOrAVanishedNamedActorIsRefused(): void
     {
+        $creator    = self::account(true);
+        $board      = new TaskBoard('B', 'b', new stdClass());
         $repository = $this->createMock(EntityRepository::class);
-        $repository->method('findOneBy')->willReturn(null);
+        $repository->method('findOneBy')->willReturn(new TaskBoardConnection($board, 'clickup', 'clickup', 'ref', 'list-1', 'List', $creator));
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->method('find')->willThrowException(new RuntimeException('bad id'));
         $entityManager->method('getRepository')->willReturn($repository);
 
-        $resolver = new ConnectionCreatorActorResolver($entityManager, stdClass::class);
-        self::assertNull($resolver->actorFor(new TaskBoard('B', 'b', new stdClass()), 'x'));
+        self::assertNull((new ConnectionCreatorActorResolver($entityManager, stdClass::class))->actorFor($board, 'x'));
+        self::assertNull($this->resolver([], $creator)->actorFor($board, 'erased'), 'an erased named actor is not replaced by the linker');
+        self::assertSame($creator, $this->resolver([], $creator)->actorFor($board, ''), 'no named actor: the linker');
     }
 
     public function testAnEnabledUserActsAndADisabledOneIsRefusedWithoutSubstitution(): void
@@ -51,7 +57,7 @@ final class ConnectionCreatorActorResolverTest extends TestCase
         // The creator acts for a run without a named user, unless disabled; no creator, no actor.
         self::assertSame($active, $this->resolver([], $active)->actorFor($board));
         self::assertNull($this->resolver([], $disabled)->actorFor($board));
-        self::assertNull($this->resolver([], null)->actorFor($board, 'gone'));
+        self::assertNull($this->resolver([], null)->actorFor($board));
     }
 
     public function testTheHostUserCheckerRefusesAccounts(): void

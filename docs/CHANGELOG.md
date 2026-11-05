@@ -109,7 +109,15 @@ API, backwards compatible). See [UPGRADING](UPGRADING.md#unreleased).
   the new `sync.actor_checker` (a Symfony `UserCheckerInterface` service id, run with `checkPreAuth()`) refuses; any
   error of the checks refuses too. A refused named user is not replaced by the user who linked the board. Scheduled,
   queued and console runs (`nowo:task-board:sync` exits with an error) stop instead of acting with that person's token.
-  A host `sync.actor_resolver` still replaces the default resolver.
+  A host `sync.actor_resolver` still replaces the default resolver. A named actor id that no longer resolves (deleted
+  or erased) or whose lookup fails is refused as well: the 1.23 fallback to the linker is gone for named actors
+  (audit EX-L2). `docs/sync.md` shows a Messenger handler resolving the actor and stopping on `null` (EX-L3).
+- **Default-view redirect** (audit EX-L1): the query is appended to the generated list / Gantt path without route
+  variables (`boardId`, `tenantSlug`…) or `_`-prefixed keys (`_fragment`, `_locale`…), so it cannot retarget the
+  route; a route the router cannot build keeps the board view instead of answering 500.
+- **422 answers** of an invalid create are `no-store, private`, with `Vary` on `board.create_dialog_header` in both
+  modes (EX-I1).
+- **Single-board tenancy** creates the tenant's first board only for a user `canCreateBoard()` accepts (EX-I2).
 
 ## [1.23.1] - 2026-11-04
 

@@ -381,7 +381,8 @@ dialog (`nowo-task-board-dialog`), with a `<noscript>` copy of the form under th
 | `index_board_item` | One board (`board`, `loop` in context); default `manage/_board_list_item.html.twig` |
 | `index_empty` | No boards (the message and, for creators, *New board*) |
 
-Partials for host pages: `manage/_board_list.html.twig` (`boards`: the same items, e.g. in a board switcher dialog),
+Partials for host pages: `manage/_board_list.html.twig` (`boards`: the same items, e.g. in a board switcher dialog;
+it prints whatever it gets, so pass boards already filtered with `TaskBoardResourceAccessChecker::filterBoards()`),
 `manage/_board_list_item.html.twig` (`board`: name, description, Board / List / Gantt links with icons, each with an
 `aria-label` naming the board, in a group named after it) and `manage/_board_create_form.html.twig` (`form`;
 `in_dialog` adds *Cancel*; `id_prefix` for a second copy on the page).
@@ -393,7 +394,7 @@ back to the index. `?new=1` opens the dialog on load.
 
 **Default view.** `board.default_view_resolver` names a `TaskBoardDefaultViewResolverInterface` service:
 `defaultView($user, $board)` answers `board`, `list` or `gantt` (null = board). A main GET of the plain board route
-then redirects to the board's list or Gantt route (the query string is kept), except with `?view=board`, an XHR
+then redirects to the board's list or Gantt route (the query string is kept, without route variables or `_` keys), except with `?view=board`, an XHR
 request, or a same-origin `Referer` under the board's own path (the user chose the board view from another page of
 the board). The bundle's Board links (index, list and Gantt view switches) carry `?view=board`.
 

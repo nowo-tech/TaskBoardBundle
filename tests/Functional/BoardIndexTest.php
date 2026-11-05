@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PreferredViewResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TenantCreateChecker;
@@ -82,6 +83,7 @@ final class BoardIndexTest extends FunctionalTestCase
         ]]);
 
         self::assertResponseStatusCodeSame(422);
+        self::assertResponseHeaderSame('Cache-Control', 'no-store, private');
         $dialog = $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
         self::assertSame('', $dialog->attr('data-open-on-connect'));
         self::assertSame('Kept <b>text</b>', $dialog->filter('textarea[name="task_board_form[description]"]')->text());
@@ -116,9 +118,12 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertCount(0, $crawler->filter('dialog, h1'), 'only the form, for the host dialog');
         self::assertSame('kept-slug', $crawler->filter('[data-testid="nowo-task-board-create-form"] input[name="task_board_form[slug]"]')->attr('value'));
 
-        // Without the header: the index page.
+        self::assertResponseHeaderSame('Cache-Control', 'no-store, private');
+
+        // Without the header: the index page, varying on the header too.
         $this->client->request('POST', self::BASE . '/create', ['task_board_form' => ['name' => '', '_token' => PredictableCsrfTokenManager::value('task_board_form')]]);
         self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('X-Host-Dialog', (string) $this->client->getResponse()->headers->get('Vary'));
         self::assertSelectorExists('dialog[data-testid="nowo-task-board-create-dialog"]');
     }
 
@@ -195,5 +200,67 @@ final class BoardIndexTest extends FunctionalTestCase
         $crawler = $this->client->request('GET', $path . '/list');
         self::assertResponseIsSuccessful();
         self::assertCount(1, $crawler->filter('a[href="' . $path . '?view=board"]'));
+    }
+
+    /**
+     * Audit EX-L1 (probes of the 1.24.0 review): the query never retargets the redirect.
+     */
+    public function testTheDefaultViewRedirectDropsRouteVariablesAndReservedKeys(): void
+    {
+        self::$taskBoardConfig = [
+            'board'   => ['default_view_resolver' => 'app.default_view'],
+            'tenancy' => ['enabled' => true, 'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']]],
+        ];
+        self::ensureKernelShutdown();
+        $this->setUp();
+        $board = $this->board('A', tenantKey: 'acme');
+        $this->login($this->owner);
+        $resolver = self::getContainer()->get('app.default_view');
+        self::assertInstanceOf(PreferredViewResolver::class, $resolver);
+        $resolver->view = 'list';
+        $path           = '/t/acme/board/' . $board->getId();
+
+        $cases = [
+            '?tenantSlug=other'             => $path . '/list',
+            '?tenantSlug=bad/..%2F%2Fevil'  => $path . '/list',
+            '?_fragment=x%0d%0ay'           => $path . '/list',
+            '?_locale=xx'                   => $path . '/list',
+            '?boardId=999&board=1&q=a%20b'  => $path . '/list?q=a%20b',
+            '?a%5B0%5D=1&next=//evil.test/' => $path . '/list?a%5B0%5D=1&next=%2F%2Fevil.test%2F',
+        ];
+        foreach ($cases as $query => $location) {
+            $this->client->request('GET', $path . $query, [], [], self::NO_REFERER);
+            self::assertResponseRedirects($location, 302, $query);
+        }
+    }
+
+    /**
+     * Audit EX-I2: single-board tenancy creates the tenant's first board only for a user the create check accepts.
+     */
+    public function testASingleBoardTenantCreatesItsBoardOnlyForWhoMayCreate(): void
+    {
+        self::$taskBoardConfig = [
+            'security' => ['access_checker' => 'app.tenant_create_checker'],
+            'tenancy'  => ['enabled' => true, 'single_board' => true, 'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']]],
+        ];
+        self::ensureKernelShutdown();
+        $this->setUp();
+        $this->login($this->owner);
+
+        $this->client->request('GET', '/t/other');
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('[data-testid="nowo-task-board-index-empty"]');
+        self::assertCount(0, $this->em->getRepository(TaskBoard::class)->findAll());
+
+        $this->client->request('GET', '/t/acme');
+        self::assertResponseRedirects();
+        self::assertCount(1, $this->em->getRepository(TaskBoard::class)->findBy(['tenantKey' => 'acme']));
+
+        // An existing board opens for everyone.
+        $owner = $this->em->getRepository(AppUser::class)->findOneBy(['email' => 'owner@example.com']);
+        self::assertInstanceOf(AppUser::class, $owner);
+        $this->board('Other board', creator: $owner, tenantKey: 'other');
+        $this->client->request('GET', '/t/other');
+        self::assertResponseRedirects();
     }
 }
