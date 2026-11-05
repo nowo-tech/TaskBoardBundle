@@ -49,6 +49,7 @@ use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
+use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
@@ -63,6 +64,7 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\GitLabMergeRequestLinkParser;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
@@ -85,6 +87,7 @@ use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
@@ -96,6 +99,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
 use function count;
+use function func_num_args;
 use function in_array;
 
 /**
@@ -635,6 +639,64 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(302, $response->getStatusCode());
     }
 
+    /**
+     * Since 1.24: a checker that only implements the 1.x interface is asked without the tenant, and the index hides
+     * New board from whoever it refuses.
+     */
+    public function testAPlainAccessCheckerIsAskedWithoutTheTenant(): void
+    {
+        $checker = new class implements TaskBoardAccessCheckerInterface {
+            /** @var list<int> */
+            public array $arguments = [];
+
+            public function canAccess(object $user): bool
+            {
+                return true;
+            }
+
+            public function canCreateBoard(object $user): bool
+            {
+                $this->arguments[] = func_num_args();
+
+                return false;
+            }
+
+            public function canListBoards(object $user): bool
+            {
+                return true;
+            }
+        };
+
+        $this->controller($this->owner, accessChecker: $checker)->index();
+        self::assertFalse($this->rendered['canCreateBoard']);
+        self::assertFalse($this->rendered['openCreateBoard']);
+
+        try {
+            $this->controller($this->owner, formData: new TaskBoardFormData(name: 'Nope'), accessChecker: $checker)->createBoard(Request::create('/', 'POST'));
+            self::fail('The create was not refused.');
+        } catch (AccessDeniedException) {
+        }
+        self::assertSame([1, 1], $checker->arguments);
+    }
+
+    /**
+     * Audit EX-L1: a list / Gantt route the router cannot build keeps the board view instead of answering 500.
+     */
+    public function testTheDefaultViewKeepsTheBoardWhenTheRouteCannotBeBuilt(): void
+    {
+        $resolver = new class implements TaskBoardDefaultViewResolverInterface {
+            public function defaultView(object $user, TaskBoard $board): string
+            {
+                return self::VIEW_LIST;
+            }
+        };
+
+        $response = $this->controller($this->owner, defaultView: $resolver, routerThrows: true)->board($this->board->getId());
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame($this->board, $this->rendered['board']);
+    }
+
     public function testDuplicateSetNamesKeepEverySetInChoices(): void
     {
         $a = new ColumnSet('Kanban');
@@ -1029,7 +1091,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null, ?TaskBoardDefaultViewResolverInterface $defaultView = null, bool $routerThrows = false): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -1061,7 +1123,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class));
 
         $controller = new TaskBoardManageController(
-            accessChecker: new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),
+            accessChecker: $accessChecker ?? new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),
             boardRepository: $boardRepository,
             taskRepository: $taskRepository,
             boardCreator: new TaskBoardCreator($boardRepository),
@@ -1086,6 +1148,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             commentRepository: $comments ? $this->commentRepository() : null,
             mentionCandidates: $candidates ?? null,
             readersCanComment: $readersCanComment,
+            defaultViewResolver: $defaultView,
         );
 
         $tokenStorage = new TokenStorage();
@@ -1116,7 +1179,15 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         });
 
         $router = $this->createMock(UrlGeneratorInterface::class);
-        $router->method('generate')->willReturn('/redirect');
+        // $routerThrows: the first URL (the default-view redirect) cannot be built, the page's own links can.
+        $calls = 0;
+        $router->method('generate')->willReturnCallback(static function () use ($routerThrows, &$calls): string {
+            if ($routerThrows && $calls++ === 0) {
+                throw new RouteNotFoundException('No route.');
+            }
+
+            return '/redirect';
+        });
 
         $container = new Container();
         $container->set('security.token_storage', $tokenStorage);

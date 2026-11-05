@@ -26,6 +26,7 @@ services:
             - '../../Bridge/TimeTrack/'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
+            - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'
             - '../../Security/ConfigurableTaskBoardAccessChecker.php'
             - '../../Security/AllowAllTaskBoardAccessChecker.php'
             - '../../Security/TaskBoardTeamMembershipResolverInterface.php'
@@ -71,6 +72,8 @@ services:
             $columnIcons: '%nowo_task_board.board.column_icons%'
             $readersCanComment: '%nowo_task_board.comments.readers_can_comment%'
             $maxTasks: '%nowo_task_board.board.max_tasks%'
+            # Since 1.24: the dialog mode header of an invalid board create (`board.create_dialog_header`).
+            $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver

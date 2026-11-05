@@ -1,0 +1,25 @@
+{#
+    Since 1.24: one board of a board list — its name (to the board route), its description and the Board / List /
+    Gantt views as links with icons, in a group named after the board; each link has an aria-label naming the board.
+    Variables: board. The Board link asks for the board view explicitly (?view=board) so a default view
+    (board.default_view_resolver) does not redirect it.
+#}
+<li class="nowo-task-board-list__item" data-testid="nowo-task-board-list-item">
+    <div class="nowo-task-board-list__main">
+        <a class="nowo-task-board-list__name text-reset fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{{ board.name }}</a>
+        {% if board.description %}
+            <p class="nowo-task-board-list__description text-secondary small mb-0">{{ board.description }}</p>
+        {% endif %}
+    </div>
+    <div class="nowo-task-board-list__views btn-list" role="group" aria-label="{{ 'task_board.index.views_of'|trans({'%name%': board.name}, 'NowoTaskBoardBundle') }}">
+        {% for view in [
+            {route: 'board', params: {view: 'board'}, icon: 'layout-kanban', label: 'task_board.view.board', aria: 'task_board.index.open_board', class: 'btn-primary'},
+            {route: 'list', params: {}, icon: 'list', label: 'task_board.view.list', aria: 'task_board.index.open_list', class: 'btn-outline-secondary'},
+            {route: 'gantt', params: {}, icon: 'chart-bar', label: 'task_board.view.gantt', aria: 'task_board.index.open_gantt', class: 'btn-outline-secondary'},
+        ] %}
+            <a href="{{ path(nowo_task_board_route(view.route), {boardId: board.id}|merge(view.params)) }}" class="btn btn-sm {{ view.class }}" aria-label="{{ view.aria|trans({'%name%': board.name}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-view-{{ view.route }}">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: view.icon}) }}{{ view.label|trans({}, 'NowoTaskBoardBundle') }}
+            </a>
+        {% endfor %}
+    </div>
+</li>

@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\View;
+
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+
+/**
+ * Since 1.24 (`board.default_view_resolver`): the view a board opens in for a user when the plain board route is
+ * requested without an explicit view (e.g. a "Default task view" preference of the host). The bundle redirects a
+ * main GET request of the board route to the list or Gantt route of the same board; `?view=board`, an XHR request
+ * or a link from another page of the same board (same-origin `Referer`) keeps the board view.
+ */
+interface TaskBoardDefaultViewResolverInterface
+{
+    public const VIEW_BOARD = 'board';
+    public const VIEW_LIST  = 'list';
+    public const VIEW_GANTT = 'gantt';
+
+    /** The views a resolver may answer. */
+    public const VIEWS = [self::VIEW_BOARD, self::VIEW_LIST, self::VIEW_GANTT];
+
+    /**
+     * `board`, `list` or `gantt`; null (or any other value) keeps the board view. Called after the board access
+     * checks, so `$board` is one the user may open.
+     */
+    public function defaultView(object $user, TaskBoard $board): ?string;
+}

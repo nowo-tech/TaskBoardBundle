@@ -59,6 +59,7 @@ use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
@@ -75,6 +76,7 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -87,26 +89,39 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
+use function array_filter;
 use function array_key_exists;
 use function array_slice;
 use function count;
+use function http_build_query;
+use function in_array;
+use function is_array;
 use function is_object;
 use function is_string;
+use function parse_url;
 use function preg_match;
 use function reset;
 use function sprintf;
 use function str_starts_with;
+
+use const ARRAY_FILTER_USE_KEY;
+use const PHP_QUERY_RFC3986;
 
 /**
  * Manage UI for task boards, kanban, list, and task detail.
  */
 final class TaskBoardManageController extends AbstractController
 {
+    /** Route variables never forwarded from the query by the default-view redirect (audit EX-L1). */
+    private const DEFAULT_VIEW_DROPPED_KEYS = ['boardId', 'board', 'tenantSlug', 'taskId'];
+
     /**
      * @param array<string, array{path: string, name: string}> $routes
      * @param array<string, string> $templates
@@ -149,6 +164,10 @@ final class TaskBoardManageController extends AbstractController
         private readonly LoggerInterface $logger = new NullLogger(),
         // Since 1.23: the members' picture URLs, resolved once per page after the access checks.
         private readonly ?TaskMemberAvatars $avatars = null,
+        // Since 1.24: the user's default board view (`board.default_view_resolver`) and the dialog mode header of an
+        // invalid board create (`board.create_dialog_header`).
+        private readonly ?TaskBoardDefaultViewResolverInterface $defaultViewResolver = null,
+        private readonly ?string $createDialogHeader = null,
     ) {
     }
 
@@ -157,33 +176,34 @@ final class TaskBoardManageController extends AbstractController
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
         if ($tenant instanceof TaskBoardTenant && $this->tenantContext?->isSingleBoard() === true) {
-            $board = $this->boardRepository->findOneByTenant($tenant->key)
-                ?? $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
-
-            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            $board = $this->boardRepository->findOneByTenant($tenant->key);
+            // Since 1.24 (audit EX-I2): the first board is created only for a user the create check accepts; the
+            // others see the (empty) index.
+            if (!$board instanceof TaskBoard && $this->canCreateBoard($user, $tenant->key)) {
+                $board = $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
+            }
+            if ($board instanceof TaskBoard) {
+                return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            }
         }
 
-        $boards = [];
-        if ($this->accessChecker->canListBoards($user)) {
-            $candidates = $tenant instanceof TaskBoardTenant
-                ? $this->boardRepository->findActiveByTenant($tenant->key)
-                : $this->boardRepository->findAllActive();
-            $boards = $this->resourceAccessChecker->filterBoards($user, $candidates, $tenant?->key);
-        }
+        $form = $this->createBoardForm($user, $tenant?->key);
 
-        return $this->render($this->templates['index'], [
-            'boards'         => $boards,
-            'boardForm'      => $this->createBoardForm($user, $tenant?->key),
-            'dashboardRoute' => $this->dashboardRoute,
-            'tenant'         => $tenant,
-        ]);
+        // Since 1.24: `?new=1` opens the New board dialog on load (e.g. a host's "New board" link).
+        return $this->renderIndex($user, $tenant, $form, $this->createBoardForm($user, $tenant?->key), $this->currentRequest()?->query->has('new') === true);
     }
 
-    public function createBoard(Request $request): RedirectResponse
+    /**
+     * Creates a board. Since 1.24 the create check gets the tenant of the request
+     * ({@see TenantAwareTaskBoardAccessCheckerInterface}), and an invalid form answers 422 with its values and
+     * errors: the index page with the New board dialog open, or only the create form when the request carries the
+     * `board.create_dialog_header` header (a host dialog). It used to redirect to the index and lose them.
+     */
+    public function createBoard(Request $request): Response
     {
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
-        if (!$this->accessChecker->canCreateBoard($user)) {
+        if (!$this->canCreateBoard($user, $tenant?->key)) {
             throw $this->createAccessDeniedException();
         }
 
@@ -201,13 +221,50 @@ final class TaskBoardManageController extends AbstractController
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
         }
 
-        return $this->redirectToRoute($this->routes['index']['name']);
+        if (!$form->isSubmitted()) {
+            return $this->redirectToRoute($this->routes['index']['name']);
+        }
+
+        if ($this->isDialogRequest($request)) {
+            return $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
+                'form'      => $form->createView(),
+                'in_dialog' => true,
+            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY)));
+        }
+
+        // The <noscript> copy of the form shows the same values and errors.
+        $fallback = $this->createBoardForm($user, $tenant?->key);
+        $fallback->handleRequest($request);
+        $this->addFlash('error', 'task_board.flash.board_invalid');
+
+        return $this->unstorable($this->renderIndex($user, $tenant, $form, $fallback, true, Response::HTTP_UNPROCESSABLE_ENTITY));
+    }
+
+    /**
+     * Audit EX-I1: a 422 answer holds the user's submitted values — `no-store, private` (kept by the session
+     * listener), and `Vary` on the dialog header in both modes when one is configured.
+     */
+    private function unstorable(Response $response): Response
+    {
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
+        $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
+        if ($this->createDialogHeader !== null && $this->createDialogHeader !== '') {
+            $response->setVary($this->createDialogHeader, false);
+        }
+
+        return $response;
     }
 
     public function board(string $boardId): Response
     {
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user);
+        // Since 1.24: the user's default view (board.default_view_resolver) when no view was asked for.
+        $defaultView = $this->defaultViewRedirect($user, $board);
+        if ($defaultView instanceof RedirectResponse) {
+            return $defaultView;
+        }
 
         $canEditBoard  = $this->resourceAccessChecker->canEditBoard($user, $board);
         $columnForm    = $this->createColumnForm(new BoardColumnFormData());
@@ -1475,6 +1532,122 @@ final class TaskBoardManageController extends AbstractController
     private function createColumnForm(BoardColumnFormData $data): FormInterface
     {
         return $this->createForm(BoardColumnFormType::class, $data, ['icon_choices' => $this->columnIcons]);
+    }
+
+    /**
+     * The board index: the boards the user may list, whether they may create one here and the New board form (the
+     * dialog's and the <noscript> copy).
+     *
+     * @param FormInterface<TaskBoardFormData> $form
+     * @param FormInterface<TaskBoardFormData> $fallbackForm
+     */
+    private function renderIndex(UserInterface $user, ?TaskBoardTenant $tenant, FormInterface $form, FormInterface $fallbackForm, bool $openCreate, int $status = Response::HTTP_OK): Response
+    {
+        $boards = [];
+        if ($this->accessChecker->canListBoards($user)) {
+            $candidates = $tenant instanceof TaskBoardTenant
+                ? $this->boardRepository->findActiveByTenant($tenant->key)
+                : $this->boardRepository->findAllActive();
+            $boards = $this->resourceAccessChecker->filterBoards($user, $candidates, $tenant?->key);
+        }
+        $canCreate = $this->canCreateBoard($user, $tenant?->key);
+
+        return $this->render($this->templates['index'], [
+            'boards'         => $boards,
+            'boardForm'      => $form,
+            'dashboardRoute' => $this->dashboardRoute,
+            'tenant'         => $tenant,
+            // Since 1.24: the New board dialog (shown to whoever may create a board here) and its <noscript> copy.
+            'canCreateBoard'    => $canCreate,
+            'boardFormFallback' => $fallbackForm,
+            'openCreateBoard'   => $canCreate && $openCreate,
+        ], new Response(status: $status));
+    }
+
+    /**
+     * The create check, with the tenant for a {@see TenantAwareTaskBoardAccessCheckerInterface} (since 1.24).
+     */
+    private function canCreateBoard(UserInterface $user, ?string $tenantKey): bool
+    {
+        return $this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface
+            ? $this->accessChecker->canCreateBoard($user, $tenantKey)
+            : $this->accessChecker->canCreateBoard($user);
+    }
+
+    /**
+     * Whether the request comes from a host dialog (`board.create_dialog_header`, since 1.24).
+     */
+    private function isDialogRequest(Request $request): bool
+    {
+        return $this->createDialogHeader !== null && $this->createDialogHeader !== '' && $request->headers->has($this->createDialogHeader);
+    }
+
+    /**
+     * Since 1.24: the list or Gantt route of the board when the user's default view (board.default_view_resolver)
+     * is one of them and the request did not ask for a view: a main GET request, not XHR, without `?view`, not
+     * coming from another page of the same board (same-origin Referer under the board path).
+     */
+    private function defaultViewRedirect(UserInterface $user, TaskBoard $board): ?RedirectResponse
+    {
+        $request = $this->currentRequest();
+        if (
+            !$this->defaultViewResolver instanceof TaskBoardDefaultViewResolverInterface
+            || !$request instanceof Request
+            || !$request->isMethod(Request::METHOD_GET)
+            || $request->query->has('view')
+            || $request->isXmlHttpRequest()
+            || $this->mainRequest() !== $request
+        ) {
+            return null;
+        }
+
+        $view = $this->defaultViewResolver->defaultView($user, $board);
+        if ($view !== TaskBoardDefaultViewResolverInterface::VIEW_LIST && $view !== TaskBoardDefaultViewResolverInterface::VIEW_GANTT) {
+            return null;
+        }
+
+        try {
+            $boardPath = $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]);
+            if ($this->comesFromBoard($request, $boardPath)) {
+                return null;
+            }
+            $target = $this->generateUrl($this->routes[$view]['name'], ['boardId' => $board->getId()]);
+        } catch (RoutingExceptionInterface) {
+            // Audit EX-L1: a route the router cannot build keeps the board view instead of answering 500.
+            return null;
+        }
+
+        // Audit EX-L1: the query is appended to the generated path, never merged into the route parameters, and
+        // without route variables or reserved `_` keys (`_fragment`, `_locale`…).
+        $query = array_filter(
+            $request->query->all(),
+            static fn (int|string $key): bool => !in_array((string) $key, self::DEFAULT_VIEW_DROPPED_KEYS, true) && !str_starts_with((string) $key, '_'),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        return $this->redirect($query === [] ? $target : $target . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986));
+    }
+
+    /**
+     * The previous page is a page of this board on this site: the user chose the board view from there.
+     */
+    private function comesFromBoard(Request $request, string $boardPath): bool
+    {
+        $referer = parse_url((string) $request->headers->get('Referer', ''));
+        if (!is_array($referer) || (isset($referer['host']) && $referer['host'] !== $request->getHost())) {
+            return false;
+        }
+        $path = $referer['path'] ?? '';
+
+        return $path === $boardPath || str_starts_with($path, $boardPath . '/');
+    }
+
+    private function mainRequest(): ?Request
+    {
+        /** @var RequestStack $requestStack */
+        $requestStack = $this->container->get('request_stack');
+
+        return $requestStack->getMainRequest();
     }
 
     /**

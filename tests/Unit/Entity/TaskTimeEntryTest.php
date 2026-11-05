@@ -40,7 +40,7 @@ final class TaskTimeEntryTest extends TestCase
         $task->addLink(new TaskLink($task, TaskLinkType::Url, 'https://example.com/1', null, 'ext-1', importSource: 'jira'));
         self::assertNull($entry->getTaskExternalId());
         $task->setTitle(str_repeat('x', 300));
-        self::assertSame(Task::TITLE_MAX, mb_strlen((string) $entry->getTaskTitleSnapshot()));
+        self::assertSame(Task::TITLE_MAX, mb_strlen($entry->getTaskTitleSnapshot()));
         self::assertSame('ext-1', $entry->getTaskExternalId());
         $task->setTitle('Renamed');
         self::assertSame('Renamed', $entry->getTaskTitle());

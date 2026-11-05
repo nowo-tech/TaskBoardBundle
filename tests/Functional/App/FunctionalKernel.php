@@ -108,6 +108,9 @@ final class FunctionalKernel extends Kernel
         // Since 1.23: the host's avatar resolver (no picture unless a test sets one).
         $container->services()->set('app.avatars', CountingAvatarResolver::class);
         $container->services()->alias(TaskMemberAvatarResolverInterface::class, 'app.avatars');
+        // Since 1.24: a tenant-aware create check and a default board view, used when a test configures them.
+        $container->services()->set('app.tenant_create_checker', TenantCreateChecker::class)->public();
+        $container->services()->set('app.default_view', PreferredViewResolver::class)->public();
         $container->extension('doctrine', [
             'dbal' => ['url' => self::databaseUrl()],
             'orm'  => [

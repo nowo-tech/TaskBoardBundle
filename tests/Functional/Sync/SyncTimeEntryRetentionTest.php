@@ -22,7 +22,7 @@ final class SyncTimeEntryRetentionTest extends SyncFunctionalTestCase
         $this->put($this->remote('t1', 'Synced task', 1));
         $this->sync($board);
 
-        $logger = static::getContainer()->get(TaskTimeLogger::class);
+        $logger = self::getContainer()->get(TaskTimeLogger::class);
         self::assertInstanceOf(TaskTimeLogger::class, $logger);
         $entry = $logger->log($this->taskTitled('Synced task'), $this->owner, 45, new DateTimeImmutable('2026-11-04'));
         self::assertSame('t1', $entry->getTaskExternalId());
@@ -40,7 +40,7 @@ final class SyncTimeEntryRetentionTest extends SyncFunctionalTestCase
         self::assertTrue($kept->getTask()?->isArchived());
 
         // Unlinking removes the connection and its items only.
-        $service = static::getContainer()->get(TaskBoardSyncService::class);
+        $service = self::getContainer()->get(TaskBoardSyncService::class);
         self::assertInstanceOf(TaskBoardSyncService::class, $service);
         $service->unlink($this->freshBoard($board), $this->owner);
         $this->em->clear();

@@ -66,6 +66,8 @@ use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
+use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -134,6 +136,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
+        $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
         $container->setParameter('nowo_task_board.import.max_rows', $config['import']['max_rows']);
         $container->setParameter('nowo_task_board.import.max_cell_length', $config['import']['max_cell_length']);
         $container->setParameter('nowo_task_board.import.max_columns', $config['import']['max_columns']);
@@ -163,6 +166,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
+        // Since 1.24: the host's default board view per user, else the board view.
+        $container->setAlias(TaskBoardDefaultViewResolverInterface::class, $this->serviceOr($config['board']['default_view_resolver'], NullTaskBoardDefaultViewResolver::class));
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
@@ -208,6 +213,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias('nowo_task_board.sync.api_client', is_string($client) && $client !== '' ? $client : 'nowo_task_board.sync.http_client');
         $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
         $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
+        // Since 1.24: the host's account checks for the default actor resolver (disabled / erased users never act).
+        if (is_string($sync['actor_checker']) && $sync['actor_checker'] !== '') {
+            $container->getDefinition(ConnectionCreatorActorResolver::class)->setArgument('$userChecker', new Reference($sync['actor_checker']));
+        }
         $container->setAlias(SyncRunnerInterface::class, $this->serviceOr($sync['runner'], InlineSyncRunner::class));
         $container->setAlias(SyncLimitCheckerInterface::class, $this->serviceOr($sync['limit_checker'], NullSyncLimitChecker::class));
         $container->setAlias(InlineImageRewriterInterface::class, $this->serviceOr($sync['inline_image_rewriter'], MapInlineImageRewriter::class));

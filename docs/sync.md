@@ -33,7 +33,8 @@ The bundle **never stores a token**. The host keeps the credentials and gives on
 | `inline_image_rewriter`: `InlineImageRewriterInterface` | no | `MapInlineImageRewriter` (stored copy, else the text "[image not copied]") |
 | `limit_checker`: `SyncLimitCheckerInterface` | no | no host limit |
 | `runner`: `SyncRunnerInterface` | no | `InlineSyncRunner` (one slice per request; the progress page continues it) |
-| `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board |
+| `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board; since 1.24 a disabled user (`isEnabled()` false) or one `actor_checker` refuses is never the actor, and a named user that is refused, no longer found or fails to load is not replaced by the linker |
+| `actor_checker`: Symfony `UserCheckerInterface` (since 1.24) | no | none: only `isEnabled()` is checked |
 
 ```php
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -197,8 +198,19 @@ final class MessengerSyncRunner implements SyncRunnerInterface
 }
 ```
 
-In the handler: `$report = $sync->runLinked($board, new SyncOptions(actor: $actor, trigger: SyncTrigger::Schedule, maxPages: 20))`;
-re-dispatch with a delay while `$report->status->isResumable()` (`$report->retryAfterSeconds` after a rate limit).
+In the handler, resolve the actor through `SyncActorResolverInterface` and stop when it answers `null`, then run:
+
+```php
+$actor = $this->actors->actorFor($board, $message->actorId); // SyncActorResolverInterface
+if ($actor === null) {
+    return; // disabled, erased or refused: never run as anyone else
+}
+$report = $this->sync->runLinked($board, new SyncOptions(actor: $actor, trigger: SyncTrigger::Schedule, maxPages: 20));
+```
+
+Re-dispatch with a delay while `$report->status->isResumable()` (`$report->retryAfterSeconds` after a rate limit). A
+handler that loads the user itself (e.g. `$em->find(User::class, $message->actorId)`) bypasses the actor refusal
+(disabled, erased or `actor_checker`-refused users) and must not be used.
 
 ## Console command
 

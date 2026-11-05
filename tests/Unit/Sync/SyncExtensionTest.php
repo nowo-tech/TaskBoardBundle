@@ -47,6 +47,21 @@ final class SyncExtensionTest extends TestCase
         self::assertNotNull($routes->get('nowo_task_board_task_restore'), 'restoring an archived task is always available');
     }
 
+    /**
+     * Since 1.24: sync.actor_checker gives the default actor resolver the host's user checker; a host actor_resolver
+     * still replaces the default.
+     */
+    public function testTheActorCheckerIsWiredAndAHostActorResolverStillWins(): void
+    {
+        $container = $this->load(['enabled' => true, 'credential_resolver' => 'app.credentials', 'actor_checker' => 'security.user_checker.main']);
+        $checker   = $container->getDefinition(ConnectionCreatorActorResolver::class)->getArgument('$userChecker');
+        self::assertInstanceOf(Reference::class, $checker);
+        self::assertSame('security.user_checker.main', (string) $checker);
+
+        $container = $this->load(['enabled' => true, 'credential_resolver' => 'app.credentials', 'actor_resolver' => 'app.active_actor']);
+        self::assertSame('app.active_actor', (string) $container->getAlias(SyncActorResolverInterface::class));
+    }
+
     public function testEnablingSyncNeedsACredentialResolver(): void
     {
         $this->expectException(LogicException::class);
@@ -61,6 +76,8 @@ final class SyncExtensionTest extends TestCase
         self::assertSame('app.credentials', (string) $container->getAlias(ProviderCredentialResolverInterface::class));
         self::assertSame('app.runner', (string) $container->getAlias(SyncRunnerInterface::class));
         self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorResolverInterface::class));
+        // Since 1.24: no sync.actor_checker, no user checker (only isEnabled()).
+        self::assertNull($container->getDefinition(ConnectionCreatorActorResolver::class)->getArgument('$userChecker'));
         self::assertSame(NullTaskAttachmentStorage::class, (string) $container->getAlias(TaskAttachmentStorageInterface::class));
         self::assertSame('app.proxy_client', (string) $container->getAlias('nowo_task_board.sync.api_client'));
         self::assertFalse($container->getParameter('nowo_task_board.sync.storage_enabled'));

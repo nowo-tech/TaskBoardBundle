@@ -22,6 +22,7 @@ import MentionController from './mention-controller';
 import ActivityFilterController from './activity-filter-controller';
 import ContainerBrowserController from './container-browser-controller';
 import SyncProgressController from './sync-progress-controller';
+import SelectAnchorController from './select-anchor-controller';
 import { observeCssVars } from './css-vars';
 import { installAvatarFallback } from './avatar-fallback';
 
@@ -53,6 +54,8 @@ application.register('nowo-task-board-task-nav', TaskNavController);
 // Since 1.23: provider connections.
 application.register('nowo-task-board-container-browser', ContainerBrowserController);
 application.register('nowo-task-board-sync-progress', SyncProgressController);
+// Since 1.24: the import help link follows the selected source (help_link.anchor_from: source).
+application.register('nowo-task-board-select-anchor', SelectAnchorController);
 
 // Since 1.23: member pictures fall back to the initial chip (one capturing error listener, no inline handler).
 installAvatarFallback(document);

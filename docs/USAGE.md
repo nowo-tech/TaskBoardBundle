@@ -20,6 +20,7 @@
   - [Who may be assigned](#who-may-be-assigned)
   - [Events after writes](#events-after-writes)
   - [Template blocks and partials](#template-blocks-and-partials)
+- [Board index and default view (since 1.24)](#board-index-and-default-view-since-124)
 - [Columns, column sets and the task panel (since 1.11)](#columns-column-sets-and-the-task-panel-since-111)
   - [Column icon, rename, colour, delete](#column-icon-rename-colour-delete)
   - [Column sets](#column-sets)
@@ -137,6 +138,16 @@ under the **Source** select:
       globals:
           nowo_task_board_import_help_link: { url: '/manual/tasks/import', label: 'Format and examples' }
   ```
+- Since 1.24, `anchor_from: source` makes the link's `#anchor` follow the selected import source: `taskboard_json`
+  opens `…#taskboard-json` (lowercase, underscores to hyphens; the current fragment of the URL is replaced). The page
+  renders the anchor of the selected source and the `nowo-task-board-select-anchor` Stimulus controller updates it when
+  the select changes. Default `null`: the URL is used as given.
+
+  ```yaml
+  twig:
+      globals:
+          nowo_task_board_import_help_link: { url: '/manual/tasks/import', label: 'Format and examples', anchor_from: source }
+  ```
 
 ## Custom access control
 
@@ -153,6 +164,23 @@ Two layers:
 nowo_task_board:
     security:
         access_checker: App\Security\TeamTaskBoardAccessChecker
+```
+
+Since 1.24 a checker may implement `TenantAwareTaskBoardAccessCheckerInterface` instead: its
+`canCreateBoard(object $user, ?string $tenantKey = null)` receives the tenant key of the request (`tenancy`), so "may
+create a board in this project" needs no listener on the create route. The board index asks it too and shows *New
+board* only to whoever may create a board there. The bundle's checkers implement it and ignore the tenant; a checker
+that only implements `TaskBoardAccessCheckerInterface` is asked without the tenant, as before.
+
+```php
+final class ProjectBoardAccessChecker implements TenantAwareTaskBoardAccessCheckerInterface
+{
+    public function canCreateBoard(object $user, ?string $tenantKey = null): bool
+    {
+        return $tenantKey !== null && $this->projects->userMayManageTasks($user, $tenantKey);
+    }
+    // canAccess(), canListBoards() …
+}
 ```
 
 ### Event listeners
@@ -339,6 +367,43 @@ done / total counter per node and `<details>` to expand / collapse. The controll
 `nowo_task_board_subtask_progress(task)` gives done / total from `task.subtasks` when no tree is at hand. Semantic
 classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`, `__subtasks`), `nowo-task-subtree`
 (`__item`, `__row`, `__progress`, `__children`), `nowo-task-panel`, `nowo-task-link--host-object`.
+
+## Board index and default view (since 1.24)
+
+The board index (`templates.index`, `manage/index.html.twig`) is a list page: the header with its actions (*New
+board*, for whoever may create a board here), one panel with the boards or an empty state, and the **New board**
+dialog (`nowo-task-board-dialog`), with a `<noscript>` copy of the form under the list. Blocks for a page extending it:
+
+| Block | Content |
+|-------|---------|
+| `nowo_task_board_toolbar` | The whole header |
+| `index_actions` | The header actions (*New board*, *Back* with `dashboard_route`) |
+| `index_board_item` | One board (`board`, `loop` in context); default `manage/_board_list_item.html.twig` |
+| `index_empty` | No boards (the message and, for creators, *New board*) |
+
+Partials for host pages: `manage/_board_list.html.twig` (`boards`: the same items, e.g. in a board switcher dialog;
+it prints whatever it gets, so pass boards already filtered with `TaskBoardResourceAccessChecker::filterBoards()`),
+`manage/_board_list_item.html.twig` (`board`: name, description, Board / List / Gantt links with icons, each with an
+`aria-label` naming the board, in a group named after it) and `manage/_board_create_form.html.twig` (`form`;
+`in_dialog` adds *Cancel*; `id_prefix` for a second copy on the page).
+
+**Invalid New board.** The create action answers `422` with the values and errors: the index page with the dialog open
+(and an error flash), or — when the request carries the `board.create_dialog_header` header (a host dialog that posts
+with `fetch`) — only `_board_create_form.html.twig`, with `Vary` on that header. A POST without the form still goes
+back to the index. `?new=1` opens the dialog on load.
+
+**Default view.** `board.default_view_resolver` names a `TaskBoardDefaultViewResolverInterface` service:
+`defaultView($user, $board)` answers `board`, `list` or `gantt` (null = board). A main GET of the plain board route
+then redirects to the board's list or Gantt route (the query string is kept, without route variables or `_` keys), except with `?view=board`, an XHR
+request, or a same-origin `Referer` under the board's own path (the user chose the board view from another page of
+the board). The bundle's Board links (index, list and Gantt view switches) carry `?view=board`.
+
+```yaml
+nowo_task_board:
+    board:
+        default_view_resolver: App\Tasks\PreferredTaskViewResolver
+        create_dialog_header: X-Beacon-Dialog
+```
 
 ## Columns, column sets and the task panel (since 1.11)
 

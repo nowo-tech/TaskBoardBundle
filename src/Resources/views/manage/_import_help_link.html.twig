@@ -2,6 +2,9 @@
     Since 1.22.1: an optional help link under the source select of the import forms. link = {url, label} or null;
     both values are escaped and only an http(s) URL or a path on this site ("/…") without white space, control
     characters or backslashes is used (anything else renders "#").
+    Since 1.24: link.anchor_from = 'source' makes the link's #anchor follow the selected import source
+    (`taskboard_json` → `#taskboard-json`): rendered from `source` (the select's current value) and kept up to date by
+    the nowo-task-board-select-anchor controller when the select changes. Default null: the URL is used as given.
 #}
 {% if link is iterable and link.url|default('') is not empty and link.label|default('') is not empty %}
     {% set _raw = link.url ~ '' %}
@@ -13,5 +16,11 @@
     {% else %}
         {% set _url = _raw|nowo_task_board_safe_url %}
     {% endif %}
-    <p class="nowo-task-import__help-link small mb-2"><a href="{{ _url }}" data-testid="nowo-task-import-help-link">{{ link.label }}</a></p>
+    {% set _follow = link.anchor_from|default(null) == 'source' and _url != '#' %}
+    {% if _follow %}
+        {% set _anchor = (source|default('') ~ '')|trim|lower|replace({_: '-'}) %}
+        {% set _base = _url|split('#')|first %}
+        {% set _url = _anchor matches '{^[a-z0-9-]+$}' ? _base ~ '#' ~ _anchor : _base %}
+    {% endif %}
+    <p class="nowo-task-import__help-link small mb-2"{% if _follow %} data-controller="nowo-task-board-select-anchor" data-nowo-task-board-select-anchor-selector-value="select[name$='[source]']"{% endif %}><a href="{{ _url }}" data-testid="nowo-task-import-help-link"{% if _follow %} data-nowo-task-board-select-anchor-target="link"{% endif %}>{{ link.label }}</a></p>
 {% endif %}

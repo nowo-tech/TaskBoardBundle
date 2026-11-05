@@ -97,7 +97,7 @@ final class TaskTimeEntryRetentionTest extends FunctionalTestCase
         $other  = $this->task($board, 'Other');
         $ids    = $this->logOn($parent, $child, $other);
 
-        $boards = static::getContainer()->get(TaskBoardRepositoryInterface::class);
+        $boards = self::getContainer()->get(TaskBoardRepositoryInterface::class);
         self::assertInstanceOf(TaskBoardRepositoryInterface::class, $boards);
         $this->clearAndReloadOwner();
         $fresh = $this->em->find(TaskBoard::class, $board->getId());
@@ -161,7 +161,7 @@ final class TaskTimeEntryRetentionTest extends FunctionalTestCase
 
     private function timeLogger(): TaskTimeLogger
     {
-        $logger = static::getContainer()->get(TaskTimeLogger::class);
+        $logger = self::getContainer()->get(TaskTimeLogger::class);
         self::assertInstanceOf(TaskTimeLogger::class, $logger);
 
         return $logger;
