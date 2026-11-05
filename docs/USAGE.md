@@ -385,7 +385,10 @@ Partials for host pages: `manage/_board_list.html.twig` (`boards`: the same item
 it prints whatever it gets, so pass boards already filtered with `TaskBoardResourceAccessChecker::filterBoards()`),
 `manage/_board_list_item.html.twig` (`board`: name, description, Board / List / Gantt links with icons, each with an
 `aria-label` naming the board, in a group named after it) and `manage/_board_create_form.html.twig` (`form`;
-`in_dialog` adds *Cancel*; `id_prefix` for a second copy on the page).
+`in_dialog` adds *Cancel*; `id_prefix` for a second copy on the page; since 1.26 the form's id is
+`<id_prefix>nowo-task-board-create-form`, `with_actions: false` leaves out the action row so a dialog can render it in
+its footer with `form="nowo-task-board-create-form"`, and the action row of `in_dialog` carries
+`data-nowo-ui-dialog-actions` for a host dialog).
 
 **Invalid New board.** The create action answers `422` with the values and errors: the index page with the dialog open
 (and an error flash), or — when the request carries the `board.create_dialog_header` header (a host dialog that posts
@@ -513,7 +516,7 @@ properties written as JSON in `data-nowo-task-vars` and set by `task-board.js` t
 inserted later). The subtask progress is a native `<progress>`. New semantic classes: `nowo-task-column--colored`,
 `nowo-task-column__icon`, `__header`, `__title`, `__name`, `__count`, `__edit`, `__tasks`, `__empty`, `__add-task`,
 `nowo-task-column-sets` (`__item`, `__delete`, `__empty`), `nowo-task-dialog` (`--native`, `__header`, `__body`,
-`__actions`, `__danger`), `nowo-task-progress`, `nowo-task-list__row`, `nowo-task-panel-fragment`.
+`__actions`, `__footer` since 1.26, `__danger` up to 1.25), `nowo-task-progress`, `nowo-task-list__row`, `nowo-task-panel-fragment`.
 
 ## Look and feel: ClickUp-like views, theming and icons (since 1.12)
 
@@ -604,6 +607,23 @@ browser, a click on the backdrop closes it), coloured by the `--nowo-task-*` tok
 backdrop, laid out with the bundle's classes (`nowo-task-dialog__header`, `__title`, `__close`, `__body`, `__grid`,
 `__section`, `__actions`, `nowo-task-field`, `nowo-task-members__*`). Overrides that kept the Bootstrap `.modal`
 markup still open through the controllers' legacy branch.
+
+**Dialog anatomy and sizes (since 1.26, dialog rule v2).** Every dialog is header (`__header`: `__title` and the ×
+`__close`, tinted), body (`__body`, the only part that scrolls) and footer (`__footer __actions`, tinted, **outside the
+body**: its submit buttons name their form with `form="…"`). The footer holds Cancel / Close first and **one primary**
+last; a secondary destructive action (*Delete column*, *Remove link*) is a danger-outline button on the left
+(`__actions--split`); a destructive confirmation (*Unlink*, *Archive anyway*) has the solid danger button as its one
+primary. Widths are the kits' shared tokens — `--nowo-dialog-width-md` (default `min(40rem, 100vw - 2rem)`) and, for
+`nowo-task-dialog--wide` (add task, people, links, dependency, import help), `--nowo-dialog-width-wide`
+(`min(56rem, 100vw - 2rem)`); the height follows the content, capped at `--nowo-dialog-height-md` / `-wide`
+(`min(36rem, 100dvh - 2rem)` / `min(52rem, 100dvh - 2rem)`) and never taller than the viewport minus 2rem. The bundle
+sets no size of its own: a host sets the tokens once on `:root` for every kit.
+
+The footer buttons read the UiKit theme slots `btn_secondary` (Cancel / Close), `btn_primary`, `btn_danger`
+(secondary destructive) and `btn_danger_solid` of the theme bundle `NowoTaskBoardBundle` through the Twig function
+`nowo_task_board_btn_class(slot)`, so a host restyles them in `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle.classes`;
+without UiKit's theme extension (UiKit 1.x) they keep the Bootstrap classes of 1.25 (`btn btn-outline-secondary`,
+`btn btn-primary`, `btn btn-outline-danger`, `btn btn-danger`).
 
 ## Comments and @mentions (since 1.16)
 

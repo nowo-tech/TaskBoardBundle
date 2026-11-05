@@ -18,6 +18,9 @@ use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
+use Throwable;
+use Twig\Environment;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
@@ -37,6 +40,7 @@ use function sprintf;
 use function str_replace;
 use function strtolower;
 use function strtr;
+use function trim;
 use function usort;
 
 use const ENT_QUOTES;
@@ -48,6 +52,17 @@ use const PHP_URL_SCHEME;
  */
 final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsInterface
 {
+    /** Since 1.26: the UiKit theme bundle key of the dialog buttons (`nowo_ui_kit.theme.bundles.NowoTaskBoardBundle`). */
+    public const THEME_BUNDLE = 'NowoTaskBoardBundle';
+
+    /** Since 1.26: the classes of a dialog button without the UiKit theme (UiKit 1.x): the Bootstrap ones of 1.25. */
+    private const BUTTON_FALLBACK = [
+        'btn_primary'      => 'btn btn-primary',
+        'btn_secondary'    => 'btn btn-outline-secondary',
+        'btn_danger'       => 'btn btn-outline-danger',
+        'btn_danger_solid' => 'btn btn-danger',
+    ];
+
     /**
      * @param array<string, array{path?: string, name?: string}> $routes Configured `routes` tree (logical key => path/name)
      */
@@ -136,7 +151,33 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_unmatched', $this->syncUnmatched(...)),
             new TwigFunction('task_board_sync_token', $this->syncToken(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
+            new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true]),
         ];
+    }
+
+    /**
+     * Since 1.26 (dialog rule v2): the classes of a dialog footer button from the UiKit theme slot (`btn_secondary`
+     * for Cancel / Close, `btn_primary`, `btn_danger` for a secondary destructive action, `btn_danger_solid` for the
+     * confirm of a destructive dialog) of the `NowoTaskBoardBundle` theme bundle, so a host restyles them in
+     * `nowo_ui_kit.theme`; the Bootstrap classes of 1.25 without UiKit's theme extension (UiKit 1.x) or for an unknown
+     * slot.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function buttonClass(Environment $env, array $context, string $slot): string
+    {
+        $fallback = self::BUTTON_FALLBACK[$slot] ?? 'btn';
+        if (!$env->hasExtension(ThemeExtension::class)) {
+            return $fallback;
+        }
+
+        try {
+            $class = $env->getExtension(ThemeExtension::class)->slotClass($context, $slot, self::THEME_BUNDLE);
+        } catch (Throwable) {
+            return $fallback;
+        }
+
+        return trim($class) !== '' ? $class : $fallback;
     }
 
     /**

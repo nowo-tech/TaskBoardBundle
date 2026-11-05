@@ -3,23 +3,29 @@
     invalid create in a host dialog (board.create_dialog_header). Values and errors of an invalid submission are kept.
     Variables: form (the TaskBoardFormType view, posted to the board_create route of the current tenant);
     in_dialog (default false: adds Cancel, which closes the surrounding nowo-task-board-dialog);
-    id_prefix (default '': prefixes the field ids, so a second copy of the form on the page keeps its labels).
+    id_prefix (default '': prefixes the field ids and the form id, so a second copy of the form on the page keeps its
+    labels); since 1.26 with_actions (default true; false: no action row, the index dialog renders Cancel and Create in
+    its footer with form="nowo-task-board-create-form"). The form id is `<id_prefix>nowo-task-board-create-form`; the
+    action row of a host dialog carries data-nowo-ui-dialog-actions (UiKit's remote dialog moves it to its footer).
 #}
 {% set _in_dialog = in_dialog|default(false) %}
 {% set _id_prefix = id_prefix|default('') %}
-{{ form_start(form, {action: path(nowo_task_board_route('board_create')), method: 'POST', attr: {class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': 'nowo-task-board-create-form'}}) }}
+{% set _with_actions = with_actions ?? true %}
+{{ form_start(form, {action: path(nowo_task_board_route('board_create')), method: 'POST', attr: {id: _id_prefix ~ 'nowo-task-board-create-form', class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': 'nowo-task-board-create-form'}}) }}
     {{ form_errors(form) }}
     {% for child in form %}
         {% if not child.rendered %}
             {{ _id_prefix is empty or 'hidden' in child.vars.block_prefixes ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
         {% endif %}
     {% endfor %}
-    <div class="nowo-task-dialog__actions">
-        {% if _in_dialog %}
-            <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-        {% endif %}
-        <button type="submit" class="btn btn-primary" data-testid="nowo-task-board-create-submit">
-            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
-        </button>
-    </div>
+    {% if _with_actions %}
+        <div class="nowo-task-dialog__actions"{% if _in_dialog %} data-nowo-ui-dialog-actions{% endif %}>
+            {% if _in_dialog %}
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            {% endif %}
+            <button type="submit" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-testid="nowo-task-board-create-submit">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        </div>
+    {% endif %}
 {{ form_end(form) }}

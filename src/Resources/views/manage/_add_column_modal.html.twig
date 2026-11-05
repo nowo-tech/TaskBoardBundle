@@ -1,6 +1,7 @@
 {#
     Add column dialog (since 1.13 a native <dialog>, styled by task-board.css: no CSS framework modal needed): name,
-    colour palette and icon grid (_column_fields.html.twig).
+    colour palette and icon grid (_column_fields.html.twig). Since 1.26 (dialog rule v2) the actions sit in the footer,
+    outside the scrolling form (form="nowo-task-board-add-column-form").
 #}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native"
@@ -16,7 +17,7 @@
     {{ form_start(columnForm, {
         action: path(nowo_task_board_route('column_create'), {boardId: board.id}),
         method: 'POST',
-        attr: {class: 'nowo-task-dialog__body'},
+        attr: {id: 'nowo-task-board-add-column-form', class: 'nowo-task-dialog__body'},
     }) }}
         {{ include('@NowoTaskBoardBundle/manage/_column_fields.html.twig', {form: columnForm, controller: 'nowo-task-board-add-column-modal', defaultColor: '#64748b'}) }}
         {% for child in columnForm %}
@@ -24,13 +25,13 @@
                 {{ form_row(child) }}
             {% endif %}
         {% endfor %}
-        <div class="nowo-task-dialog__actions">
-            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-column-modal#close">
-                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-            <button type="submit" class="btn btn-primary">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-columns'}) }}{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-        </div>
     {{ form_end(columnForm) }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-add-column-modal#close">
+            {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <button type="submit" form="nowo-task-board-add-column-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-columns'}) }}{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+    </div>
 </dialog>

@@ -3,7 +3,8 @@
 {#
     "Manage people" dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal): the members
     as a list (avatar initial, name, role, remove button on one line) and the add form as one row (person, role). Since
-    1.16.1 Close and Add member share the footer, like the other dialogs (the submit button names its form).
+    1.16.1 Close and Add member share the footer, like the other dialogs (the submit button names its form); since 1.26
+    (dialog rule v2) the footer sits outside the scrolling body.
 #}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
@@ -66,14 +67,13 @@
                 {% endfor %}
             {{ form_end(memberForm) }}
         </section>
-
-        <div class="nowo-task-dialog__actions">
-            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">
-                {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-            <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="btn btn-primary nowo-task-members__add-button">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-        </div>
+    </div>
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-task-members-modal#close">
+            {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }} nowo-task-members__add-button">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
     </div>
 </dialog>

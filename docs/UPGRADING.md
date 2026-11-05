@@ -125,6 +125,37 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.25.2** (planned 1.26.0):
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No schema or configuration change. **Visual and markup change in every dialog** (owner dialog rule v2):
+
+- The action row of each native dialog moved out of the form/body into a footer, the last child of the `<dialog>`
+  (`<div class="nowo-task-dialog__footer nowo-task-dialog__actions">`); its submit buttons name their form with
+  `form="…"` (new form ids, listed in the CHANGELOG). Ids, `data-testid`s, Stimulus targets / actions and form field
+  names did not change, so tests that click `[data-testid="nowo-task-board-create-submit"]`,
+  `nowo-task-sync-unlink-confirm` or `nowo-task-sync-mass-archive-confirm` keep working. A selector that looked for
+  the buttons **inside** the form (`form .nowo-task-dialog__actions button`) must look in the dialog instead.
+- *Edit column*: *Delete column* is a danger-outline button in the footer bound to the hidden delete form
+  (`#nowo-task-board-column-delete-form`), not a `.nowo-task-dialog__danger` block under the form.
+- Sizes: the dialogs read `--nowo-dialog-width-md` / `--nowo-dialog-width-wide` and `--nowo-dialog-height-md` /
+  `-wide` (UiKit's defaults: 40rem / 56rem wide, 36rem / 52rem tall at most) and take their content's height. Medium
+  dialogs grow from 32rem to 40rem, wide ones from 40rem to 56rem. A host that sized `nowo-task-dialog--native` from
+  outside (e.g. `body dialog.nowo-task-dialog--native { width; max-height; height: fit-content }`) can drop those rules
+  and set the tokens once on `:root`.
+- Footer buttons read the UiKit theme slots of `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle` (`btn_secondary`,
+  `btn_primary`, `btn_danger`, `btn_danger_solid`); with UiKit 2's Bootstrap defaults the classes gain
+  `nowo-ui-btn nowo-ui-btn--…` next to the former `btn btn-…`.
+- **Template overrides** of the dialog partials (`_add_task_modal`, `_add_column_modal`, `_edit_column_modal`,
+  `_task_members_modal`, `_task_priority_modal`, `_task_links_modal`, `_column_sets_dialogs`,
+  `_task_dependencies_section`, `_task_time_section`, `_task_subtask_import`, `_import_help`,
+  `_connection_unlink_dialog`, `_connection_mass_archive`, `index.html.twig`'s New board) keep rendering their old
+  markup; with the new CSS their actions inside the body scroll with it. Compare them with the new partials and move
+  the actions into the footer.
+
 ## To 1.25.2
 
 From **1.25.1**:

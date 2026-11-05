@@ -1,4 +1,8 @@
-{# Add / edit link dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal). #}
+{#
+    Add / edit link dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal). Since 1.26
+    (dialog rule v2) the footer sits outside the scrolling form: Remove link (secondary, danger outline, edit only) on
+    the left, Cancel and Save (form="nowo-task-link-form") on the right.
+#}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
     data-nowo-task-board-task-links-modal-target="modal"
@@ -34,27 +38,6 @@
                 {{ form_row(child) }}
             {% endif %}
         {% endfor %}
-        <div class="nowo-task-dialog__actions nowo-task-dialog__actions--split">
-            <button
-                type="submit"
-                form="nowo-task-link-delete-form"
-                class="btn btn-outline-danger nowo-task-btn-danger"
-                hidden
-                data-nowo-task-board-task-links-modal-target="deleteButton"
-                data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
-                data-action="click->nowo-task-board-task-links-modal#confirmDelete"
-            >
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-            <div class="nowo-task-dialog__actions-end">
-                <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-links-modal#close">
-                    {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-                </button>
-                <button type="submit" class="btn btn-primary">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
-                </button>
-            </div>
-        </div>
     {{ form_end(linkForm) }}
     {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
     {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
@@ -64,4 +47,25 @@
             {% endif %}
         {% endfor %}
     {{ form_end(linkRemoveForm) }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions nowo-task-dialog__actions--split">
+        <button
+            type="submit"
+            form="nowo-task-link-delete-form"
+            class="{{ nowo_task_board_btn_class('btn_danger') }} nowo-task-btn-danger"
+            hidden
+            data-nowo-task-board-task-links-modal-target="deleteButton"
+            data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
+            data-action="click->nowo-task-board-task-links-modal#confirmDelete"
+        >
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <div class="nowo-task-dialog__actions-end">
+            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-task-links-modal#close">
+                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+            <button type="submit" form="nowo-task-link-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        </div>
+    </div>
 </dialog>

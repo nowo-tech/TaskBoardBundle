@@ -10,12 +10,13 @@
             <h2 class="nowo-task-dialog__title" id="nowo-task-sync-mass-archive-title">{{ 'task_board.sync.mass_archive.confirm_title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
             <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
         </div>
-        {{ form_start(massArchiveForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+        {# Since 1.26 (dialog rule v2): the actions in the footer, outside the body (form="nowo-task-sync-mass-archive-form"). #}
+        {{ form_start(massArchiveForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {id: 'nowo-task-sync-mass-archive-form', class: 'nowo-task-dialog__body'}}) }}
             <p>{{ 'task_board.sync.mass_archive.confirm_text'|trans({'%count%': massArchiveCount.count|default('?')}, 'NowoTaskBoardBundle') }}</p>
-            <div class="nowo-task-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" class="btn btn-danger" data-testid="nowo-task-sync-mass-archive-confirm">{{ 'task_board.sync.mass_archive.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            </div>
         {{ form_end(massArchiveForm) }}
+        <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" form="nowo-task-sync-mass-archive-form" class="{{ nowo_task_board_btn_class('btn_danger_solid') }}" data-testid="nowo-task-sync-mass-archive-confirm">{{ 'task_board.sync.mass_archive.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        </div>
     </dialog>
 </div>

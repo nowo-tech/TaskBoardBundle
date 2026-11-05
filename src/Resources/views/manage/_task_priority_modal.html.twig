@@ -1,6 +1,9 @@
 {% import '@NowoTaskBoardBundle/manage/_task_priority_tag.html.twig' as priorityUi %}
 
-{# "Change priority" dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal). #}
+{#
+    "Change priority" dialog. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal). Since 1.26
+    (dialog rule v2) the actions sit in the footer, outside the scrolling form (form="nowo-task-board-priority-form-<task id>").
+#}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native"
     data-nowo-task-board-task-priority-modal-target="modal"
@@ -16,7 +19,7 @@
     </div>
     {# Plain radio widgets: the option label is the custom priority tag below, not the theme's form-check label. #}
     {% form_theme priorityForm 'form_div_layout.html.twig' %}
-    {{ form_start(priorityForm, {attr: {class: 'nowo-task-dialog__body'}}) }}
+    {{ form_start(priorityForm, {attr: {id: 'nowo-task-board-priority-form-' ~ task.id, class: 'nowo-task-dialog__body'}}) }}
         <p class="nowo-task-dialog__help">{{ 'task_board.task.priority_modal_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
         <div class="nowo-task-detail__priority-options">
             {% for priority in priorities %}
@@ -35,13 +38,13 @@
                 {{ form_row(child) }}
             {% endif %}
         {% endfor %}
-        <div class="nowo-task-dialog__actions">
-            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-priority-modal#close">
-                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-            <button type="submit" class="btn btn-primary">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-        </div>
     {{ form_end(priorityForm) }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-task-priority-modal#close">
+            {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <button type="submit" form="nowo-task-board-priority-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+    </div>
 </dialog>
