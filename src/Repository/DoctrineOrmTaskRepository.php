@@ -160,16 +160,23 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
 
     public function findTrackableForUser(string $userId, ?string $search, int $limit, int $offset): array
     {
-        $qb = $this->entityManager->createQueryBuilder()
-            ->select('DISTINCT t')
-            ->from(Task::class, 't')
-            ->leftJoin('t.members', 'taskMember', 'WITH', 'taskMember.memberRole = :assigneeRole')
+        // Since 1.25: the joins only select ids (a subquery), so no DISTINCT runs over the task row: PostgreSQL has no
+        // equality operator for its json columns (tags), and `SELECT DISTINCT t` failed there.
+        $ids = $this->entityManager->createQueryBuilder()
+            ->select('t2.id')
+            ->from(Task::class, 't2')
+            ->leftJoin('t2.members', 'taskMember', 'WITH', 'taskMember.memberRole = :assigneeRole')
             ->leftJoin('taskMember.user', 'assignee')
-            ->leftJoin('t.board', 'board')
+            ->leftJoin('t2.board', 'board')
             ->leftJoin('board.team', 'team')
             ->leftJoin(TeamMember::class, 'tm', 'WITH', 'tm.team = team')
             ->leftJoin('tm.user', 'tmUser')
-            ->where('assignee.id = :userId OR tmUser.id = :userId')
+            ->where('assignee.id = :userId OR tmUser.id = :userId');
+
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('t')
+            ->from(Task::class, 't')
+            ->where('t.id IN (' . $ids->getDQL() . ')')
             ->andWhere('t.completedAt IS NULL')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('assigneeRole', TaskMemberRole::Assignee)
@@ -194,12 +201,10 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
     {
         /** @var list<Task> $result */
         $result = $this->entityManager->createQueryBuilder()
-            ->select('DISTINCT t')
+            ->select('t')
             ->from(Task::class, 't')
-            ->innerJoin('t.links', 'link')
-            ->where('link.linkType = :linkType')
-            ->andWhere('link.objectType = :objectType')
-            ->andWhere('link.objectId = :objectId')
+            // Since 1.25: a subquery instead of `SELECT DISTINCT t` (PostgreSQL cannot compare the json columns).
+            ->where('t.id IN (SELECT IDENTITY(link.task) FROM ' . TaskLink::class . ' link WHERE link.linkType = :linkType AND link.objectType = :objectType AND link.objectId = :objectId)')
             ->setParameter('linkType', TaskLinkType::HostObject)
             ->setParameter('objectType', $objectType)
             ->setParameter('objectId', $objectId)

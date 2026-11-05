@@ -176,6 +176,9 @@ imported-time task totals. **Owner rule: deleting tasks or boards keeps all trac
 
 ### Fixed
 
+- PostgreSQL: `TaskRepositoryInterface::findTrackableForUser()` and `findByHostObject()` failed with *could not
+  identify an equality operator for type json* (`SELECT DISTINCT` over the task row and its json `tags`); they now
+  filter by an id subquery.
 - `templates.connection_badge` is used by the board, list and Gantt pages (they included the bundle's partial by a
   fixed path, so the option had no effect there). New Twig global `nowo_task_board_connection_badge_template`.
 - `TaskBoardSyncService::run()` hands the access check, its `BOARD_ACCESS_CHECK` listeners and `SYNC_STARTED` the
