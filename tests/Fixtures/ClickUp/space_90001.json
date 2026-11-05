@@ -1,0 +1,10 @@
+{
+  "id": "90001",
+  "name": "Space 1",
+  "statuses": [
+    {"id": "st-3", "status": "complete", "type": "closed", "orderindex": 2, "color": "#6bc950"},
+    {"id": "st-1", "status": "to do", "type": "open", "orderindex": 0, "color": "#d3d3d3"},
+    {"id": "st-2", "status": "in progress", "type": "custom", "orderindex": 1, "color": "red"},
+    {"id": "st-x", "status": "", "type": "custom", "orderindex": 9}
+  ]
+}

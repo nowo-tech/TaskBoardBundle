@@ -602,7 +602,35 @@ nowo_task_board:
         inline_slice_pages: 5         # task pages the inline runner writes per request
         progress:
             poll_interval_ms: 2000
+        # Since 1.25 (ClickUp full import; see sync.md):
+        list_as_tag: false            # tag "list:<name>" on tasks of a folder / space source
+        lookup:
+            cache_pool: ~             # PSR-6 pool for the list search (300 s, keyed by a hash of the connection ref); null = no cache
+        people:
+            resolver: ~               # SyncPersonResolverInterface; null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board)
+            require_verified_email: true   # false = an unverified e-mail match is applied as `auto` (1.23 parity)
+            reassign_batch_size: 500  # 50–2000
+            scan:
+                max_task_pages: 1     # 1–5
+                max_comment_tasks: 10 # 0–50
+                time_window: true     # one 30-day window in the pre-scan with an admin token
+        watchers:
+            enabled: true
+            max_detail_calls_per_run: 500   # GET task/{id} (E5) for rows without watchers / checklists
+        checklists:
+            enabled: true
+            max_items_per_run: 2000   # new checklist subtasks per run (also asked from sync.limit_checker)
+        time_entries:
+            sink: ~                   # ImportedTimeEntrySinkInterface; null = the time phase never runs
+            window_days: 30           # 1–30
+            max_assignees_per_call: 25     # 1–100 (upstream limit TO CONFIRM)
+            max_entries_per_window: 10000  # at or above it the window is halved (upstream cap TO CONFIRM)
+            max_windows_per_run: 200
+            fallback_max_tasks_per_run: 500
+            max_calls_per_run: 500    # time-entry requests per slice, splits included (then the run pauses)
 ```
+
+Since 1.25 the sync tables gain a people directory (schema in [UPGRADING — To 1.25.0](UPGRADING.md#schema-change-with-syncenabled-true-only)).
 
 New routes (configurable like the others, copied under `tenancy.tenant_paths`): `board_connection` (GET),
 `board_connection_containers`, `board_connection_link`, `board_connection_refresh`, `board_connection_cancel`,

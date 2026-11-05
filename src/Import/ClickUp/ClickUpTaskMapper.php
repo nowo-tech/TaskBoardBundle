@@ -8,13 +8,22 @@ use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\ImportAssigneeResolver;
 use Nowo\TaskBoardBundle\Import\Support\ImportFieldMapper;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 
 use function array_keys;
+use function array_values;
 use function count;
+use function filter_var;
 use function is_array;
 use function is_numeric;
 use function is_string;
+use function mb_substr;
+use function preg_match;
+use function preg_replace;
+use function strlen;
 use function trim;
+
+use const FILTER_VALIDATE_EMAIL;
 
 /**
  * Since 1.23: one ClickUp task (API v2 / JSON export shape) as an import row — shared by {@see ClickUpJsonImporter}
@@ -70,7 +79,47 @@ final readonly class ClickUpTaskMapper
             assigneeNames: $names,
             hasPriority: $priority !== '',
             assigneeEmails: $emails,
+            creator: $this->personRef($row['creator'] ?? null),
+            assigneeRefs: $this->personRefs($row['assignees'] ?? null),
         );
+    }
+
+    /**
+     * Since 1.25: a ClickUp user object ({id, username, email}) as a person ref; null without a valid id. The name is
+     * one clean line (controls and bidi overrides removed, at most 120 characters); the e-mail is kept only when
+     * valid.
+     */
+    public function personRef(mixed $user): ?RemotePersonRef
+    {
+        if (!is_array($user)) {
+            return null;
+        }
+        $id = $this->stringValue($user['id'] ?? null);
+        if (preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $id) !== 1) {
+            return null;
+        }
+        $name  = mb_substr(trim((string) preg_replace('/[\p{Cc}\x{061C}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}]+/u', ' ', $this->stringValue($user['username'] ?? $user['name'] ?? null))), 0, 120);
+        $email = $this->stringValue($user['email'] ?? null);
+
+        return new RemotePersonRef($id, $name !== '' ? $name : $id, $email !== '' && strlen($email) <= 254 && filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? $email : null);
+    }
+
+    /**
+     * Since 1.25: a list of user objects as refs (each id once, at most {@see ImportAssigneeResolver::MAX_ASSIGNEES_PER_ROW}).
+     *
+     * @return list<RemotePersonRef>
+     */
+    public function personRefs(mixed $users): array
+    {
+        $refs = [];
+        foreach (is_array($users) ? $users : [] as $user) {
+            $ref = $this->personRef($user);
+            if ($ref instanceof RemotePersonRef && count($refs) < ImportAssigneeResolver::MAX_ASSIGNEES_PER_ROW) {
+                $refs[$ref->providerUserId] = $ref;
+            }
+        }
+
+        return array_values($refs);
     }
 
     /**

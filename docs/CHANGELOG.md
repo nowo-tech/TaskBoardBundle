@@ -70,6 +70,178 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+ClickUp full import for provider sync (`sync.enabled` only; contract v1.0 with Beacon spec 208): people, creator and
+creation date, assignees and watchers, checklists, comment authors, status types, tracked time through a host sink, and
+re-association. Hosts without `sync.enabled` see no schema or behaviour change except the new `import_tasks` access
+decision (granted by default).
+
+Also in 1.25.0 (contract v1.0 §15.6 / §10.3, and the 1.23.2 / 1.24.0 audit follow-ups): the board eraser and the
+imported-time task totals. **Owner rule: deleting tasks or boards keeps all tracked time.** See
+[UPGRADING](UPGRADING.md#to-1250).
+
+### Added
+
+- **People directory** (`Sync\People\TaskSyncPeopleDirectoryService`, tables `task_board_sync_directories` /
+  `task_board_sync_people` / `task_board_sync_members`): one row per remote person per (host scope, provider,
+  workspace), shared by every board of the scope. Mapping states `unmatched`, `suggested`, `auto`, `manual`, `external`;
+  `applyMapping()`, `markReviewed()`, `anonymise()` ("Former <provider> user #n"), `pruneDirectory()` on the last
+  unlink. Many remote identities may map to one user; one identity never maps to two.
+- **Host hook `sync.people.resolver`** (`Sync\Hook\SyncPersonResolverInterface`: `directoryScope()`, `candidates()`,
+  `isCandidate()`, `autoMatch()`, `candidateById()`). Without it, `DefaultSyncPersonResolver` keeps 1.23 e-mail
+  matching with one directory per board. `autoMatch($board, $person, ?string $normalizedEmail = null)`: the bundle
+  passes the normalised e-mail; without it the resolver derives it from the person.
+- **Automatic e-mail matching** only creates a mapping for a person no human decided: a verified account → `auto`, an
+  unverified one → `suggested` (needs a confirmation). A changed e-mail never re-maps automatically.
+- **Projection rule:** a mapped user who cannot view the board is never written as creator, member or comment author
+  (a mapping never grants access); the person stays a reference shown with a *no access to this board* badge.
+- **Creator and original creation date** of synced tasks (`Task` / `TaskComment` take an optional `createdAt`); tasks
+  written by 1.23 are back-filled once on their next fetch (`task_board_sync_items.backfill_level`).
+- **Assignees and watchers** through the directory. Members the sync adds are tracked in `task_board_sync_members`;
+  only those are ever removed. Unprojected people are listed per task (`unmatched_people`, *Also assigned in ClickUp*).
+- **Checklists** become subtasks (`<task>#<item>`, tag `checklist:<name>`, nested items flattened in tree order); the
+  deletions scan never archives them, a checklist that drops an item does.
+- **Comment authors** as person references (`task_board_sync_comments.author_person_id`) and the ClickUp comment date.
+  `TaskSyncCommentLegacyAuthorMigrator::migrate()` strips the 1.23 "**name** (ClickUp):" line once and returns a
+  `MigrateReport` (`connectionId`, `directoryId`, `migrated`, `skipped`, `lastId`, `done`).
+- **Status types decide "done"** (`closed` / `done`); the last-column rule is only a fallback without types. A
+  done → not-done change reopens the task.
+- **Status → column map** on the connection (`TaskBoardSyncService::link(..., $statusColumnMap)`,
+  `updateStatusColumnMap()`): a column id, `__create` (created when the link is confirmed) or `__skip` (not
+  imported, counted `skipStatus`). Unmapped statuses follow the 1.23 rules with the warning `unmapped_status`.
+- **Folder and space sources** (`f:<id>` / `s:<id>`, `Sync\Provider\SourceProviderInterface`), `resolveListFromUrl()`
+  (app.clickup.com list links, no network call) and `searchLists()` (≤ 40 calls, optional PSR-6 cache
+  `sync.lookup.cache_pool`, keyed by a hash of the connection reference). `sync.list_as_tag` adds `list:<name>`.
+- **Task detail fallback (E5)** `Sync\Provider\TaskDetailProviderInterface`: rows without watchers or checklists are
+  completed by `GET task/{id}` for tasks created or changed in the run (`sync.watchers.max_detail_calls_per_run`).
+- **Tracked time through a host sink** (`sync.time_entries.sink`, `Sync\Hook\ImportedTimeEntrySinkInterface`): a
+  `time_entries` phase reads 30-day windows (halved down to one hour above `max_entries_per_window`), per assignee chunk
+  with an admin token, the token user's own entries with a member token (warning `time_member_mode`), and the legacy
+  per-task intervals only on request (`SyncOptions::$timeFallbackPerTask`). Running timers and task-less entries are
+  counted, not delivered. The bundle never writes TimeTrack data.
+- **Typed run counters:** `SyncReport::$people` (`PeopleCounts`: `seen`, `created`, `autoMatched`, `suggested`,
+  `unmatchedNew`, `changedEmail`, `autoUnmatched`) and `SyncReport::$time` (`TimeCounts`: `mode`, `windows`,
+  `windowsSplit`, `entries`, `skippedRunning`, `skippedTaskless`, `fallbackTasks`); `SyncReport::$stats` keeps only the
+  other counters (`checklist.*`, `detail.calls`, `skipStatus`).
+- **Per-run options** `SyncOptions::$watchers` / `$checklists` (default `true`, on top of `sync.watchers.enabled` /
+  `sync.checklists.enabled`).
+- **Pre-scans for the connection dialog:** `TaskSyncPeopleScanner::scan()` (members, first task pages, first comments,
+  one time window; ≤ 15 calls) and `TaskSyncSourceScanner::scan()` (source, workspace, statuses with types, people with
+  `boardAccess`, time mode).
+- **Re-association:** `TaskSyncPeopleReassigner::reassign()` / `cancelReassign()` / `detachUser()` (account erasure)
+  and `TaskSyncPeopleProjector::reprojectForUser()` (called by the host when someone gains board access). Batched,
+  resumable with a cursor, under each board's sync lock, no notification.
+- **Events** `SYNC_PERSON_MAPPED`, `SYNC_PERSON_REASSIGNED`, `SYNC_PERSON_ANONYMISED`, `SYNC_PEOPLE_REVIEWED`,
+  `SYNC_PEOPLE_REPROJECTED` (ids only) and the history type `sync_person_reassociated` (`person:` / `user:` tokens
+  rendered at display time).
+- **View models and Twig functions** `task_board_sync_creator(task)`, `task_board_sync_comment_author(comment)`,
+  `task_board_sync_unmatched(task, role)`, `task_board_sync_token(token)`; the task panel and comments show them.
+- **Export helpers** `TaskSyncPersonRepository::exportFor($user)` / `exportDirectory($directory)`.
+- **People page filter** `Sync\People\PersonFilter` for `TaskSyncPersonRepository::forDirectory()`: mapping states, `q`
+  (name or e-mail), `changed` and `changedSince` (e-mail changed in the provider).
+- **Import access decision:** `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (`import_tasks`, granted by default),
+  `TaskBoardResourceAccessChecker::canImportTasks()` / `canImportIntoTask()`; file imports and
+  `canManageBoardConnection()` ask it.
+- Config: `sync.people.*`, `sync.watchers.*`, `sync.checklists.enabled`, `sync.time_entries.*`, `sync.list_as_tag`,
+  `sync.lookup.cache_pool` ([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
+- `Service\TaskBoardEraser::emptyBoard()` / `deleteBoard()`: empty or delete a board in resumable slices (`EraseCursor`,
+  `EraseProgress`). The provider connection is unlinked first, tasks go leaf-first in flushed batches (default 200, time
+  budget 20 s), then `deleteBoard()` removes the columns and the board. Manual time entries are detached (never deleted)
+  and TimeTrack entries are never touched. Authorised by the new
+  `TaskBoardResourceAccessChecker::canManageBoard()` (board creator or `security.manage_roles`, then
+  `BOARD_ACCESS_CHECK` action `manage`); `AccessDeniedException` otherwise.
+- Events `TASK_ERASED` (`TaskErasedEvent`: task id, board id, title, the storage refs of the files a sync stored, the
+  number of manual time entries) before each batch is flushed, and `BOARD_EMPTIED` / `BOARD_DELETED`
+  (`BoardErasedEvent`: board id, counts, actor id) once at the end.
+- `Bridge\TimeTrack\ImportedTimeAggregatorListener`: with TimeTrack ≥ 1.11 the task total follows imported entries
+  (`TIME_ENTRY_IMPORTED` adds `duration − previousDuration`, moves between tasks; `TIME_ENTRIES_REMOVED` subtracts per
+  task). Not registered with TimeTrack 1.10. New `@internal Task::subtractTimeSeconds()` (clamped at 0).
+- `Service\TaskTimeEntrySnapshotPurger` (audit FA-L2 / EX-D2): count and clear the task title / external id snapshots
+  of detached manual time entries (per board, logged before a date); the time itself stays.
+- Index `task_board_tasks_board_open_due_idx` `(board_id, completed_at, due_at)` for due-date scans of open tasks
+  (KIT-74; DDL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1)).
+  The other KIT-74 item, `help_link.anchor_from: source` on the import help link (board import and the subtask
+  import of `_task_subtask_import`), already shipped in 1.24.0.
+
+### Changed
+
+- With `sync.enabled`: new comments have no author prefix line; synced tasks keep the provider's creation date; with
+  `sync.people.require_verified_email: true` (default) e-mail matches of users without `isVerified()` are only
+  suggested; non-viewers are no longer made assignees. See [UPGRADING](UPGRADING.md#to-1250).
+- `ProviderHttpClient` maps HTTP 410 to `not_found` (like 404).
+- `TaskBoard::$tasks` no longer uses `orphanRemoval` (audit FA-L1): removing a task from the collection inside a flush
+  skipped the `PreRemove` time detach. Delete tasks with `EntityManager::remove()` or the eraser.
+- The connection page's link, refresh and progress actions refuse (403, logged `actor_id_missing`) a logged-in user whose
+  id cannot be read, instead of running the sync as the board's linker (audit EX-D1).
+- `require-dev` `nowo-tech/time-track-bundle` `^1.11` (the bundle still works with TimeTrack 1.10: `suggest` only).
+
+### Fixed
+
+- PostgreSQL: `TaskRepositoryInterface::findTrackableForUser()` and `findByHostObject()` failed with *could not
+  identify an equality operator for type json* (`SELECT DISTINCT` over the task row and its json `tags`); they now
+  filter by an id subquery.
+- `templates.connection_badge` is used by the board, list and Gantt pages (they included the bundle's partial by a
+  fixed path, so the option had no effect there). New Twig global `nowo_task_board_connection_badge_template`.
+- `TaskBoardSyncService::run()` hands the access check, its `BOARD_ACCESS_CHECK` listeners and `SYNC_STARTED` the
+  managed actor when the caller passes one detached by an earlier `EntityManager::clear()`. With Doctrine ORM 3 native
+  lazy objects (PHP 8.4+), a listener reading a detached, uninitialised user proxy threw
+  `EntityIdentityCollisionException`.
+
+### Deviations from contract clickup-import-1.24 v1.0 (accepted by the owner)
+
+- `TaskSyncPeopleReassigner` / `TaskSyncPeopleProjector` return `ReassignReport` / take `ReassignCursor` (no separate
+  `ProjectionReport` / `ProjectionCursor`).
+- `SyncPersonResolverInterface::autoMatch()` has a third, optional `?string $normalizedEmail = null`; the contract's
+  two-argument call works.
+- There is no separate `people` phase: the workspace members are refreshed at the start of the tasks phase.
+- Folder sources read the folder's lists with ClickUp `project_ids[]`.
+
+### Security
+
+- A mapping never grants access (projection rule); automatic matching needs a verified e-mail from the host and is
+  scoped to its candidates; re-association is explicit, re-checked per board and audited by events.
+- Every provider call stays `GET` to the constant ClickUp base URI; no token, avatar URL or time-entry description is
+  stored or logged by the bundle; person names and e-mails stay in the person rows and are never logged.
+- **Erasing an account never deletes boards, tasks, documents or comments** (audits FP-M1, FP-L7).
+  `task_board_boards.creator_id`, `task_board_tasks.creator_id`, `task_board_task_documents.creator_id` and
+  `task_board_task_comments.author_id` are nullable `ON DELETE SET NULL` with a name snapshot (`creator_name` /
+  `author_name`); memberships, the user's history entries and their own manual time still go with the account;
+  **schema change for every host** (on SQLite run the rebuild with foreign keys off, FP-L6), SQL in [UPGRADING](UPGRADING.md#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1).
+  `TaskBoard::getCreator()`, `Task::getCreator()`, `TaskDocument::getCreator()` / `TaskComment::getAuthor()` return
+  `?object`; new `getCreatorName()` / `getAuthorName()`. `TaskSyncPeopleReassigner::detachUser()` also detaches every
+  board, task, document and comment of the user (new `ReassignReport::$boards` / `$documents`); before, an unlinked
+  board's imported tasks with their subtree, or a creator's whole board, were deleted with the user. A user deleted
+  without `detachUser(anonymise: true)` keeps their name in the snapshots (FP-I11).
+- **Checklist subtasks go through the host's quota** (audit FP-L1): `sync.limit_checker` and the new
+  `sync.checklists.max_items_per_run` (default 2000); held-back items come with a later run.
+- **LIKE searches escape with `!` everywhere** (audits FP-L2, FP-I12): `PersonFilter::$q`, the checklist prefix
+  queries and the "my tasks" title search (`findTrackableForUser()`) use `ESCAPE '!'` on MySQL, PostgreSQL and SQLite; `first_last@…`, `%` and `!` match literally.
+- **The time phase has a call budget** (audit FP-L4): `sync.time_entries.max_calls_per_run` (default 500); a dense
+  window is delivered split by split and the cursor keeps the split position, so the budget, a deadline or a rate
+  limit resume from the last delivered split instead of the start of the window.
+- **`unlink()` takes the sync lock and is one transaction** (audit FP-L5): a running sync refuses it
+  (`SyncBusyException`; the page says *Another sync is running*); loaded sync rows can no longer leave a half-done
+  unlink (connection gone, directory not pruned, no `BOARD_CONNECTION_UNLINKED`).
+- **Only mapped people's time reaches the sink** (audit FP-I2); the others are counted in
+  `SyncReport::$time->skippedUnmapped`. FP-I1 / I3 / I4 / I5 / I6 are documented in [SECURITY](SECURITY.md).
+- **The erase cursor is signed** (audit FP-L3). `EraseCursor` gains an optional `signature` (round-tripped by
+  `toArray()` / `fromArray()`): an HMAC-SHA256 (label `nowo_task_board.erase_cursor.v1`, keyed by `%kernel.secret%`
+  through the new optional `TaskBoardEraser` argument `$cursorSecret`) bound to the board id, the actor id and the
+  operation (empty or delete) and covering the phase, both counts and the attachment refs. On resume the eraser checks
+  it with `hash_equals()` and throws the new `Exception\InvalidEraseCursorException` (an `InvalidArgumentException`)
+  before touching anything when the cursor is unsigned, altered, or belongs to another board, actor or operation. A
+  host that round-tripped the cursor through a browser let the user inject storage refs into `TASK_ERASED`, skip the
+  unlink and `TASK_ERASED` with `phase=board`, loop `emptyBoard()` forever with `phase=columns`, or forge the counts of
+  `BoardErasedEvent`. Also: refs are kept only for task ids still on the board, `emptyBoard()` resumes a column phase as
+  the board phase, and a phase past the tasks is refused while the board still has tasks or pending refs.
+- **Erase cursor run id, expiry and derived key** (audits FP-I9, FP-I10). The cursor also carries (signed) a random
+  `runId` created by the first call and kept by every slice, its `issuedAt` (the eraser's clock) and an `anchorTaskId`
+  (a task still on the board when it was issued). `TaskBoardEraser` gains the optional `$cursorTtlSeconds` (default
+  3600): an older cursor is refused (`InvalidEraseCursorException::expired()`). A cursor of a finished run is refused
+  (`finished()`): no unfinished cursor is returned for an empty board and the anchor of a finished run is gone, so a
+  replay can no longer add its old counts to a new run's `BoardErasedEvent` (which gains an optional `runId`). The HMAC
+  key is now a subkey `hash_hmac('sha256', 'nowo_task_board.erase_cursor', $secret, true)`, not the raw
+  `kernel.secret`.
+
 ## [1.24.0] - 2026-11-05
 
 Beacon's v1.122.0 audit (KIT-67, KIT-74, DATA-TASK-TOKEN-ERASURE): hosts no longer need request listeners or template copies for the board

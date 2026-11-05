@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
@@ -210,6 +211,7 @@ final class TaskBoardConnectionController extends AbstractController
     {
         $user     = $this->requireUser();
         $board    = $this->findManagedBoard($boardId, $user);
+        $actorId  = $this->actorId($user);
         $data     = $request->request->all(ConnectionLinkFormType::NAME);
         $provider = $this->pickProvider(is_string($data['provider'] ?? null) ? $data['provider'] : '');
         $choice   = $provider instanceof TaskProviderInterface ? $this->pickConnection($this->credentials->connectionsFor($board, $user, $provider->id()), is_string($data['connection'] ?? null) ? $data['connection'] : '') : null;
@@ -259,7 +261,7 @@ final class TaskBoardConnectionController extends AbstractController
             'archiveRemoteDeletions' => (bool) $values['archiveRemoteDeletions'],
         ]);
         $this->logWrite('sync_link', ['board_id' => $boardId, 'provider' => $provider->id()]);
-        $this->runner->dispatch(new SyncRequest($boardId, ConnectionCreatorActorResolver::idOf($user), SyncTrigger::Manual));
+        $this->runner->dispatch(new SyncRequest($boardId, $actorId, SyncTrigger::Manual));
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.linked', ['%list%' => $container->name], 'NowoTaskBoardBundle'));
 
         return $this->backToPage($boardId);
@@ -281,7 +283,7 @@ final class TaskBoardConnectionController extends AbstractController
             throw new NotFoundHttpException('The board is not linked.');
         }
         $full = $form->has('full') && $form->get('full')->getData() === true;
-        $this->runner->dispatch(new SyncRequest($boardId, ConnectionCreatorActorResolver::idOf($user), SyncTrigger::Manual, full: $full, allowMassArchive: $massArchive === '1'));
+        $this->runner->dispatch(new SyncRequest($boardId, $this->actorId($user), SyncTrigger::Manual, full: $full, allowMassArchive: $massArchive === '1'));
         $this->logWrite('sync_refresh', ['board_id' => $boardId, 'full' => $full, 'mass_archive' => $massArchive === '1']);
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.refresh_started', [], 'NowoTaskBoardBundle'));
 
@@ -302,7 +304,7 @@ final class TaskBoardConnectionController extends AbstractController
         }
         $connection = $run->getConnection();
         if ($this->runner->advancesOnPoll() && $connection->getRunningRunId() === null && $connection->getCursor()?->runId === $runId && $run->getStatus() === SyncStatus::Paused) {
-            $this->runner->dispatch(new SyncRequest($boardId, ConnectionCreatorActorResolver::idOf($user), SyncTrigger::Manual));
+            $this->runner->dispatch(new SyncRequest($boardId, $this->actorId($user), SyncTrigger::Manual));
             $run = $this->store->findRun($runId) ?? $run;
         }
         $report = $run->getReport();
@@ -344,7 +346,14 @@ final class TaskBoardConnectionController extends AbstractController
         $user  = $this->requireUser();
         $board = $this->findManagedBoard($boardId, $user);
         $this->denyUnlessValidCsrf($request, 'task_board_connection_unlink');
-        $this->sync->unlink($board, $user);
+        try {
+            $this->sync->unlink($board, $user);
+        } catch (SyncBusyException) {
+            // Audit FP-L5: a running sync holds the lock; nothing was changed.
+            $this->addFlash('error', $this->translator->trans('task_board.sync.status.busy', [], 'NowoTaskBoardBundle'));
+
+            return $this->backToPage($boardId);
+        }
         $this->logWrite('sync_unlink', ['board_id' => $boardId]);
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.unlinked', [], 'NowoTaskBoardBundle'));
 
@@ -585,6 +594,22 @@ final class TaskBoardConnectionController extends AbstractController
 
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
+    }
+
+    /**
+     * Since 1.25 (audit EX-D1): the id a web-triggered run acts as. A logged-in user whose id cannot be read (no
+     * `getId()`, or neither scalar nor `Stringable`) is refused instead of silently running as the board's linker.
+     */
+    private function actorId(UserInterface $user): string
+    {
+        $id = ConnectionCreatorActorResolver::idOf($user);
+        if ($id === null || $id === '') {
+            $this->logRefused('actor_id_missing');
+
+            throw $this->createAccessDeniedException('The user has no id.');
+        }
+
+        return $id;
     }
 
     /**

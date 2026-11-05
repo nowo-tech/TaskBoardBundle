@@ -21,6 +21,8 @@ final readonly class RemoteComment
         public ?string $authorName,
         public DateTimeImmutable $createdAt,
         public array $inlineImageUrls = [],
+        /** Since 1.25: the author as a person of the source (`authorEmail` / `authorName` stay for BC). */
+        public ?RemotePersonRef $author = null,
     ) {
     }
 }

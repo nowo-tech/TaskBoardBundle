@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
@@ -50,6 +51,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
+use Nowo\TaskBoardBundle\Sync\Hook\DefaultSyncPersonResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
 use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
@@ -58,16 +60,25 @@ use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
+use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
+use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
+use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -79,6 +90,7 @@ use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 
 use function array_key_exists;
+use function class_exists;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -97,9 +109,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     /**
      * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
+     * @param string $timeTrackImportedEvent Since 1.25: event class whose presence (TimeTrack >= 1.11) enables the
+     *                                       imported-time aggregation
      */
     public function __construct(
         private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
+        private readonly string $timeTrackImportedEvent = TimeEntryImportedEvent::class,
     ) {
     }
 
@@ -125,6 +140,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.templates.css_framework', $config['templates']['css_framework']);
         $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
         $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
+        $container->setParameter('nowo_task_board.templates.connection_badge', $config['templates']['connection_badge']);
         $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);
@@ -228,16 +244,58 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->setAlias(UrlGuardInterface::class, OutboundUrlGuardAdapter::class);
         }
         if ($sync['providers']['clickup']['enabled']) {
+            $lookupCache = $sync['lookup']['cache_pool'];
             $container->setDefinition(ClickUpTaskProvider::class, (new Definition(ClickUpTaskProvider::class))
                 ->setAutowired(true)
                 ->setArgument('$attachmentHosts', array_values($sync['providers']['clickup']['attachment_hosts']))
                 ->setArgument('$maxComments', $sync['max_comments_per_task'])
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
+                ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
                 ->addTag('nowo_task_board.task_provider'));
         }
+        $this->registerSyncPeople($container, $sync);
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$connectionBadges', new Reference(ConnectionBadgeProvider::class));
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$syncEnabled', true);
+    }
+
+    /**
+     * Since 1.25: the people directory, watchers, checklists, tracked time (through the host's sink) and the
+     * pre-scans, from `sync.people`, `sync.watchers`, `sync.checklists`, `sync.time_entries` and `sync.list_as_tag`.
+     *
+     * @param array<string, mixed> $sync
+     */
+    private function registerSyncPeople(ContainerBuilder $container, array $sync): void
+    {
+        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
+        $people = $sync['people'];
+        /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int, max_calls_per_run: int} $time */
+        $time = $sync['time_entries'];
+        $container->getDefinition(DefaultSyncPersonResolver::class)->setArgument('$requireVerifiedEmail', $people['require_verified_email']);
+        $container->setAlias(SyncPersonResolverInterface::class, $this->serviceOr($people['resolver'], DefaultSyncPersonResolver::class));
+        $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$defaultBatchSize', $people['reassign_batch_size']);
+        $container->getDefinition(TaskSyncPeopleScanner::class)
+            ->setArgument('$maxTaskPages', $people['scan']['max_task_pages'])
+            ->setArgument('$maxCommentTasks', $people['scan']['max_comment_tasks'])
+            ->setArgument('$timeWindow', $people['scan']['time_window'])
+            ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call']);
+        $container->getDefinition(TimeEntryPhase::class)
+            ->setArgument('$sink', is_string($time['sink']) && $time['sink'] !== '' ? new Reference($time['sink']) : null)
+            ->setArgument('$windowDays', $time['window_days'])
+            ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call'])
+            ->setArgument('$maxEntriesPerWindow', $time['max_entries_per_window'])
+            ->setArgument('$maxWindowsPerRun', $time['max_windows_per_run'])
+            ->setArgument('$fallbackMaxTasks', $time['fallback_max_tasks_per_run'])
+            ->setArgument('$maxCallsPerRun', $time['max_calls_per_run']);
+        $container->getDefinition(SyncChecklistWriter::class)
+            ->setArgument('$maxItemsPerRun', (int) $sync['checklists']['max_items_per_run']);
+        $container->getDefinition(SyncTaskWriter::class)
+            ->setArgument('$listAsTag', (bool) $sync['list_as_tag'])
+            ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])
+            ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
+            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run']);
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class));
     }
 
     private function serviceOr(mixed $id, string $default): string
@@ -305,6 +363,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $loader->load('services_timetrack.yaml');
         $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskProvider::class);
         $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
+
+        // Since 1.25: totals of imported entries (TimeTrack >= 1.11); TimeTrack 1.10 has no such events.
+        if (class_exists($this->timeTrackImportedEvent)) {
+            $container->register(ImportedTimeAggregatorListener::class, ImportedTimeAggregatorListener::class)
+                ->setAutowired(true)
+                ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRY_IMPORTED, 'method' => 'onImported'])
+                ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRIES_REMOVED, 'method' => 'onRemoved']);
+        }
     }
 
     private function syncEnabled(ContainerBuilder $container): bool

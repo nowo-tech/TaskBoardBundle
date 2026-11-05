@@ -1,0 +1,21 @@
+{
+  "tasks": [
+    {
+      "id": "86a1x9",
+      "name": "From the space",
+      "status": {"status": "to do", "type": "open", "orderindex": 0},
+      "date_created": "1793000000000",
+      "date_updated": "1793100000000",
+      "archived": false,
+      "list": {"id": "900300", "name": "List 3"},
+      "url": "https://app.clickup.com/t/86a1x9"
+    },
+    {
+      "id": "86a1x8",
+      "name": "Archived one",
+      "date_updated": "1793100000000",
+      "archived": true
+    }
+  ],
+  "last_page": true
+}

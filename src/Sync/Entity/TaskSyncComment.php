@@ -40,6 +40,24 @@ class TaskSyncComment
         $this->id = Uuid::generate()->toString();
     }
 
+    /** Since 1.25: the remote author (null = unknown). */
+    #[ORM\ManyToOne(targetEntity: TaskSyncPerson::class)]
+    #[ORM\JoinColumn(name: 'author_person_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TaskSyncPerson $authorPerson = null;
+
+    public function getAuthorPerson(): ?TaskSyncPerson
+    {
+        return $this->authorPerson;
+    }
+
+    public function setAuthorPerson(?TaskSyncPerson $person): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->authorPerson = $person;
+
+        return $this;
+    }
+
     public function getId(): string
     {
         return $this->id;

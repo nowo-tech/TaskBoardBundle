@@ -9,7 +9,9 @@ use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -35,13 +37,23 @@ class TaskBoard
     #[ORM\Column(name: 'tenant_key', type: 'string', length: 191, nullable: true)]
     private ?string $tenantKey = null;
 
+    /** Since 1.25 (audit FP-L7): the creator's name, kept when the account is erased (`creator_id` SET NULL). */
+    #[ORM\Column(name: 'creator_name', type: 'string', length: 180, nullable: true)]
+    private ?string $creatorName;
+
     /** @var Collection<int, BoardColumn> */
     #[ORM\OneToMany(targetEntity: BoardColumn::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['position' => SortDirection::Ascending])]
     private Collection $columns;
 
-    /** @var Collection<int, Task> */
-    #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    /**
+     * Since 1.25 no orphan removal (audit FA-L1): removing a task from this collection inside a flush skipped the task's
+     * `PreRemove` time detach. Delete tasks with `EntityManager::remove()` (or {@see TaskBoardEraser});
+     * the `remove` cascade of a board delete still detaches every task's time.
+     *
+     * @var Collection<int, Task>
+     */
+    #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'board', cascade: ['persist', 'remove'])]
     private Collection $tasks;
 
     public function __construct(
@@ -49,9 +61,10 @@ class TaskBoard
         private string $name,
         #[ORM\Column(type: 'string', length: 255, unique: true)]
         private string $slug,
+        // Since 1.25 (audit FP-L7): nullable, ON DELETE SET NULL; deleting the creator's account keeps the board.
         #[ORM\ManyToOne(targetEntity: User::class)]
-        #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-        private object $creator,
+        #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+        private ?object $creator,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $description = null,
         #[ORM\ManyToOne(targetEntity: Team::class)]
@@ -64,6 +77,8 @@ class TaskBoard
         $this->updatedAt = new DateTimeImmutable();
         $this->columns   = new ArrayCollection();
         $this->tasks     = new ArrayCollection();
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creatorName = $creator === null ? null : Text::cut(UserLabel::of($creator), Task::USER_NAME_MAX);
     }
 
     public function getId(): string
@@ -116,9 +131,34 @@ class TaskBoard
         return $this;
     }
 
-    public function getCreator(): object
+    /** The creator; null once the account was erased (since 1.25, see {@see self::getCreatorName()}). */
+    public function getCreator(): ?object
     {
         return $this->creator;
+    }
+
+    /** Since 1.25: the creator's name when the board was created (kept when the account goes). */
+    public function getCreatorName(): ?string
+    {
+        return $this->creatorName;
+    }
+
+    /**
+     * Since 1.25 (audit FP-L7): the account is being erased — the board keeps its name snapshot (null with
+     * `$forgetName`) and no longer points at the user, so deleting the user deletes no board.
+     *
+     * @internal used by the account erasure helper
+     */
+    public function detachCreator(bool $forgetName = false): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creator = null;
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->creatorName = null;
+        }
+
+        return $this;
     }
 
     public function getTeam(): ?Team

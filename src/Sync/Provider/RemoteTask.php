@@ -24,6 +24,27 @@ final readonly class RemoteTask
         public array $attachments = [],
         public array $inlineImageUrls = [],
         public ?string $customFieldsText = null,
+        /**
+         * Since 1.25: the watchers; `watchersKnown` false = the answer had no watchers key (unknown, not empty).
+         *
+         * @var list<RemotePersonRef>
+         */
+        public array $watchers = [],
+        public bool $watchersKnown = false,
+        /**
+         * Since 1.25: the checklists (each item becomes a subtask); `checklistsKnown` as for watchers.
+         *
+         * @var list<RemoteChecklist>
+         */
+        public array $checklists = [],
+        public bool $checklistsKnown = false,
+        /** Since 1.25: total tracked seconds the provider reports on the task (null = unknown). */
+        public ?int $timeSpentSeconds = null,
+        /** Since 1.25: the task's status with its type (null = unknown; then the 1.23 column rules apply). */
+        public ?RemoteStatus $status = null,
+        /** Since 1.25: the list of the task (sources with several lists). */
+        public ?string $listId = null,
+        public ?string $listName = null,
     ) {
     }
 

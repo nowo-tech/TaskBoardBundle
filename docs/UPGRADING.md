@@ -5,6 +5,12 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.25.0](#to-1250)
+  - [Behaviour changes for sync hosts](#behaviour-changes-for-sync-hosts)
+  - [Import access decision (every host)](#import-access-decision-every-host)
+  - [Schema change for every host: task creator and comment author (audit FP-M1)](#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1)
+  - [Schema change with `sync.enabled: true` only](#schema-change-with-syncenabled-true-only)
+  - [After the update (sync hosts)](#after-the-update-sync-hosts)
 - [To 1.24.0](#to-1240)
 - [To 1.23.2](#to-1232)
   - [Time entries survive their task](#time-entries-survive-their-task)
@@ -115,6 +121,323 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+The next release is **1.25.0**: see [To 1.25.0](#to-1250) (ClickUp full import: people, creator, watchers, checklists,
+tracked time through a host sink, status types).
+
+## To 1.25.0
+
+From **1.24.0**: `composer update nowo-tech/task-board-bundle`. **Every host** gets one schema change: the task creator
+and the comment author survive the deletion of their account ([below](#schema-change-for-every-host-task-creator-and-comment-author-audit-fp-m1)).
+Hosts **without** `sync.enabled` get no other schema change; the new `import_tasks` access decision below also applies
+to them.
+
+### Behaviour changes for sync hosts
+
+1. **Original creation date.** A task the sync creates gets the provider's creation date as `Task::createdAt`
+   (accepted between 2000-01-01 and now + 5 min, else now). Tasks written by 1.23 / 1.24 get it once, with their
+   creator, on their next fetch (back-fill, no conflict note).
+2. **No author prefix on new comments.** New imported comments are written without the `**name** (ClickUp):` line; the
+   templates render *name (ClickUp)* from the person reference, and the comment keeps the ClickUp date. Run the
+   one-off legacy migrator for comments written before (below).
+3. **Verified e-mails only (`sync.people.require_verified_email: true`, default).** An e-mail match is applied
+   automatically only when the user is verified: the host resolver says so, and `DefaultSyncPersonResolver` reads
+   `isVerified()` when the user class has it. **A user class without `isVerified()` now gets *suggested* matches**,
+   which need a confirmation (`applyMapping()` with a `PersonMappingDecision::CONFIRM` decision). Set the option to `false` for 1.23 parity.
+4. **Projection rule.** A mapped user who cannot view the board (`canViewBoard()`) is no longer written as creator,
+   assignee, watcher or comment author: the run's actor is written plus the person reference, and the person is listed
+   as *Also assigned in ClickUp*. A mapping never grants access.
+
+### Import access decision (every host)
+
+File imports (into a board or under a task) and `canManageBoardConnection()` now also dispatch `BOARD_ACCESS_CHECK`
+with the action `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (`import_tasks`). It is **granted by default**, so nothing
+changes unless a listener denies it. To make importing a narrower power (e.g. Beacon's `project.tasks.import`, Full /
+Owner only, on a general board only its owner), deny that action in your listener:
+
+```php
+if ($event->getAction() === BoardAccessCheckEvent::ACTION_IMPORT_TASKS && !$this->canImport($event->getSubject(), $event->getBoard())) {
+    $event->deny();
+}
+```
+
+A listener that denies every action without reading `getAction()` already denied imports; one that grants every
+action leaves imports granted, as today. Refused file imports answer 403; the connection pages answer 404 as before.
+
+### Schema change for every host: task creator and comment author (audit FP-M1)
+
+`task_board_tasks.creator_id` and `task_board_task_comments.author_id` become **nullable with `ON DELETE SET NULL`**
+(they were `NOT NULL … ON DELETE CASCADE`), and each row keeps the name it was written with in `creator_name` /
+`author_name` (`VARCHAR(180)`, `UserLabel::of()` of the user). **Deleting a user no longer deletes the tasks they
+created (with their subtasks) or their comments**: the reference becomes null and the UI shows the kept name.
+`Task::getCreator()` and `TaskComment::getAuthor()` now return `?object`; new `getCreatorName()` / `getAuthorName()`.
+Code that reads the creator or author must handle null.
+
+**Boards and task documents too** (audit FP-L7): `task_board_boards.creator_id` and
+`task_board_task_documents.creator_id` get the same change (nullable, `ON DELETE SET NULL`, `creator_name`). Deleting
+the account of a board's creator no longer deletes the board with everyone's tasks. `TaskBoard::getCreator()` and
+`TaskDocument::getCreator()` return `?object`; new `getCreatorName()`. A board without creator is managed by
+`security.manage_roles` holders and the `BOARD_ACCESS_CHECK` listeners (the creator default no longer applies).
+
+Run `doctrine:migrations:diff` (or `schema:update --dump-sql`); it must propose only the statements below. Replace
+`<user_table>` with the table of `user_class`, add `table_prefix` to the table names when you set one, and keep your
+user id type for `creator_id` / `author_id`.
+
+MySQL / MariaDB:
+
+```sql
+ALTER TABLE task_board_tasks DROP FOREIGN KEY FK_B4902F8E61220EA6;
+ALTER TABLE task_board_tasks ADD creator_name VARCHAR(180) DEFAULT NULL, CHANGE creator_id creator_id INT DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD CONSTRAINT FK_B4902F8E61220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_task_comments DROP FOREIGN KEY FK_BC3E8197F675F31B;
+ALTER TABLE task_board_task_comments ADD author_name VARCHAR(180) DEFAULT NULL, CHANGE author_id author_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197F675F31B FOREIGN KEY (author_id) REFERENCES <user_table> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D9961220EA6;
+ALTER TABLE task_board_boards ADD creator_name VARCHAR(180) DEFAULT NULL, CHANGE creator_id creator_id INT DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D9961220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_task_documents DROP FOREIGN KEY FK_17831DAE61220EA6;
+ALTER TABLE task_board_task_documents ADD creator_name VARCHAR(180) DEFAULT NULL, CHANGE creator_id creator_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_documents ADD CONSTRAINT FK_17831DAE61220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_tasks ADD creator_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_tasks ALTER creator_id DROP NOT NULL;
+ALTER TABLE task_board_tasks DROP CONSTRAINT FK_B4902F8E61220EA6;
+ALTER TABLE task_board_tasks ADD CONSTRAINT FK_B4902F8E61220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE task_board_task_comments ADD author_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ALTER author_id DROP NOT NULL;
+ALTER TABLE task_board_task_comments DROP CONSTRAINT FK_BC3E8197F675F31B;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197F675F31B FOREIGN KEY (author_id) REFERENCES <user_table> (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE task_board_boards ADD creator_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_boards ALTER creator_id DROP NOT NULL;
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D9961220EA6;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D9961220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE task_board_task_documents ADD creator_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_documents ALTER creator_id DROP NOT NULL;
+ALTER TABLE task_board_task_documents DROP CONSTRAINT FK_17831DAE61220EA6;
+ALTER TABLE task_board_task_documents ADD CONSTRAINT FK_17831DAE61220EA6 FOREIGN KEY (creator_id) REFERENCES <user_table> (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+```
+
+SQLite: add the four columns, then let Doctrine rebuild the four tables for the new nullability and foreign key
+(SQLite cannot alter a column or a constraint; `doctrine:migrations:diff` generates the copy / drop / rename sequence).
+**Back up the database first, and run the rebuild with foreign keys off, outside a transaction** (audit FP-L6): with
+`PRAGMA foreign_keys = ON` (e.g. DBAL's `EnableForeignKeys` middleware) the `DROP TABLE` of the rebuild fires the
+foreign-key actions and **deletes every comment, member and dependency of the tasks and detaches all their time**. A
+`PRAGMA` inside a transaction is ignored, so make that migration non-transactional (`isTransactional(): false`):
+
+```sql
+PRAGMA foreign_keys = OFF;
+ALTER TABLE task_board_tasks ADD COLUMN creator_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD COLUMN author_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD COLUMN creator_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_documents ADD COLUMN creator_name VARCHAR(180) DEFAULT NULL;
+-- then the table rebuild generated by doctrine:migrations:diff (creator_id / author_id NULL, ON DELETE SET NULL)
+PRAGMA foreign_keys = ON;
+PRAGMA foreign_key_check; -- must return no row
+```
+
+The same release adds an index for due-date scans of open tasks (KIT-74), on every platform:
+
+```sql
+CREATE INDEX task_board_tasks_board_open_due_idx ON task_board_tasks (board_id, completed_at, due_at);
+```
+
+Optional back-fill of the names of existing rows: one portable correlated `UPDATE` per table (MySQL, MariaDB,
+PostgreSQL and SQLite; audit FP-I14). Replace `<user_table>` and use your user table's display column instead of
+`email` when you have one. `detachUser()` fills a missing name itself before it detaches a user:
+
+```sql
+UPDATE task_board_tasks SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_tasks.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
+UPDATE task_board_task_comments SET author_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_task_comments.author_id) WHERE author_name IS NULL AND author_id IS NOT NULL;
+UPDATE task_board_boards SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_boards.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
+UPDATE task_board_task_documents SET creator_name = (SELECT u.email FROM <user_table> u WHERE u.id = task_board_task_documents.creator_id) WHERE creator_name IS NULL AND creator_id IS NOT NULL;
+```
+
+The display value is cut to 180 characters by the bundle, not by this SQL: keep the column you copy within that
+length (e-mails are).
+
+### Schema change with `sync.enabled: true` only
+
+Run `php bin/console doctrine:migrations:diff` and review it. The diff must contain exactly the statements below
+(MySQL 8 / MariaDB, without `table_prefix`; `<users>` / `<user pk>` as in [To 1.23.0](#schema-change-with-syncenabled-true-only-the-sync-tables)).
+No data is rewritten at migration time: existing items get `backfill_level = 0` and `item_kind = 'task'`, existing
+connections `directory_id = NULL` (the next run attaches a directory) and `source_type = 'list'`.
+
+Reference DDL (MySQL 8 / MariaDB, without `table_prefix`; `<user pk>` is your user key type):
+
+```sql
+CREATE TABLE task_board_sync_directories (
+  id VARCHAR(36) NOT NULL, provider VARCHAR(32) NOT NULL, scope_key VARCHAR(64) NOT NULL,
+  workspace_id VARCHAR(64) NOT NULL, reviewed_at DATETIME DEFAULT NULL, reviewed_by_id <user pk> DEFAULT NULL,
+  anonymous_counter INT DEFAULT 0 NOT NULL, created_at DATETIME NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_directories (provider, scope_key, workspace_id), PRIMARY KEY (id)
+);
+CREATE TABLE task_board_sync_people (
+  id VARCHAR(36) NOT NULL, directory_id VARCHAR(36) NOT NULL, provider_user_id VARCHAR(64) NOT NULL,
+  name VARCHAR(120) NOT NULL, email VARCHAR(254) DEFAULT NULL, email_normalized VARCHAR(254) DEFAULT NULL,
+  remote_role VARCHAR(16) DEFAULT NULL, mapping VARCHAR(16) NOT NULL,
+  mapped_user_id <user pk> DEFAULT NULL, suggested_user_id <user pk> DEFAULT NULL, mapped_by_id <user pk> DEFAULT NULL,
+  mapped_at DATETIME DEFAULT NULL, first_seen_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL,
+  email_changed_at DATETIME DEFAULT NULL, anonymised_at DATETIME DEFAULT NULL, seen_kinds SMALLINT DEFAULT 0 NOT NULL,
+  reassign_id VARCHAR(36) DEFAULT NULL, reassign_to_user_id <user pk> DEFAULT NULL, reassign_external TINYINT(1) DEFAULT 0 NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_people_dir_remote (directory_id, provider_user_id),
+  INDEX idx_task_board_sync_people_dir_mapping (directory_id, mapping),
+  INDEX idx_task_board_sync_people_mapped (mapped_user_id),
+  INDEX idx_task_board_sync_people_dir_email (directory_id, email_normalized), PRIMARY KEY (id)
+);
+CREATE TABLE task_board_sync_members (
+  id VARCHAR(36) NOT NULL, item_id VARCHAR(36) NOT NULL, task_member_id VARCHAR(36) NOT NULL,
+  person_id VARCHAR(36) NOT NULL, member_role VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_members_member (task_member_id),
+  INDEX idx_task_board_sync_members_person (person_id), PRIMARY KEY (id)
+);
+ALTER TABLE task_board_connections ADD directory_id VARCHAR(36) DEFAULT NULL,
+  ADD source_type VARCHAR(8) DEFAULT 'list' NOT NULL, ADD source_id VARCHAR(128) DEFAULT NULL,
+  ADD status_column_map JSON DEFAULT NULL;
+ALTER TABLE task_board_sync_items
+  ADD creator_person_id VARCHAR(36) DEFAULT NULL, ADD unmatched_people JSON DEFAULT NULL,
+  ADD backfill_level SMALLINT DEFAULT 0 NOT NULL, ADD item_kind VARCHAR(16) DEFAULT 'task' NOT NULL;
+ALTER TABLE task_board_sync_comments ADD author_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_runs ADD time_mode VARCHAR(16) DEFAULT NULL;
+-- FKs: people.directory_id → directories ON DELETE CASCADE; members.person_id → people CASCADE;
+-- sync_items.creator_person_id / sync_comments.author_person_id → people SET NULL; every user FK SET NULL;
+-- connections.directory_id → directories SET NULL; members.item_id → sync_items CASCADE;
+-- members.task_member_id → task_board_task_members CASCADE.
+```
+
+PostgreSQL / SQLite: the same with `TIMESTAMP(0) WITHOUT TIME ZONE` / `BOOLEAN` / `JSON` (`TEXT` on SQLite). Rollback:
+drop the new tables and columns (1.24 ignores them).
+
+The exact diff `doctrine:migrations:diff` produces from 1.24 on MySQL 8 (DBAL 4; `app_user` / `INT` stand for your user
+table and key; Doctrine adds its own `IDX_…` / `FK_…` names next to the named indexes; the schema adoption test
+`SyncSchemaPeopleTest` asserts it):
+
+```sql
+CREATE TABLE task_board_sync_people (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, email VARCHAR(254) DEFAULT NULL, email_normalized VARCHAR(254) DEFAULT NULL, remote_role VARCHAR(16) DEFAULT NULL, mapping VARCHAR(16) NOT NULL, mapped_at DATETIME DEFAULT NULL, first_seen_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL, email_changed_at DATETIME DEFAULT NULL, anonymised_at DATETIME DEFAULT NULL, seen_kinds SMALLINT DEFAULT 0 NOT NULL, reassign_id VARCHAR(36) DEFAULT NULL, reassign_external TINYINT DEFAULT 0 NOT NULL, provider_user_id VARCHAR(64) NOT NULL, directory_id VARCHAR(36) NOT NULL, mapped_user_id INT DEFAULT NULL, suggested_user_id INT DEFAULT NULL, mapped_by_id INT DEFAULT NULL, reassign_to_user_id INT DEFAULT NULL, INDEX idx_task_board_sync_people_dir_mapping (directory_id, mapping), INDEX idx_task_board_sync_people_dir_email (directory_id, email_normalized), INDEX idx_task_board_sync_people_mapped (mapped_user_id), UNIQUE INDEX uniq_task_board_sync_people_dir_remote (directory_id, provider_user_id), INDEX IDX_AB1F29D72C94069F (directory_id), INDEX IDX_AB1F29D7E5678C70 (suggested_user_id), INDEX IDX_AB1F29D72C770F2E (mapped_by_id), INDEX IDX_AB1F29D771DD50E1 (reassign_to_user_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_directories (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, reviewed_at DATETIME DEFAULT NULL, anonymous_counter INT DEFAULT 0 NOT NULL, provider VARCHAR(32) NOT NULL, scope_key VARCHAR(64) NOT NULL, workspace_id VARCHAR(64) NOT NULL, reviewed_by_id INT DEFAULT NULL, UNIQUE INDEX uniq_task_board_sync_directories (provider, scope_key, workspace_id), INDEX IDX_65959EB6FC6B21F1 (reviewed_by_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_members (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, member_role VARCHAR(32) NOT NULL, item_id VARCHAR(36) NOT NULL, task_member_id VARCHAR(36) NOT NULL, person_id VARCHAR(36) NOT NULL, INDEX idx_task_board_sync_members_person (person_id), UNIQUE INDEX uniq_task_board_sync_members_member (task_member_id), INDEX IDX_8F991936126F525E (item_id), PRIMARY KEY (id));
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D72C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D763D4A474 FOREIGN KEY (mapped_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D7E5678C70 FOREIGN KEY (suggested_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D72C770F2E FOREIGN KEY (mapped_by_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D771DD50E1 FOREIGN KEY (reassign_to_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_directories ADD CONSTRAINT FK_65959EB6FC6B21F1 FOREIGN KEY (reviewed_by_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936ABD1EAF FOREIGN KEY (task_member_id) REFERENCES task_board_task_members (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936217BBB47 FOREIGN KEY (person_id) REFERENCES task_board_sync_people (id) ON DELETE CASCADE;
+ALTER TABLE task_board_connections ADD source_type VARCHAR(8) DEFAULT 'list' NOT NULL, ADD source_id VARCHAR(128) DEFAULT NULL, ADD status_column_map JSON DEFAULT NULL, ADD directory_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513B2C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE SET NULL;
+CREATE INDEX IDX_947E513B2C94069F ON task_board_connections (directory_id);
+ALTER TABLE task_board_sync_items ADD unmatched_people JSON DEFAULT NULL, ADD backfill_level SMALLINT DEFAULT 0 NOT NULL, ADD item_kind VARCHAR(16) DEFAULT 'task' NOT NULL, ADD creator_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5AD895820F FOREIGN KEY (creator_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_3BD8DF5AD895820F ON task_board_sync_items (creator_person_id);
+ALTER TABLE task_board_sync_runs ADD time_mode VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD author_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59A9F6C6E FOREIGN KEY (author_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id);
+```
+
+### After the update (sync hosts)
+
+- **Legacy comments (one-off).** Call `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize,
+  $afterId)` per connection, again with the returned `MigrateReport::$lastId` until `$done`. A comment whose prefix name matches exactly
+  one person of the directory loses the line and points at the person; others stay unchanged. Idempotent.
+- **People resolver.** Implement `SyncPersonResolverInterface` and set `sync.people.resolver` to share one directory
+  per tenant scope and to supply `verified` (see [sync.md](sync.md#people-directory-since-125)).
+- **Account erasure: required order.** Since this release the creator of a board, a task and a task document and the
+  author of a comment are `ON DELETE SET NULL` with a name snapshot (audits FP-M1 / FP-L7): deleting a user deletes
+  no board, task, subtask, document or comment. Still deleted with the user (by `ON DELETE CASCADE`): their task and
+  team **memberships** (the rows, not the tasks), their **change-history entries**, and their **own manual time
+  entries** (`TaskTimeEntry.user`; time logged by others on their tasks stays). `detachUser()` detaches every board,
+  task, document and comment of the user, also on unlinked boards and for content never synced; with
+  `anonymise: true` it also clears the name snapshots. **A user deleted without `detachUser()` keeps their name
+  (by default the e-mail, from `UserLabel`) in `creator_name` / `author_name`** (audit FP-I11): run `detachUser()`
+  with `anonymise: true` first when the name must go, or clear those columns by the old label yourself. Erase in this
+  order:
+  1. Stop syncs for the user (revoke or unlink their provider tokens) and run `detachUser()` there, so a run in
+     progress cannot re-project them.
+  2. `TaskSyncPeopleReassigner::detachUser($user, $actor, anonymise: <host policy>)`, repeated with its cursor until
+     it is done: creator, comments and sync members move off the user while the user row still exists; then every
+     board, task, document and comment of the user is detached (counts in `ReassignReport::$boards`, `$documents`,
+     `$creators`, `$comments`). Hosts without `sync.enabled` rely on `ON DELETE SET NULL` (names kept).
+  3. TimeTrack: `ImportedTimeEntryWriter::removeForUser($source, $user)` per source (TimeTrack ≥ 1.11), then the other
+     TimeTrack erasers.
+  4. The host's other erasers.
+  5. The user delete last.
+  `detachUser()` is idempotent: calling it from both the token eraser and the account chain is safe.
+- **Access to imported tasks follows board access.** When a user loses board access, the projected rows stay; they
+  stop granting access only if your access checker denies non-members (`BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK`).
+  The bundle's default participant rule still grants a task's creator and members: a host whose checker does not deny
+  non-members should call `reassign($person, null)` (to external) when it wants the content detached. When someone
+  gains access, call `TaskSyncPeopleProjector::reprojectForUser($user)` from your membership events.
+- **Tracked time.** Nothing is imported until you set `sync.time_entries.sink` and pass `timeEntries: true`; the bundle
+  never writes TimeTrack itself. TaskBoard 1.25 works with TimeTrack 1.10; the imported-time total listener needs
+  TimeTrack ≥ 1.11.
+- **Deleting tasks or boards keeps all time** (owner rule): manual `TaskTimeEntry` rows are detached, TimeTrack
+  entries (imported ones included) are untouched. Imported time is deleted only by an explicit manager action
+  (spec 208 FR-017), never as a side effect.
+- **Only mapped people's time reaches the sink** (audit FP-I2). Entries of people not mapped to a user (`unmatched`,
+  `suggested`, `external`, anonymised) are counted in `SyncReport::$time->skippedUnmapped` and never handed to
+  `ImportedTimeEntrySinkInterface`. Auto-matching trusts the provider's e-mail: a host that wants imported time only
+  for human decisions also checks `$candidate->person->getMapping() === TaskSyncPersonMapping::Manual` in its sink.
+- **Unlinking takes the sync lock** (audit FP-L5). `TaskBoardSyncService::unlink()` (and the board eraser, which
+  unlinks first) throws `Sync\Exception\SyncBusyException` while a run holds the board's lock; nothing changes. Cancel
+  the run (`requestCancel()`) and retry. The connection page shows *Another sync is running*. The unlink is one
+  transaction: the connection, its sync rows and the directory prune go together.
+- **Checklist subtasks count against your quota** (audit FP-L1). New checklist subtasks go through
+  `sync.limit_checker` and `sync.checklists.max_items_per_run` (default 2000). What is held back (warnings
+  `checklist_items_capped` / `checklist_items_refused`) is created by a later run.
+- **`templates.connection_badge` now applies** to the board, list and Gantt headers (they included the bundle's
+  partial by its path). A host that copied `_connection_badge.html.twig` into `templates/bundles/` keeps working; one
+  that set the option now gets its template there. Twig global `nowo_task_board_connection_badge_template`.
+- **Time phase budget** (audit FP-L4). `sync.time_entries.max_calls_per_run` (default 500) bounds the requests of one
+  slice, splits included. A dense window is delivered split by split and the cursor keeps the split position
+  (`SyncCursor::$timeSplitStart` / `$timeSplitSeconds`): the budget, a deadline or a rate limit resume from the last
+  delivered split (warning `time_paused`). The sink may now get several `accept()` calls for one window and chunk;
+  `$windowComplete` is true on the last one.
+
+### Board eraser, imported-time totals and audit fixes (every host)
+
+No schema change and no required configuration for this part.
+
+- **Empty or delete a board without losing time.** `Nowo\TaskBoardBundle\Service\TaskBoardEraser::emptyBoard($board,
+  $actor)` / `deleteBoard(...)` return an `EraseProgress`; call again with `$progress->cursor` until `done` (a Messenger
+  handler can carry `EraseCursor::toArray()` / `fromArray()`). The actor needs
+  `TaskBoardResourceAccessChecker::canManageBoard()`: the board creator or a `security.manage_roles` holder by default;
+  a `BOARD_ACCESS_CHECK` listener decides the action `BoardAccessCheckEvent::ACTION_MANAGE` (`'manage'`). A listener
+  that grants every action without looking at `getAction()` now also lets those users erase boards.
+- **The erase cursor is signed; keep it server-side** (audit FP-L3). Pass back the cursor the eraser returned (or
+  `EraseCursor::fromArray($cursor->toArray())`, which keeps the `signature`), for the same board, the same actor and the
+  same operation; carry it in a Messenger message or the server session, never through a browser. An unsigned cursor (one
+  built with `new EraseCursor(...)`), an altered one, or one of another board, actor or operation is refused with
+  `Nowo\TaskBoardBundle\Exception\InvalidEraseCursorException` before anything is touched: start a fresh run with
+  `$cursor = null` instead. The container signs with `%kernel.secret%`, so changing the secret invalidates running
+  cursors. Code that builds `TaskBoardEraser` by hand should pass `cursorSecret:`; without it a random per-instance key
+  is used and cursors resume only through that instance.
+- **Erase cursors expire and belong to one run** (audit FP-I9). A cursor older than `$cursorTtlSeconds` (new optional
+  `TaskBoardEraser` argument, default 3600 seconds) is refused with `InvalidEraseCursorException` (`expired()`): start
+  again with `$cursor = null`; the tasks already erased stay erased. A cursor of a run that already finished, or whose
+  anchor task was deleted between slices, is refused the same way. `BoardErasedEvent::$runId` identifies the run in
+  your audit row. When the board is empty, the last slice now finishes in the same call instead of returning one more
+  cursor.
+- **Your `TASK_ERASED` listener must not delete time.** Remove the task's stored files (`attachmentRefs`), mentions or
+  search entries; manual entries are detached and TimeTrack entries keep their task id and snapshots. Imported time is
+  deleted only by an explicit manager action in TimeTrack (`ImportedTimeEntryWriter::remove*()`), never on a task or
+  board delete.
+- **Orphan removal is gone on `TaskBoard::$tasks`** (audit FA-L1). Code that deleted a task with
+  `$board->getTasks()->removeElement($task)` must call `$entityManager->remove($task)` instead (the board's `remove`
+  cascade is unchanged).
+- **Erasure of task titles kept on detached time** (audit FA-L2 / EX-D2): since 1.23.2 deleting a task no longer erases
+  its title from the manual time entries logged on it. A host that must honour an erasure request calls
+  `TaskTimeEntrySnapshotPurger::purge($boardId, $loggedBefore)` (both optional), which clears the title and external id
+  snapshots of detached entries and keeps the minutes, date, user and board id.
+- **Task totals with imported time.** With TimeTrack ≥ 1.11 `ImportedTimeAggregatorListener` is registered
+  automatically and keeps `total_time_seconds` in step with imported entries; with TimeTrack 1.10 nothing changes.
+- **Web sync requests need a readable user id** (audit EX-D1): a user class whose `getId()` is missing or not scalar /
+  `Stringable` gets 403 on link, refresh and progress instead of a run as the board's linker.
 
 ## To 1.24.0
 

@@ -10,6 +10,8 @@ use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncCursor;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
@@ -163,6 +165,77 @@ class TaskBoardConnection
     public function getHeartbeatAt(): ?DateTimeImmutable
     {
         return $this->heartbeatAt;
+    }
+
+    /** Since 1.25: the people directory (null until the first run with people, or for 1.23 rows). */
+    #[ORM\ManyToOne(targetEntity: TaskSyncDirectory::class)]
+    #[ORM\JoinColumn(name: 'directory_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TaskSyncDirectory $directory = null;
+
+    /** Since 1.25: `list` (1.23), `folder` or `space`. */
+    #[ORM\Column(name: 'source_type', type: 'string', length: 8, options: ['default' => 'list'])]
+    private string $sourceType = 'list';
+
+    /** Since 1.25: the plain id of a folder / space source (null = `container_id`, a list). */
+    #[ORM\Column(name: 'source_id', type: 'string', length: 128, nullable: true)]
+    private ?string $sourceId = null;
+
+    /**
+     * Since 1.25: the status → column map of the connection dialog.
+     *
+     * @var list<array{status: string, column: string, type?: string}>|null
+     */
+    #[ORM\Column(name: 'status_column_map', type: 'json', nullable: true)]
+    private ?array $statusColumnMap = null;
+
+    public function getDirectory(): ?TaskSyncDirectory
+    {
+        return $this->directory;
+    }
+
+    public function setDirectory(?TaskSyncDirectory $directory): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->directory = $directory;
+
+        return $this;
+    }
+
+    /** Since 1.25: the source as a location (a 1.23 row is its list). */
+    public function getLocation(): RemoteLocation
+    {
+        $kind = RemoteLocationKind::tryFrom($this->sourceType) ?? RemoteLocationKind::List;
+
+        return $kind === RemoteLocationKind::List ? RemoteLocation::list($this->containerId) : new RemoteLocation($kind, $this->sourceId ?? $this->containerId);
+    }
+
+    public function setLocation(RemoteLocation $location): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->sourceType = $location->kind->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->sourceId = $location->kind === RemoteLocationKind::List ? null : $location->id;
+
+        return $this;
+    }
+
+    /**
+     * @return list<array{status: string, column: string, type?: string}>
+     */
+    public function getStatusColumnMap(): array
+    {
+        return $this->statusColumnMap ?? [];
+    }
+
+    /**
+     * @param list<array{status: string, column: string, type?: string}> $map column = a column id, "__create" or "__skip"
+     */
+    public function setStatusColumnMap(array $map): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->statusColumnMap = $map === [] ? null : array_values($map);
+
+        return $this;
     }
 
     public function option(string $name, bool $default): bool

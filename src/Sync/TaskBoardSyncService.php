@@ -8,10 +8,12 @@ use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use LogicException;
+use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncCursor;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncError;
@@ -21,6 +23,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncPhase;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Event\BoardConnectionEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFailedEvent;
@@ -32,13 +35,23 @@ use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
+use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteSource;
+use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -82,6 +95,10 @@ final readonly class TaskBoardSyncService
         private float $maxArchiveRatio = 0.5,
         private int $historyKeep = 50,
         private int $maxBytesPerRun = 1_073_741_824,
+        // Since 1.25: people directory, time phase, sources.
+        private ?TaskSyncPeopleDirectoryService $people = null,
+        private ?TimeEntryPhase $timePhase = null,
+        private ?BoardColumnManager $columnManager = null,
     ) {
     }
 
@@ -90,8 +107,9 @@ final readonly class TaskBoardSyncService
      *
      * @param array<string, bool|string|null> $options createMissingColumns, fallbackColumnId, importComments,
      *                                                 importAttachments, archiveRemoteDeletions
+     * @param iterable<mixed> $statusColumnMap since 1.25: the dialog's `list<{status, column}>`
      */
-    public function link(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, RemoteContainer $container, object $actor, array $options = []): TaskBoardConnection
+    public function link(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, RemoteContainer $container, object $actor, array $options = [], iterable $statusColumnMap = []): TaskBoardConnection
     {
         if ($this->store->findConnection($board) instanceof TaskBoardConnection) {
             throw new LogicException('The board is already linked.');
@@ -107,10 +125,47 @@ final readonly class TaskBoardSyncService
             containerPath: $container->path,
             options: $options,
         );
+        // Since 1.25: a folder / space source, and the dialog's status → column map ("__create" columns are created
+        // now, when the link is confirmed, in the statuses' order).
+        $location = RemoteLocation::fromContainerId($container->id);
+        if ($location instanceof RemoteLocation) {
+            $connection->setLocation($location);
+        }
+        $map = StatusColumns::clean($statusColumnMap, $board);
+        foreach ($map as $entry) {
+            if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
+                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
+            }
+        }
+        $connection->setStatusColumnMap($map);
         $this->entityManager->persist($connection);
         $this->entityManager->flush();
         $this->eventDispatcher?->dispatch(new BoardConnectionEvent($board, $provider->id(), $connection->getContainerId(), $connection->getContainerLabel(), $connection->getConnectionRef(), $actor), TaskBoardEvents::BOARD_CONNECTION_LINKED);
         $this->logger->info('TaskBoard sync linked', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'provider' => $provider->id()]);
+
+        return $connection;
+    }
+
+    /**
+     * Since 1.25: replaces the status → column map of a linked board (the connection page); "__create" columns are
+     * created now.
+     *
+     * @param iterable<mixed> $statusColumnMap
+     */
+    public function updateStatusColumnMap(TaskBoard $board, iterable $statusColumnMap): ?TaskBoardConnection
+    {
+        $connection = $this->store->findConnection($board);
+        if (!$connection instanceof TaskBoardConnection) {
+            return null;
+        }
+        $map = StatusColumns::clean($statusColumnMap, $board);
+        foreach ($map as $entry) {
+            if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
+                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
+            }
+        }
+        $connection->setStatusColumnMap($map);
+        $this->entityManager->flush();
 
         return $connection;
     }
@@ -122,8 +177,31 @@ final readonly class TaskBoardSyncService
         if (!$connection instanceof TaskBoardConnection) {
             return;
         }
-        $event = new BoardConnectionEvent($board, $connection->getProvider(), $connection->getContainerId(), $connection->getContainerLabel(), $connection->getConnectionRef(), $actor);
-        $this->store->deleteConnection($connection);
+        $event     = new BoardConnectionEvent($board, $connection->getProvider(), $connection->getContainerId(), $connection->getContainerLabel(), $connection->getConnectionRef(), $actor);
+        $directory = $connection->getDirectory();
+        // Since 1.25 (audit FP-L5): the unlink holds the board's sync lock, so a running sync is refused (and refuses
+        // us), and it is one transaction: the connection, its sync rows and the directory prune go together or not at all.
+        $now    = $this->clock->now();
+        $lockId = TaskSyncRun::newId();
+        if (!$this->store->acquireLock($connection, $lockId, $now, $now->sub(new DateInterval(self::STALE_AFTER)))) {
+            throw new SyncBusyException($board->getId());
+        }
+        $connectionId = $connection->getId();
+        $db           = $this->entityManager->getConnection();
+        $db->beginTransaction();
+        try {
+            $this->store->deleteConnection($connection);
+            // Since 1.25: the people directory goes (anonymised where still referenced) with its last connection.
+            if ($directory instanceof TaskSyncDirectory && $this->people instanceof TaskSyncPeopleDirectoryService) {
+                $this->people->pruneDirectory($directory);
+            }
+            $db->commit();
+        } catch (Throwable $exception) {
+            $db->rollBack();
+            $this->store->releaseLock($connectionId, $lockId);
+
+            throw $exception;
+        }
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_CONNECTION_UNLINKED);
         $this->logger->info('TaskBoard sync unlinked', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'provider' => $event->provider]);
     }
@@ -177,6 +255,13 @@ final readonly class TaskBoardSyncService
             allowMassArchive: $options->allowMassArchive,
             maxPages: $options->maxPages,
             timeBudgetSeconds: $options->timeBudgetSeconds,
+            people: $options->people,
+            requirePeopleMapping: $options->requirePeopleMapping,
+            timeEntries: $options->timeEntries,
+            timeFrom: $options->timeFrom,
+            timeFallbackPerTask: $options->timeFallbackPerTask,
+            watchers: $options->watchers,
+            checklists: $options->checklists,
         ));
     }
 
@@ -186,13 +271,16 @@ final readonly class TaskBoardSyncService
      */
     public function run(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, string $listId, SyncOptions $options, ?SyncCursor $resume = null): SyncReport
     {
-        if (!$this->accessChecker->canManageBoardConnection($options->actor, $board)) {
+        // A caller may pass an actor detached by an earlier clear (e.g. an uninitialised proxy): the access check and
+        // its BOARD_ACCESS_CHECK listeners get the managed instance, which they may read safely.
+        $actor = $this->attached($options->actor);
+        if (!$this->accessChecker->canManageBoardConnection($actor, $board)) {
             return $this->bare($board, $provider->id(), SyncStatus::Failed, 'actor_not_allowed');
         }
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             $container  = $provider->findContainer($credential, $listId) ?? new RemoteContainer($listId, $listId, ContainerType::List, null, true, false);
-            $connection = $this->link($board, $provider, $credential, $container, $options->actor);
+            $connection = $this->link($board, $provider, $credential, $container, $actor);
         } elseif ($connection->getProvider() !== $provider->id() || $connection->getContainerId() !== $listId) {
             return $this->bare($board, $provider->id(), SyncStatus::Failed, 'board_linked_elsewhere');
         }
@@ -224,7 +312,7 @@ final readonly class TaskBoardSyncService
             $connection->markRun($now);
             $run->record($ctx->report(SyncStatus::Running), $now);
             $this->entityManager->flush();
-            $this->eventDispatcher?->dispatch(new SyncStartedEvent($board, $runId, $provider->id(), $ctx->mode, $options->trigger, $options->actor, $options->dryRun), TaskBoardEvents::SYNC_STARTED);
+            $this->eventDispatcher?->dispatch(new SyncStartedEvent($board, $runId, $provider->id(), $ctx->mode, $options->trigger, $ctx->actor, $options->dryRun), TaskBoardEvents::SYNC_STARTED);
             $this->logger->info('TaskBoard sync started', $this->logContext($ctx));
 
             $status = $this->execute($ctx);
@@ -255,14 +343,21 @@ final readonly class TaskBoardSyncService
         $since     = $resume instanceof SyncCursor ? $resume->updatedSince : ($mode === SyncMode::Incremental && $watermark instanceof DateTimeImmutable ? $watermark->sub(new DateInterval('PT' . self::OVERLAP_SECONDS . 'S')) : null);
         $ctx       = new SyncRunContext($runId, $board, $connection, $provider, $credential, $options, $options->actor, $mode, $since, $now, $connection->getImportScope(), $this->maxBytesPerRun);
         if ($resume instanceof SyncCursor) {
-            $ctx->phase          = $resume->phase;
-            $ctx->providerCursor = $resume->providerCursor;
-            $ctx->highWatermark  = $resume->highWatermark;
-            $ctx->pagesDone      = $resume->pagesDone;
-            $ctx->tasksSeen      = $resume->tasksSeen;
-            $ctx->pageCap        = $resume->pageCap;
-            $ctx->pending        = $resume->pendingDependencies;
+            $ctx->phase            = $resume->phase;
+            $ctx->providerCursor   = $resume->providerCursor;
+            $ctx->highWatermark    = $resume->highWatermark;
+            $ctx->pagesDone        = $resume->pagesDone;
+            $ctx->tasksSeen        = $resume->tasksSeen;
+            $ctx->pageCap          = $resume->pageCap;
+            $ctx->pending          = $resume->pendingDependencies;
+            $ctx->timeWindowStart  = $resume->timeWindowStart;
+            $ctx->timeChunk        = $resume->timeChunk;
+            $ctx->timeSplitStart   = $resume->timeSplitStart;
+            $ctx->timeSplitSeconds = $resume->timeSplitSeconds;
+            $ctx->timeMode         = $resume->timeMode;
         }
+        // Since 1.25: people (and so tracked time) go through the directory only when the run asks for them.
+        $ctx->directoryId = $options->people ? $connection->getDirectory()?->getId() : null;
 
         return $ctx;
     }
@@ -273,6 +368,10 @@ final readonly class TaskBoardSyncService
     private function execute(SyncRunContext $ctx): SyncStatus
     {
         try {
+            if ($ctx->phase === SyncPhase::Tasks && $ctx->pagesDone === 0) {
+                $this->refreshPeople($ctx);
+            }
+            $source = $this->source($ctx);
             if ($ctx->phase === SyncPhase::Tasks) {
                 $slicePages = 0;
                 $sliceSeen  = $ctx->tasksSeen;
@@ -288,7 +387,9 @@ final readonly class TaskBoardSyncService
                     if ($slicePages >= $pageCap || $ctx->pagesDone >= $runCap) {
                         throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
                     }
-                    $page    = $ctx->provider->fetchTasks($ctx->credential, $ctx->connection->getContainerId(), $ctx->updatedSince, $ctx->providerCursor);
+                    $page = $source instanceof RemoteSource && $ctx->provider instanceof SourceProviderInterface
+                        ? $ctx->provider->fetchSourceTasks($ctx->credential, $source, $ctx->updatedSince, $ctx->providerCursor)
+                        : $ctx->provider->fetchTasks($ctx->credential, $ctx->connection->getContainerId(), $ctx->updatedSince, $ctx->providerCursor);
                     $seenWas = $ctx->tasksSeen;
                     $this->writer->writePage($ctx, $page->tasks);
                     $this->dispatchTaskEvents($ctx);
@@ -318,8 +419,11 @@ final readonly class TaskBoardSyncService
             }
             if ($ctx->phase === SyncPhase::Deletions && $ctx->options->archiveRemoteDeletions) {
                 try {
-                    $ids = [];
-                    foreach ($ctx->provider->existingTaskIds($ctx->credential, $ctx->connection->getContainerId()) as $id) {
+                    $ids      = [];
+                    $existing = $source instanceof RemoteSource && $ctx->provider instanceof SourceProviderInterface
+                        ? $ctx->provider->existingSourceTaskIds($ctx->credential, $source)
+                        : $ctx->provider->existingTaskIds($ctx->credential, $ctx->connection->getContainerId());
+                    foreach ($existing as $id) {
                         $ids[Text::cut($id, 128)] = true;
                     }
                     $this->writer->applyDeletions($ctx, $ids, $this->maxArchiveRatio);
@@ -329,6 +433,15 @@ final readonly class TaskBoardSyncService
                 } catch (ProviderException) {
                     // A partial scan never archives anything.
                     $ctx->warn('deletions_skipped');
+                }
+            }
+            if ($ctx->phase === SyncPhase::Deletions) {
+                $ctx->phase = SyncPhase::TimeEntries;
+            }
+            if ($ctx->phase === SyncPhase::TimeEntries && !$ctx->options->dryRun && $this->timePhase instanceof TimeEntryPhase && $this->timePhase->supports($ctx)) {
+                $deadline = $ctx->options->timeBudgetSeconds !== null ? $this->clock->now()->getTimestamp() + $ctx->options->timeBudgetSeconds : null;
+                if (!$this->timePhase->run($ctx, $deadline)) {
+                    return $this->store->isCancelRequested($ctx->runId) ? SyncStatus::Cancelled : SyncStatus::Paused;
                 }
             }
             $ctx->phase = SyncPhase::Done;
@@ -368,8 +481,13 @@ final readonly class TaskBoardSyncService
                     $ctx->connection->markSuccess($now, $ctx->pagingStopped ? null : $ctx->highWatermark);
                 }
             }
+            if ($status === SyncStatus::Succeeded) {
+                $ctx->perColumn = $this->store->tasksPerColumn($ctx->board);
+                $report         = $ctx->report($status, $now);
+            }
             $run = $this->store->findRun($ctx->runId);
             $run?->record($report, $now);
+            $run?->setTimeMode($ctx->timeMode);
             $this->entityManager->flush();
             $this->store->prune($ctx->connection, $this->historyKeep);
         } catch (Throwable $exception) {
@@ -385,6 +503,63 @@ final readonly class TaskBoardSyncService
         }
 
         return $report;
+    }
+
+    /**
+     * Since 1.25: attaches the people directory and refreshes it from the workspace members; refuses a first import
+     * whose People step was not saved when the host asks (`requirePeopleMapping`).
+     */
+    private function refreshPeople(SyncRunContext $ctx): void
+    {
+        if (!$ctx->options->people || !$this->people instanceof TaskSyncPeopleDirectoryService || !$ctx->provider instanceof PeopleProviderInterface) {
+            return;
+        }
+        $directory = $this->people->directoryFor($ctx->connection, $ctx->provider, $ctx->credential);
+        if (!$directory instanceof TaskSyncDirectory) {
+            return;
+        }
+        $ctx->directoryId = $directory->getId();
+        if (!$ctx->options->dryRun) {
+            $session = $this->people->session($directory, $ctx->board);
+            $this->people->refreshMembers($session, $ctx->provider, $ctx->credential);
+            foreach ($session->stats as $name => $value) {
+                $ctx->count($name, $value);
+            }
+            foreach ($session->warnings as $code) {
+                $ctx->warn($code);
+            }
+            $this->logger->info('TaskBoard sync people phase done', ['bundle' => 'nowo_task_board', 'board_id' => $ctx->board->getId(), 'directory' => $directory->getId(), 'counts' => $session->stats]);
+        }
+        // A first import waits for the People step when the host asks and someone is still undecided.
+        if ($ctx->options->requirePeopleMapping && !$directory->getReviewedAt() instanceof DateTimeImmutable && $this->store->linkedItems($ctx->connection) === [] && $this->people->unreviewedCount($directory) > 0) {
+            throw new SyncRefusedException(new LimitRefusal('people_mapping_required'));
+        }
+    }
+
+    /** Since 1.25: the folder / space source of the connection (null for a list: the 1.23 calls). */
+    private function source(SyncRunContext $ctx): ?RemoteSource
+    {
+        $location = $ctx->connection->getLocation();
+        if ($location->kind === RemoteLocationKind::List || !$ctx->provider instanceof SourceProviderInterface) {
+            return null;
+        }
+        $source = $ctx->provider->findSource($ctx->credential, $location->containerId());
+        if (!$source instanceof RemoteSource) {
+            throw new ProviderException(ProviderErrorCode::NotFound);
+        }
+
+        return $source;
+    }
+
+    private function hasColumnNamed(TaskBoard $board, string $name): bool
+    {
+        foreach ($board->getColumns() as $column) {
+            if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Progress of a running run: heartbeat, the history row, SYNC_PAGE_DONE. */
@@ -441,10 +616,18 @@ final readonly class TaskBoardSyncService
     /** A caller may pass an actor detached by an earlier clear: the run records the managed instance. */
     private function attach(SyncRunContext $ctx): void
     {
-        $actor = $this->identity($ctx->actor);
-        if ($actor !== null && !$this->entityManager->contains($ctx->actor)) {
-            $ctx->actor = $this->entityManager->find($actor[0], $actor[1]) ?? $ctx->actor;
+        $ctx->actor = $this->attached($ctx->actor);
+    }
+
+    /** The managed instance of a mapped entity that is not managed (detached by a clear); else the object itself. */
+    private function attached(object $actor): object
+    {
+        $identity = $this->identity($actor);
+        if ($identity === null || $this->entityManager->contains($actor)) {
+            return $actor;
         }
+
+        return $this->entityManager->find($identity[0], $identity[1]) ?? $actor;
     }
 
     /**

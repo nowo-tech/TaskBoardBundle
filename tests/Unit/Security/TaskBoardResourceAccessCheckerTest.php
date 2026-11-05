@@ -295,6 +295,46 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
         self::assertSame([$extra], $this->checker(dispatcher: $dispatcher)->filterBoards($owner, [$mine]));
     }
 
+    /** Since 1.25: emptying / deleting a board — creator or manage role by default, the `manage` action decides. */
+    public function testManageBoardNeedsEditAndTheManageDecision(): void
+    {
+        $owner  = new TestUser('1', 'owner@example.com');
+        $member = new TestUser('2', 'member@example.com');
+        $team   = new Team('Eng');
+        $board  = new TaskBoard('Team', 'team', $owner, team: $team);
+        $repo   = $this->createMock(TeamMemberRepositoryInterface::class);
+        $repo->method('findByUserId')->willReturnCallback(static fn (string $id): array => $id === '2' ? [new TeamMember($team, $member, TeamRole::Member)] : []);
+
+        $checker = $this->checker(repository: $repo);
+        self::assertTrue($checker->canManageBoard($owner, $board));
+        // A team member may edit the board but not erase it.
+        self::assertTrue($checker->canEditBoard($member, $board));
+        self::assertFalse($checker->canManageBoard($member, $board));
+        self::assertFalse($checker->canManageBoard(new TestUser('3', 'x@example.com'), $board));
+        self::assertTrue($this->checker(repository: $repo, scoping: false)->canManageBoard($member, $board));
+
+        $auth = $this->createMock(AuthorizationCheckerInterface::class);
+        $auth->method('isGranted')->willReturn(true);
+        self::assertTrue($this->checker(repository: $repo, auth: $auth)->canManageBoard($member, $board));
+
+        // A listener decides on the `manage` action only; read-only boards are never erased by their viewers.
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($owner): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE) {
+                $event->getSubject() === $owner ? $event->deny() : $event->grant();
+            }
+        });
+        $listened = $this->checker(repository: $repo, dispatcher: $dispatcher);
+        self::assertFalse($listened->canManageBoard($owner, $board));
+        self::assertTrue($listened->canManageBoard($member, $board));
+
+        $readOnly = new EventDispatcher();
+        $readOnly->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            $event->markReadOnly();
+        });
+        self::assertFalse($this->checker(repository: $repo, dispatcher: $readOnly)->canManageBoard($owner, $board));
+    }
+
     /**
      * @param list<string> $manageRoles
      */

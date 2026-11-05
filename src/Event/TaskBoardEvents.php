@@ -8,6 +8,11 @@ use Nowo\TaskBoardBundle\Sync\Event\BoardConnectionEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFailedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFinishedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReprojectedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReviewedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPersonAnonymisedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteArchivedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
@@ -86,4 +91,28 @@ final class TaskBoardEvents
 
     /** {@see BoardConnectionEvent} (since 1.23). */
     public const BOARD_CONNECTION_UNLINKED = 'nowo_task_board.board_connection_unlinked';
+
+    /** Since 1.25: {@see SyncPersonMappedEvent} — every mapping change (automatic ones too). */
+    public const SYNC_PERSON_MAPPED = 'nowo_task_board.sync_person_mapped';
+
+    /** Since 1.25: {@see SyncPersonReassignedEvent} — a re-association finished. */
+    public const SYNC_PERSON_REASSIGNED = 'nowo_task_board.sync_person_reassigned';
+
+    /** Since 1.25: {@see SyncPersonAnonymisedEvent}. */
+    public const SYNC_PERSON_ANONYMISED = 'nowo_task_board.sync_person_anonymised';
+
+    /** Since 1.25: {@see SyncPeopleReviewedEvent} — the People step was saved. */
+    public const SYNC_PEOPLE_REVIEWED = 'nowo_task_board.sync_people_reviewed';
+
+    /** Since 1.25: {@see SyncPeopleReprojectedEvent} — references became real rows. */
+    public const SYNC_PEOPLE_REPROJECTED = 'nowo_task_board.sync_people_reprojected';
+
+    /** {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). */
+    public const TASK_ERASED = 'nowo_task_board.task_erased';
+
+    /** {@see BoardErasedEvent}, once the board is empty (since 1.25). */
+    public const BOARD_EMPTIED = 'nowo_task_board.board_emptied';
+
+    /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
+    public const BOARD_DELETED = 'nowo_task_board.board_deleted';
 }

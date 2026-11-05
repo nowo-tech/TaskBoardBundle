@@ -40,6 +40,16 @@
 | **Script in synced text (since 1.23)** | HTML, `javascript:` links or bidi tricks in remote descriptions and comments. | `RemoteContentSanitizer` stores Markdown without raw HTML, keeps only http(s) / mailto link targets, removes controls and bidi overrides and caps the length; the host's `TaskTextRendererInterface` still escapes or sanitizes on output. |
 | **Who manages a connection (since 1.23)** | A board editor links, refreshes or unlinks without the right. | `canManageBoardConnection()` (`BOARD_ACCESS_CHECK` with `ACTION_MANAGE_CONNECTION`; default: board creator or `manage_roles`), 404 for others, re-checked for every run (scheduled runs stop when the user loses the right); per-task writes still need `canEditTask()`. Every action is a POST with its own CSRF token. |
 | **Mass archive (since 1.23)** | A token that lost access makes a sync archive a whole board. | Only a complete id scan of the same run archives; an empty scan or more than `max_archive_ratio` of the linked tasks is held until a manager confirms; nothing is ever deleted. |
+| **Who maps people (since 1.25)** | A user without manage rights reads the people (e-mails) or re-maps them. | Every directory operation and scan needs `canManageBoardConnection()` on **every** board of the directory (`PeopleMappingDeniedException`, routes 404); host routes add CSRF. |
+| **Access through a mapping (since 1.25)** | Mapping a remote person to a user who cannot see the board makes them creator or member, and the participant rule grants the task. | Projection rule: `canViewBoard()` before any creator / member / comment author is written; otherwise the person stays a reference. Re-projection only where the user can view the board at execution time. |
+| **Privilege by re-mapping (since 1.25)** | Content re-pointed to a teammate who gains authorship and edit rights. | Only an explicit `reassign()` by an authorised actor moves imported content; the target is re-checked as a candidate and viewer per board; `SYNC_PERSON_REASSIGNED` and per-task history. Automatic matching never moves content. |
+| **E-mail takeover (since 1.25)** | Someone registers a victim's ClickUp e-mail and gets auto-mapped. | `auto` only with `verified = true` from the host (`require_verified_email`, default true), else `suggested` (human confirmation); candidates scoped by the host; exactly one match; a changed e-mail never re-maps automatically. |
+| **Double identity / cross-tenant (since 1.25)** | One remote identity mapped to two users, or one tenant seeing another's people. | One person row per (scope, provider, workspace, remote id) (unique index); `directoryScope()` in the directory key; `candidateById($board, …)` is the only user lookup; reassign touches only the directory's boards. |
+| **Silent mapping change (since 1.25)** | Mappings change without trace. | `SYNC_PERSON_MAPPED` on every change (automatic ones with a null actor), reassign / anonymise / review / reproject events; history stores `person:` / `user:` tokens, never names. |
+| **Hard delete of a user (since 1.25)** | Deleting a user cascades the boards, tasks, documents and comments they created (with everyone's tasks on their boards). | Since 1.25 (audits FP-M1 / FP-L7) the board, task and document creators and the comment author are `ON DELETE SET NULL` with a name snapshot: no board, task, subtask, document or comment goes with the user. `detachUser()` before the delete detaches them explicitly (and, with `anonymise`, clears the names); erasure order in UPGRADING. Still cascaded: memberships, the user's history entries and their own manual time. A delete without `detachUser()` keeps the name snapshot (FP-I11). |
+| **Token scope for time (since 1.25)** | Importing time needs an admin token, which is more powerful. | Every provider call is a `GET` to the constant base URI (`ProviderHttpClient` has no other verb); `assignee` ids come only from the directory; the run stores only `time_mode`. ClickUp tokens have no read-only scope: read-only is a bundle guarantee. |
+| **Resource abuse (since 1.25)** | Huge workspaces, endless window splits, mass reassign. | `max_windows_per_run`, window halving down to one hour, assignee chunks, the E5 cap, scans ≤ 15 calls, list search ≤ 40 calls, reassign batches with a cursor. |
+| **Remote names and descriptions (since 1.25)** | Controls, bidi or markup in names. | Names are one sanitised line (≤ 120); ids are pattern-checked; time-entry descriptions are plain text (controls and bidi stripped) and passed to the host only, never stored or logged by the bundle. |
 | **Malicious import files** | Oversized or crafted CSV/JSON uploads. | Authenticated route only; Symfony file upload limits; parsers validate structure; import runs in orchestrator with explicit source selection. |
 
 ## Access control model
@@ -70,6 +80,31 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
   Worker runs (no session) only pass for the board creator.
 - **Outbound guard settings (EG-I6).** `OutboundUrlGuardAdapter` builds `OutboundUrlGuard` with its own (strict)
   defaults, not the host's configured guard service: host allow / deny lists of that bundle do not apply to synced files.
+- **Candidates without a resolver (FP-I1).** Without `sync.people.resolver` and without `assignee_provider`,
+  `DefaultSyncPersonResolver::isCandidate()` is true for every user and `candidateById()` finds any user id: a board
+  manager can map a remote person, and so route imported time through the sink, to any account of the host.
+  Multi-tenant hosts must set `sync.people.resolver` (or at least `assignee_provider`).
+- **Time and auto-matching (FP-I2).** Only people mapped to a user reach the time sink. Auto-matching trusts the
+  provider's (validated, ASCII) e-mail: a linked workspace's admin can attribute time to a verified candidate of the
+  board. Hosts that want time only for human decisions accept only `manual` mappings in their sink.
+- **Listeners that grant everything (FP-I3).** A `BOARD_ACCESS_CHECK` listener that calls `grant()` without reading
+  `getAction()` also grants `manage` (empty or delete a board, since 1.25) and `import_tasks`. With scoping off,
+  `manage` defaults to every editor. Check the action.
+- **The eraser and the connection (FP-I4).** `TaskBoardEraser` unlinks the board after `canManageBoard()` (`manage`)
+  only, without asking `manage_connection`: the board goes (or is emptied) anyway. Deny `manage` to whoever must not
+  drop the link that way.
+- **CLI imports are operator-trusted (FP-I5).** `nowo:task-board:import` runs as the console operator: it asks neither
+  `import_tasks` nor `canEditBoard()`. Do not expose it to untrusted callers (e.g. through a web-triggered process).
+- **Shared lookup cache (FP-I6).** The list-search cache is keyed by `connectionRef`; keep that unique per stored
+  token across tenants that share `sync.lookup.cache_pool`.
+- **The erase cursor (FP-L3, FP-I9, FP-I10).** It is signed (HMAC with a key derived from `kernel.secret`) and bound
+  to the board, the actor, the operation and its run (run id, issue time, TTL); still keep it server-side (a
+  Messenger message), never in a browser round trip.
+- **Erase-cursor residuals (FP-I13).** The TTL counts from the issuing node's clock (a node whose clock runs ahead
+  extends it by the skew; keep worker clocks in sync). Within the TTL, an unfinished run resumed after new tasks were
+  added erases them too (`canManageBoard()` is re-checked on every call, so never more than a fresh run by the same
+  actor could). Two copies of one cursor resumed in parallel may undercount, or dispatch `BOARD_EMPTIED` /
+  `BOARD_DELETED` twice: de-duplicate `BoardErasedEvent` by its `runId`.
 - **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.
@@ -79,7 +114,10 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 REQ-OBS-001 (since 1.21): every successful board / task write logs one `info` line, an invalid CSRF token one `warning`,
 and every import its start, result and failure ([CONFIGURATION — Logging](CONFIGURATION.md#logging-since-121)). The
 context holds only the action, the ids of the board objects (UUIDs) and counts. The bundle never logs user ids, names,
-e-mails, task titles or descriptions, comment bodies, link URLs, uploaded file names or contents, nor tokens. There is
+e-mails, task titles or descriptions, comment bodies, link URLs, uploaded file names or contents, nor tokens.
+Since 1.25 the never-logged list also covers the sync's people: person names and e-mails, provider user ids together
+with names, and time-entry descriptions (logs and events carry directory, person and board ids and counts only). Names
+and e-mails of remote people live only in `task_board_sync_people` (cleared by `anonymise()`); no avatar URL is stored. There is
 no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 ## Dependencies

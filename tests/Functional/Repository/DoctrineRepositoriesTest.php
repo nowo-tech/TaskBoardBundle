@@ -115,6 +115,27 @@ final class DoctrineRepositoriesTest extends KernelTestCase
         self::assertNull($boards->findById($zeta->getId()));
     }
 
+    public function testTheTrackableSearchMatchesWildcardsLiterally(): void
+    {
+        $tasks = $this->service(TaskRepositoryInterface::class);
+        self::assertInstanceOf(DoctrineOrmTaskRepository::class, $tasks);
+        [$board, $column] = $this->boardWithColumn();
+        foreach (['50% done_now!', '500 doneXnow'] as $position => $title) {
+            $task = new Task($board, $title, $this->alice, $column, position: $position);
+            $task->addMember(new TaskMember($task, $this->bob, TaskMemberRole::Assignee));
+            $this->em->persist($task);
+        }
+        $this->em->flush();
+        $this->em->clear();
+        $bob = (string) $this->bob->getId();
+
+        // Audit FP-I12: `%`, `_` and `!` are literal (ESCAPE '!'), on every platform.
+        self::assertSame(['50% done_now!'], $this->titles($tasks->findTrackableForUser($bob, '50%', 10, 0)));
+        self::assertSame(['50% done_now!'], $this->titles($tasks->findTrackableForUser($bob, 'E_N', 10, 0)));
+        self::assertSame(['50% done_now!'], $this->titles($tasks->findTrackableForUser($bob, 'now!', 10, 0)));
+        self::assertCount(2, $tasks->findTrackableForUser($bob, 'done', 10, 0));
+    }
+
     public function testTasksBoundedQueriesDetailAndLookups(): void
     {
         $tasks = $this->service(TaskRepositoryInterface::class);
@@ -165,8 +186,9 @@ final class DoctrineRepositoriesTest extends KernelTestCase
         $this->service(TaskRepositoryInterface::class)->save($task);
 
         $comments = $this->service(TaskCommentRepositoryInterface::class);
-        $kept     = new TaskComment($task, $this->alice, 'First');
-        $deleted  = new TaskComment($task, $this->bob, 'Gone');
+        // Distinct dates: MySQL DATETIME keeps seconds only, and two comments in the same second have no defined order.
+        $kept    = new TaskComment($task, $this->alice, 'First', [], new DateTimeImmutable('-2 minutes'));
+        $deleted = new TaskComment($task, $this->bob, 'Gone', [], new DateTimeImmutable('-1 minute'));
         $comments->save($kept);
         $comments->save($deleted->markDeleted());
         $this->em->clear();

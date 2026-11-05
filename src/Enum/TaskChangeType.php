@@ -36,4 +36,6 @@ enum TaskChangeType: string
     case Archived = 'archived';
     /** Since 1.23. */
     case Restored = 'restored';
+    /** Since 1.25: a remote person's authorship or membership was re-associated (values are person: / user: tokens). */
+    case SyncPersonReassociated = 'sync_person_reassociated';
 }

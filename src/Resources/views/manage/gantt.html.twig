@@ -29,7 +29,7 @@
     }) }}
     {# Since 1.23: the board's provider connection (badge, Refresh, Connect provider); nothing without sync. #}
     {% block nowo_task_board_connection %}
-        {{ include('@NowoTaskBoardBundle/manage/_connection_badge.html.twig', {sync: nowo_task_board_connection(board)}) }}
+        {{ include(nowo_task_board_connection_badge_template|default('@NowoTaskBoardBundle/manage/_connection_badge.html.twig'), {sync: nowo_task_board_connection(board)}) }}
     {% endblock %}
 
     {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}

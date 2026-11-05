@@ -22,10 +22,11 @@ final class TaskBoardTwigExtensionTest extends TestCase
         $extension = new TaskBoardTwigExtension('@NowoTaskBoardBundle/layout.html.twig', 'tabler');
 
         self::assertSame([
-            'nowo_task_board_layout'             => '@NowoTaskBoardBundle/layout.html.twig',
-            'nowo_task_board_css_framework'      => 'tabler',
-            'nowo_task_board_filters_collapse'   => null,
-            'nowo_task_board_filters_form_class' => '',
+            'nowo_task_board_layout'                    => '@NowoTaskBoardBundle/layout.html.twig',
+            'nowo_task_board_css_framework'             => 'tabler',
+            'nowo_task_board_filters_collapse'          => null,
+            'nowo_task_board_filters_form_class'        => '',
+            'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         ], $extension->getGlobals());
     }
 
@@ -34,10 +35,11 @@ final class TaskBoardTwigExtensionTest extends TestCase
         $extension = new TaskBoardTwigExtension('base.html.twig', 'custom', [], new TaskObjectLinkResolver(), 'shared/_filters_collapse.html.twig', 'issue-filters panel');
 
         self::assertSame([
-            'nowo_task_board_layout'             => 'base.html.twig',
-            'nowo_task_board_css_framework'      => 'custom',
-            'nowo_task_board_filters_collapse'   => 'shared/_filters_collapse.html.twig',
-            'nowo_task_board_filters_form_class' => 'issue-filters panel',
+            'nowo_task_board_layout'                    => 'base.html.twig',
+            'nowo_task_board_css_framework'             => 'custom',
+            'nowo_task_board_filters_collapse'          => 'shared/_filters_collapse.html.twig',
+            'nowo_task_board_filters_form_class'        => 'issue-filters panel',
+            'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         ], $extension->getGlobals());
     }
 
@@ -93,7 +95,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'list'  => ['path' => '/l/{boardId}', 'name' => ''],
         ]);
 
-        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress', 'nowo_task_board_deviation', 'nowo_task_board_ancestors', 'nowo_task_board_comment_body', 'nowo_task_board_text', 'nowo_task_board_connection', 'nowo_task_board_member_avatar_url'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
+        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress', 'nowo_task_board_deviation', 'nowo_task_board_ancestors', 'nowo_task_board_comment_body', 'nowo_task_board_text', 'nowo_task_board_connection', 'task_board_sync_creator', 'task_board_sync_comment_author', 'task_board_sync_unmatched', 'task_board_sync_token', 'nowo_task_board_member_avatar_url'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
         self::assertSame('app_board', $extension->routeName('board'));
         self::assertSame('nowo_task_board_list', $extension->routeName('list'));
         self::assertSame('nowo_task_board_task', $extension->routeName('task'));

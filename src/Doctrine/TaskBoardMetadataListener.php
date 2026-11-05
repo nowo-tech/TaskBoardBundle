@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 
 use function array_replace_recursive;
@@ -60,6 +62,9 @@ final readonly class TaskBoardMetadataListener
             // Since 1.23 (sync tables, mapped with sync.enabled).
             TaskBoardConnection::class => ['createdBy'],
             TaskSyncRun::class         => ['actor'],
+            // Since 1.25: the people directory.
+            TaskSyncDirectory::class => ['reviewedBy'],
+            TaskSyncPerson::class    => ['mappedUser', 'suggestedUser', 'mappedBy', 'reassignToUser'],
         ];
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {

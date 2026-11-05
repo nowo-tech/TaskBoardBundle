@@ -18,6 +18,11 @@ mapping of the sync tables and no header change.
 - [Running it in the background](#running-it-in-the-background)
 - [Console command](#console-command)
 - [UI](#ui)
+- [People directory (since 1.25)](#people-directory-since-125)
+- [Creator, assignees, watchers, checklists and comments (since 1.25)](#creator-assignees-watchers-checklists-and-comments-since-125)
+- [Statuses and sources (since 1.25)](#statuses-and-sources-since-125)
+- [Tracked time (since 1.25)](#tracked-time-since-125)
+- [Pre-scans and re-association (since 1.25)](#pre-scans-and-re-association-since-125)
 - [Events](#events)
 - [Testing with the in-memory provider](#testing-with-the-in-memory-provider)
 - [Adding a provider](#adding-a-provider)
@@ -35,6 +40,9 @@ The bundle **never stores a token**. The host keeps the credentials and gives on
 | `runner`: `SyncRunnerInterface` | no | `InlineSyncRunner` (one slice per request; the progress page continues it) |
 | `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board; since 1.24 a disabled user (`isEnabled()` false) or one `actor_checker` refuses is never the actor, and a named user that is refused, no longer found or fails to load is not replaced by the linker |
 | `actor_checker`: Symfony `UserCheckerInterface` (since 1.24) | no | none: only `isEnabled()` is checked |
+| `people.resolver`: `SyncPersonResolverInterface` (since 1.25) | no | `DefaultSyncPersonResolver`: one directory per board, the board's assignable users as candidates, 1.23 e-mail lookup |
+| `time_entries.sink`: `ImportedTimeEntrySinkInterface` (since 1.25) | no | none: the `time_entries` phase never runs |
+| `BOARD_ACCESS_CHECK` listener for `import_tasks` (since 1.25) | no | granted: who may edit the board (and, for the connection, manage it) may import |
 
 ```php
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -253,6 +261,161 @@ public function onBoardAccess(BoardAccessCheckEvent $event): void
 }
 ```
 
+## People directory (since 1.25)
+
+Every remote person (ClickUp user) is one row of a **directory** per (host scope, provider, workspace): every board and
+connection of that scope shares it, so a remote identity maps to at most one local user per scope (several remote
+identities may map to the same user: old and new e-mails). The scope comes from
+`SyncPersonResolverInterface::directoryScope()` (`[a-z0-9:_-]{1,64}`, e.g. `org:<uuid>`; the default resolver uses
+`board:<id>`, no sharing). The directory is attached on the first run of a connection (the workspace is looked up once).
+
+| State | Meaning | Projected |
+| --- | --- | --- |
+| `unmatched` | No user; content stays on the run's actor, with the person reference | no |
+| `suggested` | One candidate matched by e-mail, account **not verified**; needs a confirmation | no |
+| `auto` | One verified candidate matched by e-mail | yes |
+| `manual` | A human chose the user (`applyMapping()`, kind `manual` or `confirm`) | yes |
+| `external` | A human chose *Keep as external person* (or `detachUser()`) | no |
+
+**Automatic matching** runs when people are seen (the workspace members at the start of a run, refs in tasks,
+comments, checklists and time, and a persisting pre-scan) for persons no human decided. The bundle normalises the
+e-mail (trim, NFC when `ext-intl` is loaded, lower case) and asks `autoMatch()` for exactly one **candidate**: verified
+→ `auto`, unverified → `suggested`, none → `unmatched`. A person without e-mail is never matched. The bundle passes the
+normalised e-mail as the optional third argument `$normalizedEmail`; a host resolver called with two arguments (the
+contract's signature) derives it with `SyncUser::normalizeEmail($person->email)`. Name and e-mail are
+refreshed on every run; a changed e-mail sets `email_changed_at`. `manual` and `external` are never overridden; an
+`auto` person whose e-mail changed (or whose user is gone) becomes `unmatched` with the warning
+`person_auto_unmatched`, and nothing already imported moves. An anonymised person is never refreshed or matched again.
+Every mapping change, automatic ones included, dispatches `SYNC_PERSON_MAPPED`.
+
+**Projection rule — a mapping never grants access.** Before writing a mapped user as creator, member or comment author,
+the writer checks `canViewBoard($user, $board)`. A user who cannot view the board is not written: the actor (creator,
+comment author) plus the person reference is, and the person is listed in the item's `unmatched_people`. The bundle's
+default access checker grants a task to its creator and members, so projecting would grant access. The People step can
+still map such a person (warning `ScannedPerson::$boardAccess = false`); the templates show a *no access to this board*
+badge, and the host still receives their time through the sink.
+
+**Losing access deletes nothing.** Projected rows stay when a user loses board access; access to imported tasks follows
+board access only if the host's access checker denies non-members. A host whose checker does not should call
+`reassign($person, null)` to detach the content. When a user **gains** access, the host calls
+`TaskSyncPeopleProjector::reprojectForUser($user, ?$board, $batchSize, $cursor, $trigger)` from its membership events:
+references become rows where the user can view the board now (access and candidacy re-checked inside each board's lock);
+idempotent; `SYNC_PEOPLE_REPROJECTED` once per finished call.
+
+Who may manage the people (`applyMapping()`, `markReviewed()`, `anonymise()`, `reassign()`, the scans):
+`canManageBoardConnection()` on **every** board of the directory, else `PeopleMappingDeniedException` (routes: 404).
+Target users must be candidates of every board (`isCandidate()`, `candidateById()` is the only id lookup).
+`SyncOptions::$requirePeopleMapping` refuses a first import (`people_mapping_required`) while someone is undecided and
+the People step was not saved (`markReviewed()`).
+
+Privacy: `anonymise()` turns the name into "Former <provider> user #n" (stored as the token `former:<n>`, translated at
+display) and clears the e-mail; references stay. `pruneDirectory()` (run on the last unlink) deletes unreferenced
+people and anonymises the rest. Export: `TaskSyncPersonRepository::exportFor($user)` / `exportDirectory($directory)`.
+
+**People page queries:** `TaskSyncPersonRepository::forDirectory($directory, PersonFilter $filter, $limit, $offset)`
+with `new PersonFilter(mappings: [...], q: 'text', changed: true, changedSince: $date)`: mapping states (empty =
+all), `q` matches part of the name or the e-mail (case-insensitive, at most 120 characters, LIKE wildcards literal),
+`changed` keeps people whose e-mail changed in the provider, `changedSince` those whose e-mail changed at or after the
+date. `PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, ...)` is the shortcut for states only.
+No avatar URL is stored.
+
+## Creator, assignees, watchers, checklists and comments (since 1.25)
+
+- **Creator and date.** A new task's creator is the projected user of the remote creator, else the actor;
+  `task_board_sync_items.creator_person_id` keeps the person either way. `Task::createdAt` is the provider's creation
+  date (2000-01-01 … now + 5 min). Updates never move either, except the one-off back-fill of tasks written before 1.25
+  (`backfill_level` 0 → 1 on their next fetch).
+- **Assignees and watchers.** Refs go through the directory; projected users become `TaskMember`s and every member the
+  sync adds gets a `task_board_sync_members` row. Only those members are removed when the person leaves the remote set;
+  members added by hand stay. Unprojected people show as *Also assigned in ClickUp* / *Also watching in ClickUp*. No
+  `TaskMemberAddedEvent` is dispatched (no notification during a sync). When a list row has no `watchers` /
+  `checklists` key, `GET task/{id}` (E5) completes it for tasks created or changed in the run, at most
+  `sync.watchers.max_detail_calls_per_run` per run.
+- **Per run:** `SyncOptions::$watchers` / `$checklists` (default `true`) leave watchers or checklists out of one run;
+  both also need their `sync.*.enabled` option. A run without either asks no task detail (E5) for it.
+- **Checklists** (`sync.checklists.enabled`). Each item is a subtask of its task (external id `<task>#<item>`, tag
+  `checklist:<name>`, checklist order then item order, nested items flattened in tree order). Resolved items are done:
+  they go to the column the status map gives the first `closed` (else `done`) status, else the last column. The item
+  assignee goes through the directory. The deletions scan never archives checklist items; an item is archived when its
+  task was fetched with its checklists and the item is gone. An item deleted here is never recreated.
+- **Comments.** The author is the projected user, else the actor, with `task_board_sync_comments.author_person_id`; no
+  prefix line (the comment template renders *name (ClickUp)*), and the comment keeps its ClickUp date.
+  `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize, $afterId)` returns a `MigrateReport`
+  (`connectionId`, `directoryId`, `migrated`, `skipped`, `lastId`, `done`) and removes the 1.23 prefix line once
+  where the name matches exactly one person (see [UPGRADING](UPGRADING.md#after-the-update-sync-hosts)).
+- **Twig:** `task_board_sync_creator(task)`, `task_board_sync_comment_author(comment)`,
+  `task_board_sync_unmatched(task, 'assignee'|'watcher')` return `SyncPersonView` (`name`, `provider`, `external`,
+  `anonymised`, `boardAccess`); `task_board_sync_token()` renders the `person:` / `user:` tokens of the
+  `sync_person_reassociated` history entries.
+
+## Statuses and sources (since 1.25)
+
+**Done comes from the status type.** A task whose ClickUp status type is `closed` or `done` is completed; one that
+goes back to an open type is reopened (under the per-field rule of `column`). The 1.23 rule (completed in the last
+column) applies only when the provider gives no status type.
+
+**Status → column map.** `link(..., $statusColumnMap)` and `updateStatusColumnMap($board, $map)` take
+`list<{status, column, type?}>`: `column` is a column id of the board, `__create` (a column named like the status,
+created when the link is confirmed, in the statuses' order) or `__skip` (tasks in that status are not imported;
+counted `skipStatus`). Statuses match ignoring case, accents and spaces. A status missing from the map follows the 1.23
+rules (same-named column, create missing columns, fallback column) with the warning `unmapped_status`. `type` (from the
+pre-scan) tells which column receives done checklist items.
+
+**Sources.** A connection follows a list (1.23), a folder (`f:<id>`) or a space (`s:<id>`) through
+`SourceProviderInterface`: `findSource()`, `fetchSourceTasks()` (ClickUp `GET team/{id}/task` with
+`project_ids[]` for a folder or `space_ids[]`; a list keeps the 1.23 calls), `existingSourceTaskIds()`, `listStatuses()` (list or space statuses; for a folder its
+own, else the union of its lists'), `resolveListFromUrl()` (only `https://app.clickup.com/…` list links; no network
+call) and `searchLists()` (at most 40 calls; cached 300 s in `sync.lookup.cache_pool`, keyed by a hash of the connection
+reference, never the token). With `sync.list_as_tag` tasks of a multi-list source get the tag `list:<name>`.
+
+## Tracked time (since 1.25)
+
+The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set and `SyncOptions::$timeEntries`, a
+`time_entries` phase runs after the deletions:
+
+- **Admin token** (workspace owner or admin): every directory person's entries, in `assignee` chunks of
+  `max_assignees_per_call` (provider ids from the directory only). **ClickUp returns other people's time only to
+  workspace owners and admins.**
+- **Member token:** only the token user's own entries, with the warning `time_member_mode`. With
+  `SyncOptions::$timeFallbackPerTask` (explicit, never automatic) the legacy per-task intervals (E8) are read for up to
+  `fallback_max_tasks_per_run` linked tasks; when the provider no longer serves them, `time_fallback_unavailable`.
+- **Windows** of `window_days` (≤ 30) from `SyncOptions::$timeFrom` (default: the board's oldest task, else 30 days
+  back), at most `max_windows_per_run` per run; a window with `max_entries_per_window` rows or more is halved and read
+  again, down to one hour (then `response_too_large`). The phase resumes per window and chunk.
+- **The sink** gets `accept($board, $directory, $window, $access, $entries, $windowComplete)` once per window and chunk:
+  `ImportedTimeEntryCandidate {entry, person, ?task}` (`task` null when the remote task is not linked on this board).
+  Running timers and entries without a task are counted (`$report->time->skippedRunning`, `skippedTaskless`), never
+  delivered. `$windowComplete` is true on the window's last chunk: the host may tombstone what it had for that window.
+  Beacon stages the entries and writes them with TimeTrack's `ImportedTimeEntryWriter` under
+  `externalSource = clickup:<directory id>`.
+- **Report:** `SyncReport::$time` (`TimeCounts`: `mode` admin / member / fallback or null, `windows`, `windowsSplit`,
+  `entries`, `skippedRunning`, `skippedTaskless`, `fallbackTasks`) and `SyncReport::$people` (`PeopleCounts`: `seen`,
+  `created`, `autoMatched`, `suggested`, `unmatchedNew`, `changedEmail`, `autoUnmatched`). Other counters
+  (`checklist.*`, `detail.calls`, `skipStatus`) stay in `SyncReport::$stats` / `stat()`; the typed ones are not
+  repeated there.
+
+**TO CONFIRM** against a real workspace (handled defensively): the row cap per answer, the `assignee` list length,
+whether guests can track time, and what a member token gets when `assignee` lists others (the adapter sends none).
+
+## Pre-scans and re-association (since 1.25)
+
+- `TaskSyncSourceScanner::scan($board, $provider, $credential, RemoteLocation $source, $actor, $persistPeople = true)`
+  (the connection dialog, before `link()`): the source, its workspace, its statuses with types, the people scan and
+  the time mode. Read-only on the provider; with `$persistPeople` the draft directory is filled.
+- `TaskSyncPeopleScanner::scan($board, $provider, $credential, $workspaceId, $location, $actor, $persist)`: members,
+  the first task page(s) (`sync.people.scan.max_task_pages`), the comments of the first tasks (`max_comment_tasks`)
+  and, with an admin token, one 30-day time window (`time_window`); at most 15 calls. Each `ScannedPerson` has the
+  counts per kind, the mapping, the match (`auto` / `suggested` / `none`), the matched user id and `boardAccess`.
+- `TaskSyncPeopleReassigner::reassign($person, ?$newUser, $actor, $batchSize, $cursor)` maps the person to a
+  candidate (or external) and moves creator, comment authors and sync members (checklist subtasks included) on every
+  board of the directory, under each board's lock (`busyBoards` when held). Call again with the returned cursor until
+  it is null. The pending target is stored on the person: a restart resumes, another target is refused
+  (`ReassignInProgressException`) until it finishes or `cancelReassign()`. One `sync_person_reassociated` history
+  entry per task; `SYNC_PERSON_REASSIGNED` when done (the host moves its own data there, e.g. TimeTrack copies).
+- `detachUser($user, $actor, $anonymise, …)` is the account-erasure helper: every person mapped or suggested to the
+  user becomes external (optionally anonymised) and their content goes back to the actor plus the reference. Run it
+  **before** deleting the user ([erasure order](UPGRADING.md#after-the-update-sync-hosts)).
+
 ## Events
 
 | Constant | Event | Payload |
@@ -263,8 +426,13 @@ public function onBoardAccess(BoardAccessCheckEvent $event): void
 | `SYNC_FAILED` | `SyncFailedEvent` | board, `SyncError`, the report |
 | `TASK_REMOTE_ARCHIVED` / `TASK_REMOTE_RESTORED` | `TaskRemoteArchivedEvent` / `TaskRemoteRestoredEvent` | task, provider, external id, run id |
 | `BOARD_CONNECTION_LINKED` / `BOARD_CONNECTION_UNLINKED` | `BoardConnectionEvent` | board, provider, list, connection ref, actor |
+| `SYNC_PERSON_MAPPED` (1.25) | `SyncPersonMappedEvent` | directory id, person id, previous / new mapping and user id, actor id (null for automatic), reason (`auto`, `suggested`, `manual`, `external`, `confirm`, `auto_unmatched`, `erased`) |
+| `SYNC_PERSON_REASSIGNED` (1.25) | `SyncPersonReassignedEvent` | directory id, person id, previous / new user id, actor id, reassign id, `ReassignReport` |
+| `SYNC_PERSON_ANONYMISED` (1.25) | `SyncPersonAnonymisedEvent` | directory id, person id, actor id |
+| `SYNC_PEOPLE_REVIEWED` (1.25) | `SyncPeopleReviewedEvent` | directory id, actor id, counts per state |
+| `SYNC_PEOPLE_REPROJECTED` (1.25) | `SyncPeopleReprojectedEvent` | user id, board ids, `ReassignReport`, trigger |
 
-No event carries a credential. Like file imports, a sync does not dispatch per-task `TASK_CREATED` / `TASK_UPDATED`.
+No event carries a credential, an e-mail or a person name (people events carry ids; listeners must not log the person entities). Like file imports, a sync does not dispatch per-task `TASK_CREATED` / `TASK_UPDATED`.
 
 ## Testing with the in-memory provider
 

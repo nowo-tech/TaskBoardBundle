@@ -9,5 +9,7 @@ enum SyncPhase: string
 {
     case Tasks     = 'tasks';
     case Deletions = 'deletions';
-    case Done      = 'done';
+    /** Since 1.25: tracked time, window by window (after the deletions). */
+    case TimeEntries = 'time_entries';
+    case Done        = 'done';
 }

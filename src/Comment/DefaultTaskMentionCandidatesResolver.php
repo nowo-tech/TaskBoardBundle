@@ -29,7 +29,7 @@ final readonly class DefaultTaskMentionCandidatesResolver implements TaskMention
         $board = $task->getBoard();
         $users = $this->assigneeProvider?->assignableUsers($board);
         if ($users === null) {
-            $users = [$board->getCreator()];
+            $users = $board->getCreator() === null ? [] : [$board->getCreator()]; // since 1.25: an erased creator is null
             foreach ($board->getTasks() as $boardTask) {
                 foreach ($boardTask->getMembers() as $member) {
                     $users[] = $member->getUser();

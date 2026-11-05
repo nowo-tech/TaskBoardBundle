@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Entity;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_column;
@@ -38,6 +40,10 @@ class TaskComment
     #[ORM\Column(name: 'deleted_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $deletedAt = null;
 
+    /** Since 1.25 (audit FP-M1): the author's name, kept when the account is erased (`author_id` SET NULL). */
+    #[ORM\Column(name: 'author_name', type: 'string', length: 180, nullable: true)]
+    private ?string $authorName;
+
     /**
      * @param list<array{id: string, label: string}> $mentions
      */
@@ -45,16 +51,53 @@ class TaskComment
         #[ORM\ManyToOne(targetEntity: Task::class)]
         #[ORM\JoinColumn(name: 'task_id', nullable: false, onDelete: 'CASCADE')]
         private Task $task,
+        // Since 1.25 (audit FP-M1): nullable, ON DELETE SET NULL; the name stays in `author_name`.
         #[ORM\ManyToOne(targetEntity: User::class)]
-        #[ORM\JoinColumn(name: 'author_id', nullable: false, onDelete: 'CASCADE')]
-        private object $author,
+        #[ORM\JoinColumn(name: 'author_id', nullable: true, onDelete: 'SET NULL')]
+        private ?object $author,
         #[ORM\Column(type: 'text')]
         private string $body,
         #[ORM\Column(type: 'json')]
         private array $mentions = [],
+        // Since 1.25: the comment's date in the source tool (a provider sync); null = now.
+        ?DateTimeImmutable $createdAt = null,
     ) {
-        $this->id        = Uuid::generate()->toString();
-        $this->createdAt = new DateTimeImmutable();
+        $this->id         = Uuid::generate()->toString();
+        $this->createdAt  = $createdAt ?? new DateTimeImmutable();
+        $this->authorName = $author === null ? null : Text::cut(UserLabel::of($author), Task::USER_NAME_MAX);
+    }
+
+    /**
+     * Since 1.25: a new author after a people re-association (no edit mark, no notification).
+     *
+     * @internal used by the provider sync's people services only
+     */
+    public function reassignAuthor(object $author): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->author = $author;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->authorName = Text::cut(UserLabel::of($author), Task::USER_NAME_MAX);
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25 (audit FP-M1): the account is being erased — the comment keeps its name snapshot (null with
+     * `$forgetName`) and no longer points at the user, so deleting the user deletes no comment.
+     *
+     * @internal used by the account erasure helper
+     */
+    public function detachAuthor(bool $forgetName = false): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->author = null;
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->authorName = null;
+        }
+
+        return $this;
     }
 
     public function getId(): string
@@ -67,9 +110,16 @@ class TaskComment
         return $this->task;
     }
 
-    public function getAuthor(): object
+    /** The author; null once the account was erased (since 1.25, see {@see self::getAuthorName()}). */
+    public function getAuthor(): ?object
     {
         return $this->author;
+    }
+
+    /** Since 1.25: the author's name when the comment was written or last re-assigned. */
+    public function getAuthorName(): ?string
+    {
+        return $this->authorName;
     }
 
     public function getBody(): string

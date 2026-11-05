@@ -64,6 +64,23 @@ class TaskSyncRun
         $this->runOrder = (int) round(microtime(true) * 1_000_000);
     }
 
+    /** Since 1.25: the time mode of the run's time phase (admin / member / fallback), null = no time phase. */
+    #[ORM\Column(name: 'time_mode', type: 'string', length: 16, nullable: true)]
+    private ?string $timeMode = null;
+
+    public function getTimeMode(): ?string
+    {
+        return $this->timeMode;
+    }
+
+    public function setTimeMode(?string $mode): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->timeMode = $mode;
+
+        return $this;
+    }
+
     public function getRunOrder(): int
     {
         return (int) $this->runOrder;

@@ -12,10 +12,13 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use SortDirection;
 
 use function array_chunk;
+use function array_flip;
+use function array_map;
 use function array_slice;
 use function array_values;
 use function count;
@@ -145,6 +148,30 @@ final readonly class SyncStore
         return $items;
     }
 
+    /**
+     * Since 1.25: the board's tasks (archived ones excluded) per column id ("" = no column), one grouped query.
+     *
+     * @return array<string, int>
+     */
+    public function tasksPerColumn(TaskBoard $board): array
+    {
+        /** @var list<array{column: string|null, n: int|string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(t.column) AS column', 'COUNT(t.id) AS n')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')->andWhere('t.archivedAt IS NULL')
+            ->setParameter('board', $board)
+            ->groupBy('t.column')
+            ->getQuery()
+            ->getArrayResult();
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(string) $row['column']] = (int) $row['n'];
+        }
+
+        return $counts;
+    }
+
     public function findItem(string $id): ?TaskSyncItem
     {
         return $this->entityManager->find(TaskSyncItem::class, $id);
@@ -237,6 +264,33 @@ final readonly class SyncStore
         $this->entityManager->createQuery('DELETE FROM ' . TaskSyncItem::class . ' x WHERE x.connection = :c')->setParameter('c', $connection)->execute();
         $this->entityManager->createQuery('DELETE FROM ' . TaskSyncRun::class . ' x WHERE x.connection = :c')->setParameter('c', $connection)->execute();
         $this->entityManager->createQuery('DELETE FROM ' . TaskBoardConnection::class . ' x WHERE x.id = :id')->setParameter('id', $connection->getId())->execute();
+        // Audit FP-L5: the DQL deletes bypass the identity map. Rows of this connection that are still loaded would make
+        // the next flush (the directory prune) fail after the deletes: they leave the entity manager too.
+        $this->forgetLoaded($connection, $items);
         $this->entityManager->detach($connection);
+    }
+
+    /**
+     * @param array<mixed> $itemIds the ids of the connection's items (already deleted)
+     */
+    private function forgetLoaded(TaskBoardConnection $connection, array $itemIds): void
+    {
+        $items = array_flip(array_map(strval(...), $itemIds));
+        $map   = $this->entityManager->getUnitOfWork()->getIdentityMap();
+        foreach ([TaskSyncComment::class, TaskSyncAttachment::class, TaskSyncMember::class] as $class) {
+            foreach ($map[$class] ?? [] as $row) {
+                // getId() on the item reference never loads it (the row is gone).
+                if (($row instanceof TaskSyncComment || $row instanceof TaskSyncAttachment || $row instanceof TaskSyncMember) && isset($items[$row->getItem()->getId()])) {
+                    $this->entityManager->detach($row);
+                }
+            }
+        }
+        foreach ([TaskSyncItem::class, TaskSyncRun::class] as $class) {
+            foreach ($map[$class] ?? [] as $row) {
+                if (($row instanceof TaskSyncItem || $row instanceof TaskSyncRun) && $row->getConnection()->getId() === $connection->getId()) {
+                    $this->entityManager->detach($row);
+                }
+            }
+        }
     }
 }

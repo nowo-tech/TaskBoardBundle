@@ -8,20 +8,38 @@ use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
+use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonPage;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteSource;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatus;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
+use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryQuery;
 
 use function array_filter;
+use function array_key_exists;
+use function array_merge;
 use function array_shift;
 use function array_slice;
 use function array_values;
 use function count;
 use function ctype_digit;
+use function in_array;
+use function mb_strtolower;
+use function preg_match;
+use function str_contains;
 use function usort;
 
 /**
@@ -30,10 +48,35 @@ use function usort;
  *
  * Only a credential whose secret is {@see self::$acceptedSecret} is accepted (others: auth_failed).
  *
+ * Since 1.25 it also scripts the people of a workspace ({@see self::withWorkspace()}), tracked time
+ * ({@see self::withTimeEntries()}, {@see self::withTaskIntervals()}), folder / space sources ({@see self::addSource()})
+ * and statuses ({@see self::withStatuses()}). The `people` / `timeEntries` capabilities are on only once a workspace
+ * or time entries are set, so a 1.23 script keeps 1.23 behaviour.
+ *
  * @final
  */
-class InMemoryTaskProvider implements TaskProviderInterface
+class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface
 {
+    /** Since 1.25: the workspace every container belongs to (null = no people). */
+    private ?string $workspaceId = null;
+
+    /** @var list<RemotePerson> since 1.25 */
+    private array $people = [];
+
+    private TimeAccess $timeAccess;
+
+    /** @var list<RemoteTimeEntry>|null since 1.25 (null = no time capability) */
+    private ?array $timeEntries = null;
+
+    /** @var array<string, list<RemoteTimeEntry>|null> since 1.25: task id => legacy intervals (null = gone) */
+    private array $intervals = [];
+
+    /** @var array<string, array{0: RemoteSource, 1: list<string>}> since 1.25: container id => source, its list ids */
+    private array $sources = [];
+
+    /** @var array<string, list<RemoteStatus>> since 1.25: container id => statuses */
+    private array $statuses = [];
+
     /** @var array<string, list<RemoteContainer>> parent id ('' = top) => children */
     private array $containers = [];
 
@@ -58,6 +101,69 @@ class InMemoryTaskProvider implements TaskProviderInterface
         private readonly int $pageSize = 100,
         private readonly array $attachmentHosts = ['*.clickup-attachments.com'],
     ) {
+        $this->timeAccess = new TimeAccess(TimeAccessMode::Admin);
+    }
+
+    /**
+     * Since 1.25: every container belongs to `$workspaceId`, whose members are `$people`.
+     *
+     * @param list<RemotePerson> $people
+     */
+    public function withWorkspace(string $workspaceId, array $people = [], ?TimeAccess $timeAccess = null): self
+    {
+        $this->workspaceId = $workspaceId;
+        $this->people      = $people;
+        $this->timeAccess  = $timeAccess ?? $this->timeAccess;
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: the tracked time of the workspace (filtered by window, task location ignored, and assignees).
+     *
+     * @param list<RemoteTimeEntry> $entries
+     */
+    public function withTimeEntries(array $entries): self
+    {
+        $this->timeEntries = $entries;
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: the legacy intervals of a task (null = the provider no longer serves them).
+     *
+     * @param list<RemoteTimeEntry>|null $entries
+     */
+    public function withTaskIntervals(string $taskId, ?array $entries): self
+    {
+        $this->intervals[$taskId] = $entries;
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: a folder or space source made of lists (their tasks come from {@see self::putTask()}).
+     *
+     * @param list<string> $listIds
+     */
+    public function addSource(RemoteSource $source, array $listIds): self
+    {
+        $this->sources[$source->location->containerId()] = [$source, $listIds];
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: the statuses of a container ("<list id>", "f:<id>" or "s:<id>").
+     *
+     * @param list<RemoteStatus> $statuses
+     */
+    public function withStatuses(string $containerId, array $statuses): self
+    {
+        $this->statuses[$containerId] = $statuses;
+
+        return $this;
     }
 
     public function addContainer(RemoteContainer $container): self
@@ -111,7 +217,7 @@ class InMemoryTaskProvider implements TaskProviderInterface
 
     public function capabilities(): ProviderCapabilities
     {
-        return new ProviderCapabilities(true, true, true, true, true, true, $this->attachmentHosts);
+        return new ProviderCapabilities(true, true, true, true, true, true, $this->attachmentHosts, $this->workspaceId !== null, $this->timeEntries !== null, true, true);
     }
 
     public function importScope(ProviderCredential $credential): string
@@ -170,6 +276,117 @@ class InMemoryTaskProvider implements TaskProviderInterface
                 yield (string) $id;
             }
         }
+    }
+
+    public function workspaceOf(ProviderCredential $credential, string $containerId): ?string
+    {
+        $this->enter($credential, 'workspaceOf:' . $containerId);
+
+        return $this->workspaceId;
+    }
+
+    public function fetchPeople(ProviderCredential $credential, string $workspaceId, ?string $cursor = null): RemotePersonPage
+    {
+        $this->enter($credential, 'fetchPeople:' . $workspaceId);
+        if ($workspaceId !== $this->workspaceId) {
+            return new RemotePersonPage([]);
+        }
+        $offset = $cursor !== null && ctype_digit($cursor) ? (int) $cursor : 0;
+
+        return new RemotePersonPage(array_slice($this->people, $offset, $this->pageSize), $offset + $this->pageSize < count($this->people) ? (string) ($offset + $this->pageSize) : null);
+    }
+
+    public function timeAccess(ProviderCredential $credential, string $workspaceId): TimeAccess
+    {
+        $this->enter($credential, 'timeAccess:' . $workspaceId);
+
+        return $this->timeAccess;
+    }
+
+    public function fetchTimeEntries(ProviderCredential $credential, TimeEntryQuery $query): iterable
+    {
+        $this->enter($credential, 'fetchTimeEntries:' . $query->from->getTimestamp() . '-' . $query->to->getTimestamp());
+        $own = $this->timeAccess->tokenUserId;
+
+        return array_values(array_filter($this->timeEntries ?? [], static fn (RemoteTimeEntry $e): bool => $e->start >= $query->from && $e->start < $query->to
+            && ($query->assigneeIds === null ? $own === null || $e->person->providerUserId === $own : in_array($e->person->providerUserId, $query->assigneeIds, true))));
+    }
+
+    public function fetchTaskTimeIntervals(ProviderCredential $credential, string $taskId): ?iterable
+    {
+        $this->enter($credential, 'fetchTaskTimeIntervals:' . $taskId);
+
+        return array_key_exists($taskId, $this->intervals) ? $this->intervals[$taskId] : [];
+    }
+
+    public function findSource(ProviderCredential $credential, string $containerId): ?RemoteSource
+    {
+        $this->enter($credential, 'findSource:' . $containerId);
+
+        return ($this->sources[$containerId] ?? null)[0] ?? null;
+    }
+
+    public function fetchSourceTasks(ProviderCredential $credential, RemoteSource $source, ?DateTimeImmutable $updatedSince, ?string $cursor): RemoteTaskPage
+    {
+        $this->enter($credential, 'fetchSourceTasks:' . $source->location->containerId());
+        $tasks = [];
+        foreach ($this->listIdsOf($source) as $listId) {
+            $tasks = array_merge($tasks, array_values($this->tasks[$listId] ?? []));
+        }
+        $tasks = array_values(array_filter($tasks, static fn (RemoteTask $t): bool => !$updatedSince instanceof DateTimeImmutable || $t->remoteUpdatedAt > $updatedSince));
+        usort($tasks, static fn (RemoteTask $a, RemoteTask $b): int => $a->remoteUpdatedAt <=> $b->remoteUpdatedAt);
+        $offset = $cursor !== null && ctype_digit($cursor) ? (int) $cursor : 0;
+        $last   = $offset + $this->pageSize >= count($tasks);
+
+        return new RemoteTaskPage(array_slice($tasks, $offset, $this->pageSize), $last ? null : (string) ($offset + $this->pageSize), $last);
+    }
+
+    public function existingSourceTaskIds(ProviderCredential $credential, RemoteSource $source): iterable
+    {
+        $this->enter($credential, 'existingSourceTaskIds:' . $source->location->containerId());
+        foreach ($this->listIdsOf($source) as $listId) {
+            foreach ($this->tasks[$listId] ?? [] as $id => $task) {
+                if (!$task->archived) {
+                    yield (string) $id;
+                }
+            }
+        }
+    }
+
+    public function listStatuses(ProviderCredential $credential, RemoteSource $source): array
+    {
+        $this->enter($credential, 'listStatuses:' . $source->location->containerId());
+
+        return $this->statuses[$source->location->containerId()] ?? [];
+    }
+
+    /** Since 1.25: "…/v/li/<id>" of any https address (the ClickUp adapter is stricter). */
+    public function resolveListFromUrl(string $url): ?string
+    {
+        return preg_match('#^https://[^/]+/(?:\d+/)?v/li/([A-Za-z0-9_-]{1,64})/?$#D', $url, $match) === 1 ? $match[1] : null;
+    }
+
+    public function searchLists(ProviderCredential $credential, string $query, int $limit = 20): array
+    {
+        $this->enter($credential, 'searchLists');
+        $found = [];
+        foreach ($this->containers as $children) {
+            foreach ($children as $container) {
+                if ($container->selectable && count($found) < $limit && str_contains(mb_strtolower($container->name), mb_strtolower($query))) {
+                    $found[] = $container;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listIdsOf(RemoteSource $source): array
+    {
+        return $source->location->kind === RemoteLocationKind::List ? [$source->location->id] : ($this->sources[$source->location->containerId()][1] ?? []);
     }
 
     private function enter(ProviderCredential $credential, string $call): void
