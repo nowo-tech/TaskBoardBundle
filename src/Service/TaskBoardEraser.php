@@ -55,6 +55,16 @@ use function random_bytes;
  * the application secret (`%kernel.secret%` in the container). On resume an unsigned or altered cursor, or one of
  * another board, actor or operation, is refused with {@see InvalidEraseCursorException} before anything is touched.
  * Keep the cursor server-side (e.g. a Messenger message) all the same.
+ *
+ * Run id, expiry and replay (audit FP-I9). The first call (`$cursor` = null) creates a random run id, kept by every
+ * cursor of the run and reported by {@see BoardErasedEvent::$runId}. Each cursor carries its issue time (the eraser's
+ * clock) and is refused once older than `$cursorTtlSeconds` (default 1 hour). A cursor of a finished run is refused
+ * without keeping state: a call never returns an unfinished cursor while the board has no task left, and every cursor
+ * of the task phase names an anchor task that was still on the board when it was issued. Once the run is over the
+ * anchor is gone (or, after `deleteBoard()`, the board is gone), so a replayed cursor cannot add its old counts to a
+ * new run's {@see BoardErasedEvent}. A host that deletes the anchor task between two slices only has to start again.
+ *
+ * The HMAC key is a subkey derived from the secret, never the raw `kernel.secret` (audit FP-I10).
  */
 final readonly class TaskBoardEraser
 {
@@ -73,6 +83,7 @@ final readonly class TaskBoardEraser
         private int $timeBudgetSeconds = 20,
         #[SensitiveParameter]
         ?string $cursorSecret = null,
+        private int $cursorTtlSeconds = 3600,
     ) {
         // Without a secret (manual construction), cursors resume only through this instance.
         $this->cursorSigner = new EraseCursorSigner($cursorSecret !== null && $cursorSecret !== '' ? $cursorSecret : bin2hex(random_bytes(32)));
@@ -108,13 +119,16 @@ final readonly class TaskBoardEraser
         $batchSize = max(1, min($batchSize, self::MAX_BATCH));
         $boardId   = $board->getId();
         $actorId   = $this->idOf($actor);
-        $cursor    = $cursor instanceof EraseCursor ? $this->resume($board, $actorId, $cursor, $deleteBoard) : new EraseCursor();
+        $now       = $this->clock->now()->getTimestamp();
+        $cursor    = $cursor instanceof EraseCursor ? $this->resume($board, $actorId, $cursor, $deleteBoard, $now) : new EraseCursor(runId: bin2hex(random_bytes(16)));
+        $runId     = $cursor->runId;
         $refs      = $cursor->attachmentRefs;
         $tasks     = $cursor->tasksDeleted;
         $columns   = $cursor->columnsDeleted;
         $phase     = $cursor->phase;
         $deleted   = 0;
-        $deadline  = $this->clock->now()->getTimestamp() + max(1, $this->timeBudgetSeconds);
+        $deadline  = $now + max(1, $this->timeBudgetSeconds);
+        $remaining = 0;
 
         if ($phase === EraseCursor::PHASE_TASKS) {
             $refs += $this->unlink($board, $actor);
@@ -135,7 +149,8 @@ final readonly class TaskBoardEraser
                 }
                 $this->entityManager->flush();
                 $deleted += count($leaves);
-                if ($this->clock->now()->getTimestamp() >= $deadline) {
+                // Out of time: stop, unless the board is empty (finish now: no unfinished cursor of an empty board).
+                if ($this->clock->now()->getTimestamp() >= $deadline && ($remaining = $this->remaining($board)) > 0) {
                     break;
                 }
             }
@@ -155,15 +170,17 @@ final readonly class TaskBoardEraser
         }
 
         if ($phase !== EraseCursor::PHASE_BOARD) {
-            return new EraseProgress($deleted, $this->remaining($board), false, $this->cursorSigner->sign(new EraseCursor($phase, $tasks, $columns, $refs), $boardId, $actorId, $deleteBoard));
+            $next = new EraseCursor($phase, $tasks, $columns, $refs, null, $runId, $this->clock->now()->getTimestamp(), $this->anchor($board));
+
+            return new EraseProgress($deleted, $remaining, false, $this->cursorSigner->sign($next, $boardId, $actorId, $deleteBoard));
         }
 
         if ($deleteBoard) {
             $this->entityManager->remove($board);
             $this->entityManager->flush();
         }
-        $this->eventDispatcher?->dispatch(new BoardErasedEvent($boardId, $tasks, $columns, $deleteBoard, $actorId), $deleteBoard ? TaskBoardEvents::BOARD_DELETED : TaskBoardEvents::BOARD_EMPTIED);
-        $this->logger->info('TaskBoard board erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $tasks, 'columns' => $columns, 'board_deleted' => $deleteBoard]);
+        $this->eventDispatcher?->dispatch(new BoardErasedEvent($boardId, $tasks, $columns, $deleteBoard, $actorId, $runId), $deleteBoard ? TaskBoardEvents::BOARD_DELETED : TaskBoardEvents::BOARD_EMPTIED);
+        $this->logger->info('TaskBoard board erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $tasks, 'columns' => $columns, 'board_deleted' => $deleteBoard, 'run_id' => $runId]);
 
         return new EraseProgress($deleted, 0, true, null);
     }
@@ -171,21 +188,56 @@ final readonly class TaskBoardEraser
     /**
      * Verifies a cursor handed back by the caller (audit FP-L3) and returns the state to resume from:
      * - the signature must match this board, actor and operation, and the cursor's phase, counts and refs;
+     * - it must carry its run id and issue time and be at most `$cursorTtlSeconds` old (audit FP-I9);
      * - `emptyBoard()` has no column phase: `PHASE_COLUMNS` resumes as `PHASE_BOARD` (it could never return `done`);
      * - a phase past the tasks is allowed only once the board has no task left and no ref is pending;
+     * - a task-phase cursor's anchor task must still be on the board, otherwise its run is over (audit FP-I9);
      * - refs are kept only for task ids that still belong to the board.
      *
      * @throws InvalidEraseCursorException
      */
-    private function resume(TaskBoard $board, ?string $actorId, EraseCursor $cursor, bool $deleteBoard): EraseCursor
+    private function resume(TaskBoard $board, ?string $actorId, EraseCursor $cursor, bool $deleteBoard, int $now): EraseCursor
     {
         $this->cursorSigner->verify($cursor, $board->getId(), $actorId, $deleteBoard);
+        if ($cursor->runId === null || $cursor->issuedAt === null) {
+            throw InvalidEraseCursorException::incomplete();
+        }
+        if ($now - $cursor->issuedAt > max(1, $this->cursorTtlSeconds)) {
+            throw InvalidEraseCursorException::expired();
+        }
         $phase = !$deleteBoard && $cursor->phase === EraseCursor::PHASE_COLUMNS ? EraseCursor::PHASE_BOARD : $cursor->phase;
         if ($phase !== EraseCursor::PHASE_TASKS && ($cursor->attachmentRefs !== [] || $this->remaining($board) > 0)) {
             throw InvalidEraseCursorException::phaseNotAllowed($cursor->phase);
         }
+        if ($phase === EraseCursor::PHASE_TASKS && !$this->isOnBoard($board, $cursor->anchorTaskId)) {
+            throw InvalidEraseCursorException::finished();
+        }
 
-        return new EraseCursor($phase, $cursor->tasksDeleted, $cursor->columnsDeleted, $this->refsOnBoard($board, $cursor->attachmentRefs));
+        return new EraseCursor($phase, $cursor->tasksDeleted, $cursor->columnsDeleted, $this->refsOnBoard($board, $cursor->attachmentRefs), null, $cursor->runId);
+    }
+
+    /**
+     * The id of a task still on the board (the anchor of the next cursor), or null when it has none.
+     */
+    private function anchor(TaskBoard $board): ?string
+    {
+        /** @var list<array{id: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('t.id AS id')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')
+            ->setParameter('board', $board)
+            ->orderBy('t.id', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getArrayResult();
+
+        return isset($rows[0]) ? (string) $rows[0]['id'] : null;
+    }
+
+    private function isOnBoard(TaskBoard $board, ?string $taskId): bool
+    {
+        return $taskId !== null && $this->refsOnBoard($board, [$taskId => []]) !== [];
     }
 
     /**

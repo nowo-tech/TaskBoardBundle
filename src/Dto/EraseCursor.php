@@ -25,6 +25,10 @@ use function is_string;
  * the application secret, bound to the board, the actor and the operation, over the phase, the counts and the refs.
  * The eraser refuses an unsigned or altered cursor ({@see InvalidEraseCursorException}).
  * Keep it server-side anyway (e.g. a Messenger message): never let a browser hand it back.
+ *
+ * Since audit FP-I9 the signed state also holds the run id (random, created by the first call), the issue time (unix
+ * timestamp of the eraser's clock; the eraser refuses a cursor older than its TTL) and an anchor task id (a task still
+ * on the board when the cursor was issued; once the run is over the anchor is gone and the cursor is refused).
  */
 final readonly class EraseCursor
 {
@@ -37,6 +41,9 @@ final readonly class EraseCursor
     /**
      * @param array<string, list<string>> $attachmentRefs task id => storage refs
      * @param string|null $signature set by the eraser; a cursor built by hand is unsigned and refused
+     * @param string|null $runId the erase run this cursor belongs to
+     * @param int|null $issuedAt unix timestamp at which the eraser issued the cursor
+     * @param string|null $anchorTaskId a task still on the board when the cursor was issued
      */
     public function __construct(
         public string $phase = self::PHASE_TASKS,
@@ -44,15 +51,18 @@ final readonly class EraseCursor
         public int $columnsDeleted = 0,
         public array $attachmentRefs = [],
         public ?string $signature = null,
+        public ?string $runId = null,
+        public ?int $issuedAt = null,
+        public ?string $anchorTaskId = null,
     ) {
     }
 
     /**
-     * @return array{phase: string, tasksDeleted: int, columnsDeleted: int, attachmentRefs: array<string, list<string>>, signature: string|null}
+     * @return array{phase: string, tasksDeleted: int, columnsDeleted: int, attachmentRefs: array<string, list<string>>, signature: string|null, runId: string|null, issuedAt: int|null, anchorTaskId: string|null}
      */
     public function toArray(): array
     {
-        return ['phase' => $this->phase, 'tasksDeleted' => $this->tasksDeleted, 'columnsDeleted' => $this->columnsDeleted, 'attachmentRefs' => $this->attachmentRefs, 'signature' => $this->signature];
+        return ['phase' => $this->phase, 'tasksDeleted' => $this->tasksDeleted, 'columnsDeleted' => $this->columnsDeleted, 'attachmentRefs' => $this->attachmentRefs, 'signature' => $this->signature, 'runId' => $this->runId, 'issuedAt' => $this->issuedAt, 'anchorTaskId' => $this->anchorTaskId];
     }
 
     /**
@@ -77,7 +87,15 @@ final readonly class EraseCursor
             is_int($data['tasksDeleted'] ?? null) ? $data['tasksDeleted'] : 0,
             is_int($data['columnsDeleted'] ?? null) ? $data['columnsDeleted'] : 0,
             $refs,
-            is_string($signature) && $signature !== '' ? $signature : null,
+            self::nonEmptyString($signature),
+            self::nonEmptyString($data['runId'] ?? null),
+            is_int($data['issuedAt'] ?? null) ? $data['issuedAt'] : null,
+            self::nonEmptyString($data['anchorTaskId'] ?? null),
         );
+    }
+
+    private static function nonEmptyString(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

@@ -110,6 +110,14 @@ deleting tasks or boards keeps all tracked time.** See [UPGRADING](UPGRADING.md#
   unlink and `TASK_ERASED` with `phase=board`, loop `emptyBoard()` forever with `phase=columns`, or forge the counts of
   `BoardErasedEvent`. Also: refs are kept only for task ids still on the board, `emptyBoard()` resumes a column phase as
   the board phase, and a phase past the tasks is refused while the board still has tasks or pending refs.
+- **Erase cursor run id, expiry and derived key** (audits FP-I9, FP-I10). The cursor also carries (signed) a random
+  `runId` created by the first call and kept by every slice, its `issuedAt` (the eraser's clock) and an `anchorTaskId`
+  (a task still on the board when it was issued). `TaskBoardEraser` gains the optional `$cursorTtlSeconds` (default
+  3600): an older cursor is refused (`InvalidEraseCursorException::expired()`). A cursor of a finished run is refused
+  (`finished()`): no unfinished cursor is returned for an empty board and the anchor of a finished run is gone, so a
+  replay can no longer add its old counts to a new run's `BoardErasedEvent` (which gains an optional `runId`). The HMAC
+  key is now a subkey `hash_hmac('sha256', 'nowo_task_board.erase_cursor', $secret, true)`, not the raw
+  `kernel.secret`.
 
 ## [1.24.0] - 2026-11-05
 
