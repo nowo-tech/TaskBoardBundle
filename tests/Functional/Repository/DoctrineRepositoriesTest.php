@@ -186,8 +186,9 @@ final class DoctrineRepositoriesTest extends KernelTestCase
         $this->service(TaskRepositoryInterface::class)->save($task);
 
         $comments = $this->service(TaskCommentRepositoryInterface::class);
-        $kept     = new TaskComment($task, $this->alice, 'First');
-        $deleted  = new TaskComment($task, $this->bob, 'Gone');
+        // Distinct dates: MySQL DATETIME keeps seconds only, and two comments in the same second have no defined order.
+        $kept    = new TaskComment($task, $this->alice, 'First', [], new DateTimeImmutable('-2 minutes'));
+        $deleted = new TaskComment($task, $this->bob, 'Gone', [], new DateTimeImmutable('-1 minute'));
         $comments->save($kept);
         $comments->save($deleted->markDeleted());
         $this->em->clear();
