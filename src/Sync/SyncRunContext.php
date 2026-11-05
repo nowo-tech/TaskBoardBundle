@@ -86,6 +86,22 @@ final class SyncRunContext
     /** @var list<array{0: Task, 1: StoredAttachment}> files to delete from the host's storage once the page is flushed */
     public array $fileDeletes = [];
 
+    /** @var array<string, int> since 1.25: people / checklist / time counters ({@see SyncReport::$stats}) */
+    public array $stats = [];
+
+    /** @var array<string, int> since 1.25: tasks per column after the run */
+    public array $perColumn = [];
+
+    /** Since 1.25: the run's people directory id (null = no people phase). */
+    public ?string $directoryId = null;
+
+    /** Since 1.25: time phase state. */
+    public ?DateTimeImmutable $timeWindowStart = null;
+
+    public int $timeChunk = 0;
+
+    public ?string $timeMode = null;
+
     public function __construct(
         public string $runId,
         public TaskBoard $board,
@@ -129,6 +145,13 @@ final class SyncRunContext
         $this->warnings            = $previous->warnings;
         $this->total               = $previous->total;
         $this->startedAt           = $previous->startedAt;
+        $this->stats               = $previous->stats;
+    }
+
+    /** Since 1.25: adds to a counter of {@see self::$stats}. */
+    public function count(string $name, int $by = 1): void
+    {
+        $this->stats[$name] = ($this->stats[$name] ?? 0) + $by;
     }
 
     /**
@@ -157,6 +180,9 @@ final class SyncRunContext
             pendingDependencies: $this->pending,
             tasksSeen: $this->tasksSeen,
             pageCap: $this->pageCap,
+            timeWindowStart: $this->timeWindowStart,
+            timeChunk: $this->timeChunk,
+            timeMode: $this->timeMode,
         );
     }
 
@@ -190,6 +216,9 @@ final class SyncRunContext
             total: $this->total,
             startedAt: $this->startedAt,
             syncedAt: $syncedAt,
+            stats: $this->stats,
+            perColumn: $this->perColumn,
+            timeMode: $this->timeMode,
         );
     }
 }

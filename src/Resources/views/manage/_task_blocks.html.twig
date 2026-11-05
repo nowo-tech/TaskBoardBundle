@@ -126,6 +126,25 @@
                             <span class="nowo-task-detail__field-edit" aria-hidden="true">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}</span>
                             <span class="nowo-task-sr-only">{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}</span>
                         </button>
+                        {# Since 1.25: who created it in the provider and who else is assigned / watching there (no user here). #}
+                        {% set _syncCreator = task_board_sync_creator(task) %}
+                        {% if _syncCreator %}
+                            <p class="nowo-task-detail__sync-people" data-sync-creator>
+                                {{ 'task_board.sync.people.created_by'|trans({'%name%': _syncCreator.name, '%provider%': ('task_board.sync.provider.' ~ _syncCreator.provider)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
+                                {% if _syncCreator.boardAccess is same as(false) %}<span class="badge nowo-task-badge">{{ 'task_board.sync.people.no_board_access'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                            </p>
+                        {% endif %}
+                        {% for _role, _key in {assignee: 'task_board.sync.people.also_assigned', watcher: 'task_board.sync.people.also_watching'} %}
+                            {% set _others = task_board_sync_unmatched(task, _role) %}
+                            {% if _others is not empty %}
+                                <p class="nowo-task-detail__sync-people" data-sync-unmatched="{{ _role }}">
+                                    {{ _key|trans({'%provider%': ('task_board.sync.provider.' ~ _others[0].provider)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
+                                    {% for _person in _others %}
+                                        <span>{{ _person.name }}</span>{% if _person.boardAccess is same as(false) %} <span class="badge nowo-task-badge">{{ 'task_board.sync.people.no_board_access'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}{{ not loop.last ? ',' }}
+                                    {% endfor %}
+                                </p>
+                            {% endif %}
+                        {% endfor %}
                     </dd>
                 </div>
 

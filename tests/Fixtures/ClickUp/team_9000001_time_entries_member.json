@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "id": "4000000000000000001",
+      "task": {"id": "86a1x1"},
+      "user": {"id": 1000002, "username": "User 2", "email": "user2@example.test"},
+      "start": "1793000000000",
+      "end": "1793003600000",
+      "duration": "3600000",
+      "description": "Own entry",
+      "at": "1793003600000"
+    }
+  ]
+}

@@ -145,6 +145,30 @@ final readonly class SyncStore
         return $items;
     }
 
+    /**
+     * Since 1.25: the board's tasks (archived ones excluded) per column id ("" = no column), one grouped query.
+     *
+     * @return array<string, int>
+     */
+    public function tasksPerColumn(TaskBoard $board): array
+    {
+        /** @var list<array{column: string|null, n: int|string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(t.column) AS column', 'COUNT(t.id) AS n')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')->andWhere('t.archivedAt IS NULL')
+            ->setParameter('board', $board)
+            ->groupBy('t.column')
+            ->getQuery()
+            ->getArrayResult();
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(string) $row['column']] = (int) $row['n'];
+        }
+
+        return $counts;
+    }
+
     public function findItem(string $id): ?TaskSyncItem
     {
         return $this->entityManager->find(TaskSyncItem::class, $id);

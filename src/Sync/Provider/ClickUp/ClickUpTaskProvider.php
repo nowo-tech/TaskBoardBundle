@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Provider\ClickUp;
 
 use DateTimeImmutable;
+use Normalizer;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpTaskMapper;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
@@ -13,17 +14,39 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteChecklist;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteChecklistItem;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonPage;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteRole;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteSource;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatus;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusType;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
+use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryQuery;
+use Psr\Cache\CacheItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
+use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
@@ -31,8 +54,10 @@ use function array_reverse;
 use function array_slice;
 use function array_unique;
 use function array_values;
+use function class_exists;
 use function count;
 use function ctype_digit;
+use function hash;
 use function implode;
 use function intdiv;
 use function is_array;
@@ -41,14 +66,22 @@ use function is_numeric;
 use function is_scalar;
 use function is_string;
 use function json_encode;
+use function max;
+use function mb_scrub;
 use function mb_strcut;
+use function mb_strtolower;
+use function parse_url;
 use function preg_match;
 use function preg_match_all;
 use function preg_replace;
 use function sprintf;
+use function str_contains;
+use function str_replace;
+use function str_starts_with;
 use function strlen;
 use function substr;
 use function trim;
+use function usort;
 
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -59,7 +92,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -79,6 +112,27 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
     /** The most pages the id scan of the deletions phase reads (100 000 tasks). */
     private const MAX_ID_PAGES = 1000;
 
+    /** Since 1.25: the most calls one list search spends (Beacon's interim finder uses the same budget). */
+    public const SEARCH_CALL_BUDGET = 40;
+
+    /** Since 1.25: seconds a list catalog stays in the lookup cache. */
+    public const SEARCH_CACHE_TTL = 300;
+
+    /** Since 1.25: ClickUp's numeric workspace roles. */
+    private const ROLES = [1 => RemoteRole::Owner, 2 => RemoteRole::Admin, 3 => RemoteRole::Member, 4 => RemoteRole::Guest];
+
+    /** Since 1.25: the most checklist items one task gives (all checklists together). */
+    private const MAX_CHECKLIST_ITEMS = 1000;
+
+    /** Since 1.25: the most lists of a folder whose statuses are read one by one (folder status union). */
+    private const MAX_FOLDER_LISTS = 50;
+
+    /** Since 1.25: a time entry id (ClickUp: long numeric strings). */
+    private const ENTRY_ID_PATTERN = '/^[A-Za-z0-9._:#-]{1,128}$/D';
+
+    /** Since 1.25: controls and bidi overrides removed from a time-entry description (line feeds are kept). */
+    private const DESCRIPTION_STRIP = '/[\x00-\x08\x0B-\x1F\x7F\x{061C}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u';
+
     /**
      * @param list<string> $attachmentHosts
      */
@@ -91,6 +145,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
         private int $maxDescriptionLength = 100_000,
         // Since 1.23: unexpected answer shapes are logged at debug level (keys only).
         private LoggerInterface $logger = new NullLogger(),
+        // Since 1.25: list searches are cached per connection reference (never per token) when a pool is given.
+        private ?CacheItemPoolInterface $lookupCache = null,
     ) {
     }
 
@@ -114,6 +170,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             subtasks: true,
             incremental: true,
             attachmentHosts: $this->attachmentHosts,
+            people: true,
+            timeEntries: true,
+            watchers: true,
+            checklists: true,
         );
     }
 
@@ -255,6 +315,303 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
     }
 
     /**
+     * Since 1.25 (E3): the workspace of a list, folder or space — the space is read from the list or folder, then the
+     * workspaces' spaces are walked until it is found (at most one call per workspace).
+     */
+    public function workspaceOf(ProviderCredential $credential, string $containerId): ?string
+    {
+        $location = RemoteLocation::fromContainerId($containerId);
+        if (!$location instanceof RemoteLocation) {
+            return null;
+        }
+        $spaceId = $location->id;
+        if ($location->kind !== RemoteLocationKind::Space) {
+            $data = $this->getOrNull($credential, sprintf('%s/%s', $location->kind === RemoteLocationKind::List ? 'list' : 'folder', $location->id));
+            if ($data === null) {
+                return null;
+            }
+            $spaceId = $this->itemId(is_array($data['space'] ?? null) ? $data['space'] : []);
+            if ($spaceId === '') {
+                $this->unexpected('space', $data);
+
+                return null;
+            }
+        }
+        foreach ($this->items($this->get($credential, 'team'), 'teams') as $team) {
+            $teamId = $this->itemId($team);
+            if ($teamId === '') {
+                continue;
+            }
+            foreach ($this->items($this->get($credential, sprintf('team/%s/space', $teamId), ['archived' => 'false']), 'spaces') as $space) {
+                if ($this->itemId($space) === $spaceId) {
+                    return $teamId;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Since 1.25 (E1): the members of a workspace (one answer, no paging). Roles 1–4 are owner, admin, member and
+     * guest; the role is read on the user, else on the member. A workspace the token cannot see is an empty page.
+     */
+    public function fetchPeople(ProviderCredential $credential, string $workspaceId, ?string $cursor = null): RemotePersonPage
+    {
+        $people = [];
+        foreach ($this->members($credential, $workspaceId) as [$user, $role]) {
+            $ref = $this->mapper->personRef($user);
+            if (!$ref instanceof RemotePersonRef) {
+                continue;
+            }
+            $avatar   = $this->stringOf($user['profilePicture'] ?? null);
+            $people[] = new RemotePerson($ref->providerUserId, $ref->name, $ref->email, $role, str_starts_with($avatar, 'https://') ? $avatar : null);
+        }
+
+        return new RemotePersonPage($people);
+    }
+
+    /**
+     * Since 1.25 (E2 + E1): the token user and its role. Owners and admins read everyone's time; anyone else (or a
+     * token user missing from the workspace) only their own.
+     */
+    public function timeAccess(ProviderCredential $credential, string $workspaceId): TimeAccess
+    {
+        $me     = $this->get($credential, 'user');
+        $userId = $this->itemId(is_array($me['user'] ?? null) ? $me['user'] : []);
+        if ($userId === '') {
+            $this->unexpected('user', $me);
+
+            return new TimeAccess(TimeAccessMode::Member);
+        }
+        foreach ($this->members($credential, $workspaceId) as [$user, $role]) {
+            if ($this->itemId($user) === $userId) {
+                return new TimeAccess($role?->isAdmin() === true ? TimeAccessMode::Admin : TimeAccessMode::Member, $userId);
+            }
+        }
+
+        return new TimeAccess(TimeAccessMode::Member, $userId);
+    }
+
+    /**
+     * Since 1.25 (E7): the entries of one window and location. `assignee` is sent only with the query's ids (the
+     * directory's people; never user input); without it ClickUp answers the token user's own entries.
+     */
+    public function fetchTimeEntries(ProviderCredential $credential, TimeEntryQuery $query): iterable
+    {
+        $params = [
+            'start_date'             => (string) ($query->from->getTimestamp() * 1000),
+            'end_date'               => (string) ($query->to->getTimestamp() * 1000),
+            'include_task_tags'      => 'false',
+            'include_location_names' => 'false',
+        ];
+        $params[$query->location->kind->value . '_id'] = $this->checkId($query->location->id);
+        $assignees                                     = array_values(array_filter($query->assigneeIds ?? [], static fn (string $id): bool => preg_match(self::ID_PATTERN, $id) === 1));
+        if ($assignees !== []) {
+            $params['assignee'] = implode(',', $assignees);
+        }
+        $entries = [];
+        foreach ($this->items($this->get($credential, sprintf('team/%s/time_entries', $this->checkId($query->workspaceId)), $params), 'data') as $row) {
+            $task  = is_array($row['task'] ?? null) ? $this->itemId($row['task']) : '';
+            $entry = $this->timeEntry($row, $this->mapper->personRef($row['user'] ?? null), $task !== '' ? $task : null);
+            if ($entry instanceof RemoteTimeEntry) {
+                $entries[] = $entry;
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Since 1.25 (E5): one task with its watchers and checklists, for rows of the task list that leave them out.
+     */
+    public function fetchTaskDetail(ProviderCredential $credential, string $taskId): ?RemoteTask
+    {
+        $data = $this->getOrNull($credential, sprintf('task/%s', $this->checkId($taskId)), ['include_markdown_description' => 'true']);
+
+        return $data === null ? null : $this->toRemoteTask($data);
+    }
+
+    /**
+     * Since 1.25 (E8): the legacy per-task intervals of every user; null when ClickUp no longer serves them (404 / 410).
+     */
+    public function fetchTaskTimeIntervals(ProviderCredential $credential, string $taskId): ?iterable
+    {
+        $data = $this->getOrNull($credential, sprintf('task/%s/time', $this->checkId($taskId)));
+        if ($data === null) {
+            return null;
+        }
+        $entries = [];
+        foreach ($this->items($data, 'data') as $row) {
+            $person = $this->mapper->personRef($row['user'] ?? null);
+            foreach ($this->items($row, 'intervals') as $interval) {
+                $entry = $this->timeEntry(['id' => $interval['id'] ?? null, 'start' => $interval['start'] ?? null, 'end' => $interval['end'] ?? null, 'duration' => $interval['time'] ?? null], $person, $taskId);
+                if ($entry instanceof RemoteTimeEntry) {
+                    $entries[] = $entry;
+                }
+            }
+        }
+
+        return $entries;
+    }
+
+    /** Since 1.25: a list ("<id>"), folder ("f:<id>") or space ("s:<id>") with its breadcrumb; null when unknown. */
+    public function findSource(ProviderCredential $credential, string $containerId): ?RemoteSource
+    {
+        $location = RemoteLocation::fromContainerId($containerId);
+        if (!$location instanceof RemoteLocation) {
+            return null;
+        }
+        if ($location->kind === RemoteLocationKind::List) {
+            $list = $this->findContainer($credential, $location->id);
+
+            return $list instanceof RemoteContainer ? new RemoteSource($location, $list->name, null, $list->path, 1, $list->taskCount) : null;
+        }
+        $data = $this->getOrNull($credential, sprintf('%s/%s', $location->kind->value, $location->id));
+        if ($data === null) {
+            return null;
+        }
+        $space = is_array($data['space'] ?? null) ? $this->name($data['space']) : '';
+
+        return new RemoteSource(
+            location: $location,
+            name: $this->name($data),
+            path: $location->kind === RemoteLocationKind::Folder && $space !== '' ? [$space] : [],
+            listCount: is_array($data['lists'] ?? null) ? count($data['lists']) : null,
+            openTaskCount: $this->count($data['task_count'] ?? null),
+        );
+    }
+
+    /**
+     * Since 1.25: tasks of a folder or space through the filtered workspace endpoint (`space_ids[]` / `project_ids[]`
+     * — ClickUp calls folders "projects" there — / `list_ids[]`), same paging and order as a list. A list source keeps
+     * the 1.23 call.
+     */
+    public function fetchSourceTasks(ProviderCredential $credential, RemoteSource $source, ?DateTimeImmutable $updatedSince, ?string $cursor): RemoteTaskPage
+    {
+        if ($source->location->kind === RemoteLocationKind::List) {
+            return $this->fetchTasks($credential, $source->location->id, $updatedSince, $cursor);
+        }
+        $page  = $this->page($cursor);
+        $query = $this->sourceFilter($source) + [
+            'page'                         => $page,
+            'subtasks'                     => 'true',
+            'include_closed'               => 'true',
+            'include_markdown_description' => 'true',
+            'order_by'                     => 'updated',
+            'reverse'                      => 'true',
+        ];
+        if ($updatedSince instanceof DateTimeImmutable) {
+            $query['date_updated_gt'] = (string) ($updatedSince->getTimestamp() * 1000);
+        }
+        $data  = $this->get($credential, sprintf('team/%s/task', $this->sourceWorkspace($credential, $source)), $query);
+        $rows  = $this->items($data, 'tasks');
+        $tasks = [];
+        foreach ($rows as $row) {
+            $task = $this->toRemoteTask($row);
+            if ($task instanceof RemoteTask) {
+                $tasks[] = $task;
+            }
+        }
+        $last = $this->lastPage($data, count($rows));
+
+        return new RemoteTaskPage($tasks, $last ? null : (string) ($page + 1), $last);
+    }
+
+    /** Since 1.25: ids of every task still in a folder or space (a list source keeps the 1.23 scan). */
+    public function existingSourceTaskIds(ProviderCredential $credential, RemoteSource $source): iterable
+    {
+        if ($source->location->kind === RemoteLocationKind::List) {
+            yield from $this->existingTaskIds($credential, $source->location->id);
+
+            return;
+        }
+        $path   = sprintf('team/%s/task', $this->sourceWorkspace($credential, $source));
+        $filter = $this->sourceFilter($source);
+        for ($page = 0;; ++$page) {
+            if ($page >= self::MAX_ID_PAGES) {
+                throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
+            }
+            $data = $this->get($credential, $path, $filter + ['page' => $page, 'subtasks' => 'true', 'include_closed' => 'true']);
+            $rows = $this->items($data, 'tasks');
+            foreach ($rows as $row) {
+                $id = $this->itemId($row);
+                if ($id !== '' && ($row['archived'] ?? false) !== true) {
+                    yield $id;
+                }
+            }
+            if ($this->lastPage($data, count($rows))) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Since 1.25: the statuses of a source in ClickUp order — `GET list/{id}` or `GET space/{id}`; a folder is the
+     * union of its lists' statuses (deduplicated by name, first seen wins).
+     */
+    public function listStatuses(ProviderCredential $credential, RemoteSource $source): array
+    {
+        $id = $this->checkId($source->location->id);
+        if ($source->location->kind !== RemoteLocationKind::Folder) {
+            return $this->statuses($this->get($credential, sprintf('%s/%s', $source->location->kind->value, $id)));
+        }
+        $folder = $this->get($credential, sprintf('folder/%s', $id));
+        if (is_array($folder['statuses'] ?? null)) {
+            return $this->statuses($folder);
+        }
+        $union = [];
+        foreach (array_slice($this->items($folder, 'lists'), 0, self::MAX_FOLDER_LISTS) as $list) {
+            $listId = $this->itemId($list);
+            $data   = is_array($list['statuses'] ?? null) || $listId === '' ? $list : $this->get($credential, sprintf('list/%s', $listId));
+            foreach ($this->statuses($data) as $status) {
+                $union[mb_strtolower($status->name)] ??= new RemoteStatus($status->name, $status->type, $status->color, count($union), $status->openCount);
+            }
+        }
+
+        return array_values($union);
+    }
+
+    /**
+     * Since 1.25: the list id of a pasted ClickUp address (`https://app.clickup.com/` only, no credentials or port):
+     * `/<team>/v/li/<id>`, `/v/li/<id>` or a list view `/<team>/v/<view>/6-<id>-<n>`. No network call.
+     */
+    public function resolveListFromUrl(string $url): ?string
+    {
+        $parts = parse_url(trim($url));
+        if (!is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || ($parts['host'] ?? null) !== 'app.clickup.com' || isset($parts['user']) || isset($parts['pass']) || isset($parts['port'])) {
+            return null;
+        }
+        $path = $parts['path'] ?? '';
+        if (preg_match('#^/(?:\d{1,20}/)?v/li/([A-Za-z0-9_]{1,64})/?$#D', $path, $match) === 1 || preg_match('#^/\d{1,20}/v/[a-z]{1,8}/6-([A-Za-z0-9_]{1,64})-[A-Za-z0-9_-]{1,64}/?$#D', $path, $match) === 1) {
+            return $match[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Since 1.25: lists whose name contains the query (case and accents ignored), walking workspaces → spaces →
+     * folders → lists within {@see self::SEARCH_CALL_BUDGET} calls. The catalog is cached for
+     * {@see self::SEARCH_CACHE_TTL} seconds under a hash of the connection reference (never the token).
+     */
+    public function searchLists(ProviderCredential $credential, string $query, int $limit = 20): array
+    {
+        $needle = $this->fold($query);
+        $found  = [];
+        foreach ($this->catalog($credential) as $list) {
+            if ($needle === '' || str_contains($this->fold($list->name), $needle)) {
+                $found[] = $list;
+                if (count($found) >= max(1, $limit)) {
+                    break;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * @param array<mixed> $row
      */
     private function toRemoteTask(array $row): ?RemoteTask
@@ -277,6 +634,14 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             attachments: $this->attachments($row),
             inlineImageUrls: $this->imageUrls($description),
             customFieldsText: $this->customFields($row),
+            watchers: $this->mapper->personRefs($row['watchers'] ?? null),
+            watchersKnown: is_array($row['watchers'] ?? null),
+            checklists: $this->checklists($row['checklists'] ?? null),
+            checklistsKnown: is_array($row['checklists'] ?? null),
+            timeSpentSeconds: is_numeric($row['time_spent'] ?? null) && (int) $row['time_spent'] >= 0 ? intdiv((int) $row['time_spent'], 1000) : null,
+            status: is_array($row['status'] ?? null) ? $this->status($row['status'], 0) : null,
+            listId: is_array($row['list'] ?? null) && ($listId = $this->itemId($row['list'])) !== '' ? $listId : null,
+            listName: is_array($row['list'] ?? null) && ($listName = $this->name($row['list'])) !== '' ? $listName : null,
         );
     }
 
@@ -301,6 +666,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
             authorName: ($name = $this->stringOf($user['username'] ?? null)) !== '' ? $this->sanitizer->line($name, 120) : null,
             createdAt: $this->date($row['date'] ?? null) ?? new DateTimeImmutable('@0'),
             inlineImageUrls: $this->imageUrls($body),
+            author: $this->mapper->personRef($user),
         );
     }
 
@@ -445,6 +811,311 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface
         }
 
         return $items;
+    }
+
+    /**
+     * Since 1.25: the members of one workspace as [user, role] (E1).
+     *
+     * @return list<array{0: array<mixed>, 1: RemoteRole|null}>
+     */
+    private function members(ProviderCredential $credential, string $workspaceId): array
+    {
+        $members = [];
+        foreach ($this->items($this->get($credential, 'team'), 'teams') as $team) {
+            if ($this->itemId($team) !== $workspaceId) {
+                continue;
+            }
+            foreach ($this->items($team, 'members') as $member) {
+                $user = is_array($member['user'] ?? null) ? $member['user'] : [];
+                // Unconfirmed: the role sits on the user (else on the member); a missing or unknown role is null.
+                $role      = $user['role'] ?? $member['role'] ?? null;
+                $members[] = [$user, is_numeric($role) ? (self::ROLES[(int) $role] ?? null) : null];
+            }
+        }
+
+        return $members;
+    }
+
+    /**
+     * Since 1.25: one time entry (E7 row or E8 interval); null without an id, a person or a start. Milliseconds are
+     * floored to seconds; a negative duration is a running timer; `billable` only when it is a JSON bool.
+     *
+     * @param array<mixed> $row
+     */
+    private function timeEntry(array $row, ?RemotePersonRef $person, ?string $taskId): ?RemoteTimeEntry
+    {
+        $id    = $this->stringOf($row['id'] ?? null);
+        $start = $this->date($row['start'] ?? null);
+        if (preg_match(self::ENTRY_ID_PATTERN, $id) !== 1 || !$person instanceof RemotePersonRef || !$start instanceof DateTimeImmutable) {
+            return null;
+        }
+        $duration = is_numeric($row['duration'] ?? null) ? (int) $row['duration'] : 0;
+        $tags     = [];
+        foreach (array_slice($this->items($row, 'tags'), 0, 20) as $tag) {
+            $name = $this->sanitizer->line($this->stringOf($tag['name'] ?? null), 64);
+            if ($name !== '') {
+                $tags[] = $name;
+            }
+        }
+
+        return new RemoteTimeEntry(
+            id: $id,
+            taskId: $taskId,
+            person: $person,
+            start: $start,
+            end: $duration < 0 ? null : $this->date($row['end'] ?? null),
+            durationSeconds: $duration < 0 ? -1 : intdiv($duration, 1000),
+            running: $duration < 0,
+            billable: is_bool($row['billable'] ?? null) ? $row['billable'] : null,
+            description: $this->description($row['description'] ?? null),
+            tags: $tags,
+            remoteUpdatedAt: $this->date($row['at'] ?? null),
+        );
+    }
+
+    /**
+     * Since 1.25: a time-entry description as plain text, kept whole (owner decision: no length cap) — line breaks
+     * normalised to LF, other controls and bidi overrides removed, trimmed; white space only → null.
+     */
+    private function description(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+        $text = trim((string) preg_replace(self::DESCRIPTION_STRIP, '', str_replace(["\r\n", "\r", "\t"], ["\n", "\n", ' '], mb_scrub($value, 'UTF-8'))));
+
+        return $text === '' ? null : $text;
+    }
+
+    /**
+     * Since 1.25: the filter of the workspace task endpoint for a folder or a space.
+     *
+     * @return array<string, string>
+     */
+    private function sourceFilter(RemoteSource $source): array
+    {
+        return [($source->location->kind === RemoteLocationKind::Folder ? 'project_ids[]' : 'space_ids[]') => $this->checkId($source->location->id)];
+    }
+
+    /** Since 1.25: the workspace of a source (given, else looked up). */
+    private function sourceWorkspace(ProviderCredential $credential, RemoteSource $source): string
+    {
+        $workspaceId = $source->workspaceId ?? $this->workspaceOf($credential, $source->location->containerId());
+        if ($workspaceId === null) {
+            throw new ProviderException(ProviderErrorCode::NotFound);
+        }
+
+        return $this->checkId($workspaceId);
+    }
+
+    /**
+     * Since 1.25: the `statuses` of a list, folder or space answer, by `orderindex`.
+     *
+     * @param array<mixed> $data
+     *
+     * @return list<RemoteStatus>
+     */
+    private function statuses(array $data): array
+    {
+        $statuses = [];
+        foreach ($this->items($data, 'statuses') as $index => $row) {
+            $status = $this->status($row, $index);
+            if ($status instanceof RemoteStatus) {
+                $statuses[] = $status;
+            }
+        }
+        usort($statuses, static fn (RemoteStatus $a, RemoteStatus $b): int => $a->position <=> $b->position);
+
+        return $statuses;
+    }
+
+    /**
+     * Since 1.25: one status ({status, type, color, orderindex}); null without a name.
+     *
+     * @param array<mixed> $row
+     */
+    private function status(array $row, int $fallbackPosition): ?RemoteStatus
+    {
+        $name = $this->sanitizer->line($this->stringOf($row['status'] ?? $row['name'] ?? null), 255);
+        if ($name === '') {
+            return null;
+        }
+        $color = $this->stringOf($row['color'] ?? null);
+
+        return new RemoteStatus(
+            name: $name,
+            type: RemoteStatusType::tryFrom(mb_strtolower($this->stringOf($row['type'] ?? null))),
+            color: preg_match('/^#[0-9A-Fa-f]{3,8}$/D', $color) === 1 ? $color : null,
+            position: is_numeric($row['orderindex'] ?? null) ? (int) $row['orderindex'] : $fallbackPosition,
+        );
+    }
+
+    /**
+     * Since 1.25: the checklists of a task, by `orderindex`; nested items are flattened in tree order (parent, then
+     * its children) as siblings.
+     *
+     * @return list<RemoteChecklist>
+     */
+    private function checklists(mixed $value): array
+    {
+        $checklists = [];
+        $budget     = self::MAX_CHECKLIST_ITEMS;
+        $rows       = is_array($value) ? array_values(array_filter($value, is_array(...))) : [];
+        usort($rows, fn (array $a, array $b): int => $this->order($a) <=> $this->order($b));
+        foreach ($rows as $position => $row) {
+            $id = $this->itemId($row);
+            if ($id === '') {
+                continue;
+            }
+            /** @var array<string, list<array<mixed>>> $children parent item id ('' = top) => items */
+            $children = [];
+            $known    = [];
+            foreach ($this->items($row, 'items') as $item) {
+                $itemId = $this->itemId($item);
+                if ($itemId !== '') {
+                    $known[$itemId] = $item;
+                }
+            }
+            foreach ($known as $itemId => $item) {
+                $parent                                                                   = $this->stringOf($item['parent'] ?? null);
+                $children[isset($known[$parent]) && $parent !== $itemId ? $parent : ''][] = $item;
+            }
+            $items = [];
+            $this->flatten($children, '', null, $items, [], $budget);
+            $checklists[] = new RemoteChecklist($id, $this->sanitizer->line($this->stringOf($row['name'] ?? null), 120), $position, $items);
+        }
+
+        return $checklists;
+    }
+
+    /**
+     * @param array<string, list<array<mixed>>> $children
+     * @param list<RemoteChecklistItem> $items
+     * @param array<string, true> $path the ancestors (a cycle stops)
+     */
+    private function flatten(array $children, string $parentKey, ?string $parentId, array &$items, array $path, int &$budget): void
+    {
+        $level = $children[$parentKey] ?? [];
+        usort($level, fn (array $a, array $b): int => $this->order($a) <=> $this->order($b));
+        foreach ($level as $item) {
+            $id = $this->itemId($item);
+            if (isset($path[$id]) || $budget <= 0) {
+                continue;
+            }
+            --$budget;
+            $items[] = new RemoteChecklistItem(
+                id: $id,
+                name: $this->sanitizer->line($this->stringOf($item['name'] ?? null), 255),
+                position: count($items),
+                resolved: ($item['resolved'] ?? false) === true,
+                assignee: $this->mapper->personRef($item['assignee'] ?? null),
+                parentItemId: $parentId,
+            );
+            $this->flatten($children, $id, $id, $items, $path + [$id => true], $budget);
+        }
+    }
+
+    /**
+     * @param array<mixed> $row
+     */
+    private function order(array $row): int
+    {
+        return is_numeric($row['orderindex'] ?? null) ? (int) $row['orderindex'] : 0;
+    }
+
+    /**
+     * Since 1.25: every list the token can see (with its breadcrumb), within the call budget; cached per connection
+     * reference when a pool is configured.
+     *
+     * @return list<RemoteContainer>
+     */
+    private function catalog(ProviderCredential $credential): array
+    {
+        $item = $this->lookupCache?->getItem('nowo_task_board.clickup.lists.' . hash('sha256', $credential->connectionRef));
+        if ($item instanceof CacheItemInterface && $item->isHit() && is_array($cached = $item->get())) {
+            $lists = [];
+            foreach ($cached as $row) {
+                if (is_array($row) && is_string($row['id'] ?? null) && is_string($row['name'] ?? null) && is_array($row['path'] ?? null)) {
+                    $lists[] = new RemoteContainer($row['id'], $row['name'], ContainerType::List, null, true, false, null, array_values(array_filter($row['path'], is_string(...))));
+                }
+            }
+
+            return $lists;
+        }
+        $calls = 0;
+        $lists = [];
+        $call  = function (string $path, array $query = []) use ($credential, &$calls): ?array {
+            if ($calls >= self::SEARCH_CALL_BUDGET) {
+                return null;
+            }
+            ++$calls;
+
+            return $this->get($credential, $path, $query);
+        };
+        foreach ($this->items($call('team') ?? ['teams' => []], 'teams') as $team) {
+            $teamId = $this->itemId($team);
+            $spaces = $teamId === '' ? [] : $this->items($call(sprintf('team/%s/space', $teamId), ['archived' => 'false']) ?? ['spaces' => []], 'spaces');
+            foreach ($spaces as $space) {
+                $spaceId = $this->itemId($space);
+                if ($spaceId === '') {
+                    continue;
+                }
+                foreach ($this->items($call(sprintf('space/%s/list', $spaceId), ['archived' => 'false']) ?? ['lists' => []], 'lists') as $list) {
+                    $lists[] = [$list, [$this->name($space)]];
+                }
+                foreach ($this->items($call(sprintf('space/%s/folder', $spaceId), ['archived' => 'false']) ?? ['folders' => []], 'folders') as $folder) {
+                    // The folder answer carries its lists; no call per folder.
+                    foreach ($this->items($folder + ['lists' => []], 'lists') as $list) {
+                        $lists[] = [$list, [$this->name($space), $this->name($folder)]];
+                    }
+                }
+            }
+        }
+        $found = [];
+        $rows  = [];
+        foreach ($lists as [$list, $path]) {
+            $id = $this->itemId($list);
+            if ($id !== '') {
+                $found[] = new RemoteContainer($id, $this->name($list), ContainerType::List, null, true, false, $this->count($list['task_count'] ?? null), $path);
+                $rows[]  = ['id' => $id, 'name' => $this->name($list), 'path' => $path];
+            }
+        }
+        if ($item instanceof CacheItemInterface && $this->lookupCache instanceof CacheItemPoolInterface) {
+            $this->lookupCache->save($item->set($rows)->expiresAfter(self::SEARCH_CACHE_TTL));
+        }
+
+        return $found;
+    }
+
+    /** Since 1.25: lower case without accents (search matching). */
+    private function fold(string $text): string
+    {
+        $text = mb_strtolower(trim($text));
+        if (class_exists(Normalizer::class)) {
+            $text = (string) preg_replace('/\p{Mn}+/u', '', (string) Normalizer::normalize($text, Normalizer::FORM_D));
+        }
+
+        return $text;
+    }
+
+    /**
+     * Since 1.25: an answer, or null when ClickUp says the resource is gone (404 / 410).
+     *
+     * @param array<string, scalar> $query
+     *
+     * @return array<mixed>|null
+     */
+    private function getOrNull(ProviderCredential $credential, string $path, array $query = []): ?array
+    {
+        try {
+            return $this->get($credential, $path, $query);
+        } catch (ProviderException $exception) {
+            if ($exception->errorCode === ProviderErrorCode::NotFound) {
+                return null;
+            }
+
+            throw $exception;
+        }
     }
 
     /**

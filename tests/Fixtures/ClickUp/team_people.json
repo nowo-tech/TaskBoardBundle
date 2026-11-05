@@ -1,0 +1,26 @@
+{
+  "teams": [
+    {
+      "id": "9000001",
+      "name": "Workspace 1",
+      "color": "#7b68ee",
+      "avatar": null,
+      "members": [
+        {"user": {"id": 1000001, "username": "User 1", "email": "user1@example.test", "color": "#000000", "profilePicture": null, "initials": "U1", "role": 1}},
+        {"user": {"id": 1000002, "username": "User 2", "email": "user2@example.test", "color": "#000000", "profilePicture": null, "initials": "U2", "role": 2}},
+        {"user": {"id": 1000003, "username": "User 3", "email": "user3@example.test", "color": "#000000", "profilePicture": null, "initials": "U3", "role": 3}},
+        {"user": {"id": 1000004, "username": "User 4", "email": "user4@example.test", "color": "#000000", "profilePicture": null, "initials": "U4", "role": 4}},
+        {"user": {"id": 1000005, "username": "User 5", "email": null, "color": "#000000", "profilePicture": null, "initials": "U5"}, "role": 3},
+        {"user": {"id": 1000006, "username": "User 6", "email": "not-an-email", "color": "#000000", "profilePicture": null, "initials": "U6"}},
+        {"user": {"username": "No id"}}
+      ]
+    },
+    {
+      "id": "9000002",
+      "name": "Workspace 2",
+      "members": [
+        {"user": {"id": 1000009, "username": "User 9", "email": "user9@example.test", "role": 3}}
+      ]
+    }
+  ]
+}

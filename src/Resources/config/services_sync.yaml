@@ -102,3 +102,50 @@ services:
         tags: ['controller.service_arguments']
 
     Nowo\TaskBoardBundle\Command\TaskBoardSyncCommand: ~
+
+    # Since 1.25: the people directory (people, creator, assignees, watchers, comment authors), checklists, statuses,
+    # tracked time through the host's sink, the pre-scans and re-association. Arguments that come from the config are
+    # set by the extension (registerSyncPeople()).
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\Hook\DefaultSyncPersonResolver:
+        arguments:
+            $userClass: '%nowo_task_board.user_class%'
+            $assigneeProvider: '@?Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface'
+
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
+
+    Nowo\TaskBoardBundle\Sync\People\PeopleProjection: ~
+    Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter: ~
+
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
+
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleProjector:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\TaskSyncSourceScanner:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\People\TaskSyncCommentLegacyAuthorMigrator:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\SyncChecklistWriter: ~
+
+    Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase:
+        arguments:
+            $sink: null
+
+    Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider:
+        arguments:
+            $translator: '@?translator'
+            $userClass: '%nowo_task_board.user_class%'

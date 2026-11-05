@@ -112,7 +112,7 @@ final readonly class ProviderHttpClient
                 $response->cancel();
 
                 throw new ProviderException(match ($status) {
-                    401 => ProviderErrorCode::AuthFailed, 403 => ProviderErrorCode::Forbidden, 404 => ProviderErrorCode::NotFound, default => ProviderErrorCode::InvalidResponse,
+                    401 => ProviderErrorCode::AuthFailed, 403 => ProviderErrorCode::Forbidden, 404, 410 => ProviderErrorCode::NotFound, default => ProviderErrorCode::InvalidResponse,
                 });
             }
 

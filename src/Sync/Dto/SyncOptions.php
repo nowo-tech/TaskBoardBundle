@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\Dto;
 
+use DateTimeImmutable;
+
 /**
  * Since 1.23: the options of one run.
  */
@@ -27,6 +29,16 @@ final readonly class SyncOptions
         public bool $allowMassArchive = false,
         public ?int $maxPages = null,
         public ?int $timeBudgetSeconds = null,
+        /** Since 1.25: refresh the people directory and resolve people through it (when the provider has people). */
+        public bool $people = true,
+        /** Since 1.25: a first import is refused (`people_mapping_required`) until the People step was saved. */
+        public bool $requirePeopleMapping = false,
+        /** Since 1.25: run the `time_entries` phase (needs `sync.time_entries.sink`). */
+        public bool $timeEntries = false,
+        /** Since 1.25: start of the first time window (null = the board's oldest task). */
+        public ?DateTimeImmutable $timeFrom = null,
+        /** Since 1.25: member token only — read the legacy per-task intervals (explicit action, never automatic). */
+        public bool $timeFallbackPerTask = false,
     ) {
     }
 }

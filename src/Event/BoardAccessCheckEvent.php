@@ -24,6 +24,14 @@ final class BoardAccessCheckEvent extends Event
      */
     public const ACTION_MANAGE_CONNECTION = 'manage_connection';
 
+    /**
+     * Since 1.25: bringing tasks in from outside — a file import into the board or under a task, and the provider
+     * connection (link, sync, people mapping, unlink). Granted by default to whoever may edit the board (and, for the
+     * connection, manage it); a host denies it to narrow imports to a dedicated permission (e.g. Beacon's
+     * `project.tasks.import`).
+     */
+    public const ACTION_IMPORT_TASKS = 'import_tasks';
+
     private bool $granted = false;
 
     private bool $denied = false;

@@ -50,6 +50,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
+use Nowo\TaskBoardBundle\Sync\Hook\DefaultSyncPersonResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
 use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
@@ -58,11 +59,17 @@ use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
+use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
@@ -228,16 +235,55 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->setAlias(UrlGuardInterface::class, OutboundUrlGuardAdapter::class);
         }
         if ($sync['providers']['clickup']['enabled']) {
+            $lookupCache = $sync['lookup']['cache_pool'];
             $container->setDefinition(ClickUpTaskProvider::class, (new Definition(ClickUpTaskProvider::class))
                 ->setAutowired(true)
                 ->setArgument('$attachmentHosts', array_values($sync['providers']['clickup']['attachment_hosts']))
                 ->setArgument('$maxComments', $sync['max_comments_per_task'])
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
+                ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
                 ->addTag('nowo_task_board.task_provider'));
         }
+        $this->registerSyncPeople($container, $sync);
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$connectionBadges', new Reference(ConnectionBadgeProvider::class));
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$syncEnabled', true);
+    }
+
+    /**
+     * Since 1.25: the people directory, watchers, checklists, tracked time (through the host's sink) and the
+     * pre-scans, from `sync.people`, `sync.watchers`, `sync.checklists`, `sync.time_entries` and `sync.list_as_tag`.
+     *
+     * @param array<string, mixed> $sync
+     */
+    private function registerSyncPeople(ContainerBuilder $container, array $sync): void
+    {
+        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
+        $people = $sync['people'];
+        /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int} $time */
+        $time = $sync['time_entries'];
+        $container->getDefinition(DefaultSyncPersonResolver::class)->setArgument('$requireVerifiedEmail', $people['require_verified_email']);
+        $container->setAlias(SyncPersonResolverInterface::class, $this->serviceOr($people['resolver'], DefaultSyncPersonResolver::class));
+        $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$defaultBatchSize', $people['reassign_batch_size']);
+        $container->getDefinition(TaskSyncPeopleScanner::class)
+            ->setArgument('$maxTaskPages', $people['scan']['max_task_pages'])
+            ->setArgument('$maxCommentTasks', $people['scan']['max_comment_tasks'])
+            ->setArgument('$timeWindow', $people['scan']['time_window'])
+            ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call']);
+        $container->getDefinition(TimeEntryPhase::class)
+            ->setArgument('$sink', is_string($time['sink']) && $time['sink'] !== '' ? new Reference($time['sink']) : null)
+            ->setArgument('$windowDays', $time['window_days'])
+            ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call'])
+            ->setArgument('$maxEntriesPerWindow', $time['max_entries_per_window'])
+            ->setArgument('$maxWindowsPerRun', $time['max_windows_per_run'])
+            ->setArgument('$fallbackMaxTasks', $time['fallback_max_tasks_per_run']);
+        $container->getDefinition(SyncTaskWriter::class)
+            ->setArgument('$listAsTag', (bool) $sync['list_as_tag'])
+            ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])
+            ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
+            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run']);
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class));
     }
 
     private function serviceOr(mixed $id, string $default): string

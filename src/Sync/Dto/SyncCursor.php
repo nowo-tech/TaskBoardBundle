@@ -35,6 +35,12 @@ final readonly class SyncCursor
         public int $tasksSeen = 0,
         /** Since audit EG-L2: the most task pages this run reads (0: the configured default). */
         public int $pageCap = 0,
+        /** Since 1.25: start of the next time window to read (time phase). */
+        public ?DateTimeImmutable $timeWindowStart = null,
+        /** Since 1.25: the assignee chunk of that window. */
+        public int $timeChunk = 0,
+        /** Since 1.25: the time mode chosen at the start of the time phase. */
+        public ?string $timeMode = null,
     ) {
     }
 
@@ -54,6 +60,9 @@ final readonly class SyncCursor
             'pendingDependencies' => array_slice($this->pendingDependencies, 0, self::MAX_PENDING),
             'tasksSeen'           => $this->tasksSeen,
             'pageCap'             => $this->pageCap,
+            'timeWindowStart'     => $this->timeWindowStart?->format(DateTimeInterface::ATOM),
+            'timeChunk'           => $this->timeChunk,
+            'timeMode'            => $this->timeMode,
         ];
     }
 
@@ -81,6 +90,9 @@ final readonly class SyncCursor
             pendingDependencies: array_slice($pending, 0, self::MAX_PENDING),
             tasksSeen: SyncValues::int($data['tasksSeen'] ?? 0),
             pageCap: SyncValues::int($data['pageCap'] ?? 0),
+            timeWindowStart: SyncValues::date($data['timeWindowStart'] ?? null),
+            timeChunk: SyncValues::int($data['timeChunk'] ?? 0),
+            timeMode: isset($data['timeMode']) ? SyncValues::string($data['timeMode']) : null,
         );
     }
 }

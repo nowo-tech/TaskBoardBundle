@@ -5,6 +5,11 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.25.0](#to-1250)
+  - [Behaviour changes for sync hosts](#behaviour-changes-for-sync-hosts)
+  - [Import access decision (every host)](#import-access-decision-every-host)
+  - [Schema change with `sync.enabled: true` only](#schema-change-with-syncenabled-true-only)
+  - [After the update (sync hosts)](#after-the-update-sync-hosts)
 - [To 1.24.0](#to-1240)
 - [To 1.23.2](#to-1232)
   - [Time entries survive their task](#time-entries-survive-their-task)
@@ -115,6 +120,158 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+The next release is **1.25.0**: see [To 1.25.0](#to-1250) (ClickUp full import: people, creator, watchers, checklists,
+tracked time through a host sink, status types).
+
+## To 1.25.0
+
+From **1.24.0**: `composer update nowo-tech/task-board-bundle`. Hosts **without** `sync.enabled` get no schema change;
+only the new `import_tasks` access decision below applies to them.
+
+### Behaviour changes for sync hosts
+
+1. **Original creation date.** A task the sync creates gets the provider's creation date as `Task::createdAt`
+   (accepted between 2000-01-01 and now + 5 min, else now). Tasks written by 1.23 / 1.24 get it once, with their
+   creator, on their next fetch (back-fill, no conflict note).
+2. **No author prefix on new comments.** New imported comments are written without the `**name** (ClickUp):` line; the
+   templates render *name (ClickUp)* from the person reference, and the comment keeps the ClickUp date. Run the
+   one-off legacy migrator for comments written before (below).
+3. **Verified e-mails only (`sync.people.require_verified_email: true`, default).** An e-mail match is applied
+   automatically only when the user is verified: the host resolver says so, and `DefaultSyncPersonResolver` reads
+   `isVerified()` when the user class has it. **A user class without `isVerified()` now gets *suggested* matches**,
+   which need a confirmation (`applyMapping()` with a `PersonMappingDecision::CONFIRM` decision). Set the option to `false` for 1.23 parity.
+4. **Projection rule.** A mapped user who cannot view the board (`canViewBoard()`) is no longer written as creator,
+   assignee, watcher or comment author: the run's actor is written plus the person reference, and the person is listed
+   as *Also assigned in ClickUp*. A mapping never grants access.
+
+### Import access decision (every host)
+
+File imports (into a board or under a task) and `canManageBoardConnection()` now also dispatch `BOARD_ACCESS_CHECK`
+with the action `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (`import_tasks`). It is **granted by default**, so nothing
+changes unless a listener denies it. To make importing a narrower power (e.g. Beacon's `project.tasks.import`, Full /
+Owner only, on a general board only its owner), deny that action in your listener:
+
+```php
+if ($event->getAction() === BoardAccessCheckEvent::ACTION_IMPORT_TASKS && !$this->canImport($event->getSubject(), $event->getBoard())) {
+    $event->deny();
+}
+```
+
+A listener that denies every action without reading `getAction()` already denied imports; one that grants every
+action leaves imports granted, as today. Refused file imports answer 403; the connection pages answer 404 as before.
+
+### Schema change with `sync.enabled: true` only
+
+Run `php bin/console doctrine:migrations:diff` and review it. The diff must contain exactly the statements below
+(MySQL 8 / MariaDB, without `table_prefix`; `<users>` / `<user pk>` as in [To 1.23.0](#schema-change-with-syncenabled-true-only-the-sync-tables)).
+No data is rewritten at migration time: existing items get `backfill_level = 0` and `item_kind = 'task'`, existing
+connections `directory_id = NULL` (the next run attaches a directory) and `source_type = 'list'`.
+
+Reference DDL (MySQL 8 / MariaDB, without `table_prefix`; `<user pk>` is your user key type):
+
+```sql
+CREATE TABLE task_board_sync_directories (
+  id VARCHAR(36) NOT NULL, provider VARCHAR(32) NOT NULL, scope_key VARCHAR(64) NOT NULL,
+  workspace_id VARCHAR(64) NOT NULL, reviewed_at DATETIME DEFAULT NULL, reviewed_by_id <user pk> DEFAULT NULL,
+  anonymous_counter INT DEFAULT 0 NOT NULL, created_at DATETIME NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_directories (provider, scope_key, workspace_id), PRIMARY KEY (id)
+);
+CREATE TABLE task_board_sync_people (
+  id VARCHAR(36) NOT NULL, directory_id VARCHAR(36) NOT NULL, provider_user_id VARCHAR(64) NOT NULL,
+  name VARCHAR(120) NOT NULL, email VARCHAR(254) DEFAULT NULL, email_normalized VARCHAR(254) DEFAULT NULL,
+  remote_role VARCHAR(16) DEFAULT NULL, mapping VARCHAR(16) NOT NULL,
+  mapped_user_id <user pk> DEFAULT NULL, suggested_user_id <user pk> DEFAULT NULL, mapped_by_id <user pk> DEFAULT NULL,
+  mapped_at DATETIME DEFAULT NULL, first_seen_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL,
+  email_changed_at DATETIME DEFAULT NULL, anonymised_at DATETIME DEFAULT NULL, seen_kinds SMALLINT DEFAULT 0 NOT NULL,
+  reassign_id VARCHAR(36) DEFAULT NULL, reassign_to_user_id <user pk> DEFAULT NULL, reassign_external TINYINT(1) DEFAULT 0 NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_people_dir_remote (directory_id, provider_user_id),
+  INDEX idx_task_board_sync_people_dir_mapping (directory_id, mapping),
+  INDEX idx_task_board_sync_people_mapped (mapped_user_id),
+  INDEX idx_task_board_sync_people_dir_email (directory_id, email_normalized), PRIMARY KEY (id)
+);
+CREATE TABLE task_board_sync_members (
+  id VARCHAR(36) NOT NULL, item_id VARCHAR(36) NOT NULL, task_member_id VARCHAR(36) NOT NULL,
+  person_id VARCHAR(36) NOT NULL, member_role VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL,
+  UNIQUE INDEX uniq_task_board_sync_members_member (task_member_id),
+  INDEX idx_task_board_sync_members_person (person_id), PRIMARY KEY (id)
+);
+ALTER TABLE task_board_connections ADD directory_id VARCHAR(36) DEFAULT NULL,
+  ADD source_type VARCHAR(8) DEFAULT 'list' NOT NULL, ADD source_id VARCHAR(128) DEFAULT NULL,
+  ADD status_column_map JSON DEFAULT NULL;
+ALTER TABLE task_board_sync_items
+  ADD creator_person_id VARCHAR(36) DEFAULT NULL, ADD unmatched_people JSON DEFAULT NULL,
+  ADD backfill_level SMALLINT DEFAULT 0 NOT NULL, ADD item_kind VARCHAR(16) DEFAULT 'task' NOT NULL;
+ALTER TABLE task_board_sync_comments ADD author_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_runs ADD time_mode VARCHAR(16) DEFAULT NULL;
+-- FKs: people.directory_id → directories ON DELETE CASCADE; members.person_id → people CASCADE;
+-- sync_items.creator_person_id / sync_comments.author_person_id → people SET NULL; every user FK SET NULL;
+-- connections.directory_id → directories SET NULL; members.item_id → sync_items CASCADE;
+-- members.task_member_id → task_board_task_members CASCADE.
+```
+
+PostgreSQL / SQLite: the same with `TIMESTAMP(0) WITHOUT TIME ZONE` / `BOOLEAN` / `JSON` (`TEXT` on SQLite). Rollback:
+drop the new tables and columns (1.24 ignores them).
+
+The exact diff `doctrine:migrations:diff` produces from 1.24 on MySQL 8 (DBAL 4; `app_user` / `INT` stand for your user
+table and key; Doctrine adds its own `IDX_…` / `FK_…` names next to the named indexes; the schema adoption test
+`SyncSchemaPeopleTest` asserts it):
+
+```sql
+CREATE TABLE task_board_sync_people (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, email VARCHAR(254) DEFAULT NULL, email_normalized VARCHAR(254) DEFAULT NULL, remote_role VARCHAR(16) DEFAULT NULL, mapping VARCHAR(16) NOT NULL, mapped_at DATETIME DEFAULT NULL, first_seen_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL, email_changed_at DATETIME DEFAULT NULL, anonymised_at DATETIME DEFAULT NULL, seen_kinds SMALLINT DEFAULT 0 NOT NULL, reassign_id VARCHAR(36) DEFAULT NULL, reassign_external TINYINT DEFAULT 0 NOT NULL, provider_user_id VARCHAR(64) NOT NULL, directory_id VARCHAR(36) NOT NULL, mapped_user_id INT DEFAULT NULL, suggested_user_id INT DEFAULT NULL, mapped_by_id INT DEFAULT NULL, reassign_to_user_id INT DEFAULT NULL, INDEX idx_task_board_sync_people_dir_mapping (directory_id, mapping), INDEX idx_task_board_sync_people_dir_email (directory_id, email_normalized), INDEX idx_task_board_sync_people_mapped (mapped_user_id), UNIQUE INDEX uniq_task_board_sync_people_dir_remote (directory_id, provider_user_id), INDEX IDX_AB1F29D72C94069F (directory_id), INDEX IDX_AB1F29D7E5678C70 (suggested_user_id), INDEX IDX_AB1F29D72C770F2E (mapped_by_id), INDEX IDX_AB1F29D771DD50E1 (reassign_to_user_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_directories (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, reviewed_at DATETIME DEFAULT NULL, anonymous_counter INT DEFAULT 0 NOT NULL, provider VARCHAR(32) NOT NULL, scope_key VARCHAR(64) NOT NULL, workspace_id VARCHAR(64) NOT NULL, reviewed_by_id INT DEFAULT NULL, UNIQUE INDEX uniq_task_board_sync_directories (provider, scope_key, workspace_id), INDEX IDX_65959EB6FC6B21F1 (reviewed_by_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_members (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, member_role VARCHAR(32) NOT NULL, item_id VARCHAR(36) NOT NULL, task_member_id VARCHAR(36) NOT NULL, person_id VARCHAR(36) NOT NULL, INDEX idx_task_board_sync_members_person (person_id), UNIQUE INDEX uniq_task_board_sync_members_member (task_member_id), INDEX IDX_8F991936126F525E (item_id), PRIMARY KEY (id));
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D72C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D763D4A474 FOREIGN KEY (mapped_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D7E5678C70 FOREIGN KEY (suggested_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D72C770F2E FOREIGN KEY (mapped_by_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_people ADD CONSTRAINT FK_AB1F29D771DD50E1 FOREIGN KEY (reassign_to_user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_directories ADD CONSTRAINT FK_65959EB6FC6B21F1 FOREIGN KEY (reviewed_by_id) REFERENCES app_user (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936ABD1EAF FOREIGN KEY (task_member_id) REFERENCES task_board_task_members (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_members ADD CONSTRAINT FK_8F991936217BBB47 FOREIGN KEY (person_id) REFERENCES task_board_sync_people (id) ON DELETE CASCADE;
+ALTER TABLE task_board_connections ADD source_type VARCHAR(8) DEFAULT 'list' NOT NULL, ADD source_id VARCHAR(128) DEFAULT NULL, ADD status_column_map JSON DEFAULT NULL, ADD directory_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_connections ADD CONSTRAINT FK_947E513B2C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE SET NULL;
+CREATE INDEX IDX_947E513B2C94069F ON task_board_connections (directory_id);
+ALTER TABLE task_board_sync_items ADD unmatched_people JSON DEFAULT NULL, ADD backfill_level SMALLINT DEFAULT 0 NOT NULL, ADD item_kind VARCHAR(16) DEFAULT 'task' NOT NULL, ADD creator_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5AD895820F FOREIGN KEY (creator_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_3BD8DF5AD895820F ON task_board_sync_items (creator_person_id);
+ALTER TABLE task_board_sync_runs ADD time_mode VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD author_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59A9F6C6E FOREIGN KEY (author_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id);
+```
+
+### After the update (sync hosts)
+
+- **Legacy comments (one-off).** Call `TaskSyncCommentLegacyAuthorMigrator::migrate($connection, $batchSize,
+  $afterId)` per connection, again with the returned `lastId` until `done`. A comment whose prefix name matches exactly
+  one person of the directory loses the line and points at the person; others stay unchanged. Idempotent.
+- **People resolver.** Implement `SyncPersonResolverInterface` and set `sync.people.resolver` to share one directory
+  per tenant scope and to supply `verified` (see [sync.md](sync.md#people-directory-since-125)).
+- **Account erasure: required order.** `Task.creator`, `TaskComment.author` and `TaskMember.user` are
+  `ON DELETE CASCADE` (they become `SET NULL` + snapshot in 2.0). Deleting a user the sync projected content onto
+  deletes those imported tasks and comments. Erase in this order:
+  1. Stop syncs for the user (revoke or unlink their provider tokens) and run `detachUser()` there, so a run in
+     progress cannot re-project them.
+  2. `TaskSyncPeopleReassigner::detachUser($user, $actor, anonymise: <host policy>)`, repeated with its cursor until
+     it is done: creator, comments and sync members move off the user while the user row still exists.
+  3. TimeTrack: `ImportedTimeEntryWriter::removeForUser($source, $user)` per source (TimeTrack ≥ 1.11), then the other
+     TimeTrack erasers.
+  4. The host's other erasers.
+  5. The user delete last.
+  `detachUser()` is idempotent: calling it from both the token eraser and the account chain is safe.
+- **Access to imported tasks follows board access.** When a user loses board access, the projected rows stay; they
+  stop granting access only if your access checker denies non-members (`BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK`).
+  The bundle's default participant rule still grants a task's creator and members: a host whose checker does not deny
+  non-members should call `reassign($person, null)` (to external) when it wants the content detached. When someone
+  gains access, call `TaskSyncPeopleProjector::reprojectForUser($user)` from your membership events.
+- **Tracked time.** Nothing is imported until you set `sync.time_entries.sink` and pass `timeEntries: true`; the bundle
+  never writes TimeTrack itself. TaskBoard 1.25 works with TimeTrack 1.10; the imported-time total listener needs
+  TimeTrack ≥ 1.11.
+- **Deleting tasks or boards keeps all time** (owner rule): manual `TaskTimeEntry` rows are detached, TimeTrack
+  entries (imported ones included) are untouched. Imported time is deleted only by an explicit manager action
+  (spec 208 FR-017), never as a side effect.
 
 ## To 1.24.0
 

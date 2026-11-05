@@ -132,11 +132,13 @@ class Task
         /** @var list<string> */
         #[ORM\Column(type: 'json')]
         private array $tags = [],
+        // Since 1.25: the creation date of the source tool (a provider sync); null = now.
+        ?DateTimeImmutable $createdAt = null,
     ) {
         $this->id = Uuid::generate()->toString();
         // Since 1.16: cut to the column (VARCHAR(255)) whatever the caller (imports, host integrations).
         $this->title                = Text::cut($title, self::TITLE_MAX);
-        $this->createdAt            = new DateTimeImmutable();
+        $this->createdAt            = $createdAt ?? new DateTimeImmutable();
         $this->updatedAt            = new DateTimeImmutable();
         $this->tags                 = $this->normalizeTags($tags);
         $this->changeHistory        = new ArrayCollection();
@@ -350,6 +352,32 @@ class Task
         $this->tags = $this->normalizeTags($tags);
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: the source tool's creation date, once, for a task a 1.23 sync created (back-fill).
+     *
+     * @internal used by the provider sync only
+     */
+    public function importCreatedAt(DateTimeImmutable $createdAt): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->createdAt = $createdAt;
+
+        return $this;
+    }
+
+    /**
+     * Since 1.25: a new creator after a people re-association or back-fill (no history, no notification).
+     *
+     * @internal used by the provider sync's people services only
+     */
+    public function reassignCreator(object $creator): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creator = $creator;
 
         return $this;
     }

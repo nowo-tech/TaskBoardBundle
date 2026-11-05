@@ -1,0 +1,116 @@
+{
+    "id": "86a1x2",
+    "name": "Task with detail",
+    "markdown_description": "Mock-ups.",
+    "status": {
+        "status": "complete",
+        "color": "#6bc950",
+        "type": "closed",
+        "orderindex": 3
+    },
+    "date_created": "1793000000000",
+    "date_updated": "1793100000000",
+    "archived": false,
+    "creator": {
+        "id": 1000001,
+        "username": "User 1",
+        "email": "user1@example.test",
+        "profilePicture": null
+    },
+    "assignees": [
+        {
+            "id": 1000002,
+            "username": "User 2",
+            "email": "user2@example.test",
+            "profilePicture": null
+        },
+        {
+            "id": 1000005,
+            "username": "User 5",
+            "email": null,
+            "profilePicture": null
+        }
+    ],
+    "watchers": [
+        {
+            "id": 1000003,
+            "username": "User 3",
+            "email": "user3@example.test",
+            "profilePicture": null
+        },
+        {
+            "id": "bad id!",
+            "username": "Ignored"
+        }
+    ],
+    "checklists": [
+        {
+            "id": "cl-2",
+            "name": "Second",
+            "orderindex": 1,
+            "items": [
+                {
+                    "id": "it-21",
+                    "name": "Only item",
+                    "orderindex": 0,
+                    "resolved": false,
+                    "assignee": null,
+                    "parent": null
+                }
+            ]
+        },
+        {
+            "id": "cl-1",
+            "name": "Review",
+            "orderindex": 0,
+            "items": [
+                {
+                    "id": "it-12",
+                    "name": "Second top",
+                    "orderindex": 1,
+                    "resolved": false,
+                    "assignee": null,
+                    "parent": null
+                },
+                {
+                    "id": "it-11",
+                    "name": "First top",
+                    "orderindex": 0,
+                    "resolved": true,
+                    "assignee": {
+                        "id": 1000004,
+                        "username": "User 4",
+                        "email": "user4@example.test"
+                    },
+                    "parent": null
+                },
+                {
+                    "id": "it-111",
+                    "name": "Nested under first",
+                    "orderindex": 0,
+                    "resolved": false,
+                    "assignee": null,
+                    "parent": "it-11"
+                },
+                {
+                    "id": "it-1111",
+                    "name": "Deeper",
+                    "orderindex": 0,
+                    "resolved": true,
+                    "assignee": null,
+                    "parent": "it-111"
+                }
+            ]
+        }
+    ],
+    "time_spent": 5400500,
+    "list": {
+        "id": "900200",
+        "name": "List 2"
+    },
+    "tags": [],
+    "parent": null,
+    "priority": null,
+    "url": "https://app.clickup.com/t/86a1x2",
+    "attachments": []
+}

@@ -42,6 +42,31 @@ class TaskSyncItem
     #[ORM\Column(name: 'last_seen_run_id', type: 'string', length: 36, nullable: true)]
     private ?string $lastSeenRunId = null;
 
+    /** Since 1.25: the remote creator (null = unknown). */
+    #[ORM\ManyToOne(targetEntity: TaskSyncPerson::class)]
+    #[ORM\JoinColumn(name: 'creator_person_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TaskSyncPerson $creatorPerson = null;
+
+    /**
+     * Since 1.25: remote assignees / watchers not written as members (unmatched, external or without board access).
+     *
+     * @var array<string, list<string>>|null role => person ids
+     */
+    #[ORM\Column(name: 'unmatched_people', type: 'json', nullable: true)]
+    private ?array $unmatchedPeople = null;
+
+    /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
+    #[ORM\Column(name: 'backfill_level', type: 'smallint', options: ['default' => 0])]
+    private int $backfillLevel = 1;
+
+    /** Since 1.25: `task` or `checklist_item` (a subtask made from a checklist item, external id "<task>#<item>"). */
+    #[ORM\Column(name: 'item_kind', type: 'string', length: 16, options: ['default' => 'task'])]
+    private string $itemKind = self::KIND_TASK;
+
+    public const KIND_TASK = 'task';
+
+    public const KIND_CHECKLIST_ITEM = 'checklist_item';
+
     public function __construct(
         #[ORM\ManyToOne(targetEntity: TaskBoardConnection::class)]
         #[ORM\JoinColumn(name: 'connection_id', nullable: false, onDelete: 'CASCADE')]
@@ -160,6 +185,70 @@ class TaskSyncItem
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->remoteArchivedAt = $at;
+
+        return $this;
+    }
+
+    public function getCreatorPerson(): ?TaskSyncPerson
+    {
+        return $this->creatorPerson;
+    }
+
+    public function setCreatorPerson(?TaskSyncPerson $person): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->creatorPerson = $person;
+
+        return $this;
+    }
+
+    /**
+     * @return list<string> person ids of a role ("assignee" / "watcher") not written as members
+     */
+    public function unmatchedPeople(string $role): array
+    {
+        return $this->unmatchedPeople[$role] ?? [];
+    }
+
+    /**
+     * @param list<string> $personIds
+     */
+    public function setUnmatchedPeople(string $role, array $personIds): self
+    {
+        $people = $this->unmatchedPeople ?? [];
+        if ($personIds === []) {
+            unset($people[$role]);
+        } else {
+            $people[$role] = $personIds;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->unmatchedPeople = $people === [] ? null : $people;
+
+        return $this;
+    }
+
+    public function getBackfillLevel(): int
+    {
+        return $this->backfillLevel;
+    }
+
+    public function setBackfillLevel(int $level): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->backfillLevel = $level;
+
+        return $this;
+    }
+
+    public function getItemKind(): string
+    {
+        return $this->itemKind;
+    }
+
+    public function setItemKind(string $kind): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->itemKind = $kind;
 
         return $this;
     }

@@ -20,6 +20,14 @@ final readonly class ProviderCapabilities
         public bool $subtasks = false,
         public bool $incremental = false,
         public array $attachmentHosts = [],
+        /** Since 1.25: {@see PeopleProviderInterface}. */
+        public bool $people = false,
+        /** Since 1.25: {@see TimeEntryProviderInterface}. */
+        public bool $timeEntries = false,
+        /** Since 1.25: tasks carry watchers. */
+        public bool $watchers = false,
+        /** Since 1.25: tasks carry checklists. */
+        public bool $checklists = false,
     ) {
     }
 }

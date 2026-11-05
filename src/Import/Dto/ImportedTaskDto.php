@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Import\Dto;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 
 /**
  * Normalized task row produced by any importer.
@@ -60,6 +61,14 @@ final readonly class ImportedTaskDto
          * @var list<string>
          */
         public array $assigneeEmails = [],
+        /** Since 1.25: who created the task in the source tool (provider syncs only). */
+        public ?RemotePersonRef $creator = null,
+        /**
+         * Since 1.25: the assignees as people of the source (provider syncs only), resolved through the people directory.
+         *
+         * @var list<RemotePersonRef>
+         */
+        public array $assigneeRefs = [],
     ) {
     }
 }

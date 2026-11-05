@@ -70,6 +70,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+ClickUp full import for provider sync (`sync.enabled` only; contract v1.0 with Beacon spec 208): people, creator and
+creation date, assignees and watchers, checklists, comment authors, status types, tracked time through a host sink, and
+re-association. Hosts without `sync.enabled` see no schema or behaviour change except the new `import_tasks` access
+decision (granted by default).
+
+### Added
+
+- **People directory** (`Sync\People\TaskSyncPeopleDirectoryService`, tables `task_board_sync_directories` /
+  `task_board_sync_people` / `task_board_sync_members`): one row per remote person per (host scope, provider,
+  workspace), shared by every board of the scope. Mapping states `unmatched`, `suggested`, `auto`, `manual`, `external`;
+  `applyMapping()`, `markReviewed()`, `anonymise()` ("Former <provider> user #n"), `pruneDirectory()` on the last
+  unlink. Many remote identities may map to one user; one identity never maps to two.
+- **Host hook `sync.people.resolver`** (`Sync\Hook\SyncPersonResolverInterface`: `directoryScope()`, `candidates()`,
+  `isCandidate()`, `autoMatch()`, `candidateById()`). Without it, `DefaultSyncPersonResolver` keeps 1.23 e-mail
+  matching with one directory per board.
+- **Automatic e-mail matching** only creates a mapping for a person no human decided: a verified account → `auto`, an
+  unverified one → `suggested` (needs a confirmation). A changed e-mail never re-maps automatically.
+- **Projection rule:** a mapped user who cannot view the board is never written as creator, member or comment author
+  (a mapping never grants access); the person stays a reference shown with a *no access to this board* badge.
+- **Creator and original creation date** of synced tasks (`Task` / `TaskComment` take an optional `createdAt`); tasks
+  written by 1.23 are back-filled once on their next fetch (`task_board_sync_items.backfill_level`).
+- **Assignees and watchers** through the directory. Members the sync adds are tracked in `task_board_sync_members`;
+  only those are ever removed. Unprojected people are listed per task (`unmatched_people`, *Also assigned in ClickUp*).
+- **Checklists** become subtasks (`<task>#<item>`, tag `checklist:<name>`, nested items flattened in tree order); the
+  deletions scan never archives them, a checklist that drops an item does.
+- **Comment authors** as person references (`task_board_sync_comments.author_person_id`) and the ClickUp comment date.
+  `TaskSyncCommentLegacyAuthorMigrator::migrate()` strips the 1.23 "**name** (ClickUp):" line once.
+- **Status types decide "done"** (`closed` / `done`); the last-column rule is only a fallback without types. A
+  done → not-done change reopens the task.
+- **Status → column map** on the connection (`TaskBoardSyncService::link(..., $statusColumnMap)`,
+  `updateStatusColumnMap()`): a column id, `__create` (created when the link is confirmed) or `__skip` (not
+  imported, counted `skipStatus`). Unmapped statuses follow the 1.23 rules with the warning `unmapped_status`.
+- **Folder and space sources** (`f:<id>` / `s:<id>`, `Sync\Provider\SourceProviderInterface`), `resolveListFromUrl()`
+  (app.clickup.com list links, no network call) and `searchLists()` (≤ 40 calls, optional PSR-6 cache
+  `sync.lookup.cache_pool`, keyed by a hash of the connection reference). `sync.list_as_tag` adds `list:<name>`.
+- **Task detail fallback (E5)** `Sync\Provider\TaskDetailProviderInterface`: rows without watchers or checklists are
+  completed by `GET task/{id}` for tasks created or changed in the run (`sync.watchers.max_detail_calls_per_run`).
+- **Tracked time through a host sink** (`sync.time_entries.sink`, `Sync\Hook\ImportedTimeEntrySinkInterface`): a
+  `time_entries` phase reads 30-day windows (halved down to one hour above `max_entries_per_window`), per assignee chunk
+  with an admin token, the token user's own entries with a member token (warning `time_member_mode`), and the legacy
+  per-task intervals only on request (`SyncOptions::$timeFallbackPerTask`). Running timers and task-less entries are
+  counted, not delivered. The bundle never writes TimeTrack data.
+- **Pre-scans for the connection dialog:** `TaskSyncPeopleScanner::scan()` (members, first task pages, first comments,
+  one time window; ≤ 15 calls) and `TaskSyncSourceScanner::scan()` (source, workspace, statuses with types, people with
+  `boardAccess`, time mode).
+- **Re-association:** `TaskSyncPeopleReassigner::reassign()` / `cancelReassign()` / `detachUser()` (account erasure)
+  and `TaskSyncPeopleProjector::reprojectForUser()` (called by the host when someone gains board access). Batched,
+  resumable with a cursor, under each board's sync lock, no notification.
+- **Events** `SYNC_PERSON_MAPPED`, `SYNC_PERSON_REASSIGNED`, `SYNC_PERSON_ANONYMISED`, `SYNC_PEOPLE_REVIEWED`,
+  `SYNC_PEOPLE_REPROJECTED` (ids only) and the history type `sync_person_reassociated` (`person:` / `user:` tokens
+  rendered at display time).
+- **View models and Twig functions** `task_board_sync_creator(task)`, `task_board_sync_comment_author(comment)`,
+  `task_board_sync_unmatched(task, role)`, `task_board_sync_token(token)`; the task panel and comments show them.
+- **Export helpers** `TaskSyncPersonRepository::exportFor($user)` / `exportDirectory($directory)`.
+- **Import access decision:** `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (`import_tasks`, granted by default),
+  `TaskBoardResourceAccessChecker::canImportTasks()` / `canImportIntoTask()`; file imports and
+  `canManageBoardConnection()` ask it.
+- Config: `sync.people.*`, `sync.watchers.*`, `sync.checklists.enabled`, `sync.time_entries.*`, `sync.list_as_tag`,
+  `sync.lookup.cache_pool` ([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
+
+### Changed
+
+- With `sync.enabled`: new comments have no author prefix line; synced tasks keep the provider's creation date; with
+  `sync.people.require_verified_email: true` (default) e-mail matches of users without `isVerified()` are only
+  suggested; non-viewers are no longer made assignees. See [UPGRADING](UPGRADING.md#to-1250).
+- `ProviderHttpClient` maps HTTP 410 to `not_found` (like 404).
+
+### Security
+
+- A mapping never grants access (projection rule); automatic matching needs a verified e-mail from the host and is
+  scoped to its candidates; re-association is explicit, re-checked per board and audited by events.
+- Every provider call stays `GET` to the constant ClickUp base URI; no token, avatar URL or time-entry description is
+  stored or logged by the bundle; person names and e-mails stay in the person rows and are never logged.
+
 ## [1.24.0] - 2026-11-05
 
 Beacon's v1.122.0 audit (KIT-67, KIT-74, DATA-TASK-TOKEN-ERASURE): hosts no longer need request listeners or template copies for the board

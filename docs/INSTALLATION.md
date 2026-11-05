@@ -90,6 +90,10 @@ php bin/console doctrine:schema:update --force
 
 Tables use the prefix `task_board_` by default (e.g. `task_board_boards`, `task_board_tasks`, `task_board_teams`).
 
+Provider sync (`sync.enabled`) maps extra tables; their DDL is in [UPGRADING](UPGRADING.md) (sync tables in *To
+1.23.0*, the people directory and the 1.25 columns in [*To 1.25.0*](UPGRADING.md#schema-change-with-syncenabled-true-only)).
+Hosts without the sync get no sync table.
+
 ## Security firewall
 
 Manage routes require authentication:

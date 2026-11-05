@@ -50,7 +50,34 @@ final readonly class SyncReport
         public ?int $total = null,
         public DateTimeImmutable $startedAt = new DateTimeImmutable(),
         public ?DateTimeImmutable $syncedAt = null,
+        /**
+         * Since 1.25: counters of the people, checklist and time phases (e.g. "people.autoMatched", "time.entries",
+         * "skipStatus"), all ints.
+         *
+         * @var array<string, int>
+         */
+        public array $stats = [],
+        /**
+         * Since 1.25: tasks of the board per column id after the run ("" = no column).
+         *
+         * @var array<string, int>
+         */
+        public array $perColumn = [],
+        /** Since 1.25: the time mode of the run's time phase (admin / member / fallback), null = none. */
+        public ?string $timeMode = null,
     ) {
+    }
+
+    /** Since 1.25: tasks the run wrote or found unchanged (created + updated + unchanged; subtasks and closed included). */
+    public function written(): int
+    {
+        return $this->created + $this->updated + $this->unchanged;
+    }
+
+    /** Since 1.25: one counter of {@see self::$stats} (0 when absent). */
+    public function stat(string $name): int
+    {
+        return $this->stats[$name] ?? 0;
     }
 
     public function skipped(): int
@@ -114,6 +141,10 @@ final readonly class SyncReport
             'total'               => $this->total,
             'startedAt'           => $this->startedAt->format(DateTimeInterface::ATOM),
             'syncedAt'            => $this->syncedAt?->format(DateTimeInterface::ATOM),
+            'written'             => $this->written(),
+            'stats'               => $this->stats,
+            'perColumn'           => $this->perColumn,
+            'timeMode'            => $this->timeMode,
         ];
     }
 
@@ -152,6 +183,24 @@ final readonly class SyncReport
             total: isset($data['total']) ? SyncValues::int($data['total']) : null,
             startedAt: SyncValues::date($data['startedAt'] ?? null) ?? new DateTimeImmutable(),
             syncedAt: SyncValues::date($data['syncedAt'] ?? null),
+            stats: self::intMap($list('stats')),
+            perColumn: self::intMap($list('perColumn')),
+            timeMode: isset($data['timeMode']) ? SyncValues::string($data['timeMode']) : null,
         );
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @return array<string, int>
+     */
+    private static function intMap(array $values): array
+    {
+        $map = [];
+        foreach ($values as $key => $value) {
+            $map[(string) $key] = SyncValues::int($value);
+        }
+
+        return $map;
     }
 }

@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Twig\Extension\AbstractExtension;
@@ -61,7 +63,37 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?ConnectionBadgeProvider $connectionBadges = null,
         // Since 1.23: the avatar URLs of the request (null: no pictures).
         private readonly ?TaskMemberAvatars $avatars = null,
+        // Since 1.25: remote people of synced tasks (null when `sync.enabled` is false).
+        private readonly ?SyncPeopleViewProvider $syncPeople = null,
     ) {
+    }
+
+    /** Since 1.25: the remote creator of a synced task (null without sync or for a local task). */
+    public function syncCreator(Task $task): ?SyncPersonView
+    {
+        return $this->syncPeople?->creatorOf($task);
+    }
+
+    /** Since 1.25: the remote author of an imported comment (null without sync or for a local comment). */
+    public function syncCommentAuthor(TaskComment $comment): ?SyncPersonView
+    {
+        return $this->syncPeople?->commentAuthorOf($comment);
+    }
+
+    /** Since 1.25: a history token (`person:<id>` / `user:<id>`) as a label; the token itself without sync. */
+    public function syncToken(?string $token): string
+    {
+        return $this->syncPeople?->tokenLabel((string) $token) ?? (string) $token;
+    }
+
+    /**
+     * Since 1.25: people assigned (`assignee`) or watching (`watcher`) in the provider who are not task members.
+     *
+     * @return list<SyncPersonView>
+     */
+    public function syncUnmatched(Task $task, string $role = 'assignee'): array
+    {
+        return $this->syncPeople?->unmatchedOf($task, $role) ?? [];
     }
 
     /**
@@ -95,6 +127,10 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_comment_body', $this->renderCommentBody(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_text', $this->renderText(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_connection', $this->connection(...)),
+            new TwigFunction('task_board_sync_creator', $this->syncCreator(...)),
+            new TwigFunction('task_board_sync_comment_author', $this->syncCommentAuthor(...)),
+            new TwigFunction('task_board_sync_unmatched', $this->syncUnmatched(...)),
+            new TwigFunction('task_board_sync_token', $this->syncToken(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
         ];
     }

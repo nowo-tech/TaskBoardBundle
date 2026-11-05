@@ -1,0 +1,11 @@
+{
+  "id": "900300",
+  "name": "List 3",
+  "folder": {"id": "90002", "name": "Folder 1", "hidden": false},
+  "space": {"id": "90001", "name": "Space 1"},
+  "statuses": [
+    {"status": "To Do", "type": "open", "orderindex": 0},
+    {"status": "review", "type": "custom", "orderindex": 1},
+    {"status": "closed", "type": "closed", "orderindex": 2}
+  ]
+}

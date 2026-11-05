@@ -34,7 +34,9 @@ use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
@@ -43,14 +45,22 @@ use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
+use Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusType;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Stringable;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
+use function addcslashes;
 use function array_filter;
 use function array_key_last;
 use function array_keys;
@@ -69,7 +79,9 @@ use function method_exists;
 use function sha1;
 use function sort;
 use function sprintf;
+use function str_contains;
 use function str_starts_with;
+use function time;
 use function trim;
 
 use const JSON_PRESERVE_ZERO_FRACTION;
@@ -109,6 +121,15 @@ final readonly class SyncTaskWriter
         private ?TranslatorInterface $translator = null,
         private bool $storageEnabled = false,
         private int $maxFileBytes = 26_214_400,
+        // Since 1.25: the people directory (creator, assignees, watchers, comment authors through the mapping).
+        private ?TaskSyncPeopleDirectoryService $peopleDirectory = null,
+        private ?SyncPeopleWriter $peopleWriter = null,
+        // Since 1.25: `sync.list_as_tag` (tag "list:<name>" on tasks of a multi-list source), checklists, watchers.
+        private bool $listAsTag = false,
+        private bool $checklistsEnabled = true,
+        private bool $watchersEnabled = true,
+        private ?SyncChecklistWriter $checklistWriter = null,
+        private int $maxDetailCalls = 500,
     ) {
     }
 
@@ -163,6 +184,11 @@ final readonly class SyncTaskWriter
                 ++$ctx->skipLocallyDeleted;
                 continue;
             }
+            // Since 1.25: a status the dialog's map skips is not imported (nor updated).
+            if (StatusColumns::target($ctx->connection->getStatusColumnMap(), $remote->task->status) === StatusColumns::SKIP) {
+                $ctx->count('skipStatus');
+                continue;
+            }
             $task = $known[$id][0] ?? null;
             if (!$task instanceof Task) {
                 if (isset($elsewhere[$id])) {
@@ -206,9 +232,10 @@ final readonly class SyncTaskWriter
         try {
             $columns   = $this->columns($ctx, $plan);
             $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $ctx->board);
+            $session   = $this->session($ctx);
             foreach ($plan as [$action, $id, $remote, $task, $item]) {
                 if ($action === 'create') {
-                    $post[] = $this->create($ctx, $id, $remote, $columns, $assignees, $related);
+                    $post[] = $this->create($ctx, $id, $remote, $columns, $assignees, $related, $session);
                 } elseif ($action === 'archive' && $task instanceof Task) {
                     $this->markArchived($ctx, $task, $item ?? $this->adopt($ctx, $id, $task), $id);
                 } elseif ($task instanceof Task) {
@@ -216,7 +243,7 @@ final readonly class SyncTaskWriter
                         $item ??= $this->adopt($ctx, $id, $task);
                         $this->markRestored($ctx, $task, $item, $id);
                     }
-                    $result = $this->update($ctx, $id, $remote, $task, $item, $columns, $assignees, $related, $action === 'restore');
+                    $result = $this->update($ctx, $id, $remote, $task, $item, $columns, $assignees, $related, $action === 'restore', $session);
                     if ($result !== null) {
                         $post[] = $result;
                     }
@@ -231,6 +258,7 @@ final readonly class SyncTaskWriter
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
                 $this->entityManager->clear();
+                $this->closeSession($ctx, $session);
 
                 return;
             }
@@ -247,9 +275,10 @@ final readonly class SyncTaskWriter
         // Files, inline images, comments and the fields document of the tasks this page created or changed.
         try {
             foreach ($post as [$item, $task, $remote, $descriptionWritten]) {
-                $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees);
+                $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees, $session);
             }
         } finally {
+            $this->closeSession($ctx, $session);
             $deletes          = $ctx->fileDeletes;
             $ctx->fileDeletes = [];
             $this->entityManager->flush();
@@ -294,7 +323,8 @@ final readonly class SyncTaskWriter
      */
     public function applyDeletions(SyncRunContext $ctx, array $remoteIds, float $maxArchiveRatio): void
     {
-        $linked  = $this->store->linkedItems($ctx->connection);
+        // Since 1.25: checklist subtasks ("<task>#<item>") are archived by the checklist writer, never by the id scan.
+        $linked  = array_values(array_filter($this->store->linkedItems($ctx->connection), static fn (array $i): bool => !str_contains($i['externalId'], '#')));
         $active  = array_values(array_filter($linked, static fn (array $i): bool => !$i['archived']));
         $missing = array_values(array_filter($active, static fn (array $i): bool => !isset($remoteIds[$i['externalId']])));
         $back    = array_values(array_filter($linked, static fn (array $i): bool => $i['archived'] && $i['remoteArchived'] && $i['reason'] === Task::ARCHIVE_REASON_REMOTE && isset($remoteIds[$i['externalId']])));
@@ -334,22 +364,24 @@ final readonly class SyncTaskWriter
      *
      * @return array{0: TaskSyncItem, 1: Task, 2: RemoteTask, 3: bool}
      */
-    private function create(SyncRunContext $ctx, string $id, RemoteTask $remote, array $columns, ImportAssigneeResolver $assignees, array &$related): array
+    private function create(SyncRunContext $ctx, string $id, RemoteTask $remote, array $columns, ImportAssigneeResolver $assignees, array &$related, ?PeopleSession $session = null): array
     {
-        $row    = $remote->task;
-        $column = $this->columnOf($row->status, $columns) ?? $columns['fallback'] ?? ($columns['list'][0] ?? null);
-        $parent = $this->parentOf($ctx, $row, $related);
-        $task   = new Task(
+        $row     = $remote->task;
+        $column  = $this->columnFor($ctx, $remote, $columns) ?? $columns['fallback'] ?? ($columns['list'][0] ?? null);
+        $parent  = $this->parentOf($ctx, $row, $related);
+        $creator = $session instanceof PeopleSession && $row->creator instanceof RemotePersonRef ? $session->person($row->creator, TaskSyncPerson::KIND_CREATOR) : null;
+        $task    = new Task(
             board: $ctx->board,
             title: $row->title,
-            creator: $ctx->actor,
+            creator: $session?->projected($creator) ?? $ctx->actor,
             column: $column,
             parent: $parent,
             priority: $row->priority,
             position: $this->nextPosition($ctx, $column),
             estimatedMinutes: $row->estimatedMinutes,
             dueAt: $row->dueAt,
-            tags: $row->tags,
+            tags: $this->tagsOf($remote),
+            createdAt: $this->createdAt($row->createdAt),
         );
         if ($this->description($row) !== null) {
             // No provider URL is ever stored: the images are copied after the page, then rewritten again.
@@ -367,11 +399,16 @@ final readonly class SyncTaskWriter
             externalId: $id,
             importSource: $ctx->scope,
         ));
-        $users = $assignees->resolve($row);
+        $peopleMode = $this->peopleMode($session, $row);
+        $users      = $peopleMode ? [] : $assignees->resolve($row);
         foreach ($users as $user) {
             $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
         }
-        if ($column instanceof BoardColumn && $columns['list'] !== [] && $columns['list'][array_key_last($columns['list'])]->getId() === $column->getId()) {
+        // Since 1.25 (Q-B15): a status type says whether the task is done; the last column only without one.
+        $done = $remote->status?->type instanceof RemoteStatusType
+            ? $remote->status->type->isDone()
+            : $column instanceof BoardColumn && $columns['list'] !== [] && $columns['list'][array_key_last($columns['list'])]->getId() === $column->getId();
+        if ($done) {
             $task->markCompleted();
         }
         $this->changeRecorder->recordCreated($task, $ctx->actor);
@@ -381,7 +418,10 @@ final readonly class SyncTaskWriter
         // A row with an item is linked (planned as an update) or a tombstone (skipped): a new task has none.
         $item = new TaskSyncItem($ctx->connection, $ctx->board->getId(), $task, $id, $remote->remoteUpdatedAt);
         $this->entityManager->persist($item);
-        $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId);
+        $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId)->setCreatorPerson($creator);
+        if ($peopleMode && $session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter) {
+            $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Assignee, $row->assigneeRefs, TaskSyncPerson::KIND_ASSIGNEE, $ctx->actor);
+        }
         foreach ($this->remoteValues($row, $column, $users, $parent) as $field => $value) {
             if ($value !== null) {
                 $item->setBaseline($field, $this->hash($value), $this->hash($this->localValue($task, $field)));
@@ -401,9 +441,12 @@ final readonly class SyncTaskWriter
      *
      * @return array{0: TaskSyncItem, 1: Task, 2: RemoteTask, 3: bool}|null
      */
-    private function update(SyncRunContext $ctx, string $id, RemoteTask $remote, Task $task, ?TaskSyncItem $item, array $columns, ImportAssigneeResolver $assignees, array &$related, bool $restoring): ?array
+    private function update(SyncRunContext $ctx, string $id, RemoteTask $remote, Task $task, ?TaskSyncItem $item, array $columns, ImportAssigneeResolver $assignees, array &$related, bool $restoring, ?PeopleSession $session = null): ?array
     {
         $related[$id] = $task;
+        if ($item instanceof TaskSyncItem && $item->getBackfillLevel() === 0) {
+            $this->backfill($item, $task, $remote, $session);
+        }
         if ($item instanceof TaskSyncItem && !$ctx->options->full && !$restoring && $remote->remoteUpdatedAt <= $item->getRemoteUpdatedAt()) {
             $item->setLastSeenRunId($ctx->runId);
             ++$ctx->unchanged;
@@ -412,9 +455,10 @@ final readonly class SyncTaskWriter
         }
         $item ??= $this->adopt($ctx, $id, $task);
         $row          = $remote->task;
-        $column       = $this->columnOf($row->status, $columns);
+        $column       = $this->columnFor($ctx, $remote, $columns);
         $parent       = $this->parentOf($ctx, $row, $related);
-        $users        = $assignees->resolve($row);
+        $peopleMode   = $this->peopleMode($session, $row);
+        $users        = $peopleMode ? [] : $assignees->resolve($row);
         $remoteValues = $this->remoteValues($row, $column, $users, $parent);
 
         /** @var array<string, true> $allowed */
@@ -462,6 +506,14 @@ final readonly class SyncTaskWriter
         if (isset($allowed['parent']) && $parent instanceof Task) {
             $changed = $this->reparent($ctx, $task, $parent) || $changed;
         }
+        if ($peopleMode && $session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter) {
+            $changed = $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Assignee, $row->assigneeRefs, TaskSyncPerson::KIND_ASSIGNEE, $ctx->actor) || $changed;
+        }
+        // Since 1.25 (Q-B15): the status type decides completion when the column may be written.
+        if ($remote->status?->type instanceof RemoteStatusType && ($allowed['column'] ?? false) === true && $remote->status->type->isDone() !== $task->isCompleted()) {
+            $remote->status->type->isDone() ? $task->markCompleted() : $task->markIncomplete();
+            $changed = true;
+        }
         foreach (array_keys($allowed) as $field) {
             $item->setBaseline($field, $this->hash($remoteValues[$field]), $this->hash($this->localValue($task, $field)))->setConflictHash($field, null);
         }
@@ -494,6 +546,30 @@ final readonly class SyncTaskWriter
         $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::Archived, null, $ctx->provider->id());
         $ctx->taskEvents[] = ['archived', $task->getId(), $externalId];
         ++$ctx->archived;
+        // Since 1.25 (§5.5): a parent archived remotely archives its checklist subtasks.
+        foreach ($this->checklistTasks($ctx, $externalId) as $subtask) {
+            if (!$subtask->isArchived()) {
+                $subtask->archive(Task::ARCHIVE_REASON_REMOTE);
+                $ctx->count('checklist.archived');
+            }
+        }
+    }
+
+    /**
+     * Since 1.25: the tasks of a parent's checklist items (`<parent>#<item>` sync items of the board).
+     *
+     * @return list<Task>
+     */
+    private function checklistTasks(SyncRunContext $ctx, string $parentExternalId): array
+    {
+        /** @var list<Task> $tasks */
+        $tasks = $this->entityManager->createQueryBuilder()->select('t')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
+            ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere('i.externalId LIKE :prefix')
+            ->setParameter('board', $ctx->board->getId())->setParameter('kind', TaskSyncItem::KIND_CHECKLIST_ITEM)
+            ->setParameter('prefix', addcslashes($parentExternalId, '%_\\') . '#%')
+            ->getQuery()->getResult();
+
+        return $tasks;
     }
 
     private function markRestored(SyncRunContext $ctx, Task $task, TaskSyncItem $item, string $externalId): void
@@ -503,6 +579,11 @@ final readonly class SyncTaskWriter
         $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::Restored, null, $ctx->provider->id());
         $ctx->taskEvents[] = ['restored', $task->getId(), $externalId];
         ++$ctx->restored;
+        foreach ($this->checklistTasks($ctx, $externalId) as $subtask) {
+            if ($subtask->getArchiveReason() === Task::ARCHIVE_REASON_REMOTE) {
+                $subtask->restore();
+            }
+        }
     }
 
     /**
@@ -527,7 +608,7 @@ final readonly class SyncTaskWriter
      * Files, inline images, comments and the fields document of a task this page wrote. A provider error here defers
      * the task to the next run (its remote date is reset) instead of losing its comments or files.
      */
-    private function afterWrite(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, bool $descriptionWritten, ImportAssigneeResolver $assignees): void
+    private function afterWrite(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, bool $descriptionWritten, ImportAssigneeResolver $assignees, ?PeopleSession $session = null): void
     {
         $capabilities      = $ctx->provider->capabilities();
         $remoteDescription = $this->description($remote->task);
@@ -544,7 +625,14 @@ final readonly class SyncTaskWriter
                 $this->syncAttachments($ctx, $task, $item, $remote->attachments);
             }
             if ($ctx->options->importComments && $capabilities->comments) {
-                $this->syncComments($ctx, $task, $item, $assignees);
+                $this->syncComments($ctx, $task, $item, $assignees, $session);
+            }
+            $detail = $this->detail($ctx, $item, $remote);
+            if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $this->watchersEnabled && $detail->watchersKnown) {
+                $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Watcher, $detail->watchers, TaskSyncPerson::KIND_WATCHER, $ctx->actor);
+            }
+            if ($this->checklistsEnabled && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
+                $this->checklistWriter->sync($ctx, $session, $item, $task, $detail);
             }
         } catch (ProviderException $exception) {
             $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
@@ -682,7 +770,7 @@ final readonly class SyncTaskWriter
         return $stored;
     }
 
-    private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, ImportAssigneeResolver $assignees): void
+    private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, ImportAssigneeResolver $assignees, ?PeopleSession $session = null): void
     {
         $existing = $this->store->commentsOf($item);
         foreach ($ctx->provider->fetchComments($ctx->credential, $item->getExternalId()) as $remote) {
@@ -691,12 +779,14 @@ final readonly class SyncTaskWriter
             if ($known instanceof TaskSyncComment && $known->getBodyHash() === $remoteHash) {
                 continue;
             }
-            $author = $remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null;
-            $body   = $this->commentBody($ctx, $task, $item, $remote, $author === null);
+            // Since 1.25: through the directory (no "Originally by" line: the template shows the person reference).
+            $person = $session instanceof PeopleSession && $remote->author !== null ? $session->person($remote->author, TaskSyncPerson::KIND_COMMENT) : null;
+            $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null);
+            $body   = $this->commentBody($ctx, $task, $item, $remote, $author === null && !$person instanceof TaskSyncPerson);
             if (!$known instanceof TaskSyncComment) {
-                $comment = new TaskComment($task, $author ?? $ctx->actor, $body);
+                $comment = new TaskComment($task, $author ?? $ctx->actor, $body, [], $remote->createdAt);
                 $this->entityManager->persist($comment);
-                $this->entityManager->persist(new TaskSyncComment($item, $comment, Text::cut($remote->id, 128), $remoteHash, $this->hash($body)));
+                $this->entityManager->persist((new TaskSyncComment($item, $comment, Text::cut($remote->id, 128), $remoteHash, $this->hash($body)))->setAuthorPerson($person));
                 ++$ctx->commentsCreated;
                 continue;
             }
@@ -829,9 +919,10 @@ final readonly class SyncTaskWriter
                 $fallback = $column;
             }
         }
+        $map = $ctx->connection->getStatusColumnMap();
         foreach ($plan as [$action, , $remote]) {
             $status = trim((string) $remote->task->status);
-            if ($action === 'archive' || $status === '' || isset($byName[mb_strtolower($status)])) {
+            if ($action === 'archive' || $status === '' || isset($byName[mb_strtolower($status)]) || StatusColumns::mapped($map, $status, $ctx->board)) {
                 continue;
             }
             if (!$ctx->options->createMissingColumns) {
@@ -844,6 +935,125 @@ final readonly class SyncTaskWriter
         }
 
         return ['byName' => $byName, 'list' => array_values($ctx->board->getColumns()->toArray()), 'fallback' => $fallback];
+    }
+
+    /**
+     * Since 1.25: the column of a remote task — the dialog's status → column map first, then the 1.23 rules (name match,
+     * fallback). A status the map does not know is warned about (`unmapped_status`).
+     *
+     * @param array{byName: array<string, BoardColumn>, list: list<BoardColumn>, fallback: BoardColumn|null} $columns
+     */
+    private function columnFor(SyncRunContext $ctx, RemoteTask $remote, array $columns): ?BoardColumn
+    {
+        $map    = $ctx->connection->getStatusColumnMap();
+        $status = $remote->task->status;
+        $target = StatusColumns::target($map, $status);
+        if ($target !== null) {
+            foreach ($columns['list'] as $column) {
+                if ($column->getId() === $target) {
+                    return $column;
+                }
+            }
+        }
+        if ($map !== [] && $target === null && trim((string) $status) !== '') {
+            $ctx->warn('unmapped_status');
+        }
+
+        return $this->columnOf($status, $columns);
+    }
+
+    /**
+     * Since 1.25 (E5): the task's detail when its list row left out watchers or checklists, within
+     * `sync.watchers.max_detail_calls_per_run` per run; else the row itself.
+     */
+    private function detail(SyncRunContext $ctx, TaskSyncItem $item, RemoteTask $remote): RemoteTask
+    {
+        $provider = $ctx->provider;
+        $missing  = ($this->watchersEnabled && !$remote->watchersKnown) || ($this->checklistsEnabled && !$remote->checklistsKnown);
+        if (!$missing || !$provider instanceof TaskDetailProviderInterface || ($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {
+            return $remote;
+        }
+        $ctx->count('detail.calls');
+
+        return $provider->fetchTaskDetail($ctx->credential, $item->getExternalId()) ?? $remote;
+    }
+
+    /** Since 1.25: whether assignees go through the people directory (a session and person refs on the row). */
+    private function peopleMode(?PeopleSession $session, ImportedTaskDto $row): bool
+    {
+        return $session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $row->assigneeRefs !== [];
+    }
+
+    /** Since 1.25: the people session of a page (null without a directory). */
+    private function session(SyncRunContext $ctx): ?PeopleSession
+    {
+        if ($ctx->directoryId === null || !$this->peopleDirectory instanceof TaskSyncPeopleDirectoryService) {
+            return null;
+        }
+        $directory = $this->entityManager->find(TaskSyncDirectory::class, $ctx->directoryId);
+
+        return $directory instanceof TaskSyncDirectory ? $this->peopleDirectory->session($directory, $ctx->board) : null;
+    }
+
+    /** Since 1.25: the session's counters and warnings into the run. */
+    private function closeSession(SyncRunContext $ctx, ?PeopleSession $session): void
+    {
+        if (!$session instanceof PeopleSession) {
+            return;
+        }
+        foreach ($session->stats as $name => $value) {
+            $ctx->count($name, $value);
+        }
+        $session->stats = [];
+        foreach ($session->warnings as $code) {
+            $ctx->warn($code);
+        }
+        $session->warnings = [];
+    }
+
+    /** Since 1.25: the creation date of the source when it is plausible (2000-01-01 … now + 5 min). */
+    private function createdAt(?DateTimeImmutable $at): ?DateTimeImmutable
+    {
+        if (!$at instanceof DateTimeImmutable || $at->getTimestamp() < 946_684_800 || $at->getTimestamp() > time() + 300) {
+            return null;
+        }
+
+        return $at;
+    }
+
+    /**
+     * Since 1.25: the row's tags, plus "list:<name>" for a multi-list source when `sync.list_as_tag` is on.
+     *
+     * @return list<string>
+     */
+    private function tagsOf(RemoteTask $remote): array
+    {
+        $tags = $remote->task->tags;
+        if ($this->listAsTag && $remote->listName !== null && $remote->listName !== '') {
+            $tags[] = Text::cut('list:' . $this->sanitizer->line($remote->listName, 120), 64);
+        }
+
+        return $tags;
+    }
+
+    /**
+     * Since 1.25: a task written by 1.23 gets its creator and creation date once (no conflict note: never editable).
+     */
+    private function backfill(TaskSyncItem $item, Task $task, RemoteTask $remote, ?PeopleSession $session): void
+    {
+        $createdAt = $this->createdAt($remote->task->createdAt);
+        if ($createdAt instanceof DateTimeImmutable) {
+            $task->importCreatedAt($createdAt);
+        }
+        if ($session instanceof PeopleSession && $remote->task->creator instanceof RemotePersonRef) {
+            $person = $session->person($remote->task->creator, TaskSyncPerson::KIND_CREATOR);
+            $item->setCreatorPerson($person);
+            $user = $session->projected($person);
+            if ($user !== null) {
+                $task->reassignCreator($user);
+            }
+        }
+        $item->setBackfillLevel(1);
     }
 
     /**

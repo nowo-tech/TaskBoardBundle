@@ -78,6 +78,15 @@
                                     {% else %}
                                         <span>{{ 'task_board.form.task.no_color'|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
+                                {% elseif entry.changeType.value == 'sync_person_reassociated' %}
+                                    {# Since 1.25: person: / user: tokens, rendered now (an anonymised person shows anonymised). #}
+                                    {% if entry.oldValue %}
+                                        <span class="nowo-task-activity__old">{{ task_board_sync_token(entry.oldValue) }}</span>
+                                    {% endif %}
+                                    {% if entry.oldValue and entry.newValue %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}{% endif %}
+                                    {% if entry.newValue %}
+                                        <span>{{ task_board_sync_token(entry.newValue) }}</span>
+                                    {% endif %}
                                 {% elseif entry.changeType.value in ['member_added', 'member_removed'] %}
                                     {% if entry.oldValue %}
                                         <span>{{ entry.oldValue }}</span>

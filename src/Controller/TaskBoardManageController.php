@@ -493,6 +493,10 @@ final class TaskBoardManageController extends AbstractController
     {
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user, true);
+        // Since 1.25: importing is its own decision (BoardAccessCheckEvent::ACTION_IMPORT_TASKS).
+        if (!$this->resourceAccessChecker->canImportTasks($user, $board)) {
+            throw $this->createAccessDeniedException('Task import denied.');
+        }
 
         $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
         $form->handleRequest($request);
@@ -549,6 +553,9 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
+        if (!$this->resourceAccessChecker->canImportIntoTask($user, $task)) {
+            throw $this->createAccessDeniedException('Task import denied.');
+        }
         $form = $this->createSubtaskImportForm($task);
         $form->handleRequest($request);
         /** @var TaskImportFormData $data */

@@ -79,6 +79,35 @@ final readonly class TaskBoardResourceAccessChecker
         $event   = new BoardAccessCheckEvent($user, $board, $default, BoardAccessCheckEvent::ACTION_MANAGE_CONNECTION);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
+        // Since 1.25: a connection imports tasks (and people and time), so the import decision applies too.
+        return $this->isBoardViewable($event) && $this->importDecision($user, $board);
+    }
+
+    /**
+     * Since 1.25: whether the user may bring tasks into the board from outside (file import into the board or under
+     * one of its tasks). Needs {@see self::canEditBoard()} and the {@see BoardAccessCheckEvent::ACTION_IMPORT_TASKS}
+     * decision of BOARD_ACCESS_CHECK, granted by default (listeners narrow it, e.g. to a dedicated permission).
+     * {@see self::canManageBoardConnection()} asks the same decision.
+     */
+    public function canImportTasks(object $user, TaskBoard $board): bool
+    {
+        return $this->canEditBoard($user, $board) && $this->importDecision($user, $board);
+    }
+
+    /**
+     * Since 1.25: whether the user may import a file of subtasks under the task: edit rights on the task (a task
+     * participant qualifies, as since 1.18) and the {@see BoardAccessCheckEvent::ACTION_IMPORT_TASKS} decision.
+     */
+    public function canImportIntoTask(object $user, Task $task): bool
+    {
+        return $this->canEditTask($user, $task) && $this->importDecision($user, $task->getBoard());
+    }
+
+    private function importDecision(object $user, TaskBoard $board): bool
+    {
+        $event = new BoardAccessCheckEvent($user, $board, true, BoardAccessCheckEvent::ACTION_IMPORT_TASKS);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
         return $this->isBoardViewable($event);
     }
 

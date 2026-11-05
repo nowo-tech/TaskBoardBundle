@@ -20,8 +20,12 @@ final class ScrubbedFixturesTest extends TestCase
 
     public function testTheFixturesAreScrubbed(): void
     {
-        $files = glob(__DIR__ . '/../../Fixtures/ClickUp/*.json') ?: [];
+        // Since 1.25: the people, time-entry and header fixtures too.
+        $files = [...(glob(__DIR__ . '/../../Fixtures/ClickUp/*.json') ?: []), ...(glob(__DIR__ . '/../../Fixtures/ClickUp/*.headers') ?: [])];
         self::assertNotEmpty($files);
+        foreach (['team_people.json', 'user.json', 'list_900200_task_people.json', 'team_9000001_time_entries_admin.json', 'team_9000001_time_entries_member.json', 'task_86a1x1_time.json', 'task_86a1x2.json', 'time_entries_429.headers'] as $required) {
+            self::assertContains(__DIR__ . '/../../Fixtures/ClickUp/' . $required, $files, $required . ' is covered');
+        }
         foreach ($files as $file) {
             $text = (string) file_get_contents($file);
             self::assertDoesNotMatchRegularExpression('/pk_(?!REDACTED)[A-Za-z0-9_]{8,}/', $text, $file . ': a token');
@@ -37,7 +41,12 @@ final class ScrubbedFixturesTest extends TestCase
             }
             self::assertDoesNotMatchRegularExpression('/"(profilePicture|avatar)"\s*:\s*"/', $text, $file . ': an avatar');
             preg_match_all('/"name"\s*:\s*"([^"]*)"/', $text, $names);
-            if (str_starts_with(basename($file), 'team.')) {
+            // Since 1.25: people are "User <n>" (fake), user ids start with 9 or 1000 (fake ranges).
+            preg_match_all('/"username"\s*:\s*"([^"]*)"/', $text, $usernames);
+            foreach ($usernames[1] as $username) {
+                self::assertMatchesRegularExpression('/^(User \d+|No id|Ignored)$/', $username, $file . ': a person name');
+            }
+            if (str_starts_with(basename($file), 'team.') || str_starts_with(basename($file), 'team_people.')) {
                 foreach ($names[1] as $name) {
                     self::assertMatchesRegularExpression('/^Workspace \d+$/', $name, $file . ': a workspace name');
                 }

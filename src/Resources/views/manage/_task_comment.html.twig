@@ -10,7 +10,14 @@
     {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: comment.author, class: 'nowo-task-detail__history-avatar', size: 32, labelled: false}, with_context: false) }}
     <div class="nowo-task-activity__body nowo-task-comment__body">
         <div class="nowo-task-detail__history-summary">
-            <strong>{{ memberUi.member_label(comment.author)|trim }}</strong>
+            {# Since 1.25: an imported comment shows its remote author ("<name> (ClickUp)") instead of a prefix line. #}
+            {% set _remote = task_board_sync_comment_author(comment) %}
+            {% if _remote and _remote.external %}
+                <strong>{{ 'task_board.sync.people.external'|trans({'%name%': _remote.name, '%provider%': ('task_board.sync.provider.' ~ _remote.provider)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</strong>
+                {% if _remote.boardAccess is same as(false) %}<span class="badge nowo-task-badge">{{ 'task_board.sync.people.no_board_access'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+            {% else %}
+                <strong>{{ memberUi.member_label(comment.author)|trim }}</strong>
+            {% endif %}
             <time class="nowo-task-activity__time" datetime="{{ comment.createdAt|date('c') }}">{{ comment.createdAt|date('Y-m-d H:i') }}</time>
             {% if comment.editedAt and not comment.deleted %}<span class="nowo-task-comment__edited">{{ 'task_board.comment.edited'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
             {% if _mine %}<span class="nowo-task-sr-only">{{ 'task_board.comment.mentions_you'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}

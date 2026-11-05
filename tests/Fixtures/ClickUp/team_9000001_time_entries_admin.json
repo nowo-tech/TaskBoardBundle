@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "id": "4000000000000000001",
+      "task": {"id": "86a1x1", "name": "Design the screens", "status": {"status": "complete"}},
+      "wid": "9000001",
+      "user": {"id": 1000002, "username": "User 2", "email": "user2@example.test", "profilePicture": null},
+      "billable": true,
+      "start": "1793000000000",
+      "end": "1793003600000",
+      "duration": "3600999",
+      "description": "Line one\r\nLine two‮ reversed\u0007",
+      "tags": [{"name": "design"}, {"name": "  "}],
+      "source": "clickup",
+      "at": "1793003600000"
+    },
+    {
+      "id": "4000000000000000002",
+      "task": {"id": "86a1x2"},
+      "user": {"id": 1000003, "username": "User 3", "email": "user3@example.test"},
+      "billable": false,
+      "start": "1793010000000",
+      "end": "1793011800000",
+      "duration": "1800000",
+      "description": "   ",
+      "tags": [],
+      "at": "1793011800000"
+    },
+    {
+      "id": "4000000000000000003",
+      "task": {"id": "86a1x2"},
+      "user": {"id": 1000004, "username": "User 4", "email": "user4@example.test"},
+      "billable": "yes",
+      "start": "1793020000000",
+      "duration": "-1793020000000",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "4000000000000000004",
+      "task": null,
+      "user": {"id": 1000002, "username": "User 2", "email": "user2@example.test"},
+      "start": "1793030000000",
+      "end": "1793030600000",
+      "duration": "600000"
+    },
+    {
+      "id": "4000000000000000005",
+      "task": {"id": "86a1x1"},
+      "start": "1793040000000",
+      "end": "1793040600000",
+      "duration": "600000"
+    }
+  ]
+}

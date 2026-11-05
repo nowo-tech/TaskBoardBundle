@@ -52,9 +52,24 @@ class TaskComment
         private string $body,
         #[ORM\Column(type: 'json')]
         private array $mentions = [],
+        // Since 1.25: the comment's date in the source tool (a provider sync); null = now.
+        ?DateTimeImmutable $createdAt = null,
     ) {
         $this->id        = Uuid::generate()->toString();
-        $this->createdAt = new DateTimeImmutable();
+        $this->createdAt = $createdAt ?? new DateTimeImmutable();
+    }
+
+    /**
+     * Since 1.25: a new author after a people re-association (no edit mark, no notification).
+     *
+     * @internal used by the provider sync's people services only
+     */
+    public function reassignAuthor(object $author): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->author = $author;
+
+        return $this;
     }
 
     public function getId(): string
