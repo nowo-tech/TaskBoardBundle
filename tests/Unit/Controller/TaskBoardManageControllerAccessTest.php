@@ -45,6 +45,7 @@ use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
@@ -1141,7 +1142,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             columnSetManager: $columnSets,
             columnIcons: ['tabler:bug'],
             dependencyManager: new TaskDependencyManager($taskRepository, $recorder),
-            timeLogger: new TaskTimeLogger($taskRepository, $recorder),
+            timeLogger: new TaskTimeLogger($taskRepository, $recorder, $this->createStub(TaskTimeEntryRepositoryInterface::class)),
             weekStartResolver: new ConfiguredWeekStartResolver('sunday'),
             commentManager: $comments ? new TaskCommentManager($this->commentRepository(), $candidates = $this->mentionCandidates()) : null,
             commentRepository: $comments ? $this->commentRepository() : null,
