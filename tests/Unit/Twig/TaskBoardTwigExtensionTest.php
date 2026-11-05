@@ -27,6 +27,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'nowo_task_board_filters_collapse'          => null,
             'nowo_task_board_filters_form_class'        => '',
             'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
+            'nowo_task_board_sync_badge_connect_link'   => true,
         ], $extension->getGlobals());
     }
 
@@ -40,6 +41,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'nowo_task_board_filters_collapse'          => 'shared/_filters_collapse.html.twig',
             'nowo_task_board_filters_form_class'        => 'issue-filters panel',
             'nowo_task_board_connection_badge_template' => '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
+            'nowo_task_board_sync_badge_connect_link'   => true,
         ], $extension->getGlobals());
     }
 

@@ -67,6 +67,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?SyncPeopleViewProvider $syncPeople = null,
         // Since 1.25: templates.connection_badge (the board, list and Gantt headers include it).
         private readonly string $connectionBadgeTemplate = '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
+        // Since 1.25.2: sync.badge.connect_link (false = the badge of an unlinked board renders nothing).
+        private readonly bool $syncBadgeConnectLink = true,
     ) {
     }
 
@@ -299,6 +301,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             'nowo_task_board_filters_form_class' => $this->filtersFormClass,
             // Since 1.25: the configured connection badge partial (templates.connection_badge).
             'nowo_task_board_connection_badge_template' => $this->connectionBadgeTemplate,
+            // Since 1.25.2: sync.badge.connect_link.
+            'nowo_task_board_sync_badge_connect_link' => $this->syncBadgeConnectLink,
         ];
     }
 }

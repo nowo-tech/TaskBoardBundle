@@ -706,6 +706,12 @@ final class Configuration implements ConfigurationInterface
                                 ->integerNode('poll_interval_ms')->defaultValue(2000)->min(500)->end()
                             ->end()
                         ->end()
+                        ->arrayNode('badge')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->booleanNode('connect_link')->defaultTrue()->info('Since 1.25.2: false = the connection badge shows nothing for an unlinked board (no "Connect provider" link, no empty strip); a linked board keeps its badge.')->end()
+                            ->end()
+                        ->end()
                         // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
                         ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()
                         ->arrayNode('lookup')

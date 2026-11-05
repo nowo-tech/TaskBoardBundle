@@ -602,6 +602,8 @@ nowo_task_board:
         inline_slice_pages: 5         # task pages the inline runner writes per request
         progress:
             poll_interval_ms: 2000
+        badge:
+            connect_link: true        # since 1.25.2: false = an unlinked board shows no badge (no "Connect provider" link)
         # Since 1.25 (ClickUp full import; see sync.md):
         list_as_tag: false            # tag "list:<name>" on tasks of a folder / space source
         lookup:
@@ -636,6 +638,12 @@ New routes (configurable like the others, copied under `tenancy.tenant_paths`): 
 `board_connection_containers`, `board_connection_link`, `board_connection_refresh`, `board_connection_cancel`,
 `board_connection_unlink` (POST, CSRF), `board_connection_progress` (GET, JSON), and `task_restore` (POST, always on).
 New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`.
+
+Since 1.25.2, `sync.badge.connect_link: false` hides the board / list / Gantt header badge of an **unlinked** board
+(the *Connect provider* link and its strip) for hosts that offer the connection elsewhere (e.g. an import menu linking
+`board_connection`); a linked board keeps its badge. Default `true` renders exactly as 1.25.1. No template override is
+needed; the bundle partial reads the Twig global `nowo_task_board_sync_badge_connect_link`, which a host's own
+`templates.connection_badge` partial may read too.
 
 ## Assets
 
