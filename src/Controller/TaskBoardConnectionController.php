@@ -42,6 +42,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
@@ -600,8 +601,18 @@ final class TaskBoardConnectionController extends AbstractController
                 $rows[] = ['key' => $key, 'tasks' => $pending[$bit], 'status' => $status];
             }
         }
-        if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0) {
-            $rows[] = ['key' => 'time_in_status', 'tasks' => $stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] + ($stats[SyncTaskDetailsWriter::STAT_STATUS_SKIPPED] ?? 0), 'status' => 'unavailable'];
+        // Since 1.28.0: kept on the connection, so a run that writes nothing does not make the row disappear.
+        if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0 || $connection->isStatusHistoryUnavailable()) {
+            $rows[] = ['key' => 'time_in_status', 'tasks' => ($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) + ($stats[SyncTaskDetailsWriter::STAT_STATUS_SKIPPED] ?? 0), 'status' => 'unavailable'];
+        }
+        if (($stats[SyncTaskDetailsWriter::STAT_TYPES_UNAVAILABLE] ?? 0) > 0) {
+            $rows[] = ['key' => 'task_types', 'tasks' => 0, 'status' => 'unavailable'];
+        }
+        // Since 1.28.0 (TB-SYNC-4): what the provider's API does not give, or what is not kept, on every report.
+        if ($report instanceof SyncReport && $provider instanceof ProviderApiGapsInterface) {
+            foreach ($provider->apiGaps() as $key => $status) {
+                $rows[] = ['key' => $key, 'tasks' => 0, 'status' => $status];
+            }
         }
         // Since 1.28.0: hours of people with no host user, when the sink takes mapped people only: never silent.
         if ($report instanceof SyncReport && $report->time->skippedUnmapped > 0) {

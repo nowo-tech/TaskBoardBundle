@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
+use Nowo\TaskBoardBundle\Sync\Dto\SyncMode;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -147,6 +148,8 @@ final readonly class SyncTaskWriter
         private bool $importArchived = true,
         // Since 1.27.0 (audit GW-L6): reply requests per run.
         private int $maxReplyCalls = 500,
+        // Since 1.28.0: `sync.full_sync_rereads_details`.
+        private bool $fullSyncRereadsDetails = false,
     ) {
     }
 
@@ -700,10 +703,34 @@ final readonly class SyncTaskWriter
             }
             $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
             $this->syncAttachments($ctx, $task, $item, $detail->attachments);
+        } elseif ($detail !== $remote && $ctx->mode === SyncMode::Full && $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS)) {
+            // Since 1.28.0 (audit GWf-I1): asked twice, the detail has no key. ClickUp documents it only for tasks with files, so
+            // this is a task without files: nothing is left to read, and no stored file is touched.
+            $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
         } elseif (!$this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ) || $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS)) {
             $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, true);
             $ctx->count('attachments.unread');
         }
+    }
+
+    /**
+     * Since 1.28.0: replies kept per remote comment.
+     *
+     * @param array<string, TaskSyncComment> $comments
+     *
+     * @return array<string, int>
+     */
+    private function storedReplies(array $comments): array
+    {
+        $count = [];
+        foreach ($comments as $comment) {
+            $parent = $comment->getParentRemoteId();
+            if ($parent !== null) {
+                $count[$parent] = ($count[$parent] ?? 0) + 1;
+            }
+        }
+
+        return $count;
     }
 
     /** Since 1.27.0: this version of the task was already read (repeated full syncs make progress). */
@@ -846,7 +873,8 @@ final readonly class SyncTaskWriter
         $provider = $ctx->provider;
         // Audit GWd-L3: threads already read for this version spend nothing, so the budget reaches the next tasks.
         $done     = $this->read($item, $remoteTask, SyncTaskDetailsWriter::META_REPLIES_READ);
-        $replies  = $done ? ReplyBudget::alreadyRead() : new ReplyBudget(max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls')));
+        $left     = max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls'));
+        $replies  = $done ? ReplyBudget::alreadyReadExcept($this->storedReplies($existing), $left) : new ReplyBudget($left);
         $comments = $provider instanceof ThreadedCommentProviderInterface
             ? $provider->fetchCommentsWithin($ctx->credential, $item->getExternalId(), $replies)
             : $provider->fetchComments($ctx->credential, $item->getExternalId());
@@ -1092,7 +1120,9 @@ final readonly class SyncTaskWriter
                 $ctx->warn('status_without_column');
                 continue;
             }
-            $column                         = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255)));
+            // Since 1.28.0: the status's colour now; its order at the end of the first import.
+            $column = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255), color: $remote->status?->color));
+            $ctx->connection->addCreatedColumn($column->getId());
             $byName[mb_strtolower($status)] = $column;
             ++$ctx->columnsCreated;
         }
@@ -1135,7 +1165,10 @@ final readonly class SyncTaskWriter
         $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown)
             || ($ctx->options->importAttachments && $provider->capabilities()->attachments && !$remote->attachmentsKnown);
         // A version already read spends no request, whatever the row lacks: the budget reaches the next tasks (audit GW).
-        if (!$missing || !$provider instanceof TaskDetailProviderInterface || $this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ)) {
+        // Since 1.28.0 (`sync.full_sync_rereads_details`, audit GWf-I2): for a provider where a new file may not move the task's date.
+        // Since 1.28.0 (audit GWf-I1): a full sync asks again about files still unread, so "retried on a full sync" is true.
+        $reread = $ctx->mode === SyncMode::Full && ($this->fullSyncRereadsDetails || $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS));
+        if (!$missing || !$provider instanceof TaskDetailProviderInterface || (!$reread && $this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ))) {
             return $remote;
         }
         if (($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {

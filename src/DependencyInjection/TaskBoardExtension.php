@@ -270,6 +270,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
                 ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
                 ->setArgument('$includeArchived', (bool) $sync['import_archived'])
+                ->setArgument('$includeMultiList', (bool) $sync['include_multi_list_tasks'])
                 ->setArgument('$excludedFieldTypes', $sync['custom_fields']['exclude_types'])
                 ->addTag('nowo_task_board.task_provider'));
         }
@@ -321,7 +322,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
             ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode'])
             ->setArgument('$importArchived', (bool) $sync['import_archived'])
-            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run']);
+            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run'])
+            ->setArgument('$fullSyncRereadsDetails', (bool) $sync['full_sync_rereads_details']);
         $container->getDefinition(SyncCustomFieldWriter::class)
             ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
         // Audit GW-L8: restoring a task by hand asks the host's limit too.

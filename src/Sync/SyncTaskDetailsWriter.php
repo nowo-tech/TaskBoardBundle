@@ -10,15 +10,18 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Sync\Provider\StatusHistoryProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskTypeProviderInterface;
 
 use function array_map;
 use function is_array;
+use function is_string;
 
 use const DATE_ATOM;
 
@@ -38,6 +41,8 @@ final readonly class SyncTaskDetailsWriter
     public const STAT_STATUS_FORBIDDEN = 'statusHistory.forbidden';
 
     public const STAT_STATUS_SKIPPED = 'statusHistory.skipped';
+
+    public const STAT_TYPES_UNAVAILABLE = 'taskTypes.unavailable';
 
     /** The remote date of the task when its detail was last read: a later run spends no request on this version. */
     public const META_DETAIL_READ = 'detailRead';
@@ -81,6 +86,10 @@ final readonly class SyncTaskDetailsWriter
         if ($estimates !== []) {
             $meta['estimates'] = $estimates;
         }
+        $type = $this->taskType($ctx, $item, $details);
+        if ($type !== null) {
+            $meta['taskType'] = $type;
+        }
         $history = $this->history($ctx, $item);
         if ($history !== null && $history !== []) {
             $meta['statusHistory'] = $history;
@@ -97,6 +106,40 @@ final readonly class SyncTaskDetailsWriter
             $ctx->count('details.updated');
         }
         $this->completion($ctx, $item, $task, $details->doneAt ?? $details->closedAt);
+    }
+
+    /**
+     * Since 1.28.0: the name of the task's type: ClickUp's type 0 is its default and has no row in the workspace's types.
+     * One request per run; a refusal keeps what the task had and is said in the report, it does not fail the run.
+     *
+     * @throws RateLimitedException
+     */
+    private function taskType(SyncRunContext $ctx, TaskSyncItem $item, RemoteTaskDetails $details): ?string
+    {
+        $id = $details->taskTypeId;
+        if ($id === null) {
+            return null;
+        }
+        if ($id === '0') {
+            return 'Task';
+        }
+        if ($ctx->taskTypes === null) {
+            $ctx->taskTypes = [];
+            if ($ctx->provider instanceof TaskTypeProviderInterface && $details->workspaceId !== null) {
+                try {
+                    $ctx->taskTypes = $ctx->provider->fetchTaskTypes($ctx->credential, $details->workspaceId);
+                } catch (RateLimitedException $exception) {
+                    $ctx->taskTypes = null;
+
+                    throw $exception;
+                } catch (ProviderException) {
+                    $ctx->count(self::STAT_TYPES_UNAVAILABLE);
+                }
+            }
+        }
+        $last = $item->getRemoteMeta()['taskType'] ?? null;
+
+        return $ctx->taskTypes[$id] ?? (is_string($last) ? $last : '#' . $id);
     }
 
     /**
@@ -149,6 +192,8 @@ final readonly class SyncTaskDetailsWriter
             }
             if ($exception->errorCode === ProviderErrorCode::Forbidden) {
                 $ctx->count(self::STAT_STATUS_FORBIDDEN);
+                // Since 1.28.0: said until a later run reads it (a run that writes nothing does not ask again).
+                $ctx->connection->setStatusHistoryUnavailable(true);
 
                 return $last;
             }
@@ -157,6 +202,9 @@ final readonly class SyncTaskDetailsWriter
 
             return $last;
         }
+
+        // Since 1.28.0: the provider answered: nothing to say any more.
+        $ctx->connection->setStatusHistoryUnavailable(false);
 
         return $statuses === null ? $last : array_map(static fn (RemoteStatusTime $status): array => [
             'status'  => $status->status,

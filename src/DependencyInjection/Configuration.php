@@ -773,6 +773,8 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                         ->end()
                         ->booleanNode('people_bulk_former')->defaultFalse()->info('Since 1.28.0: true = the People page offers "Mark every unmapped person as a former person" (mapping external, changeable person by person). false = no button, and the route answers 404.')->end()
+                        ->booleanNode('include_multi_list_tasks')->defaultFalse()->info('Since 1.28.0: true = a ClickUp list source also reads the tasks added to it from other lists (include_timl). Each still appears once, with all its lists; a task belongs to one board.')->end()
+                        ->booleanNode('full_sync_rereads_details')->defaultFalse()->info('Since 1.28.0: true = a full sync reads each task\'s detail again even when its date did not move (within sync.watchers.max_detail_calls_per_run). For when a new file does not move ClickUp\'s date_updated.')->end()
                         ->booleanNode('unmatched_columns_choice')->defaultFalse()->info('Since 1.28.0: true = the link page offers "Columns no status uses" (keep, or delete the empty ones after the first import). false = not drawn; a posted task_board_sync_link[unmatchedColumns] is accepted either way (a host drawing its own dialog).')->end()
                         ->arrayNode('people')
                             ->addDefaultsIfNotSet()

@@ -167,6 +167,7 @@ services:
     Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider: ~
 
     Nowo\TaskBoardBundle\Sync\Status\UnmatchedColumnsCleaner: ~
+    Nowo\TaskBoardBundle\Sync\Status\FirstImportFinisher: ~
 
     Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase:
         arguments:
