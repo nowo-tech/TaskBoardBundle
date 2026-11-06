@@ -133,6 +133,13 @@ No schema change; the default output is unchanged. The connection badge data gai
 progress bar in the bundle's badge. A host with its own `templates.connection_badge` can wire the bar itself
 ([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
 
+People page (TB-SYNC-2), no schema change: a linked board's connection page links a People page where managers map
+remote people to host users. Hosts with their own `templates.connection` can include
+`templates.connection_people_summary` (variable `peopleSummary`) or link `board_connection_people`. To put the page
+between linking and the first import, set `sync.people.step: true`; for *Invite by e-mail*, set `sync.people.inviter`.
+The candidates are those of `sync.people.resolver` (`SyncPersonResolverInterface::candidates()`): a host without a
+resolver gets the board's assignable users. See [sync.md](sync.md#people-page-and-step-since-127).
+
 ## To 1.26.2
 
 From **1.26.1**:

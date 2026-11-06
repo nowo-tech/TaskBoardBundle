@@ -103,6 +103,8 @@ services:
             $cache: '@?cache.app'
             $containerCacheTtl: '%nowo_task_board.sync.container_cache_ttl%'
             $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
+            $peopleStep: '%nowo_task_board.sync.people.step%'
+            $peoplePageSize: '%nowo_task_board.sync.people.page_size%'
         tags: ['controller.service_arguments']
 
     Nowo\TaskBoardBundle\Command\TaskBoardSyncCommand: ~
@@ -133,6 +135,12 @@ services:
 
     Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleProjector:
         public: true
+
+    # Since 1.27.0 (TB-SYNC-2): the People page / step. $inviter, $candidateLimit, $reapplySeconds come from the extension.
+    Nowo\TaskBoardBundle\Sync\People\PeopleMappingService:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
 
     Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner:
         public: true

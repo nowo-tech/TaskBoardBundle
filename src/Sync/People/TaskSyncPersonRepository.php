@@ -79,6 +79,24 @@ final readonly class TaskSyncPersonRepository
         return $people;
     }
 
+    /**
+     * Since 1.27.0: people whose re-association is not finished (a pending target is stored), by id.
+     *
+     * @return list<TaskSyncPerson>
+     */
+    public function pendingReassigns(TaskSyncDirectory $directory, int $limit = 50): array
+    {
+        /** @var list<TaskSyncPerson> $people */
+        $people = $this->entityManager->createQueryBuilder()
+            ->select('p')->from(TaskSyncPerson::class, 'p')
+            ->where('p.directory = :directory')->andWhere('p.reassignId IS NOT NULL')
+            ->setParameter('directory', $directory)
+            ->orderBy('p.id', SortDirection::Ascending)->setMaxResults(max(1, $limit))
+            ->getQuery()->getResult();
+
+        return $people;
+    }
+
     /** People nobody decided yet (unmatched or suggested, not anonymised). */
     public function unreviewedCount(TaskSyncDirectory $directory): int
     {

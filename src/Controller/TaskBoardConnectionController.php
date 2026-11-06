@@ -4,19 +4,24 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
+use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionRefreshFormType;
 use Nowo\TaskBoardBundle\Form\ContainerLevelFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncRequest;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
@@ -24,8 +29,16 @@ use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingDeniedException;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingRow;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
+use Nowo\TaskBoardBundle\Sync\People\PersonFilter;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
@@ -38,6 +51,7 @@ use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -51,12 +65,18 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use function array_filter;
 use function array_map;
 use function array_slice;
+use function array_sum;
+use function array_unique;
 use function array_values;
 use function count;
 use function hash;
+use function implode;
 use function in_array;
+use function is_numeric;
 use function is_object;
 use function is_string;
+use function max;
+use function min;
 use function preg_match;
 use function serialize;
 use function unserialize;
@@ -93,6 +113,13 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly int $historyShown = 20,
         private readonly int $pollInterval = 2000,
         private readonly LoggerInterface $logger = new NullLogger(),
+        // Since 1.27.0 (TB-SYNC-2): the People page / step.
+        private readonly ?PeopleMappingService $peopleMapping = null,
+        private readonly ?TaskSyncPeopleDirectoryService $peopleDirectories = null,
+        private readonly ?TaskSyncPeopleScanner $peopleScanner = null,
+        private readonly ?TaskSyncPersonRepository $peopleRepository = null,
+        private readonly bool $peopleStep = false,
+        private readonly int $peoplePageSize = 50,
     ) {
     }
 
@@ -253,7 +280,7 @@ final class TaskBoardConnectionController extends AbstractController
             return $this->backToPage($boardId, $provider, $choice);
         }
 
-        $this->sync->link($board, $provider, $credential, $container, $user, [
+        $connection = $this->sync->link($board, $provider, $credential, $container, $user, [
             'createMissingColumns'   => (bool) $values['createMissingColumns'],
             'fallbackColumnId'       => $values['fallbackColumnId'],
             'importComments'         => (bool) $values['importComments'],
@@ -261,6 +288,12 @@ final class TaskBoardConnectionController extends AbstractController
             'archiveRemoteDeletions' => (bool) $values['archiveRemoteDeletions'],
         ]);
         $this->logWrite('sync_link', ['board_id' => $boardId, 'provider' => $provider->id()]);
+        if ($this->peopleStepScan($board, $connection, $provider, $credential, $user)) {
+            // Since 1.27.0 (TB-SYNC-2): the People step comes first; its save starts the import.
+            $this->addFlash('success', $this->translator->trans('task_board.sync.people.flash.step', ['%list%' => $container->name], 'NowoTaskBoardBundle'));
+
+            return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId]);
+        }
         $this->runner->dispatch(new SyncRequest($boardId, $actorId, SyncTrigger::Manual));
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.linked', ['%list%' => $container->name], 'NowoTaskBoardBundle'));
 
@@ -324,6 +357,8 @@ final class TaskBoardConnectionController extends AbstractController
             'conflicts' => count($report->conflicts ?? []),
             'files'     => $report?->files->toArray() ?? ['copied' => 0, 'reused' => 0, 'refused' => 0, 'bytes' => 0],
             'summary'   => $report instanceof SyncReport ? $this->summary($report) : '',
+            // Since 1.27.0 (TB-SYNC-2): people of the connection nobody mapped or decided yet.
+            'unmappedPeople' => $this->peopleSummary($board, $connection)['unreviewed'] ?? 0,
         ]);
         $response->headers->set('Cache-Control', 'no-store');
 
@@ -358,6 +393,80 @@ final class TaskBoardConnectionController extends AbstractController
         $this->addFlash('success', $this->translator->trans('task_board.sync.flash.unlinked', [], 'NowoTaskBoardBundle'));
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-2): the People page — every remote person of the connection's directory with a host-user
+     * select (pre-filled by e-mail, then by name). Managers only (remote e-mails are shown here).
+     */
+    public function people(string $boardId, Request $request): Response
+    {
+        $user       = $this->requireUser();
+        $board      = $this->findManagedBoard($boardId, $user);
+        $connection = $this->linkedConnection($board);
+        try {
+            return $this->render($this->templates['connection_people'], $this->peopleView($board, $connection, $user, $request->query));
+        } catch (PeopleMappingDeniedException) {
+            throw new NotFoundHttpException('Board not found.');
+        }
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-2): saves the People page (changed rows are re-applied to the imported tasks); during the
+     * People step it also starts the first import (`skip` starts it without changing anything).
+     */
+    public function peopleSave(string $boardId, Request $request): RedirectResponse
+    {
+        $user       = $this->requireUser();
+        $board      = $this->findManagedBoard($boardId, $user);
+        $connection = $this->linkedConnection($board);
+        $directory  = $connection->getDirectory();
+        if (!$directory instanceof TaskSyncDirectory || !$this->peopleMapping instanceof PeopleMappingService) {
+            throw new NotFoundHttpException('No people for this connection.');
+        }
+        $query = ['filter' => $this->peopleFilterName($request->query), 'page' => $this->peoplePage($request->query)];
+        try {
+            $view = $this->peopleView($board, $connection, $user, $request->query);
+            /** @var list<PeopleMappingRow> $rows */
+            $rows = $view['rows'];
+            /** @var array<string, string> $labels */
+            $labels = $view['candidateLabels'];
+            $form   = $this->peopleForm($board, $user, $rows, $labels, $query);
+            $form->handleRequest($request);
+            if (!$form->isSubmitted() || !$form->isValid()) {
+                if (!$form->isSubmitted() || $form->getErrors()->count() > 0) {
+                    $this->logRefused('csrf_invalid');
+
+                    throw $this->createAccessDeniedException('Invalid CSRF token.');
+                }
+                $this->addFlash('error', $this->translator->trans('task_board.sync.people.flash.invalid', [], 'NowoTaskBoardBundle'));
+
+                return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId] + $query);
+            }
+            $choices = [];
+            if ($request->request->get('skip') === null) {
+                foreach ($rows as $row) {
+                    $value                          = $form->get(ConnectionPeopleFormType::FIELD_PREFIX . $row->person->getId())->getData();
+                    $choices[$row->person->getId()] = is_string($value) ? $value : '';
+                }
+            }
+            $result = $this->peopleMapping->save($directory, $board, $choices, $user);
+        } catch (PeopleMappingDeniedException) {
+            throw new NotFoundHttpException('Board not found.');
+        }
+        $this->logWrite('sync_people_save', ['board_id' => $boardId, 'changed' => count($result->changes), 'invited' => $result->invited, 'pending' => $result->pending, 'refused' => count($result->errors)]);
+        $this->addFlash('success', $this->translator->trans('task_board.sync.people.flash.saved', ['%changed%' => (string) count($result->changes), '%invited%' => (string) $result->invited, '%pending%' => (string) $result->pending], 'NowoTaskBoardBundle'));
+        if ($result->errors !== []) {
+            $this->addFlash('error', $this->translator->trans('task_board.sync.people.flash.refused', ['%count%' => (string) count($result->errors), '%reasons%' => implode(', ', array_map(fn (string $code): string => $this->translator->trans('task_board.sync.people.error.' . $code, [], 'NowoTaskBoardBundle'), array_values(array_unique($result->errors))))], 'NowoTaskBoardBundle'));
+        }
+        if ($this->firstImportPending($connection)) {
+            $this->runner->dispatch(new SyncRequest($boardId, $this->actorId($user), SyncTrigger::Manual));
+            $this->addFlash('success', $this->translator->trans('task_board.sync.flash.refresh_started', [], 'NowoTaskBoardBundle'));
+
+            return $this->backToPage($boardId);
+        }
+
+        return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId] + $query);
     }
 
     /** The one-line summary of a report, in the user's language (also the live region text). */
@@ -404,6 +513,7 @@ final class TaskBoardConnectionController extends AbstractController
             'dashboardRoute'   => $this->dashboardRoute,
             'templates'        => $this->templates,
             'pollInterval'     => $this->pollInterval,
+            'peopleSummary'    => $this->peopleSummary($board, $connection),
         ];
     }
 
@@ -550,6 +660,149 @@ final class TaskBoardConnectionController extends AbstractController
         $url = $this->credentials->credentialFormUrl($board, $provider->id());
 
         return $url !== null && preg_match('~^(?:https://[^\s/?#@\\\\]+|/(?![/\\\\]))[^\s\x00-\x1f\x7f\\\\]*$~Di', $url) === 1 ? $url : null;
+    }
+
+    private function linkedConnection(TaskBoard $board): TaskBoardConnection
+    {
+        $connection = $this->store->findConnection($board);
+        if (!$connection instanceof TaskBoardConnection || !$this->peopleMapping instanceof PeopleMappingService) {
+            throw new NotFoundHttpException('The board is not linked.');
+        }
+
+        return $connection;
+    }
+
+    /** The first import has not started yet (People step): saving the People page starts it. */
+    private function firstImportPending(TaskBoardConnection $connection): bool
+    {
+        return $this->peopleStep && !$connection->getLastRunAt() instanceof DateTimeImmutable && $connection->getRunningRunId() === null;
+    }
+
+    /**
+     * Since 1.27.0: with `sync.people.step`, attaches the directory and scans the source's people after the link.
+     * False (start the import at once) when the step is off, the provider has no people or the scan fails.
+     */
+    private function peopleStepScan(TaskBoard $board, TaskBoardConnection $connection, TaskProviderInterface $provider, ProviderCredential $credential, UserInterface $user): bool
+    {
+        if (!$this->peopleStep || !$this->peopleDirectories instanceof TaskSyncPeopleDirectoryService || !$this->peopleScanner instanceof TaskSyncPeopleScanner || !$provider instanceof PeopleProviderInterface) {
+            return false;
+        }
+        try {
+            $directory = $this->peopleDirectories->directoryFor($connection, $provider, $credential);
+            if (!$directory instanceof TaskSyncDirectory) {
+                return false;
+            }
+            $this->peopleScanner->scan($board, $provider, $credential, $directory->getWorkspaceId(), $connection->getLocation(), $user, true);
+        } catch (ProviderException $exception) {
+            $this->addFlash('error', $this->translator->trans('task_board.sync.error.' . $exception->errorCode->value, [], 'NowoTaskBoardBundle'));
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Since 1.27.0: the People counts of the connection page and the progress endpoint (null without a directory).
+     *
+     * @return array{unreviewed: int, mapped: int, total: int, url: string}|null
+     */
+    private function peopleSummary(TaskBoard $board, TaskBoardConnection $connection): ?array
+    {
+        $directory = $connection->getDirectory();
+        if (!$directory instanceof TaskSyncDirectory || !$this->peopleRepository instanceof TaskSyncPersonRepository || !$this->peopleMapping instanceof PeopleMappingService) {
+            return null;
+        }
+        $counts = $this->peopleRepository->mappingCounts($directory);
+
+        return [
+            'unreviewed' => $this->peopleRepository->unreviewedCount($directory),
+            'mapped'     => ($counts[TaskSyncPersonMapping::Auto->value] ?? 0) + ($counts[TaskSyncPersonMapping::Manual->value] ?? 0),
+            'total'      => array_sum($counts),
+            'url'        => $this->generateUrl($this->routes['board_connection_people']['name'], ['boardId' => $board->getId()]),
+        ];
+    }
+
+    /**
+     * @param InputBag<string> $query
+     *
+     * @return array<string, mixed>
+     */
+    private function peopleView(TaskBoard $board, TaskBoardConnection $connection, UserInterface $user, InputBag $query): array
+    {
+        $directory = $connection->getDirectory();
+        $filter    = $this->peopleFilterName($query);
+        $page      = $this->peoplePage($query);
+        $rows      = [];
+        $labels    = [];
+        $hasNext   = false;
+        $form      = null;
+        if ($directory instanceof TaskSyncDirectory && $this->peopleMapping instanceof PeopleMappingService) {
+            $this->peopleDirectories?->assertCanManage($directory, $user, $board);
+            $candidates = $this->peopleMapping->candidates($board);
+            foreach ($candidates as $id => $candidate) {
+                $labels[$id] = UserLabel::option($candidate);
+            }
+            $rows    = $this->peopleMapping->rows($directory, $candidates, $filter === 'unmapped' ? PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested) : new PersonFilter(), $this->peoplePageSize + 1, ($page - 1) * $this->peoplePageSize);
+            $hasNext = count($rows) > $this->peoplePageSize;
+            $rows    = array_slice($rows, 0, $this->peoplePageSize);
+            $form    = $this->peopleForm($board, $user, $rows, $labels, ['filter' => $filter, 'page' => $page])->createView();
+        }
+
+        return [
+            'board'              => $board,
+            'connection'         => $connection,
+            'provider'           => $this->providers->has($connection->getProvider()) ? $this->providers->get($connection->getProvider()) : null,
+            'directory'          => $directory,
+            'rows'               => $rows,
+            'candidateLabels'    => $labels,
+            'peopleForm'         => $form,
+            'filter'             => $filter,
+            'page'               => $page,
+            'hasNext'            => $hasNext,
+            'peopleSummary'      => $this->peopleSummary($board, $connection),
+            'pendingReassigns'   => $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository ? count($this->peopleRepository->pendingReassigns($directory)) : 0,
+            'firstImportPending' => $this->firstImportPending($connection),
+            'dashboardRoute'     => $this->dashboardRoute,
+            'templates'          => $this->templates,
+        ];
+    }
+
+    /**
+     * @param list<PeopleMappingRow> $rows
+     * @param array<string, string> $labels
+     * @param array{filter: string, page: int} $query
+     *
+     * @return FormInterface<mixed>
+     */
+    private function peopleForm(TaskBoard $board, UserInterface $user, array $rows, array $labels, array $query): FormInterface
+    {
+        return $this->container->get('form.factory')->createNamed(ConnectionPeopleFormType::NAME, ConnectionPeopleFormType::class, null, [
+            'action'           => $this->generateUrl($this->routes['board_connection_people_save']['name'], ['boardId' => $board->getId()] + $query),
+            'rows'             => $rows,
+            'candidates'       => $labels,
+            'invite'           => $this->peopleMapping?->canInvite($board, $user) === true,
+            'not_mapped_label' => $this->translator->trans('task_board.sync.people.not_mapped', [], 'NowoTaskBoardBundle'),
+            'invite_label'     => $this->translator->trans('task_board.sync.people.invite', [], 'NowoTaskBoardBundle'),
+        ]);
+    }
+
+    /**
+     * @param InputBag<string> $query
+     */
+    private function peopleFilterName(InputBag $query): string
+    {
+        return $query->get('filter') === 'unmapped' ? 'unmapped' : 'all';
+    }
+
+    /**
+     * @param InputBag<string> $query
+     */
+    private function peoplePage(InputBag $query): int
+    {
+        $page = $query->get('page');
+
+        return is_numeric($page) ? max(1, min(10_000, (int) $page)) : 1;
     }
 
     private function requireUser(): UserInterface

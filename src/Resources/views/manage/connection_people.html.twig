@@ -1,0 +1,128 @@
+{% extends nowo_task_board_layout %}
+{#
+    Since 1.27.0 (TB-SYNC-2): the People page of a linked board — each remote person (assignees, creators, watchers,
+    commenters, time-entry users, workspace members) with a host-user select pre-filled by e-mail, then by name. Saving
+    maps the changed rows and re-applies them to the tasks already imported. During the People step (sync.people.step)
+    the save starts the first import. Remote names and e-mails are untrusted text (escaped) and shown only to managers.
+    board, connection, provider, directory, rows, peopleForm, filter, page, hasNext, peopleSummary, pendingReassigns,
+    firstImportPending. Override with templates.connection_people.
+#}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block title %}{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+
+{% block body %}
+    {% set _provider = (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') %}
+    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
+        pageTitle: 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle'),
+        pageSubtitle: 'task_board.sync.people.subtitle'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle'),
+        breadcrumbRoute: nowo_task_board_route('board'),
+        breadcrumbParams: {boardId: board.id},
+        breadcrumbLabel: board.name,
+        headerActions: [
+            {href: path(nowo_task_board_route('board_connection'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+        ],
+        dashboardRoute: dashboardRoute|default(null),
+    }) }}
+
+    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+
+    {% block nowo_task_board_connection_people %}
+        <section class="card nowo-task-sync-people" aria-labelledby="nowo-task-sync-people-title" data-testid="nowo-task-sync-people">
+            <div class="card-header">
+                <h2 class="card-title" id="nowo-task-sync-people-title">{{ _provider }} · {{ connection.containerLabel }}</h2>
+            </div>
+            <div class="card-body">
+                {% if firstImportPending %}
+                    <p class="alert alert-info" data-testid="nowo-task-sync-people-step">{{ 'task_board.sync.people.step_help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                {% endif %}
+                <p class="text-secondary">{{ 'task_board.sync.people.help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                {% if pendingReassigns > 0 %}
+                    <p class="alert alert-warning" role="status" data-testid="nowo-task-sync-people-pending">{{ 'task_board.sync.people.pending'|trans({'%count%': pendingReassigns}, 'NowoTaskBoardBundle') }}</p>
+                {% endif %}
+
+                {% if directory is null %}
+                    <p class="text-secondary" data-testid="nowo-task-sync-people-none">{{ 'task_board.sync.people.none_yet'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                {% else %}
+                    <nav class="nav nav-pills mb-3" aria-label="{{ 'task_board.sync.people.filter'|trans({}, 'NowoTaskBoardBundle') }}">
+                        {% for _f in ['all', 'unmapped'] %}
+                            <a class="nav-link{{ filter == _f ? ' active' : '' }}" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: _f}) }}"{% if filter == _f %} aria-current="page"{% endif %}>{{ ('task_board.sync.people.filter.' ~ _f)|trans({}, 'NowoTaskBoardBundle') }}</a>
+                        {% endfor %}
+                    </nav>
+
+                    {% if rows is empty %}
+                        <p class="text-secondary" data-testid="nowo-task-sync-people-empty">{{ 'task_board.sync.people.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                    {% endif %}
+
+                    {{ form_start(peopleForm, {method: 'POST', attr: {id: 'nowo-task-sync-people-form'}}) }}
+                        {% if rows is not empty %}
+                            {#- A scrolling region is reachable with the keyboard (WCAG 2.1.1). -#}
+                            <div class="table-responsive" tabindex="0" role="region" aria-labelledby="nowo-task-sync-people-title">
+                                <table class="table card-table table-vcenter">
+                                    <caption class="visually-hidden">{{ 'task_board.sync.people.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">{{ 'task_board.sync.people.col_person'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</th>
+                                            <th scope="col">{{ 'task_board.sync.people.col_user'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in rows %}
+                                            {% set _person = row.person %}
+                                            <tr data-testid="nowo-task-sync-person-row">
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="avatar avatar-sm nowo-task-member-avatar" aria-hidden="true">{{ _person.name|slice(0, 1)|upper }}</span>
+                                                        <div>
+                                                            <div id="nowo-task-sync-person-{{ _person.id }}">{{ _person.name }}</div>
+                                                            {% if _person.email %}<div class="text-secondary small">{{ _person.email }}</div>{% endif %}
+                                                            <div class="small">
+                                                                {% if row.prefill == 'email' or row.prefill == 'name' %}
+                                                                    <span class="badge bg-yellow-lt" data-testid="nowo-task-sync-person-prefill">{{ ('task_board.sync.people.prefill.' ~ row.prefill)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                {% elseif row.prefill == 'mapped' %}
+                                                                    <span class="badge bg-green-lt">{{ ('task_board.sync.people.state.' ~ _person.mapping.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                {% elseif row.prefill == 'external' %}
+                                                                    <span class="badge bg-secondary-lt">{{ 'task_board.sync.people.state.external'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                {% endif %}
+                                                                {% if row.pending %}
+                                                                    <span class="badge bg-orange-lt">{{ 'task_board.sync.people.reapplying'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>{{ form_widget(peopleForm['p_' ~ _person.id]) }}{{ form_errors(peopleForm['p_' ~ _person.id]) }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                            {% if rows is not empty or firstImportPending %}
+                                <button type="submit" class="btn btn-primary" data-testid="nowo-task-sync-people-save">
+                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ (firstImportPending ? 'task_board.sync.people.save_import' : 'task_board.sync.people.save')|trans({}, 'NowoTaskBoardBundle') }}
+                                </button>
+                            {% endif %}
+                            {% if firstImportPending %}
+                                <button type="submit" name="skip" value="1" class="btn btn-outline-secondary" data-testid="nowo-task-sync-people-skip">{{ 'task_board.sync.people.skip'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                            {% endif %}
+                        </div>
+                    {{ form_end(peopleForm) }}
+
+                    {% if page > 1 or hasNext %}
+                        <nav class="d-flex gap-2 mt-3" aria-label="{{ 'task_board.sync.people.pages'|trans({}, 'NowoTaskBoardBundle') }}">
+                            {% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page - 1}) }}">{{ 'task_board.sync.people.previous'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
+                            {% if hasNext %}<a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page + 1}) }}" data-testid="nowo-task-sync-people-next">{{ 'task_board.sync.people.next'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
+                        </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </section>
+    {% endblock %}
+{% endblock %}

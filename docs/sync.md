@@ -23,6 +23,7 @@ mapping of the sync tables and no header change.
 - [Statuses and sources (since 1.25)](#statuses-and-sources-since-125)
 - [Tracked time (since 1.25)](#tracked-time-since-125)
 - [Pre-scans and re-association (since 1.25)](#pre-scans-and-re-association-since-125)
+- [People page and step (since 1.27.0)](#people-page-and-step-since-127)
 - [Events](#events)
 - [Testing with the in-memory provider](#testing-with-the-in-memory-provider)
 - [Adding a provider](#adding-a-provider)
@@ -420,6 +421,47 @@ whether guests can track time, and what a member token gets when `assignee` list
   user becomes external (optionally anonymised) and their content goes back to the actor plus the reference. Run it
   **before** deleting the user ([erasure order](UPGRADING.md#after-the-update-sync-hosts)).
 
+## People page and step (since 1.27.0)
+
+TB-SYNC-2: a UI on top of the people directory, so a manager decides who each remote person is.
+
+- **People page** (`board_connection_people`, template `templates.connection_people`; linked from the connection page
+  by `templates.connection_people_summary`: "*n* of *m* people are mapped. *k* not mapped yet." and *Map people*). One
+  row per remote person of the connection's directory (workspace members and every creator, assignee, watcher,
+  commenter, checklist and time-entry user a run or scan saw), by name, `page_size` per page, filter *All* /
+  *Not mapped yet*. Each row has a host-user select: *Not mapped*, the board's candidates
+  (`SyncPersonResolverInterface::candidates()`, at most `candidate_limit`) and, with `sync.people.inviter` and a
+  remote e-mail, *Invite by e-mail*. No remote avatar is shown (none is stored): an initial instead.
+- **Pre-fill, deny by default.** The select starts on the current mapping; else the host's suggestion (unverified
+  e-mail match); else the only candidate with the same normalised e-mail; else the only candidate whose label
+  (`UserLabel`) has the same normalised name (case, accents, spaces, `.`, `_`, `-` ignored), marked *Pre-filled by name:
+  check it*. A pre-fill is only a starting value: **nobody is mapped until a manager saves**, and only to a candidate of
+  every board of the directory. A sync still maps automatically only the 1.25 verified e-mail matches.
+- **Save** (`board_connection_people_save`, CSRF token id `task_board_connection_people`, form
+  `ConnectionPeopleFormType`, fields `p_<person id>`; any other value is a form error): rows whose value changed go
+  through `TaskSyncPeopleReassigner::reassign()`, so the tasks already imported follow — creator, assignees and watchers
+  the sync added, comment authors (the comment keeps the remote name as its snapshot), checklist items — on every board
+  of the directory; the host moves its tracked time on `SYNC_PERSON_REASSIGNED`, and the time phase sends mapped people's
+  entries from then on. *Not mapped* on a mapped person keeps them as an external person (their sync rows go back to
+  references). A save spends at most `reapply_seconds`; what is left is pending (the page says so) and continues on the
+  next save and **at the end of every sync of a board of the directory** (`PeopleMappingService::resume()`). The save
+  marks the directory reviewed (`SYNC_PEOPLE_REVIEWED`) and dispatches **`SYNC_PEOPLE_MAPPING_CHANGED`**
+  (`PeopleMappingChangedEvent`: board id, directory id, actor id, the changes as ids and mapping states, invitations,
+  pending) once, besides the per-person `SYNC_PERSON_MAPPED` / `SYNC_PERSON_REASSIGNED`.
+- **Invite by e-mail** (`Sync\Hook\PeopleInviterInterface`: `canInvite($board, $actor)`, `invite($board, $email, $name,
+  $actor): ?object`): a returned user is mapped right away (still checked as a candidate); null = pending invitation, the
+  person stays unmapped until a later sync matches the verified account.
+- **Step** (`sync.people.step: true`): linking a board attaches the directory and runs the people pre-scan
+  (`TaskSyncPeopleScanner`, ≤ 15 calls) instead of starting the import, and redirects to the People page, whose buttons
+  are *Save and start the import* and *Start the import without mapping*. Without a people capability (no workspace),
+  or when the scan fails (flash with the provider error), the import starts at once as before.
+- **Run summary.** The connection page shows the people line; the progress JSON gains `unmappedPeople` (people nobody
+  decided: unmatched or suggested).
+- **Access.** Every People route needs `canManageBoardConnection()` (`ACTION_MANAGE_CONNECTION`, deny by default) on
+  the board and on every board sharing the directory, else 404: remote e-mails are only shown to those managers.
+- **Scope.** The mapping is stored per directory: per connection by default (`board:<id>`), or per provider workspace
+  and host tenant when the host's `directoryScope()` returns a shared scope.
+
 ## Events
 
 | Constant | Event | Payload |
@@ -435,6 +477,7 @@ whether guests can track time, and what a member token gets when `assignee` list
 | `SYNC_PERSON_ANONYMISED` (1.25) | `SyncPersonAnonymisedEvent` | directory id, person id, actor id |
 | `SYNC_PEOPLE_REVIEWED` (1.25) | `SyncPeopleReviewedEvent` | directory id, actor id, counts per state |
 | `SYNC_PEOPLE_REPROJECTED` (1.25) | `SyncPeopleReprojectedEvent` | user id, board ids, `ReassignReport`, trigger |
+| `SYNC_PEOPLE_MAPPING_CHANGED` (1.27.0) | `PeopleMappingChangedEvent` | board id, directory id, actor id, changes (person id, previous / new mapping and user id), invited, pending |
 
 No event carries a credential, an e-mail or a person name (people events carry ids; listeners must not log the person entities). Like file imports, a sync does not dispatch per-task `TASK_CREATED` / `TASK_UPDATED`.
 

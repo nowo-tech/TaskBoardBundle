@@ -143,6 +143,9 @@ final class FunctionalKernel extends Kernel
             $services->set('app.memory_provider', InMemoryTaskProvider::class)->public()->tag('nowo_task_board.task_provider');
             // Since 1.25: the host's tracked-time sink (used when a test sets sync.time_entries.sink).
             $services->set('app.time_sink', RecordingTimeSink::class)->public();
+            // Since 1.27.0: the host's people candidates and inviter (used when a test sets sync.people.resolver / inviter).
+            $services->set('app.people_resolver', ScriptedPeopleResolver::class)->autowire()->public();
+            $services->set('app.people_inviter', RecordingPeopleInviter::class)->autowire()->public();
             if (!$this->realHttpClient) {
                 $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
             }

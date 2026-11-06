@@ -64,6 +64,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
@@ -231,6 +232,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.inline_slice_pages', $sync['inline_slice_pages']);
         $container->setParameter('nowo_task_board.sync.progress.poll_interval_ms', $sync['progress']['poll_interval_ms']);
         $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
+        $container->setParameter('nowo_task_board.sync.people.step', (bool) $sync['people']['step']);
+        $container->setParameter('nowo_task_board.sync.people.page_size', (int) $sync['people']['page_size']);
 
         $loader->load('services_sync.yaml');
         $container->registerForAutoconfiguration(SyncTaskProviderInterface::class)->addTag('nowo_task_board.task_provider');
@@ -276,13 +279,18 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      */
     private function registerSyncPeople(ContainerBuilder $container, array $sync): void
     {
-        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
+        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, inviter: string|null, candidate_limit: int, reapply_seconds: float, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
         $people = $sync['people'];
         /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int, max_calls_per_run: int} $time */
         $time = $sync['time_entries'];
         $container->getDefinition(DefaultSyncPersonResolver::class)->setArgument('$requireVerifiedEmail', $people['require_verified_email']);
         $container->setAlias(SyncPersonResolverInterface::class, $this->serviceOr($people['resolver'], DefaultSyncPersonResolver::class));
         $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$defaultBatchSize', $people['reassign_batch_size']);
+        // Since 1.27.0 (TB-SYNC-2): the People page.
+        $container->getDefinition(PeopleMappingService::class)
+            ->setArgument('$inviter', is_string($people['inviter']) && $people['inviter'] !== '' ? new Reference($people['inviter']) : null)
+            ->setArgument('$candidateLimit', $people['candidate_limit'])
+            ->setArgument('$reapplySeconds', (float) $people['reapply_seconds']);
         $container->getDefinition(TaskSyncPeopleScanner::class)
             ->setArgument('$maxTaskPages', $people['scan']['max_task_pages'])
             ->setArgument('$maxCommentTasks', $people['scan']['max_comment_tasks'])

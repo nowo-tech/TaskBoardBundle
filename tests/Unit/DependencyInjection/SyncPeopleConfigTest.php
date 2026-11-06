@@ -38,7 +38,7 @@ final class SyncPeopleConfigTest extends TestCase
     {
         $sync = (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class]])['sync'];
 
-        self::assertSame(['resolver' => null, 'require_verified_email' => true, 'reassign_batch_size' => 500, 'scan' => ['max_task_pages' => 1, 'max_comment_tasks' => 10, 'time_window' => true]], $sync['people']);
+        self::assertSame(['resolver' => null, 'require_verified_email' => true, 'reassign_batch_size' => 500, 'step' => false, 'inviter' => null, 'page_size' => 50, 'candidate_limit' => 200, 'reapply_seconds' => 10.0, 'scan' => ['max_task_pages' => 1, 'max_comment_tasks' => 10, 'time_window' => true]], $sync['people']);
         self::assertSame(['enabled' => true, 'max_detail_calls_per_run' => 500], $sync['watchers']);
         self::assertSame(['enabled' => true, 'max_items_per_run' => 2000], $sync['checklists']);
         self::assertSame(['sink' => null, 'window_days' => 30, 'max_assignees_per_call' => 25, 'max_entries_per_window' => 10_000, 'max_windows_per_run' => 200, 'fallback_max_tasks_per_run' => 500, 'max_calls_per_run' => 500], $sync['time_entries']);

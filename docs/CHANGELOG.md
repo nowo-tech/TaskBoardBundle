@@ -85,6 +85,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *Show the result* when the run ends, without reloading. New option `sync.badge.progress` (default `false`): `true`
   renders that bar in the bundle's own badge; the default output is unchanged. `SyncReport::processed()` (written +
   skipped) is the bar's numerator, also used by the progress endpoint.
+- **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
+  `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
+  `Sync\People\PeopleMappingService`: every remote person of the connection with a host-user select fed by the host's
+  candidates (`SyncPersonResolverInterface`), pre-filled by e-mail, then by normalised name (deny by default: only a
+  save maps). Saving re-applies the change to the tasks already imported (creator, assignees, watchers, comment
+  authors, checklist items; the host moves time on `SYNC_PERSON_REASSIGNED`) within `sync.people.reapply_seconds`; the
+  rest continues on the next save and after every sync. `sync.people.step` (default `false`) puts the page between
+  linking and the first import. Optional `sync.people.inviter` (`Sync\Hook\PeopleInviterInterface`) adds *Invite by
+  e-mail*. New event `SYNC_PEOPLE_MAPPING_CHANGED` (`PeopleMappingChangedEvent`, ids only). The connection page shows
+  mapped / not mapped people with a link; the progress JSON gains `unmappedPeople`. Config `sync.people.step`,
+  `inviter`, `page_size`, `candidate_limit`, `reapply_seconds`. `TaskSyncPersonRepository::pendingReassigns()`.
+  No schema change.
 
 ## [1.26.2] - 2026-11-06
 
