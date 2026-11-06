@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function array_column;
 use function iterator_to_array;
@@ -151,6 +152,7 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
         $this->sync($board);
         $task = $this->taskTitled('Doc');
         $this->em->persist(new TaskDocument($task, 'Campos (ClickUp)', '- **Contact**: zebulon@people.test', $this->owner, 1));
+        $this->em->persist(new TaskDocument($task, 'Campos (ACME)', '- **Contact**: zebulon@people.test', $this->owner, 4));
         $this->em->persist(new TaskDocument($task, 'Fields (ClickUp) draft', '- **Contact**: zebulon@people.test', $this->owner, 2));
         $this->em->persist(new TaskDocument($task, 'Felder (ClickUp)', "My notes\n- **Contact**: zebulon@people.test", $this->owner, 3));
         $this->em->flush();
@@ -164,6 +166,7 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
             $contents[$document->getTitle()] = [$document->getContent(), $document->isSyncFields()];
         }
         self::assertSame(['', true], $contents['Campos (ClickUp)']);
+        self::assertSame(['- **Contact**: zebulon@people.test', false], $contents['Campos (ACME)'], 'a provider this bundle does not write');
         self::assertFalse($contents['Fields (ClickUp) draft'][1]);
         self::assertStringContainsString('zebulon', $contents['Fields (ClickUp) draft'][0]);
         self::assertStringContainsString('zebulon', $contents['Felder (ClickUp)'][0]);
@@ -197,13 +200,13 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
         $board = $this->boardWithColumns('To do');
         $this->put($this->row('t1', 'One', 1));
         $this->provider->setComments('t1', [
-            new RemoteComment('c1', 'one two [link](https://x.test/a)', null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
+            new RemoteComment('c1', 'one two [link](https://x.test/a(b))', null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
             new RemoteComment('c2', 'before', null, 'Bob', new DateTimeImmutable('@1790000101'), author: self::ref('7')),
         ]);
         $this->workspace([self::member('7')]);
         $this->sync($board);
         $this->provider->setComments('t1', [
-            new RemoteComment('c1', "- one\n- **two** [link](https://x.test/a%20b)", null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
+            new RemoteComment('c1', "- one\n- **two** [link](https://x.test/a%28b%29)", null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
             new RemoteComment('c2', 'after', null, 'Bob', new DateTimeImmutable('@1790000101'), author: self::ref('7')),
         ]);
         $report = $this->sync($board, full: true);
@@ -215,7 +218,56 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
             $edited[$comment->getBody()] = $comment->getEditedAt() !== null;
         }
         ksort($edited);
-        self::assertSame(["- one\n- **two** [link](https://x.test/a%20b)" => false, 'after' => true], $edited);
+        self::assertSame(["- one\n- **two** [link](https://x.test/a%28b%29)" => false, 'after' => true], $edited);
+    }
+
+    /**
+     * Audit HId-L1: what a reader relies on is an edit, even with the same words.
+     *
+     * @return iterable<string, array{0: string, 1: string}>
+     */
+    public static function realEdits(): iterable
+    {
+        yield 'link target' => ['[pay here](https://ok.test/invoice)', '[pay here](https://evil.test/invoice)'];
+        yield 'image target' => ['![i](https://ok.test/a.png)', '![i](https://evil.test/a.png)'];
+        yield 'number at the start of a line' => ['100. approved', '900. approved'];
+        yield 'word spacing' => ['no tes', 'notes'];
+    }
+
+    #[DataProvider('realEdits')]
+    public function testARealEditIsMarked(string $before, string $after): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put($this->row('t1', 'One', 1));
+        $this->provider->setComments('t1', [new RemoteComment('c1', $before, null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7'))]);
+        $this->workspace([self::member('7')]);
+        $this->sync($board);
+        $this->provider->setComments('t1', [new RemoteComment('c1', $after, null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7'))]);
+        $this->sync($board, full: true);
+        $this->em->clear();
+        $this->refreshOwner();
+        $comment = $this->em->getRepository(TaskComment::class)->findOneBy([]);
+        self::assertInstanceOf(TaskComment::class, $comment);
+        self::assertSame($after, $comment->getBody());
+        self::assertNotNull($comment->getEditedAt());
+    }
+
+    /** Audit HId-L3: renaming the field does not bring an identifying value back; a short value stays tied to its field. */
+    public function testARenamedFieldDoesNotBringTheValueBackAndAShortValueTouchesNoOtherField(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put($this->fieldRow(1, "- **Contact**: zeb@people.test\n- **Phone**: +34600000000\n- **Flag**: yes\n- **Other**: yes"));
+        $this->sync($board);
+        $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
+        self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
+        $eraser->eraseByValue('zeb@people.test', $board);
+        $eraser->eraseByValue('+34600000000', $board);
+        $eraser->eraseByValue('**Flag**', $board);
+        $this->assertDocuments(['sync' => '- **Other**: yes']);
+
+        $this->put($this->fieldRow(2, "- **Contacto**: zeb@people.test\n- **Mobile**: +34600000000\n- **Flag**: yes\n- **Other**: yes\n- **Renamed**: yes"));
+        $this->sync($board, full: true);
+        $this->assertDocuments(['sync' => "- **Other**: yes\n- **Renamed**: yes"]);
     }
 
     private function fieldRow(int $updated, string $text): RemoteTask

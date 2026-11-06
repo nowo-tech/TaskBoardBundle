@@ -52,6 +52,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
@@ -87,8 +88,10 @@ use function max;
 use function mb_strtolower;
 use function method_exists;
 use function preg_replace;
+use function rawurldecode;
 use function sha1;
 use function sort;
+use function spl_object_id;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
@@ -719,12 +722,16 @@ final readonly class SyncTaskWriter
         }
     }
 
-    /** The words of a Markdown body: no link target, no marker, no white space. */
+    /**
+     * The text of a Markdown body without its formatting: markers and emphasis go, spacing collapses, an encoded character
+     * reads as itself. Link targets, ordered numbers and word breaks stay, so changing one of them is an edit (audit HId-L1).
+     */
     private function plainWords(string $markdown): string
     {
-        $text = (string) preg_replace(['/\]\([^)\s]*\)/', '/^\s*(?:\d+\.|[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m'], ['', ''], $markdown);
+        $text = (string) preg_replace('/^\s*(?:[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m', '', rawurldecode($markdown));
+        $text = (string) preg_replace('/[*_`~\[\]\\\\]+/', '', $text);
 
-        return (string) preg_replace('/[\s*_`~\[\]\\\\]+/', '', $text);
+        return trim((string) preg_replace('/\s+/', ' ', $text));
     }
 
     /**
@@ -734,15 +741,17 @@ final readonly class SyncTaskWriter
      */
     private function writableUser(SyncRunContext $ctx, ?object $user): ?object
     {
-        if ($user === null || !$this->accessChecker->canViewBoard($user, $ctx->board) || $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) === true) {
-            if ($user !== null) {
-                $ctx->count('emailPath.notWritten');
-            }
-
+        if ($user === null) {
             return null;
         }
+        // One answer per user and slice: a host's check may be costly (audit HId-I2).
+        $key = SyncUser::id($user) ?? (string) spl_object_id($user);
+        if ($ctx->writableUsers[$key] ??= $this->accessChecker->canViewBoard($user, $ctx->board) && $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) !== true) {
+            return $user;
+        }
+        $ctx->count('emailPath.notWritten');
 
-        return $user;
+        return null;
     }
 
     /**
@@ -1084,7 +1093,7 @@ final readonly class SyncTaskWriter
             return $text;
         }
 
-        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => !in_array($suppression->record(null, $line), $erased, true)));
+        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => !in_array($suppression->recordLine($line), $erased, true)));
     }
 
     /**

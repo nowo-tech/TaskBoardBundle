@@ -50,8 +50,8 @@ final readonly class SyncFieldValueEraser
 
     private const FIELD_LINE_PARTS = '/^- \*\*(.+?)\*\*: (.*)$/';
 
-    /** `task_board.sync.fields_document` in the bundle's locales, then "(<provider>)". */
-    private const LEGACY_TITLE = '/^(?:Fields|Campos|Felder|Champs|Campi|Velden) \(.+\)$/D';
+    /** `task_board.sync.fields_document` in the bundle's locales, then the label of the provider the bundle ships. */
+    private const LEGACY_TITLE = '/^(?:Fields|Campos|Felder|Champs|Campi|Velden) \(ClickUp\)$/D';
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -189,7 +189,7 @@ final readonly class SyncFieldValueEraser
             $kept    = array_values(array_filter($lines, static fn (string $line): bool => !$matches($line)));
             $removed = array_values(array_diff($lines, $kept));
             if ($removed !== []) {
-                $document->markSyncFields()->addErasedLines(array_map(fn (string $line): string => $this->suppression->record(null, $line), $removed));
+                $document->markSyncFields()->addErasedLines(array_map($this->suppression->recordLine(...), $removed));
                 $document->setContent(implode("\n", $kept));
                 $erased += count($removed);
             }

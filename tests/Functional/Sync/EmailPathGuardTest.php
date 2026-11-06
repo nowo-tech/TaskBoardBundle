@@ -108,6 +108,15 @@ final class EmailPathGuardTest extends SyncPeopleFunctionalTestCase
         $this->assertNotWritten();
     }
 
+    public function testAnAddressNobodyHasStaysAName(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->scene();
+        $report = $this->sync($board, people: false);
+        self::assertArrayNotHasKey('emailPath.notWritten', $report->stats);
+        $this->assertNotWritten();
+    }
+
     public function testAUserWhoCanViewAndIsNotFlaggedIsStillWritten(): void
     {
         $this->viewer(self::EMAIL);

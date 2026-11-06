@@ -137,6 +137,13 @@ final class SyncRunContext
      */
     public ?array $taskTypes = null;
 
+    /**
+     * Since 1.28.0: the e-mail path's answer per user, for this slice.
+     *
+     * @var array<string, bool>
+     */
+    public array $writableUsers = [];
+
     public function __construct(
         public string $runId,
         public TaskBoard $board,

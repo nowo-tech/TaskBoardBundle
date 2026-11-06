@@ -84,9 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unmatched columns lock (audit HI-M1).** `SELECT … FOR UPDATE` on the column row. CI gains a PostgreSQL job for the functional suite.
 - **Fields document (audits HI-L2, HI-L3).** Marked when the sync writes it (`task_board_task_documents.sync_fields`, schema change). Erased lines do not return on a re-sync, and the exports read the lines.
 - **History values (audit HI-L4).** `anonymise: true` also clears `member_added` and `member_removed` values equal to the user's current label.
-- **Edited mark (audit HI-L5).** A comment whose words did not change is rewritten without the mark.
+- **Edited mark (audits HI-L5, HId-L1).** A comment whose text, link targets and numbers did not change is rewritten without the mark.
 - Tag colours use `data-nowo-task-vars` instead of a `style` attribute (audit HI-I3).
-- Audit HI (2026-11-06): Pass (conditional) / Medium at `561203a`; fixes re-verification pending. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+- Audit HI (2026-11-06): Pass (good) / Low at `<final>`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
 - **ClickUp comments keep their style (TB-SYNC-4).** `Sync\Provider\ClickUp\ClickUpCommentRenderer` replaces the private
   `segmentsToMarkdown()`: lists (bullet, ordered, checked, unchecked, toggled) nested by `indent`, fenced code blocks,
   `strike`, `link_mention`, `task_mention`, `emoticon`, and other typed segments with a target. ClickUp documents a Quill
