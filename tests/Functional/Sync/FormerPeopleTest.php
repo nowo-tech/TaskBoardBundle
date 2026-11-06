@@ -224,7 +224,9 @@ final class FormerPeopleTest extends SyncPeopleFunctionalTestCase
         self::assertNotSame([], $delivered);
         $candidate = $delivered[0];
         self::assertInstanceOf(ImportedTimeEntryCandidate::class, $candidate);
-        self::assertSame('suspended@example.test', $candidate->user() instanceof AppUser ? $candidate->user()->getEmail() : null);
+        self::assertNotNull($candidate->user());
+        $mapped = $this->freshPerson('1')->getMappedUser();
+        self::assertSame('suspended@example.test', $mapped instanceof AppUser ? $mapped->getEmail() : null);
     }
 
     public function testWithoutTheHostFlagTheViewIsWhatItWas(): void
