@@ -617,3 +617,8 @@ task_board.sync.error.replies_budget: "Some comment replies were not read: the r
 task_board.sync.people.prefill.name_suggestion: "Same name as %user%: choose it only if it is the same person"
 task_board.flash.task_restore_refused: "The task was not restored: the limit of active tasks was reached."
 task_board.time.former_user: "Former user"
+task_board.sync.people.attribution_only: "%user% (attribution only, no access)"
+task_board.sync.people.former_all: "Mark every unmapped person as a former person"
+task_board.sync.people.former_help: "They keep their name on tasks, comments and history. Nobody gets access, and you can still change each person below."
+task_board.sync.people.flash.former: "%count% people marked as former."
+task_board.sync.completeness.status.pending_person: "Pending: no user for this person"

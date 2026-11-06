@@ -138,6 +138,19 @@ No action. Comments written or edited after the upgrade keep their lists, code b
 those already imported, unless they were edited here. Comment bodies are compared by hash, so the first full sync after
 the upgrade counts every comment with such formatting as updated.
 
+### Former people (TB-SYNC-4)
+
+Nothing changes unless you opt in. TaskBoard does not require TimeTrack.
+
+- **Hours of people with no user:** implement `OwnerlessTimeEntrySinkInterface` on your sink. With TimeTrackBundle 1.15:
+  `$candidate->user() ?? new ImportedTimeEntryPerson($candidate->person->getId(), $candidate->personName(), $scopeKey)`.
+  If such a person is mapped later, `SYNC_PERSON_REASSIGNED` is your cue to move their entries, as for any re-association.
+- **Bulk action:** set `sync.people_bulk_former: true`. A host that overrides `connection_people.html.twig` draws `peopleFormerForm`
+  (null when off or when nobody is undecided).
+- **Attribution:** implement `AttributionOnlyResolverInterface` on your `SyncPersonResolverInterface` and offer those users as
+  candidates. A host that shows `SyncPersonView::$name` needs no change; it can read `$attributionOnly` to add a note.
+  Someone already projected keeps what was written until you call `reassign()` again for that person.
+
 ## To 1.27.0
 
 From **1.26.3**:

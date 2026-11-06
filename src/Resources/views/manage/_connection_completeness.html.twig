@@ -26,7 +26,7 @@
                     <tr data-completeness-key="{{ row.key }}" data-completeness-status="{{ row.status }}">
                         <td><code>{{ row.key }}</code></td>
                         <td>{{ row.tasks }}</td>
-                        <td>{{ ('task_board.sync.completeness.status.' ~ row.status)|trans({}, 'NowoTaskBoardBundle') }}</td>
+                        <td>{{ ('task_board.sync.completeness.status.' ~ row.status)|trans({}, 'NowoTaskBoardBundle') }}{% if row.hours is defined %} ({{ row.hours }} h){% endif %}</td>
                     </tr>
                 {% endfor %}
             </tbody>

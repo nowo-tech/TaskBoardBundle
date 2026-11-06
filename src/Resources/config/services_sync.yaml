@@ -104,6 +104,7 @@ services:
             $containerCacheTtl: '%nowo_task_board.sync.container_cache_ttl%'
             $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
             $peopleStep: '%nowo_task_board.sync.people.step%'
+            $peopleBulkFormer: '%nowo_task_board.sync.people_bulk_former%'
             $peoplePageSize: '%nowo_task_board.sync.people.page_size%'
         tags: ['controller.service_arguments']
 
@@ -172,3 +173,4 @@ services:
         arguments:
             $translator: '@?translator'
             $userClass: '%nowo_task_board.user_class%'
+            $resolver: '@Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface'

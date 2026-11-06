@@ -404,6 +404,12 @@ The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set an
 **TO CONFIRM** against a real workspace (handled defensively): the row cap per answer, the `assignee` list length,
 whether guests can track time, and what a member token gets when `assignee` lists others (the adapter sends none).
 
+### Hours of people with no user (since 1.28.0)
+
+A plain sink gets people mapped to a user, and the rest is counted (`time.skippedUnmapped`, shown with its hours in the
+completeness report). A sink that implements `OwnerlessTimeEntrySinkInterface` also gets those entries, with `user()` null and the
+person on the candidate; the bundle stores no time and the hours stay at the provider either way. `ownerless.entries` counts them.
+
 ## Pre-scans and re-association (since 1.25)
 
 - `TaskSyncSourceScanner::scan($board, $provider, $credential, RemoteLocation $source, $actor, $persistPeople = true)`
@@ -464,6 +470,16 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
   the board and on every board sharing the directory, else 404: remote e-mails are only shown to those managers.
 - **Scope.** The mapping is stored per directory: per connection by default (`board:<id>`), or per provider workspace
   and host tenant when the host's `directoryScope()` returns a shared scope.
+
+### Former people and attribution only (since 1.28.0)
+
+`sync.people_bulk_former` adds a button marking everyone undecided (unmatched or suggested, not anonymised, across all pages) as a
+former person: mapping `external`. Their name stays on tasks, comments and history; they cannot be assigned, mentioned or notified,
+and nothing moves. A person remains changeable, and anonymising stays available.
+
+`AttributionOnlyResolverInterface` lets a host offer a user for attribution only. The option says so in the select. Such a mapping
+writes no membership and does not set the task's creator or a comment's author, because a task's creator gets access through
+`isTaskParticipant`. The panel shows the user's label from the view model, and the sink receives the user for tracked time.
 
 ## Everything a ClickUp task has (since 1.27.0)
 

@@ -117,6 +117,14 @@
                         </div>
                     {{ form_end(peopleForm) }}
 
+                    {% if peopleFormerForm|default(null) %}
+                        {#- Since 1.28.0 (sync.people_bulk_former). -#}
+                        {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'mt-3'}}) }}
+                            <p class="text-secondary small mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                            <button type="submit" class="btn btn-outline-secondary" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                        {{ form_end(peopleFormerForm) }}
+                    {% endif %}
+
                     {% if page > 1 or hasNext %}
                         <nav class="d-flex gap-2 mt-3" aria-label="{{ 'task_board.sync.people.pages'|trans({}, 'NowoTaskBoardBundle') }}">
                             {% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page - 1}) }}">{{ 'task_board.sync.people.previous'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}

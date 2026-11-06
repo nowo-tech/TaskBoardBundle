@@ -617,3 +617,8 @@ task_board.sync.error.replies_budget: "Einige Kommentarantworten wurden nicht ge
 task_board.sync.people.prefill.name_suggestion: "Gleicher Name wie %user%: nur auswählen, wenn es dieselbe Person ist"
 task_board.flash.task_restore_refused: "Die Aufgabe wurde nicht wiederhergestellt: Das Limit aktiver Aufgaben ist erreicht."
 task_board.time.former_user: "Ehemaliger Benutzer"
+task_board.sync.people.attribution_only: "%user% (nur Zuordnung, kein Zugriff)"
+task_board.sync.people.former_all: "Alle nicht zugeordneten Personen als ehemalig markieren"
+task_board.sync.people.former_help: "Ihr Name bleibt an Aufgaben, Kommentaren und im Verlauf. Niemand erhält Zugriff, und du kannst jede Person unten weiterhin ändern."
+task_board.sync.people.flash.former: "%count% Personen als ehemalig markiert."
+task_board.sync.completeness.status.pending_person: "Ausstehend: kein Benutzer für diese Person"
