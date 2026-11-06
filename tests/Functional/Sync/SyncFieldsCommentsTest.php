@@ -24,6 +24,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 use function array_replace_recursive;
 use function str_contains;
+use function strlen;
 
 /**
  * Since 1.27.0 (TB-SYNC-3): typed custom fields (definitions per board, values per task, shown in the task panel and
@@ -94,6 +95,13 @@ final class SyncFieldsCommentsTest extends SyncPeopleFunctionalTestCase
         self::assertSame(SyncFieldType::Money, $field?->getType());
         self::assertSame('Draft', $this->em->getRepository(TaskSyncField::class)->findOneBy(['remoteId' => 'f2'])?->choiceName('o1'));
         self::assertSame('zz', $this->em->getRepository(TaskSyncField::class)->findOneBy(['remoteId' => 'f2'])?->choiceName('zz'));
+        self::assertInstanceOf(TaskSyncField::class, $field);
+        self::assertSame([36, $board->getId(), 'clickup', 'currency', 0], [strlen($field->getId()), $field->getBoard()->getId(), $field->getProvider(), $field->getRemoteType(), $field->getPosition()]);
+        self::assertInstanceOf(DateTimeImmutable::class, $field->getUpdatedAt());
+        $value = $this->em->getRepository(TaskSyncFieldValue::class)->findOneBy([]);
+        self::assertInstanceOf(TaskSyncFieldValue::class, $value);
+        self::assertSame([36, 'Website', '1600'], [strlen($value->getId()), $value->getTask()->getTitle(), $value->getValue()]);
+        self::assertInstanceOf(DateTimeImmutable::class, $value->getUpdatedAt());
     }
 
     public function testCommentsInFull(): void
