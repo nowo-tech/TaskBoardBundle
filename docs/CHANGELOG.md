@@ -74,6 +74,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Manual and calendar time now reaches the task total** (TimeTrack contract §9.3). With TimeTrackBundle ≥ 1.14,
+  `TimeSpentAggregatorListener` also listens to `TimeTrackEvents::TIME_ENTRY_CREATED` (`TimeEntryCreatedEvent`,
+  origin `manual` or `calendar`: `POST entries` and accepted calendar suggestions) and adds the entry's duration to
+  `Task::$totalTimeSeconds`, reusing the `TIMER_STOP` path (refresh under a kept-alive worker, then add). The tag is
+  added by the extension only when the event class and constant exist, so TimeTrack 1.10–1.13 and hosts without
+  TimeTrack behave as before. TimeTrack dispatches each entry through exactly one of `TIMER_STOP` and
+  `TIME_ENTRY_CREATED`, so nothing is counted twice. Entries on tasks that are not TaskBoard tasks, and zero-length
+  entries, are ignored without a query or an error.
+
 ## [1.26.0] - 2026-11-06
 
 Dialog rule v2: all 15 native dialogs get a header with ×, a footer outside the body and one primary, with kit size tokens; footer buttons use UiKit theme classes when available.

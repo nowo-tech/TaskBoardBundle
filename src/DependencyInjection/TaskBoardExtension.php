@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
@@ -77,6 +78,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
@@ -91,6 +93,7 @@ use Symfony\Component\DependencyInjection\Reference;
 
 use function array_key_exists;
 use function class_exists;
+use function defined;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -111,10 +114,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
      * @param string $timeTrackImportedEvent Since 1.25: event class whose presence (TimeTrack >= 1.11) enables the
      *                                       imported-time aggregation
+     * @param string $timeTrackEntryCreatedEvent Since 1.26.1: event class whose presence (TimeTrack >= 1.14) enables the
+     *                                           aggregation of manual and calendar entries
      */
     public function __construct(
         private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
         private readonly string $timeTrackImportedEvent = TimeEntryImportedEvent::class,
+        private readonly string $timeTrackEntryCreatedEvent = TimeEntryCreatedEvent::class,
     ) {
     }
 
@@ -372,6 +378,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setAutowired(true)
                 ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRY_IMPORTED, 'method' => 'onImported'])
                 ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRIES_REMOVED, 'method' => 'onRemoved']);
+        }
+
+        // Since 1.26.1: manual and calendar entries (TimeTrack >= 1.14, contract §9.3). Older TimeTrack has neither the
+        // event class nor the constant: only TIMER_STOP is aggregated, as before.
+        if (class_exists($this->timeTrackEntryCreatedEvent) && defined(TimeTrackEvents::class . '::TIME_ENTRY_CREATED')) {
+            $container->getDefinition(TimeSpentAggregatorListener::class)
+                ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRY_CREATED, 'method' => 'onTimeEntryCreated']);
         }
     }
 

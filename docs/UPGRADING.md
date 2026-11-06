@@ -126,6 +126,18 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.26.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No schema or configuration change. With **TimeTrackBundle ≥ 1.14**, manual and calendar time entries
+(`TIME_ENTRY_CREATED`) are now added to the task's `total_time_seconds`, like timer stops. Only entries created after
+the update are counted: manual or calendar entries recorded with TimeTrack 1.14 before this release are not in the
+total. A host that needs them can add the sum of those entries (`source` `manual` / `calendar`) per task once. With
+TimeTrack < 1.14 or without TimeTrack nothing changes.
+
 ## To 1.26.0
 
 From **1.25.2**:
