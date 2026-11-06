@@ -73,6 +73,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Every dialog follows the owner's dialog rule v2: header with ×, a body that alone scrolls, the footer outside it with
+one primary, the kits' two widths and a content height.
+
+### Changed
+
+- **Dialog anatomy (visual change).** The actions of every native dialog moved out of the scrolling form into a
+  tinted footer (`nowo-task-dialog__footer nowo-task-dialog__actions`), the last child of the `<dialog>`: the submit
+  buttons name their form with `form="…"`, so header and footer stay in view and only the body scrolls. New form ids:
+  `nowo-task-board-create-form`, `nowo-task-board-add-task-form`, `nowo-task-board-add-column-form`,
+  `nowo-task-board-edit-column-form`, `nowo-task-board-column-delete-form`, `nowo-task-board-priority-form-<task>`,
+  `nowo-task-column-set-save-form`, `nowo-task-column-set-apply-form`, `nowo-task-dependency-form-<task>`,
+  `nowo-task-time-form-<task>`, `nowo-task-subtask-import-form-<task>`, `nowo-task-sync-unlink-form`,
+  `nowo-task-sync-mass-archive-form`. Dialogs: New board, Add task, Add / Edit column, Save columns as set, Add columns
+  from set, People, Priority, Add / edit link, Add dependency, Log time, Import subtasks, Import help, Unlink, Archive
+  anyway. Existing ids, `data-testid`s, Stimulus targets and form field names are unchanged.
+- **Edit column has one primary.** *Delete column* is no longer a second block with its own button under the form: it
+  is a danger-outline button on the left of the footer, bound to the (now hidden) delete form, which keeps its
+  confirmation; the help sentence moved into the body (`aria-describedby`).
+- **Add columns from set** has Cancel and *Add columns* in the footer (Close only when there are no sets); the apply
+  form's submit left the body.
+- **Sizes from the kits' tokens.** `dialog.nowo-task-dialog--native` is `--nowo-dialog-width-md` wide
+  (`nowo-task-dialog--wide`: `--nowo-dialog-width-wide`), its height follows the content capped at
+  `--nowo-dialog-height-md` / `-wide` and the viewport minus 2rem (UiKit's defaults as fallbacks). The bundle's own
+  sizes are gone: 32rem / 40rem widths and the import help body's `max-height: min(70vh, 40rem)`. Header and footer
+  are tinted (`--nowo-task-surface-muted`) with a divider.
+- **Footer buttons from the theme.** Cancel / Close, the primary and the danger actions read the UiKit theme slots
+  `btn_secondary`, `btn_primary`, `btn_danger`, `btn_danger_solid` of the theme bundle `NowoTaskBoardBundle` (new Twig
+  function `nowo_task_board_btn_class(slot)`); without UiKit's theme extension the 1.25 Bootstrap classes stay.
+  With UiKit 2's theme extension the buttons carry UiKit's classes (`nowo-ui-btn nowo-ui-btn--secondary` … next to
+  the Bootstrap defaults, or only the host's theme classes with `framework_defaults: false`): a host that does not
+  load UiKit's CSS (`nowo-ui.css`) may see the footer buttons change. A slot the theme cannot resolve falls back to
+  the 1.25 classes and logs a warning (`logger`, when available).
+- **CSS:** the `.nowo-task-dialog__danger` rules are removed (no template renders the class since Edit column's
+  Delete moved to the footer); `.nowo-task-dialog__danger-help` stays.
+
+### Added
+
+- `manage/_board_create_form.html.twig`: `with_actions` (default `true`) and the form id
+  `<id_prefix>nowo-task-board-create-form`; with `in_dialog` the action row carries `data-nowo-ui-dialog-actions` (a
+  host's UiKit remote dialog moves it into its footer).
+
 ## [1.25.2] - 2026-11-05
 
 Option `sync.badge.connect_link` to hide the connect link of an unlinked board.

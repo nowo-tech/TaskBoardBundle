@@ -68,6 +68,33 @@ describe('task-board.css', () => {
     expect(rules('.nowo-task-dialog--native .nowo-task-dialog__actions .btn')).toMatch(/min-height:\s*2rem/);
   });
 
+  it('sizes the native dialogs with the kits\' shared tokens, the height following the content (1.26, dialog rule v2)', () => {
+    const dialog = rules('dialog.nowo-task-dialog--native');
+    expect(dialog).toMatch(/width:\s*var\(--nowo-dialog-width-md,\s*min\(40rem, calc\(100vw - 2rem\)\)\)/);
+    expect(dialog).toMatch(/height:\s*fit-content/);
+    expect(dialog).toMatch(/max-height:\s*min\(var\(--nowo-dialog-height-md,\s*min\(36rem, calc\(100dvh - 2rem\)\)\),\s*calc\(100dvh - 2rem\)\)/);
+    expect(dialog).toMatch(/overflow:\s*hidden/);
+    const wide = rules('dialog.nowo-task-dialog--native.nowo-task-dialog--wide');
+    expect(wide).toMatch(/width:\s*var\(--nowo-dialog-width-wide,\s*min\(56rem, calc\(100vw - 2rem\)\)\)/);
+    expect(wide).toMatch(/max-height:\s*min\(var\(--nowo-dialog-height-wide,\s*min\(52rem, calc\(100dvh - 2rem\)\)\),\s*calc\(100dvh - 2rem\)\)/);
+    // No size of the bundle's own any more.
+    expect(css).not.toMatch(/32rem/);
+    expect(rules('.nowo-task-import-help__body')).not.toMatch(/max-height/);
+  });
+
+  it('keeps the dialog header and footer in view, only the body scrolls (1.26)', () => {
+    expect(rules('dialog.nowo-task-dialog--native[open]')).toMatch(/display:\s*flex;\s*flex-direction:\s*column/);
+    expect(rules('.nowo-task-dialog--native .nowo-task-dialog__header')).toMatch(/flex:\s*none/);
+    const body = rules('.nowo-task-dialog--native .nowo-task-dialog__body');
+    expect(body).toMatch(/flex:\s*1 1 auto/);
+    expect(body).toMatch(/min-height:\s*0/);
+    expect(body).toMatch(/overflow:\s*auto/);
+    const footer = rules('.nowo-task-dialog--native .nowo-task-dialog__footer');
+    expect(footer).toMatch(/flex:\s*none/);
+    expect(footer).toMatch(/border-top:/);
+    expect(footer).toMatch(/background:\s*var\(--nowo-task-surface-muted/);
+  });
+
   it('prints the list group name in the text colour, the column colour as a dot', () => {
     const name = rules('.nowo-task-list__group-name');
     expect(name).toMatch(/color:\s*var\(--nowo-task-ink/);

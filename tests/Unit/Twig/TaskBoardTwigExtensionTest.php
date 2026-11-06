@@ -9,9 +9,15 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\UiKitBundle\Theme\Theme;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use ReflectionProperty;
 use stdClass;
+use Throwable;
+use Twig\Environment;
+use Twig\Loader\ArrayLoader;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
 
@@ -97,7 +103,7 @@ final class TaskBoardTwigExtensionTest extends TestCase
             'list'  => ['path' => '/l/{boardId}', 'name' => ''],
         ]);
 
-        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress', 'nowo_task_board_deviation', 'nowo_task_board_ancestors', 'nowo_task_board_comment_body', 'nowo_task_board_text', 'nowo_task_board_connection', 'task_board_sync_creator', 'task_board_sync_comment_author', 'task_board_sync_unmatched', 'task_board_sync_token', 'nowo_task_board_member_avatar_url'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
+        self::assertSame(['nowo_task_board_route', 'nowo_task_board_link_label', 'nowo_task_board_link_url', 'nowo_task_board_link_badge', 'nowo_task_board_subtask_progress', 'nowo_task_board_deviation', 'nowo_task_board_ancestors', 'nowo_task_board_comment_body', 'nowo_task_board_text', 'nowo_task_board_connection', 'task_board_sync_creator', 'task_board_sync_comment_author', 'task_board_sync_unmatched', 'task_board_sync_token', 'nowo_task_board_member_avatar_url', 'nowo_task_board_btn_class'], array_map(static fn (TwigFunction $function): string => $function->getName(), $extension->getFunctions()));
         self::assertSame('app_board', $extension->routeName('board'));
         self::assertSame('nowo_task_board_list', $extension->routeName('list'));
         self::assertSame('nowo_task_board_task', $extension->routeName('task'));
@@ -125,5 +131,49 @@ final class TaskBoardTwigExtensionTest extends TestCase
         self::assertSame([], TaskBoardTwigExtension::tagList(''));
         self::assertSame([], TaskBoardTwigExtension::tagList('not json'));
         self::assertSame([], TaskBoardTwigExtension::tagList('"api"'));
+    }
+
+    /** Since 1.26: dialog buttons read the UiKit theme slot of the NowoTaskBoardBundle theme bundle. */
+    public function testButtonClassReadsTheUiKitThemeSlot(): void
+    {
+        $extension = new TaskBoardTwigExtension('layout.html.twig', 'bootstrap');
+        $twig      = new Environment(new ArrayLoader());
+        $twig->addExtension(new ThemeExtension(new Theme(bundles: [
+            TaskBoardTwigExtension::THEME_BUNDLE => ['classes' => ['btn_secondary' => 'beacon-cancel']],
+        ])));
+
+        self::assertStringContainsString('beacon-cancel', $extension->buttonClass($twig, [], 'btn_secondary'));
+        self::assertStringContainsString('nowo-ui-btn--secondary', $extension->buttonClass($twig, [], 'btn_secondary'));
+        self::assertStringContainsString('btn-primary', $extension->buttonClass($twig, [], 'btn_primary'));
+        // An unknown slot (an older UiKit) falls back to the 1.25 classes, silently without a logger.
+        self::assertSame('btn', $extension->buttonClass($twig, [], 'no_such_slot'));
+    }
+
+    /** Since 1.26 (audit GI-I1): a slot the UiKit theme cannot resolve is logged as a warning, then falls back. */
+    public function testButtonClassLogsAThemeFailure(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            self::stringContains('could not be resolved'),
+            self::callback(static fn (array $context): bool => $context['slot'] === 'no_such_slot' && $context['bundle'] === 'NowoTaskBoardBundle' && $context['fallback'] === 'btn' && $context['exception'] instanceof Throwable),
+        );
+        $extension = new TaskBoardTwigExtension('layout.html.twig', 'bootstrap', logger: $logger);
+        $twig      = new Environment(new ArrayLoader());
+        $twig->addExtension(new ThemeExtension(new Theme()));
+
+        self::assertSame('btn', $extension->buttonClass($twig, [], 'no_such_slot'));
+        self::assertStringContainsString('btn-primary', $extension->buttonClass($twig, [], 'btn_primary'));
+    }
+
+    public function testButtonClassFallsBackWithoutTheUiKitTheme(): void
+    {
+        $extension = new TaskBoardTwigExtension('layout.html.twig', 'bootstrap');
+        $twig      = new Environment(new ArrayLoader());
+
+        self::assertSame('btn btn-outline-secondary', $extension->buttonClass($twig, [], 'btn_secondary'));
+        self::assertSame('btn btn-primary', $extension->buttonClass($twig, [], 'btn_primary'));
+        self::assertSame('btn btn-outline-danger', $extension->buttonClass($twig, [], 'btn_danger'));
+        self::assertSame('btn btn-danger', $extension->buttonClass($twig, [], 'btn_danger_solid'));
+        self::assertSame('btn', $extension->buttonClass($twig, [], 'other'));
     }
 }

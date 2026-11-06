@@ -4,7 +4,8 @@
     Variables: task, subtaskImportForm; since 1.22.1 optional help_link ({url, label}, default: the Twig global
     nowo_task_board_import_help_link) rendered as an escaped link under the source select, and the empty block
     import_help at the same place (for a template that embeds this one). Since 1.24 help_link.anchor_from: 'source'
-    makes the link's #anchor follow the selected source.
+    makes the link's #anchor follow the selected source. Since 1.26 (dialog rule v2) the footer sits outside the
+    scrolling form: Help (secondary) on the left, Cancel and Import (form="nowo-task-subtask-import-form-<task id>").
 #}
 {% if subtaskImportForm|default(null) %}
     <div class="nowo-task-subtask-import" data-controller="nowo-task-board-dialog">
@@ -18,7 +19,7 @@
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
                 </button>
             </div>
-            {{ form_start(subtaskImportForm, {method: 'POST', attr: {class: 'nowo-task-dialog__body', enctype: 'multipart/form-data'}}) }}
+            {{ form_start(subtaskImportForm, {method: 'POST', attr: {id: 'nowo-task-subtask-import-form-' ~ task.id, class: 'nowo-task-dialog__body', enctype: 'multipart/form-data'}}) }}
                 <p class="nowo-task-dialog__help">{{ 'task_board.import.subtasks.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
                 <div class="nowo-task-field">{{ form_row(subtaskImportForm.source) }}</div>
                 {# Since 1.22.1: a place for the host's help under the source select (block, or the help_link parameter). #}
@@ -29,14 +30,16 @@
                         <div class="nowo-task-field">{{ form_row(child) }}</div>
                     {% endif %}
                 {% endfor %}
-                <div class="nowo-task-dialog__actions">
-                    <button type="button" class="btn btn-outline-secondary nowo-task-subtask-import__help" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    <button type="submit" class="btn btn-primary">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                </div>
             {{ form_end(subtaskImportForm) }}
+            <div class="nowo-task-dialog__footer nowo-task-dialog__actions nowo-task-dialog__actions--split">
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }} nowo-task-subtask-import__help" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
+                </button>
+                <div class="nowo-task-dialog__actions-end">
+                    <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" form="nowo-task-subtask-import-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                </div>
+            </div>
         </dialog>
         {{ include('@NowoTaskBoardBundle/manage/_import_help.html.twig', {scope: 'task', helpId: 'task-' ~ task.id}) }}
     </div>

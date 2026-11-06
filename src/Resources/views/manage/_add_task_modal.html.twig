@@ -1,6 +1,7 @@
 {#
     Add task dialog on the board. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal):
-    title, priority and column, description, estimate and due date, tags and the task colour.
+    title, priority and column, description, estimate and due date, tags and the task colour. Since 1.26 (dialog
+    rule v2) Cancel and Add task sit in the footer, outside the scrolling form (form="nowo-task-board-add-task-form").
 #}
 <dialog
     class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
@@ -18,7 +19,7 @@
     {{ form_start(taskForm, {
         action: path(nowo_task_board_route('task_create'), {boardId: board.id}),
         method: 'POST',
-        attr: {class: 'nowo-task-dialog__body'},
+        attr: {id: 'nowo-task-board-add-task-form', class: 'nowo-task-dialog__body'},
     }) }}
         <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput', maxlength: 255}}) }}</div>
         <div class="nowo-task-dialog__grid">
@@ -50,13 +51,13 @@
                 {{ form_row(child) }}
             {% endif %}
         {% endfor %}
-        <div class="nowo-task-dialog__actions">
-            <button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-add-task-modal#close">
-                {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-            <button type="submit" class="btn btn-primary">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
-        </div>
     {{ form_end(taskForm) }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-add-task-modal#close">
+            {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+        <button type="submit" form="nowo-task-board-add-task-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
+        </button>
+    </div>
 </dialog>

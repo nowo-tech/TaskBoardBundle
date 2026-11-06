@@ -125,6 +125,59 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+From **1.25.2** (planned 1.26.0):
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No schema or configuration change. **Visual and markup change in every dialog** (owner dialog rule v2):
+
+- The action row of each native dialog moved out of the form/body into a footer, the last child of the `<dialog>`
+  (`<div class="nowo-task-dialog__footer nowo-task-dialog__actions">`); its submit buttons name their form with
+  `form="…"` (new form ids, listed in the CHANGELOG). Ids, `data-testid`s, Stimulus targets / actions and form field
+  names did not change, so tests that click `[data-testid="nowo-task-board-create-submit"]`,
+  `nowo-task-sync-unlink-confirm` or `nowo-task-sync-mass-archive-confirm` keep working. A selector that looked for
+  the buttons **inside** the form (`form .nowo-task-dialog__actions button`) must look in the dialog instead.
+- *Edit column*: *Delete column* is a danger-outline button in the footer bound to the hidden delete form
+  (`#nowo-task-board-column-delete-form`), not a `.nowo-task-dialog__danger` block under the form.
+- Sizes: the dialogs read `--nowo-dialog-width-md` / `--nowo-dialog-width-wide` and `--nowo-dialog-height-md` /
+  `-wide` (UiKit's defaults: 40rem / 56rem wide, 36rem / 52rem tall at most) and take their content's height. Medium
+  dialogs grow from 32rem to 40rem, wide ones from 40rem to 56rem. A host that sized `nowo-task-dialog--native` from
+  outside (e.g. `body dialog.nowo-task-dialog--native { width; max-height; height: fit-content }`) can drop those rules
+  and set the tokens once on `:root`.
+- Footer buttons read the UiKit theme slots of `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle` (`btn_secondary`,
+  `btn_primary`, `btn_danger`, `btn_danger_solid`) **when UiKit's theme extension is registered** (UiKit 2); with
+  UiKit 2's Bootstrap defaults the classes gain `nowo-ui-btn nowo-ui-btn--…` next to the former `btn btn-…`, and with
+  `framework_defaults: false` only the semantic and host classes remain. **A host that does not load UiKit's CSS
+  (`css/nowo-ui.css`) may see a visual change** of these buttons: load it, or map the slots back in the theme, e.g.
+
+  ```yaml
+  nowo_ui_kit:
+      theme:
+          bundles:
+              NowoTaskBoardBundle:
+                  classes:
+                      btn_secondary: 'btn btn-outline-secondary'
+  ```
+
+  Without UiKit's theme extension (UiKit 1.x) the 1.25 classes stay. A slot the theme cannot resolve also falls back
+  to them and is logged as a warning.
+- The `.nowo-task-dialog__danger` CSS is removed; an override that still renders that block loses its tinted strip.
+- **Form ids are page-unique per partial.** The new footer buttons find their form by id
+  (`nowo-task-board-add-task-form`, `nowo-task-board-add-column-form`, `nowo-task-board-edit-column-form`,
+  `nowo-task-board-column-delete-form`, `nowo-task-column-set-save-form`, `nowo-task-column-set-apply-form`,
+  `nowo-task-sync-unlink-form`, `nowo-task-sync-mass-archive-form`, `nowo-task-link-form`; the task-scoped ones end
+  with the task id). A host page that renders one of these partials **twice** (e.g. the same board dialogs in two
+  places, or the same task's panel twice) gets duplicate ids and the second copy's footer would submit the first
+  form: render each partial once per page (`_board_create_form` takes `id_prefix` for a second copy).
+- **Template overrides** of the dialog partials (`_add_task_modal`, `_add_column_modal`, `_edit_column_modal`,
+  `_task_members_modal`, `_task_priority_modal`, `_task_links_modal`, `_column_sets_dialogs`,
+  `_task_dependencies_section`, `_task_time_section`, `_task_subtask_import`, `_import_help`,
+  `_connection_unlink_dialog`, `_connection_mass_archive`, `index.html.twig`'s New board) keep rendering their old
+  markup; with the new CSS their actions inside the body scroll with it. Compare them with the new partials and move
+  the actions into the footer.
+
 ## To 1.25.2
 
 From **1.25.1**:

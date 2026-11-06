@@ -1,7 +1,9 @@
 {#
     Column sets (since 1.11), for board editors: "Save columns as set" (columnSetForm) and "Add columns from set"
     (columnSetApplyForm, the list of columnSets with their delete forms in columnSetDeleteForms). Native <dialog>
-    elements opened by the nowo-task-board-dialog controller (Escape closes them, focus returns to the button).
+    elements opened by the nowo-task-board-dialog controller (Escape closes them, focus returns to the button). Since
+    1.26 (dialog rule v2) each footer sits outside the scrolling body, its primary bound with form="…"
+    (nowo-task-column-set-save-form, nowo-task-column-set-apply-form); without sets, Add columns has Close only.
 #}
 {% set columnSets = columnSets|default([]) %}
 <div class="nowo-task-column-sets" data-controller="nowo-task-board-dialog">
@@ -17,18 +19,18 @@
             <h2 class="nowo-task-dialog__title" id="nowo-task-column-set-save-title">{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}</h2>
             <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
         </div>
-        {{ form_start(columnSetForm, {action: path(nowo_task_board_route('column_set_create'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-dialog__body'}}) }}
+        {{ form_start(columnSetForm, {action: path(nowo_task_board_route('column_set_create'), {boardId: board.id}), method: 'POST', attr: {id: 'nowo-task-column-set-save-form', class: 'nowo-task-dialog__body'}}) }}
             <p class="nowo-task-dialog__help">{{ 'task_board.column_set.save_help'|trans({'%count%': board.columns|length}, 'NowoTaskBoardBundle') }}</p>
             {% for child in columnSetForm %}
                 {% if not child.rendered %}
                     {{ form_row(child) }}
                 {% endif %}
             {% endfor %}
-            <div class="nowo-task-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" class="btn btn-primary">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            </div>
         {{ form_end(columnSetForm) }}
+        <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" form="nowo-task-column-set-save-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        </div>
     </dialog>
 
     <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="apply" aria-labelledby="nowo-task-column-set-apply-title">
@@ -40,16 +42,13 @@
             {% if columnSets is empty %}
                 <p class="nowo-task-column-sets__empty nowo-task-dialog__help">{{ 'task_board.column_set.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
             {% else %}
-                {{ form_start(columnSetApplyForm, {action: path(nowo_task_board_route('column_set_apply'), {boardId: board.id}), method: 'POST'}) }}
+                {{ form_start(columnSetApplyForm, {action: path(nowo_task_board_route('column_set_apply'), {boardId: board.id}), method: 'POST', attr: {id: 'nowo-task-column-set-apply-form'}}) }}
                     <p class="nowo-task-dialog__help">{{ 'task_board.column_set.apply_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
                     {% for child in columnSetApplyForm %}
                         {% if not child.rendered %}
                             {{ form_row(child) }}
                         {% endif %}
                     {% endfor %}
-                    <div class="nowo-task-dialog__actions">
-                        <button type="submit" class="btn btn-primary">{{ 'task_board.column_set.apply_action'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    </div>
                 {{ form_end(columnSetApplyForm) }}
 
                 <ul class="nowo-task-column-sets__list">
@@ -79,6 +78,14 @@
                         </li>
                     {% endfor %}
                 </ul>
+            {% endif %}
+        </div>
+        <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+            {% if columnSets is empty %}
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            {% else %}
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-column-set-apply-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ 'task_board.column_set.apply_action'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
         </div>
     </dialog>

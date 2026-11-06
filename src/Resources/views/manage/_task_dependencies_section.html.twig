@@ -61,7 +61,8 @@
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
                 </button>
             </div>
-            {{ form_start(dependencyForm, {method: 'POST', attr: {class: 'nowo-task-dialog__body', 'data-controller': 'nowo-task-board-option-filter'}}) }}
+            {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
+            {{ form_start(dependencyForm, {method: 'POST', attr: {id: 'nowo-task-dependency-form-' ~ task.id, class: 'nowo-task-dialog__body', 'data-controller': 'nowo-task-board-option-filter'}}) }}
                 <p class="nowo-task-dialog__help">{{ 'task_board.dependency.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
                 <div class="nowo-task-field">{{ form_row(dependencyForm.type) }}</div>
                 <div class="nowo-task-field">{{ form_row(dependencyForm.search) }}</div>
@@ -72,11 +73,11 @@
                         {{ form_row(child) }}
                     {% endif %}
                 {% endfor %}
-                <div class="nowo-task-dialog__actions">
-                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    <button type="submit" class="btn btn-primary">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                </div>
             {{ form_end(dependencyForm) }}
+            <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-dependency-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            </div>
         </dialog>
     {% endif %}
 </details>

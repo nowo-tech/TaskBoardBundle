@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 
 use DateTimeImmutable;
+use DOMElement;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
@@ -70,6 +71,7 @@ use Symfony\Bridge\Twig\Extension\RoutingExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
@@ -93,6 +95,8 @@ use Twig\Loader\ChainLoader;
 use Twig\Loader\FilesystemLoader;
 use Twig\RuntimeLoader\FactoryRuntimeLoader;
 use Twig\TwigFunction;
+
+use function count;
 
 /**
  * Renders every full manage page with real entities and strict_variables (as in the dev
@@ -221,12 +225,14 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('class="nowo-task-members__item"', $html);
         self::assertStringContainsString('class="nowo-task-members__role nowo-task-members__role--assignee"', $html);
         self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
-        // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form.
-        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__actions">\s*<button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="btn btn-primary nowo-task-members__add-button">/', $html);
+        // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form (1.26: the footer
+        // is outside the scrolling body).
+        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__footer nowo-task-dialog__actions">\s*<button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="btn btn-primary nowo-task-members__add-button">/', $html);
         self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);
         self::assertStringNotContainsString(' style="', $html);
+        $this->assertDialogAnatomy($html, 3);
     }
 
     public function testBoardCardAndGanttBarUseTheTaskColour(): void
@@ -406,6 +412,28 @@ final class ManageTemplatesRenderingTest extends TestCase
         ]);
 
         self::assertStringContainsString('Roadmap', $html);
+        // Since 1.26 (dialog rule v2): New board's Cancel and Create sit in the footer, bound to the form.
+        $this->assertDialogAnatomy($html, 1);
+        $create = (new Crawler($html))->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
+        self::assertSame('nowo-task-board-create-form', $create->filter('form')->attr('id'));
+        self::assertCount(0, $create->filter('form .nowo-task-dialog__actions'));
+        self::assertSame('nowo-task-board-create-form', $create->filter('[data-testid="nowo-task-board-create-submit"]')->attr('form'));
+    }
+
+    /** Since 1.26: the create form alone (the 422 answer of a host dialog) keeps its action row, marked for the host. */
+    public function testTheBoardCreateFormAloneKeepsItsActionsForAHostDialog(): void
+    {
+        $form = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form, 'in_dialog' => true]);
+
+        $actions = (new Crawler($html))->filter('form#nowo-task-board-create-form .nowo-task-dialog__actions');
+        self::assertSame('', $actions->attr('data-nowo-ui-dialog-actions'));
+        self::assertCount(2, $actions->filter('button'));
+
+        $page  = $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView(), 'id_prefix' => 'nojs-']);
+        $plain = (new Crawler($page))->filter('form#nojs-nowo-task-board-create-form .nowo-task-dialog__actions');
+        self::assertNull($plain->attr('data-nowo-ui-dialog-actions'));
+        self::assertCount(1, $plain->filter('button'));
     }
 
     /** Since 1.19: a plain-text description is shown rendered, with "Edit description" for editors only. */
@@ -438,6 +466,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('enctype="multipart/form-data"', $html);
         self::assertStringContainsString('task_board.import.help.intro_task', $html);
         self::assertMatchesRegularExpression('/<option value="taskboard_csv" selected/', $html);
+        // Since 1.26: Help on the left, Cancel and Import (bound to the form) on the right, outside the body.
+        self::assertSame('nowo-task-subtask-import-form-' . $this->task->getId(), (new Crawler($html))->filter('dialog[data-dialog="subtask-import"] .nowo-task-dialog__footer .btn-primary')->attr('form'));
+        $this->assertDialogAnatomy($html, 5);
 
         $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'panel' => true]);
         self::assertStringNotContainsString('nowo-task-subtask-import', $readOnly);
@@ -527,6 +558,25 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('action="/delete-set"', $html);
         self::assertSame(1, substr_count($html, 'nowo-task-column-sets__delete'));
         self::assertStringContainsString('Todo, Done', $html);
+        // Since 1.26 (dialog rule v2): add task, add / edit column, save set, add from set — header, body, footer.
+        $this->assertDialogAnatomy($html, 5);
+        // Edit column has one primary: Delete column is a secondary danger action in the footer, bound to the hidden
+        // delete form (which keeps its confirm).
+        $editColumn = (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"]');
+        $delete     = $editColumn->filter('.nowo-task-dialog__footer button[form="nowo-task-board-column-delete-form"]');
+        self::assertSame('btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
+        self::assertSame('nowo-task-board-column-delete-help', $delete->attr('aria-describedby'));
+        $deleteForm = $editColumn->filter('form#nowo-task-board-column-delete-form');
+        self::assertSame('hidden', $deleteForm->attr('hidden'));
+        self::assertSame('submit->nowo-task-board-edit-column-modal#confirmDelete', $deleteForm->attr('data-action'));
+        self::assertSame('nowo-task-board-edit-column-form', $editColumn->filter('.nowo-task-dialog__footer .btn-primary')->attr('form'));
+        self::assertCount(1, $editColumn->filter('#nowo-task-board-column-delete-help'));
+        self::assertStringContainsString('nowo-task-dialog__actions--split', (string) $editColumn->filter('.nowo-task-dialog__footer')->attr('class'));
+        self::assertStringNotContainsString('nowo-task-dialog__danger"', $html);
+        // Add columns from a set: the apply submit is the footer's primary, after Cancel.
+        $apply = (new Crawler($html))->filter('dialog[data-dialog="apply"] .nowo-task-dialog__footer button');
+        self::assertCount(2, $apply);
+        self::assertSame('nowo-task-column-set-apply-form', $apply->eq(1)->attr('form'));
     }
 
     public function testBoardColumnSetsDialogHasAnEmptyState(): void
@@ -539,6 +589,13 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         self::assertStringContainsString('task_board.column_set.empty', $html);
         self::assertStringNotContainsString('/column-sets/apply', $html);
+        // Without sets the dialog has nothing to apply: Close only (1.26).
+        $footer = (new Crawler($html))->filter('dialog[data-dialog="apply"] .nowo-task-dialog__footer button');
+        self::assertCount(1, $footer);
+        self::assertSame('nowo-task-board-dialog#close', $footer->attr('data-action'));
+        $this->assertDialogAnatomy($html, 5);
+        // Without columnDeleteForm the edit column footer is not split.
+        self::assertSame('nowo-task-dialog__footer nowo-task-dialog__actions', (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
         // A two-column board without columnDeleteForm (older controllers) has no delete button.
         self::assertStringNotContainsString('task_board.action.delete_column', $html);
     }
@@ -653,6 +710,8 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('task_board.dependency.relation.duplicated_by', $html);
         self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/dependency/', $html);
         self::assertStringContainsString('nowo-task-dependencies__task is-done', $html);
+        // Since 1.26: people, priority, links, dependency and time dialogs, each with its footer outside the body.
+        $this->assertDialogAnatomy($html, 5);
         // Time: estimate 1 h 30 min, 2 h spent, +30 min (+33 %), over; the subtasks' row; the entries and the dialog.
         self::assertStringContainsString('nowo-task-deviation--over', $html);
         self::assertStringContainsString('<dd>1 h 30 min</dd>', $html);
@@ -1003,6 +1062,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('task_board.import.help.source_trello_json', $html);
         self::assertStringContainsString('id,parent,title,status,start,due,estimate,depends_on', $html);
         self::assertStringContainsString('value="taskboard_csv"', $html);
+        $this->assertDialogAnatomy($html, 1);
     }
 
     /**
@@ -1080,6 +1140,47 @@ final class ManageTemplatesRenderingTest extends TestCase
             ->addExtension(new ValidatorExtension(Validation::createValidator()))
             ->addTypes($types)
             ->getFormFactory();
+    }
+
+    /**
+     * Since 1.26 (dialog rule v2): every native dialog has the header (title, ×), a body, and the footer outside the
+     * body as its last child; at most one primary, the last button; a footer submit names a form of its dialog.
+     */
+    private function assertDialogAnatomy(string $html, int $expected): void
+    {
+        $dialogs = (new Crawler($html))->filter('dialog.nowo-task-dialog--native');
+        self::assertCount($expected, $dialogs);
+
+        foreach ($dialogs as $dialog) {
+            $children = [];
+            foreach ($dialog->childNodes as $child) {
+                if ($child instanceof DOMElement) {
+                    $children[] = $child;
+                }
+            }
+            self::assertGreaterThanOrEqual(3, count($children));
+            $header = new Crawler($children[0]);
+            $footer = new Crawler($children[count($children) - 1]);
+            self::assertStringContainsString('nowo-task-dialog__header', (string) $header->attr('class'));
+            self::assertCount(1, $header->filter('.nowo-task-dialog__title'));
+            self::assertCount(1, $header->filter('button.nowo-task-dialog__close'));
+            self::assertCount(1, (new Crawler($dialog))->filter('.nowo-task-dialog__body'));
+            self::assertStringContainsString('nowo-task-dialog__footer', (string) $footer->attr('class'));
+
+            $buttons   = $footer->filter('button');
+            $primaries = $footer->filter('.btn-primary, .btn-danger');
+            self::assertGreaterThanOrEqual(1, $buttons->count());
+            self::assertLessThanOrEqual(1, $primaries->count());
+            if ($primaries->count() === 1) {
+                self::assertSame($buttons->last()->getNode(0), $primaries->getNode(0));
+            }
+            foreach ($buttons as $button) {
+                self::assertInstanceOf(DOMElement::class, $button);
+                if ($button->getAttribute('type') === 'submit') {
+                    self::assertCount(1, (new Crawler($dialog))->filter('form#' . $button->getAttribute('form')));
+                }
+            }
+        }
     }
 
     private function twig(?TaskObjectLinkResolver $linkResolver = null, ?string $filtersCollapse = null, string $filtersFormClass = ''): Environment

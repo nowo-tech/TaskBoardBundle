@@ -927,9 +927,11 @@ button.nowo-task-detail__priority-tag:hover {
 }
 
 .nowo-task-dialog--native {
-    width: min(32rem, calc(100vw - 2rem));
+    /* Since 1.26 (dialog rule v2): the kits' shared size tokens, the content's height capped. */
+    width: var(--nowo-dialog-width-md, min(40rem, calc(100vw - 2rem)));
+    height: fit-content;
     max-height: calc(100vh - 2rem);
-    max-height: calc(100dvh - 2rem);
+    max-height: min(var(--nowo-dialog-height-md, min(36rem, calc(100dvh - 2rem))), calc(100dvh - 2rem));
     padding: 0;
     border: 1px solid var(--tblr-border-color, #e6e7e9);
     border-radius: var(--tblr-border-radius, 8px);
@@ -962,11 +964,6 @@ button.nowo-task-detail__priority-tag:hover {
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 1rem;
-}
-
-.nowo-task-dialog__danger {
-    display: block;
-    border-top: 1px solid var(--tblr-border-color, #e6e7e9);
 }
 
 .nowo-task-detail__estimate {

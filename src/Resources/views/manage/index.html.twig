@@ -89,7 +89,14 @@
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
                     </button>
                 </div>
-                {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true}) }}
+                {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true, with_actions: false}) }}
+                {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling body. #}
+                <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+                    <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-testid="nowo-task-board-create-submit">
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+                    </button>
+                </div>
             </dialog>
             {# Without JavaScript the dialog cannot open: the same form under the list. #}
             {% if boardFormFallback is defined and boardFormFallback %}

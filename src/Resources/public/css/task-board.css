@@ -190,7 +190,6 @@ body.modal-open {
     min-width: 180px;
 }
 
-
 /* Task detail — ClickUp-inspired layout */
 .nowo-task-detail {
     border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
@@ -933,9 +932,6 @@ button.nowo-task-detail__priority-tag:hover {
 }
 
 .nowo-task-dialog--native {
-    width: min(32rem, calc(100vw - 2rem));
-    max-height: calc(100vh - 2rem);
-    max-height: calc(100dvh - 2rem);
     padding: 0;
     border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
     border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
@@ -968,11 +964,6 @@ button.nowo-task-detail__priority-tag:hover {
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 1rem;
-}
-
-.nowo-task-dialog__danger {
-    display: block;
-    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
 }
 
 .nowo-task-detail__estimate {
@@ -1812,16 +1803,22 @@ details.nowo-task-section[open] > summary,
 
 /*
  * Since 1.13 — native dialogs (add / edit column, column sets), the colour palette and the icon grid. A host's
- * CSS reset (e.g. Tailwind preflight) cannot move them: position, size and colours are set here from the tokens.
+ * CSS reset (e.g. Tailwind preflight) cannot move them: position and colours are set here from the tokens.
+ * Since 1.26 (dialog rule v2) the size is the kits' shared one: the medium width `--nowo-dialog-width-md` (wide:
+ * `--nowo-dialog-width-wide`), the content's height capped at `--nowo-dialog-height-md` / `-wide` and the viewport
+ * minus 2rem (UiKit's defaults as fallbacks: the tokens have no :root value, a host sets them once). Header and footer
+ * stay in view, only the body scrolls.
  */
 dialog.nowo-task-dialog--native {
     position: fixed;
     inset: 0;
-    width: min(32rem, calc(100vw - 2rem));
-    max-height: calc(100dvh - 2rem);
+    width: var(--nowo-dialog-width-md, min(40rem, calc(100vw - 2rem)));
+    height: fit-content;
+    max-height: calc(100vh - 2rem);
+    max-height: min(var(--nowo-dialog-height-md, min(36rem, calc(100dvh - 2rem))), calc(100dvh - 2rem));
     margin: auto;
     padding: 0;
-    overflow: auto;
+    overflow: hidden;
     border: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
     border-radius: var(--nowo-task-radius, var(--tblr-border-radius, 8px));
     background: var(--nowo-task-surface, var(--tblr-bg-surface, #fff));
@@ -1833,6 +1830,11 @@ dialog.nowo-task-dialog--native:not([open]) {
     display: none;
 }
 
+dialog.nowo-task-dialog--native[open] {
+    display: flex;
+    flex-direction: column;
+}
+
 dialog.nowo-task-dialog--native::backdrop {
     /* Since 1.13.1 a token: hosts give every dialog the same backdrop as their own modals. */
     background: var(--nowo-task-overlay, rgb(15 23 42 / 0.55));
@@ -1841,10 +1843,13 @@ dialog.nowo-task-dialog--native::backdrop {
 
 .nowo-task-dialog--native .nowo-task-dialog__header {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.25rem 0.5rem;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
 }
 
 .nowo-task-dialog--native .nowo-task-dialog__title {
@@ -1875,8 +1880,13 @@ dialog.nowo-task-dialog--native::backdrop {
 
 .nowo-task-dialog--native .nowo-task-dialog__body {
     display: grid;
+    flex: 1 1 auto;
+    align-content: start;
     gap: 1rem;
-    padding: 0.5rem 1.25rem 1.25rem;
+    min-height: 0;
+    margin: 0;
+    padding: 1rem 1.25rem 1.25rem;
+    overflow: auto;
 }
 
 .nowo-task-dialog--native .nowo-task-dialog__actions {
@@ -1887,22 +1897,20 @@ dialog.nowo-task-dialog--native::backdrop {
     margin-top: 0.25rem;
 }
 
+/* Since 1.26 (dialog rule v2): the footer, outside the scrolling body — Cancel, then the one primary, last. */
+.nowo-task-dialog--native .nowo-task-dialog__footer {
+    flex: none;
+    align-items: center;
+    margin: 0;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
+    background: var(--nowo-task-surface-muted, var(--tblr-bg-surface-secondary, #f8fafc));
+}
+
 .nowo-task-dialog__help {
     margin: 0;
     color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
     font-size: 0.875rem;
-}
-
-.nowo-task-dialog__danger {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin: 0;
-    padding: 1rem 1.25rem;
-    border-top: 1px solid var(--nowo-task-border, var(--tblr-border-color, #e6e7e9));
-    background: var(--nowo-task-danger-soft, var(--tblr-red-lt, #fbebeb));
 }
 
 .nowo-task-dialog__danger-help {
@@ -2256,7 +2264,9 @@ dialog.nowo-task-dialog--native::backdrop {
  * colour (palette with "No colour", Gantt bar, card edge, activity swatch).
  */
 dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
-    width: min(40rem, calc(100vw - 2rem));
+    width: var(--nowo-dialog-width-wide, min(56rem, calc(100vw - 2rem)));
+    max-height: calc(100vh - 2rem);
+    max-height: min(var(--nowo-dialog-height-wide, min(52rem, calc(100dvh - 2rem))), calc(100dvh - 2rem));
 }
 
 .nowo-task-dialog__grid {
@@ -3143,8 +3153,6 @@ details.nowo-task-section > summary {
 .nowo-task-import-help__body {
     display: grid;
     gap: 0.75rem;
-    max-height: min(70vh, 40rem);
-    overflow-y: auto;
 }
 
 .nowo-task-import-help__heading {
