@@ -604,6 +604,7 @@ nowo_task_board:
             poll_interval_ms: 2000
         badge:
             connect_link: true        # since 1.25.2: false = an unlinked board shows no badge (no "Connect provider" link)
+            progress: false           # since 1.26.3: true = the bundle's badge shows a determinate bar of the running run
         # Since 1.25 (ClickUp full import; see sync.md):
         list_as_tag: false            # tag "list:<name>" on tasks of a folder / space source
         lookup:
@@ -644,6 +645,35 @@ Since 1.25.2, `sync.badge.connect_link: false` hides the board / list / Gantt he
 `board_connection`); a linked board keeps its badge. Default `true` renders exactly as 1.25.1. No template override is
 needed; the bundle partial reads the Twig global `nowo_task_board_sync_badge_connect_link`, which a host's own
 `templates.connection_badge` partial may read too.
+
+Since 1.26.3 (TB-SYNC-1) the badge data (`nowo_task_board_connection(board)`) also carries the running run:
+
+| Key | Value |
+| --- | --- |
+| `activeRunId` | id of the run in progress (running or paused), else `null` |
+| `progressUrl` | `board_connection_progress` of that run, **only for users who may manage the connection** (the endpoint answers 404 to the others), else `null` |
+| `total` / `processed` | the run's latest counters (`total` is `null` when the provider gave no task count: indeterminate bar) |
+| `pollInterval` | `sync.progress.poll_interval_ms` |
+| `progress` | `sync.badge.progress` |
+
+A host badge can hand them to the bundle's `nowo-task-board-sync-progress` Stimulus controller (targets `bar`, `status`,
+`done`, optional `cancel`; values `url`, `interval`): the bar fills from the polled counters, the polite live region
+changes at most every 5 s, and the `done` element is shown when the run ends.
+
+```twig
+{% if sync.running and sync.progressUrl %}
+    <div data-controller="nowo-task-board-sync-progress"
+         data-nowo-task-board-sync-progress-url-value="{{ sync.progressUrl }}"
+         data-nowo-task-board-sync-progress-interval-value="{{ sync.pollInterval }}">
+        <progress {% if sync.total %}max="{{ sync.total }}" value="{{ min(sync.processed, sync.total) }}"{% endif %} data-nowo-task-board-sync-progress-target="bar"></progress>
+        <p role="status" aria-live="polite" aria-atomic="true" data-nowo-task-board-sync-progress-target="status">…</p>
+        <a href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" hidden data-nowo-task-board-sync-progress-target="done">Show the result</a>
+    </div>
+{% endif %}
+```
+
+`sync.badge.progress: true` makes the bundle's own `_connection_badge.html.twig` render that bar (the default `false`
+renders as 1.26.2).
 
 ## Assets
 

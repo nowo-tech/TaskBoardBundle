@@ -89,6 +89,10 @@ services:
     Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider:
         arguments:
             $security: '@?security.helper'
+            $urlGenerator: '@router'
+            $routes: '%nowo_task_board.routes%'
+            $showProgress: '%nowo_task_board.sync.badge.progress%'
+            $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
 
     Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController:
         public: true
