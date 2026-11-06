@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
+use Nowo\TaskBoardBundle\Sync\Provider\ReplyBudget;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -376,6 +377,26 @@ final class ClickUpTaskProviderTest extends TestCase
         self::assertSame([['done', 2, false], ['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'dup')), 'the current status goes last, once');
         self::assertSame([], $provider->fetchStatusHistory($credential, 'none'));
         self::assertNull($provider->fetchStatusHistory($credential, 'missing'), 'not served (404)');
+    }
+
+    /** Since 1.27.0 (audit GW-L6, GW-I9, GW-L7): reply requests are budgeted, a 404 has no thread, dates are bounded. */
+    public function testReplyBudgetGoneThreadsAndBoundedDates(): void
+    {
+        $comments = array_map(static fn (int $i): array => ['id' => 'c' . $i, 'comment_text' => 'Body ' . $i, 'date' => '179000000' . $i . '000', 'reply_count' => 1], [1, 2, 3]);
+        $provider = $this->provider([
+            'task/T/comment'     => new MockResponse((string) json_encode(['comments' => $comments])),
+            'comment/c1/reply'   => new MockResponse('{}', ['http_code' => 404]),
+            'comment/c2/reply'   => new MockResponse((string) json_encode(['comments' => []])),
+            'list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'far', 'name' => 'Far', 'date_done' => '999999999999999', 'date_closed' => '100000'], ['id' => 'ok', 'name' => 'Ok', 'attachments' => []]], 'last_page' => true])),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+        $budget     = new ReplyBudget(2);
+        self::assertCount(3, [...$provider->fetchCommentsWithin($credential, 'T', $budget)]);
+        self::assertSame([2, 1], [$budget->used, $budget->skipped]);
+
+        $page = $provider->fetchTasks($credential, 'L', null, null);
+        self::assertSame([null, null], [$page->tasks[0]->details?->doneAt, $page->tasks[0]->details?->closedAt]);
+        self::assertSame([false, true], [$page->tasks[0]->attachmentsKnown, $page->tasks[1]->attachmentsKnown]);
     }
 
     /**

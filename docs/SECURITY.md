@@ -7,6 +7,7 @@
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
 - [Logging and personal data](#logging-and-personal-data)
+- [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
 - [Reporting](#reporting)
 - [Release security checklist](#release-security-checklist)
@@ -52,9 +53,11 @@
 | **Remote names and descriptions (since 1.25)** | Controls, bidi or markup in names. | Names are one sanitised line (≤ 120); ids are pattern-checked; time-entry descriptions are plain text (controls and bidi stripped) and passed to the host only, never stored or logged by the bundle. |
 | **New provider calls (since 1.27.0)** | More outbound calls with the host's token; a remote answer that makes a run ask without end. | All `GET` through `ProviderHttpClient` to the constant base URI, with pattern-checked ids: `task/{id}/time_in_status` (`sync.status_history.max_calls_per_run`, only for tasks a run wrote; budget kept across slices), `comment/{id}/reply` (`max_comments_per_task`), the archived pass of `list/{id}/task` and `team/{id}/task` (same page caps and paging guard). The token never enters `remote_meta`, the stats or a cursor; cursors are `<n>` / `a<n>`. |
 | **Personal data in read-only data (since 1.27.0)** | Names copied into JSON escape `anonymise()`. | Estimates per assignee and `people` custom fields store `person:<id>` (or `ref:<provider user id>` without a directory); names are read from `task_board_sync_people` when shown. Test: the raw columns hold no name, and a forgotten person disappears from the panel. |
-| **Remote custom fields (since 1.27.0)** | Script, `javascript:` links, huge values or forged types. | `ClickUpCustomFieldParser`: types checked, text sanitised and cut, only http(s) URLs, valid e-mails, finite numbers, hex colours; choices capped; what does not fit is kept as text. Rendered escaped. `e-mail`, `phone` and text fields are task content, shown to whoever can see the task, and `anonymise()` does not touch them. |
+| **Remote custom fields (since 1.27.0)** | Script, `javascript:` links, huge values or forged types. | `ClickUpCustomFieldParser`: types checked, text sanitised and cut, only http(s) URLs, valid e-mails without `?` or `&`, finite numbers, hex colours; choices capped; what does not fit is kept as text. A misfit never redefines the board's field, and `SyncFieldViewProvider` and the template re-check a URL before drawing a link (audit GW-L1, re-verification pending). Rendered escaped; the `mailto:` value is URL-encoded. E-mail, phone and text values are personal data when they name someone: see [below](#personal-data-in-synced-tasks-rgpd--lopdgdd). |
+| **Files of comments (since 1.27.0)** | A copied file that erasure does not know stays in the host's storage. | Tracked in `task_board_sync_attachments` (key `comment:<hash>:<hash>`), so `TaskErasedEvent::$attachmentRefs` names it; reused while unchanged; replaced and removed copies are deleted; nothing is downloaded for a comment in conflict; same `RemoteFileFetcher` allow-list (audit GW-M2, re-verification pending). |
+| **Lost work and rate limits (since 1.27.0)** | A provider error, or a token that may not read an endpoint, burns requests or silently skips tasks. | A failed page defers every task not finished (GW-L2, also in 1.26.3). Budgets: `status_history.max_calls_per_run`, `comments.max_reply_calls_per_run`, `watchers.max_detail_calls_per_run`; a 403 on time in status stops those requests for the run. What was not read is reported as such. |
 | **Remote keys in stats (since 1.27.0)** | An answer with thousands of keys grows the stored report, or injects markup into it. | Keys must match `[a-z0-9_]{1,40}`; at most 200 keys per run (`SyncTaskDetailsWriter::MAX_KEYS`); rendered escaped; values are never stored, only counts. |
-| **People page (since 1.27.0)** | A viewer reads remote e-mails, or re-maps someone. | `canManageBoardConnection` on every board of the directory (404 otherwise), CSRF on save, candidates only from the host's resolver, `SYNC_PEOPLE_MAPPING_CHANGED` with ids only; a mapping grants no access (projection rule). |
+| **People page (since 1.27.0)** | A viewer reads remote e-mails, or re-maps someone. | `canManageBoardConnection` on every board of the directory (404 otherwise), CSRF on save, candidates only from the host's resolver, a same-name candidate is only suggested (a remote person chooses their name; GW-L3), a row absent from the POST is left alone (GW-L4), `SYNC_PEOPLE_MAPPING_CHANGED` with ids only; a mapping grants no access (projection rule). |
 | **Malicious import files** | Oversized or crafted CSV/JSON uploads. | Authenticated route only; Symfony file upload limits; parsers validate structure; import runs in orchestrator with explicit source selection. |
 
 ## Access control model
@@ -126,6 +129,39 @@ and e-mails of remote people live only in `task_board_sync_people` (cleared by `
 Since 1.27.0 `task_board_sync_items.remote_meta` and `people` custom fields keep references to those rows, not names. The
 exports `exportFor()` / `exportDirectory()` list the people, not their estimates per task. There is
 no `dump()`, `var_dump()` or `error_log()` in `src/`.
+
+## Personal data in synced tasks (RGPD / LOPDGDD)
+
+An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice. **The grade was Pass (conditional) /
+Medium at `993d4b0`; the fixes described here are in 1.27.0, re-verification pending.**
+
+**Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
+estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
+(Art. 5(1)(c) and 25 RGPD). Which default suits a deployment is the host's decision.
+
+What the bundle does and does not do:
+
+| Duty | State |
+| --- | --- |
+| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, so clear it at the source too. A keyed hash of the value stays in the row to recognise it. Comment and task files are named in `TaskErasedEvent::$attachmentRefs` on deletion, and the host deletes them. |
+| Blocking, Art. 32 LOPDGDD | The bundle has no blocking state. Erasure in Spain implies blocking for the limitation periods: the host keeps this outside and defines its policy. |
+| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportFor()` / `exportDirectory()` for people. **Not in any export:** estimates per task, comment assignments, comment bodies and task text; the host adds them if it must. |
+| Minimisation and by default, Art. 5(1)(c) and 25 RGPD | See the default above. |
+| Storage limitation, Art. 5(1)(e) RGPD | After an unlink, tasks and their field values stay, and stored files stay unless the task is deleted. Run `eraseBoard()` when the host's retention rule asks for it. |
+| Information, Art. 14 RGPD; Art. 11 LOPDGDD | Data arrives indirectly from the provider. The people concerned, who may be customers and not staff, must be informed within a month or an exception documented. Host side. |
+| Roles and records, Art. 28 and 30 RGPD | The host is usually a processor for its tenants, and the import is a processing activity to record. Host side. |
+| Workplace, Art. 87 LOPDGDD and Art. 20 bis ET | Estimates and imported time per person can serve to monitor workers. Hosts must say so and limit their use. For counsel. |
+
+What `anonymise()` is: **pseudonymisation**. Name and e-mail go from the person row, so every view that reads references
+shows *Former user*. `provider_user_id`, the remote role, dates and `person:` links stay, so someone with access to the
+provider can re-identify the person. It does **not** reach field values other than `people`, comment bodies and
+`@mentions`, task titles and descriptions, the *Fields* document of `text` and `both` modes, or files.
+
+Pruning a directory deletes a person referenced only from JSON (an estimate or a people field); views then show `—`.
+
+Known residuals, outside this change: any editor of a task may remove another user's manual time entry (since 1.15), and
+`TaskTimeEntry.user` is `ON DELETE CASCADE`, so deleting a **user** deletes their manual time. The rule on tracked time
+covers deleting tasks and boards. CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).
 
 ## Dependencies
 

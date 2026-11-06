@@ -607,6 +607,9 @@ nowo_task_board:
             progress: false           # since 1.26.3: true = the bundle's badge shows a determinate bar of the running run
         custom_fields:
             mode: typed               # since 1.27.0: typed (field definitions + typed values) | text (1.23 "Fields" document) | both
+            exclude_types: []         # since 1.27.0: field types never imported, e.g. [email, phone, text]. Default: none (everything is imported); see SECURITY.md
+        comments:
+            max_reply_calls_per_run: 500 # since 1.27.0: requests for comment threads per run (0 = no replies); the rest is reported
         import_archived: true         # since 1.27.0: archived provider tasks are read and imported archived (false = 1.26)
         status_history:
             max_calls_per_run: 200    # since 1.27.0: "time in status" requests per run for the tasks it writes (0 = never)

@@ -74,6 +74,8 @@ use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
@@ -168,6 +170,8 @@ final class TaskBoardManageController extends AbstractController
         // invalid board create (`board.create_dialog_header`).
         private readonly ?TaskBoardDefaultViewResolverInterface $defaultViewResolver = null,
         private readonly ?string $createDialogHeader = null,
+        // Since 1.27.0 (audit GW-L8): the host's limit of active tasks, asked when a task is restored (with `sync.enabled`).
+        private readonly ?SyncLimitCheckerInterface $syncLimits = null,
     ) {
     }
 
@@ -653,7 +657,9 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_restore'));
-        if ($task->isArchived()) {
+        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), 1, 0) instanceof LimitRefusal) {
+            $this->addFlash('error', 'task_board.flash.task_restore_refused');
+        } elseif ($task->isArchived()) {
             $task->restore();
             $this->taskManager->recordRestored($task, $user);
             $this->logWrite('task_restore', ['task_id' => $taskId]);

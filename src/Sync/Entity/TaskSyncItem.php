@@ -64,6 +64,10 @@ class TaskSyncItem
     #[ORM\Column(name: 'remote_meta', type: 'json', nullable: true)]
     private ?array $remoteMeta = null;
 
+    /** Since 1.27.0 (TB-SYNC-3): the provider's own task reference (e.g. "DEV-123"); a column so that the list never reads `remote_meta`. */
+    #[ORM\Column(name: 'custom_id', type: 'string', length: 64, nullable: true)]
+    private ?string $customId = null;
+
     /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
     #[ORM\Column(name: 'backfill_level', type: 'smallint', options: ['default' => 0])]
     private int $backfillLevel = 1;
@@ -219,6 +223,23 @@ class TaskSyncItem
     public function getRemoteMeta(): array
     {
         return $this->remoteMeta ?? [];
+    }
+
+    public function getCustomId(): ?string
+    {
+        return $this->customId;
+    }
+
+    /** Since 1.27.0: true when it changed. */
+    public function setCustomId(?string $customId): bool
+    {
+        if ($customId === $this->customId) {
+            return false;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->customId = $customId;
+
+        return true;
     }
 
     /**

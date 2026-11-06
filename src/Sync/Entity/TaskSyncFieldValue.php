@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
+use function hash_hmac;
+use function is_array;
 use function mb_substr;
 
 /**
@@ -24,6 +26,8 @@ use function mb_substr;
 class TaskSyncFieldValue
 {
     public const TEXT_MAX = 500;
+
+    private const ERASED = 'erased';
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
@@ -60,6 +64,32 @@ class TaskSyncFieldValue
         [$this->value, $this->text, $this->updatedAt] = [$value, $text, $now];
 
         return true;
+    }
+
+    /**
+     * Since 1.27.0 (audit GW-M3): the value is gone. A keyed hash stays, so that a re-sync of the same value does not
+     * bring it back; a different value is imported as usual.
+     */
+    public function erase(DateTimeImmutable $now): void
+    {
+        // @igor-ignore - Doctrine entity fields; instance-scoped, not a shared service.
+        [$this->value, $this->text, $this->updatedAt] = [[self::ERASED => $this->erasedHash($this->text)], '', $now];
+    }
+
+    public function isErased(): bool
+    {
+        return is_array($this->value) && isset($this->value[self::ERASED]);
+    }
+
+    /** Whether `$text` is what was erased here (the provider still has it). */
+    public function isErasedFor(string $text): bool
+    {
+        return $this->isErased() && is_array($this->value) && $this->value[self::ERASED] === $this->erasedHash(mb_substr($text, 0, self::TEXT_MAX));
+    }
+
+    private function erasedHash(string $text): string
+    {
+        return hash_hmac('sha256', $text, $this->id);
     }
 
     public function getId(): string

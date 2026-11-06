@@ -39,13 +39,12 @@ final readonly class RemoteTaskDetails
     }
 
     /**
-     * @return array<string, mixed> the JSON stored on the sync item, without `estimates`: people are stored as references
-     *                              by {@see SyncTaskDetailsWriter} (no name, no e-mail)
+     * @return array<string, mixed> the JSON stored on the sync item, without `customId` (its own column) and `estimates`:
+     *                              people are stored as references by {@see SyncTaskDetailsWriter} (no name, no e-mail)
      */
     public function toArray(): array
     {
         return array_filter([
-            'customId'     => $this->customId,
             'points'       => $this->points,
             'doneAt'       => $this->doneAt?->format(DATE_ATOM),
             'closedAt'     => $this->closedAt?->format(DATE_ATOM),

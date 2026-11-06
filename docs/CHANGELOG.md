@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`task_board_sync_field_values`) for text, number, money, date (with time), dropdown, labels, checkbox, URL, e-mail,
   phone, rating, progress, people and relationship; unknown types and values that do not fit are kept as text, never
   dropped. Shown in the task panel (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields()`) and found by the
-  list search (`data-search-extra`, Twig `task_board_sync_search_text()`). `sync.custom_fields.mode`
+  list search (`data-search-extra`, Twig `task_board_sync_search_texts(tasks)`). `sync.custom_fields.mode`
   (`typed` default, `text`, `both`): the 1.23 "Fields" document is kept as an option. New
   `Sync\Provider\RemoteCustomField`, `RemoteTask::$customFields`, `Sync\Field\SyncFieldType`,
   `Sync\Provider\ClickUp\ClickUpCustomFieldParser`, `Sync\Field\SyncCustomFieldWriter`.
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
   `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
   `Sync\People\PeopleMappingService`: every remote person of the connection with a host-user select fed by the host's
-  candidates (`SyncPersonResolverInterface`), pre-filled by e-mail, then by normalised name (deny by default: only a
+  candidates (`SyncPersonResolverInterface`), pre-filled by e-mail; a same-name candidate is only suggested beside an unselected select (deny by default: only a
   save maps). Saving re-applies the change to the tasks already imported (creator, assignees, watchers, comment
   authors, checklist items; the host moves time on `SYNC_PERSON_REASSIGNED`) within `sync.people.reapply_seconds`; the
   rest continues on the next save and after every sync. `sync.people.step` (default `false`) puts the page between
@@ -123,6 +123,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mapped / not mapped people with a link; the progress JSON gains `unmappedPeople`. Config `sync.people.step`,
   `inviter`, `page_size`, `candidate_limit`, `reapply_seconds`. `TaskSyncPersonRepository::pendingReassigns()`.
   No schema change.
+
+### Fixed
+
+Audit GW (2026-11-06, Pass conditional / Medium at `993d4b0`). **Re-verification pending.**
+
+- **List memory (GW-M1).** The list reads custom fields only for the rows drawn and never reads `remote_meta`: the custom
+  id has its own column, `task_board_sync_items.custom_id`. Twig `task_board_sync_search_texts(tasks)`.
+- **Comment files (GW-M2).** They are tracked in `task_board_sync_attachments`, so erasure names them, an unchanged file
+  is reused, and a replaced or removed one leaves the storage. Nothing is downloaded for a comment in conflict.
+- **Personal data in field values (GW-M3).** `sync.custom_fields.exclude_types` (default: none, everything is imported),
+  `Sync\Field\SyncFieldValueEraser` (`eraseByValue()`, `eraseBoard()`, `exportByValue()`, `exportBoard()`). A malformed
+  people value is no longer kept as text.
+- **Rejected URLs (GW-L1).** A value that does not fit its type never redefines the board's field, and the view
+  re-checks it before drawing a link.
+- **Lost tasks after a provider error (GW-L2, also in 1.26.3).** Every task of the page not finished is read again by the
+  next run, not only the one that failed.
+- **People page.** A same-name candidate is no longer selected (GW-L3), and a row absent from the POST stays as it is
+  (GW-L4).
+- **Completion date (GW-L5).** A remote done date applies only to a task the sync completed, or whose date has not
+  changed since (`details.completionKept`).
+- **Budgets and bounds.** `sync.comments.max_reply_calls_per_run` (GW-L6); a reply 404 no longer fails the run (GW-I9);
+  dates outside 2000-2100 and people ids over 64 characters are refused (GW-L7); restoring a task asks the host's limit
+  (GW-L8); the `mailto:` value is encoded and `?` or `&` in an e-mail is refused (GW-L9).
+- **Task files on list rows.** ClickUp list rows have no `attachments`: the task's detail is read, within
+  `sync.watchers.max_detail_calls_per_run`. The tasks left are reported as not read, not as imported
+  (`RemoteTask::$attachmentsKnown`, `attachments.unread`).
+- **Time in status refused (403).** The requests stop for the run after the first refusal, and the report says
+  *Unavailable*.
 
 ## [1.26.3] - 2026-11-06
 

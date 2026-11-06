@@ -102,9 +102,13 @@ final class ClickUpCustomFieldParserTest extends TestCase
             ['id' => 'v', 'name' => 'Nan', 'type' => 'number', 'value' => 'NAN'],
         ]));
 
-        foreach (['Js link', 'Ftp', 'Bad mail', 'Bad number', 'Huge', 'Bad date', 'No option', 'Odd drop', 'Odd labels', 'Odd check', 'Odd phone', 'Odd stars', 'Odd progress', 'Odd users', 'No users', 'Odd text', 'Bool text', 'Long url', 'Obj number', 'Nan'] as $name) {
-            self::assertSame(SyncFieldType::Text, $fields[$name]->type, $name);
+        foreach (['Js link', 'Ftp', 'Bad mail', 'Bad number', 'Huge', 'Bad date', 'No option', 'Odd drop', 'Odd labels', 'Odd check', 'Odd phone', 'Odd stars', 'Odd progress', 'Odd text', 'Bool text', 'Long url', 'Obj number', 'Nan'] as $name) {
+            self::assertTrue($fields[$name]->fallback, $name);
         }
+        // The field keeps its declared type (audit GW-L1), and a person's name never stays as text (GW-M3).
+        self::assertSame(SyncFieldType::Url, $fields['Js link']->type);
+        self::assertFalse($fields['Odd users']->hasValue());
+        self::assertFalse($fields['No users']->hasValue());
         self::assertSame('javascript:alert(1)', $fields['Js link']->text, 'shown as text, never as a link');
         self::assertSame('true', $fields['Bool text']->text);
         self::assertFalse($fields['Blank']->hasValue());
@@ -114,6 +118,12 @@ final class ClickUpCustomFieldParserTest extends TestCase
     public function testUntrustedShapes(): void
     {
         $parser = new ClickUpCustomFieldParser();
+        // Audit GW-L9, GW-L7: mailto parameters, and a people id too long for the directory.
+        $mail = $parser->parse([['id' => 'e', 'name' => 'Mail', 'type' => 'email', 'value' => 'a?bcc=x&subject=y@example.test']]);
+        self::assertTrue($mail[0]->fallback);
+        $long = $parser->parse([['id' => 'u', 'name' => 'Owners', 'type' => 'users', 'value' => [['id' => str_repeat('1', 65), 'username' => 'Fake']]]]);
+        self::assertFalse($long[0]->hasValue());
+        self::assertSame(SyncFieldType::Email, $parser->typeOf('EMAIL'));
         self::assertSame([], $parser->parse('junk'));
         self::assertSame([], $parser->parse([['id' => 'bad id!', 'name' => 'X'], ['id' => 'x', 'name' => ''], 'junk', ['name' => 'No id']]));
         self::assertCount(ClickUpCustomFieldParser::MAX_FIELDS, $parser->parse(array_map(static fn (int $i): array => ['id' => 'f' . $i, 'name' => 'F' . $i], range(1, 150))));

@@ -88,7 +88,8 @@ final class PeopleMappingPageTest extends SyncPeopleFunctionalTestCase
         $p2 = $this->personOf('2');
         $p3 = $this->personOf('3');
         self::assertSame((string) $ana->getId(), $crawler->filter('select[name="task_board_sync_people[p_' . $p1->getId() . ']"] option[selected]')->attr('value'), 'pre-filled by e-mail');
-        self::assertSame((string) $bob->getId(), $crawler->filter('select[name="task_board_sync_people[p_' . $p2->getId() . ']"] option[selected]')->attr('value'), 'pre-filled by name');
+        self::assertSame('', $crawler->filter('select[name="task_board_sync_people[p_' . $p2->getId() . ']"] option[selected]')->attr('value'), 'a name match is only a suggestion (audit GW-L3)');
+        self::assertStringContainsString('Bob Stone', $crawler->filter('[data-testid="nowo-task-sync-person-suggestion"]')->text());
         self::assertSame('name', $crawler->filter('select[name="task_board_sync_people[p_' . $p2->getId() . ']"]')->attr('data-prefill'));
         self::assertCount(1, $crawler->filter('select[name="task_board_sync_people[p_' . $p3->getId() . ']"] option[value="__invite"]'));
         self::assertCount(0, $crawler->filter('select[name="task_board_sync_people[p_' . $p2->getId() . ']"] option[value="__invite"]'), 'no invite without an e-mail');
@@ -106,6 +107,15 @@ final class PeopleMappingPageTest extends SyncPeopleFunctionalTestCase
         self::assertCount(2, $this->events[0]->changes);
         self::assertSame(1, $this->events[0]->invited);
         self::assertSame($board->getId(), $this->events[0]->boardId);
+
+        // Audit GW-L4: a row the saved page did not have stays as it is.
+        $mapped = $this->personOf('1');
+        self::assertSame(TaskSyncPersonMapping::Manual, $mapped->getMapping());
+        $this->client->request('POST', self::BASE . $board->getId() . '/connection/people/save?filter=all&page=1', ['task_board_sync_people' => ['_token' => PredictableCsrfTokenManager::value('task_board_connection_people')]]);
+        $this->em->clear();
+        self::assertSame(TaskSyncPersonMapping::Manual, $this->personOf('1')->getMapping(), 'not on the POST: unchanged');
+        $this->refreshOwner();
+        $this->login($this->owner);
 
         // The import ran with the saved mapping: both are assignees; Dora stays a reference.
         $task   = $this->taskTitledFresh('Shared task');

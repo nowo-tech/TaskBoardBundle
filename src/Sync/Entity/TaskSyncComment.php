@@ -66,8 +66,10 @@ class TaskSyncComment
     /** Since 1.27.0: the thread, action item and edit date of the remote comment. */
     public function describe(?string $parentRemoteId, ?bool $resolved, ?TaskSyncPerson $assignee, ?DateTimeImmutable $remoteUpdatedAt): self
     {
+        // Audit GW-I8: the same instant keeps its object, so an unchanged comment writes nothing.
+        $updatedAt = $remoteUpdatedAt?->getTimestamp() === $this->remoteUpdatedAt?->getTimestamp() ? $this->remoteUpdatedAt : $remoteUpdatedAt;
         // @igor-ignore - Doctrine entity fields; instance-scoped, not a shared service.
-        [$this->parentRemoteId, $this->resolved, $this->assigneePerson, $this->remoteUpdatedAt] = [$parentRemoteId, $resolved, $assignee, $remoteUpdatedAt];
+        [$this->parentRemoteId, $this->resolved, $this->assigneePerson, $this->remoteUpdatedAt] = [$parentRemoteId, $resolved, $assignee, $updatedAt];
 
         return $this;
     }

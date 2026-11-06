@@ -132,11 +132,12 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 ### Schema change with `sync.enabled: true` only (TB-SYNC-3)
 
 Two new tables (typed custom fields), four nullable columns on `task_board_sync_comments` (thread, action item, edit
-date) and one nullable JSON column on `task_board_sync_items` (`remote_meta`: custom id, points, done / closed dates,
-time flags, location, estimates, recurrence, time in status). Additive: existing rows need no rewrite; hosts without
+date) and two nullable columns on `task_board_sync_items` (`custom_id`, and the JSON `remote_meta`: points, done / closed
+dates, time flags, location, estimates, recurrence, time in status). Additive: existing rows need no rewrite; hosts without
 `sync.enabled` see no change. Run `php bin/console doctrine:migrations:diff` and compare it with the statements below
-(without `table_prefix`; the schema test `SyncSchemaFullImportTest` asserts them). Rollback: drop the two tables and
-the five columns (1.26 ignores them).
+(the schema test `SyncSchemaFullImportTest` asserts them). `table_prefix` does not apply to the `task_board_sync_*` tables,
+like the rest of the sync tables; the foreign keys to boards and tasks follow it. Rollback: drop the two tables and
+the six columns (1.26 ignores them).
 
 MySQL 8 / MariaDB:
 
@@ -146,7 +147,7 @@ CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) 
 ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE;
 ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
 ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
-ALTER TABLE task_board_sync_items ADD remote_meta JSON DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD remote_meta JSON DEFAULT NULL, ADD custom_id VARCHAR(64) DEFAULT NULL;
 ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL, ADD resolved TINYINT DEFAULT NULL, ADD remote_updated_at DATETIME DEFAULT NULL, ADD assignee_person_id VARCHAR(36) DEFAULT NULL;
 ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
 CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
@@ -166,6 +167,7 @@ ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FORE
 ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
 ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
 ALTER TABLE task_board_sync_items ADD remote_meta JSON DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD custom_id VARCHAR(64) DEFAULT NULL;
 ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL;
 ALTER TABLE task_board_sync_comments ADD resolved BOOLEAN DEFAULT NULL;
 ALTER TABLE task_board_sync_comments ADD remote_updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL;
@@ -185,6 +187,7 @@ CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) 
 CREATE UNIQUE INDEX uniq_task_board_sync_fields_board_remote ON task_board_sync_fields (board_id, provider, remote_id);
 CREATE INDEX IDX_FDECA079E7EC5785 ON task_board_sync_fields (board_id);
 ALTER TABLE task_board_sync_items ADD COLUMN remote_meta CLOB DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD COLUMN custom_id VARCHAR(64) DEFAULT NULL;
 CREATE TEMPORARY TABLE __temp__task_board_sync_comments AS SELECT id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id FROM task_board_sync_comments;
 DROP TABLE task_board_sync_comments;
 CREATE TABLE task_board_sync_comments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, body_hash VARCHAR(64) NOT NULL, local_hash VARCHAR(64) NOT NULL, item_id VARCHAR(36) NOT NULL, comment_id VARCHAR(36) NOT NULL, author_person_id VARCHAR(36) DEFAULT NULL, parent_remote_id VARCHAR(128) DEFAULT NULL, resolved BOOLEAN DEFAULT NULL, remote_updated_at DATETIME DEFAULT NULL, assignee_person_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_BDECD5F5126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F5F8697D13 FOREIGN KEY (comment_id) REFERENCES task_board_task_comments (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59A9F6C6E FOREIGN KEY (author_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
@@ -210,9 +213,29 @@ runs read only tasks changed since the last one, so without it the existing task
 siblings when they next change. The time in status budget applies: repeat the full sync, or raise the budget, on boards
 with more tasks than the budget.
 
+What the audit fixes change for a host (audit GW, re-verification pending):
+
+- **Personal data.** Everything is still imported by default. To leave out types, set `sync.custom_fields.exclude_types`
+  (for example `[email, phone]`); what is stored of them goes when the task is next written. Hosts must wire
+  `Sync\Field\SyncFieldValueEraser` into their erasure and access flows: [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+- **Completion dates.** A done date applies only to a task the sync completed, or whose date is unchanged since the last
+  sync. A task completed by 1.26 keeps its date; the panel still shows the remote one.
+- **Restore.** With `sync.enabled`, restoring a task asks `SyncLimitCheckerInterface` for one new active task. A refusal
+  leaves it archived, with a message. Archived imports are **not** counted by the limit, which is about active tasks; the
+  check moved to the moment they become active. Hosts that want no archived rows set `sync.import_archived: false`.
+- **Requests.** List rows have no files, so a run reads one task detail per written task, within
+  `sync.watchers.max_detail_calls_per_run` (500). On large boards, repeat the full sync: tasks already read are skipped
+  until they change. `sync.comments.max_reply_calls_per_run` (500) bounds thread requests; the threads past it are read
+  when the task next changes or on a later full sync, and only while the run's budget allows.
+- **People page.** A candidate of the same name is suggested and no longer selected: a manager chooses it.
+- **Twig.** The list uses `task_board_sync_search_texts(tasks)` (task id => line), once per group of rows.
+
 BC notes: `Task::markCompleted()` gains an optional `?DateTimeImmutable $at`, so a host subclass that overrides it must
 add the parameter. `RemoteTaskPage` gains the optional `$passEnded`; a custom provider with several passes sets it on
-the last page of a pass, because an empty page otherwise stops the run (`paging_stopped`). Hosts with their own
+the last page of a pass, because an empty page otherwise stops the run (`paging_stopped`). A provider whose rows may
+leave out the files passes `attachmentsKnown: false` on `RemoteTask` (default `true`) and implements
+`TaskDetailProviderInterface`; one that reads threads with a request each can implement
+`ThreadedCommentProviderInterface`. Hosts with their own
 `templates.connection` include `@NowoTaskBoardBundle/manage/_connection_completeness.html.twig` (variable `completeness`)
 to show the report. The rule on tracked time does not change: deleting tasks or boards keeps all of it, manual and
 imported, detached.

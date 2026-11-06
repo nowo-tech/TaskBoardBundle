@@ -13,10 +13,10 @@
                     <dd class="nowo-task-detail__field-value">
                         {% if field.type == 'checkbox' %}
                             {{ (field.value ? 'task_board.sync.fields.yes' : 'task_board.sync.fields.no')|trans({}, 'NowoTaskBoardBundle') }}
-                        {% elseif field.type == 'url' %}
+                        {% elseif field.type == 'url' and field.value matches '{^https?://}i' %}
                             <a href="{{ field.value }}" target="_blank" rel="noopener noreferrer nofollow">{{ field.text }}</a>
                         {% elseif field.type == 'email' %}
-                            <a href="mailto:{{ field.value }}">{{ field.text }}</a>
+                            <a href="mailto:{{ field.value|url_encode|replace({'%40': '@'}) }}">{{ field.text }}</a>
                         {% elseif field.type == 'date' %}
                             <time datetime="{{ field.value }}">{{ field.text }}</time>
                         {% elseif field.type == 'rating' %}

@@ -31,6 +31,8 @@ final readonly class RemoteCustomField
         public array $config = [],
         public mixed $value = null,
         public string $text = '',
+        /** Since 1.27.0 (audit GW-L1): `value` did not fit `type` and is only text; the definition keeps the declared type. */
+        public bool $fallback = false,
     ) {
     }
 

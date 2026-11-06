@@ -252,7 +252,7 @@ final readonly class PeopleMappingService
         $name   = self::normalizeName($person->getName());
         $byName = $name === '' ? null : $this->unique($candidates, static fn (object $user): bool => self::normalizeName(UserLabel::of($user)) === $name);
         if ($byName !== null) {
-            return new PeopleMappingRow($person, '', $byName, PeopleMappingRow::PREFILL_NAME, $pending);
+            return new PeopleMappingRow($person, '', '', PeopleMappingRow::PREFILL_NAME, $pending, $byName);
         }
 
         return new PeopleMappingRow($person, '', '', PeopleMappingRow::PREFILL_NONE, $pending);

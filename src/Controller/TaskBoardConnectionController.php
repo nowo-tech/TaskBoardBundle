@@ -45,6 +45,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Psr\Log\LoggerInterface;
@@ -64,6 +65,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 use function array_filter;
+use function array_key_exists;
 use function array_map;
 use function array_slice;
 use function array_sum;
@@ -449,7 +451,12 @@ final class TaskBoardConnectionController extends AbstractController
             }
             $choices = [];
             if ($request->request->get('skip') === null) {
+                // Audit GW-L4: a row that was not on the page the manager saved stays as it is.
+                $submitted = $request->request->all(ConnectionPeopleFormType::NAME);
                 foreach ($rows as $row) {
+                    if (!array_key_exists(ConnectionPeopleFormType::FIELD_PREFIX . $row->person->getId(), $submitted)) {
+                        continue;
+                    }
                     $value                          = $form->get(ConnectionPeopleFormType::FIELD_PREFIX . $row->person->getId())->getData();
                     $choices[$row->person->getId()] = is_string($value) ? $value : '';
                 }
@@ -540,11 +547,21 @@ final class TaskBoardConnectionController extends AbstractController
                 $rows[] = ['key' => $key, 'tasks' => $tasks, 'status' => $coverage[$key] ?? 'not_imported_yet'];
             }
         }
+        // Since 1.27.0: what the run could not read is said, whatever the provider declares for the key.
+        $stats = $report->stats ?? [];
+        foreach (['attachments' => 'attachments.unread', 'comment_replies' => 'comments.replies_unread'] as $key => $stat) {
+            if (($stats[$stat] ?? 0) > 0) {
+                $rows[] = ['key' => $key, 'tasks' => $stats[$stat], 'status' => 'not_read'];
+            }
+        }
+        if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0) {
+            $rows[] = ['key' => 'time_in_status', 'tasks' => $stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] + ($stats[SyncTaskDetailsWriter::STAT_STATUS_SKIPPED] ?? 0), 'status' => 'unavailable'];
+        }
         // Not imported yet first, then the reasons, then what is imported; by key inside each.
         $rank = static fn (string $status): int => match ($status) {
-            'not_imported_yet'                       => 0,
-            FieldCoverageProviderInterface::IMPORTED => 2,
-            default                                  => 1,
+            'not_imported_yet', 'not_read', 'unavailable' => 0,
+            FieldCoverageProviderInterface::IMPORTED      => 2,
+            default                                       => 1,
         };
         usort($rows, static fn (array $a, array $b): int => [$rank($a['status']), $a['key']] <=> [$rank($b['status']), $b['key']]);
 

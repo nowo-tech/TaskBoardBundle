@@ -114,10 +114,17 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         return $this->syncPeople?->detailsOf($task) ?? [];
     }
 
-    /** Since 1.27.0: the custom field values of a task as one line (list search; '' without sync). */
-    public function syncSearchText(Task $task): string
+    /**
+     * Since 1.27.0: what the list search finds for the tasks drawn (task id => line; [] without sync). Reads only these
+     * tasks: call it once per group of rows.
+     *
+     * @param iterable<Task> $tasks
+     *
+     * @return array<string, string>
+     */
+    public function syncSearchTexts(iterable $tasks): array
     {
-        return $this->syncFields?->searchTextOf($task) ?? '';
+        return $this->syncFields?->searchTextsOf($tasks) ?? [];
     }
 
     /**
@@ -194,7 +201,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_unmatched', $this->syncUnmatched(...)),
             new TwigFunction('task_board_sync_token', $this->syncToken(...)),
             new TwigFunction('task_board_sync_fields', $this->syncFields(...)),
-            new TwigFunction('task_board_sync_search_text', $this->syncSearchText(...)),
+            new TwigFunction('task_board_sync_search_texts', $this->syncSearchTexts(...)),
             new TwigFunction('task_board_sync_comment_meta', $this->syncCommentMeta(...)),
             new TwigFunction('task_board_sync_details', $this->syncDetails(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),

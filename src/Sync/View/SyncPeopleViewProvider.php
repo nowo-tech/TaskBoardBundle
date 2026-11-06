@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -73,8 +74,12 @@ final class SyncPeopleViewProvider implements ResetInterface
         $item = $this->item($task);
         $meta = $item?->getRemoteMeta() ?? [];
 
-        if ($meta === [] || !$item instanceof TaskSyncItem) {
+        unset($meta[SyncTaskDetailsWriter::META_ATTACHMENTS_READ]);
+        if (!$item instanceof TaskSyncItem || ($meta === [] && $item->getCustomId() === null)) {
             return [];
+        }
+        if ($item->getCustomId() !== null) {
+            $meta['customId'] = $item->getCustomId();
         }
         if (is_array($meta['estimates'] ?? null)) {
             $meta['estimates'] = array_map(fn (array $estimate): array => ['name' => $this->personLabel((string) $estimate['person']), 'minutes' => $estimate['minutes']], $meta['estimates']);

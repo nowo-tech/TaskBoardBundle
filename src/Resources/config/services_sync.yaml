@@ -155,6 +155,9 @@ services:
 
     # Since 1.27.0 (TB-SYNC-3): typed custom fields and their view.
     Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter: ~
+    # Since 1.27.0 (audit GW-M3): erasure and access for custom field values; public for the host's erasure chain.
+    Nowo\TaskBoardBundle\Sync\Field\SyncFieldValueEraser:
+        public: true
     Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter: ~
     Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider: ~
 

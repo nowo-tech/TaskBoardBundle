@@ -49,7 +49,7 @@ class TaskSyncAttachment
         private int $size,
         #[ORM\Column(type: 'string', length: 64, nullable: true)]
         private ?string $sha256 = null,
-        /** The attachment link shown on the task (null for an inline image). */
+        /** The attachment link shown on the task (null for an inline image or a comment's file). */
         #[ORM\ManyToOne(targetEntity: TaskLink::class)]
         #[ORM\JoinColumn(name: 'link_id', nullable: true, onDelete: 'SET NULL')]
         private ?TaskLink $link = null,
@@ -90,7 +90,7 @@ class TaskSyncAttachment
     }
 
     /** The remote file changed: the row now describes the new stored copy (updated in place, the key stays unique). */
-    public function replace(?int $remoteSize, ?DateTimeImmutable $remoteUpdatedAt, StoredAttachment $stored, string $name, string $mime, TaskLink $link): void
+    public function replace(?int $remoteSize, ?DateTimeImmutable $remoteUpdatedAt, StoredAttachment $stored, string $name, string $mime, ?TaskLink $link): void
     {
         $this->remoteSize      = $remoteSize;
         $this->remoteUpdatedAt = $remoteUpdatedAt;

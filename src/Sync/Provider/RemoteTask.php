@@ -59,6 +59,8 @@ final readonly class RemoteTask
          * @var list<string>
          */
         public array $presentKeys = [],
+        /** Since 1.27.0: false when the answer does not say (ClickUp list rows have no `attachments`): the detail is read. */
+        public bool $attachmentsKnown = true,
     ) {
     }
 

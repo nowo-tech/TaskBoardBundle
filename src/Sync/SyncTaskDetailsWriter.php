@@ -36,6 +36,15 @@ final readonly class SyncTaskDetailsWriter
 
     public const STAT_STATUS_FAILED = 'statusHistory.failed';
 
+    public const STAT_STATUS_FORBIDDEN = 'statusHistory.forbidden';
+
+    public const STAT_STATUS_SKIPPED = 'statusHistory.skipped';
+
+    /** The remote date of the task when its detail (files) was last read. */
+    public const META_ATTACHMENTS_READ = 'attachmentsRead';
+
+    private const BASELINE_COMPLETED = 'completed';
+
     /** Remote keys are untrusted: the stats of a run stay bounded. */
     public const MAX_KEYS = 200;
 
@@ -62,7 +71,7 @@ final readonly class SyncTaskDetailsWriter
     /**
      * @throws ProviderException a passing error of the status history
      */
-    public function write(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, ?PeopleSession $session = null): void
+    public function write(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, ?PeopleSession $session = null, bool $attachmentsRead = false): void
     {
         $details   = $remote->details ?? new RemoteTaskDetails();
         $meta      = $details->toArray();
@@ -77,14 +86,38 @@ final readonly class SyncTaskDetailsWriter
         if ($history !== null && $history !== []) {
             $meta['statusHistory'] = $history;
         }
-        if ($item->setRemoteMeta($meta)) {
+        $read = $attachmentsRead ? $remote->remoteUpdatedAt->getTimestamp() : ($item->getRemoteMeta()[self::META_ATTACHMENTS_READ] ?? null);
+        if ($read !== null) {
+            $meta[self::META_ATTACHMENTS_READ] = $read;
+        }
+        $changedId   = $item->setCustomId($details->customId);
+        $changedMeta = $item->setRemoteMeta($meta);
+        if ($changedId || $changedMeta) {
             $ctx->count('details.updated');
         }
-        // The provider's done (else closed) date is when the task was completed.
-        $doneAt = $details->doneAt ?? $details->closedAt;
-        if ($doneAt instanceof DateTimeImmutable && $task->isCompleted() && $task->getCompletedAt()?->getTimestamp() !== $doneAt->getTimestamp()) {
+        $this->completion($ctx, $item, $task, $details->doneAt ?? $details->closedAt);
+    }
+
+    /**
+     * The provider's done (else closed) date is when the task was completed — unless the date here was set here (audit
+     * GW-L5): applied only to a task the sync completed, or whose date has not changed since the last time.
+     */
+    private function completion(SyncRunContext $ctx, TaskSyncItem $item, Task $task, ?DateTimeImmutable $doneAt): void
+    {
+        if (!$doneAt instanceof DateTimeImmutable || !$task->isCompleted()) {
+            return;
+        }
+        $local = (string) $task->getCompletedAt()?->getTimestamp();
+        $base  = $item->baseline(self::BASELINE_COMPLETED);
+        if (!isset($ctx->completedBySync[$task->getId()]) && ($base === null || $base[1] !== $local)) {
+            $ctx->count('details.completionKept');
+
+            return;
+        }
+        if ($local !== (string) $doneAt->getTimestamp()) {
             $task->markCompleted($doneAt);
         }
+        $item->setBaseline(self::BASELINE_COMPLETED, (string) $doneAt->getTimestamp(), (string) $doneAt->getTimestamp());
     }
 
     /**
@@ -100,12 +133,23 @@ final readonly class SyncTaskDetailsWriter
         if (!$provider instanceof StatusHistoryProviderInterface || ($ctx->stats[self::STAT_STATUS_CALLS] ?? 0) >= $this->maxStatusCalls) {
             return $last;
         }
+        // A token that may not read it never will: one refusal stops the requests of the whole run.
+        if ($ctx->stat(self::STAT_STATUS_FORBIDDEN) > 0) {
+            $ctx->count(self::STAT_STATUS_SKIPPED);
+
+            return $last;
+        }
         $ctx->count(self::STAT_STATUS_CALLS);
         try {
             $statuses = $provider->fetchStatusHistory($ctx->credential, $item->getExternalId());
         } catch (ProviderException $exception) {
             if (in_array($exception->errorCode, self::RETRIED, true)) {
                 throw $exception;
+            }
+            if ($exception->errorCode === ProviderErrorCode::Forbidden) {
+                $ctx->count(self::STAT_STATUS_FORBIDDEN);
+
+                return $last;
             }
             // Read-only extra (e.g. ClickUp answers 400 when the ClickApp is off): never fails a run.
             $ctx->count(self::STAT_STATUS_FAILED);

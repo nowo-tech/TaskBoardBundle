@@ -56,7 +56,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusType;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
+use Nowo\TaskBoardBundle\Sync\Provider\ReplyBudget;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ThreadedCommentProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Stringable;
@@ -68,6 +70,7 @@ use function array_filter;
 use function array_key_last;
 use function array_keys;
 use function array_map;
+use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
@@ -101,6 +104,9 @@ final readonly class SyncTaskWriter
     /** The synced fields. */
     /** The longest description stored (bytes). */
     public const MAX_DESCRIPTION_BYTES = 100_000;
+
+    /** Since 1.27.0: tracked files of comments, `comment:<sha1 of the comment id>:<sha1 of the file id>`. */
+    private const COMMENT_FILE_PREFIX = 'comment:';
 
     public const FIELDS = ['title', 'description', 'priority', 'column', 'start', 'due', 'estimate', 'tags', 'assignees', 'parent'];
 
@@ -139,6 +145,8 @@ final readonly class SyncTaskWriter
         // Since 1.27.0 (TB-SYNC-3): details, status history and completeness; archived tasks imported archived.
         private ?SyncTaskDetailsWriter $detailsWriter = null,
         private bool $importArchived = true,
+        // Since 1.27.0 (audit GW-L6): reply requests per run.
+        private int $maxReplyCalls = 500,
     ) {
     }
 
@@ -290,8 +298,17 @@ final readonly class SyncTaskWriter
 
         // Files, inline images, comments and the fields document of the tasks this page created or changed.
         try {
-            foreach ($post as [$item, $task, $remote, $descriptionWritten]) {
-                $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees, $session);
+            foreach ($post as $index => [$item, $task, $remote, $descriptionWritten]) {
+                try {
+                    $this->afterWrite($ctx, $item, $task, $remote, $descriptionWritten, $assignees, $session);
+                } catch (Throwable $exception) {
+                    // Audit GW-L2: the tasks not reached keep nothing of this write: all are read again next time.
+                    foreach (array_slice($post, $index) as [$deferred]) {
+                        $deferred->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
+                    }
+
+                    throw $exception;
+                }
             }
         } finally {
             $this->closeSession($ctx, $session);
@@ -426,6 +443,7 @@ final readonly class SyncTaskWriter
             : $column instanceof BoardColumn && $columns['list'] !== [] && $columns['list'][array_key_last($columns['list'])]->getId() === $column->getId();
         if ($done) {
             $task->markCompleted();
+            $ctx->completedBySync[$task->getId()] = true;
         }
         $this->changeRecorder->recordCreated($task, $ctx->actor);
         $this->entityManager->persist($task);
@@ -528,6 +546,9 @@ final readonly class SyncTaskWriter
         // Since 1.25 (Q-B15): the status type decides completion when the column may be written.
         if ($remote->status?->type instanceof RemoteStatusType && ($allowed['column'] ?? false) === true && $remote->status->type->isDone() !== $task->isCompleted()) {
             $remote->status->type->isDone() ? $task->markCompleted() : $task->markIncomplete();
+            if ($task->isCompleted()) {
+                $ctx->completedBySync[$task->getId()] = true;
+            }
             $changed = true;
         }
         foreach (array_keys($allowed) as $field) {
@@ -637,20 +658,18 @@ final readonly class SyncTaskWriter
             $item->setBaseline('description', $this->hash($remoteDescription), $this->hash($task->getDescription()));
         }
         try {
-            if ($ctx->options->importAttachments && $capabilities->attachments) {
-                $this->syncAttachments($ctx, $task, $item, $remote->attachments);
-            }
+            $detail = $this->detail($ctx, $item, $remote);
+            $this->taskFiles($ctx, $task, $item, $remote, $detail);
             if ($ctx->options->importComments && $capabilities->comments) {
                 $this->syncComments($ctx, $task, $item, $assignees, $session);
             }
-            $detail = $this->detail($ctx, $item, $remote);
             if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $this->watchers($ctx) && $detail->watchersKnown) {
                 $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Watcher, $detail->watchers, TaskSyncPerson::KIND_WATCHER, $ctx->actor);
             }
             if ($this->checklists($ctx) && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
                 $this->checklistWriter->sync($ctx, $session, $item, $task, $detail);
             }
-            $this->detailsWriter?->write($ctx, $item, $task, $remote, $session);
+            $this->detailsWriter?->write($ctx, $item, $task, $remote, $session, $detail->attachmentsKnown && !$remote->attachmentsKnown);
         } catch (ProviderException $exception) {
             $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
             $ctx->warn('task_deferred');
@@ -663,6 +682,33 @@ final readonly class SyncTaskWriter
         if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
             $this->fieldWriter->write($ctx, $task, $remote->customFields, $session);
         }
+    }
+
+    /**
+     * Since 1.27.0: the task's files, from the row or (ClickUp list rows have no `attachments`) its detail. A task whose
+     * files could not be read is counted (`attachments.unread`) so the report does not claim them.
+     */
+    private function taskFiles(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteTask $remote, RemoteTask $detail): void
+    {
+        if (!$ctx->options->importAttachments || !$ctx->provider->capabilities()->attachments) {
+            return;
+        }
+        if ($remote->attachmentsKnown) {
+            $this->syncAttachments($ctx, $task, $item, $remote->attachments);
+        } elseif ($detail->attachmentsKnown) {
+            if ($detail->attachments !== []) {
+                $ctx->count('keys.attachments');
+            }
+            $this->syncAttachments($ctx, $task, $item, $detail->attachments);
+        } elseif (!$this->attachmentsRead($item, $remote)) {
+            $ctx->count('attachments.unread');
+        }
+    }
+
+    /** Since 1.27.0: the detail of this version of the task was already read (repeated full syncs make progress). */
+    private function attachmentsRead(TaskSyncItem $item, RemoteTask $remote): bool
+    {
+        return ($item->getRemoteMeta()[SyncTaskDetailsWriter::META_ATTACHMENTS_READ] ?? null) === $remote->remoteUpdatedAt->getTimestamp();
     }
 
     /**
@@ -703,7 +749,7 @@ final readonly class SyncTaskWriter
             return;
         }
         foreach ($existing as $remoteId => $known) {
-            if (!isset($listed[$remoteId]) && !str_starts_with($remoteId, 'img:')) {
+            if (!isset($listed[$remoteId]) && !str_starts_with($remoteId, 'img:') && !str_starts_with($remoteId, self::COMMENT_FILE_PREFIX)) {
                 $ctx->fileDeletes[] = [$task, $known->stored()];
                 $link               = $known->getLink();
                 if ($link instanceof TaskLink) {
@@ -793,7 +839,13 @@ final readonly class SyncTaskWriter
     private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, ImportAssigneeResolver $assignees, ?PeopleSession $session = null): void
     {
         $existing = $this->store->commentsOf($item);
-        foreach ($ctx->provider->fetchComments($ctx->credential, $item->getExternalId()) as $remote) {
+        $provider = $ctx->provider;
+        $replies  = new ReplyBudget(max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls')));
+        $comments = $provider instanceof ThreadedCommentProviderInterface
+            ? $provider->fetchCommentsWithin($ctx->credential, $item->getExternalId(), $replies)
+            : $provider->fetchComments($ctx->credential, $item->getExternalId());
+        $files = null;
+        foreach ($comments as $remote) {
             // Since 1.27.0: the files of the comment are part of what makes it change.
             $remoteHash = $this->hash($remote->attachments === [] ? $remote->body : [$remote->body, array_map(static fn (RemoteAttachment $file): array => [$file->id, $file->size, $file->updatedAt?->getTimestamp()], $remote->attachments)]);
             $known      = $existing[$remote->id] ?? null;
@@ -803,10 +855,21 @@ final readonly class SyncTaskWriter
                 $known->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt);
                 continue;
             }
+            if ($known instanceof TaskSyncComment) {
+                $known->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt);
+                $comment = $known->getComment();
+                // Audit GW-M2: before the body is built, so a conflict downloads nothing.
+                if ($comment->isDeleted() || $this->hash($comment->getBody()) !== $known->getLocalHash()) {
+                    $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $item->getExternalId(), 'comment', $this->sanitizer->line($remote->body, 200));
+                    $known->written($remoteHash, $known->getLocalHash());
+                    continue;
+                }
+            }
             // Since 1.25: through the directory (no "Originally by" line: the template shows the person reference).
             $person = $session instanceof PeopleSession && $remote->author !== null ? $session->person($remote->author, TaskSyncPerson::KIND_COMMENT) : null;
             $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null);
-            $body   = $this->commentBody($ctx, $task, $item, $remote, $author === null && !$person instanceof TaskSyncPerson);
+            $files ??= $this->store->attachmentsOf($task);
+            $body = $this->commentBody($ctx, $task, $item, $remote, $author === null && !$person instanceof TaskSyncPerson, $files);
             if (!$known instanceof TaskSyncComment) {
                 $comment = new TaskComment($task, $author ?? $ctx->actor, $body, [], $remote->createdAt);
                 $this->entityManager->persist($comment);
@@ -814,20 +877,22 @@ final readonly class SyncTaskWriter
                 ++$ctx->commentsCreated;
                 continue;
             }
-            $known->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt);
-            $comment = $known->getComment();
-            if ($comment->isDeleted() || $this->hash($comment->getBody()) !== $known->getLocalHash()) {
-                $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $item->getExternalId(), 'comment', $this->sanitizer->line($remote->body, 200));
-                $known->written($remoteHash, $known->getLocalHash());
-                continue;
-            }
-            $comment->edit($body, []);
+            $known->getComment()->edit($body, []);
             $known->written($remoteHash, $this->hash($body));
             ++$ctx->commentsUpdated;
         }
+        // Audit GW-L6: the replies past the run's budget are said, not lost silently.
+        $ctx->count('comments.reply_calls', $replies->used);
+        if ($replies->skipped > 0) {
+            $ctx->count('comments.replies_unread', $replies->skipped);
+            $ctx->warn('replies_budget');
+        }
     }
 
-    private function commentBody(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteComment $remote, bool $prefix): string
+    /**
+     * @param array<string, TaskSyncAttachment> $files the task's tracked files (new ones are added)
+     */
+    private function commentBody(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteComment $remote, bool $prefix, array &$files): string
     {
         $body = $remote->body;
         if ($remote->inlineImageUrls !== []) {
@@ -841,19 +906,70 @@ final readonly class SyncTaskWriter
         }
         // Since 1.27.0 (TB-SYNC-3): the comment's files are copied like task attachments (same host allow-list, size
         // caps and type sniffing) and linked under the comment; a refused file is named without a link.
-        $files = [];
+        $lines = [];
+        $kept  = [];
         foreach ($remote->attachments as $attachment) {
-            $stored  = $ctx->options->importAttachments ? $this->download($ctx, $task, $attachment, false) : null;
-            $name    = addcslashes($this->sanitizer->line($attachment->name, 120), '\\`*_[]()<>!#~|');
-            $files[] = $stored instanceof StoredAttachment ? sprintf('- [%s](%s)', $name, $stored->url) : '- ' . $name;
+            $key        = $this->commentFileKey($remote->id, $attachment->id);
+            $kept[$key] = true;
+            $stored     = $this->commentFile($ctx, $task, $item, $attachment, $key, $files);
+            $name       = addcslashes($this->sanitizer->line($attachment->name, 120), '\\`*_[]()<>!#~|');
+            $lines[]    = $stored instanceof StoredAttachment ? sprintf('- [%s](%s)', $name, $stored->url) : '- ' . $name;
+        }
+        // Audit GW-M2: a file the comment no longer has leaves the host's storage.
+        foreach ($files as $key => $file) {
+            if (str_starts_with($key, $this->commentFilePrefix($remote->id)) && !isset($kept[$key])) {
+                $ctx->fileDeletes[] = [$task, $file->stored()];
+                $this->entityManager->remove($file);
+                unset($files[$key]);
+            }
         }
         $body = $this->sanitizer->markdown($body, TaskComment::MAX_LENGTH);
-        if ($files === []) {
+        if ($lines === []) {
             return $body;
         }
 
         // The stored URLs are the host's own (not remote input): appended after the remote text is sanitised.
-        return Text::cut($body . "\n\n" . $this->trans('task_board.sync.comment_attachments', 'Attachments:') . "\n" . implode("\n", $files), TaskComment::MAX_LENGTH);
+        return Text::cut($body . "\n\n" . $this->trans('task_board.sync.comment_attachments', 'Attachments:') . "\n" . implode("\n", $lines), TaskComment::MAX_LENGTH);
+    }
+
+    /**
+     * Audit GW-M2: a comment's file is tracked like a task's (erasure, quota): reused while unchanged, its old copy
+     * deleted when replaced. When the new one is refused the old copy stays linked.
+     *
+     * @param array<string, TaskSyncAttachment> $files
+     */
+    private function commentFile(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteAttachment $attachment, string $key, array &$files): ?StoredAttachment
+    {
+        $known = $files[$key] ?? null;
+        if ($known instanceof TaskSyncAttachment && $known->matches($attachment->size, $attachment->updatedAt)) {
+            ++$ctx->filesReused;
+
+            return $known->stored();
+        }
+        $stored = $ctx->options->importAttachments ? $this->download($ctx, $task, $attachment, false) : null;
+        if (!$stored instanceof StoredAttachment) {
+            return $known?->stored();
+        }
+        if ($known instanceof TaskSyncAttachment) {
+            $ctx->fileDeletes[] = [$task, $known->stored()];
+            $known->replace($attachment->size, $attachment->updatedAt, $stored, Text::cut($stored->name, 255), Text::cut($stored->mime, 127), null);
+
+            return $stored;
+        }
+        $files[$key] = new TaskSyncAttachment($item, $task, $key, $attachment->size, $attachment->updatedAt, $stored->ref, $stored->url, Text::cut($stored->name, 255), Text::cut($stored->mime, 127), $stored->size, $stored->sha256);
+        $this->entityManager->persist($files[$key]);
+
+        return $stored;
+    }
+
+    private function commentFilePrefix(string $commentId): string
+    {
+        return self::COMMENT_FILE_PREFIX . sha1($commentId) . ':';
+    }
+
+    private function commentFileKey(string $commentId, string $fileId): string
+    {
+        return $this->commentFilePrefix($commentId) . sha1($fileId);
     }
 
     private function fieldsDocument(SyncRunContext $ctx, Task $task, string $text): void
@@ -1001,13 +1117,14 @@ final readonly class SyncTaskWriter
     }
 
     /**
-     * Since 1.25 (E5): the task's detail when its list row left out watchers or checklists, within
+     * Since 1.25 (E5): the task's detail when its list row left out watchers, checklists or (since 1.27.0) files, within
      * `sync.watchers.max_detail_calls_per_run` per run; else the row itself.
      */
     private function detail(SyncRunContext $ctx, TaskSyncItem $item, RemoteTask $remote): RemoteTask
     {
         $provider = $ctx->provider;
-        $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown);
+        $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown)
+            || ($ctx->options->importAttachments && $provider->capabilities()->attachments && !$remote->attachmentsKnown && !$this->attachmentsRead($item, $remote));
         if (!$missing || !$provider instanceof TaskDetailProviderInterface || ($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {
             return $remote;
         }

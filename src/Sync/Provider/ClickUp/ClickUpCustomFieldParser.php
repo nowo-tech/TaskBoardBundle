@@ -53,6 +53,9 @@ final readonly class ClickUpCustomFieldParser
 
     private const ID_PATTERN = '/^[A-Za-z0-9_:.-]{1,128}$/D';
 
+    /** Audit GW-L7: as {@see ClickUpTaskMapper::personRef()} (the people directory's column). */
+    private const PERSON_ID_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/D';
+
     private const TYPES = [
         'text'               => SyncFieldType::Text,
         'short_text'         => SyncFieldType::Text,
@@ -117,13 +120,23 @@ final readonly class ClickUpCustomFieldParser
 
         [$typed, $text] = $this->value($type, $value, $choices, $settings) ?? [null, ''];
         if ($typed === null) {
-            // A value that does not fit its type: kept as text, never dropped.
+            // A person's name goes only through the people directory: a malformed people value is not kept.
+            if ($type === SyncFieldType::People) {
+                return new RemoteCustomField($id, $name, $type, $remoteType, $choices, $settings);
+            }
+            // A value that does not fit its type: kept as text, never dropped, and the field keeps its type (audit GW-L1).
             $text = $this->asText($value);
 
-            return new RemoteCustomField($id, $name, SyncFieldType::Text, $remoteType, [], [], $text === '' ? null : $text, $text);
+            return new RemoteCustomField($id, $name, $type, $remoteType, $choices, $settings, $text === '' ? null : $text, $text, true);
         }
 
         return new RemoteCustomField($id, $name, $type, $remoteType, $choices, $settings, $typed, $text);
+    }
+
+    /** Since 1.27.0: the bundle's type of a ClickUp field type (unknown: text). */
+    public function typeOf(string $remoteType): SyncFieldType
+    {
+        return self::TYPES[strtolower($remoteType)] ?? SyncFieldType::Text;
     }
 
     /**
@@ -137,19 +150,20 @@ final readonly class ClickUpCustomFieldParser
     private function value(SyncFieldType $type, mixed $value, array $choices, array $config): ?array
     {
         return match ($type) {
-            SyncFieldType::Text                                => is_scalar($value) && !is_bool($value) ? $this->textValue((string) $value) : null,
-            SyncFieldType::Number                              => $this->number($value),
-            SyncFieldType::Money                               => ($n = $this->number($value)) === null ? null : [$n[0], rtrim($n[1] . ' ' . ($config['currency'] ?? ''))],
-            SyncFieldType::Date                                => $this->date($value, ($config['time'] ?? 0) === 1),
-            SyncFieldType::Dropdown                            => $this->dropdown($value, $choices),
-            SyncFieldType::Labels                              => $this->labels($value, $choices),
-            SyncFieldType::Checkbox                            => $this->checkbox($value),
-            SyncFieldType::Url                                 => is_string($value) && $this->sanitizer->isSafeUrl($value) && preg_match('~^https?://~i', $value) === 1 && strlen($value) <= 2048 ? [$value, $value] : null,
-            SyncFieldType::Email                               => is_string($value) && strlen($value) <= 254 && filter_var($value, FILTER_VALIDATE_EMAIL) !== false ? [$value, $value] : null,
-            SyncFieldType::Phone                               => is_scalar($value) && preg_match('/^\+?[0-9 ().-]{3,40}$/D', (string) $value) === 1 ? [(string) $value, (string) $value] : null,
-            SyncFieldType::Rating                              => is_numeric($value) && (int) $value >= 0 ? [min((int) $value, (int) ($config['max'] ?? 5)), sprintf('%d/%d', min((int) $value, (int) ($config['max'] ?? 5)), (int) ($config['max'] ?? 5))] : null,
-            SyncFieldType::Progress                            => $this->progress($value),
-            SyncFieldType::People, SyncFieldType::Relationship => $this->references($value),
+            SyncFieldType::Text         => is_scalar($value) && !is_bool($value) ? $this->textValue((string) $value) : null,
+            SyncFieldType::Number       => $this->number($value),
+            SyncFieldType::Money        => ($n = $this->number($value)) === null ? null : [$n[0], rtrim($n[1] . ' ' . ($config['currency'] ?? ''))],
+            SyncFieldType::Date         => $this->date($value, ($config['time'] ?? 0) === 1),
+            SyncFieldType::Dropdown     => $this->dropdown($value, $choices),
+            SyncFieldType::Labels       => $this->labels($value, $choices),
+            SyncFieldType::Checkbox     => $this->checkbox($value),
+            SyncFieldType::Url          => is_string($value) && $this->sanitizer->isSafeUrl($value) && preg_match('~^https?://~i', $value) === 1 && strlen($value) <= 2048 ? [$value, $value] : null,
+            SyncFieldType::Email        => is_string($value) && strlen($value) <= 254 && !str_contains($value, '?') && !str_contains($value, '&') && filter_var($value, FILTER_VALIDATE_EMAIL) !== false ? [$value, $value] : null,
+            SyncFieldType::Phone        => is_scalar($value) && preg_match('/^\+?[0-9 ().-]{3,40}$/D', (string) $value) === 1 ? [(string) $value, (string) $value] : null,
+            SyncFieldType::Rating       => is_numeric($value) && (int) $value >= 0 ? [min((int) $value, (int) ($config['max'] ?? 5)), sprintf('%d/%d', min((int) $value, (int) ($config['max'] ?? 5)), (int) ($config['max'] ?? 5))] : null,
+            SyncFieldType::Progress     => $this->progress($value),
+            SyncFieldType::People       => $this->references($value, self::PERSON_ID_PATTERN),
+            SyncFieldType::Relationship => $this->references($value, self::ID_PATTERN),
         };
     }
 
@@ -267,7 +281,7 @@ final readonly class ClickUpCustomFieldParser
      *
      * @return array{0: list<array{id: string, name: string}>, 1: string}|null
      */
-    private function references(mixed $value): ?array
+    private function references(mixed $value, string $idPattern): ?array
     {
         if (!is_array($value)) {
             return null;
@@ -276,7 +290,7 @@ final readonly class ClickUpCustomFieldParser
         foreach (array_slice($value, 0, self::MAX_CHOICES) as $item) {
             $id   = is_array($item) && is_scalar($item['id'] ?? null) ? (string) $item['id'] : '';
             $name = is_array($item) ? $this->sanitizer->line(is_string($item['name'] ?? null) ? $item['name'] : (is_string($item['username'] ?? null) ? $item['username'] : ''), 120) : '';
-            if (preg_match(self::ID_PATTERN, $id) === 1) {
+            if (preg_match($idPattern, $id) === 1) {
                 $refs[$id] ??= ['id' => $id, 'name' => $name !== '' ? $name : $id];
             }
         }

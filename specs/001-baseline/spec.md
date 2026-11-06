@@ -155,7 +155,10 @@ the board.
 - **FR-SYNC-COMMENT-001** (1.27): threaded replies, files under the comment, action items (assignee, resolved) and remote edit date.
 - **FR-SYNC-DETAIL-001** (1.27): custom id (searchable), points, done / closed dates (completion date), time flags, location, estimates per assignee, recurrence and time in status (bounded by `sync.status_history.max_calls_per_run`), read-only in `task_board_sync_items.remote_meta`; linked tasks as `related` relations; archived tasks imported archived (`sync.import_archived`).
 - **FR-SYNC-PRIVACY-001** (1.27): remote people in read-only JSON are references (`PersonToken`), never names or e-mails; `anonymise()` is enough to remove a name from every view.
-- **FR-SYNC-REPORT-001** (1.27): a per-key completeness report after each run (`FieldCoverageProviderInterface`), covering every task read, at most 200 keys per run.
+- **FR-SYNC-PRIVACY-002** (1.27): `sync.custom_fields.exclude_types` (default none) and `SyncFieldValueEraser` for erasure and access of field values; files of comments are tracked, so erasure names them.
+- **FR-SYNC-REPORT-001** (1.27): a per-key completeness report after each run (`FieldCoverageProviderInterface`), covering every task read, at most 200 keys per run; what could not be read is shown as *Not read* or *Unavailable*, never as imported.
+- **FR-SYNC-BUDGET-001** (1.27): reply requests (`sync.comments.max_reply_calls_per_run`), task details (`sync.watchers.max_detail_calls_per_run`) and time in status are bounded per run; a failed page defers every task not finished.
+- **FR-SYNC-VIEW-001** (1.27): the list reads custom fields and custom ids only for the rows drawn, never `remote_meta`.
 - **FR-SYNC-TIME-001** (owner rule): deleting a task or a board keeps all tracked time (manual and imported), detached; a sync never deletes it; imported time is deleted only by an explicit manager action in TimeTrack.
 
 ### Import

@@ -82,7 +82,9 @@
                                                             <div id="nowo-task-sync-person-{{ _person.id }}">{{ _person.name }}</div>
                                                             {% if _person.email %}<div class="text-secondary small">{{ _person.email }}</div>{% endif %}
                                                             <div class="small">
-                                                                {% if row.prefill == 'email' or row.prefill == 'name' %}
+                                                                {% if row.prefill == 'name' %}
+                                                                    <span class="badge bg-yellow-lt" data-testid="nowo-task-sync-person-suggestion">{{ 'task_board.sync.people.prefill.name_suggestion'|trans({'%user%': candidateLabels[row.suggestedUserId]|default('')}, 'NowoTaskBoardBundle') }}</span>
+                                                                {% elseif row.prefill == 'email' %}
                                                                     <span class="badge bg-yellow-lt" data-testid="nowo-task-sync-person-prefill">{{ ('task_board.sync.people.prefill.' ~ row.prefill)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% elseif row.prefill == 'mapped' %}
                                                                     <span class="badge bg-green-lt">{{ ('task_board.sync.people.state.' ~ _person.mapping.value)|trans({}, 'NowoTaskBoardBundle') }}</span>

@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -49,6 +50,7 @@ use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
@@ -266,6 +268,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
                 ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
                 ->setArgument('$includeArchived', (bool) $sync['import_archived'])
+                ->setArgument('$excludedFieldTypes', $sync['custom_fields']['exclude_types'])
                 ->addTag('nowo_task_board.task_provider'));
         }
         $this->registerSyncPeople($container, $sync);
@@ -315,7 +318,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
             ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
             ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode'])
-            ->setArgument('$importArchived', (bool) $sync['import_archived']);
+            ->setArgument('$importArchived', (bool) $sync['import_archived'])
+            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run']);
+        $container->getDefinition(SyncCustomFieldWriter::class)
+            ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
+        // Audit GW-L8: restoring a task by hand asks the host's limit too.
+        $container->getDefinition(TaskBoardManageController::class)
+            ->setArgument('$syncLimits', new Reference(SyncLimitCheckerInterface::class));
         $container->getDefinition(SyncTaskDetailsWriter::class)
             ->setArgument('$maxStatusCalls', (int) $sync['status_history']['max_calls_per_run']);
         $container->getDefinition(TaskBoardTwigExtension::class)

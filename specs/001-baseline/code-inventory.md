@@ -211,9 +211,12 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Sync/Field/SyncFieldType.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Provider/ClickUp/ClickUpCustomFieldParser.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Provider/RemoteCustomField.php` | Typed custom fields | FR-SYNC-FIELD-001 |
-| `Sync/View/SyncFieldViewProvider.php` | Typed custom fields and search | FR-SYNC-FIELD-001, FR-SYNC-DETAIL-001 |
+| `Sync/View/SyncFieldViewProvider.php` | Typed custom fields and search | FR-SYNC-FIELD-001, FR-SYNC-DETAIL-001, FR-SYNC-VIEW-001 |
 | `Resources/views/manage/_task_sync_fields.html.twig` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/People/PersonToken.php` | People in read-only data | FR-SYNC-PRIVACY-001 |
+| `Sync/Field/SyncFieldValueEraser.php` | Erasure and access of field values | FR-SYNC-PRIVACY-002 |
+| `Sync/Provider/ReplyBudget.php` | Request budgets | FR-SYNC-BUDGET-001 |
+| `Sync/Provider/ThreadedCommentProviderInterface.php` | Request budgets | FR-SYNC-BUDGET-001 |
 | `Sync/Provider/RemoteStatusTime.php` | Task details | FR-SYNC-DETAIL-001 |
 | `Sync/Provider/RemoteTaskDetails.php` | Task details | FR-SYNC-DETAIL-001 |
 | `Sync/Provider/StatusHistoryProviderInterface.php` | Task details | FR-SYNC-DETAIL-001 |

@@ -7,12 +7,14 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\File\HostAllowlist;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
+use function array_map;
 use function is_string;
 use function preg_match;
 use function str_contains;
@@ -739,10 +741,20 @@ final class Configuration implements ConfigurationInterface
                                 ->integerNode('max_calls_per_run')->defaultValue(200)->min(0)->info('Since 1.27.0 (TB-SYNC-3): "time in status" requests a run may spend on the tasks it creates or changes (0 = never).')->end()
                             ->end()
                         ->end()
+                        ->arrayNode('comments')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_reply_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.27.0: requests for comment threads per run (0 = no replies). The threads past it are reported, and read when the comment or task next changes.')->end()
+                            ->end()
+                        ->end()
                         ->arrayNode('custom_fields')
                             ->addDefaultsIfNotSet()
                             ->children()
                                 ->enumNode('mode')->values(['typed', 'text', 'both'])->defaultValue('typed')->info('Since 1.27.0 (TB-SYNC-3): typed = board-level field definitions and typed values per task (task panel, list search); text = the 1.23 "Fields (<provider>)" task document only; both.')->end()
+                                ->arrayNode('exclude_types')
+                                    ->info('Since 1.27.0: field types never imported, e.g. [email, phone, text] to minimise personal data (RGPD Art. 5, 25). Default: none, everything is imported. What is stored of these types goes when the task is next written.')
+                                    ->enumPrototype()->values(array_map(static fn (SyncFieldType $type): string => $type->value, SyncFieldType::cases()))->end()
+                                ->end()
                             ->end()
                         ->end()
                         ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()

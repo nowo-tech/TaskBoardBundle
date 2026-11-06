@@ -58,7 +58,14 @@ final class SyncRunContext
     /** Since audit EG-L2: the most task pages of the run (0: the configured default). */
     public int $pageCap = 0;
     /** Since audit EG-I11: the task list stopped advancing; the watermark must not move past unseen tasks. */
-    public bool $pagingStopped               = false;
+    public bool $pagingStopped = false;
+
+    /**
+     * Since 1.27.0: tasks the sync itself completed on this page (a provider's done date may be applied to them).
+     *
+     * @var array<string, true>
+     */
+    public array $completedBySync            = [];
     public bool $filesBlocked                = false;
     public ?string $refusalCode              = null;
     public ?int $retryAfter                  = null;

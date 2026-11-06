@@ -435,10 +435,11 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
   (`SyncPersonResolverInterface::candidates()`, at most `candidate_limit`) and, with `sync.people.inviter` and a
   remote e-mail, *Invite by e-mail*. No remote avatar is shown (none is stored): an initial instead.
 - **Pre-fill, deny by default.** The select starts on the current mapping; else the host's suggestion (unverified
-  e-mail match); else the only candidate with the same normalised e-mail; else the only candidate whose label
-  (`UserLabel`) has the same normalised name (case, accents, spaces, `.`, `_`, `-` ignored), marked *Pre-filled by name:
-  check it*. A pre-fill is only a starting value: **nobody is mapped until a manager saves**, and only to a candidate of
+  e-mail match); else the only candidate with the same normalised e-mail. The only candidate whose label (`UserLabel`) has the
+  same normalised name (case, accents, spaces, `.`, `_`, `-` ignored) is **suggested beside a select left on *Not mapped***,
+  because a remote person chooses their own name. A pre-fill is only a starting value: **nobody is mapped until a manager saves**, and only to a candidate of
   every board of the directory. A sync still maps automatically only the 1.25 verified e-mail matches.
+- **Stale pages**: a row absent from the POST stays as it is.
 - **Save** (`board_connection_people_save`, CSRF token id `task_board_connection_people`, form
   `ConnectionPeopleFormType`, fields `p_<person id>`; any other value is a form error): rows whose value changed go
   through `TaskSyncPeopleReassigner::reassign()`, so the tasks already imported follow — creator, assignees and watchers
@@ -480,13 +481,20 @@ sniffing), and nothing remote is rendered unescaped.
   it drops is removed; there is no local editing. A re-sync writes nothing when nothing changed.
 - **Types** (`Sync\Field\SyncFieldType`): text (ClickUp `text`, `short_text`), number, money (`currency`, ISO code),
   date (`date`, with time when the field says so; UTC), dropdown (`drop_down`), labels, checkbox, url, email, phone,
-  rating (`emoji`, 1–10 stars), progress (`automatic_progress` / `manual_progress`, 0–100), people (`users`, names as
-  given by ClickUp) and relationship (`tasks`, `list_relationship`). **Any other type, and any value that does not fit
-  its type, is kept as text: nothing is dropped** (e.g. a `javascript:` URL shows as text, never as a link).
+  rating (`emoji`, 1–10 stars), progress (`automatic_progress` / `manual_progress`, 0–100), people (`users`, stored as
+  references to the directory) and relationship (`tasks`, `list_relationship`). **Any other type, and any value that does
+  not fit its type, is kept as text** (e.g. a `javascript:` URL shows as text, never as a link); the field keeps its type
+  and the view re-checks a value before drawing a link. The one exception is a malformed people value, which is left out:
+  a name goes only through the directory.
+- **Leaving types out**: `sync.custom_fields.exclude_types` (default none). Excluded types are not read into the typed
+  values or the "Fields" document; what is stored of them goes when the task is next written.
+- **Erasure and access**: see [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd). In `text` or `both` mode
+  the "Fields" document holds the values as plain text (a `users` value as raw JSON with names and e-mails), which
+  neither `anonymise()` nor the eraser reaches; prefer `typed`.
 - **Task panel**: a *Fields* section (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields(task)`): choices as
   badges (`data-color`), checkbox Yes/No, url as an external link (`rel="noopener noreferrer nofollow"`), email
   `mailto:`, rating as stars with an accessible label, progress as `<progress>`.
-- **List view**: each row carries `data-search-extra` (Twig `task_board_sync_search_text(task)`, one query per board
+- **List view**: each row carries `data-search-extra` (Twig `task_board_sync_search_texts(tasks)`, only the rows drawn, once per group
   and request): the list search finds tasks by their field values.
 - Report counters (`SyncReport::stat()`): `fields.defined`, `fields.values`, `fields.cleared`.
 
@@ -512,10 +520,11 @@ sniffing), and nothing remote is rendered unescaped.
 Kept read-only on the synced task (`task_board_sync_items.remote_meta`) and shown in the task panel's *From
 ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(task)`):
 
-- **Custom task id** (`custom_id`, e.g. `DEV-123`), also found by the list search.
+- **Custom task id** (`custom_id`, e.g. `DEV-123`, column `task_board_sync_items.custom_id`), also found by the list search.
 - **Points** (`points`).
-- **Done / closed dates** (`date_done`, `date_closed`). The done (else closed) date becomes the task's completion date
-  when the task is completed.
+- **Done / closed dates** (`date_done`, `date_closed`, 2000-2100 only). The done (else closed) date becomes the task's
+  completion date when the sync completed the task or the date has not changed here since the last sync; a date set here
+  is kept (`details.completionKept`).
 - **Dates with time**: `start_date_time` / `due_date_time` say whether start and due carry a time of day (the dates
   themselves are the task's start and due, as before; ClickUp dates are UTC instants).
 - **Location**: the folder (unless hidden) and list names.
@@ -526,17 +535,22 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
 - **Time in status** (`GET task/{id}/time_in_status`, `Sync\Provider\StatusHistoryProviderInterface`): for the tasks
   a run creates or changes, at most `sync.status_history.max_calls_per_run` per run; a table of status, since and
   minutes. When ClickUp does not serve it (404 / 410, or another lasting error such as the 400 of a disabled ClickApp,
-  counted as `statusHistory.failed`) the last one stays and the run goes on. A passing error (rate limit, timeout, 5xx,
+  counted as `statusHistory.failed`) the last one stays and the run goes on. A 403 stops the requests for the rest of the
+  run (`statusHistory.forbidden`, `statusHistory.skipped`), and the report shows `time_in_status` as *Unavailable*. A passing error (rate limit, timeout, 5xx,
   refused token) stops the run as usual and the task is read again by the next one. A task past the budget gets its
   history when it next changes, or on a full sync.
 - **Linked tasks** (`linked_tasks`, non-blocking) become `related` relations to the other task (in the Gantt), like
   dependencies; the file import maps them the same way.
 - **Archived tasks** (`sync.import_archived`, default `true`): after the active pages, the archived ones are read
   (ClickUp `archived=true`, cursor `a<n>`, at least one more request per run) and imported archived (reason `remote`).
-  They do not count against the host's limit of new tasks (`SyncLimitCheckerInterface`), as a restore does. The id scan
+  They do not count against the host's limit of new tasks (`SyncLimitCheckerInterface`), which is about active tasks;
+  every restore, by a sync or by hand, asks it. The id scan
   of deletions still reads active tasks only.
 - Watchers are mapped to host users through the People mapping (since 1.25); description images are stored and
   rewritten (since 1.23); attachments keep the provider's order.
+- **Task files**: ClickUp list rows have no `attachments`, so the task's detail (`GET task/{id}`) is read within
+  `sync.watchers.max_detail_calls_per_run`. A task past the budget is counted as `attachments.unread` and shown as *Not
+  read*. A task already read is skipped until it changes, so repeated full syncs get through a large board.
 
 ### Completeness report
 
@@ -544,6 +558,8 @@ After each run the connection page lists, per key of the provider's task answers
 tasks and whether it is imported, skipped (with the provider's reason: not supported, not needed, internal) or **Not
 imported yet** (a key the provider does not declare; listed in the summary line). Every task the run read counts,
 written or not; an incremental run reads the tasks changed since the last one, so a full sync gives the whole picture.
+What the run could not read is listed above the rest: `attachments` and `comment_replies` as *Not read* (request budget),
+`time_in_status` as *Unavailable* (the provider refused the token).
 The provider declares its keys with `Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the
 run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`, at most 200 keys per run:
 `completeness.keys`). Only keys and counts are stored, never values.

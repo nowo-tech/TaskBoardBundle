@@ -37,10 +37,12 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
+use Nowo\TaskBoardBundle\Sync\Provider\ReplyBudget;
 use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\StatusHistoryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ThreadedCommentProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
@@ -64,6 +66,7 @@ use function count;
 use function ctype_digit;
 use function hash;
 use function implode;
+use function in_array;
 use function intdiv;
 use function is_array;
 use function is_bool;
@@ -100,7 +103,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -149,6 +152,11 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         'attachments'            => 'imported', 'subtasks' => 'imported', 'recurrence' => 'imported',
     ];
 
+    /** Since 1.27.0 (audit GW-L7): 2000-01-01 and 2100-01-01 UTC. */
+    private const MIN_DATE = 946_684_800;
+
+    private const MAX_DATE = 4_102_444_800;
+
     /** Since 1.25: the most checklist items one task gives (all checklists together). */
     private const MAX_CHECKLIST_ITEMS = 1000;
 
@@ -179,6 +187,12 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         private ClickUpCustomFieldParser $fieldParser = new ClickUpCustomFieldParser(),
         // Since 1.27.0 (TB-SYNC-3): archived tasks are read too (a second pass with archived=true) and imported archived.
         private bool $includeArchived = false,
+        /**
+         * Since 1.27.0 (audit GW-M3): `sync.custom_fields.exclude_types`, also left out of the "Fields" document.
+         *
+         * @var list<string>
+         */
+        private array $excludedFieldTypes = [],
     ) {
     }
 
@@ -298,6 +312,11 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
 
     public function fetchComments(ProviderCredential $credential, string $taskId): iterable
     {
+        return $this->fetchCommentsWithin($credential, $taskId, new ReplyBudget($this->maxComments));
+    }
+
+    public function fetchCommentsWithin(ProviderCredential $credential, string $taskId, ReplyBudget $budget): iterable
+    {
         $path     = sprintf('task/%s/comment', $this->checkId($taskId));
         $comments = [];
         $replies  = [];
@@ -328,19 +347,25 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
 
         // The API answers newest first; each thread follows its comment, oldest reply first.
         $threaded = [];
-        $budget   = $this->maxComments - count($comments);
+        $left     = $this->maxComments - count($comments);
         foreach (array_reverse($comments) as $comment) {
             $threaded[] = $comment;
-            if ($budget <= 0 || !isset($replies[$comment->id])) {
+            if ($left <= 0 || !isset($replies[$comment->id]) || !$budget->take()) {
                 continue;
             }
+            // Audit GW-L6: a request that brings no reply also counts against the task's cap.
+            // Audit GW-I9: a comment deleted meanwhile (404) has no thread; it does not fail the run.
             // Unconfirmed against the live API (GET comment/{id}/reply); validated by Beacon after deploy.
             $thread = [];
-            foreach ($this->items($this->get($credential, sprintf('comment/%s/reply', $this->checkId($comment->id))), 'comments') as $row) {
+            $rows   = $this->items($this->getOrNull($credential, sprintf('comment/%s/reply', $this->checkId($comment->id))) ?? [], 'comments');
+            if ($rows === []) {
+                --$left;
+            }
+            foreach ($rows as $row) {
                 $reply = $this->toRemoteComment($row, $comment->id);
-                if ($reply instanceof RemoteComment && $budget > 0) {
+                if ($reply instanceof RemoteComment && $left > 0) {
                     $thread[] = $reply;
-                    --$budget;
+                    --$left;
                 }
             }
             usort($thread, static fn (RemoteComment $a, RemoteComment $b): int => $a->createdAt <=> $b->createdAt);
@@ -705,6 +730,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             customFields: $this->fieldParser->parse($row['custom_fields'] ?? null),
             details: $this->details($row),
             presentKeys: $this->presentKeys($row),
+            attachmentsKnown: array_key_exists('attachments', $row),
         );
     }
 
@@ -850,7 +876,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         foreach ($this->items($row, 'custom_fields') as $field) {
             $name  = $this->sanitizer->line($this->stringOf($field['name'] ?? null), 120);
             $value = $field['value'] ?? null;
-            if ($name === '' || $value === null || $value === '' || $value === []) {
+            if ($name === '' || $value === null || $value === '' || $value === [] || in_array($this->fieldParser->typeOf($this->stringOf($field['type'] ?? null))->value, $this->excludedFieldTypes, true)) {
                 continue;
             }
             $text    = is_bool($value) ? ($value ? 'yes' : 'no') : (is_scalar($value) ? (string) $value : (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -1458,8 +1484,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         if ($value === '' || !ctype_digit($value) || strlen($value) > 15) {
             return null;
         }
+        // Audit GW-L7: a date outside 2000-2100 is not one (MySQL refuses some, SQLite misreads them).
+        $seconds = strlen($value) > 3 ? (int) substr($value, 0, -3) : 0;
 
-        return new DateTimeImmutable('@' . (strlen($value) > 3 ? substr($value, 0, -3) : '0'));
+        return $seconds >= self::MIN_DATE && $seconds < self::MAX_DATE ? new DateTimeImmutable('@' . $seconds) : null;
     }
 
     private function stringOf(mixed $value): string
