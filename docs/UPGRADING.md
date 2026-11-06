@@ -132,6 +132,12 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### ClickUp comments (TB-SYNC-4)
+
+No action. Comments written or edited after the upgrade keep their lists, code blocks and mentions; a full sync rewrites
+those already imported, unless they were edited here. Comment bodies are compared by hash, so the first full sync after
+the upgrade counts every comment with such formatting as updated.
+
 ## To 1.27.0
 
 From **1.26.3**:

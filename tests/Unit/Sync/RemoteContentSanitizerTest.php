@@ -164,4 +164,17 @@ final class RemoteContentSanitizerTest extends TestCase
             || preg_match('/(href|src)\s*=\s*"\s*(javascript|vbscript|data):/i', $html) === 1
             || preg_match('/<[a-z][^>]*\son[a-z]+\s*=/i', $html) === 1;
     }
+
+    /**
+     * Since 1.28.0 (TB-SYNC-4, `markdown_description` of real tasks): a GFM table stays a table; an HTML-like tag stays
+     * visible as text, and in a table it does not break the cell.
+     */
+    public function testTablesAndHtmlLikeTagsOfADescription(): void
+    {
+        $sanitizer = new RemoteContentSanitizer();
+        $table     = "| A | B |\n| --- | --- |\n| 1 | 2 |";
+        self::assertSame($table, $sanitizer->markdown($table, 1000));
+        self::assertSame("| A |\n| --- |\n| \\<u>x\\</u>\\<br> |", $sanitizer->markdown("| A |\n| --- |\n| <u>x</u><br> |", 1000));
+        self::assertSame('Array\\<string> and \\<div class="x">y\\</div>', $sanitizer->markdown('Array<string> and <div class="x">y</div>', 1000));
+    }
 }

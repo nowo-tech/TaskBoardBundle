@@ -78,6 +78,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **ClickUp comments keep their style (TB-SYNC-4).** `Sync\Provider\ClickUp\ClickUpCommentRenderer` replaces the private
+  `segmentsToMarkdown()`: lists (bullet, ordered, checked, unchecked, toggled) nested by `indent`, fenced code blocks,
+  `strike`, `link_mention`, `task_mention`, `emoticon`, and other typed segments with a target. ClickUp documents a Quill
+  delta (block attributes on the line feed); the attribute on the text and flat values are read too, since live data has
+  not been checked. `underline`, `color` and `background-color` keep the text, not the style: the host escapes raw HTML.
+  Every link and image goes through `RemoteContentSanitizer::isSafeUrl()`; a refused target leaves the label as text.
+  A comment whose segments give no text falls back to `comment_text`.
+
 ## [1.27.0] - 2026-11-06
 
 ### Added
