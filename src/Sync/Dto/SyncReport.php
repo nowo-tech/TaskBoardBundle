@@ -83,6 +83,12 @@ final readonly class SyncReport
         return $this->stats[$name] ?? 0;
     }
 
+    /** Since 1.26.3: tasks handled so far (written + skipped), the numerator of the progress bar. */
+    public function processed(): int
+    {
+        return $this->written() + $this->skipped();
+    }
+
     public function skipped(): int
     {
         return $this->skips->total();

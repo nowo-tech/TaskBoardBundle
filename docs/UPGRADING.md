@@ -128,6 +128,11 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+No schema change; the default output is unchanged. The connection badge data gains `activeRunId`, `progressUrl`,
+`total`, `processed` and `pollInterval`, and the option `sync.badge.progress` (default `false`) shows a determinate
+progress bar in the bundle's badge. A host with its own `templates.connection_badge` can wire the bar itself
+([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
+
 ## To 1.26.2
 
 From **1.26.1**:

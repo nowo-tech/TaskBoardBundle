@@ -2,6 +2,9 @@
     Since 1.23: the provider connection in the board header (board, list and Gantt views). sync = the result of
     nowo_task_board_connection(board): null shows nothing. Override with templates.connection_badge.
     Since 1.25.2: sync.badge.connect_link false = an unlinked board shows nothing (no Connect link, no empty strip).
+    Since 1.26.3: sync.activeRunId, sync.progressUrl (managers only), sync.total, sync.processed, sync.pollInterval;
+    with sync.badge.progress (sync.progress) the running run shows a <progress> driven by the
+    nowo-task-board-sync-progress controller (polite live region, at most one update every 5 s, *Show result* at the end).
 #}
 {% if sync and (sync.linked or (nowo_task_board_sync_badge_connect_link ?? true)) %}
     <div class="nowo-task-sync-badge d-flex flex-wrap align-items-center gap-2 mb-3" data-testid="nowo-task-sync-badge">
@@ -9,6 +12,21 @@
             <span class="badge bg-azure-lt nowo-task-sync-badge__label">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plug-connected'}) }}{{ sync.providerLabelKey|trans({}, 'NowoTaskBoardBundle') }} · {{ sync.containerLabel }}
             </span>
+            {% if sync.running and (sync.progress ?? false) and (sync.progressUrl ?? null) %}
+                <span class="nowo-task-sync-badge__progress d-inline-flex flex-wrap align-items-center gap-2"
+                    data-controller="nowo-task-board-sync-progress"
+                    data-nowo-task-board-sync-progress-url-value="{{ sync.progressUrl }}"
+                    data-nowo-task-board-sync-progress-interval-value="{{ sync.pollInterval ?? 2000 }}"
+                    data-testid="nowo-task-sync-badge-progress">
+                    {% if sync.total %}
+                        <progress class="nowo-task-sync__bar" max="{{ sync.total }}" value="{{ min(sync.processed, sync.total) }}" aria-label="{{ 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') }}" data-nowo-task-board-sync-progress-target="bar"></progress>
+                    {% else %}
+                        <progress class="nowo-task-sync__bar" aria-label="{{ 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') }}" data-nowo-task-board-sync-progress-target="bar"></progress>
+                    {% endif %}
+                    <span class="text-secondary small" role="status" aria-live="polite" aria-atomic="true" data-nowo-task-board-sync-progress-target="status">{{ 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    <a class="small" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" hidden data-nowo-task-board-sync-progress-target="done">{{ 'task_board.sync.progress.show_result'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                </span>
+            {% else %}
             <span class="text-secondary small">
                 {% if sync.running %}
                     {{ 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') }}
@@ -18,6 +36,7 @@
                     {{ 'task_board.sync.status.never'|trans({}, 'NowoTaskBoardBundle') }}
                 {% endif %}
             </span>
+            {% endif %}
             {% if sync.canManage %}
                 {{ form_start(sync.refreshForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
                     <button type="submit" class="btn btn-sm btn-outline-primary" data-testid="nowo-task-sync-header-refresh"{% if sync.running %} disabled aria-disabled="true"{% endif %}>

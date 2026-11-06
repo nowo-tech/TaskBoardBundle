@@ -710,6 +710,7 @@ final class Configuration implements ConfigurationInterface
                             ->addDefaultsIfNotSet()
                             ->children()
                                 ->booleanNode('connect_link')->defaultTrue()->info('Since 1.25.2: false = the connection badge shows nothing for an unlinked board (no "Connect provider" link, no empty strip); a linked board keeps its badge.')->end()
+                                ->booleanNode('progress')->defaultFalse()->info('Since 1.26.3: true = the bundle\'s own connection badge shows a determinate progress bar of the running run (polling board_connection_progress, managers only). The badge data (activeRunId, progressUrl, total, processed, pollInterval) is given either way, for a host template.')->end()
                             ->end()
                         ->end()
                         // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.

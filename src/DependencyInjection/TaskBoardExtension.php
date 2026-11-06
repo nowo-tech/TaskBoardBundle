@@ -230,6 +230,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.container_cache_ttl', $sync['container_cache_ttl']);
         $container->setParameter('nowo_task_board.sync.inline_slice_pages', $sync['inline_slice_pages']);
         $container->setParameter('nowo_task_board.sync.progress.poll_interval_ms', $sync['progress']['poll_interval_ms']);
+        $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
 
         $loader->load('services_sync.yaml');
         $container->registerForAutoconfiguration(SyncTaskProviderInterface::class)->addTag('nowo_task_board.task_provider');

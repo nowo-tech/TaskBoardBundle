@@ -76,6 +76,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The running run in the header badge (TB-SYNC-1).** `nowo_task_board_connection(board)` (the board, list and Gantt
+  header badge) also returns `activeRunId`, `progressUrl` (route `board_connection_progress`, only for users who may
+  manage the connection), the run's `total` / `processed` and `pollInterval`, so a host badge can drive the
+  `nowo-task-board-sync-progress` controller: a determinate bar, a polite live region (at most one update every 5 s) and
+  *Show the result* when the run ends, without reloading. New option `sync.badge.progress` (default `false`): `true`
+  renders that bar in the bundle's own badge; the default output is unchanged. `SyncReport::processed()` (written +
+  skipped) is the bar's numerator, also used by the progress endpoint.
+
 ## [1.26.2] - 2026-11-06
 
 The Import subtasks dialog follows the import permission (ACTION_IMPORT_TASKS), as the import action already did.

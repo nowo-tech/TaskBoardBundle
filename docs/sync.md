@@ -235,7 +235,9 @@ rate-limited (resumable), 4 refused by a limit, 5 busy. It never prints a token 
   sync time and, for managers, *Refresh from ClickUp* and *Connection* (block `nowo_task_board_connection`, template
   `_connection_badge.html.twig`). Readers see the badge only. Since 1.25.2, `sync.badge.connect_link: false` drops
   the *Connect provider* link: an unlinked board shows nothing in the header (the connection page stays reachable at
-  `board_connection` for the host to link from elsewhere); a linked board is unchanged.
+  `board_connection` for the host to link from elsewhere); a linked board is unchanged. Since 1.26.3 the badge data
+  carries the running run (`activeRunId`, `progressUrl` for managers, `total`, `processed`, `pollInterval`) and
+  `sync.badge.progress: true` shows a determinate bar driven by the progress endpoint ([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
 - The connection page (`board_connection`, template `templates.connection`): provider, stored connection (with a link
   to the host's credential form), the container browser, the import options; once linked, status, progress, history,
   *Refresh*, the mass-archive confirmation and *Unlink*.

@@ -315,7 +315,7 @@ final class TaskBoardConnectionController extends AbstractController
             'terminal'  => $run->getStatus()->isTerminal(),
             'pagesDone' => $report->pagesDone ?? 0,
             'total'     => $report?->total,
-            'processed' => $report instanceof SyncReport ? $report->created + $report->updated + $report->unchanged + $report->skipped() : 0,
+            'processed' => $report?->processed() ?? 0,
             'created'   => $report->created ?? 0,
             'updated'   => $report->updated ?? 0,
             'archived'  => $report->archived ?? 0,
