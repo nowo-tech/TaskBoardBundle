@@ -55,6 +55,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -130,6 +131,8 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly bool $peopleStep = false,
         private readonly int $peoplePageSize = 50,
         private readonly bool $peopleBulkFormer = false,
+        // Since 1.28.0: the bundle's own link page offers `unmatchedColumns` (it is always accepted when posted).
+        private readonly bool $unmatchedColumnsChoice = false,
     ) {
     }
 
@@ -177,7 +180,7 @@ final class TaskBoardConnectionController extends AbstractController
             'choices'           => $choices,
             'choice'            => $choice,
             'credentialFormUrl' => $provider instanceof TaskProviderInterface ? $this->credentialFormUrl($board, $provider) : null,
-            'linkForm'          => $linkForm?->createView(),
+            'linkForm'          => $this->linkFormView($linkForm),
             'tree'              => $tree,
             'levelForms'        => array_map(fn (ContainerPage $level): FormView => $this->levelForm($level)->createView(), $tree ?? []),
             'treeError'         => $treeError,
@@ -271,7 +274,7 @@ final class TaskBoardConnectionController extends AbstractController
         if ($this->store->findConnection($board) instanceof TaskBoardConnection) {
             return $this->backToPage($boardId);
         }
-        /** @var array{container: string, createMissingColumns: bool, fallbackColumnId: string|null, importComments: bool, importAttachments: bool, archiveRemoteDeletions: bool} $values */
+        /** @var array{container: string, createMissingColumns: bool, fallbackColumnId: string|null, unmatchedColumns: string|null, importComments: bool, importAttachments: bool, archiveRemoteDeletions: bool} $values */
         $values     = $form->getData();
         $credential = $this->credentials->credentialFor($board, $choice->ref);
         $container  = null;
@@ -296,7 +299,8 @@ final class TaskBoardConnectionController extends AbstractController
             'importComments'         => (bool) $values['importComments'],
             'importAttachments'      => (bool) $values['importAttachments'],
             'archiveRemoteDeletions' => (bool) $values['archiveRemoteDeletions'],
-        ]);
+            // Since 1.28.0: only the non-default choice is stored.
+        ] + ($values['unmatchedColumns'] === TaskBoardConnection::UNMATCHED_DELETE ? ['unmatchedColumns' => TaskBoardConnection::UNMATCHED_DELETE] : []));
         $this->logWrite('sync_link', ['board_id' => $boardId, 'provider' => $provider->id()]);
         if ($this->peopleStepScan($board, $connection, $provider, $credential, $user)) {
             // Since 1.27.0 (TB-SYNC-2): the People step comes first; its save starts the import.
@@ -672,6 +676,22 @@ final class TaskBoardConnectionController extends AbstractController
         return $page instanceof ContainerPage ? $page : $load();
     }
 
+    /**
+     * @param FormInterface<array<string, mixed>>|null $form
+     */
+    private function linkFormView(?FormInterface $form): ?FormView
+    {
+        $view = $form?->createView();
+        if ($view instanceof FormView && !$this->unmatchedColumnsChoice) {
+            $view['unmatchedColumns']->setRendered();
+        }
+
+        return $view;
+    }
+
+    /**
+     * @return FormInterface<array<string, mixed>>
+     */
     private function linkForm(TaskBoard $board, TaskProviderInterface $provider, ConnectionChoice $choice): FormInterface
     {
         $columns = [];
@@ -687,6 +707,7 @@ final class TaskBoardConnectionController extends AbstractController
             'provider'               => $provider->id(),
             'connection'             => $choice->ref,
             'createMissingColumns'   => true,
+            'unmatchedColumns'       => TaskBoardConnection::UNMATCHED_KEEP,
             'importComments'         => true,
             'importAttachments'      => true,
             'archiveRemoteDeletions' => true,

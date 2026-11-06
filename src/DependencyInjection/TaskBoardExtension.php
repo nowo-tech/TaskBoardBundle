@@ -238,6 +238,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
         $container->setParameter('nowo_task_board.sync.people.step', (bool) $sync['people']['step']);
         $container->setParameter('nowo_task_board.sync.people_bulk_former', (bool) $sync['people_bulk_former']);
+        $container->setParameter('nowo_task_board.sync.unmatched_columns_choice', (bool) $sync['unmatched_columns_choice']);
         $container->setParameter('nowo_task_board.sync.people.page_size', (int) $sync['people']['page_size']);
 
         $loader->load('services_sync.yaml');

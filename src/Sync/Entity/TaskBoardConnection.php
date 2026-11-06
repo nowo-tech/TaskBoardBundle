@@ -20,6 +20,8 @@ use function is_array;
 use function is_bool;
 use function is_string;
 
+use const DATE_ATOM;
+
 /**
  * Since 1.23: the link of a board to one remote list (one per board). It holds the host's opaque connection
  * reference — never a token.
@@ -29,6 +31,15 @@ use function is_string;
 #[ORM\UniqueConstraint(name: 'uniq_task_board_connections_board', columns: ['board_id'])]
 class TaskBoardConnection
 {
+    /** Since 1.28.0: values of the option `unmatchedColumns`. */
+    public const UNMATCHED_KEEP = 'keep';
+
+    public const UNMATCHED_DELETE = 'delete';
+
+    private const OPTION_UNMATCHED = 'unmatchedColumns';
+
+    private const OPTION_UNMATCHED_RESOLVED = 'unmatchedColumnsResolvedAt';
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -243,6 +254,25 @@ class TaskBoardConnection
         $value = $this->options[$name] ?? null;
 
         return is_bool($value) ? $value : $default;
+    }
+
+    /** Since 1.28.0: `keep` (default, and for anything else) or `delete`: what the first import does with unmatched columns. */
+    public function getUnmatchedColumns(): string
+    {
+        return ($this->options[self::OPTION_UNMATCHED] ?? null) === self::UNMATCHED_DELETE ? self::UNMATCHED_DELETE : self::UNMATCHED_KEEP;
+    }
+
+    /** Since 1.28.0: the choice has been acted on; later syncs never delete a column. */
+    public function isUnmatchedColumnsResolved(): bool
+    {
+        return is_string($this->options[self::OPTION_UNMATCHED_RESOLVED] ?? null);
+    }
+
+    public function markUnmatchedColumnsResolved(DateTimeImmutable $at): self
+    {
+        $this->options[self::OPTION_UNMATCHED_RESOLVED] = $at->format(DATE_ATOM);
+
+        return $this;
     }
 
     public function fallbackColumnId(): ?string

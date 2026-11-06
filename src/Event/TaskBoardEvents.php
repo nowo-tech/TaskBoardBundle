@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteArchivedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\TaskRemoteRestoredEvent;
+use Nowo\TaskBoardBundle\Sync\Event\UnmatchedColumnsResolvedEvent;
 
 /**
  * Event names for TaskBoardBundle extensibility hooks.
@@ -119,4 +120,7 @@ final class TaskBoardEvents
 
     /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
     public const BOARD_DELETED = 'nowo_task_board.board_deleted';
+
+    /** Since 1.28.0: {@see UnmatchedColumnsResolvedEvent}. */
+    public const SYNC_UNMATCHED_COLUMNS_RESOLVED = 'nowo_task_board.sync_unmatched_columns_resolved';
 }
