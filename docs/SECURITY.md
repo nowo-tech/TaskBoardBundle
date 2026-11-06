@@ -144,7 +144,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low, 2026-11-06, re-verified at `0009885` (Appendix GW). No open Critical, High or Medium.**
+**AI security audit (REQ-SEC-004): Pass (good) / Low, 2026-11-06, re-verified at `0009885` (Appendix GW). No open Critical, High or Medium.** The 1.28.0 changes (TB-SYNC-4): re-verification pending.
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
@@ -154,9 +154,9 @@ What the bundle does and does not do:
 
 | Duty | State |
 | --- | --- |
-| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). Changing `kernel.secret` makes erased values importable again if the provider still has them: a host that must keep a value out keeps its erasure log and runs it again after rotating. In `text` and `both` modes the eraser does not reach the *Fields* document. Comment and task files are named in `TaskErasedEvent::$attachmentRefs` on deletion, also after an unlink (GWd-M1), and the host deletes them. |
+| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). Changing `kernel.secret` makes erased values importable again if the provider still has them: a host that must keep a value out keeps its erasure log and runs it again after rotating. Since 1.28.0 the eraser also removes the lines of the *Fields* document in `text` and `both` modes (see the residual below). |
 | Blocking, Art. 32 LOPDGDD | The bundle has no blocking state. Erasure in Spain implies blocking for the limitation periods: the host keeps this outside and defines its policy. |
-| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. **Not in any export:** comment bodies and task text, nor the links from a person to the comments they wrote, the tasks they created and the tasks they are assigned to or watch (`TaskSyncComment`, `TaskSyncItem`, `TaskSyncMember`); the host adds them if it must. |
+| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. Since 1.28.0 `exportPerson()` also names the comments they wrote, the tasks they created and the tasks they are assigned to or watch, by id. **Not in any export:** comment bodies and task text; the host adds them if it must. |
 | Minimisation and by default, Art. 5(1)(c) and 25 RGPD | See the default above. |
 | Storage limitation, Art. 5(1)(e) RGPD | After an unlink, tasks, their field values and the rows that track stored files stay; a later deletion of the task or board names the files (GWd-M1). Run `eraseBoard()` when the host's retention rule asks for it. |
 | Information, Art. 14 RGPD; Art. 11 LOPDGDD | Data arrives indirectly from the provider. The people concerned, who may be customers and not staff, must be informed within a month or an exception documented. Host side. |
@@ -178,10 +178,7 @@ manager of the board, or by a manager alone when the author is gone; the removal
 
 Accepted residuals (audit GW, all pre-existing unless noted):
 
-- Low (since 1.27.0). In `text` and `both` modes the *Fields* document keeps values that `anonymise()` and the eraser do not
-  reach; `users` values there hold names, no e-mails.
-- Low. Deleting a user deletes their rows in the task history on every task (`TaskChangeHistory.user` is `ON DELETE CASCADE`), including `time_removed`. The time itself stays, so the rule on tracked time holds, but the record of a removal does not outlive its author's account.
-- Low (since 1.27.0). `exportPerson()` leaves out the links listed above.
+- Low (since 1.27.0). In `text` and `both` modes `anonymise()` does not reach the *Fields* document, and a re-sync writes it again from what the provider still has, since no suppression record exists for a line: clear the value at the source. `eraseBoard()` with types cannot tell a type from a line, so `text` mode is only erased as a whole. `users` values there hold names, no e-mails.
 - Host note: a `BOARD_ACCESS_CHECK` listener that grants every action makes every editor a board manager, including for removing another user's time entry.
 - `TimeTrackBundle` entries (`TimeEntry.user`) are that bundle's own; this rule and this audit do not reach them.
 - CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).

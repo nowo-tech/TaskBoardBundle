@@ -8,6 +8,7 @@ use DateInterval;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -193,7 +194,7 @@ final readonly class TaskSyncPeopleReassigner
     {
         $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $counts = [];
-        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName']] as [$class, $field, $name]) {
+        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName'], [TaskChangeHistory::class, 'user', 'userName']] as [$class, $field, $name]) {
             // Rows written before 1.25 have no snapshot yet: they get the current name first.
             $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
                 ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
@@ -210,6 +211,11 @@ final readonly class TaskSyncPeopleReassigner
         foreach ([...$map[TaskBoard::class] ?? [], ...$map[TaskDocument::class] ?? []] as $row) {
             if (($row instanceof TaskBoard || $row instanceof TaskDocument) && SyncUser::same($row->getCreator(), $user)) {
                 $row->detachCreator($forgetName);
+            }
+        }
+        foreach ($map[TaskChangeHistory::class] ?? [] as $entry) {
+            if ($entry instanceof TaskChangeHistory && SyncUser::same($entry->getUser(), $user)) {
+                $entry->detachUser($forgetName);
             }
         }
         foreach ($map[TaskComment::class] ?? [] as $comment) {

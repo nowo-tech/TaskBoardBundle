@@ -7,18 +7,27 @@ namespace Nowo\TaskBoardBundle\Sync\Field;
 use Doctrine\ORM\EntityManagerInterface;
 use Generator;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
+use function array_filter;
+use function array_values;
 use function count;
+use function explode;
+use function implode;
 use function in_array;
 use function is_array;
 use function json_encode;
 use function mb_stripos;
 use function mb_strlen;
+use function preg_grep;
+use function str_ends_with;
+use function str_starts_with;
 
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -53,7 +62,10 @@ final readonly class SyncFieldValueEraser
      */
     public function eraseByValue(string $value, ?TaskBoard $board): int
     {
-        return $this->eraseRows($this->matching($value, $board));
+        $erased = $this->eraseRows($this->matching($value, $board));
+
+        // Audit GWd-L4: a line left in a "Fields" document with no row behind it (`text` mode) counts as one value.
+        return $erased + $this->eraseDocuments($board, static fn (string $line): bool => mb_stripos($line, $value) !== false);
     }
 
     /**
@@ -65,7 +77,10 @@ final readonly class SyncFieldValueEraser
      */
     public function eraseBoard(TaskBoard $board, ?array $types = null): int
     {
-        return $this->eraseRows($this->rows($board, $types));
+        $erased = $this->eraseRows($this->rows($board, $types));
+
+        // Audit GWd-L4: a type cannot be told from a document's line, so `text` mode is only erased as a whole.
+        return $erased + ($types === null ? $this->eraseDocuments($board, static fn (string $line): bool => true) : 0);
     }
 
     /**
@@ -116,10 +131,64 @@ final readonly class SyncFieldValueEraser
             $value = $this->entityManager->find(TaskSyncFieldValue::class, $row['id']);
             if ($value instanceof TaskSyncFieldValue) {
                 $value->erase($this->suppression->record($value->getValue(), $value->getText()), $this->clock->now());
+                // Audit GWd-L4: in `both` mode the same field is a line of the "Fields" document.
+                $this->eraseDocumentLines($value->getTask(), static fn (string $line): bool => str_starts_with($line, '- **' . $value->getField()->getName() . '**: '));
                 ++$erased;
             }
         }
         $this->entityManager->flush();
+
+        return $erased;
+    }
+
+    /**
+     * Audit GWd-L4: the lines of a task's "Fields" document that match. Recognised by its shape, so a document somebody
+     * wrote is never touched: a title ending in "(<provider>)" and nothing but `- **name**: value` lines.
+     *
+     * @param callable(string): bool $matches
+     */
+    private function eraseDocumentLines(Task $task, callable $matches): int
+    {
+        $erased = 0;
+        foreach ($task->getDocuments() as $document) {
+            $lines = explode("\n", $document->getContent());
+            if (!str_ends_with($document->getTitle(), ')') || $lines !== preg_grep('/^- \*\*.+?\*\*: /', $lines)) {
+                continue;
+            }
+            $kept = array_values(array_filter($lines, static fn (string $line): bool => !$matches($line)));
+            if ($kept !== $lines) {
+                $document->setContent(implode("\n", $kept));
+                $erased += count($lines) - count($kept);
+            }
+        }
+
+        return $erased;
+    }
+
+    /**
+     * Audit GWd-L4: `text` mode writes no field rows: the document is the only copy.
+     *
+     * @param callable(string): bool $matches
+     */
+    private function eraseDocuments(?TaskBoard $board, callable $matches): int
+    {
+        $erased = 0;
+        $after  = '';
+        do {
+            $query = $this->entityManager->createQueryBuilder()->select('t')->from(Task::class, 't')->join(TaskDocument::class, 'd', 'WITH', 'd.task = t')
+                ->where('t.id > :after')->andWhere('d.content LIKE :shape')->setParameter('after', $after)->setParameter('shape', '- **%')
+                ->groupBy('t.id')->orderBy('t.id', 'ASC')->setMaxResults(self::PAGE);
+            if ($board instanceof TaskBoard) {
+                $query->andWhere('t.board = :board')->setParameter('board', $board);
+            }
+            /** @var list<Task> $tasks */
+            $tasks = $query->getQuery()->getResult();
+            foreach ($tasks as $task) {
+                $after = $task->getId();
+                $erased += $this->eraseDocumentLines($task, $matches);
+            }
+            $this->entityManager->flush();
+        } while (count($tasks) === self::PAGE);
 
         return $erased;
     }

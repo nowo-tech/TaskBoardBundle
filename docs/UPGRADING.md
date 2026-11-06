@@ -170,6 +170,33 @@ Two options to decide on, both off by default:
 - `sync.full_sync_rereads_details`: if a new file turns out not to move ClickUp's `date_updated`, set it. Each full sync then spends the detail budget from the
   first tasks on, so raise `sync.watchers.max_detail_calls_per_run` above the board's size.
 
+### Schema change for every host: task history outlives its user (audit GWf-L1)
+
+`task_board_task_change_history.user_id` becomes nullable with `ON DELETE SET NULL`, and `user_name` keeps the name. Replace `app_user` with your user table and `INT` with its id
+type; the foreign key name comes from `doctrine:migrations:diff`.
+
+MySQL 8 / MariaDB:
+
+```sql
+ALTER TABLE task_board_task_change_history DROP FOREIGN KEY FK_45E6EE27A76ED395;
+ALTER TABLE task_board_task_change_history ADD user_name VARCHAR(180) DEFAULT NULL, CHANGE user_id user_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ADD CONSTRAINT FK_45E6EE27A76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_change_history DROP CONSTRAINT FK_45E6EE27A76ED395;
+ALTER TABLE task_board_task_change_history ADD user_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ALTER user_id DROP NOT NULL;
+ALTER TABLE task_board_task_change_history ADD CONSTRAINT FK_45E6EE27A76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+```
+
+SQLite rebuilds the table; `doctrine:schema:update --dump-sql` gives the statements for yours.
+
+After the DDL, call `TaskTimeEntrySnapshotPurger::backfillUserNames()` until it returns 0, so that older rows also have a name. `TaskChangeHistory::getUser()` now returns `?object`: host code
+reading it must handle null and use `getUserName()`. Rollback: put back `NOT NULL` and `CASCADE` after handling the rows with a null user, and drop `user_name`.
+
 ## To 1.27.0
 
 From **1.26.3**:
@@ -714,8 +741,7 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
 - **Account erasure: required order.** Since this release the creator of a board, a task and a task document and the
   author of a comment are `ON DELETE SET NULL` with a name snapshot (audits FP-M1 / FP-L7): deleting a user deletes
   no board, task, subtask, document or comment. Still deleted with the user (by `ON DELETE CASCADE`): their task and
-  team **memberships** (the rows, not the tasks), their **change-history entries**, and their **own manual time
-  entries** (`TaskTimeEntry.user`; time logged by others on their tasks stays). `detachUser()` detaches every board,
+  team **memberships** (the rows, not the tasks). Since 1.27.0 their manual time entries stay, and since 1.28.0 their change-history entries stay too. `detachUser()` detaches every board,
   task, document and comment of the user, also on unlinked boards and for content never synced; with
   `anonymise: true` it also clears the name snapshots. **A user deleted without `detachUser()` keeps their name
   (by default the e-mail, from `UserLabel`) in `creator_name` / `author_name`** (audit FP-I11): run `detachUser()`
@@ -727,8 +753,9 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
      it is done: creator, comments and sync members move off the user while the user row still exists; then every
      board, task, document and comment of the user is detached (counts in `ReassignReport::$boards`, `$documents`,
      `$creators`, `$comments`). Hosts without `sync.enabled` rely on `ON DELETE SET NULL` (names kept).
-  3. TimeTrack: `ImportedTimeEntryWriter::removeForUser($source, $user)` per source (TimeTrack ≥ 1.11), then the other
-     TimeTrack erasers.
+  3. TimeTrack ≥ 1.15: `FormerPersonTimeEntries::anonymiseUser($user)` keeps the time and clears the person, or `release($user, $name)` keeps it under a
+     name. Never call `ImportedTimeEntryWriter::removeForUser()` here: it deletes tracked time, which the owner rule forbids (corrected in 1.28.0). Below TimeTrack 1.15, leave
+     the entries to that bundle's own rule. Then the other TimeTrack erasers.
   4. The host's other erasers.
   5. The user delete last.
   `detachUser()` is idempotent: calling it from both the token eraser and the account chain is safe.
