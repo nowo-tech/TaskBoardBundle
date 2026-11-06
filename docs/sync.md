@@ -569,7 +569,7 @@ run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9
 `completeness.keys`). Only keys and counts are stored, never values.
 
 **After upgrading**, run one full sync per linked board so that existing tasks get all of this
-([UPGRADING](UPGRADING.md#unreleased)).
+([UPGRADING](UPGRADING.md#to-1270)).
 
 ### Time entries one by one
 

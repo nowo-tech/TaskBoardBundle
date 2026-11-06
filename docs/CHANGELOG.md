@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.27.0] - 2026-11-06](#1270---2026-11-06)
 - [[1.26.3] - 2026-11-06](#1263---2026-11-06)
 - [[1.26.2] - 2026-11-06](#1262---2026-11-06)
 - [[1.26.1] - 2026-11-06](#1261---2026-11-06)
@@ -77,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-11-06
+
 ### Added
 
 - **Typed custom fields (TB-SYNC-3).** Board-level definitions (`task_board_sync_fields`) and typed values per task
@@ -109,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it read (written or not, at most 200 keys per run) with a value: imported, skipped (reason) or *Not imported yet*
   (`Sync\Provider\FieldCoverageProviderInterface`, `_connection_completeness.html.twig`).
 - **Schema change with `sync.enabled` only**: two new tables, four nullable columns on `task_board_sync_comments` and `task_board_sync_items.remote_meta`
-  (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#unreleased)).
+  (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#to-1270)).
 
 - **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
   `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
@@ -1644,7 +1647,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.26.3...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.27.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
