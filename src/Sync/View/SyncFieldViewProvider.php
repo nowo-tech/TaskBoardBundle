@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -82,6 +83,17 @@ final class SyncFieldViewProvider implements ResetInterface
             $this->search[$boardId] = [];
             foreach ($rows as $row) {
                 $this->search[$boardId][(string) $row['taskId']][] = $row['text'];
+            }
+            // Since 1.27.0: the provider's custom task id (e.g. "DEV-123") is searchable too.
+            /** @var list<array{taskId: string|null, meta: array<string, mixed>|null}> $items */
+            $items = $this->entityManager->createQueryBuilder()
+                ->select('IDENTITY(i.task) AS taskId', 'i.remoteMeta AS meta')->from(TaskSyncItem::class, 'i')
+                ->where('i.boardId = :board')->andWhere('i.remoteMeta IS NOT NULL')->setParameter('board', $boardId)
+                ->getQuery()->getArrayResult();
+            foreach ($items as $item) {
+                if ($item['taskId'] !== null && is_string($item['meta']['customId'] ?? null)) {
+                    $this->search[$boardId][$item['taskId']][] = $item['meta']['customId'];
+                }
             }
         }
 

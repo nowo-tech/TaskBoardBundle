@@ -155,6 +155,7 @@ services:
 
     # Since 1.27.0 (TB-SYNC-3): typed custom fields and their view.
     Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter: ~
+    Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter: ~
     Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider: ~
 
     Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase:

@@ -14,12 +14,15 @@ use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
+use function count;
 use function iterator_to_array;
 use function json_encode;
 use function parse_str;
@@ -323,9 +326,57 @@ final class ClickUpTaskProviderTest extends TestCase
     }
 
     /**
+     * Since 1.27.0 (TB-SYNC-3): custom id, points, done / closed dates, time flags, location, estimates, recurrence,
+     * the keys with a value, linked tasks, the declared coverage, the time in status and the archived pass.
+     */
+    public function testDetailsLinksHistoryAndTheArchivedPass(): void
+    {
+        $row = [
+            'id'                     => 'ok', 'name' => 'Ok', 'custom_id' => 'DEV-123', 'points' => 2.5, 'date_done' => '1790000000000', 'date_closed' => '1790000100000',
+            'start_date_time'        => true, 'due_date_time' => false, 'folder' => ['id' => 'f', 'name' => 'Folder', 'hidden' => false], 'list' => ['id' => 'l', 'name' => 'List'],
+            'time_estimates_by_user' => [['user' => ['id' => 7, 'username' => 'Ana'], 'time_estimate' => 5_400_000], ['user' => ['id' => 'bad id!'], 'time_estimate' => 1], 'junk'],
+            'recurrence'             => 'Every week', 'linked_tasks' => [['task_id' => 'ok', 'link_id' => 'other'], ['task_id' => 'third', 'link_id' => 'ok'], ['task_id' => 'x', 'link_id' => 'y'], 'junk'],
+            'Bad-Key'                => 1, 'empty' => '', 'mystery' => ['a'],
+        ];
+        $odd      = ['id' => 'odd', 'name' => 'Odd', 'custom_id' => 'not valid!', 'points' => 'many', 'folder' => ['id' => 'f', 'name' => 'Hidden', 'hidden' => true], 'recurrence' => ['x']];
+        $provider = $this->provider([
+            'list/L/task?page=0'       => new MockResponse((string) json_encode(['tasks' => [$row, $odd], 'last_page' => true])),
+            'list/L/task?page=1'       => new MockResponse((string) json_encode(['tasks' => [], 'last_page' => true])),
+            'task/ok/time_in_status'   => new MockResponse((string) json_encode(['current_status' => ['status' => 'done', 'total_time' => ['by_minute' => 3, 'since' => '1790000000000']], 'status_history' => [['status' => 'to do', 'total_time' => ['by_minute' => 60, 'since' => '1789000000000']], ['status' => 'done', 'total_time' => []], 'junk', ['status' => '']]])),
+            'task/new/time_in_status'  => new MockResponse((string) json_encode(['current_status' => ['status' => 'open'], 'status_history' => 'junk'])),
+            'task/none/time_in_status' => new MockResponse((string) json_encode(['status_history' => []])),
+        ], includeArchived: true);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+
+        $page = $provider->fetchTasks($credential, 'L', null, null);
+        self::assertSame(['a0', false], [$page->nextCursor, $page->lastPage], 'the archived pass follows the active pages');
+        $details = $page->tasks[0]->details;
+        self::assertSame(['DEV-123', '2.5', 1790000000, 1790000100, true, false, ['Folder', 'List'], 'Every week'], [$details?->customId, $details?->points, $details?->doneAt?->getTimestamp(), $details?->closedAt?->getTimestamp(), $details?->startHasTime, $details?->dueHasTime, $details?->path, $details?->recurrence]);
+        self::assertSame([['id' => '7', 'name' => 'Ana', 'minutes' => 90]], $details?->toArray()['estimates']);
+        self::assertSame(['other', 'third'], array_map(static fn (array $d): string => $d[0], $page->tasks[0]->task->dependsOn));
+        self::assertNotContains('Bad-Key', $page->tasks[0]->presentKeys);
+        self::assertNotContains('empty', $page->tasks[0]->presentKeys);
+        self::assertContains('mystery', $page->tasks[0]->presentKeys);
+        self::assertSame([null, null, [], null], [$page->tasks[1]->details?->customId, $page->tasks[1]->details?->points, $page->tasks[1]->details?->path, $page->tasks[1]->details?->recurrence]);
+        self::assertSame([], (new RemoteTaskDetails())->toArray());
+
+        $archived = $provider->fetchTasks($credential, 'L', null, 'a0');
+        self::assertSame('true', $this->requests[count($this->requests) - 1]['query']['archived']);
+        self::assertSame([null, true], [$archived->nextCursor, $archived->lastPage]);
+
+        self::assertSame('imported', $provider->fieldCoverage()['custom_id']);
+        $history = $provider->fetchStatusHistory($credential, 'ok');
+        self::assertSame([['to do', 60, false], ['done', 3, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $history));
+        self::assertSame(1790000000, $history[1]->since?->getTimestamp());
+        self::assertSame([['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'new')));
+        self::assertSame([], $provider->fetchStatusHistory($credential, 'none'));
+        self::assertNull($provider->fetchStatusHistory($credential, 'missing'), 'not served (404)');
+    }
+
+    /**
      * @param array<string, MockResponse|string> $routes
      */
-    private function provider(array $routes, int $maxComments = 500, ?RecordingLogger $logger = null): ClickUpTaskProvider
+    private function provider(array $routes, int $maxComments = 500, ?RecordingLogger $logger = null, bool $includeArchived = false): ClickUpTaskProvider
     {
         $this->routes   = $routes;
         $this->requests = [];
@@ -358,6 +409,7 @@ final class ClickUpTaskProviderTest extends TestCase
             new ProviderHttpClient($client, new RecordingSleeper(), new MockClock()),
             maxComments: $maxComments,
             logger: $logger ?? new RecordingLogger(),
+            includeArchived: $includeArchived,
         );
     }
 }

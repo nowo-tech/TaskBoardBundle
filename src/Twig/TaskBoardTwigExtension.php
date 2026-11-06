@@ -104,6 +104,16 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         return $this->syncFields?->fieldsOf($task) ?? [];
     }
 
+    /**
+     * Since 1.27.0: the provider's details of a synced task ([] without sync or for a local task).
+     *
+     * @return array<string, mixed>
+     */
+    public function syncDetails(Task $task): array
+    {
+        return $this->syncPeople?->detailsOf($task) ?? [];
+    }
+
     /** Since 1.27.0: the custom field values of a task as one line (list search; '' without sync). */
     public function syncSearchText(Task $task): string
     {
@@ -186,6 +196,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_fields', $this->syncFields(...)),
             new TwigFunction('task_board_sync_search_text', $this->syncSearchText(...)),
             new TwigFunction('task_board_sync_comment_meta', $this->syncCommentMeta(...)),
+            new TwigFunction('task_board_sync_details', $this->syncDetails(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
             new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true]),
         ];

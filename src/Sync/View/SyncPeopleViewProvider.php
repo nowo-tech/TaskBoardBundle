@@ -56,6 +56,21 @@ final class SyncPeopleViewProvider implements ResetInterface
     }
 
     /**
+     * Since 1.27.0 (TB-SYNC-3): what the provider has besides the synced fields (the item's `remote_meta`): customId,
+     * points, doneAt / closedAt, startHasTime / dueHasTime, path, estimates (`{name, minutes}`), recurrence and
+     * statusHistory (`{status, since, minutes, current}`), plus `provider`. Empty for a task the sync did not write.
+     *
+     * @return array<string, mixed>
+     */
+    public function detailsOf(Task $task): array
+    {
+        $item = $this->item($task);
+        $meta = $item?->getRemoteMeta() ?? [];
+
+        return $meta === [] || !$item instanceof TaskSyncItem ? [] : $meta + ['provider' => $item->getConnection()->getProvider()];
+    }
+
+    /**
      * Since 1.27.0 (TB-SYNC-3): the thread and action item of an imported comment — `reply` (it answers another
      * comment), `replyTo` (that comment's remote author, when known), `resolved` (null = not an action item),
      * `assignee` (who it is assigned to) and `remoteEditedAt`. Null for a local comment.

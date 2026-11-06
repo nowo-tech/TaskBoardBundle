@@ -136,6 +136,9 @@ final readonly class SyncTaskWriter
         // Since 1.27.0 (TB-SYNC-3): typed custom fields (`sync.custom_fields.mode`: typed, text or both).
         private ?SyncCustomFieldWriter $fieldWriter = null,
         private string $fieldsMode = 'typed',
+        // Since 1.27.0 (TB-SYNC-3): details, status history and completeness; archived tasks imported archived.
+        private ?SyncTaskDetailsWriter $detailsWriter = null,
+        private bool $importArchived = true,
     ) {
     }
 
@@ -199,7 +202,7 @@ final readonly class SyncTaskWriter
             if (!$task instanceof Task) {
                 if (isset($elsewhere[$id])) {
                     ++$ctx->skipElsewhere;
-                } elseif ($remote->archived) {
+                } elseif ($remote->archived && !$this->importArchived) {
                     ++$ctx->unchanged;
                 } else {
                     $plan[] = ['create', $id, $remote, null, $item];
@@ -241,7 +244,11 @@ final readonly class SyncTaskWriter
             $session   = $this->session($ctx);
             foreach ($plan as [$action, $id, $remote, $task, $item]) {
                 if ($action === 'create') {
-                    $post[] = $this->create($ctx, $id, $remote, $columns, $assignees, $related, $session);
+                    $post[] = $created = $this->create($ctx, $id, $remote, $columns, $assignees, $related, $session);
+                    if ($remote->archived) {
+                        // Since 1.27.0: an archived provider task is imported archived.
+                        $this->markArchived($ctx, $created[1], $created[0], $id);
+                    }
                 } elseif ($action === 'archive' && $task instanceof Task) {
                     $this->markArchived($ctx, $task, $item ?? $this->adopt($ctx, $id, $task), $id);
                 } elseif ($task instanceof Task) {
@@ -652,6 +659,7 @@ final readonly class SyncTaskWriter
         if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
             $this->fieldWriter->write($ctx, $task, $remote->customFields);
         }
+        $this->detailsWriter?->write($ctx, $item, $task, $remote);
     }
 
     /**

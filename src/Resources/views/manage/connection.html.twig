@@ -68,6 +68,9 @@
                             {# Since 1.27.0 (TB-SYNC-2): mapped / unmapped people and the People page. #}
                             {{ include(templates.connection_people_summary, {peopleSummary: peopleSummary|default(null)}) }}
 
+                            {# Since 1.27.0 (TB-SYNC-3): what the latest run imported, field by field. #}
+                            {{ include('@NowoTaskBoardBundle/manage/_connection_completeness.html.twig', {completeness: completeness|default([]), provider: provider}) }}
+
                             <div class="d-flex flex-wrap gap-2 align-items-end">
                                 {{ form_start(refreshForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-sync__refresh d-flex flex-wrap gap-2 align-items-center'}}) }}
                                     {% for child in refreshForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}

@@ -92,7 +92,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`RemoteComment::$parentId`, `$attachments`, `$assignee`, `$resolved`, `$updatedAt`; Twig
   `task_board_sync_comment_meta()`). Reactions are not imported.
 - **Time entries**: `ImportedTimeEntryCandidate::user()` (the mapped host user). Imported time is never deleted.
-- **Schema change with `sync.enabled` only**: two new tables and four nullable columns on `task_board_sync_comments`
+- **The rest of a ClickUp task (TB-SYNC-3).** Custom task id (searchable), points, done / closed dates (the done date
+  is the completion date), start / due time flags, location (folder, list), estimate per assignee, recurrence and the
+  time in status (`Sync\Provider\StatusHistoryProviderInterface`, `sync.status_history.max_calls_per_run`), kept
+  read-only in `task_board_sync_items.remote_meta` and shown in the task panel (`_task_sync_details.html.twig`, Twig
+  `task_board_sync_details()`). Linked tasks become `related` relations (also in file imports). Archived tasks are
+  imported archived (`sync.import_archived`, default `true`; ClickUp reads an archived pass). New
+  `RemoteTaskDetails`, `RemoteStatusTime`, `RemoteTask::$details` / `$presentKeys`, `Task::markCompleted(?$at)`.
+- **Completeness report (TB-SYNC-3).** After each run the connection page lists every key of the provider's answers
+  with a value: imported, skipped (reason) or *Not imported yet*
+  (`Sync\Provider\FieldCoverageProviderInterface`, `_connection_completeness.html.twig`).
+- **Schema change with `sync.enabled` only**: two new tables, four nullable columns on `task_board_sync_comments` and `task_board_sync_items.remote_meta`
   (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#unreleased)).
 
 - **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates

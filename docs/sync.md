@@ -507,6 +507,39 @@ sniffing), and nothing remote is rendered unescaped.
 - **TO CONFIRM** against a real workspace: the reply endpoint and the field names `assignee`, `resolved`,
   `date_updated` and the `attachment` segment shape.
 
+### Dates, points, links, ids, location, status history, archived tasks, recurrence
+
+Kept read-only on the synced task (`task_board_sync_items.remote_meta`) and shown in the task panel's *From
+ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(task)`):
+
+- **Custom task id** (`custom_id`, e.g. `DEV-123`), also found by the list search.
+- **Points** (`points`).
+- **Done / closed dates** (`date_done`, `date_closed`). The done (else closed) date becomes the task's completion date
+  when the task is completed.
+- **Dates with time**: `start_date_time` / `due_date_time` say whether start and due carry a time of day (the dates
+  themselves are the task's start and due, as before; ClickUp dates are UTC instants).
+- **Location**: the folder (unless hidden) and list names.
+- **Estimate per assignee** (`time_estimates_by_user`, TO CONFIRM against a live workspace).
+- **Recurrence**: a read-only text when the answer has one (`recurrence`; the v2 task answer usually has none, see the
+  completeness report).
+- **Time in status** (`GET task/{id}/time_in_status`, `Sync\Provider\StatusHistoryProviderInterface`): for the tasks
+  a run creates or changes, at most `sync.status_history.max_calls_per_run` per run; a table of status, since and
+  minutes. When ClickUp no longer serves it (404 / 410) the last one stays.
+- **Linked tasks** (`linked_tasks`, non-blocking) become `related` relations to the other task (in the Gantt), like
+  dependencies; the file import maps them the same way.
+- **Archived tasks** (`sync.import_archived`, default `true`): after the active pages, the archived ones are read
+  (ClickUp `archived=true`, cursor `a<n>`) and imported archived (reason `remote`).
+- Watchers are mapped to host users through the People mapping (since 1.25); description images are stored and
+  rewritten (since 1.23); attachments keep the provider's order.
+
+### Completeness report
+
+After each run the connection page lists, per key of the provider's task answers that carried a value, on how many
+tasks and whether it is imported, skipped (with the provider's reason: not supported, not needed, internal) or **Not
+imported yet** (a key the provider does not declare; listed in the summary line). The provider declares its keys with
+`Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the run's `keys.<key>` stats
+(`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`).
+
 ### Time entries one by one
 
 Already since 1.25 (see [Tracked time](#tracked-time-since-125)): each entry (user through the People mapping, start,

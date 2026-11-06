@@ -388,6 +388,11 @@ final class ClickUpPeopleTimeProviderTest extends TestCase
         $last = $this->lastRequest();
         self::assertSame(['90002'], $last['query']['project_ids'], 'ClickUp names folders "projects" there');
         self::assertArrayNotHasKey('date_updated_gt', $last['query']);
+        // Since 1.27.0: the archived pass of a folder or space ("a<n>" cursors).
+        $archived = $provider->fetchSourceTasks($this->credential, $withWorkspace, null, 'a7');
+        self::assertSame('a8', $archived->nextCursor);
+        self::assertSame('true', $this->lastRequest()['query']['archived']);
+        self::assertSame('7', $this->lastRequest()['query']['page']);
 
         // A list source keeps the 1.23 calls.
         $listProvider = $this->provider(['list/900200/task' => 'list_900200_task_page0.json']);

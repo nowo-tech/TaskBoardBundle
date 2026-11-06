@@ -38,6 +38,7 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
 
     public const NEW_COLUMNS = [
         'task_board_sync_comments' => ['parent_remote_id', 'resolved', 'assignee_person_id', 'remote_updated_at'],
+        'task_board_sync_items'    => ['remote_meta'],
     ];
 
     public function testTheNewTablesColumnsIndexesAndForeignKeys(): void

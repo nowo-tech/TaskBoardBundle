@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
@@ -30,11 +31,14 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteRole;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteSource;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatus;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusType;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
 use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\StatusHistoryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
@@ -50,6 +54,7 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
+use function array_pop;
 use function array_push;
 use function array_reverse;
 use function array_slice;
@@ -63,6 +68,8 @@ use function implode;
 use function intdiv;
 use function is_array;
 use function is_bool;
+use function is_float;
+use function is_int;
 use function is_numeric;
 use function is_scalar;
 use function is_string;
@@ -93,7 +100,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -121,6 +128,26 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
 
     /** Since 1.25: ClickUp's numeric workspace roles. */
     private const ROLES = [1 => RemoteRole::Owner, 2 => RemoteRole::Admin, 3 => RemoteRole::Member, 4 => RemoteRole::Guest];
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): every key of a ClickUp task answer and what the bundle does with it (the completeness
+     * report): `imported`, or why not.
+     */
+    private const COVERAGE = [
+        'id'                     => 'imported', 'custom_id' => 'imported', 'custom_item_id' => 'not_supported', 'name' => 'imported',
+        'text_content'           => 'imported', 'description' => 'imported', 'markdown_description' => 'imported',
+        'status'                 => 'imported', 'orderindex' => 'not_needed', 'date_created' => 'imported', 'date_updated' => 'imported',
+        'date_closed'            => 'imported', 'date_done' => 'imported', 'archived' => 'imported', 'creator' => 'imported',
+        'assignees'              => 'imported', 'group_assignees' => 'not_supported', 'watchers' => 'imported',
+        'checklists'             => 'imported', 'tags' => 'imported', 'parent' => 'imported', 'top_level_parent' => 'not_needed',
+        'priority'               => 'imported', 'due_date' => 'imported', 'start_date' => 'imported', 'due_date_time' => 'imported',
+        'start_date_time'        => 'imported', 'points' => 'imported', 'time_estimate' => 'imported',
+        'time_estimates_by_user' => 'imported', 'time_spent' => 'imported', 'custom_fields' => 'imported',
+        'dependencies'           => 'imported', 'linked_tasks' => 'imported', 'locations' => 'not_supported',
+        'team_id'                => 'internal', 'url' => 'imported', 'sharing' => 'internal', 'permission_level' => 'internal',
+        'list'                   => 'imported', 'project' => 'not_needed', 'folder' => 'imported', 'space' => 'not_needed',
+        'attachments'            => 'imported', 'subtasks' => 'imported', 'recurrence' => 'imported',
+    ];
 
     /** Since 1.25: the most checklist items one task gives (all checklists together). */
     private const MAX_CHECKLIST_ITEMS = 1000;
@@ -150,6 +177,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         private ?CacheItemPoolInterface $lookupCache = null,
         // Since 1.27.0 (TB-SYNC-3): typed custom fields.
         private ClickUpCustomFieldParser $fieldParser = new ClickUpCustomFieldParser(),
+        // Since 1.27.0 (TB-SYNC-3): archived tasks are read too (a second pass with archived=true) and imported archived.
+        private bool $includeArchived = false,
     ) {
     }
 
@@ -236,8 +265,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
 
     public function fetchTasks(ProviderCredential $credential, string $listId, ?DateTimeImmutable $updatedSince, ?string $cursor): RemoteTaskPage
     {
-        $page  = $this->page($cursor);
-        $query = [
+        [$archived, $page] = $this->pass($cursor);
+        $query             = [
             'page'                         => $page,
             'subtasks'                     => 'true',
             'include_closed'               => 'true',
@@ -252,6 +281,9 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         if ($updatedSince instanceof DateTimeImmutable) {
             $query['date_updated_gt'] = (string) ($updatedSince->getTimestamp() * 1000);
         }
+        if ($archived) {
+            $query['archived'] = 'true';
+        }
         $data  = $this->get($credential, sprintf('list/%s/task', $this->checkId($listId)), $query);
         $tasks = [];
         foreach ($this->items($data, 'tasks') as $row) {
@@ -260,10 +292,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
                 $tasks[] = $task;
             }
         }
-        $rows = count($this->items($data, 'tasks'));
-        $last = $this->lastPage($data, $rows);
 
-        return new RemoteTaskPage($tasks, $last ? null : (string) ($page + 1), $last);
+        return $this->taskPage($tasks, $archived, $page, $this->lastPage($data, count($this->items($data, 'tasks'))));
     }
 
     public function fetchComments(ProviderCredential $credential, string $taskId): iterable
@@ -520,8 +550,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         if ($source->location->kind === RemoteLocationKind::List) {
             return $this->fetchTasks($credential, $source->location->id, $updatedSince, $cursor);
         }
-        $page  = $this->page($cursor);
-        $query = $this->sourceFilter($source) + [
+        [$archived, $page] = $this->pass($cursor);
+        $query             = $this->sourceFilter($source) + [
             'page'                         => $page,
             'subtasks'                     => 'true',
             'include_closed'               => 'true',
@@ -532,6 +562,9 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         if ($updatedSince instanceof DateTimeImmutable) {
             $query['date_updated_gt'] = (string) ($updatedSince->getTimestamp() * 1000);
         }
+        if ($archived) {
+            $query['archived'] = 'true';
+        }
         $data  = $this->get($credential, sprintf('team/%s/task', $this->sourceWorkspace($credential, $source)), $query);
         $rows  = $this->items($data, 'tasks');
         $tasks = [];
@@ -541,9 +574,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
                 $tasks[] = $task;
             }
         }
-        $last = $this->lastPage($data, count($rows));
 
-        return new RemoteTaskPage($tasks, $last ? null : (string) ($page + 1), $last);
+        return $this->taskPage($tasks, $archived, $page, $this->lastPage($data, count($rows)));
     }
 
     /** Since 1.25: ids of every task still in a folder or space (a list source keeps the 1.23 scan). */
@@ -671,6 +703,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             listId: is_array($row['list'] ?? null) && ($listId = $this->itemId($row['list'])) !== '' ? $listId : null,
             listName: is_array($row['list'] ?? null) && ($listName = $this->name($row['list'])) !== '' ? $listName : null,
             customFields: $this->fieldParser->parse($row['custom_fields'] ?? null),
+            details: $this->details($row),
+            presentKeys: $this->presentKeys($row),
         );
     }
 
@@ -1277,6 +1311,140 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         }
 
         return $id;
+    }
+
+    public function fieldCoverage(): array
+    {
+        return self::COVERAGE;
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): `GET task/{id}/time_in_status` — the statuses the task went through, oldest first, the
+     * current one last; null when ClickUp does not serve it (the Time in Status ClickApp is off: 404 / 410).
+     * Unconfirmed against the live API; validated by Beacon after deploy.
+     */
+    public function fetchStatusHistory(ProviderCredential $credential, string $taskId): ?array
+    {
+        $data = $this->getOrNull($credential, sprintf('task/%s/time_in_status', $this->checkId($taskId)));
+        if ($data === null) {
+            return null;
+        }
+        $history = [];
+        foreach (is_array($data['status_history'] ?? null) ? array_slice($data['status_history'], 0, 100) : [] as $row) {
+            $status = $this->statusTime($row, false);
+            if ($status instanceof RemoteStatusTime) {
+                $history[] = $status;
+            }
+        }
+        $current = $this->statusTime($data['current_status'] ?? null, true);
+        if ($current instanceof RemoteStatusTime) {
+            $last = $history === [] ? null : $history[count($history) - 1];
+            if ($last instanceof RemoteStatusTime && $last->status === $current->status) {
+                array_pop($history);
+            }
+            $history[] = $current;
+        }
+
+        return $history;
+    }
+
+    private function statusTime(mixed $row, bool $current): ?RemoteStatusTime
+    {
+        $status = is_array($row) ? $this->sanitizer->line($this->stringOf($row['status'] ?? null), 120) : '';
+        if ($status === '' || !is_array($row)) {
+            return null;
+        }
+        $total = is_array($row['total_time'] ?? null) ? $row['total_time'] : [];
+
+        return new RemoteStatusTime($status, $this->date($total['since'] ?? null), is_numeric($total['by_minute'] ?? null) ? max(0, (int) $total['by_minute']) : 0, $current);
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): custom id, points, done / closed dates, time flags, location path, estimates per
+     * assignee and recurrence. Every value is validated; what does not fit is left out.
+     *
+     * @param array<mixed> $row
+     */
+    private function details(array $row): RemoteTaskDetails
+    {
+        $customId = $this->stringOf($row['custom_id'] ?? null);
+        $points   = $row['points'] ?? null;
+        $path     = [];
+        foreach (['folder', 'list'] as $key) {
+            $item = $row[$key] ?? null;
+            if (is_array($item) && ($item['hidden'] ?? false) !== true && ($name = $this->name($item)) !== '') {
+                $path[] = $name;
+            }
+        }
+        $estimates = [];
+        foreach (is_array($row['time_estimates_by_user'] ?? null) ? array_slice($row['time_estimates_by_user'], 0, 100) : [] as $estimate) {
+            // Unconfirmed against the live API (`{user, time_estimate}` in milliseconds); validated by Beacon after deploy.
+            $person = is_array($estimate) ? $this->mapper->personRef($estimate['user'] ?? null) : null;
+            $ms     = is_array($estimate) ? ($estimate['time_estimate'] ?? $estimate['user_time_estimate'] ?? null) : null;
+            if ($person instanceof RemotePersonRef && is_numeric($ms) && (int) $ms >= 0) {
+                $estimates[] = ['person' => $person, 'minutes' => intdiv((int) $ms, 60_000)];
+            }
+        }
+        $recurrence = $row['recurrence'] ?? null;
+
+        return new RemoteTaskDetails(
+            customId: preg_match('/^[A-Za-z0-9 _.:#-]{1,64}$/D', $customId) === 1 ? $customId : null,
+            points: (is_int($points) || is_float($points) || is_string($points)) && is_numeric($points) && strlen((string) $points) <= 20 ? (string) (0 + $points) : null,
+            doneAt: $this->date($row['date_done'] ?? null),
+            closedAt: $this->date($row['date_closed'] ?? null),
+            startHasTime: ($row['start_date_time'] ?? false) === true,
+            dueHasTime: ($row['due_date_time'] ?? false) === true,
+            path: $path,
+            estimates: $estimates,
+            recurrence: is_string($recurrence) && trim($recurrence) !== '' ? $this->sanitizer->line($recurrence, 200) : null,
+        );
+    }
+
+    /**
+     * Since 1.27.0: the keys of the answer that carry a value (`[a-z0-9_]{1,40}` only: remote keys are untrusted).
+     *
+     * @param array<mixed> $row
+     *
+     * @return list<string>
+     */
+    private function presentKeys(array $row): array
+    {
+        $keys = [];
+        foreach ($row as $key => $value) {
+            if (is_string($key) && preg_match('/^[a-z0-9_]{1,40}$/D', $key) === 1 && $value !== null && $value !== '' && $value !== [] && $value !== false) {
+                $keys[] = $key;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Since 1.27.0: the pass of a task cursor — `<n>` the active tasks' page n, `a<n>` the archived tasks' page n.
+     *
+     * @return array{0: bool, 1: int}
+     */
+    private function pass(?string $cursor): array
+    {
+        $archived = $cursor !== null && str_starts_with($cursor, 'a');
+
+        return [$archived, $this->page($archived ? substr((string) $cursor, 1) : $cursor)];
+    }
+
+    /**
+     * Since 1.27.0: after the last active page comes the archived pass (`include_archived`).
+     *
+     * @param list<RemoteTask> $tasks
+     */
+    private function taskPage(array $tasks, bool $archived, int $page, bool $last): RemoteTaskPage
+    {
+        $next = match (true) {
+            !$last                               => ($archived ? 'a' : '') . ($page + 1),
+            !$archived && $this->includeArchived => 'a0',
+            default                              => null,
+        };
+
+        return new RemoteTaskPage($tasks, $next, $next === null);
     }
 
     private function page(?string $cursor): int

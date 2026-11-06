@@ -70,6 +70,7 @@ use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
@@ -264,6 +265,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxComments', $sync['max_comments_per_task'])
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
                 ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
+                ->setArgument('$includeArchived', (bool) $sync['import_archived'])
                 ->addTag('nowo_task_board.task_provider'));
         }
         $this->registerSyncPeople($container, $sync);
@@ -312,7 +314,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])
             ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
             ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
-            ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode']);
+            ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode'])
+            ->setArgument('$importArchived', (bool) $sync['import_archived']);
+        $container->getDefinition(SyncTaskDetailsWriter::class)
+            ->setArgument('$maxStatusCalls', (int) $sync['status_history']['max_calls_per_run']);
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class))
             ->setArgument('$syncFields', new Reference(SyncFieldViewProvider::class));

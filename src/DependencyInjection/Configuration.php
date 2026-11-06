@@ -732,6 +732,13 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                         ->end()
                         // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
+                        ->booleanNode('import_archived')->defaultTrue()->info('Since 1.27.0 (TB-SYNC-3): archived provider tasks are read (ClickUp: a second pass with archived=true) and imported archived. false = 1.26 (an archived task is not created).')->end()
+                        ->arrayNode('status_history')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_calls_per_run')->defaultValue(200)->min(0)->info('Since 1.27.0 (TB-SYNC-3): "time in status" requests a run may spend on the tasks it creates or changes (0 = never).')->end()
+                            ->end()
+                        ->end()
                         ->arrayNode('custom_fields')
                             ->addDefaultsIfNotSet()
                             ->children()

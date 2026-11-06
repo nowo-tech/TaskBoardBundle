@@ -56,6 +56,15 @@ class TaskSyncItem
     private ?array $unmatchedPeople = null;
 
     /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
+    /**
+     * Since 1.27.0 (TB-SYNC-3): what the provider has besides the import row (custom id, points, done / closed dates,
+     * time flags, location path, estimates per assignee, recurrence, status history), read-only on the task.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(name: 'remote_meta', type: 'json', nullable: true)]
+    private ?array $remoteMeta = null;
+
     #[ORM\Column(name: 'backfill_level', type: 'smallint', options: ['default' => 0])]
     private int $backfillLevel = 1;
 
@@ -200,6 +209,33 @@ class TaskSyncItem
         $this->creatorPerson = $person;
 
         return $this;
+    }
+
+    /**
+     * Since 1.27.0.
+     *
+     * @return array<string, mixed>
+     */
+    public function getRemoteMeta(): array
+    {
+        return $this->remoteMeta ?? [];
+    }
+
+    /**
+     * Since 1.27.0: true when it changed.
+     *
+     * @param array<string, mixed> $meta
+     */
+    public function setRemoteMeta(array $meta): bool
+    {
+        $meta = $meta === [] ? null : $meta;
+        if ($meta === $this->remoteMeta) {
+            return false;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->remoteMeta = $meta;
+
+        return true;
     }
 
     /**

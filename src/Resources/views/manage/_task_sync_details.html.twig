@@ -1,0 +1,48 @@
+{#
+    Since 1.27.0 (TB-SYNC-3): what the provider has besides the synced fields, read-only — custom task id, points,
+    done / closed dates, whether start / due carry a time, the source location, estimates per assignee, recurrence and
+    the status history ("time in status"). details = task_board_sync_details(task) ([] = nothing to show). All remote
+    text is escaped.
+#}
+{% if details is not empty %}
+    {% set _provider = ('task_board.sync.provider.' ~ details.provider)|trans({}, 'NowoTaskBoardBundle') %}
+    <section class="nowo-task-detail__section nowo-task-detail__sync-details" aria-labelledby="nowo-task-sync-details-title" data-testid="nowo-task-sync-details">
+        <h3 class="nowo-task-detail__section-title" id="nowo-task-sync-details-title">{{ 'task_board.sync.details.title'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</h3>
+        <dl class="nowo-task-detail__attrs">
+            {% if details.customId is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="custom-id"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.custom_id'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value"><code>{{ details.customId }}</code></dd></div>
+            {% endif %}
+            {% if details.points is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="points"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.points'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.points }}</dd></div>
+            {% endif %}
+            {% for _dk in ['doneAt', 'closedAt'] %}
+                {% if details[_dk] is defined %}
+                    <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="{{ _dk }}"><dt class="nowo-task-detail__field-label"><span>{{ ('task_board.sync.details.' ~ _dk)|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value"><time datetime="{{ details[_dk] }}">{{ details[_dk]|date('Y-m-d H:i') }}</time></dd></div>
+                {% endif %}
+            {% endfor %}
+            {% if details.startHasTime is defined or details.dueHasTime is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="times"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.times'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ (details.startHasTime is defined and details.dueHasTime is defined ? 'task_board.sync.details.times_both' : (details.startHasTime is defined ? 'task_board.sync.details.times_start' : 'task_board.sync.details.times_due'))|trans({}, 'NowoTaskBoardBundle') }}</dd></div>
+            {% endif %}
+            {% if details.path is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="path"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.path'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.path|join(' › ') }}</dd></div>
+            {% endif %}
+            {% if details.estimates is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="estimates"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.estimates'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{% for _e in details.estimates %}{{ _e.name }}: {{ 'task_board.sync.details.minutes'|trans({'%minutes%': _e.minutes}, 'NowoTaskBoardBundle') }}{{ not loop.last ? ', ' }}{% endfor %}</dd></div>
+            {% endif %}
+            {% if details.recurrence is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="recurrence"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.recurrence'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.recurrence }}</dd></div>
+            {% endif %}
+        </dl>
+        {% if details.statusHistory is defined %}
+            <table class="table table-sm nowo-task-sync-status-history" data-testid="nowo-task-sync-status-history">
+                <caption>{{ 'task_board.sync.details.status_history'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                <thead><tr><th scope="col">{{ 'task_board.sync.details.status'|trans({}, 'NowoTaskBoardBundle') }}</th><th scope="col">{{ 'task_board.sync.details.since'|trans({}, 'NowoTaskBoardBundle') }}</th><th scope="col">{{ 'task_board.sync.details.time'|trans({}, 'NowoTaskBoardBundle') }}</th></tr></thead>
+                <tbody>
+                    {% for _s in details.statusHistory %}
+                        <tr{% if _s.current %} aria-current="true"{% endif %}><td>{{ _s.status }}</td><td>{% if _s.since %}<time datetime="{{ _s.since }}">{{ _s.since|date('Y-m-d H:i') }}</time>{% endif %}</td><td>{{ 'task_board.sync.details.minutes'|trans({'%minutes%': _s.minutes}, 'NowoTaskBoardBundle') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </section>
+{% endif %}

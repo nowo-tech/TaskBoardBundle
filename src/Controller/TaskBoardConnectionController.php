@@ -38,6 +38,7 @@ use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
@@ -79,7 +80,10 @@ use function max;
 use function min;
 use function preg_match;
 use function serialize;
+use function str_starts_with;
+use function substr;
 use function unserialize;
+use function usort;
 
 /**
  * Since 1.23: the provider connection of a board — connect (pick a provider, a stored connection and a remote list),
@@ -514,7 +518,37 @@ final class TaskBoardConnectionController extends AbstractController
             'templates'        => $this->templates,
             'pollInterval'     => $this->pollInterval,
             'peopleSummary'    => $this->peopleSummary($board, $connection),
+            // Since 1.27.0 (TB-SYNC-3): what the latest run imported, field by field.
+            'completeness' => $this->completeness($connection, $report),
         ];
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): per answer key of the latest run, the tasks that had it and whether it is imported
+     * (`imported`), why not (the provider's reason) or `not_imported_yet` (a key the provider does not declare).
+     *
+     * @return list<array{key: string, tasks: int, status: string}>
+     */
+    private function completeness(TaskBoardConnection $connection, ?SyncReport $report): array
+    {
+        $provider = $this->providers->has($connection->getProvider()) ? $this->providers->get($connection->getProvider()) : null;
+        $coverage = $provider instanceof FieldCoverageProviderInterface ? $provider->fieldCoverage() : [];
+        $rows     = [];
+        foreach ($report->stats ?? [] as $name => $tasks) {
+            if (str_starts_with($name, 'keys.')) {
+                $key    = substr($name, 5);
+                $rows[] = ['key' => $key, 'tasks' => $tasks, 'status' => $coverage[$key] ?? 'not_imported_yet'];
+            }
+        }
+        // Not imported yet first, then the reasons, then what is imported; by key inside each.
+        $rank = static fn (string $status): int => match ($status) {
+            'not_imported_yet'                       => 0,
+            FieldCoverageProviderInterface::IMPORTED => 2,
+            default                                  => 1,
+        };
+        usort($rows, static fn (array $a, array $b): int => [$rank($a['status']), $a['key']] <=> [$rank($b['status']), $b['key']]);
+
+        return $rows;
     }
 
     /**

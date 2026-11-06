@@ -51,6 +51,14 @@ final readonly class RemoteTask
          * @var list<RemoteCustomField>
          */
         public array $customFields = [],
+        /** Since 1.27.0 (TB-SYNC-3): custom id, points, done / closed dates, time flags, path, estimates, recurrence. */
+        public ?RemoteTaskDetails $details = null,
+        /**
+         * Since 1.27.0: the keys of the provider's answer that carried a value (completeness report).
+         *
+         * @var list<string>
+         */
+        public array $presentKeys = [],
     ) {
     }
 
