@@ -1261,8 +1261,9 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.15: dependencies, time entries and the deviation (own, and the subtasks' sum).
             'dependencyForm'       => $this->dependencyManager instanceof TaskDependencyManager ? $this->createDependencyForm($task, $routeExtra, $boardTasks)->createView() : null,
             'dependencyRemoveForm' => $this->csrfActionForm('task_board_task_dependency_remove')->createView(),
-            // Since 1.18: import subtasks with their Gantt relations (editors only).
-            'subtaskImportForm'   => $this->resourceAccessChecker->canEditTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
+            // Since 1.18: import subtasks with their Gantt relations (editors only); since 1.26.2 only when the
+            // ACTION_IMPORT_TASKS decision allows it, as importIntoTask() enforces.
+            'subtaskImportForm'   => $this->resourceAccessChecker->canImportIntoTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
             'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
             'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
             'deviation'           => TaskDeviation::of($task),
