@@ -5,8 +5,14 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.28.0](#to-1280)
+  - [ClickUp comments (TB-SYNC-4)](#clickup-comments-tb-sync-4)
+  - [Former people (TB-SYNC-4)](#former-people-tb-sync-4)
+  - [Columns no status uses (TB-SYNC-4)](#columns-no-status-uses-tb-sync-4)
+  - [Everything possible from ClickUp (TB-SYNC-3 addendum)](#everything-possible-from-clickup-tb-sync-3-addendum)
   - [Schema change for every host: the sync's *Fields* document (audits HI-L2, HI-L3)](#schema-change-for-every-host-the-syncs-fields-document-audits-hi-l2-hi-l3)
   - [Schema change for every host: task history outlives its user (audit GWf-L1)](#schema-change-for-every-host-task-history-outlives-its-user-audit-gwf-l1)
+  - [Danger buttons](#danger-buttons)
 - [To 1.27.0](#to-1270)
   - [Schema change for every host: manual time outlives its user](#schema-change-for-every-host-manual-time-outlives-its-user)
   - [Schema change with `sync.enabled: true` only (TB-SYNC-3)](#schema-change-with-syncenabled-true-only-tb-sync-3)
@@ -133,6 +139,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.28.0
+
+From **1.27.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 ### ClickUp comments (TB-SYNC-4)
 
