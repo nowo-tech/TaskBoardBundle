@@ -13,7 +13,8 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
  * Since 1.23: a provider file stored by the host for a task (reused while the remote id, size and date are the
- * same).
+ * same). Since 1.27.0 (audit GWd-M1) the row outlives an unlink (`item` = null), so that a later deletion of the task or
+ * board still names the file to the host.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_sync_attachments')]
@@ -26,8 +27,8 @@ class TaskSyncAttachment
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: TaskSyncItem::class)]
-        #[ORM\JoinColumn(name: 'item_id', nullable: false, onDelete: 'CASCADE')]
-        private TaskSyncItem $item,
+        #[ORM\JoinColumn(name: 'item_id', nullable: true, onDelete: 'SET NULL')]
+        private ?TaskSyncItem $item,
         #[ORM\ManyToOne(targetEntity: Task::class)]
         #[ORM\JoinColumn(name: 'task_id', nullable: false, onDelete: 'CASCADE')]
         private Task $task,
@@ -49,7 +50,7 @@ class TaskSyncAttachment
         private int $size,
         #[ORM\Column(type: 'string', length: 64, nullable: true)]
         private ?string $sha256 = null,
-        /** The attachment link shown on the task (null for an inline image). */
+        /** The attachment link shown on the task (null for an inline image or a comment's file). */
         #[ORM\ManyToOne(targetEntity: TaskLink::class)]
         #[ORM\JoinColumn(name: 'link_id', nullable: true, onDelete: 'SET NULL')]
         private ?TaskLink $link = null,
@@ -62,7 +63,8 @@ class TaskSyncAttachment
         return $this->id;
     }
 
-    public function getItem(): TaskSyncItem
+    /** Null once the board was unlinked. */
+    public function getItem(): ?TaskSyncItem
     {
         return $this->item;
     }
@@ -90,7 +92,7 @@ class TaskSyncAttachment
     }
 
     /** The remote file changed: the row now describes the new stored copy (updated in place, the key stays unique). */
-    public function replace(?int $remoteSize, ?DateTimeImmutable $remoteUpdatedAt, StoredAttachment $stored, string $name, string $mime, TaskLink $link): void
+    public function replace(?int $remoteSize, ?DateTimeImmutable $remoteUpdatedAt, StoredAttachment $stored, string $name, string $mime, ?TaskLink $link): void
     {
         $this->remoteSize      = $remoteSize;
         $this->remoteUpdatedAt = $remoteUpdatedAt;

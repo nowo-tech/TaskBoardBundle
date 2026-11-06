@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -42,6 +43,8 @@ final readonly class TaskSyncPeopleReassigner
 {
     private const STALE_AFTER = 'PT10M';
 
+    private TaskTimeEntrySnapshotPurger $timeEntries;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private TaskSyncPersonRepository $people,
@@ -53,7 +56,9 @@ final readonly class TaskSyncPeopleReassigner
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ClockInterface $clock = new NativeClock(),
         private int $defaultBatchSize = 500,
+        ?TaskTimeEntrySnapshotPurger $timeEntries = null,
     ) {
+        $this->timeEntries = $timeEntries ?? new TaskTimeEntrySnapshotPurger($entityManager);
     }
 
     /**
@@ -175,7 +180,9 @@ final readonly class TaskSyncPeopleReassigner
             $this->entityManager->flush();
         }
 
-        return $total->plus($this->detachContent($user, $anonymise));
+        return $total->plus($this->detachContent($user, $anonymise))
+            // Owner rule (audit GWd-M2): the user's manual time stays, with their name unless it is forgotten.
+            ->plus(new ReassignReport(timeEntries: $this->timeEntries->detachUser($user, $anonymise)));
     }
 
     /**

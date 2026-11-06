@@ -7,7 +7,13 @@ namespace Nowo\TaskBoardBundle\Service;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
+
+use function count;
 
 /**
  * Since 1.25 (audit FA-L2 / EX-D2): erasure helper for the task snapshots of **detached** manual time entries.
@@ -47,6 +53,61 @@ final readonly class TaskTimeEntrySnapshotPurger
         );
 
         return (int) $query->getQuery()->execute();
+    }
+
+    /**
+     * Since 1.27.0 (owner rule): call before deleting a user. Their manual time stays; the entries keep their name, or
+     * lose it with `$forgetName` (erasure). Deleting the user without this keeps the name stored at logging time.
+     *
+     * @return int the entries detached
+     */
+    public function detachUser(object $user, bool $forgetName = false): int
+    {
+        $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        // Rows written before 1.27 have no name yet: they get the current one first.
+        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE e.user = :user AND e.userName IS NULL')
+            ->setParameter('label', $label)->setParameter('user', $user)->execute();
+        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE e.user = :user')
+            ->setParameter('user', $user)->execute();
+        // The bulk updates bypass the identity map: loaded entries follow.
+        foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[TaskTimeEntry::class] ?? [] as $entry) {
+            if ($entry instanceof TaskTimeEntry && SyncUser::same($entry->getUser(), $user)) {
+                $entry->detachUser($forgetName);
+            }
+        }
+        $this->entityManager->flush();
+
+        return $count;
+    }
+
+    /**
+     * Since 1.27.0: clears the kept name after the user is gone (the row no longer leads to them).
+     *
+     * @return int the entries changed
+     */
+    public function forgetUserName(string $name): int
+    {
+        return (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = NULL WHERE e.user IS NULL AND e.userName = :name')
+            ->setParameter('name', $name)->execute();
+    }
+
+    /**
+     * Since 1.27.0: fills the name of entries logged before 1.27, a page at a time; run it after the upgrade (repeat
+     * until it returns 0). Until then, deleting such a user leaves the entry without a name.
+     *
+     * @return int the entries filled
+     */
+    public function backfillUserNames(int $batchSize = 500): int
+    {
+        /** @var list<TaskTimeEntry> $entries */
+        $entries = $this->entityManager->createQueryBuilder()->select('e')->from(TaskTimeEntry::class, 'e')
+            ->where('e.user IS NOT NULL')->andWhere('e.userName IS NULL')->setMaxResults($batchSize)->getQuery()->getResult();
+        foreach ($entries as $entry) {
+            $entry->backfillUserName();
+        }
+        $this->entityManager->flush();
+
+        return count($entries);
     }
 
     private function scoped(QueryBuilder $builder, ?string $boardId, ?DateTimeImmutable $loggedBefore): QueryBuilder

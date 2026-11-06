@@ -23,6 +23,8 @@ mapping of the sync tables and no header change.
 - [Statuses and sources (since 1.25)](#statuses-and-sources-since-125)
 - [Tracked time (since 1.25)](#tracked-time-since-125)
 - [Pre-scans and re-association (since 1.25)](#pre-scans-and-re-association-since-125)
+- [People page and step (since 1.27.0)](#people-page-and-step-since-1270)
+- [Everything a ClickUp task has (since 1.27.0)](#everything-a-clickup-task-has-since-1270)
 - [Events](#events)
 - [Testing with the in-memory provider](#testing-with-the-in-memory-provider)
 - [Adding a provider](#adding-a-provider)
@@ -149,7 +151,8 @@ bundle keeps the hash of the value it last wrote (`task_board_sync_items.field_h
 
 A conflict on the same remote value is noted once. An empty remote value never clears a local one. Comments are imported
 once per remote id and updated when the provider edits them, unless they were edited here (a conflict on "comment").
-Custom fields go to a task document "Fields (ClickUp)" that the sync keeps up to date.
+Custom fields are typed values since 1.27.0 (`sync.custom_fields.mode`); with `text` or `both` they also go to a task
+document "Fields (ClickUp)" that the sync keeps up to date.
 
 ## Deletions and the mass-archive guard
 
@@ -420,6 +423,162 @@ whether guests can track time, and what a member token gets when `assignee` list
   user becomes external (optionally anonymised) and their content goes back to the actor plus the reference. Run it
   **before** deleting the user ([erasure order](UPGRADING.md#after-the-update-sync-hosts)).
 
+## People page and step (since 1.27.0)
+
+TB-SYNC-2: a UI on top of the people directory, so a manager decides who each remote person is.
+
+- **People page** (`board_connection_people`, template `templates.connection_people`; linked from the connection page
+  by `templates.connection_people_summary`: "*n* of *m* people are mapped. *k* not mapped yet." and *Map people*). One
+  row per remote person of the connection's directory (workspace members and every creator, assignee, watcher,
+  commenter, checklist and time-entry user a run or scan saw), by name, `page_size` per page, filter *All* /
+  *Not mapped yet*. Each row has a host-user select: *Not mapped*, the board's candidates
+  (`SyncPersonResolverInterface::candidates()`, at most `candidate_limit`) and, with `sync.people.inviter` and a
+  remote e-mail, *Invite by e-mail*. No remote avatar is shown (none is stored): an initial instead.
+- **Pre-fill, deny by default.** The select starts on the current mapping; else the host's suggestion (unverified
+  e-mail match); else the only candidate with the same normalised e-mail. The only candidate whose label (`UserLabel`) has the
+  same normalised name (case, accents, spaces, `.`, `_`, `-` ignored) is **suggested beside a select left on *Not mapped***,
+  because a remote person chooses their own name. A pre-fill is only a starting value: **nobody is mapped until a manager saves**, and only to a candidate of
+  every board of the directory. A sync still maps automatically only the 1.25 verified e-mail matches.
+- **Stale pages**: a row absent from the POST stays as it is.
+- **Save** (`board_connection_people_save`, CSRF token id `task_board_connection_people`, form
+  `ConnectionPeopleFormType`, fields `p_<person id>`; any other value is a form error): rows whose value changed go
+  through `TaskSyncPeopleReassigner::reassign()`, so the tasks already imported follow — creator, assignees and watchers
+  the sync added, comment authors (the comment keeps the remote name as its snapshot), checklist items — on every board
+  of the directory; the host moves its tracked time on `SYNC_PERSON_REASSIGNED`, and the time phase sends mapped people's
+  entries from then on. *Not mapped* on a mapped person keeps them as an external person (their sync rows go back to
+  references). A save spends at most `reapply_seconds`; what is left is pending (the page says so) and continues on the
+  next save and **at the end of every sync of a board of the directory** (`PeopleMappingService::resume()`). The save
+  marks the directory reviewed (`SYNC_PEOPLE_REVIEWED`) and dispatches **`SYNC_PEOPLE_MAPPING_CHANGED`**
+  (`PeopleMappingChangedEvent`: board id, directory id, actor id, the changes as ids and mapping states, invitations,
+  pending) once, besides the per-person `SYNC_PERSON_MAPPED` / `SYNC_PERSON_REASSIGNED`.
+- **Invite by e-mail** (`Sync\Hook\PeopleInviterInterface`: `canInvite($board, $actor)`, `invite($board, $email, $name,
+  $actor): ?object`): a returned user is mapped right away (still checked as a candidate); null = pending invitation, the
+  person stays unmapped until a later sync matches the verified account.
+- **Step** (`sync.people.step: true`): linking a board attaches the directory and runs the people pre-scan
+  (`TaskSyncPeopleScanner`, ≤ 15 calls) instead of starting the import, and redirects to the People page, whose buttons
+  are *Save and start the import* and *Start the import without mapping*. Without a people capability (no workspace),
+  or when the scan fails (flash with the provider error), the import starts at once as before.
+- **Run summary.** The connection page shows the people line; the progress JSON gains `unmappedPeople` (people nobody
+  decided: unmatched or suggested).
+- **Access.** Every People route needs `canManageBoardConnection()` (`ACTION_MANAGE_CONNECTION`, deny by default) on
+  the board and on every board sharing the directory, else 404: remote e-mails are only shown to those managers.
+- **Scope.** The mapping is stored per directory: per connection by default (`board:<id>`), or per provider workspace
+  and host tenant when the host's `directoryScope()` returns a shared scope.
+
+## Everything a ClickUp task has (since 1.27.0)
+
+TB-SYNC-3. Remote data is untrusted everywhere: values are type-checked, text is sanitised and cut, links must be
+`http(s)`, files go through `RemoteFileFetcher` (provider attachment hosts only, no private addresses, size caps, type
+sniffing), and nothing remote is rendered unescaped.
+
+### Typed custom fields
+
+`sync.custom_fields.mode`: `typed` (default), `text` (the 1.23 Markdown document only) or `both`.
+
+- **Definitions** per board (`task_board_sync_fields`: provider field id, name, type, remote type, choices, config,
+  position), refreshed when the provider renames or retypes a field. **Values** per task
+  (`task_board_sync_field_values`: the typed value as JSON and a one-line text). The provider is their source: a value
+  it drops is removed; there is no local editing. A re-sync writes nothing when nothing changed.
+- **Types** (`Sync\Field\SyncFieldType`): text (ClickUp `text`, `short_text`), number, money (`currency`, ISO code),
+  date (`date`, with time when the field says so; UTC), dropdown (`drop_down`), labels, checkbox, url, email, phone,
+  rating (`emoji`, 1–10 stars), progress (`automatic_progress` / `manual_progress`, 0–100), people (`users`, stored as
+  references to the directory) and relationship (`tasks`, `list_relationship`). **Any other type, and any value that does
+  not fit its type, is kept as text** (e.g. a `javascript:` URL shows as text, never as a link); the field keeps its type
+  and the view re-checks a value before drawing a link. The one exception is a malformed people value, which is left out:
+  a name goes only through the directory.
+- **Leaving types out**: `sync.custom_fields.exclude_types` (default none). Excluded types are not read into the typed
+  values or the "Fields" document; what is stored of them goes when the task is next written.
+- **Erasure and access**: see [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd). In `text` or `both` mode
+  the "Fields" document holds the values as plain text (a `users` value as names), which neither `anonymise()` nor the
+  eraser reaches; prefer `typed`.
+- **Task panel**: a *Fields* section (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields(task)`): choices as
+  badges (`data-color`), checkbox Yes/No, url as an external link (`rel="noopener noreferrer nofollow"`), email
+  `mailto:`, rating as stars with an accessible label, progress as `<progress>`.
+- **List view**: each row carries `data-search-extra` (Twig `task_board_sync_search_texts(tasks)`, only the rows drawn, once per group
+  and request): the list search finds tasks by their field values.
+- Report counters (`SyncReport::stat()`): `fields.defined`, `fields.values`, `fields.cleared`.
+
+### Comments in full
+
+- **Threads**: replies (`GET comment/{id}/reply`, read for comments with `reply_count > 0`; the replies count against
+  `sync.max_comments_per_task`) follow their comment, oldest first. `task_board_sync_comments.parent_remote_id`; the
+  comment shows *Reply to <name>*.
+- **Files**: the attachment segments of a comment are copied like task attachments (same checks and budgets) and
+  listed under the comment body (*Attachments:* with links to the host's stored copies; a refused file is named
+  without a link). The comment is rewritten when its text or its files change.
+- **Assigned comments (action items)**: the assignee (through the people directory) and the resolved state
+  (`assignee_person_id`, `resolved`), shown as *Assigned to <name>* and *Resolved* / *Open* badges; they are
+  refreshed on every fetch without rewriting the comment.
+- **Edit date**: `remote_updated_at` (*edited in the provider on …*).
+- Twig `task_board_sync_comment_meta(comment)`: `reply`, `replyTo`, `resolved`, `assignee`, `remoteEditedAt`.
+- Not imported: reactions (optional in the request).
+- **TO CONFIRM** against a real workspace: the reply endpoint and the field names `assignee`, `resolved`,
+  `date_updated` and the `attachment` segment shape.
+
+### Dates, points, links, ids, location, status history, archived tasks, recurrence
+
+Kept read-only on the synced task (`task_board_sync_items.remote_meta`) and shown in the task panel's *From
+ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(task)`):
+
+- **Custom task id** (`custom_id`, e.g. `DEV-123`, column `task_board_sync_items.custom_id`), also found by the list search.
+- **Points** (`points`).
+- **Done / closed dates** (`date_done`, `date_closed`, 2000-2100 only). The done (else closed) date becomes the task's
+  completion date when the sync completed the task or the date has not changed here since the last sync; a date set here
+  is kept (`details.completionKept`).
+- **Dates with time**: `start_date_time` / `due_date_time` say whether start and due carry a time of day (the dates
+  themselves are the task's start and due, as before; ClickUp dates are UTC instants).
+- **Location**: the folder (unless hidden) and list names.
+- **Estimate per assignee** (`time_estimates_by_user`, TO CONFIRM against a live workspace). Stored as a reference to
+  the person (`Sync\People\PersonToken`), not a name: `anonymise()` covers it; without a directory it shows `#<id>`.
+- **Recurrence**: a read-only text when the answer has one (`recurrence`; the v2 task answer usually has none, see the
+  completeness report).
+- **Time in status** (`GET task/{id}/time_in_status`, `Sync\Provider\StatusHistoryProviderInterface`): for the tasks
+  a run creates or changes, at most `sync.status_history.max_calls_per_run` per run; a table of status, since and
+  minutes. When ClickUp does not serve it (404 / 410, or another lasting error such as the 400 of a disabled ClickApp,
+  counted as `statusHistory.failed`) the last one stays and the run goes on. A 403 stops the requests for the rest of the
+  run (`statusHistory.forbidden`, `statusHistory.skipped`), and the report shows `time_in_status` as *Unavailable*. A passing error (rate limit, timeout, 5xx,
+  refused token) stops the run as usual and the task is read again by the next one. A task past the budget gets its
+  history when it next changes, or on a full sync.
+- **Linked tasks** (`linked_tasks`, non-blocking) become `related` relations to the other task (in the Gantt), like
+  dependencies; the file import maps them the same way.
+- **Archived tasks** (`sync.import_archived`, default `true`): after the active pages, the archived ones are read
+  (ClickUp `archived=true`, cursor `a<n>`, at least one more request per run) and imported archived (reason `remote`).
+  They do not count against the host's limit of new tasks (`SyncLimitCheckerInterface`), which is about active tasks;
+  every restore, by a sync or by hand, asks it. The id scan
+  of deletions still reads active tasks only.
+- Watchers are mapped to host users through the People mapping (since 1.25); description images are stored and
+  rewritten (since 1.23); attachments keep the provider's order.
+- **Task files**: ClickUp list rows have no `attachments`, so the task's detail (`GET task/{id}`) is read within
+  `sync.watchers.max_detail_calls_per_run`. A task past the budget is counted as `attachments.unread` and shown as *Not
+  read*. A version already read spends no request, whatever else the row lacks, so repeated full syncs get through a large
+  board. A lasting error on the detail (403, too large) leaves that task as it is, the run goes on, and it is listed as
+  `task_detail`, *Unavailable*; a passing one stops the run as usual.
+
+### Completeness report
+
+After each run the connection page lists, per key of the provider's task answers that carried a value, on how many
+tasks and whether it is imported, skipped (with the provider's reason: not supported, not needed, internal) or **Not
+imported yet** (a key the provider does not declare; listed in the summary line). Every task the run read counts,
+written or not; an incremental run reads the tasks changed since the last one, so a full sync gives the whole picture.
+What is still unread is listed above the rest, from what each task keeps (`pending_reads`), so a later run does not hide
+it: `attachments`, `comment_replies` and `task_detail` as *Not read* (request budget; a full sync reaches the next tasks),
+`task_detail` as *Unavailable* (a lasting error). `time_in_status` is *Unavailable* when the provider refused the token in
+the latest run.
+The provider declares its keys with `Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the
+run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`, at most 200 keys per run:
+`completeness.keys`). Only keys and counts are stored, never values.
+
+**After upgrading**, run one full sync per linked board so that existing tasks get all of this
+([UPGRADING](UPGRADING.md#unreleased)).
+
+### Time entries one by one
+
+Already since 1.25 (see [Tracked time](#tracked-time-since-125)): each entry (user through the People mapping, start,
+end, duration, description, billable, tags) reaches the host's `sync.time_entries.sink` one by one as an
+`ImportedTimeEntryCandidate`; since 1.27.0 `ImportedTimeEntryCandidate::user()` gives the mapped host user. The bundle
+never deletes tracked time: not on a re-sync, not when a task, a board or a user is deleted. **Hosts that must never delete
+imported time ignore `$windowComplete`** (it only says a window was read in full).
+
 ## Events
 
 | Constant | Event | Payload |
@@ -435,6 +594,7 @@ whether guests can track time, and what a member token gets when `assignee` list
 | `SYNC_PERSON_ANONYMISED` (1.25) | `SyncPersonAnonymisedEvent` | directory id, person id, actor id |
 | `SYNC_PEOPLE_REVIEWED` (1.25) | `SyncPeopleReviewedEvent` | directory id, actor id, counts per state |
 | `SYNC_PEOPLE_REPROJECTED` (1.25) | `SyncPeopleReprojectedEvent` | user id, board ids, `ReassignReport`, trigger |
+| `SYNC_PEOPLE_MAPPING_CHANGED` (1.27.0) | `PeopleMappingChangedEvent` | board id, directory id, actor id, changes (person id, previous / new mapping and user id), invited, pending |
 
 No event carries a credential, an e-mail or a person name (people events carry ids; listeners must not log the person entities). Like file imports, a sync does not dispatch per-task `TASK_CREATED` / `TASK_UPDATED`.
 

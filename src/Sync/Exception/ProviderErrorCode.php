@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\Exception;
 
+use function in_array;
+
 /**
  * Since 1.23: why a provider call failed. Each code has one fixed English message and a translation key
  * `task_board.sync.error.<value>`.
@@ -20,6 +22,12 @@ enum ProviderErrorCode: string
     case ServerError      = 'server_error';
     case UnsafeUrl        = 'unsafe_url';
     case Transport        = 'transport';
+
+    /** Since 1.27.0: it may work on the next try; any other error will answer the same. */
+    public function isPassing(): bool
+    {
+        return in_array($this, [self::AuthFailed, self::RateLimited, self::Timeout, self::Transport, self::ServerError], true);
+    }
 
     public function message(): string
     {

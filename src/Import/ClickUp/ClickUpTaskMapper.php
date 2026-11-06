@@ -212,9 +212,9 @@ final readonly class ClickUpTaskMapper
     private function extractDependencies(array $row, string $selfId): array
     {
         $items        = $row['dependencies'] ?? null;
-        $dependencies = [];
+        $dependencies = $this->extractLinks($row, $selfId);
         if (!is_array($items)) {
-            return [];
+            return $dependencies;
         }
         foreach ($items as $item) {
             if (!is_array($item)) {
@@ -237,6 +237,29 @@ final readonly class ClickUpTaskMapper
         }
 
         return $dependencies;
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): ClickUp's `linked_tasks` ({task_id, link_id}: two tasks linked without blocking) as
+     * `related` relations to the other task.
+     *
+     * @param array<mixed> $row
+     *
+     * @return list<array{0: string, 1: TaskDependencyType}>
+     */
+    private function extractLinks(array $row, string $selfId): array
+    {
+        $links = [];
+        foreach (is_array($row['linked_tasks'] ?? null) ? $row['linked_tasks'] : [] as $item) {
+            $one   = is_array($item) ? $this->stringValue($item['task_id'] ?? null) : '';
+            $other = is_array($item) ? $this->stringValue($item['link_id'] ?? null) : '';
+            $id    = $one === $selfId ? $other : $one;
+            if ($selfId !== '' && $id !== '' && $id !== $selfId && ($one === $selfId || $other === $selfId)) {
+                $links[$id] = [$id, TaskDependencyType::Related];
+            }
+        }
+
+        return array_values($links);
     }
 
     /**

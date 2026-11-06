@@ -438,10 +438,11 @@ class Task
         return $this->completedAt instanceof DateTimeImmutable;
     }
 
-    public function markCompleted(): self
+    /** Since 1.27.0: `$at` = when it was done (a provider's done date); default now. */
+    public function markCompleted(?DateTimeImmutable $at = null): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->completedAt = new DateTimeImmutable();
+        $this->completedAt = $at ?? new DateTimeImmutable();
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
 

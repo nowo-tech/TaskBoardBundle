@@ -605,6 +605,14 @@ nowo_task_board:
         badge:
             connect_link: true        # since 1.25.2: false = an unlinked board shows no badge (no "Connect provider" link)
             progress: false           # since 1.26.3: true = the bundle's badge shows a determinate bar of the running run
+        custom_fields:
+            mode: typed               # since 1.27.0: typed (field definitions + typed values) | text (1.23 "Fields" document) | both
+            exclude_types: []         # since 1.27.0: field types never imported, e.g. [email, phone, text]. Default: none (everything is imported); see SECURITY.md
+        comments:
+            max_reply_calls_per_run: 500 # since 1.27.0: requests for comment threads per run (0 = no replies); the rest is reported
+        import_archived: true         # since 1.27.0: archived provider tasks are read and imported archived (false = 1.26)
+        status_history:
+            max_calls_per_run: 200    # since 1.27.0: "time in status" requests per run for the tasks it writes (0 = never)
         # Since 1.25 (ClickUp full import; see sync.md):
         list_as_tag: false            # tag "list:<name>" on tasks of a folder / space source
         lookup:
@@ -613,6 +621,12 @@ nowo_task_board:
             resolver: ~               # SyncPersonResolverInterface; null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board)
             require_verified_email: true   # false = an unverified e-mail match is applied as `auto` (1.23 parity)
             reassign_batch_size: 500  # 50–2000
+            # Since 1.27.0 (TB-SYNC-2): the People page / step (see sync.md "People page and step")
+            step: false               # true = linking scans the people and opens the People page; its save starts the import
+            inviter: ~                # PeopleInviterInterface ("Invite by e-mail"); null = no invite option
+            page_size: 50             # people per page (10–200)
+            candidate_limit: 200      # host users offered per select (1–1000)
+            reapply_seconds: 10       # seconds a save (and the end of each sync) spends re-applying changed mappings (0–60)
             scan:
                 max_task_pages: 1     # 1–5
                 max_comment_tasks: 10 # 0–50
@@ -638,7 +652,14 @@ Since 1.25 the sync tables gain a people directory (schema in [UPGRADING — To 
 New routes (configurable like the others, copied under `tenancy.tenant_paths`): `board_connection` (GET),
 `board_connection_containers`, `board_connection_link`, `board_connection_refresh`, `board_connection_cancel`,
 `board_connection_unlink` (POST, CSRF), `board_connection_progress` (GET, JSON), and `task_restore` (POST, always on).
-New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`.
+New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`;
+since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
+Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.
+Since 1.27.0 the partials `manage/_connection_completeness.html.twig` (variable `completeness`, on the connection page)
+and `manage/_task_sync_details.html.twig` / `_task_sync_fields.html.twig` (task panel) are included by the bundle's
+templates; a host with its own `templates.connection` includes the first one itself.
+`sync.import_archived` and `sync.status_history.max_calls_per_run` cost provider requests: one more pass (at least one
+request per run) and one request per task written, see [sync.md](sync.md#everything-a-clickup-task-has-since-1270).
 
 Since 1.25.2, `sync.badge.connect_link: false` hides the board / list / Gantt header badge of an **unlinked** board
 (the *Connect provider* link and its strip) for hosts that offer the connection elsewhere (e.g. an import menu linking

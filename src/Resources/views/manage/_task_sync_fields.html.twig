@@ -1,0 +1,38 @@
+{#
+    Since 1.27.0 (TB-SYNC-3): the typed custom fields a provider sync wrote on the task (read-only: the provider is
+    their source). fields = task_board_sync_fields(task). Remote text is escaped; URLs were checked (http/https) and
+    open in a new tab without referrer.
+#}
+{% if fields is not empty %}
+    <section class="nowo-task-detail__section nowo-task-detail__sync-fields" aria-labelledby="nowo-task-sync-fields-title" data-testid="nowo-task-sync-fields">
+        <h3 class="nowo-task-detail__section-title" id="nowo-task-sync-fields-title">{{ 'task_board.sync.fields.title'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+        <dl class="nowo-task-detail__attrs">
+            {% for field in fields %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-field-type="{{ field.type }}">
+                    <dt class="nowo-task-detail__field-label"><span>{{ field.name }}</span></dt>
+                    <dd class="nowo-task-detail__field-value">
+                        {% if field.type == 'checkbox' %}
+                            {{ (field.value ? 'task_board.sync.fields.yes' : 'task_board.sync.fields.no')|trans({}, 'NowoTaskBoardBundle') }}
+                        {% elseif field.type == 'url' and field.value matches '{^https?://}i' %}
+                            <a href="{{ field.value }}" target="_blank" rel="noopener noreferrer nofollow">{{ field.text }}</a>
+                        {% elseif field.type == 'email' %}
+                            <a href="mailto:{{ field.value|url_encode|replace({'%40': '@'}) }}">{{ field.text }}</a>
+                        {% elseif field.type == 'date' %}
+                            <time datetime="{{ field.value }}">{{ field.text }}</time>
+                        {% elseif field.type == 'rating' %}
+                            <span aria-label="{{ 'task_board.sync.fields.rating'|trans({'%value%': field.value, '%max%': field.config.max|default(5)}, 'NowoTaskBoardBundle') }}">{% for _i in 1..(field.config.max|default(5)) %}{{ _i <= field.value ? '★' : '☆' }}{% endfor %}</span>
+                        {% elseif field.type == 'progress' %}
+                            <progress max="100" value="{{ field.value }}" aria-label="{{ field.name }}"></progress> {{ field.text }}
+                        {% elseif field.type == 'dropdown' or field.type == 'labels' %}
+                            {% for choice in field.choices %}
+                                <span class="badge nowo-task-badge"{% if choice.color %} data-color="{{ choice.color }}"{% endif %}>{{ choice.name }}</span>
+                            {% endfor %}
+                        {% else %}
+                            {{ field.text }}
+                        {% endif %}
+                    </dd>
+                </div>
+            {% endfor %}
+        </dl>
+    </section>
+{% endif %}

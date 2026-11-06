@@ -42,7 +42,7 @@ use function random_bytes;
 /**
  * Since 1.25: empties or deletes a board in resumable slices (Beacon "vaciar tablero" / delete board).
  *
- * Owner rule: **deleting tasks or boards keeps all tracked time**. The manual `TaskTimeEntry` rows are detached
+ * Owner rule: **deleting tasks, boards or users keeps all tracked time**. The manual `TaskTimeEntry` rows are detached
  * (`task` = null, snapshots kept, since 1.23.2) and TimeTrack entries are never touched: they keep their task id and
  * snapshots. Imported time is deleted only by an explicit manager action in TimeTrack, never here.
  *

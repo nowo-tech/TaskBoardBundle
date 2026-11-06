@@ -1,0 +1,35 @@
+{#
+    Since 1.27.0 (TB-SYNC-3): the completeness report of the latest run — each key of the provider's task answers that
+    carried a value, on how many tasks, and whether it is imported, why not, or "Not imported yet" (a key the provider
+    does not declare). completeness = list<{key, tasks, status}>, provider.
+#}
+{% if completeness is not empty %}
+    {% set _missing = completeness|filter(row => row.status == 'not_imported_yet') %}
+    <details class="nowo-task-sync__completeness mb-3" data-testid="nowo-task-sync-completeness">
+        <summary>
+            {{ 'task_board.sync.completeness.title'|trans({}, 'NowoTaskBoardBundle') }}
+            {% if _missing is not empty %}
+                <span data-testid="nowo-task-sync-not-imported">{{ 'task_board.sync.completeness.not_imported_yet_list'|trans({'%keys%': _missing|map(row => row.key)|join(', ')}, 'NowoTaskBoardBundle') }}</span>
+            {% endif %}
+        </summary>
+        <table class="table table-sm">
+            <caption class="visually-hidden">{{ 'task_board.sync.completeness.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">{{ 'task_board.sync.completeness.field'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    <th scope="col">{{ 'task_board.sync.completeness.tasks'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                    <th scope="col">{{ 'task_board.sync.completeness.result'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in completeness %}
+                    <tr data-completeness-key="{{ row.key }}" data-completeness-status="{{ row.status }}">
+                        <td><code>{{ row.key }}</code></td>
+                        <td>{{ row.tasks }}</td>
+                        <td>{{ ('task_board.sync.completeness.status.' ~ row.status)|trans({}, 'NowoTaskBoardBundle') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
+{% endif %}

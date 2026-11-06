@@ -11,13 +11,19 @@ use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use SortDirection;
 
 use function array_map;
+use function count;
+use function in_array;
+use function is_array;
 use function max;
 
 use const DATE_ATOM;
@@ -27,6 +33,8 @@ use const DATE_ATOM;
  */
 final readonly class TaskSyncPersonRepository
 {
+    private const EXPORT_PAGE = 500;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
     ) {
@@ -75,6 +83,24 @@ final readonly class TaskSyncPersonRepository
 
         /** @var list<TaskSyncPerson> $people */
         $people = $builder->getQuery()->getResult();
+
+        return $people;
+    }
+
+    /**
+     * Since 1.27.0: people whose re-association is not finished (a pending target is stored), by id.
+     *
+     * @return list<TaskSyncPerson>
+     */
+    public function pendingReassigns(TaskSyncDirectory $directory, int $limit = 50): array
+    {
+        /** @var list<TaskSyncPerson> $people */
+        $people = $this->entityManager->createQueryBuilder()
+            ->select('p')->from(TaskSyncPerson::class, 'p')
+            ->where('p.directory = :directory')->andWhere('p.reassignId IS NOT NULL')
+            ->setParameter('directory', $directory)
+            ->orderBy('p.id', SortDirection::Ascending)->setMaxResults(max(1, $limit))
+            ->getQuery()->getResult();
 
         return $people;
     }
@@ -303,6 +329,83 @@ final readonly class TaskSyncPersonRepository
         $people = $this->entityManager->getRepository(TaskSyncPerson::class)->findBy(['directory' => $directory], ['id' => 'ASC']);
 
         return array_map($this->exportRow(...), $people);
+    }
+
+    /**
+     * Since 1.27.0 (audit I6): an access request for one person — the row, the estimates per task, the comments assigned
+     * to them and the `people` custom fields that name them. Comment bodies and task text are not searched. **The host
+     * authorises the caller.**.
+     *
+     * @return array{person: array<string, string|null>, estimates: list<array{taskId: string, minutes: int}>, commentAssignments: list<array{taskId: string, commentId: string, resolved: bool|null}>, fields: list<array{taskId: string, field: string}>}
+     */
+    public function exportPerson(TaskSyncPerson $person): array
+    {
+        $token = 'person:' . $person->getId();
+
+        /** @var list<array{taskId: string, commentId: string, resolved: bool|null}> $assigned */
+        $assigned = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(i.task) AS taskId', 'IDENTITY(c.comment) AS commentId', 'c.resolved AS resolved')
+            ->from(TaskSyncComment::class, 'c')->join('c.item', 'i')
+            ->where('c.assigneePerson = :person')->setParameter('person', $person)
+            ->getQuery()->getArrayResult();
+
+        return ['person' => $this->exportRow($person), 'estimates' => $this->estimatesOf($person->getDirectory(), $token), 'commentAssignments' => $assigned, 'fields' => $this->fieldsNaming($person->getDirectory(), $token)];
+    }
+
+    /**
+     * @return list<array{taskId: string, minutes: int}>
+     */
+    private function estimatesOf(TaskSyncDirectory $directory, string $token): array
+    {
+        $found = [];
+        $after = '';
+        do {
+            /** @var list<array{id: string, taskId: string|null, meta: array<string, mixed>|null}> $page */
+            $page = $this->entityManager->createQueryBuilder()
+                ->select('i.id AS id', 'IDENTITY(i.task) AS taskId', 'i.remoteMeta AS meta')->from(TaskSyncItem::class, 'i')->join('i.connection', 'c')
+                ->where('c.directory = :directory')->andWhere('i.id > :after')->andWhere('i.remoteMeta IS NOT NULL')
+                ->setParameter('directory', $directory)->setParameter('after', $after)
+                ->orderBy('i.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
+            foreach ($page as $row) {
+                $after     = $row['id'];
+                $estimates = $row['meta']['estimates'] ?? [];
+                foreach (is_array($estimates) ? $estimates : [] as $estimate) {
+                    if ($row['taskId'] !== null && is_array($estimate) && ($estimate['person'] ?? null) === $token) {
+                        $found[] = ['taskId' => $row['taskId'], 'minutes' => (int) ($estimate['minutes'] ?? 0)];
+                    }
+                }
+            }
+        } while (count($page) === self::EXPORT_PAGE);
+
+        return $found;
+    }
+
+    /**
+     * @return list<array{taskId: string, field: string}>
+     */
+    private function fieldsNaming(TaskSyncDirectory $directory, string $token): array
+    {
+        $found = [];
+        foreach ($this->connectionsOf($directory) as $connection) {
+            $after = '';
+            do {
+                /** @var list<array{id: string, taskId: string, field: string, value: mixed}> $page */
+                $page = $this->entityManager->createQueryBuilder()
+                    ->select('v.id AS id', 'IDENTITY(v.task) AS taskId', 'f.name AS field', 'v.value AS value')
+                    ->from(TaskSyncFieldValue::class, 'v')->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
+                    ->where('f.board = :board')->andWhere('f.type = :people')->andWhere('v.id > :after')
+                    ->setParameter('board', $connection->getBoard())->setParameter('people', SyncFieldType::People->value)->setParameter('after', $after)
+                    ->orderBy('v.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
+                foreach ($page as $row) {
+                    $after = $row['id'];
+                    if (is_array($row['value']) && in_array($token, $row['value'], true)) {
+                        $found[] = ['taskId' => $row['taskId'], 'field' => $row['field']];
+                    }
+                }
+            } while (count($page) === self::EXPORT_PAGE);
+        }
+
+        return $found;
     }
 
     /**

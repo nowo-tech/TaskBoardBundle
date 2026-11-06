@@ -13,12 +13,17 @@ use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
+use Nowo\TaskBoardBundle\Sync\Provider\ReplyBudget;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
+use function count;
 use function iterator_to_array;
 use function json_encode;
 use function parse_str;
@@ -275,9 +280,138 @@ final class ClickUpTaskProviderTest extends TestCase
     }
 
     /**
+     * Since 1.27.0 (TB-SYNC-3): threads (replies after their comment, oldest first, within the comment cap), comment
+     * files, assigned comments and their resolved state, the edit date, and typed custom fields on the task.
+     */
+    public function testThreadsActionItemsCommentFilesAndTypedFields(): void
+    {
+        $file     = ['id' => 'att1', 'title' => 'spec.pdf', 'url' => 'https://t000.p.clickup-attachments.com/att1/spec.pdf', 'size' => 10, 'mimetype' => 'application/pdf'];
+        $provider = $this->provider([
+            'task/T/comment?' => new MockResponse((string) json_encode(['comments' => [
+                ['id' => 'c2', 'comment_text' => 'Second', 'date' => '1790000002000', 'reply_count' => 0],
+                ['id' => 'c1', 'comment' => [['text' => 'See '], ['type' => 'attachment', 'text' => 'spec.pdf', 'attachment' => $file], ['type' => 'attachment']], 'date' => '1790000001000', 'reply_count' => '2', 'assignee' => ['id' => 7, 'username' => 'Ana'], 'resolved' => true, 'date_updated' => '1790000009000', 'user' => ['id' => 5, 'username' => 'Bob']],
+            ]])),
+            'comment/c1/reply' => new MockResponse((string) json_encode(['comments' => [
+                ['id' => 'r2', 'comment_text' => 'Later reply', 'date' => '1790000004000'],
+                ['id' => 'r1', 'comment_text' => 'First reply', 'date' => '1790000003000', 'resolved' => true],
+                ['comment_text' => 'no id'],
+            ]])),
+            'list/L/task' => new MockResponse((string) json_encode(['tasks' => [['id' => 'ok', 'name' => 'Ok', 'custom_fields' => [['id' => 'f1', 'name' => 'Budget', 'type' => 'currency', 'type_config' => ['currency_type' => 'USD'], 'value' => '10']]]], 'last_page' => true])),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+
+        $comments = [...$provider->fetchComments($credential, 'T')];
+        self::assertSame(['c1', 'r1', 'r2', 'c2'], array_map(static fn (RemoteComment $c): string => $c->id, $comments));
+        self::assertSame([null, 'c1', 'c1', null], array_map(static fn (RemoteComment $c): ?string => $c->parentId, $comments));
+        self::assertSame('See', trim($comments[0]->body), 'the attachment segment is a file, not text');
+        self::assertCount(1, $comments[0]->attachments);
+        self::assertSame('spec.pdf', $comments[0]->attachments[0]->name);
+        self::assertSame('7', $comments[0]->assignee?->providerUserId);
+        self::assertTrue($comments[0]->resolved);
+        self::assertSame(1790000009, $comments[0]->updatedAt?->getTimestamp());
+        self::assertNull($comments[1]->resolved, 'resolved without an assignee is no action item');
+        self::assertSame('https://api.clickup.com/api/v2/comment/c1/reply', $this->requests[1]['url']);
+        $task = $provider->fetchTasks($credential, 'L', null, null)->tasks[0];
+        self::assertSame('10 USD', $task->customFields[0]->text);
+
+        // The cap counts the replies: with two comments at most, no reply is read.
+        $capped = $this->provider(['task/T/comment?' => new MockResponse((string) json_encode(['comments' => [['id' => 'c1', 'comment_text' => 'A', 'reply_count' => 3], ['id' => 'c0', 'comment_text' => 'B']]]))], maxComments: 2);
+        self::assertCount(2, [...$capped->fetchComments($credential, 'T')]);
+        self::assertCount(1, $this->requests);
+        $one = $this->provider([
+            'task/T/comment?'  => new MockResponse((string) json_encode(['comments' => [['id' => 'c1', 'comment_text' => 'A', 'reply_count' => 3]]])),
+            'comment/c1/reply' => new MockResponse((string) json_encode(['comments' => [['id' => 'r1', 'comment_text' => 'x'], ['id' => 'r2', 'comment_text' => 'y']]])),
+        ], maxComments: 2);
+        self::assertSame(['c1', 'r1'], array_map(static fn (RemoteComment $c): string => $c->id, [...$one->fetchComments($credential, 'T')]));
+
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): custom id, points, done / closed dates, time flags, location, estimates, recurrence,
+     * the keys with a value, linked tasks, the declared coverage, the time in status and the archived pass.
+     */
+    public function testDetailsLinksHistoryAndTheArchivedPass(): void
+    {
+        $row = [
+            'id'                     => 'ok', 'name' => 'Ok', 'custom_id' => 'DEV-123', 'points' => 2.5, 'date_done' => '1790000000000', 'date_closed' => '1790000100000',
+            'start_date_time'        => true, 'due_date_time' => false, 'folder' => ['id' => 'f', 'name' => 'Folder', 'hidden' => false], 'list' => ['id' => 'l', 'name' => 'List'],
+            'time_estimates_by_user' => [['user' => ['id' => 7, 'username' => 'Ana'], 'time_estimate' => 5_400_000], ['user' => ['id' => 'bad id!'], 'time_estimate' => 1], 'junk'],
+            'recurrence'             => 'Every week', 'linked_tasks' => [['task_id' => 'ok', 'link_id' => 'other'], ['task_id' => 'third', 'link_id' => 'ok'], ['task_id' => 'x', 'link_id' => 'y'], 'junk'],
+            'Bad-Key'                => 1, 'empty' => '', 'mystery' => ['a'],
+        ];
+        $odd      = ['id' => 'odd', 'name' => 'Odd', 'custom_id' => 'not valid!', 'points' => 'many', 'folder' => ['id' => 'f', 'name' => 'Hidden', 'hidden' => true], 'recurrence' => ['x']];
+        $provider = $this->provider([
+            'list/L/task?page=0'       => new MockResponse((string) json_encode(['tasks' => [$row, $odd, ['id' => 'inf', 'name' => 'Inf', 'points' => '1e999']], 'last_page' => true])),
+            'task/dup/time_in_status'  => new MockResponse((string) json_encode(['current_status' => ['status' => 'open'], 'status_history' => [['status' => 'open', 'total_time' => ['by_minute' => 9]], ['status' => 'done', 'total_time' => ['by_minute' => 2]]]])),
+            'list/L/task?page=1'       => new MockResponse((string) json_encode(['tasks' => [], 'last_page' => true])),
+            'task/ok/time_in_status'   => new MockResponse((string) json_encode(['current_status' => ['status' => 'done', 'total_time' => ['by_minute' => 3, 'since' => '1790000000000']], 'status_history' => [['status' => 'to do', 'total_time' => ['by_minute' => 60, 'since' => '1789000000000']], ['status' => 'done', 'total_time' => []], 'junk', ['status' => '']]])),
+            'task/new/time_in_status'  => new MockResponse((string) json_encode(['current_status' => ['status' => 'open'], 'status_history' => 'junk'])),
+            'task/none/time_in_status' => new MockResponse((string) json_encode(['status_history' => []])),
+        ], includeArchived: true);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+
+        $page = $provider->fetchTasks($credential, 'L', null, null);
+        self::assertSame(['a0', false], [$page->nextCursor, $page->lastPage], 'the archived pass follows the active pages');
+        $details = $page->tasks[0]->details;
+        self::assertSame(['DEV-123', '2.5', 1790000000, 1790000100, true, false, ['Folder', 'List'], 'Every week'], [$details?->customId, $details?->points, $details?->doneAt?->getTimestamp(), $details?->closedAt?->getTimestamp(), $details?->startHasTime, $details?->dueHasTime, $details?->path, $details?->recurrence]);
+        self::assertSame(['7', 90], [$details?->estimates[0]['person']->providerUserId, $details?->estimates[0]['minutes']]);
+        self::assertArrayNotHasKey('estimates', (array) $details?->toArray(), 'no person name in the stored JSON');
+        self::assertTrue($page->passEnded, 'an empty last active page is not a stalled list');
+        self::assertNull($page->tasks[2]->details?->points, 'not a finite number');
+        self::assertSame(['other', 'third'], array_map(static fn (array $d): string => $d[0], $page->tasks[0]->task->dependsOn));
+        self::assertNotContains('Bad-Key', $page->tasks[0]->presentKeys);
+        self::assertNotContains('empty', $page->tasks[0]->presentKeys);
+        self::assertContains('mystery', $page->tasks[0]->presentKeys);
+        self::assertSame([null, null, [], null], [$page->tasks[1]->details?->customId, $page->tasks[1]->details?->points, $page->tasks[1]->details?->path, $page->tasks[1]->details?->recurrence]);
+        self::assertSame([], (new RemoteTaskDetails())->toArray());
+
+        $archived = $provider->fetchTasks($credential, 'L', null, 'a0');
+        self::assertSame('true', $this->requests[count($this->requests) - 1]['query']['archived']);
+        self::assertSame([null, true, false], [$archived->nextCursor, $archived->lastPage, $archived->passEnded]);
+
+        self::assertSame('imported', $provider->fieldCoverage()['custom_id']);
+        $history = $provider->fetchStatusHistory($credential, 'ok');
+        self::assertSame([['to do', 60, false], ['done', 3, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $history));
+        self::assertSame(1790000000, $history[1]->since?->getTimestamp());
+        self::assertSame([['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'new')));
+        self::assertSame([['done', 2, false], ['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'dup')), 'the current status goes last, once');
+        self::assertSame([], $provider->fetchStatusHistory($credential, 'none'));
+        self::assertNull($provider->fetchStatusHistory($credential, 'missing'), 'not served (404)');
+    }
+
+    /** Since 1.27.0 (audit GWd-L4): a people value in the "Fields" document has names, never e-mails. */
+    public function testTheFieldsDocumentHasNoEmailsOfPeople(): void
+    {
+        $provider = $this->provider(['list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'ok', 'name' => 'Ok', 'custom_fields' => [
+            ['id' => 'f1', 'name' => 'Owners', 'type' => 'users', 'value' => [['id' => 7, 'username' => 'User 7', 'email' => 'user7@example.test'], 'junk']],
+        ]]], 'last_page' => true]))]);
+        self::assertSame('- **Owners**: User 7', $provider->fetchTasks(new ProviderCredential('pk_test_token', 'conn-1'), 'L', null, null)->tasks[0]->customFieldsText);
+    }
+
+    /** Since 1.27.0 (audit GW-L6, GW-I9, GW-L7): reply requests are budgeted, a 404 has no thread, dates are bounded. */
+    public function testReplyBudgetGoneThreadsAndBoundedDates(): void
+    {
+        $comments = array_map(static fn (int $i): array => ['id' => 'c' . $i, 'comment_text' => 'Body ' . $i, 'date' => '179000000' . $i . '000', 'reply_count' => 1], [1, 2, 3]);
+        $provider = $this->provider([
+            'task/T/comment'     => new MockResponse((string) json_encode(['comments' => $comments])),
+            'comment/c1/reply'   => new MockResponse('{}', ['http_code' => 404]),
+            'comment/c2/reply'   => new MockResponse((string) json_encode(['comments' => []])),
+            'list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'far', 'name' => 'Far', 'date_done' => '999999999999999', 'date_closed' => '100000'], ['id' => 'ok', 'name' => 'Ok', 'attachments' => []]], 'last_page' => true])),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+        $budget     = new ReplyBudget(2);
+        self::assertCount(3, [...$provider->fetchCommentsWithin($credential, 'T', $budget)]);
+        self::assertSame([2, 1], [$budget->used, $budget->skipped]);
+
+        $page = $provider->fetchTasks($credential, 'L', null, null);
+        self::assertSame([null, null], [$page->tasks[0]->details?->doneAt, $page->tasks[0]->details?->closedAt]);
+        self::assertSame([false, true], [$page->tasks[0]->attachmentsKnown, $page->tasks[1]->attachmentsKnown]);
+    }
+
+    /**
      * @param array<string, MockResponse|string> $routes
      */
-    private function provider(array $routes, int $maxComments = 500, ?RecordingLogger $logger = null): ClickUpTaskProvider
+    private function provider(array $routes, int $maxComments = 500, ?RecordingLogger $logger = null, bool $includeArchived = false): ClickUpTaskProvider
     {
         $this->routes   = $routes;
         $this->requests = [];
@@ -310,6 +444,7 @@ final class ClickUpTaskProviderTest extends TestCase
             new ProviderHttpClient($client, new RecordingSleeper(), new MockClock()),
             maxComments: $maxComments,
             logger: $logger ?? new RecordingLogger(),
+            includeArchived: $includeArchived,
         );
     }
 }

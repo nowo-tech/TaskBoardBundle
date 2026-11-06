@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Sync\Event\BoardConnectionEvent;
+use Nowo\TaskBoardBundle\Sync\Event\PeopleMappingChangedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFailedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFinishedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
@@ -106,6 +107,9 @@ final class TaskBoardEvents
 
     /** Since 1.25: {@see SyncPeopleReprojectedEvent} — references became real rows. */
     public const SYNC_PEOPLE_REPROJECTED = 'nowo_task_board.sync_people_reprojected';
+
+    /** Since 1.27.0: {@see PeopleMappingChangedEvent} — the People page saved mapping changes (one event per save, for the host's audit). */
+    public const SYNC_PEOPLE_MAPPING_CHANGED = 'nowo_task_board.sync_people_mapping_changed';
 
     /** {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). */
     public const TASK_ERASED = 'nowo_task_board.task_erased';

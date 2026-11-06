@@ -38,6 +38,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
@@ -99,6 +100,8 @@ final readonly class TaskBoardSyncService
         private ?TaskSyncPeopleDirectoryService $people = null,
         private ?TimeEntryPhase $timePhase = null,
         private ?BoardColumnManager $columnManager = null,
+        // Since 1.27.0 (TB-SYNC-2): resumes the re-application of changed people mappings after each run.
+        private ?PeopleMappingService $peopleMapping = null,
     ) {
     }
 
@@ -316,8 +319,7 @@ final readonly class TaskBoardSyncService
             $this->logger->info('TaskBoard sync started', $this->logContext($ctx));
 
             $status = $this->execute($ctx);
-
-            return $this->finish($ctx, $status);
+            $report = $this->finish($ctx, $status);
         } catch (Throwable $exception) {
             // Anything before the phases (the provider's container lookup, the database): the run fails cleanly.
             $this->logger->error('TaskBoard sync failed', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'run_id' => $runId, 'exception' => $exception::class]);
@@ -333,6 +335,22 @@ final readonly class TaskBoardSyncService
             return $report;
         } finally {
             $this->store->releaseLock($connectionId, $runId);
+        }
+        // Since 1.27.0 (TB-SYNC-2): mapping changes not yet re-applied to the imported tasks continue after each run
+        // (outside the run's lock: the re-association takes each board's lock itself).
+        if (!$options->dryRun) {
+            $this->resumePeople($connectionId, $options->actor);
+        }
+
+        return $report;
+    }
+
+    /** Since 1.27.0: continues the directory's unfinished re-associations (each refusal stays pending; see PeopleMappingService::resume()). */
+    private function resumePeople(string $connectionId, object $actor): void
+    {
+        $directory = $this->peopleMapping instanceof PeopleMappingService ? $this->entityManager->find(TaskBoardConnection::class, $connectionId)?->getDirectory() : null;
+        if ($directory instanceof TaskSyncDirectory) {
+            $this->peopleMapping?->resume($directory, $this->attached($actor));
         }
     }
 
@@ -400,7 +418,7 @@ final readonly class TaskBoardSyncService
                     if ($page->lastPage || $page->nextCursor === null) {
                         break;
                     }
-                    if ($ctx->tasksSeen === $seenWas) {
+                    if ($ctx->tasksSeen === $seenWas && !$page->passEnded) {
                         // A page that brings no new task (empty, or only ids already read): the list does not advance.
                         $ctx->warn('paging_stopped');
                         $ctx->pagingStopped = true;
@@ -611,6 +629,7 @@ final readonly class TaskBoardSyncService
             $ctx->actor = $this->entityManager->find($actor[0], $actor[1]) ?? $ctx->actor;
         }
         $ctx->positions = [];
+        $ctx->fields    = [];
     }
 
     /** A caller may pass an actor detached by an earlier clear: the run records the managed instance. */

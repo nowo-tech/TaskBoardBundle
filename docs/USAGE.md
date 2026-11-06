@@ -761,6 +761,17 @@ archive and restore its tasks. It is opt-in (`sync.enabled`) and the host keeps 
 configuration, the field and conflict rules, the mass-archive guard, files, background runs, the command, the UI and
 the events — is in [sync.md](sync.md).
 
+**What a linked board brings (since 1.27.0).** Managers map remote people to host users on the *People* page of the
+connection; a candidate of the same name is suggested, never selected for them. The task panel shows the typed custom fields and a read-only *From ClickUp* section: custom task id
+(also found by the list search), points, done and closed dates, location, estimate per assignee, recurrence and time in
+status. Linked tasks appear as *related* relations, and archived tasks are imported archived. After each run the
+connection page lists every field of the provider's answers: imported, skipped (with the reason) or *Not imported yet*.
+What a run could not read is listed as *Not read* or *Unavailable*. Hosts choose which custom field types are imported
+(`sync.custom_fields.exclude_types`) and own erasure and access requests: [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+**Tracked time is never deleted by a sync, or when a task, a board or a user is deleted**: the entries stay, detached. A manual
+entry is removed only by its author or a board manager. Removing
+imported time is an explicit manager action in TimeTrack.
+
 **Archived tasks** (every host): `Task::archive()` / `restore()` / `isArchived()`. An archived task is hidden from the
 board, the list, the Gantt and the counts (`findByBoard()`, `findByBoardWithin()`, `countByBoard()`); the list view shows
 the archived tasks in a folded "Archived tasks" section with *Restore* for editors (route `task_restore`, CSRF token id

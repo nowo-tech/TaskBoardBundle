@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Dto\TimeCounts;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
@@ -57,7 +58,14 @@ final class SyncRunContext
     /** Since audit EG-L2: the most task pages of the run (0: the configured default). */
     public int $pageCap = 0;
     /** Since audit EG-I11: the task list stopped advancing; the watermark must not move past unseen tasks. */
-    public bool $pagingStopped               = false;
+    public bool $pagingStopped = false;
+
+    /**
+     * Since 1.27.0: tasks the sync itself completed on this page (a provider's done date may be applied to them).
+     *
+     * @var array<string, true>
+     */
+    public array $completedBySync            = [];
     public bool $filesBlocked                = false;
     public ?string $refusalCode              = null;
     public ?int $retryAfter                  = null;
@@ -113,6 +121,14 @@ final class SyncRunContext
     public int $timeSplitSeconds = 0;
 
     public ?string $timeMode = null;
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): the board's custom field definitions loaded or created on this page (remote id =>
+     * entity); cleared with the entity manager after each page.
+     *
+     * @var array<string, TaskSyncField>
+     */
+    public array $fields = [];
 
     public function __construct(
         public string $runId,

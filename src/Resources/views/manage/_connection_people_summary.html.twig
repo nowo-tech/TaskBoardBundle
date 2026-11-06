@@ -1,0 +1,19 @@
+{#
+    Since 1.27.0 (TB-SYNC-2): the People line of a linked board's connection page — how many remote people are mapped,
+    how many nobody decided yet, and the link to the People page. peopleSummary (null: nothing to show).
+    Override with templates.connection_people_summary.
+#}
+{% if peopleSummary %}
+    <section class="nowo-task-sync__people mb-3" aria-labelledby="nowo-task-sync-people-summary-title" data-testid="nowo-task-sync-people-summary">
+        <h3 class="h4" id="nowo-task-sync-people-summary-title">{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+        <p class="mb-2">
+            {{ 'task_board.sync.people.summary'|trans({'%mapped%': peopleSummary.mapped, '%total%': peopleSummary.total}, 'NowoTaskBoardBundle') }}
+            {% if peopleSummary.unreviewed > 0 %}
+                <strong data-testid="nowo-task-sync-people-unmapped">{{ 'task_board.sync.people.unmapped'|trans({'%count%': peopleSummary.unreviewed}, 'NowoTaskBoardBundle') }}</strong>
+            {% endif %}
+        </p>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ peopleSummary.url }}" data-testid="nowo-task-sync-people-link">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'users'}) }}{{ 'task_board.sync.people.manage'|trans({}, 'NowoTaskBoardBundle') }}
+        </a>
+    </section>
+{% endif %}

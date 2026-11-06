@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncPhase;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
@@ -75,6 +76,11 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
         self::assertSame(['e1', 'e4'], array_map(static fn (ImportedTimeEntryCandidate $c): string => $c->entry->id, $delivered));
         self::assertSame('Task', $delivered[0]->task?->getTitle());
         self::assertSame('9001', $delivered[0]->person->getProviderUserId());
+        // Since 1.27.0: the host user of the entry (the person's mapping); none once the person is unmapped.
+        self::assertSame($delivered[0]->person->getMappedUser(), $delivered[0]->user());
+        self::assertNotNull($delivered[0]->user());
+        $delivered[0]->person->map(TaskSyncPersonMapping::Unmatched, null, null, new DateTimeImmutable());
+        self::assertNull($delivered[0]->user());
         self::assertNull($delivered[1]->task, 'not linked on this board');
         // e5: 9555 is not in the directory, so its id is never sent as an assignee.
         self::assertSame(self::LIST, RecordingTimeSink::$calls[0]['window']->location->id);

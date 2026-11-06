@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -49,6 +50,7 @@ use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
@@ -64,14 +66,17 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
@@ -231,6 +236,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.inline_slice_pages', $sync['inline_slice_pages']);
         $container->setParameter('nowo_task_board.sync.progress.poll_interval_ms', $sync['progress']['poll_interval_ms']);
         $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
+        $container->setParameter('nowo_task_board.sync.people.step', (bool) $sync['people']['step']);
+        $container->setParameter('nowo_task_board.sync.people.page_size', (int) $sync['people']['page_size']);
 
         $loader->load('services_sync.yaml');
         $container->registerForAutoconfiguration(SyncTaskProviderInterface::class)->addTag('nowo_task_board.task_provider');
@@ -260,6 +267,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxComments', $sync['max_comments_per_task'])
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
                 ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
+                ->setArgument('$includeArchived', (bool) $sync['import_archived'])
+                ->setArgument('$excludedFieldTypes', $sync['custom_fields']['exclude_types'])
                 ->addTag('nowo_task_board.task_provider'));
         }
         $this->registerSyncPeople($container, $sync);
@@ -276,13 +285,18 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      */
     private function registerSyncPeople(ContainerBuilder $container, array $sync): void
     {
-        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
+        /** @var array{resolver: string|null, require_verified_email: bool, reassign_batch_size: int, inviter: string|null, candidate_limit: int, reapply_seconds: float, scan: array{max_task_pages: int, max_comment_tasks: int, time_window: bool}} $people */
         $people = $sync['people'];
         /** @var array{sink: string|null, window_days: int, max_assignees_per_call: int, max_entries_per_window: int, max_windows_per_run: int, fallback_max_tasks_per_run: int, max_calls_per_run: int} $time */
         $time = $sync['time_entries'];
         $container->getDefinition(DefaultSyncPersonResolver::class)->setArgument('$requireVerifiedEmail', $people['require_verified_email']);
         $container->setAlias(SyncPersonResolverInterface::class, $this->serviceOr($people['resolver'], DefaultSyncPersonResolver::class));
         $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$defaultBatchSize', $people['reassign_batch_size']);
+        // Since 1.27.0 (TB-SYNC-2): the People page.
+        $container->getDefinition(PeopleMappingService::class)
+            ->setArgument('$inviter', is_string($people['inviter']) && $people['inviter'] !== '' ? new Reference($people['inviter']) : null)
+            ->setArgument('$candidateLimit', $people['candidate_limit'])
+            ->setArgument('$reapplySeconds', (float) $people['reapply_seconds']);
         $container->getDefinition(TaskSyncPeopleScanner::class)
             ->setArgument('$maxTaskPages', $people['scan']['max_task_pages'])
             ->setArgument('$maxCommentTasks', $people['scan']['max_comment_tasks'])
@@ -302,9 +316,20 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$listAsTag', (bool) $sync['list_as_tag'])
             ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])
             ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
-            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run']);
+            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
+            ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode'])
+            ->setArgument('$importArchived', (bool) $sync['import_archived'])
+            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run']);
+        $container->getDefinition(SyncCustomFieldWriter::class)
+            ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
+        // Audit GW-L8: restoring a task by hand asks the host's limit too.
+        $container->getDefinition(TaskBoardManageController::class)
+            ->setArgument('$syncLimits', new Reference(SyncLimitCheckerInterface::class));
+        $container->getDefinition(SyncTaskDetailsWriter::class)
+            ->setArgument('$maxStatusCalls', (int) $sync['status_history']['max_calls_per_run']);
         $container->getDefinition(TaskBoardTwigExtension::class)
-            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class));
+            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class))
+            ->setArgument('$syncFields', new Reference(SyncFieldViewProvider::class));
     }
 
     private function serviceOr(mixed $id, string $default): string

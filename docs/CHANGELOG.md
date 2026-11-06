@@ -77,6 +77,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Typed custom fields (TB-SYNC-3).** Board-level definitions (`task_board_sync_fields`) and typed values per task
+  (`task_board_sync_field_values`) for text, number, money, date (with time), dropdown, labels, checkbox, URL, e-mail,
+  phone, rating, progress, people and relationship; unknown types and values that do not fit are kept as text, never
+  dropped. Shown in the task panel (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields()`) and found by the
+  list search (`data-search-extra`, Twig `task_board_sync_search_texts(tasks)`). `sync.custom_fields.mode`
+  (`typed` default, `text`, `both`): the 1.23 "Fields" document is kept as an option. New
+  `Sync\Provider\RemoteCustomField`, `RemoteTask::$customFields`, `Sync\Field\SyncFieldType`,
+  `Sync\Provider\ClickUp\ClickUpCustomFieldParser`, `Sync\Field\SyncCustomFieldWriter`.
+- **Comments in full (TB-SYNC-3).** Threaded replies, the files of each comment (copied with the attachment rules and
+  linked under the comment), assigned comments with their resolved state, and the remote edit date
+  (`RemoteComment::$parentId`, `$attachments`, `$assignee`, `$resolved`, `$updatedAt`; Twig
+  `task_board_sync_comment_meta()`). Reactions are not imported.
+- **Time entries**: `ImportedTimeEntryCandidate::user()` (the mapped host user). Imported time is never deleted.
+- **The rest of a ClickUp task (TB-SYNC-3).** Custom task id (searchable), points, done / closed dates (the done date
+  is the completion date), start / due time flags, location (folder, list), estimate per assignee, recurrence and the
+  time in status (`Sync\Provider\StatusHistoryProviderInterface`, `sync.status_history.max_calls_per_run`), kept
+  read-only in `task_board_sync_items.remote_meta` and shown in the task panel (`_task_sync_details.html.twig`, Twig
+  `task_board_sync_details()`). Linked tasks become `related` relations (also in file imports). Archived tasks are
+  imported archived (`sync.import_archived`, default `true`; ClickUp reads an archived pass). New
+  `RemoteTaskDetails`, `RemoteStatusTime`, `RemoteTask::$details` / `$presentKeys`, `RemoteTaskPage::$passEnded`,
+  `Task::markCompleted(?$at)`. A lasting error of the time in status (`statusHistory.failed`) keeps the last one and
+  never fails a run; a passing one defers the task.
+- **People in read-only data (TB-SYNC-3).** Estimates per assignee and `people` custom fields store references
+  (`Sync\People\PersonToken`: `person:<id>`, or `ref:<provider user id>` without a directory), never a name or an
+  e-mail; names are read from `task_board_sync_people`, so `anonymise()` also covers them. New
+  `SyncPeopleViewProvider::personLabel()`.
+- **Completeness report (TB-SYNC-3).** After each run the connection page lists every key of the answers of the tasks
+  it read (written or not, at most 200 keys per run) with a value: imported, skipped (reason) or *Not imported yet*
+  (`Sync\Provider\FieldCoverageProviderInterface`, `_connection_completeness.html.twig`).
+- **Schema change with `sync.enabled` only**: two new tables, four nullable columns on `task_board_sync_comments` and `task_board_sync_items.remote_meta`
+  (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#unreleased)).
+
+- **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
+  `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
+  `Sync\People\PeopleMappingService`: every remote person of the connection with a host-user select fed by the host's
+  candidates (`SyncPersonResolverInterface`), pre-filled by e-mail; a same-name candidate is only suggested beside an unselected select (deny by default: only a
+  save maps). Saving re-applies the change to the tasks already imported (creator, assignees, watchers, comment
+  authors, checklist items; the host moves time on `SYNC_PERSON_REASSIGNED`) within `sync.people.reapply_seconds`; the
+  rest continues on the next save and after every sync. `sync.people.step` (default `false`) puts the page between
+  linking and the first import. Optional `sync.people.inviter` (`Sync\Hook\PeopleInviterInterface`) adds *Invite by
+  e-mail*. New event `SYNC_PEOPLE_MAPPING_CHANGED` (`PeopleMappingChangedEvent`, ids only). The connection page shows
+  mapped / not mapped people with a link; the progress JSON gains `unmappedPeople`. Config `sync.people.step`,
+  `inviter`, `page_size`, `candidate_limit`, `reapply_seconds`. `TaskSyncPersonRepository::pendingReassigns()`.
+  No schema change.
+
+### Fixed
+
+Audit GW (2026-11-06): Pass (good) / Low, re-verified at `0009885`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+
+- **Deleting a user keeps their manual time (owner rule, GWd-M2).** `task_board_task_time_entries.user_id` is nullable,
+  `ON DELETE SET NULL`, with a name snapshot (`user_name`). `TaskTimeEntry::getUser()` may return null. `detachUser()` of
+  the people reassigner and the new `TaskTimeEntrySnapshotPurger::detachUser()` forget the name on request.
+- **Removing a manual time entry (GWd-M2).** Only its author or a manager of the board; when the author no longer exists, a
+  manager only. **Behaviour change**, see UPGRADING.
+- **Files after an unlink (GWd-M1, also in 1.26.3).** The rows that track stored files stay through an unlink, so a later
+  deletion of the task or board names the files to the host.
+- **A lasting error on a task's detail (GWd-L1)** no longer stops the board: later tasks continue, the watermark moves,
+  and the report shows `task_detail` as *Unavailable*.
+- **Suppression record (GWd-L2).** Keyed with a subkey of `kernel.secret`, over the stored value
+  (`Sync\Field\SyncFieldSuppression`). `people` and `checkbox` values no longer stay erased after a remote change.
+- **Unread state (GWd-L3).** `task_board_sync_items.pending_reads` keeps what each task has unread, so the report no longer
+  depends on the latest run. Read markers per version let repeated full syncs reach the next tasks, for threads and for
+  details, whatever the rows lack.
+- **"Fields" document (GWd-L4).** A `users` value holds names only, no e-mails.
+- **`TaskSyncPersonRepository::exportPerson()` (I6):** one person's estimates, comment assignments and people fields.
+- **`SyncFieldValueEraser::eraseByValue()` / `exportByValue()`** take the board explicitly: `null` crosses every tenant.
+- **Release note (GW-L2):** boards synced by 1.26 and earlier that had a failed run may be missing comments, files and
+  fields. One full sync repairs them.
+
+- **List memory (GW-M1).** The list reads custom fields only for the rows drawn and never reads `remote_meta`: the custom
+  id has its own column, `task_board_sync_items.custom_id`. Twig `task_board_sync_search_texts(tasks)`.
+- **Comment files (GW-M2).** They are tracked in `task_board_sync_attachments`, so erasure names them, an unchanged file
+  is reused, and a replaced or removed one leaves the storage. Nothing is downloaded for a comment in conflict.
+- **Personal data in field values (GW-M3).** `sync.custom_fields.exclude_types` (default: none, everything is imported),
+  `Sync\Field\SyncFieldValueEraser` (`eraseByValue()`, `eraseBoard()`, `exportByValue()`, `exportBoard()`). A malformed
+  people value is no longer kept as text.
+- **Rejected URLs (GW-L1).** A value that does not fit its type never redefines the board's field, and the view
+  re-checks it before drawing a link.
+- **Lost tasks after a provider error (GW-L2, also in 1.26.3).** Every task of the page not finished is read again by the
+  next run, not only the one that failed.
+- **People page.** A same-name candidate is no longer selected (GW-L3), and a row absent from the POST stays as it is
+  (GW-L4).
+- **Completion date (GW-L5).** A remote done date applies only to a task the sync completed, or whose date has not
+  changed since (`details.completionKept`).
+- **Budgets and bounds.** `sync.comments.max_reply_calls_per_run` (GW-L6); a reply 404 no longer fails the run (GW-I9);
+  dates outside 2000-2100 and people ids over 64 characters are refused (GW-L7); restoring a task asks the host's limit
+  (GW-L8); the `mailto:` value is encoded and `?` or `&` in an e-mail is refused (GW-L9).
+- **Task files on list rows.** ClickUp list rows have no `attachments`: the task's detail is read, within
+  `sync.watchers.max_detail_calls_per_run`. The tasks left are reported as not read, not as imported
+  (`RemoteTask::$attachmentsKnown`, `attachments.unread`).
+- **Time in status refused (403).** The requests stop for the run after the first refusal, and the report says
+  *Unavailable*.
+
 ## [1.26.3] - 2026-11-06
 
 The connection badge data carries the running sync's progress (`activeRunId`, `progressUrl` for managers, `total`, `processed`); opt-in `sync.badge.progress` draws a determinate bar in the bundle's badge.

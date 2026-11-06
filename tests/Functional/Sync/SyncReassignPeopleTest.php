@@ -68,7 +68,7 @@ final class SyncReassignPeopleTest extends SyncReassignTestCase
         $report = $this->reassigner()->reassign($person, $this->bob, $this->owner);
 
         self::assertTrue($report->isDone());
-        self::assertSame(['tasks' => 2, 'creators' => 2, 'comments' => 1, 'membersRemoved' => 3, 'membersAdded' => 3, 'notProjected' => 0, 'busyBoards' => 0, 'boards' => 0, 'documents' => 0], $report->toArray());
+        self::assertSame(['tasks' => 2, 'creators' => 2, 'comments' => 1, 'membersRemoved' => 3, 'membersAdded' => 3, 'notProjected' => 0, 'busyBoards' => 0, 'boards' => 0, 'documents' => 0, 'timeEntries' => 0], $report->toArray());
         $bobId   = (string) $this->bob->getId();
         $aliceId = (string) $this->alice->getId();
         $fresh   = $this->taskOf($item);
@@ -141,7 +141,7 @@ final class SyncReassignPeopleTest extends SyncReassignTestCase
 
         $report = $this->reassigner()->reassign($person, $this->alice, $this->owner);
 
-        self::assertSame(['tasks' => 1, 'creators' => 1, 'comments' => 1, 'membersRemoved' => 0, 'membersAdded' => 1, 'notProjected' => 0, 'busyBoards' => 0, 'boards' => 0, 'documents' => 0], $report->toArray());
+        self::assertSame(['tasks' => 1, 'creators' => 1, 'comments' => 1, 'membersRemoved' => 0, 'membersAdded' => 1, 'notProjected' => 0, 'busyBoards' => 0, 'boards' => 0, 'documents' => 0, 'timeEntries' => 0], $report->toArray());
         $fresh = $this->taskOf($item);
         self::assertSame((string) $this->alice->getId(), SyncUser::id($fresh->getCreator()));
         self::assertSame(['assignee:' . $this->alice->getId()], $this->membersOf($fresh));
@@ -364,7 +364,7 @@ final class SyncReassignPeopleTest extends SyncReassignTestCase
         self::assertEquals($cursor, ReassignCursor::fromArray($cursor->toArray()));
         self::assertEquals(new ReassignCursor(''), ReassignCursor::fromArray(['previousUserId' => ['x'], 'personIndex' => 'n']));
         $report = (new ReassignReport(1, 2, 3, 4, 5, 6, 7))->plus(new ReassignReport(1, 1, 1, 1, 1, 1, 1, $cursor));
-        self::assertSame(['tasks' => 2, 'creators' => 3, 'comments' => 4, 'membersRemoved' => 5, 'membersAdded' => 6, 'notProjected' => 7, 'busyBoards' => 8, 'boards' => 0, 'documents' => 0], $report->toArray());
+        self::assertSame(['tasks' => 2, 'creators' => 3, 'comments' => 4, 'membersRemoved' => 5, 'membersAdded' => 6, 'notProjected' => 7, 'busyBoards' => 8, 'boards' => 0, 'documents' => 0, 'timeEntries' => 0], $report->toArray());
         self::assertFalse($report->isDone());
         self::assertTrue($report->withCursor(null)->isDone());
     }

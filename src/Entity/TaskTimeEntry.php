@@ -8,6 +8,7 @@ use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
@@ -17,6 +18,9 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
  * instead of deleting the tracked time. The task title, board id and external id are kept as snapshots (filled at
  * creation, refreshed on rename and right before the task is removed) so a detached entry still reads in timesheets
  * and reports — read them through {@see self::getTaskTitle()} / {@see self::getBoardId()} / {@see self::getTaskExternalId()}.
+ *
+ * Since 1.27.0 (owner rule, audit GWd-M2) the entry also outlives its user: deleting the user leaves `user` = null
+ * (`ON DELETE SET NULL`) and {@see self::getUserName()} keeps the name it was logged with, until it is forgotten.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_time_entries')]
@@ -42,11 +46,18 @@ class TaskTimeEntry
     #[ORM\Column(name: 'task_external_id', type: 'string', length: 128, nullable: true)]
     private ?string $taskExternalId = null;
 
+    /** Since 1.27.0: null once the user was deleted. */
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?object $user;
+
+    /** Since 1.27.0: the user's name when the entry was logged, kept when the user is deleted; null once forgotten. */
+    #[ORM\Column(name: 'user_name', type: 'string', length: Task::USER_NAME_MAX, nullable: true)]
+    private ?string $userName;
+
     public function __construct(
         Task $task,
-        #[ORM\ManyToOne(targetEntity: User::class)]
-        #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-        private object $user,
+        object $user,
         #[ORM\Column(type: 'integer')]
         private int $minutes,
         #[ORM\Column(name: 'logged_at', type: 'datetime_immutable')]
@@ -54,8 +65,10 @@ class TaskTimeEntry
         #[ORM\Column(type: 'string', length: 512, nullable: true)]
         private ?string $description = null,
     ) {
-        $this->id   = Uuid::generate()->toString();
-        $this->task = $task;
+        $this->id       = Uuid::generate()->toString();
+        $this->task     = $task;
+        $this->user     = $user;
+        $this->userName = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $this->refreshTaskSnapshot();
     }
 
@@ -140,9 +153,43 @@ class TaskTimeEntry
         return $this->taskExternalId;
     }
 
-    public function getUser(): object
+    /** Null once the user was deleted (since 1.27.0): read {@see self::getUserName()} then. */
+    public function getUser(): ?object
     {
         return $this->user;
+    }
+
+    /** Since 1.27.0: the name it was logged with (null: forgotten, or a row of 1.26 never backfilled). */
+    public function getUserName(): ?string
+    {
+        return $this->userName;
+    }
+
+    /** Since 1.27.0: fills the name of an entry logged before 1.27. */
+    public function backfillUserName(): self
+    {
+        if ($this->user !== null) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->userName ??= Text::cut(UserLabel::of($this->user), Task::USER_NAME_MAX);
+        }
+
+        return $this;
+    }
+
+    /** Since 1.27.0: drops the user reference, and the name when `$forgetName`; the time stays. */
+    public function detachUser(bool $forgetName = false): self
+    {
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->userName = null;
+        } elseif ($this->user !== null) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->userName ??= Text::cut(UserLabel::of($this->user), Task::USER_NAME_MAX);
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->user = null;
+
+        return $this;
     }
 
     public function getMinutes(): int

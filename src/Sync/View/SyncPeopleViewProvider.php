@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\View;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -13,10 +14,17 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Nowo\TaskBoardBundle\Sync\People\PersonToken;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
+use function array_map;
 use function explode;
+use function is_array;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Since 1.25: view models of the remote people of a synced task (Twig `task_board_sync_creator(task)`,
@@ -52,6 +60,74 @@ final class SyncPeopleViewProvider implements ResetInterface
         $person = $sync instanceof TaskSyncComment ? $sync->getAuthorPerson() : null;
 
         return $person instanceof TaskSyncPerson ? $this->view($person, $comment->getTask()) : null;
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): what the provider has besides the synced fields (the item's `remote_meta`): customId,
+     * points, doneAt / closedAt, startHasTime / dueHasTime, path, estimates (`{name, minutes}`), recurrence and
+     * statusHistory (`{status, since, minutes, current}`), plus `provider`. Empty for a task the sync did not write.
+     *
+     * @return array<string, mixed>
+     */
+    public function detailsOf(Task $task): array
+    {
+        $item = $this->item($task);
+        $meta = $item?->getRemoteMeta() ?? [];
+
+        unset($meta[SyncTaskDetailsWriter::META_DETAIL_READ], $meta[SyncTaskDetailsWriter::META_REPLIES_READ]);
+        if (!$item instanceof TaskSyncItem || ($meta === [] && $item->getCustomId() === null)) {
+            return [];
+        }
+        if ($item->getCustomId() !== null) {
+            $meta['customId'] = $item->getCustomId();
+        }
+        if (is_array($meta['estimates'] ?? null)) {
+            $meta['estimates'] = array_map(fn (array $estimate): array => ['name' => $this->personLabel((string) $estimate['person']), 'minutes' => $estimate['minutes']], $meta['estimates']);
+        }
+
+        return $meta + ['provider' => $item->getConnection()->getProvider()];
+    }
+
+    /**
+     * Since 1.27.0: the label of a {@see PersonToken}: the person's name (anonymised when forgotten), `#<id>` without a
+     * directory, `—` for a person no longer there.
+     */
+    public function personLabel(string $token): string
+    {
+        if (str_starts_with($token, PersonToken::REF_PREFIX)) {
+            return '#' . substr($token, strlen(PersonToken::REF_PREFIX));
+        }
+        $label = $this->tokenLabel($token);
+
+        return $label === $token ? '—' : $label;
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): the thread and action item of an imported comment — `reply` (it answers another
+     * comment), `replyTo` (that comment's remote author, when known), `resolved` (null = not an action item),
+     * `assignee` (who it is assigned to) and `remoteEditedAt`. Null for a local comment.
+     *
+     * @return array{reply: bool, replyTo: SyncPersonView|null, resolved: bool|null, assignee: SyncPersonView|null, remoteEditedAt: DateTimeImmutable|null}|null
+     */
+    public function commentMetaOf(TaskComment $comment): ?array
+    {
+        $sync = $this->entityManager->getRepository(TaskSyncComment::class)->findOneBy(['comment' => $comment]);
+        if (!$sync instanceof TaskSyncComment) {
+            return null;
+        }
+        $task     = $comment->getTask();
+        $parentId = $sync->getParentRemoteId();
+        $parent   = $parentId === null ? null : $this->entityManager->getRepository(TaskSyncComment::class)->findOneBy(['item' => $sync->getItem(), 'remoteId' => $parentId]);
+        $replyTo  = $parent?->getAuthorPerson();
+        $assignee = $sync->getAssigneePerson();
+
+        return [
+            'reply'          => $parentId !== null,
+            'replyTo'        => $replyTo instanceof TaskSyncPerson ? $this->view($replyTo, $task) : null,
+            'resolved'       => $sync->isResolved(),
+            'assignee'       => $assignee instanceof TaskSyncPerson ? $this->view($assignee, $task) : null,
+            'remoteEditedAt' => $sync->getRemoteUpdatedAt(),
+        ];
     }
 
     /**

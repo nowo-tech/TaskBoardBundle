@@ -146,8 +146,10 @@ final class SyncWriterRulesTest extends SyncFunctionalTestCase
             $this->full('z1', 'Gone before', 6, archived: true),
         );
         $report = $this->sync($board);
-        self::assertSame(5, $report->created, 'a row archived there and unknown here is not created');
-        self::assertSame(1, $report->unchanged);
+        // Since 1.27.0 (sync.import_archived): a row archived there and unknown here is imported archived.
+        self::assertSame(6, $report->created);
+        self::assertSame(1, $report->archived);
+        self::assertTrue($this->taskTitled('Gone before')->isArchived());
         $codes = $this->codes($report->warnings);
         self::assertContains('relation_skipped', $codes);
         self::assertContains('parent_cycle', $codes);

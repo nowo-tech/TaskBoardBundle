@@ -191,6 +191,41 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Twig/TaskBoardTwigExtension.php` | Twig globals for the manage Web UI (REQ-UI-001) | FR-TPL-001 |
 | `ValueObject/Uuid.php` | UUID helper | FR-VO-001 |
 
+## Provider sync additions in 1.27.0 (`src/`)
+
+Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 audit; earlier sync code is described in `docs/sync.md`.
+
+| Source file | Spec section | Requirement IDs |
+| --- | --- | --- |
+| `Form/ConnectionPeopleFormType.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Resources/views/manage/connection_people.html.twig` | People page | FR-SYNC-PEOPLE-001 |
+| `Resources/views/manage/_connection_people_summary.html.twig` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/Event/PeopleMappingChangedEvent.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/Hook/PeopleInviterInterface.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/People/PeopleMappingResult.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/People/PeopleMappingRow.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/People/PeopleMappingService.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Sync/Entity/TaskSyncField.php` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/Entity/TaskSyncFieldValue.php` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/Field/SyncCustomFieldWriter.php` | Typed custom fields | FR-SYNC-FIELD-001, FR-SYNC-PRIVACY-001 |
+| `Sync/Field/SyncFieldType.php` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/Provider/ClickUp/ClickUpCustomFieldParser.php` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/Provider/RemoteCustomField.php` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/View/SyncFieldViewProvider.php` | Typed custom fields and search | FR-SYNC-FIELD-001, FR-SYNC-DETAIL-001, FR-SYNC-VIEW-001 |
+| `Resources/views/manage/_task_sync_fields.html.twig` | Typed custom fields | FR-SYNC-FIELD-001 |
+| `Sync/People/PersonToken.php` | People in read-only data | FR-SYNC-PRIVACY-001 |
+| `Sync/Field/SyncFieldValueEraser.php` | Erasure and access of field values | FR-SYNC-PRIVACY-002 |
+| `Sync/Field/SyncFieldSuppression.php` | Erasure and access of field values | FR-SYNC-PRIVACY-002 |
+| `Sync/Provider/ReplyBudget.php` | Request budgets | FR-SYNC-BUDGET-001 |
+| `Sync/Provider/ThreadedCommentProviderInterface.php` | Request budgets | FR-SYNC-BUDGET-001 |
+| `Sync/Provider/RemoteStatusTime.php` | Task details | FR-SYNC-DETAIL-001 |
+| `Sync/Provider/RemoteTaskDetails.php` | Task details | FR-SYNC-DETAIL-001 |
+| `Sync/Provider/StatusHistoryProviderInterface.php` | Task details | FR-SYNC-DETAIL-001 |
+| `Sync/SyncTaskDetailsWriter.php` | Task details and report | FR-SYNC-DETAIL-001, FR-SYNC-PRIVACY-001, FR-SYNC-REPORT-001 |
+| `Resources/views/manage/_task_sync_details.html.twig` | Task details | FR-SYNC-DETAIL-001 |
+| `Sync/Provider/FieldCoverageProviderInterface.php` | Completeness report | FR-SYNC-REPORT-001 |
+| `Resources/views/manage/_connection_completeness.html.twig` | Completeness report | FR-SYNC-REPORT-001 |
+
 ## TypeScript & CSS (`src/Resources/assets/src/`)
 
 | Source file | Spec section | Requirement IDs |

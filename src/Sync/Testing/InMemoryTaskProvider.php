@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
+use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
@@ -55,7 +56,7 @@ use function usort;
  *
  * @final
  */
-class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface
+class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, FieldCoverageProviderInterface
 {
     /** Since 1.25: the workspace every container belongs to (null = no people). */
     private ?string $workspaceId = null;
@@ -88,6 +89,9 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     /** @var list<ProviderException|null> failures for the next calls, in order (null = answer normally) */
     private array $failures = [];
+
+    /** @var array<string, string> since 1.27.0: the declared coverage of task answer keys */
+    private array $coverage = [];
 
     /** @var list<string> the calls made, as "method:argument" (no credential) */
     public array $calls = [];
@@ -195,6 +199,23 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         $this->comments[$taskId] = $comments;
 
         return $this;
+    }
+
+    /**
+     * Since 1.27.0: what the provider declares about its answer keys (completeness report).
+     *
+     * @param array<string, string> $coverage key => `imported` or a reason
+     */
+    public function withFieldCoverage(array $coverage): self
+    {
+        $this->coverage = $coverage;
+
+        return $this;
+    }
+
+    public function fieldCoverage(): array
+    {
+        return $this->coverage;
     }
 
     /** The next call fails with `$failure` (queue several; null lets a call through). */

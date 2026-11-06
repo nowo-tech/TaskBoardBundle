@@ -129,6 +129,198 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### Schema change for every host: manual time outlives its user
+
+Owner rule: deleting a task, a board **or a user** keeps all manual time. `task_board_task_time_entries.user_id` becomes
+nullable with `ON DELETE SET NULL`, and `user_name` keeps the name the entry was logged with. Replace `app_user` with your
+user table and `INT` with its id type; the foreign key name comes from `doctrine:migrations:diff`.
+
+MySQL 8 / MariaDB:
+
+```sql
+ALTER TABLE task_board_task_time_entries DROP FOREIGN KEY FK_180A3E3AA76ED395;
+ALTER TABLE task_board_task_time_entries ADD user_name VARCHAR(180) DEFAULT NULL, CHANGE user_id user_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ADD CONSTRAINT FK_180A3E3AA76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_time_entries DROP CONSTRAINT FK_180A3E3AA76ED395;
+ALTER TABLE task_board_task_time_entries ADD user_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_time_entries ALTER user_id DROP NOT NULL;
+ALTER TABLE task_board_task_time_entries ADD CONSTRAINT FK_180A3E3AA76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL NOT DEFERRABLE;
+```
+
+SQLite (the table is rebuilt: run it with `PRAGMA foreign_keys = OFF`):
+
+```sql
+CREATE TEMPORARY TABLE __temp__task_board_task_time_entries AS SELECT id, task_title_snapshot, board_id_snapshot, task_external_id, minutes, logged_at, description, task_id, user_id FROM task_board_task_time_entries;
+DROP TABLE task_board_task_time_entries;
+CREATE TABLE task_board_task_time_entries (id VARCHAR(36) NOT NULL, task_title_snapshot VARCHAR(255) DEFAULT NULL, board_id_snapshot VARCHAR(36) DEFAULT NULL, task_external_id VARCHAR(128) DEFAULT NULL, minutes INTEGER NOT NULL, logged_at DATETIME NOT NULL, description VARCHAR(512) DEFAULT NULL, task_id VARCHAR(36) DEFAULT NULL, user_id INTEGER DEFAULT NULL, user_name VARCHAR(180) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_180A3E3A8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_180A3E3AA76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
+INSERT INTO task_board_task_time_entries (id, task_title_snapshot, board_id_snapshot, task_external_id, minutes, logged_at, description, task_id, user_id) SELECT id, task_title_snapshot, board_id_snapshot, task_external_id, minutes, logged_at, description, task_id, user_id FROM __temp__task_board_task_time_entries;
+DROP TABLE __temp__task_board_task_time_entries;
+CREATE INDEX IDX_180A3E3A8DB60186 ON task_board_task_time_entries (task_id);
+CREATE INDEX IDX_180A3E3AA76ED395 ON task_board_task_time_entries (user_id);
+```
+
+After the DDL, call `TaskTimeEntrySnapshotPurger::backfillUserNames()` until it returns 0, so that older entries also have a
+name. Rollback: put back `NOT NULL` and `CASCADE` after handling the rows with a null user, and drop `user_name`.
+
+- `TaskTimeEntry::getUser()` now returns `?object`: **host code that reads it must handle null** and use `getUserName()`
+  (null when forgotten; the panel then says *Former user*).
+- Erasure: `TaskSyncPeopleReassigner::detachUser($user, $actor, anonymise: true)` clears the name of the user's entries.
+  Without sync, or for the entries alone, call `TaskTimeEntrySnapshotPurger::detachUser($user, forgetName: true)` before
+  deleting the user. Deleting the user without either keeps the name; `forgetUserName($name)` clears it later.
+- **Behaviour change: removing a manual time entry.** Only its author or a manager of the board (`canManageBoard()`) may
+  remove it; when the author no longer exists, a manager only. Others get 403 and no button. Without board scoping every
+  editor is a manager, so nothing changes there. Hosts with their own panel pass `removableTimeEntryIds` to
+  `_task_time_section.html.twig`, or no remove button is drawn.
+
+### Schema change with `sync.enabled: true` only (TB-SYNC-3)
+
+Two new tables (typed custom fields), four nullable columns on `task_board_sync_comments` (thread, action item, edit
+date) and three columns on `task_board_sync_items` (`pending_reads`, default 0, what each task has unread; `custom_id`;
+and the JSON `remote_meta`: points, done / closed dates, time flags, location, estimates, recurrence, time in status). One
+change is not an addition: `task_board_sync_attachments.item_id` becomes nullable with `ON DELETE SET NULL`, so that a later
+deletion still names stored files after an unlink. The rest is additive: existing rows need no rewrite; hosts without
+`sync.enabled` see no change. Run `php bin/console doctrine:migrations:diff` and compare it with the statements below
+(the schema test `SyncSchemaFullImportTest` asserts them). `table_prefix` does not apply to the `task_board_sync_*` tables,
+like the rest of the sync tables; the foreign keys to boards and tasks follow it. Rollback: drop the two tables and
+the seven columns and restore the foreign key after deleting the rows with a null `item_id` (1.26 ignores them).
+
+MySQL 8 / MariaDB:
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, value_text VARCHAR(500) NOT NULL, field_value JSON NOT NULL, updated_at DATETIME NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, INDEX idx_task_board_sync_field_values_field (field_id), UNIQUE INDEX uniq_task_board_sync_field_values_task_field (task_id, field_id), INDEX IDX_4F05C2928DB60186 (task_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices JSON NOT NULL, config JSON NOT NULL, position INT DEFAULT 0 NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, updated_at DATETIME NOT NULL, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_sync_fields_board_remote (board_id, provider, remote_id), INDEX IDX_FDECA079E7EC5785 (board_id), PRIMARY KEY (id));
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_items ADD remote_meta JSON DEFAULT NULL, ADD pending_reads SMALLINT DEFAULT 0 NOT NULL, ADD custom_id VARCHAR(64) DEFAULT NULL;
+ALTER TABLE task_board_sync_attachments DROP FOREIGN KEY FK_A44E84EF126F525E;
+ALTER TABLE task_board_sync_attachments CHANGE item_id item_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE SET NULL;
+ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL, ADD resolved TINYINT DEFAULT NULL, ADD remote_updated_at DATETIME DEFAULT NULL, ADD assignee_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+PostgreSQL:
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, value_text VARCHAR(500) NOT NULL, field_value JSON NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_field_values_field ON task_board_sync_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_field_values_task_field ON task_board_sync_field_values (task_id, field_id);
+CREATE INDEX IDX_4F05C2928DB60186 ON task_board_sync_field_values (task_id);
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices JSON NOT NULL, config JSON NOT NULL, position INT DEFAULT 0 NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_sync_fields_board_remote ON task_board_sync_fields (board_id, provider, remote_id);
+CREATE INDEX IDX_FDECA079E7EC5785 ON task_board_sync_fields (board_id);
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_items ADD remote_meta JSON DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD custom_id VARCHAR(64) DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD pending_reads SMALLINT DEFAULT 0 NOT NULL;
+ALTER TABLE task_board_sync_attachments DROP CONSTRAINT FK_A44E84EF126F525E;
+ALTER TABLE task_board_sync_attachments ALTER item_id DROP NOT NULL;
+ALTER TABLE task_board_sync_attachments ADD CONSTRAINT FK_A44E84EF126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD resolved BOOLEAN DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD remote_updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD assignee_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+SQLite (the comments table is rebuilt to add the foreign key: run it with `PRAGMA foreign_keys = OFF`):
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, value_text VARCHAR(500) NOT NULL, field_value CLOB NOT NULL, updated_at DATETIME NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE INDEX idx_task_board_sync_field_values_field ON task_board_sync_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_field_values_task_field ON task_board_sync_field_values (task_id, field_id);
+CREATE INDEX IDX_4F05C2928DB60186 ON task_board_sync_field_values (task_id);
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices CLOB NOT NULL, config CLOB NOT NULL, position INTEGER DEFAULT 0 NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, updated_at DATETIME NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE UNIQUE INDEX uniq_task_board_sync_fields_board_remote ON task_board_sync_fields (board_id, provider, remote_id);
+CREATE INDEX IDX_FDECA079E7EC5785 ON task_board_sync_fields (board_id);
+ALTER TABLE task_board_sync_items ADD COLUMN remote_meta CLOB DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD COLUMN custom_id VARCHAR(64) DEFAULT NULL;
+ALTER TABLE task_board_sync_items ADD COLUMN pending_reads SMALLINT DEFAULT 0 NOT NULL;
+CREATE TEMPORARY TABLE __temp__task_board_sync_attachments AS SELECT id, remote_id, remote_size, remote_updated_at, stored_ref, stored_url, name, mime, size, sha256, item_id, task_id, link_id FROM task_board_sync_attachments;
+DROP TABLE task_board_sync_attachments;
+CREATE TABLE task_board_sync_attachments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, remote_size BIGINT DEFAULT NULL, remote_updated_at DATETIME DEFAULT NULL, stored_ref VARCHAR(191) NOT NULL, stored_url VARCHAR(2048) NOT NULL, name VARCHAR(255) NOT NULL, mime VARCHAR(127) NOT NULL, size BIGINT NOT NULL, sha256 VARCHAR(64) DEFAULT NULL, item_id VARCHAR(36) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, link_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_A44E84EF8DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_A44E84EFADA40271 FOREIGN KEY (link_id) REFERENCES task_board_task_links (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_A44E84EF126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
+INSERT INTO task_board_sync_attachments (id, remote_id, remote_size, remote_updated_at, stored_ref, stored_url, name, mime, size, sha256, item_id, task_id, link_id) SELECT id, remote_id, remote_size, remote_updated_at, stored_ref, stored_url, name, mime, size, sha256, item_id, task_id, link_id FROM __temp__task_board_sync_attachments;
+DROP TABLE __temp__task_board_sync_attachments;
+CREATE UNIQUE INDEX uniq_task_board_sync_attachments_task_remote ON task_board_sync_attachments (task_id, remote_id);
+CREATE INDEX IDX_A44E84EF126F525E ON task_board_sync_attachments (item_id);
+CREATE INDEX IDX_A44E84EF8DB60186 ON task_board_sync_attachments (task_id);
+CREATE INDEX IDX_A44E84EFADA40271 ON task_board_sync_attachments (link_id);
+CREATE TEMPORARY TABLE __temp__task_board_sync_comments AS SELECT id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id FROM task_board_sync_comments;
+DROP TABLE task_board_sync_comments;
+CREATE TABLE task_board_sync_comments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, body_hash VARCHAR(64) NOT NULL, local_hash VARCHAR(64) NOT NULL, item_id VARCHAR(36) NOT NULL, comment_id VARCHAR(36) NOT NULL, author_person_id VARCHAR(36) DEFAULT NULL, parent_remote_id VARCHAR(128) DEFAULT NULL, resolved BOOLEAN DEFAULT NULL, remote_updated_at DATETIME DEFAULT NULL, assignee_person_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_BDECD5F5126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F5F8697D13 FOREIGN KEY (comment_id) REFERENCES task_board_task_comments (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59A9F6C6E FOREIGN KEY (author_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
+INSERT INTO task_board_sync_comments (id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id) SELECT id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id FROM __temp__task_board_sync_comments;
+DROP TABLE __temp__task_board_sync_comments;
+CREATE UNIQUE INDEX uniq_task_board_sync_comments_item_remote ON task_board_sync_comments (item_id, remote_id);
+CREATE INDEX IDX_BDECD5F5126F525E ON task_board_sync_comments (item_id);
+CREATE INDEX IDX_BDECD5F5F8697D13 ON task_board_sync_comments (comment_id);
+CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id);
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+Behaviour change with `sync.enabled`: **`sync.custom_fields.mode` defaults to `typed`**: custom fields become typed
+values shown in the task panel, and the 1.23 "Fields (ClickUp)" task document is no longer updated (existing documents
+stay). Set `mode: both` (or `text`) to keep updating it. **`sync.import_archived` defaults to `true`**: archived provider tasks
+are read (ClickUp: a second pass with `archived=true`) and imported archived; before, an archived task unknown here was
+not created. `false` keeps the 1.26 rule. Each run also asks ClickUp for the *time in status* of the tasks it creates
+or changes (`sync.status_history.max_calls_per_run`, default 200; `0` = never).
+
+After the upgrade, **run one full sync per linked board** (`php bin/console nowo:task-board:sync <boardId> --full`, or the full refresh of
+the connection page):
+runs read only tasks changed since the last one, so without it the existing tasks get their fields, details and archived
+siblings when they next change. The time in status budget applies: repeat the full sync, or raise the budget, on boards
+with more tasks than the budget.
+
+What the audit fixes change for a host (audit GW):
+
+- **Personal data.** Everything is still imported by default. To leave out types, set `sync.custom_fields.exclude_types`
+  (for example `[email, phone]`); what is stored of them goes when the task is next written. Hosts must wire
+  `Sync\Field\SyncFieldValueEraser` into their erasure and access flows: [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+- **Completion dates.** A done date applies only to a task the sync completed, or whose date is unchanged since the last
+  sync. A task completed by 1.26 keeps its date; the panel still shows the remote one.
+- **Restore.** With `sync.enabled`, restoring a task asks `SyncLimitCheckerInterface` for one new active task. A refusal
+  leaves it archived, with a message. Archived imports are **not** counted by the limit, which is about active tasks; the
+  check moved to the moment they become active. Hosts that want no archived rows set `sync.import_archived: false`.
+- **Requests.** List rows have no files, so a run reads one task detail per written task, within
+  `sync.watchers.max_detail_calls_per_run` (500). `sync.comments.max_reply_calls_per_run` (500) bounds thread requests. On
+  large boards, repeat the full sync: a task version already read spends no request, so each run reaches the next tasks.
+  The connection page lists what is still unread, also after later runs. A lasting error on a task's detail (403, too large)
+  no longer stops the board; the task is listed as *Unavailable*.
+- **Repair (GW-L2).** Boards synced by 1.26 and earlier that had a failed run may be missing comments, files and fields:
+  the one full sync above repairs them.
+- **Files after an unlink.** They stay tracked: a later deletion of the task or board names them in
+  `TaskErasedEvent::$attachmentRefs`. Unlinking still does not delete files.
+- **Field value API.** `eraseByValue()` and `exportByValue()` take the board as a required argument; `null` crosses every
+  tenant. The suppression record uses `kernel.secret`: changing the secret makes erased values importable again.
+- **People page.** A candidate of the same name is suggested and no longer selected: a manager chooses it.
+- **Twig.** The list uses `task_board_sync_search_texts(tasks)` (task id => line), once per group of rows.
+
+BC notes: `Task::markCompleted()` gains an optional `?DateTimeImmutable $at`, so a host subclass that overrides it must
+add the parameter. `RemoteTaskPage` gains the optional `$passEnded`; a custom provider with several passes sets it on
+the last page of a pass, because an empty page otherwise stops the run (`paging_stopped`). A provider whose rows may
+leave out the files passes `attachmentsKnown: false` on `RemoteTask` (default `true`) and implements
+`TaskDetailProviderInterface`; one that reads threads with a request each can implement
+`ThreadedCommentProviderInterface`. Hosts with their own
+`templates.connection` include `@NowoTaskBoardBundle/manage/_connection_completeness.html.twig` (variable `completeness`)
+to show the report. The rule on tracked time does not change: deleting tasks or boards keeps all of it, manual and
+imported, detached.
+
+No schema change. People page (TB-SYNC-2): a linked board's connection page links a People page where managers map
+remote people to host users. Hosts with their own `templates.connection` can include
+`templates.connection_people_summary` (variable `peopleSummary`) or link `board_connection_people`. To put the page
+between linking and the first import, set `sync.people.step: true`; for *Invite by e-mail*, set `sync.people.inviter`.
+The candidates are those of `sync.people.resolver` (`SyncPersonResolverInterface::candidates()`): a host without a
+resolver gets the board's assignable users. See [sync.md](sync.md#people-page-and-step-since-1270).
+
 ## To 1.26.3
 
 From **1.26.2**:

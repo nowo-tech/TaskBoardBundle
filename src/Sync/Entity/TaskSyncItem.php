@@ -22,6 +22,18 @@ use function is_string;
 #[ORM\Index(name: 'idx_task_board_sync_items_task', columns: ['task_id'])]
 class TaskSyncItem
 {
+    /** Since 1.27.0: the files could not be read (request budget, or the detail does not say). */
+    public const PENDING_ATTACHMENTS = 1;
+
+    /** Since 1.27.0: threads past the run's reply budget. */
+    public const PENDING_REPLIES = 2;
+
+    /** Since 1.27.0: the detail was not read (request budget). */
+    public const PENDING_DETAIL = 4;
+
+    /** Since 1.27.0: the provider refuses the detail with a lasting error. */
+    public const PENDING_DETAIL_REFUSED = 8;
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -54,6 +66,23 @@ class TaskSyncItem
      */
     #[ORM\Column(name: 'unmatched_people', type: 'json', nullable: true)]
     private ?array $unmatchedPeople = null;
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): what the provider has besides the import row (custom id, points, done / closed dates,
+     * time flags, location path, estimates per assignee, recurrence, status history), read-only on the task.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(name: 'remote_meta', type: 'json', nullable: true)]
+    private ?array $remoteMeta = null;
+
+    /** Since 1.27.0 (audit GWd-L3): what this task still has unread, `PENDING_*` bits; the report reads it. */
+    #[ORM\Column(name: 'pending_reads', type: 'smallint', options: ['default' => 0])]
+    private int $pendingReads = 0;
+
+    /** Since 1.27.0 (TB-SYNC-3): the provider's own task reference (e.g. "DEV-123"); a column so that the list never reads `remote_meta`. */
+    #[ORM\Column(name: 'custom_id', type: 'string', length: 64, nullable: true)]
+    private ?string $customId = null;
 
     /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
     #[ORM\Column(name: 'backfill_level', type: 'smallint', options: ['default' => 0])]
@@ -203,6 +232,62 @@ class TaskSyncItem
     }
 
     /**
+     * Since 1.27.0.
+     *
+     * @return array<string, mixed>
+     */
+    public function getRemoteMeta(): array
+    {
+        return $this->remoteMeta ?? [];
+    }
+
+    public function hasPendingRead(int $bit): bool
+    {
+        return ($this->pendingReads & $bit) !== 0;
+    }
+
+    /** Since 1.27.0: marks one `PENDING_*` bit. */
+    public function setPendingRead(int $bit, bool $pending): void
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->pendingReads = $pending ? $this->pendingReads | $bit : $this->pendingReads & ~$bit;
+    }
+
+    public function getCustomId(): ?string
+    {
+        return $this->customId;
+    }
+
+    /** Since 1.27.0: true when it changed. */
+    public function setCustomId(?string $customId): bool
+    {
+        if ($customId === $this->customId) {
+            return false;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->customId = $customId;
+
+        return true;
+    }
+
+    /**
+     * Since 1.27.0: true when it changed (MySQL's JSON type reorders keys: the order does not count as a change).
+     *
+     * @param array<string, mixed> $meta
+     */
+    public function setRemoteMeta(array $meta): bool
+    {
+        $meta = $meta === [] ? null : self::canonical($meta);
+        if ($meta === ($this->remoteMeta === null ? null : self::canonical($this->remoteMeta))) {
+            return false;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->remoteMeta = $meta;
+
+        return true;
+    }
+
+    /**
      * @return list<string> person ids of a role ("assignee" / "watcher") not written as members
      */
     public function unmatchedPeople(string $role): array
@@ -264,5 +349,22 @@ class TaskSyncItem
         $this->lastSeenRunId = $runId;
 
         return $this;
+    }
+
+    /**
+     * @param array<mixed> $value
+     *
+     * @return array<mixed>
+     */
+    private static function canonical(array $value): array
+    {
+        ksort($value);
+        foreach ($value as $key => $child) {
+            if (is_array($child)) {
+                $value[$key] = self::canonical($child);
+            }
+        }
+
+        return $value;
     }
 }

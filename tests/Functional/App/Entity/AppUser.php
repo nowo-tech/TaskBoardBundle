@@ -21,6 +21,10 @@ class AppUser implements UserInterface, Stringable
     #[ORM\Column]
     private ?int $id = null;
 
+    /** Since 1.27.0: an optional display name (the People page's name pre-fill). */
+    #[ORM\Column(name: 'display_name', length: 120, nullable: true)]
+    private ?string $displayName = null;
+
     /**
      * @param list<string> $roles
      */
@@ -35,6 +39,18 @@ class AppUser implements UserInterface, Stringable
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getDisplayName(): ?string
+    {
+        return $this->displayName;
+    }
+
+    public function setDisplayName(?string $displayName): self
+    {
+        $this->displayName = $displayName;
+
+        return $this;
     }
 
     public function getEmail(): string

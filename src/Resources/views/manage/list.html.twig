@@ -134,11 +134,14 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {# Since 1.27.0: custom fields and custom ids of the rows drawn, read once per group. #}
+                            {% set _syncSearch = task_board_sync_search_texts(group.tasks) %}
                             {% for task in group.tasks %}
                                 {% set _deviation = nowo_task_board_deviation(task) %}
                                 <tr
                                     data-nowo-task-board-list-filter-target="row"
                                     data-title="{{ task.title }}"
+                                    data-search-extra="{{ _syncSearch[task.id]|default('') }}"
                                     data-priority="{{ task.priority.value }}"
                                     data-column="{{ task.column ? task.column.name : '' }}"
                                     data-column-name="{{ task.column ? task.column.name : '' }}"

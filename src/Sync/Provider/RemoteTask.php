@@ -45,6 +45,22 @@ final readonly class RemoteTask
         /** Since 1.25: the list of the task (sources with several lists). */
         public ?string $listId = null,
         public ?string $listName = null,
+        /**
+         * Since 1.27.0 (TB-SYNC-3): the custom fields, typed (definitions and values).
+         *
+         * @var list<RemoteCustomField>
+         */
+        public array $customFields = [],
+        /** Since 1.27.0 (TB-SYNC-3): custom id, points, done / closed dates, time flags, path, estimates, recurrence. */
+        public ?RemoteTaskDetails $details = null,
+        /**
+         * Since 1.27.0: the keys of the provider's answer that carried a value (completeness report).
+         *
+         * @var list<string>
+         */
+        public array $presentKeys = [],
+        /** Since 1.27.0: false when the answer does not say (ClickUp list rows have no `attachments`): the detail is read. */
+        public bool $attachmentsKnown = true,
     ) {
     }
 

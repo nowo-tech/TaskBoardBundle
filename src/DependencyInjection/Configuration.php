@@ -7,12 +7,14 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\File\HostAllowlist;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
+use function array_map;
 use function is_string;
 use function preg_match;
 use function str_contains;
@@ -431,6 +433,21 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_unlink')->end()
                             ->end()
                         ->end()
+                        // Since 1.27.0 (TB-SYNC-2): the People page of a linked board.
+                        ->arrayNode('board_connection_people')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('board_connection_people_save')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/save')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_save')->end()
+                            ->end()
+                        ->end()
                     ->end()
                 ->end()
                 ->arrayNode('templates')
@@ -458,6 +475,9 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('connection_badge')->defaultValue('@NowoTaskBoardBundle/manage/_connection_badge.html.twig')->end()
                         ->scalarNode('connection_progress')->defaultValue('@NowoTaskBoardBundle/manage/_connection_progress.html.twig')->end()
                         ->scalarNode('connection_history')->defaultValue('@NowoTaskBoardBundle/manage/_connection_history.html.twig')->end()
+                        // Since 1.27.0 (TB-SYNC-2): the People page and the People summary of the connection page.
+                        ->scalarNode('connection_people')->defaultValue('@NowoTaskBoardBundle/manage/connection_people.html.twig')->end()
+                        ->scalarNode('connection_people_summary')->defaultValue('@NowoTaskBoardBundle/manage/_connection_people_summary.html.twig')->end()
                         ->scalarNode('task_panel')
                             ->defaultValue('@NowoTaskBoardBundle/manage/task_panel.html.twig')
                             ->info('Task editing panel without layout (since 1.11), served by the task_panel route for side drawers.')
@@ -714,6 +734,29 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                         ->end()
                         // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
+                        ->booleanNode('import_archived')->defaultTrue()->info('Since 1.27.0 (TB-SYNC-3): archived provider tasks are read (ClickUp: a second pass with archived=true) and imported archived. false = 1.26 (an archived task is not created).')->end()
+                        ->arrayNode('status_history')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_calls_per_run')->defaultValue(200)->min(0)->info('Since 1.27.0 (TB-SYNC-3): "time in status" requests a run may spend on the tasks it creates or changes (0 = never).')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('comments')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_reply_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.27.0: requests for comment threads per run (0 = no replies). The threads past it are reported, and read when the comment or task next changes.')->end()
+                            ->end()
+                        ->end()
+                        ->arrayNode('custom_fields')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->enumNode('mode')->values(['typed', 'text', 'both'])->defaultValue('typed')->info('Since 1.27.0 (TB-SYNC-3): typed = board-level field definitions and typed values per task (task panel, list search); text = the 1.23 "Fields (<provider>)" task document only; both.')->end()
+                                ->arrayNode('exclude_types')
+                                    ->info('Since 1.27.0: field types never imported, e.g. [email, phone, text] to minimise personal data (RGPD Art. 5, 25). Default: none, everything is imported. What is stored of these types goes when the task is next written.')
+                                    ->enumPrototype()->values(array_map(static fn (SyncFieldType $type): string => $type->value, SyncFieldType::cases()))->end()
+                                ->end()
+                            ->end()
+                        ->end()
                         ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()
                         ->arrayNode('lookup')
                             ->addDefaultsIfNotSet()
@@ -727,6 +770,12 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('resolver')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\SyncPersonResolverInterface (tenant scope, candidates, verified e-mail match). null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board).')->end()
                                 ->booleanNode('require_verified_email')->defaultTrue()->info('Since 1.25: an e-mail match is applied automatically only for a verified account; otherwise it is only suggested. false = 1.23 parity for users without isVerified().')->end()
                                 ->integerNode('reassign_batch_size')->defaultValue(500)->min(50)->max(2000)->end()
+                                // Since 1.27.0 (TB-SYNC-2): the People page / step.
+                                ->booleanNode('step')->defaultFalse()->info('Since 1.27.0: true = linking a board does not start the first import: the people are scanned and the manager lands on the People page ("Save and start the import"). false = the import starts at once (1.26); the People page is reachable from the connection page either way.')->end()
+                                ->scalarNode('inviter')->defaultNull()->info('Since 1.27.0: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\PeopleInviterInterface ("Invite by e-mail" on the People page). null = no invite option.')->end()
+                                ->integerNode('page_size')->defaultValue(50)->min(10)->max(200)->info('Since 1.27.0: people per page of the People page.')->end()
+                                ->integerNode('candidate_limit')->defaultValue(200)->min(1)->max(1000)->info('Since 1.27.0: the most host users offered in each People select (SyncPersonResolverInterface::candidates()).')->end()
+                                ->floatNode('reapply_seconds')->defaultValue(10.0)->min(0.0)->max(60.0)->info('Since 1.27.0: seconds a People save (and the end of each sync) spends re-applying changed mappings to already imported tasks; the rest continues on the next save or sync.')->end()
                                 ->arrayNode('scan')
                                     ->addDefaultsIfNotSet()
                                     ->children()
