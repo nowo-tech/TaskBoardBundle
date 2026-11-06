@@ -611,6 +611,10 @@ nowo_task_board:
         comments:
             max_reply_calls_per_run: 500 # since 1.27.0: requests for comment threads per run (0 = no replies); the rest is reported
         import_archived: true         # since 1.27.0: archived provider tasks are read and imported archived (false = 1.26)
+        include_multi_list_tasks: false  # since 1.28.0: a ClickUp list source also reads tasks added to it from other lists (include_timl)
+        full_sync_rereads_details: false # since 1.28.0: a full sync reads each task's detail again even if its date did not move
+        people_bulk_former: false     # since 1.28.0: People page button "Mark every unmapped person as a former person"
+        unmatched_columns_choice: false # since 1.28.0: draw "Columns no status uses" on the link page (a posted value is accepted either way)
         status_history:
             max_calls_per_run: 200    # since 1.27.0: "time in status" requests per run for the tasks it writes (0 = never)
         # Since 1.25 (ClickUp full import; see sync.md):
@@ -655,6 +659,7 @@ New routes (configurable like the others, copied under `tenancy.tenant_paths`): 
 New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`;
 since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
 Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.
+Since 1.28.0 `board_connection_people_former` (POST, CSRF) is added; it answers 404 unless `sync.people_bulk_former` is true.
 Since 1.27.0 the partials `manage/_connection_completeness.html.twig` (variable `completeness`, on the connection page)
 and `manage/_task_sync_details.html.twig` / `_task_sync_fields.html.twig` (task panel) are included by the bundle's
 templates; a host with its own `templates.connection` includes the first one itself.

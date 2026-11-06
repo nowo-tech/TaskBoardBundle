@@ -35,6 +35,22 @@ final readonly class RemoteTaskDetails
         public array $estimates = [],
         /** A read-only description of the recurrence, when the provider gives one. */
         public ?string $recurrence = null,
+        /** Since 1.28.0: the provider's task type id; its name comes from {@see TaskTypeProviderInterface}. */
+        public ?string $taskTypeId = null,
+        /** Since 1.28.0: the workspace the task answer names. */
+        public ?string $workspaceId = null,
+        /**
+         * Since 1.28.0: every list the task appears in.
+         *
+         * @var list<array{id: string, name: string}>
+         */
+        public array $locations = [],
+        /**
+         * Since 1.28.0: tag name => colours.
+         *
+         * @var array<string, array{fg: string|null, bg: string|null}>
+         */
+        public array $tagColours = [],
     ) {
     }
 
@@ -52,6 +68,8 @@ final readonly class RemoteTaskDetails
             'dueHasTime'   => $this->dueHasTime ?: null,
             'path'         => $this->path === [] ? null : $this->path,
             'recurrence'   => $this->recurrence,
+            'locations'    => $this->locations === [] ? null : $this->locations,
+            'tagColours'   => $this->tagColours === [] ? null : $this->tagColours,
         ], static fn (mixed $value): bool => $value !== null);
     }
 }

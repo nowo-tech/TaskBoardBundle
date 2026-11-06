@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncConflict;
+use Nowo\TaskBoardBundle\Sync\Dto\SyncMode;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -42,6 +43,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
@@ -50,6 +52,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
@@ -74,16 +77,21 @@ use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
+use function explode;
 use function hash;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_scalar;
 use function json_encode;
 use function max;
 use function mb_strtolower;
 use function method_exists;
+use function preg_replace;
+use function rawurldecode;
 use function sha1;
 use function sort;
+use function spl_object_id;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
@@ -147,6 +155,10 @@ final readonly class SyncTaskWriter
         private bool $importArchived = true,
         // Since 1.27.0 (audit GW-L6): reply requests per run.
         private int $maxReplyCalls = 500,
+        // Since 1.28.0: `sync.full_sync_rereads_details`.
+        private bool $fullSyncRereadsDetails = false,
+        // Since 1.28.0 (audit HI-L3): lines of the "Fields" document the eraser removed.
+        private ?SyncFieldSuppression $suppression = null,
     ) {
     }
 
@@ -433,7 +445,7 @@ final readonly class SyncTaskWriter
             importSource: $ctx->scope,
         ));
         $peopleMode = $this->peopleMode($session, $row);
-        $users      = $peopleMode ? [] : $assignees->resolve($row);
+        $users      = $peopleMode ? [] : $this->writableUsers($ctx, $assignees->resolve($row));
         foreach ($users as $user) {
             $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
         }
@@ -492,7 +504,7 @@ final readonly class SyncTaskWriter
         $column       = $this->columnFor($ctx, $remote, $columns);
         $parent       = $this->parentOf($ctx, $row, $related);
         $peopleMode   = $this->peopleMode($session, $row);
-        $users        = $peopleMode ? [] : $assignees->resolve($row);
+        $users        = $peopleMode ? [] : $this->writableUsers($ctx, $assignees->resolve($row));
         $remoteValues = $this->remoteValues($row, $column, $users, $parent);
 
         /** @var array<string, true> $allowed */
@@ -700,10 +712,76 @@ final readonly class SyncTaskWriter
             }
             $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
             $this->syncAttachments($ctx, $task, $item, $detail->attachments);
+        } elseif ($detail !== $remote && $ctx->mode === SyncMode::Full && $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS)) {
+            // Since 1.28.0 (audit GWf-I1): asked twice, the detail has no key. ClickUp documents it only for tasks with files, so
+            // this is a task without files: nothing is left to read, and no stored file is touched.
+            $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
         } elseif (!$this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ) || $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS)) {
             $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, true);
             $ctx->count('attachments.unread');
         }
+    }
+
+    /**
+     * The text of a Markdown body without its formatting: markers and emphasis go, spacing collapses, an encoded character
+     * reads as itself. Link targets, ordered numbers and word breaks stay, so changing one of them is an edit (audit HId-L1).
+     */
+    private function plainWords(string $markdown): string
+    {
+        $text = (string) preg_replace('/^\s*(?:[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m', '', rawurldecode($markdown));
+        $text = (string) preg_replace('/[*_`~\[\]\\\\]+/', '', $text);
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
+    }
+
+    /**
+     * Since 1.28.0 (audit HI-M2): the one rule of the e-mail path, the writes with no people session or no person reference:
+     * a user who cannot view the board, or whom the host flags as attribution only, is not written. A member row is a
+     * participant row, and a participant gets the task.
+     */
+    private function writableUser(SyncRunContext $ctx, ?object $user): ?object
+    {
+        if ($user === null) {
+            return null;
+        }
+        // One answer per user and slice: a host's check may be costly (audit HId-I2).
+        $key = SyncUser::id($user) ?? (string) spl_object_id($user);
+        if ($ctx->writableUsers[$key] ??= $this->accessChecker->canViewBoard($user, $ctx->board) && $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) !== true) {
+            return $user;
+        }
+        $ctx->count('emailPath.notWritten');
+
+        return null;
+    }
+
+    /**
+     * @param list<object> $users
+     *
+     * @return list<object>
+     */
+    private function writableUsers(SyncRunContext $ctx, array $users): array
+    {
+        return array_values(array_filter($users, fn (object $user): bool => $this->writableUser($ctx, $user) !== null));
+    }
+
+    /**
+     * Since 1.28.0: replies kept per remote comment.
+     *
+     * @param array<string, TaskSyncComment> $comments
+     *
+     * @return array<string, int>
+     */
+    private function storedReplies(array $comments): array
+    {
+        $count = [];
+        foreach ($comments as $comment) {
+            $parent = $comment->getParentRemoteId();
+            if ($parent !== null) {
+                $count[$parent] = ($count[$parent] ?? 0) + 1;
+            }
+        }
+
+        return $count;
     }
 
     /** Since 1.27.0: this version of the task was already read (repeated full syncs make progress). */
@@ -846,7 +924,8 @@ final readonly class SyncTaskWriter
         $provider = $ctx->provider;
         // Audit GWd-L3: threads already read for this version spend nothing, so the budget reaches the next tasks.
         $done     = $this->read($item, $remoteTask, SyncTaskDetailsWriter::META_REPLIES_READ);
-        $replies  = $done ? ReplyBudget::alreadyRead() : new ReplyBudget(max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls')));
+        $left     = max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls'));
+        $replies  = $done ? ReplyBudget::alreadyReadExcept($this->storedReplies($existing), $left) : new ReplyBudget($left);
         $comments = $provider instanceof ThreadedCommentProviderInterface
             ? $provider->fetchCommentsWithin($ctx->credential, $item->getExternalId(), $replies)
             : $provider->fetchComments($ctx->credential, $item->getExternalId());
@@ -873,7 +952,7 @@ final readonly class SyncTaskWriter
             }
             // Since 1.25: through the directory (no "Originally by" line: the template shows the person reference).
             $person = $session instanceof PeopleSession && $remote->author !== null ? $session->person($remote->author, TaskSyncPerson::KIND_COMMENT) : null;
-            $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null);
+            $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $this->writableUser($ctx, $assignees->userByEmail($remote->authorEmail)) : null);
             $files ??= $this->store->attachmentsOf($task);
             $body = $this->commentBody($ctx, $task, $item, $remote, $author === null && !$person instanceof TaskSyncPerson, $files);
             if (!$known instanceof TaskSyncComment) {
@@ -883,7 +962,12 @@ final readonly class SyncTaskWriter
                 ++$ctx->commentsCreated;
                 continue;
             }
-            $known->getComment()->edit($body, []);
+            // Since 1.28.0 (audit HI-L5): the same words in another format are not an edit (a new renderer, not a person).
+            if ($this->plainWords($known->getComment()->getBody()) === $this->plainWords($body)) {
+                $known->getComment()->reformat($body);
+            } else {
+                $known->getComment()->edit($body, []);
+            }
             $known->written($remoteHash, $this->hash($body));
             ++$ctx->commentsUpdated;
         }
@@ -985,7 +1069,10 @@ final readonly class SyncTaskWriter
     {
         $title = Text::cut(sprintf('%s (%s)', $this->trans('task_board.sync.fields_document', 'Fields'), $this->providerName($ctx)), 255);
         foreach ($task->getDocuments() as $document) {
-            if ($document->getTitle() === $title) {
+            if ($document->isSyncFields() || $document->getTitle() === $title) {
+                // Since 1.28.0 (audits HI-L2, HI-L3): marked as the sync's own; lines the eraser removed do not return.
+                $document->markSyncFields();
+                $text = $this->withoutErasedLines($document, $text);
                 if ($document->getContent() !== $text) {
                     $document->setContent($text);
                 }
@@ -993,9 +1080,20 @@ final readonly class SyncTaskWriter
                 return;
             }
         }
-        $document = new TaskDocument($task, $title, $text, $ctx->actor, count($task->getDocuments()));
+        $document = (new TaskDocument($task, $title, $text, $ctx->actor, count($task->getDocuments())))->markSyncFields();
         $task->getDocuments()->add($document);
         $this->entityManager->persist($document);
+    }
+
+    private function withoutErasedLines(TaskDocument $document, string $text): string
+    {
+        $erased      = $document->erasedLines();
+        $suppression = $this->suppression;
+        if ($erased === [] || !$suppression instanceof SyncFieldSuppression) {
+            return $text;
+        }
+
+        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => !in_array($suppression->recordLine($line), $erased, true)));
     }
 
     /**
@@ -1092,7 +1190,9 @@ final readonly class SyncTaskWriter
                 $ctx->warn('status_without_column');
                 continue;
             }
-            $column                         = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255)));
+            // Since 1.28.0: the status's colour now; its order at the end of the first import.
+            $column = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255), color: $remote->status?->color));
+            $ctx->connection->addCreatedColumn($column->getId());
             $byName[mb_strtolower($status)] = $column;
             ++$ctx->columnsCreated;
         }
@@ -1135,7 +1235,10 @@ final readonly class SyncTaskWriter
         $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown)
             || ($ctx->options->importAttachments && $provider->capabilities()->attachments && !$remote->attachmentsKnown);
         // A version already read spends no request, whatever the row lacks: the budget reaches the next tasks (audit GW).
-        if (!$missing || !$provider instanceof TaskDetailProviderInterface || $this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ)) {
+        // Since 1.28.0 (`sync.full_sync_rereads_details`, audit GWf-I2): for a provider where a new file may not move the task's date.
+        // Since 1.28.0 (audit GWf-I1): a full sync asks again about files still unread, so "retried on a full sync" is true.
+        $reread = $ctx->mode === SyncMode::Full && ($this->fullSyncRereadsDetails || $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS));
+        if (!$missing || !$provider instanceof TaskDetailProviderInterface || (!$reread && $this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ))) {
             return $remote;
         }
         if (($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {

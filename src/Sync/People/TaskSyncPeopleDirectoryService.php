@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReviewedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonAnonymisedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
+use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
@@ -221,6 +222,12 @@ final readonly class TaskSyncPeopleDirectoryService
     public function unreviewedCount(TaskSyncDirectory $directory): int
     {
         return $this->people->unreviewedCount($directory);
+    }
+
+    /** Since 1.28.0: the host says the user is shown for attribution only (see {@see AttributionOnlyResolverInterface}). */
+    public function isAttributionOnly(TaskBoard $board, object $user): bool
+    {
+        return $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($board, $user);
     }
 
     /** The People step was saved: the first import may run (`SyncOptions::requirePeopleMapping`). */

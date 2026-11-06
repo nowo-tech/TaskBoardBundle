@@ -164,6 +164,15 @@ class TaskComment
         return in_array($userId, $this->getMentionedIds(), true);
     }
 
+    /** Since 1.28.0: the same words in another format, from the sync: not an edit. */
+    public function reformat(string $body): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->body = $body;
+
+        return $this;
+    }
+
     /**
      * @param list<array{id: string, label: string}> $mentions
      */

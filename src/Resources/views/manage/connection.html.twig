@@ -44,6 +44,9 @@
                             </h2>
                         </div>
                         <div class="card-body">
+                            {% if connection.sourceDescription %}
+                                <p class="text-secondary small mb-2" data-testid="nowo-task-sync-source-description"><strong>{{ 'task_board.sync.page.source_description'|trans({'%provider%': (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}:</strong> {{ connection.sourceDescription }}</p>
+                            {% endif %}
                             {% if connection.containerPath is not empty %}
                                 <p class="text-secondary small mb-2">{{ connection.containerPath|join(' › ') }}</p>
                             {% endif %}

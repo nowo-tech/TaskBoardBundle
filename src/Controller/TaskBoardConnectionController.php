@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Controller;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
+use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormerFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionRefreshFormType;
 use Nowo\TaskBoardBundle\Form\ContainerLevelFormType;
@@ -41,6 +42,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
@@ -48,6 +50,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
+use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -82,6 +85,7 @@ use function is_string;
 use function max;
 use function min;
 use function preg_match;
+use function round;
 use function serialize;
 use function str_starts_with;
 use function substr;
@@ -127,6 +131,9 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly ?TaskSyncPersonRepository $peopleRepository = null,
         private readonly bool $peopleStep = false,
         private readonly int $peoplePageSize = 50,
+        private readonly bool $peopleBulkFormer = false,
+        // Since 1.28.0: the bundle's own link page offers `unmatchedColumns` (it is always accepted when posted).
+        private readonly bool $unmatchedColumnsChoice = false,
     ) {
     }
 
@@ -174,7 +181,7 @@ final class TaskBoardConnectionController extends AbstractController
             'choices'           => $choices,
             'choice'            => $choice,
             'credentialFormUrl' => $provider instanceof TaskProviderInterface ? $this->credentialFormUrl($board, $provider) : null,
-            'linkForm'          => $linkForm?->createView(),
+            'linkForm'          => $this->linkFormView($linkForm),
             'tree'              => $tree,
             'levelForms'        => array_map(fn (ContainerPage $level): FormView => $this->levelForm($level)->createView(), $tree ?? []),
             'treeError'         => $treeError,
@@ -268,7 +275,7 @@ final class TaskBoardConnectionController extends AbstractController
         if ($this->store->findConnection($board) instanceof TaskBoardConnection) {
             return $this->backToPage($boardId);
         }
-        /** @var array{container: string, createMissingColumns: bool, fallbackColumnId: string|null, importComments: bool, importAttachments: bool, archiveRemoteDeletions: bool} $values */
+        /** @var array{container: string, createMissingColumns: bool, fallbackColumnId: string|null, unmatchedColumns: string|null, importComments: bool, importAttachments: bool, archiveRemoteDeletions: bool} $values */
         $values     = $form->getData();
         $credential = $this->credentials->credentialFor($board, $choice->ref);
         $container  = null;
@@ -293,7 +300,8 @@ final class TaskBoardConnectionController extends AbstractController
             'importComments'         => (bool) $values['importComments'],
             'importAttachments'      => (bool) $values['importAttachments'],
             'archiveRemoteDeletions' => (bool) $values['archiveRemoteDeletions'],
-        ]);
+            // Since 1.28.0: only the non-default choice is stored.
+        ] + ($values['unmatchedColumns'] === TaskBoardConnection::UNMATCHED_DELETE ? ['unmatchedColumns' => TaskBoardConnection::UNMATCHED_DELETE] : []));
         $this->logWrite('sync_link', ['board_id' => $boardId, 'provider' => $provider->id()]);
         if ($this->peopleStepScan($board, $connection, $provider, $credential, $user)) {
             // Since 1.27.0 (TB-SYNC-2): the People step comes first; its save starts the import.
@@ -481,6 +489,37 @@ final class TaskBoardConnectionController extends AbstractController
         return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId] + $query);
     }
 
+    /**
+     * Since 1.28.0 (`sync.people_bulk_former`): every person nobody decided yet becomes a former person. The rows stay
+     * changeable person by person; during the People step the page's save still starts the import.
+     */
+    public function peopleFormer(string $boardId, Request $request): RedirectResponse
+    {
+        $user       = $this->requireUser();
+        $board      = $this->findManagedBoard($boardId, $user);
+        $connection = $this->linkedConnection($board);
+        $directory  = $connection->getDirectory();
+        if (!$this->peopleBulkFormer || !$directory instanceof TaskSyncDirectory || !$this->peopleMapping instanceof PeopleMappingService) {
+            throw new NotFoundHttpException('No people for this connection.');
+        }
+        $form = $this->peopleFormerForm($board);
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $this->logRefused('csrf_invalid');
+
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+        try {
+            $changed = $this->peopleMapping->markUnmappedAsFormer($directory, $board, $user);
+        } catch (PeopleMappingDeniedException) {
+            throw new NotFoundHttpException('Board not found.');
+        }
+        $this->logWrite('sync_people_former', ['board_id' => $boardId, 'changed' => $changed]);
+        $this->addFlash('success', $this->translator->trans('task_board.sync.people.flash.former', ['%count%' => (string) $changed], 'NowoTaskBoardBundle'));
+
+        return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId]);
+    }
+
     /** The one-line summary of a report, in the user's language (also the live region text). */
     public function summary(SyncReport $report): string
     {
@@ -562,14 +601,28 @@ final class TaskBoardConnectionController extends AbstractController
                 $rows[] = ['key' => $key, 'tasks' => $pending[$bit], 'status' => $status];
             }
         }
-        if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0) {
-            $rows[] = ['key' => 'time_in_status', 'tasks' => $stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] + ($stats[SyncTaskDetailsWriter::STAT_STATUS_SKIPPED] ?? 0), 'status' => 'unavailable'];
+        // Since 1.28.0: kept on the connection, so a run that writes nothing does not make the row disappear.
+        if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0 || $connection->isStatusHistoryUnavailable()) {
+            $rows[] = ['key' => 'time_in_status', 'tasks' => ($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) + ($stats[SyncTaskDetailsWriter::STAT_STATUS_SKIPPED] ?? 0), 'status' => 'unavailable'];
+        }
+        if (($stats[SyncTaskDetailsWriter::STAT_TYPES_UNAVAILABLE] ?? 0) > 0) {
+            $rows[] = ['key' => 'task_types', 'tasks' => 0, 'status' => 'unavailable'];
+        }
+        // Since 1.28.0 (TB-SYNC-4): what the provider's API does not give, or what is not kept, on every report.
+        if ($report instanceof SyncReport && $provider instanceof ProviderApiGapsInterface) {
+            foreach ($provider->apiGaps() as $key => $status) {
+                $rows[] = ['key' => $key, 'tasks' => 0, 'status' => $status];
+            }
+        }
+        // Since 1.28.0: hours of people with no host user, when the sink takes mapped people only: never silent.
+        if ($report instanceof SyncReport && $report->time->skippedUnmapped > 0) {
+            $rows[] = ['key' => 'time_entries_unmapped', 'tasks' => $report->time->skippedUnmapped, 'status' => 'pending_person', 'hours' => round(($stats[TimeEntryPhase::STAT_UNMAPPED_SECONDS] ?? 0) / 3600, 2)];
         }
         // Not imported yet first, then the reasons, then what is imported; by key inside each.
         $rank = static fn (string $status): int => match ($status) {
-            'not_imported_yet', 'not_read', 'unavailable' => 0,
-            FieldCoverageProviderInterface::IMPORTED      => 2,
-            default                                       => 1,
+            'not_imported_yet', 'not_read', 'unavailable', 'pending_person' => 0,
+            FieldCoverageProviderInterface::IMPORTED                        => 2,
+            default                                                         => 1,
         };
         usort($rows, static fn (array $a, array $b): int => [$rank($a['status']), $a['key']] <=> [$rank($b['status']), $b['key']]);
 
@@ -635,6 +688,19 @@ final class TaskBoardConnectionController extends AbstractController
     }
 
     /**
+     * @param FormInterface<array<string, mixed>>|null $form
+     */
+    private function linkFormView(?FormInterface $form): ?FormView
+    {
+        $view = $form?->createView();
+        if ($view instanceof FormView && !$this->unmatchedColumnsChoice) {
+            $view['unmatchedColumns']->setRendered();
+        }
+
+        return $view;
+    }
+
+    /**
      * @return FormInterface<array<string, mixed>>
      */
     private function linkForm(TaskBoard $board, TaskProviderInterface $provider, ConnectionChoice $choice): FormInterface
@@ -652,6 +718,7 @@ final class TaskBoardConnectionController extends AbstractController
             'provider'               => $provider->id(),
             'connection'             => $choice->ref,
             'createMissingColumns'   => true,
+            'unmatchedColumns'       => TaskBoardConnection::UNMATCHED_KEEP,
             'importComments'         => true,
             'importAttachments'      => true,
             'archiveRemoteDeletions' => true,
@@ -801,6 +868,10 @@ final class TaskBoardConnectionController extends AbstractController
             $candidates = $this->peopleMapping->candidates($board);
             foreach ($candidates as $id => $candidate) {
                 $labels[$id] = UserLabel::option($candidate);
+                // Since 1.28.0: said in the option, so a manager knows the user gets no access from this mapping.
+                if ($this->peopleMapping->isAttributionOnly($board, $candidate)) {
+                    $labels[$id] = $this->translator->trans('task_board.sync.people.attribution_only', ['%user%' => $labels[$id]], 'NowoTaskBoardBundle');
+                }
             }
             $rows    = $this->peopleMapping->rows($directory, $candidates, $filter === 'unmapped' ? PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested) : new PersonFilter(), $this->peoplePageSize + 1, ($page - 1) * $this->peoplePageSize);
             $hasNext = count($rows) > $this->peoplePageSize;
@@ -822,9 +893,20 @@ final class TaskBoardConnectionController extends AbstractController
             'peopleSummary'      => $this->peopleSummary($board, $connection),
             'pendingReassigns'   => $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository ? count($this->peopleRepository->pendingReassigns($directory)) : 0,
             'firstImportPending' => $this->firstImportPending($connection),
+            'peopleFormerForm'   => $this->peopleBulkFormer && $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository && $this->peopleRepository->unreviewedCount($directory) > 0 ? $this->peopleFormerForm($board)->createView() : null,
             'dashboardRoute'     => $this->dashboardRoute,
             'templates'          => $this->templates,
         ];
+    }
+
+    /**
+     * @return FormInterface<mixed>
+     */
+    private function peopleFormerForm(TaskBoard $board): FormInterface
+    {
+        return $this->container->get('form.factory')->createNamed(ConnectionPeopleFormerFormType::NAME, ConnectionPeopleFormerFormType::class, null, [
+            'action' => $this->generateUrl($this->routes['board_connection_people_former']['name'], ['boardId' => $board->getId()]),
+        ]);
     }
 
     /**

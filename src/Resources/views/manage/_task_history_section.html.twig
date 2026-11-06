@@ -27,10 +27,10 @@
             {% set entry = item.entry %}
             {% set changeKey = 'task_board.history.type.' ~ entry.changeType.value %}
             <li class="nowo-task-activity__item nowo-task-detail__history-item">
-                    {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: entry.user, class: 'nowo-task-detail__history-avatar', size: 32, labelled: false}, with_context: false) }}
+                    {% if entry.user %}{{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: entry.user, class: 'nowo-task-detail__history-avatar', size: 32, labelled: false}, with_context: false) }}{% endif %}
                     <div class="nowo-task-activity__body">
                         <div class="nowo-task-detail__history-summary">
-                            <strong>{{ memberUi.member_label(entry.user) }}</strong>
+                            <strong>{% if entry.user %}{{ memberUi.member_label(entry.user) }}{% else %}{{ entry.userName ?: 'task_board.history.former_user'|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</strong>
                             <span class="nowo-task-activity__action">
                                 {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
                             </span>

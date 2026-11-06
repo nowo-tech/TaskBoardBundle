@@ -375,6 +375,14 @@ own, else the union of its lists'), `resolveListFromUrl()` (only `https://app.cl
 call) and `searchLists()` (at most 40 calls; cached 300 s in `sync.lookup.cache_pool`, keyed by a hash of the connection
 reference, never the token). With `sync.list_as_tag` tasks of a multi-list source get the tag `list:<name>`.
 
+### Columns no status uses (since 1.28.0)
+
+With `unmatchedColumns: delete`, at the end of the first import, each board column that no provider status maps to is deleted if it is
+empty. A status maps through the dialog's map (`__skip` maps to nothing), else by the same name; the fallback column counts as mapped.
+Whatever cannot be decided keeps the column and says so in the run report: a source not read to the end, edit permission lost during
+the run, statuses the provider did not give, a database refusal. The decision is marked on the connection before anything is deleted, so
+a failure is never retried by a later sync. A run that fails is not the end of the first import: the retry still decides.
+
 ## Tracked time (since 1.25)
 
 The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set and `SyncOptions::$timeEntries`, a
@@ -403,6 +411,12 @@ The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set an
 
 **TO CONFIRM** against a real workspace (handled defensively): the row cap per answer, the `assignee` list length,
 whether guests can track time, and what a member token gets when `assignee` lists others (the adapter sends none).
+
+### Hours of people with no user (since 1.28.0)
+
+A plain sink gets people mapped to a user, and the rest is counted (`time.skippedUnmapped`, shown with its hours in the
+completeness report). A sink that implements `OwnerlessTimeEntrySinkInterface` also gets those entries, with `user()` null and the
+person on the candidate; the bundle stores no time and the hours stay at the provider either way. `ownerless.entries` counts them.
 
 ## Pre-scans and re-association (since 1.25)
 
@@ -465,6 +479,16 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
 - **Scope.** The mapping is stored per directory: per connection by default (`board:<id>`), or per provider workspace
   and host tenant when the host's `directoryScope()` returns a shared scope.
 
+### Former people and attribution only (since 1.28.0)
+
+`sync.people_bulk_former` adds a button marking everyone undecided (unmatched or suggested, not anonymised, across all pages) as a
+former person: mapping `external`. Their name stays on tasks, comments and history; they cannot be assigned, mentioned or notified,
+and nothing moves. A person remains changeable, and anonymising stays available.
+
+`AttributionOnlyResolverInterface` lets a host offer a user for attribution only. The option says so in the select. Such a mapping
+writes no membership and does not set the task's creator or a comment's author, because a task's creator gets access through
+`isTaskParticipant`. The panel shows the user's label from the view model, and the sink receives the user for tracked time.
+
 ## Everything a ClickUp task has (since 1.27.0)
 
 TB-SYNC-3. Remote data is untrusted everywhere: values are type-checked, text is sanitised and cut, links must be
@@ -515,6 +539,16 @@ sniffing), and nothing remote is rendered unescaped.
 - **TO CONFIRM** against a real workspace: the reply endpoint and the field names `assignee`, `resolved`,
   `date_updated` and the `attachment` segment shape.
 
+**Style (since 1.28.0).** A comment's segments become GitHub-flavoured Markdown. Block attributes (`list`, `indent`,
+`code-block`, and Quill's `blockquote` and `header`) count on the line feed that ends a line, which is what ClickUp
+documents, and on the line's text, in the nested (`{"list": {"list": "bullet"}}`) and the flat form. A task mention links
+to `https://app.clickup.com/t/<id>` when the segment has no address of its own; it does not point at the imported task
+here. `underline`, `color` and `background-color` have no Markdown form: the text stays and the style does not.
+
+Descriptions come from `markdown_description` through `RemoteContentSanitizer`: a GFM table stays a table, and anything
+that looks like an HTML tag stays visible as text (`\<u>`, rendered `<u>`), in a table cell too. The sanitizer also
+escapes `<` inside inline code spans, so a span shows its backslash there: block code keeps its text exactly.
+
 ### Dates, points, links, ids, location, status history, archived tasks, recurrence
 
 Kept read-only on the synced task (`task_board_sync_items.remote_meta`) and shown in the task panel's *From
@@ -554,6 +588,12 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
   board. A lasting error on the detail (403, too large) leaves that task as it is, the run goes on, and it is listed as
   `task_detail`, *Unavailable*; a passing one stops the run as usual.
 
+**Since 1.28.0:** the task type (`custom_item_id`, whose 0 is ClickUp's own *Task*, with the workspace's name for the rest; `#<id>` if the names cannot
+be read), all the task's lists, and tag colours (plain hex only) are in the panel. Subtasks at any depth arrive flat with their `parent`, closed ones
+included (`subtasks=true`, `include_closed=true`). `sync.include_multi_list_tasks` sends `include_timl` on list sources; ClickUp documents it only on
+that endpoint, so a folder or space source does not send it. Columns the connection created take their status's colour and the provider's order among
+themselves at the end of the first import; every other column stays where it is. A later run orders and colours only the columns it creates itself.
+
 ### Completeness report
 
 After each run the connection page lists, per key of the provider's task answers that carried a value, on how many
@@ -570,6 +610,11 @@ run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9
 
 **After upgrading**, run one full sync per linked board so that existing tasks get all of this
 ([UPGRADING](UPGRADING.md#to-1270)).
+
+**What the API does not give (since 1.28.0).** `Sync\Provider\ProviderApiGapsInterface::apiGaps()` adds rows on every report, whatever the answers held. For
+ClickUp, from its published reference as read on 2026-11-06: `reminders`, `sprints`, `goal_links`, `folder_description`, `space_description` are *not exposed*. No
+reference page documents them on a task, a folder or a space. `comment_assigned_by` and `comment_reactions` are exposed and not kept. `task_types` is *Unavailable* when the names
+were refused, and `time_in_status` stays *Unavailable* across runs until a later run reads it.
 
 ### Time entries one by one
 

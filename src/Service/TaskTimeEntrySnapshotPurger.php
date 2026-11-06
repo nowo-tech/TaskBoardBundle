@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
@@ -87,6 +88,10 @@ final readonly class TaskTimeEntrySnapshotPurger
      */
     public function forgetUserName(string $name): int
     {
+        // Since 1.28.0: the task history keeps the same name.
+        $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.userName = NULL WHERE h.user IS NULL AND h.userName = :name')
+            ->setParameter('name', $name)->execute();
+
         return (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = NULL WHERE e.user IS NULL AND e.userName = :name')
             ->setParameter('name', $name)->execute();
     }
@@ -105,9 +110,16 @@ final readonly class TaskTimeEntrySnapshotPurger
         foreach ($entries as $entry) {
             $entry->backfillUserName();
         }
+        // Since 1.28.0 (audit GWf-L1): the task history keeps a name the same way.
+        /** @var list<TaskChangeHistory> $history */
+        $history = $this->entityManager->createQueryBuilder()->select('h')->from(TaskChangeHistory::class, 'h')
+            ->where('h.user IS NOT NULL')->andWhere('h.userName IS NULL')->setMaxResults($batchSize)->getQuery()->getResult();
+        foreach ($history as $entry) {
+            $entry->backfillUserName();
+        }
         $this->entityManager->flush();
 
-        return count($entries);
+        return count($entries) + count($history);
     }
 
     private function scoped(QueryBuilder $builder, ?string $boardId, ?DateTimeImmutable $loggedBefore): QueryBuilder

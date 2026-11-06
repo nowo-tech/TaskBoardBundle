@@ -1920,9 +1920,9 @@ dialog.nowo-task-dialog--native::backdrop {
     font-size: 0.8125rem;
 }
 
-.nowo-task-btn-danger {
-    color: var(--nowo-task-danger, var(--tblr-red, #d63939));
-    border-color: var(--nowo-task-danger, var(--tblr-red, #d63939));
+.nowo-task-sync-tag {
+    background-color: var(--nowo-task-sync-tag-bg, transparent);
+    color: var(--nowo-task-sync-tag-fg, inherit);
 }
 
 .nowo-task-field {

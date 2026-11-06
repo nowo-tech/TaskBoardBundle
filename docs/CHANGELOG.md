@@ -78,6 +78,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sync writes by e-mail (audit HI-M2).** With no people session or no person reference, a match by e-mail or name is written as member or comment author only if it can view the board and is not attribution only. From 1.23.0 to 1.27.0 that path did not ask, and a member row gives the task. See [SECURITY](SECURITY.md#sync-writes-by-e-mail-fixed-in-1280) for what a host can do before upgrading.
+- **Unmatched columns lock (audit HI-M1).** `SELECT … FOR UPDATE` on the column row. CI gains a PostgreSQL job for the functional suite.
+- **Fields document (audits HI-L2, HI-L3).** Marked when the sync writes it (`task_board_task_documents.sync_fields`, schema change). Erased lines do not return on a re-sync, and the exports read the lines.
+- **History values (audit HI-L4).** `anonymise: true` also clears `member_added` and `member_removed` values equal to the user's current label.
+- **Edited mark (audits HI-L5, HId-L1).** A comment whose text, link targets and numbers did not change is rewritten without the mark.
+- Tag colours use `data-nowo-task-vars` instead of a `style` attribute (audit HI-I3).
+- Audit HI (2026-11-06): Pass (good) / Low at `532dbaa`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+- **ClickUp comments keep their style (TB-SYNC-4).** `Sync\Provider\ClickUp\ClickUpCommentRenderer` replaces the private
+  `segmentsToMarkdown()`: lists (bullet, ordered, checked, unchecked, toggled) nested by `indent`, fenced code blocks,
+  `strike`, `link_mention`, `task_mention`, `emoticon`, and other typed segments with a target. ClickUp documents a Quill
+  delta (block attributes on the line feed); the attribute on the text and flat values are read too, since live data has
+  not been checked. `underline`, `color` and `background-color` keep the text, not the style: the host escapes raw HTML.
+  Every link and image goes through `RemoteContentSanitizer::isSafeUrl()`; a refused target leaves the label as text.
+  A comment whose segments give no text falls back to `comment_text`.
+- **Open questions on ClickUp, handled both ways.** A task whose `GET task/{id}` has no `attachments` key no longer stays *Not read* forever (audit
+  GWf-I1): it stays so on the first read, a full sync asks again, and a second answer without the key counts as no files (ClickUp documents the key for tasks with files only). No stored file is touched. An already read version still reads a thread whose
+  `reply_count` is above the replies kept here, so a reply that does not move `date_updated` arrives on a full sync (audit GWf-I2).
+  `sync.full_sync_rereads_details` (default `false`) does the same for files, at the cost of the detail budget.
+- **Audit residuals.** GWf-L1: `TaskChangeHistory.user` is `ON DELETE SET NULL` with a `user_name` snapshot, so a history row, `time_removed` included, outlives its
+  author's account; `detachUser()` detaches it, and with `anonymise: true` forgets the name. GWd-L4: `eraseByValue()` and `eraseBoard()` also remove the lines of the *Fields* document
+  in `text` and `both` modes, recognised by its shape, so a document somebody wrote is untouched. I6: `exportPerson()` adds `tasksCreated`, `commentsWritten` and `taskRoles`.
+  *UPGRADING* no longer tells hosts to call TimeTrack's `removeForUser()` during account erasure, which deletes time.
+- **`.nowo-task-btn-danger` no longer sets `color` and `border-color`.** They went over the `btn_danger` slot, giving red on red with a solid slot. The slot alone decides the colours; the
+  class stays for hosts that hook on it.
+
+### Added
+
+- **Former people's hours (TB-SYNC-4).** `Sync\Hook\OwnerlessTimeEntrySinkInterface`: a sink implementing it also receives the
+  entries of people with no host user. `ImportedTimeEntryCandidate::user()` is null, `isOwnerless()` true, and
+  `$person` and `personName()` say whose they are. A sink that only implements `ImportedTimeEntrySinkInterface` behaves as
+  before; its skipped entries now appear in the completeness report with their hours (`time_entries_unmapped`).
+- **Bulk former people.** `sync.people_bulk_former` (default `false`) adds *Mark every unmapped person as a former person*
+  to the People page and the POST route `board_connection_people_former`, with its own CSRF id. Mapping `external`, a human
+  decision the sync never overrides, changeable person by person. Dispatches `PeopleMappingChangedEvent`.
+- **Attribution only.** `Sync\Hook\AttributionOnlyResolverInterface`, optional on the host's person resolver, flags a candidate
+  such as a suspended member. A person mapped to them shows the user's label (`SyncPersonView::$attributionOnly`) and the
+  sink gets the user, but they are never written as creator, author or member, whatever the board access check says.
+- **Columns no status uses (TB-SYNC-4).** `ConnectionLinkFormType::unmatchedColumns`, `keep` (default) or `delete`, accepted when
+  posted; `sync.unmatched_columns_choice` (default `false`) draws it on the bundle's link page. `delete` acts once per connection,
+  marked on the connection, at the end of the first import when every slice completed without error. Only empty columns go: any task
+  row counts, and check and delete share a transaction. A column holding tasks stays and is listed in the run report; a board keeps one
+  column; tasks never move; later syncs never delete a column; same permission as *Delete column*, logged as `column_delete` with
+  `origin: sync_unmatched_columns`. New event `TaskBoardEvents::SYNC_UNMATCHED_COLUMNS_RESOLVED`. Counted in
+  `columns.unmatchedDeleted` and `columns.unmatchedKept`.
+- **Everything possible from ClickUp (TB-SYNC-3 addendum).** Each checked against ClickUp's published API reference, not a live
+  workspace. Task types: `custom_item_id` and the workspace's names (`GET team/{id}/custom_item`, one call per run, optional
+  `TaskTypeProviderInterface`). All of a task's lists (`locations`), and `sync.include_multi_list_tasks` (default `false`) sends
+  `include_timl` on list sources and on the deletion scan. Tag colours in the task panel. Status colours and order on the columns the
+  connection created, once, at the end of the first import. The list's description on the connection page. New
+  `ProviderApiGapsInterface`: reminders, sprints, goal links, folder and space descriptions are reported as *not exposed by the API* on every
+  run, comment `assigned_by` and `reactions` as not supported; none is marked imported. Subtasks at any depth, closed ones too, are covered by a test.
+
 ## [1.27.0] - 2026-11-06
 
 ### Added

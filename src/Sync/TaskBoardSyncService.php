@@ -51,7 +51,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\Sync\Status\FirstImportFinisher;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Nowo\TaskBoardBundle\Sync\Status\UnmatchedColumnsCleaner;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -102,6 +104,10 @@ final readonly class TaskBoardSyncService
         private ?BoardColumnManager $columnManager = null,
         // Since 1.27.0 (TB-SYNC-2): resumes the re-application of changed people mappings after each run.
         private ?PeopleMappingService $peopleMapping = null,
+        // Since 1.28.0 (TB-SYNC-4): `unmatchedColumns: delete`.
+        private ?UnmatchedColumnsCleaner $unmatchedColumns = null,
+        // Since 1.28.0 (TB-SYNC-4): colour, order and the source's description at the end of the first import.
+        private ?FirstImportFinisher $createdColumns = null,
     ) {
     }
 
@@ -109,7 +115,8 @@ final readonly class TaskBoardSyncService
      * Links the board to a remote list (the first step of the connection page); the first run imports it.
      *
      * @param array<string, bool|string|null> $options createMissingColumns, fallbackColumnId, importComments,
-     *                                                 importAttachments, archiveRemoteDeletions
+     *                                                 importAttachments, archiveRemoteDeletions, since 1.28.0
+     *                                                 unmatchedColumns (`keep`, the default, or `delete`)
      * @param iterable<mixed> $statusColumnMap since 1.25: the dialog's `list<{status, column}>`
      */
     public function link(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, RemoteContainer $container, object $actor, array $options = [], iterable $statusColumnMap = []): TaskBoardConnection
@@ -137,7 +144,7 @@ final readonly class TaskBoardSyncService
         $map = StatusColumns::clean($statusColumnMap, $board);
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
-                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
+                $connection->addCreatedColumn($this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)))->getId()); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);
@@ -463,6 +470,13 @@ final readonly class TaskBoardSyncService
                 }
             }
             $ctx->phase = SyncPhase::Done;
+            // Since 1.28.0: the end of the whole first import (every slice, the time phase included), without error.
+            if ($ctx->connection->createdColumns() !== [] || !$ctx->connection->getLastSuccessAt() instanceof DateTimeImmutable) {
+                $this->createdColumns?->finish($ctx);
+            }
+            if ($this->unmatchedColumns?->isDue($ctx) === true) {
+                $this->unmatchedColumns->resolve($ctx);
+            }
 
             return SyncStatus::Succeeded;
         } catch (RateLimitedException $exception) {

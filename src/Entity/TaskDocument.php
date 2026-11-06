@@ -11,10 +11,17 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
+use function array_slice;
+use function array_unique;
+use function array_values;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_documents')]
 class TaskDocument
 {
+    /** Since 1.28.0: suppression records one document keeps. */
+    public const MAX_ERASED_LINES = 200;
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -28,6 +35,15 @@ class TaskDocument
     /** Since 1.25 (audit FP-L7): the creator's name, kept when the account is erased (`creator_id` SET NULL). */
     #[ORM\Column(name: 'creator_name', type: 'string', length: 180, nullable: true)]
     private ?string $creatorName;
+
+    /**
+     * Since 1.28.0 (audit HI-L2): not null = the sync's "Fields" document, with the suppression records of the lines the
+     * eraser removed.
+     *
+     * @var array{erased?: list<string>}|null
+     */
+    #[ORM\Column(name: 'sync_fields', type: 'json', nullable: true)]
+    private ?array $syncFields = null;
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'documents')]
@@ -49,6 +65,36 @@ class TaskDocument
         $this->updatedAt = new DateTimeImmutable();
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->creatorName = $creator === null ? null : Text::cut(UserLabel::of($creator), Task::USER_NAME_MAX);
+    }
+
+    public function isSyncFields(): bool
+    {
+        return $this->syncFields !== null;
+    }
+
+    public function markSyncFields(): self
+    {
+        $this->syncFields ??= [];
+
+        return $this;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function erasedLines(): array
+    {
+        return $this->syncFields['erased'] ?? [];
+    }
+
+    /**
+     * @param list<string> $records
+     */
+    public function addErasedLines(array $records): self
+    {
+        $this->syncFields = ['erased' => array_slice(array_values(array_unique([...$this->erasedLines(), ...$records])), -self::MAX_ERASED_LINES)];
+
+        return $this;
     }
 
     public function getId(): string

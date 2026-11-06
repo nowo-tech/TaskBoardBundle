@@ -5,6 +5,8 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Schema change for every host: the sync's *Fields* document (audits HI-L2, HI-L3)](#schema-change-for-every-host-the-syncs-fields-document-audits-hi-l2-hi-l3)
+  - [Schema change for every host: task history outlives its user (audit GWf-L1)](#schema-change-for-every-host-task-history-outlives-its-user-audit-gwf-l1)
 - [To 1.27.0](#to-1270)
   - [Schema change for every host: manual time outlives its user](#schema-change-for-every-host-manual-time-outlives-its-user)
   - [Schema change with `sync.enabled: true` only (TB-SYNC-3)](#schema-change-with-syncenabled-true-only-tb-sync-3)
@@ -131,6 +133,99 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+### ClickUp comments (TB-SYNC-4)
+
+No action. Comments written or edited after the upgrade keep their lists, code blocks and mentions; a full sync rewrites
+those already imported. Comment bodies are compared by hash, so the first full sync counts every comment with such formatting as
+updated. A comment whose text, link targets and numbers did not change does not show the *edited* mark. One that changed does, including a comment now shown with
+an ordered list or a link it did not have. Emphasis characters are ignored even inside a link target or a number, so an edit to those alone shows no mark. Comments edited here are not rewritten; they appear as conflicts in that run's report.
+
+### Former people (TB-SYNC-4)
+
+Nothing changes unless you opt in. TaskBoard does not require TimeTrack.
+
+- **Hours of people with no user:** implement `OwnerlessTimeEntrySinkInterface` on your sink. TimeTrack 1.15 is required for this; a plain user row on an entry that has no owner is refused:
+
+  ```php
+  $user = $candidate->user();
+  $owner = $user instanceof UserInterface
+      ? new ImportedTimeEntryClaim($user, $candidate->person->getId(), $scopeKey)
+      : new ImportedTimeEntryPerson($candidate->person->getId(), $candidate->personName(), $scopeKey);
+  ```
+
+  If such a person is mapped later, `SYNC_PERSON_REASSIGNED` is your cue to move their entries, as for any re-association.
+- **Bulk action:** set `sync.people_bulk_former: true`. A host that overrides `connection_people.html.twig` draws `peopleFormerForm`
+  (null when off or when nobody is undecided).
+- **Attribution:** implement `AttributionOnlyResolverInterface` on your `SyncPersonResolverInterface` and offer those users as
+  candidates. A host that shows `SyncPersonView::$name` needs no change; it can read `$attributionOnly` to add a note.
+  Someone already projected keeps what was written until you call `reassign()` again for that person. The flag is read by the sync: keep flagged users out of your assignable
+  lists, because file imports and the member UI do not consult it.
+- **Writes by e-mail (behaviour change, audit HI-M2).** A sync with no people session or no person reference for a row now writes a matched user as member or comment author only if they can
+  view the board and are not attribution only. Anyone else is left out and the comment keeps the name as text. Hosts that relied on assigning people without board access through this path must grant it first.
+
+### Columns no status uses (TB-SYNC-4)
+
+Nothing changes by default and there is no schema change: the choice and its marker live in the connection's `options` JSON. A host that
+draws its own columns step posts `task_board_sync_link[unmatchedColumns]`, or passes `unmatchedColumns` to `TaskBoardSyncService::link()`.
+Connections linked earlier stay on `keep`. The deletion needs the provider's statuses (`SourceProviderInterface::listStatuses()`): a provider
+that cannot list them keeps every column and reports it.
+
+### Everything possible from ClickUp (TB-SYNC-3 addendum)
+
+No schema change: what is new lives in `remote_meta` and the connection's `options` JSON. Run one full sync per linked board to fill it. The first import
+makes up to three more requests (task types, list, statuses). Columns the connection creates from now on take their status's colour and the provider's order among themselves; existing columns do not change. The completeness report gains rows for what the API does not give. A template override of `_task_sync_details.html.twig` draws `taskType`, `locations`
+and `tagColours` if wanted.
+
+Two options to decide on, both off by default:
+
+- `sync.include_multi_list_tasks`: tasks added to a list from another list join the import. Each appears once with all its lists.
+- `sync.full_sync_rereads_details`: if a new file turns out not to move ClickUp's `date_updated`, set it. Each full sync then spends the detail budget from the
+  first tasks on, so raise `sync.watchers.max_detail_calls_per_run` above the board's size.
+
+### Schema change for every host: the sync's *Fields* document (audits HI-L2, HI-L3)
+
+`task_board_task_documents.sync_fields` marks the document the sync writes and holds the suppression records of erased lines. Any task written marks its document; run one full sync in `text` or `both` mode before erasing.
+
+MySQL 8 / MariaDB and PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_documents ADD sync_fields JSON DEFAULT NULL;
+```
+
+SQLite: `ALTER TABLE task_board_task_documents ADD COLUMN sync_fields CLOB DEFAULT NULL;`
+
+### Schema change for every host: task history outlives its user (audit GWf-L1)
+
+`task_board_task_change_history.user_id` becomes nullable with `ON DELETE SET NULL`, and `user_name` keeps the name. Replace `app_user` with your user table and `INT` with its id
+type; the foreign key name comes from `doctrine:migrations:diff`.
+
+MySQL 8 / MariaDB:
+
+```sql
+ALTER TABLE task_board_task_change_history DROP FOREIGN KEY FK_45E6EE27A76ED395;
+ALTER TABLE task_board_task_change_history ADD user_name VARCHAR(180) DEFAULT NULL, CHANGE user_id user_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ADD CONSTRAINT FK_45E6EE27A76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_change_history DROP CONSTRAINT FK_45E6EE27A76ED395;
+ALTER TABLE task_board_task_change_history ADD user_name VARCHAR(180) DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ALTER user_id DROP NOT NULL;
+ALTER TABLE task_board_task_change_history ADD CONSTRAINT FK_45E6EE27A76ED395 FOREIGN KEY (user_id) REFERENCES app_user (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+```
+
+SQLite rebuilds the table; `doctrine:schema:update --dump-sql` gives the statements for yours.
+
+After the DDL, call `TaskTimeEntrySnapshotPurger::backfillUserNames()` until it returns 0, so that older rows also have a name. `TaskChangeHistory::getUser()` now returns `?object`: host code
+reading it must handle null and use `getUserName()`. Rollback: put back `NOT NULL` and `CASCADE` after handling the rows with a null user, and drop `user_name`.
+
+### Danger buttons
+
+A host whose `btn_danger` slot relied on `.nowo-task-btn-danger` for its red needs a slot class that sets it; the default `btn btn-outline-danger` does. A host that worked around the old rule (Beacon's
+`.btn-danger.nowo-task-btn-danger`) can delete that.
 
 ## To 1.27.0
 
@@ -676,8 +771,7 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
 - **Account erasure: required order.** Since this release the creator of a board, a task and a task document and the
   author of a comment are `ON DELETE SET NULL` with a name snapshot (audits FP-M1 / FP-L7): deleting a user deletes
   no board, task, subtask, document or comment. Still deleted with the user (by `ON DELETE CASCADE`): their task and
-  team **memberships** (the rows, not the tasks), their **change-history entries**, and their **own manual time
-  entries** (`TaskTimeEntry.user`; time logged by others on their tasks stays). `detachUser()` detaches every board,
+  team **memberships** (the rows, not the tasks). Since 1.27.0 their manual time entries stay, and since 1.28.0 their change-history entries stay too. `detachUser()` detaches every board,
   task, document and comment of the user, also on unlinked boards and for content never synced; with
   `anonymise: true` it also clears the name snapshots. **A user deleted without `detachUser()` keeps their name
   (by default the e-mail, from `UserLabel`) in `creator_name` / `author_name`** (audit FP-I11): run `detachUser()`
@@ -689,8 +783,9 @@ CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id)
      it is done: creator, comments and sync members move off the user while the user row still exists; then every
      board, task, document and comment of the user is detached (counts in `ReassignReport::$boards`, `$documents`,
      `$creators`, `$comments`). Hosts without `sync.enabled` rely on `ON DELETE SET NULL` (names kept).
-  3. TimeTrack: `ImportedTimeEntryWriter::removeForUser($source, $user)` per source (TimeTrack ≥ 1.11), then the other
-     TimeTrack erasers.
+  3. TimeTrack ≥ 1.15: `FormerPersonTimeEntries::anonymiseUser($user)` keeps the time and clears the person, or `release($user, $name)` keeps it under a
+     name. Never call `ImportedTimeEntryWriter::removeForUser()` here: it deletes tracked time, which the owner rule forbids (corrected in 1.28.0). Below TimeTrack 1.15, leave
+     the entries to that bundle's own rule. Then the other TimeTrack erasers.
   4. The host's other erasers.
   5. The user delete last.
   `detachUser()` is idempotent: calling it from both the token eraser and the account chain is safe.

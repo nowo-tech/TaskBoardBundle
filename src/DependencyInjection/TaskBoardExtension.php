@@ -237,6 +237,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.progress.poll_interval_ms', $sync['progress']['poll_interval_ms']);
         $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
         $container->setParameter('nowo_task_board.sync.people.step', (bool) $sync['people']['step']);
+        $container->setParameter('nowo_task_board.sync.people_bulk_former', (bool) $sync['people_bulk_former']);
+        $container->setParameter('nowo_task_board.sync.unmatched_columns_choice', (bool) $sync['unmatched_columns_choice']);
         $container->setParameter('nowo_task_board.sync.people.page_size', (int) $sync['people']['page_size']);
 
         $loader->load('services_sync.yaml');
@@ -268,6 +270,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxDescriptionLength', $sync['max_description_length'])
                 ->setArgument('$lookupCache', is_string($lookupCache) && $lookupCache !== '' ? new Reference($lookupCache) : null)
                 ->setArgument('$includeArchived', (bool) $sync['import_archived'])
+                ->setArgument('$includeMultiList', (bool) $sync['include_multi_list_tasks'])
                 ->setArgument('$excludedFieldTypes', $sync['custom_fields']['exclude_types'])
                 ->addTag('nowo_task_board.task_provider'));
         }
@@ -319,7 +322,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
             ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode'])
             ->setArgument('$importArchived', (bool) $sync['import_archived'])
-            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run']);
+            ->setArgument('$maxReplyCalls', (int) $sync['comments']['max_reply_calls_per_run'])
+            ->setArgument('$fullSyncRereadsDetails', (bool) $sync['full_sync_rereads_details']);
         $container->getDefinition(SyncCustomFieldWriter::class)
             ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
         // Audit GW-L8: restoring a task by hand asks the host's limit too.

@@ -21,6 +21,8 @@ final readonly class RemoteContainer
         public bool $hasChildren,
         public ?int $taskCount = null,
         public array $path = [],
+        // Since 1.28.0: the provider's description of the container, as safe Markdown.
+        public ?string $description = null,
     ) {
     }
 }

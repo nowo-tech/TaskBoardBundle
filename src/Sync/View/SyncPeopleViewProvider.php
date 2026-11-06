@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Symfony\Contracts\Service\ResetInterface;
@@ -22,6 +24,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use function array_map;
 use function explode;
 use function is_array;
+use function is_string;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -42,6 +45,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         private readonly TaskBoardResourceAccessChecker $accessChecker,
         private readonly ?TranslatorInterface $translator = null,
         private readonly ?string $userClass = null,
+        // Since 1.28.0: tells who is shown for attribution only.
+        private readonly ?SyncPersonResolverInterface $resolver = null,
     ) {
     }
 
@@ -83,6 +88,11 @@ final class SyncPeopleViewProvider implements ResetInterface
         }
         if (is_array($meta['estimates'] ?? null)) {
             $meta['estimates'] = array_map(fn (array $estimate): array => ['name' => $this->personLabel((string) $estimate['person']), 'minutes' => $estimate['minutes']], $meta['estimates']);
+        }
+
+        // Since 1.28.0: stored JSON is read back as if remote: a colour reaches a style attribute only as plain hex.
+        if (is_array($meta['tagColours'] ?? null)) {
+            $meta['tagColours'] = array_filter(array_map(static fn (mixed $colours): array => is_array($colours) ? array_filter($colours, static fn (mixed $value): bool => is_string($value) && preg_match('/^#[0-9A-Fa-f]{3,8}$/D', $value) === 1) : [], $meta['tagColours']));
         }
 
         return $meta + ['provider' => $item->getConnection()->getProvider()];
@@ -193,14 +203,20 @@ final class SyncPeopleViewProvider implements ResetInterface
         $provider = $person->getDirectory()->getProvider();
         $user     = $person->getMappedUser();
         $access   = $user === null ? null : $this->accessChecker->canViewBoard($user, $task->getBoard());
+        // Since 1.28.0: attribution to a host user the board does not give access to: their label, nothing else.
+        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($task->getBoard(), $user);
+        if ($attribution) {
+            $access = false;
+        }
 
         return new SyncPersonView(
             personId: $person->getId(),
-            name: $this->name($person),
+            name: $attribution ? UserLabel::of($user) : $this->name($person),
             provider: $provider,
             external: $access !== true,
             anonymised: $person->isAnonymised(),
             boardAccess: $access,
+            attributionOnly: $attribution,
         );
     }
 

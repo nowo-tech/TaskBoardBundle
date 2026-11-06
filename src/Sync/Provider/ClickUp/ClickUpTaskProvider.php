@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
@@ -43,6 +44,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\StatusHistoryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskTypeProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ThreadedCommentProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
@@ -104,7 +106,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -138,7 +140,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
      * report): `imported`, or why not.
      */
     private const COVERAGE = [
-        'id'                     => 'imported', 'custom_id' => 'imported', 'custom_item_id' => 'not_supported', 'name' => 'imported',
+        'id'                     => 'imported', 'custom_id' => 'imported', 'custom_item_id' => 'imported', 'name' => 'imported',
         'text_content'           => 'imported', 'description' => 'imported', 'markdown_description' => 'imported',
         'status'                 => 'imported', 'orderindex' => 'not_needed', 'date_created' => 'imported', 'date_updated' => 'imported',
         'date_closed'            => 'imported', 'date_done' => 'imported', 'archived' => 'imported', 'creator' => 'imported',
@@ -147,11 +149,30 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         'priority'               => 'imported', 'due_date' => 'imported', 'start_date' => 'imported', 'due_date_time' => 'imported',
         'start_date_time'        => 'imported', 'points' => 'imported', 'time_estimate' => 'imported',
         'time_estimates_by_user' => 'imported', 'time_spent' => 'imported', 'custom_fields' => 'imported',
-        'dependencies'           => 'imported', 'linked_tasks' => 'imported', 'locations' => 'not_supported',
+        'dependencies'           => 'imported', 'linked_tasks' => 'imported', 'locations' => 'imported',
         'team_id'                => 'internal', 'url' => 'imported', 'sharing' => 'internal', 'permission_level' => 'internal',
         'list'                   => 'imported', 'project' => 'not_needed', 'folder' => 'imported', 'space' => 'not_needed',
         'attachments'            => 'imported', 'subtasks' => 'imported', 'recurrence' => 'imported',
     ];
+
+    /**
+     * Since 1.28.0 (TB-SYNC-4): what ClickUp's API v2 and v3 reference does not expose, or what is exposed and not kept. Listed in
+     * the completeness report with that reason on every run, never as `imported`. Checked against the published
+     * reference on 2026-11-06, not against a live workspace.
+     */
+    private const HEX_COLOUR = '/^#[0-9A-Fa-f]{3,8}$/D';
+
+    private const API_GAPS = [
+        'reminders'           => self::GAP_NOT_EXPOSED,
+        'sprints'             => self::GAP_NOT_EXPOSED,
+        'goal_links'          => self::GAP_NOT_EXPOSED,
+        'folder_description'  => self::GAP_NOT_EXPOSED,
+        'space_description'   => self::GAP_NOT_EXPOSED,
+        'comment_assigned_by' => 'not_supported',
+        'comment_reactions'   => 'not_supported',
+    ];
+
+    private const GAP_NOT_EXPOSED = 'not_exposed';
 
     /** Since 1.27.0 (audit GW-L7): 2000-01-01 and 2100-01-01 UTC. */
     private const MIN_DATE = 946_684_800;
@@ -194,6 +215,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
          * @var list<string>
          */
         private array $excludedFieldTypes = [],
+        // Since 1.28.0 (TB-SYNC-4): lists, nesting, code blocks and mentions of a comment.
+        private ClickUpCommentRenderer $commentRenderer = new ClickUpCommentRenderer(),
+        // Since 1.28.0 (`sync.include_multi_list_tasks`): `include_timl`, list sources only: the only endpoint that documents it.
+        private bool $includeMultiList = false,
     ) {
     }
 
@@ -275,7 +300,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
             $path[] = $this->name($folder);
         }
 
-        return new RemoteContainer($this->itemId($list), $this->name($list), ContainerType::List, null, true, false, $this->count($list['task_count'] ?? null), $path);
+        return new RemoteContainer($this->itemId($list), $this->name($list), ContainerType::List, null, true, false, $this->count($list['task_count'] ?? null), $path, ($content = $this->stringOf($list['content'] ?? null)) !== '' ? $this->sanitizer->markdown($content, 2000) : null);
     }
 
     public function fetchTasks(ProviderCredential $credential, string $listId, ?DateTimeImmutable $updatedSince, ?string $cursor): RemoteTaskPage
@@ -298,6 +323,9 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         }
         if ($archived) {
             $query['archived'] = 'true';
+        }
+        if ($this->includeMultiList) {
+            $query['include_timl'] = 'true';
         }
         $data  = $this->get($credential, sprintf('list/%s/task', $this->checkId($listId)), $query);
         $tasks = [];
@@ -333,7 +361,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
                     $comments[] = $comment;
                     // Since 1.27.0 (TB-SYNC-3): threads; the replies are read after the top-level comments.
                     if (is_numeric($row['reply_count'] ?? null) && (int) $row['reply_count'] > 0) {
-                        $replies[$comment->id] = true;
+                        $replies[$comment->id] = (int) $row['reply_count'];
                     }
                 }
             }
@@ -351,7 +379,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         $left     = $this->maxComments - count($comments);
         foreach (array_reverse($comments) as $comment) {
             $threaded[] = $comment;
-            if ($left <= 0 || !isset($replies[$comment->id]) || !$budget->take()) {
+            if ($left <= 0 || !isset($replies[$comment->id]) || !$budget->wants($comment->id, $replies[$comment->id]) || !$budget->take()) {
                 continue;
             }
             // Audit GW-L6: a request that brings no reply also counts against the task's cap.
@@ -384,7 +412,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
                 // A runaway paging loop: a partial answer must never look complete.
                 throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
             }
-            $data = $this->get($credential, $path, ['page' => $page, 'subtasks' => 'true', 'include_closed' => 'true']);
+            // Since 1.28.0: the same tasks the import reads, or a task listed elsewhere would look deleted.
+            $data = $this->get($credential, $path, ['page' => $page, 'subtasks' => 'true', 'include_closed' => 'true'] + ($this->includeMultiList ? ['include_timl' => 'true'] : []));
             $rows = $this->items($data, 'tasks');
             foreach ($rows as $row) {
                 $id = $this->itemId($row);
@@ -549,7 +578,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         if ($location->kind === RemoteLocationKind::List) {
             $list = $this->findContainer($credential, $location->id);
 
-            return $list instanceof RemoteContainer ? new RemoteSource($location, $list->name, null, $list->path, 1, $list->taskCount) : null;
+            return $list instanceof RemoteContainer ? new RemoteSource($location, $list->name, null, $list->path, 1, $list->taskCount, $list->description) : null;
         }
         $data = $this->getOrNull($credential, sprintf('%s/%s', $location->kind->value, $location->id));
         if ($data === null) {
@@ -745,9 +774,13 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
             return null;
         }
         $segments = is_array($row['comment'] ?? null) ? $row['comment'] : [];
-        $body     = $segments !== [] ? $this->segmentsToMarkdown($segments) : $this->stringOf($row['comment_text'] ?? null);
-        $body     = $this->sanitizer->markdown($body, 5000);
-        $user     = is_array($row['user'] ?? null) ? $row['user'] : [];
+        $body     = $segments !== [] ? $this->commentRenderer->render($segments) : '';
+        // Since 1.28.0: segments that gave no text (no file among them either) do not lose the comment's plain text.
+        if (trim($body) === '' && $this->commentAttachments($segments) === []) {
+            $body = $this->stringOf($row['comment_text'] ?? null);
+        }
+        $body = $this->sanitizer->markdown($body, 5000);
+        $user = is_array($row['user'] ?? null) ? $row['user'] : [];
         // Since 1.27.0: an assigned comment (action item) and its resolved state; unconfirmed field names
         // (`assignee`, `resolved`, `date_updated`), validated by Beacon after deploy.
         $assignee = $this->mapper->personRef($row['assignee'] ?? null);
@@ -787,57 +820,6 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         }
 
         return $files;
-    }
-
-    /**
-     * ClickUp rich text (a list of {text, attributes, type}) as Markdown.
-     *
-     * @param array<mixed> $segments
-     */
-    private function segmentsToMarkdown(array $segments): string
-    {
-        $out = '';
-        foreach ($segments as $segment) {
-            if (!is_array($segment)) {
-                continue;
-            }
-            $attributes = is_array($segment['attributes'] ?? null) ? $segment['attributes'] : [];
-            if (($segment['type'] ?? null) === 'image' && is_array($segment['image'] ?? null)) {
-                $url = $this->stringOf($segment['image']['url'] ?? null);
-                $out .= $url !== '' ? sprintf('![%s](%s)', $this->stringOf($segment['image']['name'] ?? 'image'), $url) : '';
-                continue;
-            }
-            if (($segment['type'] ?? null) === 'attachment') {
-                // Since 1.27.0: copied as a file of the comment (commentAttachments()).
-                continue;
-            }
-            if (($segment['type'] ?? null) === 'tag' && is_array($segment['user'] ?? null)) {
-                $out .= '@' . $this->stringOf($segment['user']['username'] ?? '');
-                continue;
-            }
-            // Raw text: the spaces between segments are part of the comment.
-            $text = is_string($segment['text'] ?? null) ? $segment['text'] : '';
-            if (trim($text) === '') {
-                $out .= $text;
-                continue;
-            }
-            if (($attributes['code'] ?? false) === true) {
-                $text = '`' . $text . '`';
-            }
-            if (($attributes['bold'] ?? false) === true) {
-                $text = '**' . $text . '**';
-            }
-            if (($attributes['italic'] ?? false) === true) {
-                $text = '*' . $text . '*';
-            }
-            $link = $attributes['link'] ?? null;
-            if (is_string($link) && $link !== '') {
-                $text = sprintf('[%s](%s)', $text, $link);
-            }
-            $out .= $text;
-        }
-
-        return $out;
     }
 
     /**
@@ -1072,7 +1054,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         return new RemoteStatus(
             name: $name,
             type: RemoteStatusType::tryFrom(mb_strtolower($this->stringOf($row['type'] ?? null))),
-            color: preg_match('/^#[0-9A-Fa-f]{3,8}$/D', $color) === 1 ? $color : null,
+            color: preg_match(self::HEX_COLOUR, $color) === 1 ? $color : null,
             position: is_numeric($row['orderindex'] ?? null) ? (int) $row['orderindex'] : $fallbackPosition,
         );
     }
@@ -1349,6 +1331,29 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         return self::COVERAGE;
     }
 
+    public function apiGaps(): array
+    {
+        return self::API_GAPS;
+    }
+
+    /**
+     * Since 1.28.0: `GET team/{id}/custom_item`, the names of the workspace's task types by id. Type 0 is ClickUp's own
+     * "Task" and is not listed.
+     */
+    public function fetchTaskTypes(ProviderCredential $credential, string $workspaceId): array
+    {
+        $types = [];
+        foreach ($this->items($this->get($credential, sprintf('team/%s/custom_item', $this->checkId($workspaceId))), 'custom_items') as $row) {
+            $id   = $this->stringOf($row['id'] ?? null);
+            $name = $this->name($row);
+            if ($name !== '' && preg_match(self::ID_PATTERN, $id) === 1) {
+                $types[$id] = $name;
+            }
+        }
+
+        return $types;
+    }
+
     /**
      * Since 1.27.0 (TB-SYNC-3): `GET task/{id}/time_in_status` — the statuses the task went through, oldest first, the
      * current one last; null when ClickUp does not serve it (the Time in Status ClickApp is off: 404 / 410).
@@ -1422,7 +1427,55 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
             path: $path,
             estimates: $estimates,
             recurrence: is_string($recurrence) && trim($recurrence) !== '' ? $this->sanitizer->line($recurrence, 200) : null,
+            taskTypeId: is_numeric($row['custom_item_id'] ?? null) || (is_string($row['custom_item_id'] ?? null) && preg_match(self::ID_PATTERN, $row['custom_item_id']) === 1) ? (string) $row['custom_item_id'] : null,
+            workspaceId: preg_match(self::ID_PATTERN, $this->stringOf($row['team_id'] ?? null)) === 1 ? $this->stringOf($row['team_id']) : null,
+            locations: $this->locations($row),
+            tagColours: $this->tagColours($row),
         );
+    }
+
+    /**
+     * Since 1.28.0: every list the task appears in (`locations`), once each and at most 50: the home list first.
+     *
+     * @param array<mixed> $row
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    private function locations(array $row): array
+    {
+        $found = [];
+        foreach (array_slice(is_array($row['locations'] ?? null) ? array_filter($row['locations'], is_array(...)) : [], 0, 50) as $location) {
+            $id = $this->itemId($location);
+            if ($id !== '') {
+                $found[$id] = ['id' => $id, 'name' => $this->name($location)];
+            }
+        }
+
+        return array_values($found);
+    }
+
+    /**
+     * Since 1.28.0: `{name, tag_fg, tag_bg}` of the task's tags; only colours that are plain hex values are kept.
+     *
+     * @param array<mixed> $row
+     *
+     * @return array<string, array{fg: string|null, bg: string|null}>
+     */
+    private function tagColours(array $row): array
+    {
+        $colours = [];
+        foreach (array_slice(is_array($row['tags'] ?? null) ? array_filter($row['tags'], is_array(...)) : [], 0, 100) as $tag) {
+            $name = $this->name($tag);
+            $fg   = $this->stringOf($tag['tag_fg'] ?? null);
+            $bg   = $this->stringOf($tag['tag_bg'] ?? null);
+            $fg   = preg_match(self::HEX_COLOUR, $fg) === 1 ? $fg : null;
+            $bg   = preg_match(self::HEX_COLOUR, $bg) === 1 ? $bg : null;
+            if ($name !== '' && ($fg !== null || $bg !== null)) {
+                $colours[$name] = ['fg' => $fg, 'bg' => $bg];
+            }
+        }
+
+        return $colours;
     }
 
     /**

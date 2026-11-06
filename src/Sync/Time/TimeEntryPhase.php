@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntrySinkInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\PersonFilter;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
@@ -51,6 +52,9 @@ use function min;
 final readonly class TimeEntryPhase
 {
     public const MODE_FALLBACK = 'fallback';
+
+    /** Since 1.28.0: the hours a plain sink could not take, for the run report (they stay in the provider). */
+    public const STAT_UNMAPPED_SECONDS = 'pending.unmappedSeconds';
 
     private const MIN_WINDOW_SECONDS = 3600;
 
@@ -204,10 +208,15 @@ final readonly class TimeEntryPhase
         $list  = [];
         foreach ($candidates as $entry) {
             $person = $session->person($entry->person, TaskSyncPerson::KIND_TIME_ENTRY);
-            // Audit FP-I2: only people mapped to a user (auto / manual) are handed to the host; the others are counted.
+            // Audit FP-I2: a plain sink gets people mapped to a user (auto / manual) only; the others are counted.
+            // Since 1.28.0 a sink that keeps time with no user receives them too, with the person (`user()` is null).
             if (!$person->getMapping()->isMapped() || $person->getMappedUser() === null) {
-                $ctx->count('time.skippedUnmapped');
-                continue;
+                if (!$this->sink instanceof OwnerlessTimeEntrySinkInterface) {
+                    $ctx->count('time.skippedUnmapped');
+                    $ctx->count(self::STAT_UNMAPPED_SECONDS, $entry->durationSeconds);
+                    continue;
+                }
+                $ctx->count('ownerless.entries');
             }
             $task   = $items[(string) $entry->taskId] ?? null;
             $list[] = new ImportedTimeEntryCandidate($entry, $person, $task instanceof TaskSyncItem ? $task->getTask() : null);

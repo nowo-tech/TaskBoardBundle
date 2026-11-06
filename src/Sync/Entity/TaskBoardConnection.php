@@ -16,9 +16,13 @@ use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_values;
+use function explode;
 use function is_array;
 use function is_bool;
 use function is_string;
+use function trim;
+
+use const DATE_ATOM;
 
 /**
  * Since 1.23: the link of a board to one remote list (one per board). It holds the host's opaque connection
@@ -29,6 +33,21 @@ use function is_string;
 #[ORM\UniqueConstraint(name: 'uniq_task_board_connections_board', columns: ['board_id'])]
 class TaskBoardConnection
 {
+    /** Since 1.28.0: values of the option `unmatchedColumns`. */
+    public const UNMATCHED_KEEP = 'keep';
+
+    public const UNMATCHED_DELETE = 'delete';
+
+    private const OPTION_UNMATCHED = 'unmatchedColumns';
+
+    private const OPTION_UNMATCHED_RESOLVED = 'unmatchedColumnsResolvedAt';
+
+    private const OPTION_HISTORY_UNAVAILABLE = 'statusHistoryUnavailable';
+
+    private const OPTION_CREATED_COLUMNS = 'createdColumns';
+
+    private const OPTION_SOURCE_DESCRIPTION = 'sourceDescription';
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -243,6 +262,85 @@ class TaskBoardConnection
         $value = $this->options[$name] ?? null;
 
         return is_bool($value) ? $value : $default;
+    }
+
+    /** Since 1.28.0: `keep` (default, and for anything else) or `delete`: what the first import does with unmatched columns. */
+    public function getUnmatchedColumns(): string
+    {
+        return ($this->options[self::OPTION_UNMATCHED] ?? null) === self::UNMATCHED_DELETE ? self::UNMATCHED_DELETE : self::UNMATCHED_KEEP;
+    }
+
+    /** Since 1.28.0: the choice has been acted on; later syncs never delete a column. */
+    public function isUnmatchedColumnsResolved(): bool
+    {
+        return is_string($this->options[self::OPTION_UNMATCHED_RESOLVED] ?? null);
+    }
+
+    public function markUnmatchedColumnsResolved(DateTimeImmutable $at): self
+    {
+        $this->options[self::OPTION_UNMATCHED_RESOLVED] = $at->format(DATE_ATOM);
+
+        return $this;
+    }
+
+    public function isStatusHistoryUnavailable(): bool
+    {
+        return ($this->options[self::OPTION_HISTORY_UNAVAILABLE] ?? false) === true;
+    }
+
+    public function setStatusHistoryUnavailable(bool $unavailable): self
+    {
+        if ($unavailable) {
+            $this->options[self::OPTION_HISTORY_UNAVAILABLE] = true;
+        } else {
+            unset($this->options[self::OPTION_HISTORY_UNAVAILABLE]);
+        }
+
+        return $this;
+    }
+
+    /** Since 1.28.0: the columns this connection created, by id (colour and order follow the provider's statuses once). */
+    public function addCreatedColumn(string $columnId): self
+    {
+        $this->options[self::OPTION_CREATED_COLUMNS] = trim(($this->options[self::OPTION_CREATED_COLUMNS] ?? '') . ' ' . $columnId);
+
+        return $this;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function createdColumns(): array
+    {
+        $ids = $this->options[self::OPTION_CREATED_COLUMNS] ?? null;
+
+        return is_string($ids) && $ids !== '' ? explode(' ', $ids) : [];
+    }
+
+    public function clearCreatedColumns(): self
+    {
+        unset($this->options[self::OPTION_CREATED_COLUMNS]);
+
+        return $this;
+    }
+
+    /** Since 1.28.0: the provider's description of the source (safe Markdown, read at the end of the first import). */
+    public function getSourceDescription(): ?string
+    {
+        $value = $this->options[self::OPTION_SOURCE_DESCRIPTION] ?? null;
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function setSourceDescription(?string $description): self
+    {
+        if ($description === null) {
+            unset($this->options[self::OPTION_SOURCE_DESCRIPTION]);
+        } else {
+            $this->options[self::OPTION_SOURCE_DESCRIPTION] = $description;
+        }
+
+        return $this;
     }
 
     public function fallbackColumnId(): ?string

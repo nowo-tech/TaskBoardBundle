@@ -10,10 +10,12 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonPage;
@@ -24,6 +26,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskPage;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
 use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Provider\TaskTypeProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
@@ -56,7 +59,7 @@ use function usort;
  *
  * @final
  */
-class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, FieldCoverageProviderInterface
+class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, FieldCoverageProviderInterface
 {
     /** Since 1.25: the workspace every container belongs to (null = no people). */
     private ?string $workspaceId = null;
@@ -95,6 +98,12 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     /** @var list<string> the calls made, as "method:argument" (no credential) */
     public array $calls = [];
+
+    /** @var array<string, string> since 1.28.0 */
+    private array $apiGaps = [];
+
+    /** @var array<string, string> since 1.28.0 */
+    private array $taskTypes = [];
 
     /**
      * @param list<string> $attachmentHosts
@@ -199,6 +208,42 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         $this->comments[$taskId] = $comments;
 
         return $this;
+    }
+
+    /**
+     * Since 1.28.0: what the provider's API does not give (completeness report).
+     *
+     * @param array<string, string> $gaps name => reason
+     */
+    public function withApiGaps(array $gaps): self
+    {
+        $this->apiGaps = $gaps;
+
+        return $this;
+    }
+
+    /**
+     * Since 1.28.0.
+     *
+     * @param array<string, string> $types id => name
+     */
+    public function withTaskTypes(array $types): self
+    {
+        $this->taskTypes = $types;
+
+        return $this;
+    }
+
+    public function apiGaps(): array
+    {
+        return $this->apiGaps;
+    }
+
+    public function fetchTaskTypes(ProviderCredential $credential, string $workspaceId): array
+    {
+        $this->enter($credential, 'fetchTaskTypes:' . $workspaceId);
+
+        return $this->taskTypes;
     }
 
     /**
@@ -344,7 +389,21 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
     {
         $this->enter($credential, 'findSource:' . $containerId);
 
-        return ($this->sources[$containerId] ?? null)[0] ?? null;
+        $source = ($this->sources[$containerId] ?? null)[0] ?? null;
+        if ($source !== null) {
+            return $source;
+        }
+        // Since 1.28.0: a list source, from its container (description included).
+        $location = RemoteLocation::fromContainerId($containerId);
+        foreach ($this->containers as $level) {
+            foreach ($level as $container) {
+                if ($container->id === $containerId && $location instanceof RemoteLocation) {
+                    return new RemoteSource($location, $container->name, null, $container->path, 1, $container->taskCount, $container->description);
+                }
+            }
+        }
+
+        return null;
     }
 
     public function fetchSourceTasks(ProviderCredential $credential, RemoteSource $source, ?DateTimeImmutable $updatedSince, ?string $cursor): RemoteTaskPage

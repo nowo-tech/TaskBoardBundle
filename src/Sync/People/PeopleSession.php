@@ -64,7 +64,8 @@ final class PeopleSession
         }
         $id = SyncUser::id($user) ?? '';
 
-        return ($this->viewers[$id] ??= $this->accessChecker->canViewBoard($user, $this->board)) ? $user : null; // @igor-ignore - one object per page, never a service
+        // Since 1.28.0: attribution only (a suspended member): never written as creator, author or member.
+        return ($this->viewers[$id] ??= $this->accessChecker->canViewBoard($user, $this->board) && !$this->directoryService->isAttributionOnly($this->board, $user)) ? $user : null; // @igor-ignore - one object per page, never a service
     }
 
     /** Adds to a counter. */

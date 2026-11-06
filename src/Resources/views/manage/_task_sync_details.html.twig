@@ -23,6 +23,15 @@
             {% if details.startHasTime is defined or details.dueHasTime is defined %}
                 <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="times"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.times'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ (details.startHasTime is defined and details.dueHasTime is defined ? 'task_board.sync.details.times_both' : (details.startHasTime is defined ? 'task_board.sync.details.times_start' : 'task_board.sync.details.times_due'))|trans({}, 'NowoTaskBoardBundle') }}</dd></div>
             {% endif %}
+            {% if details.taskType is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="task-type"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.task_type'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.taskType }}</dd></div>
+            {% endif %}
+            {% if details.locations is defined %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="locations"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.locations'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.locations|map(l => l.name ?: l.id)|join(', ') }}</dd></div>
+            {% endif %}
+            {% if details.tagColours is defined and details.tagColours is not empty %}
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="tag-colours"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.tags'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{% for _tag, _c in details.tagColours %}<span class="badge nowo-task-sync-tag"{% if _c is not empty %} data-nowo-task-vars="{{ {'--nowo-task-sync-tag-bg': _c.bg|default(null), '--nowo-task-sync-tag-fg': _c.fg|default(null)}|filter(v => v is not null)|json_encode }}"{% endif %}>{{ _tag }}</span> {% endfor %}</dd></div>
+            {% endif %}
             {% if details.path is defined %}
                 <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="path"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.path'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.path|join(' › ') }}</dd></div>
             {% endif %}

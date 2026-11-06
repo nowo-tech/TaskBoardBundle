@@ -8,8 +8,10 @@ use DateInterval;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -193,12 +195,19 @@ final readonly class TaskSyncPeopleReassigner
     {
         $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $counts = [];
-        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName']] as [$class, $field, $name]) {
+        foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName'], [TaskChangeHistory::class, 'user', 'userName']] as [$class, $field, $name]) {
             // Rows written before 1.25 have no snapshot yet: they get the current name first.
             $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
                 ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
             $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
                 ->setParameter('user', $user)->execute();
+        }
+        // Audit HI-L4: a member row's values are the label at the time; the fact of the change stays.
+        if ($forgetName) {
+            foreach (['oldValue', 'newValue'] as $field) {
+                $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label')
+                    ->setParameter('types', [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved])->setParameter('label', UserLabel::of($user))->execute();
+            }
         }
         // The bulk updates bypass the identity map: loaded tasks and comments follow.
         $map = $this->entityManager->getUnitOfWork()->getIdentityMap();
@@ -210,6 +219,11 @@ final readonly class TaskSyncPeopleReassigner
         foreach ([...$map[TaskBoard::class] ?? [], ...$map[TaskDocument::class] ?? []] as $row) {
             if (($row instanceof TaskBoard || $row instanceof TaskDocument) && SyncUser::same($row->getCreator(), $user)) {
                 $row->detachCreator($forgetName);
+            }
+        }
+        foreach ($map[TaskChangeHistory::class] ?? [] as $entry) {
+            if ($entry instanceof TaskChangeHistory && SyncUser::same($entry->getUser(), $user)) {
+                $entry->detachUser($forgetName);
             }
         }
         foreach ($map[TaskComment::class] ?? [] as $comment) {
@@ -236,7 +250,7 @@ final readonly class TaskSyncPeopleReassigner
         for ($index = $cursor->boardIndex; $index < count($connections); ++$index) {
             $connection = $connections[$index];
             $board      = $connection->getBoard();
-            $projected  = $target !== null && $this->accessChecker->canViewBoard($target, $board) && $this->resolver->isCandidate($board, $target) ? $target : null;
+            $projected  = $target !== null && $this->accessChecker->canViewBoard($target, $board) && $this->resolver->isCandidate($board, $target) && !$this->directories->isAttributionOnly($board, $target) ? $target : null;
             if ($target !== null && $projected === null) {
                 $report = $report->plus(new ReassignReport(notProjected: 1));
                 // Re-projection only ever adds rows where the user can view the board now; it never rewrites others.
