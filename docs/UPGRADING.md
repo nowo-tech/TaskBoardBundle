@@ -158,6 +158,18 @@ draws its own columns step posts `task_board_sync_link[unmatchedColumns]`, or pa
 Connections linked earlier stay on `keep`. The deletion needs the provider's statuses (`SourceProviderInterface::listStatuses()`): a provider
 that cannot list them keeps every column and reports it.
 
+### Everything possible from ClickUp (TB-SYNC-3 addendum)
+
+No schema change: what is new lives in `remote_meta` and the connection's `options` JSON. Run one full sync per linked board to fill it. The first import
+makes up to three more requests (task types, list, statuses). A template override of `_task_sync_details.html.twig` draws `taskType`, `locations`
+and `tagColours` if wanted.
+
+Two options to decide on, both off by default:
+
+- `sync.include_multi_list_tasks`: tasks added to a list from another list join the import. Each appears once with all its lists.
+- `sync.full_sync_rereads_details`: if a new file turns out not to move ClickUp's `date_updated`, set it. Each full sync then spends the detail budget from the
+  first tasks on, so raise `sync.watchers.max_detail_calls_per_run` above the board's size.
+
 ## To 1.27.0
 
 From **1.26.3**:

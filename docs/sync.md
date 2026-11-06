@@ -588,6 +588,12 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
   board. A lasting error on the detail (403, too large) leaves that task as it is, the run goes on, and it is listed as
   `task_detail`, *Unavailable*; a passing one stops the run as usual.
 
+**Since 1.28.0:** the task type (`custom_item_id`, whose 0 is ClickUp's own *Task*, with the workspace's name for the rest; `#<id>` if the names cannot
+be read), all the task's lists, and tag colours (plain hex only) are in the panel. Subtasks at any depth arrive flat with their `parent`, closed ones
+included (`subtasks=true`, `include_closed=true`). `sync.include_multi_list_tasks` sends `include_timl` on list sources; ClickUp documents it only on
+that endpoint, so a folder or space source does not send it. Columns the connection created take their status's colour and the provider's order among
+themselves at the end of the first import; every other column stays where it is, and nothing changes afterwards.
+
 ### Completeness report
 
 After each run the connection page lists, per key of the provider's task answers that carried a value, on how many
@@ -604,6 +610,11 @@ run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9
 
 **After upgrading**, run one full sync per linked board so that existing tasks get all of this
 ([UPGRADING](UPGRADING.md#to-1270)).
+
+**What the API does not give (since 1.28.0).** `Sync\Provider\ProviderApiGapsInterface::apiGaps()` adds rows on every report, whatever the answers held. For
+ClickUp, from its published reference as read on 2026-11-06: `reminders`, `sprints`, `goal_links`, `folder_description`, `space_description` are *not exposed*. No
+reference page documents them on a task, a folder or a space. `comment_assigned_by` and `comment_reactions` are exposed and not kept. `task_types` is *Unavailable* when the names
+were refused, and `time_in_status` stays *Unavailable* across runs until a later run reads it.
 
 ### Time entries one by one
 

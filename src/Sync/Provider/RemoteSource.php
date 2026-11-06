@@ -19,6 +19,8 @@ final readonly class RemoteSource
         public array $path = [],
         public ?int $listCount = null,
         public ?int $openTaskCount = null,
+        // Since 1.28.0: the provider's description of the source, as safe Markdown.
+        public ?string $description = null,
     ) {
     }
 

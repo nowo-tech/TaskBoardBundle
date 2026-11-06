@@ -24,6 +24,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use function array_map;
 use function explode;
 use function is_array;
+use function is_string;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -87,6 +88,11 @@ final class SyncPeopleViewProvider implements ResetInterface
         }
         if (is_array($meta['estimates'] ?? null)) {
             $meta['estimates'] = array_map(fn (array $estimate): array => ['name' => $this->personLabel((string) $estimate['person']), 'minutes' => $estimate['minutes']], $meta['estimates']);
+        }
+
+        // Since 1.28.0: stored JSON is read back as if remote: a colour reaches a style attribute only as plain hex.
+        if (is_array($meta['tagColours'] ?? null)) {
+            $meta['tagColours'] = array_filter(array_map(static fn (mixed $colours): array => is_array($colours) ? array_filter($colours, static fn (mixed $value): bool => is_string($value) && preg_match('/^#[0-9A-Fa-f]{3,8}$/D', $value) === 1) : [], $meta['tagColours']));
         }
 
         return $meta + ['provider' => $item->getConnection()->getProvider()];

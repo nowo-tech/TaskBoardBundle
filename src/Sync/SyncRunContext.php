@@ -130,6 +130,13 @@ final class SyncRunContext
      */
     public array $fields = [];
 
+    /**
+     * Since 1.28.0: the workspace's task types of this slice; null until asked.
+     *
+     * @var array<string, string>|null
+     */
+    public ?array $taskTypes = null;
+
     public function __construct(
         public string $runId,
         public TaskBoard $board,

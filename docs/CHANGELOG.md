@@ -87,6 +87,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not been checked. `underline`, `color` and `background-color` keep the text, not the style: the host escapes raw HTML.
   Every link and image goes through `RemoteContentSanitizer::isSafeUrl()`; a refused target leaves the label as text.
   A comment whose segments give no text falls back to `comment_text`.
+- **Open questions on ClickUp, handled both ways.** A task whose `GET task/{id}` has no `attachments` key no longer stays *Not read* forever (audit
+  GWf-I1): it stays so on the first read, a full sync asks again, and a second answer without the key counts as no files (ClickUp documents the key for tasks with files only). No stored file is touched. An already read version still reads a thread whose
+  `reply_count` is above the replies kept here, so a reply that does not move `date_updated` arrives on a full sync (audit GWf-I2).
+  `sync.full_sync_rereads_details` (default `false`) does the same for files, at the cost of the detail budget.
 
 ### Added
 
@@ -107,6 +111,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   column; tasks never move; later syncs never delete a column; same permission as *Delete column*, logged as `column_delete` with
   `origin: sync_unmatched_columns`. New event `TaskBoardEvents::SYNC_UNMATCHED_COLUMNS_RESOLVED`. Counted in
   `columns.unmatchedDeleted` and `columns.unmatchedKept`.
+- **Everything possible from ClickUp (TB-SYNC-3 addendum).** Each checked against ClickUp's published API reference, not a live
+  workspace. Task types: `custom_item_id` and the workspace's names (`GET team/{id}/custom_item`, one call per run, optional
+  `TaskTypeProviderInterface`). All of a task's lists (`locations`), and `sync.include_multi_list_tasks` (default `false`) sends
+  `include_timl` on list sources and on the deletion scan. Tag colours in the task panel. Status colours and order on the columns the
+  connection created, once, at the end of the first import. The list's description on the connection page. New
+  `ProviderApiGapsInterface`: reminders, sprints, goal links, folder and space descriptions are reported as *not exposed by the API* on every
+  run, comment `assigned_by` and `reactions` as not supported; none is marked imported. Subtasks at any depth, closed ones too, are covered by a test.
 
 ## [1.27.0] - 2026-11-06
 

@@ -7,6 +7,7 @@
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
+- [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -122,6 +123,10 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 
 `unmatchedColumns: delete` deletes board structure from a background run. It checks `canEditBoard` for the run's actor at that moment. The empty check and the delete share a transaction, under a write lock on the column row, because `task.column_id` is `ON DELETE SET NULL` and could otherwise silently unplace a task written at the same time. Audit status for this change: re-verification pending.
 
+## Task types, tag colours and descriptions (since 1.28.0)
+
+Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches a `style` attribute, so it is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern. Audit status for this change: re-verification pending.
+
 ## Logging and personal data
 
 REQ-OBS-001 (since 1.21): every successful board / task write logs one `info` line, an invalid CSRF token one `warning`,
@@ -173,8 +178,6 @@ manager of the board, or by a manager alone when the author is gone; the removal
 
 Accepted residuals (audit GW, all pre-existing unless noted):
 
-- Low (since 1.27.0). `time_in_status` as *Unavailable* is shown for the latest run only; unread files, threads and details are
-  kept per task.
 - Low (since 1.27.0). In `text` and `both` modes the *Fields* document keeps values that `anonymise()` and the eraser do not
   reach; `users` values there hold names, no e-mails.
 - Low. Deleting a user deletes their rows in the task history on every task (`TaskChangeHistory.user` is `ON DELETE CASCADE`), including `time_removed`. The time itself stays, so the rule on tracked time holds, but the record of a removal does not outlive its author's account.

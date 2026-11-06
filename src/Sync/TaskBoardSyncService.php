@@ -51,6 +51,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\Sync\Status\FirstImportFinisher;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Nowo\TaskBoardBundle\Sync\Status\UnmatchedColumnsCleaner;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
@@ -105,6 +106,8 @@ final readonly class TaskBoardSyncService
         private ?PeopleMappingService $peopleMapping = null,
         // Since 1.28.0 (TB-SYNC-4): `unmatchedColumns: delete`.
         private ?UnmatchedColumnsCleaner $unmatchedColumns = null,
+        // Since 1.28.0 (TB-SYNC-4): colour, order and the source's description at the end of the first import.
+        private ?FirstImportFinisher $createdColumns = null,
     ) {
     }
 
@@ -141,7 +144,7 @@ final readonly class TaskBoardSyncService
         $map = StatusColumns::clean($statusColumnMap, $board);
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
-                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
+                $connection->addCreatedColumn($this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)))->getId()); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);
@@ -468,6 +471,9 @@ final readonly class TaskBoardSyncService
             }
             $ctx->phase = SyncPhase::Done;
             // Since 1.28.0: the end of the whole first import (every slice, the time phase included), without error.
+            if ($ctx->connection->createdColumns() !== [] || !$ctx->connection->getLastSuccessAt() instanceof DateTimeImmutable) {
+                $this->createdColumns?->finish($ctx);
+            }
             if ($this->unmatchedColumns?->isDue($ctx) === true) {
                 $this->unmatchedColumns->resolve($ctx);
             }
