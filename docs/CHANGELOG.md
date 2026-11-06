@@ -95,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   author's account; `detachUser()` detaches it, and with `anonymise: true` forgets the name. GWd-L4: `eraseByValue()` and `eraseBoard()` also remove the lines of the *Fields* document
   in `text` and `both` modes, recognised by its shape, so a document somebody wrote is untouched. I6: `exportPerson()` adds `tasksCreated`, `commentsWritten` and `taskRoles`.
   *UPGRADING* no longer tells hosts to call TimeTrack's `removeForUser()` during account erasure, which deletes time.
+- **`.nowo-task-btn-danger` no longer sets `color` and `border-color`.** They went over the `btn_danger` slot, giving red on red with a solid slot. The slot alone decides the colours; the
+  class stays for hosts that hook on it.
 
 ### Added
 
