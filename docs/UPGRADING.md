@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.26.0](#to-1260)
 - [To 1.25.2](#to-1252)
 - [To 1.25.1](#to-1251)
 - [To 1.25.0](#to-1250)
@@ -125,7 +126,9 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-From **1.25.2** (planned 1.26.0):
+## To 1.26.0
+
+From **1.25.2**:
 
 ```bash
 composer update nowo-tech/task-board-bundle
