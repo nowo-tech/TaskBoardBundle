@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Schema change for every host: task history outlives its user (audit GWf-L1)](#schema-change-for-every-host-task-history-outlives-its-user-audit-gwf-l1)
 - [To 1.27.0](#to-1270)
   - [Schema change for every host: manual time outlives its user](#schema-change-for-every-host-manual-time-outlives-its-user)
   - [Schema change with `sync.enabled: true` only (TB-SYNC-3)](#schema-change-with-syncenabled-true-only-tb-sync-3)
@@ -196,6 +197,11 @@ SQLite rebuilds the table; `doctrine:schema:update --dump-sql` gives the stateme
 
 After the DDL, call `TaskTimeEntrySnapshotPurger::backfillUserNames()` until it returns 0, so that older rows also have a name. `TaskChangeHistory::getUser()` now returns `?object`: host code
 reading it must handle null and use `getUserName()`. Rollback: put back `NOT NULL` and `CASCADE` after handling the rows with a null user, and drop `user_name`.
+
+### Danger buttons
+
+A host whose `btn_danger` slot relied on `.nowo-task-btn-danger` for its red needs a slot class that sets it; the default `btn btn-outline-danger` does. A host that worked around the old rule (Beacon's
+`.btn-danger.nowo-task-btn-danger`) can delete that.
 
 ## To 1.27.0
 
