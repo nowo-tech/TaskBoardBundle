@@ -145,6 +145,45 @@ jobs:
           SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
         run: composer test -- --testsuite functional
 
+  pgsql:
+    name: Functional + repository tests on PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: task_board_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d task_board_test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - name: Checkout TaskBoardBundle
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json, pdo_pgsql
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies (Symfony 7.4)
+        run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      - name: Run the functional suite against PostgreSQL
+        env:
+          TASK_BOARD_TEST_DATABASE_URL: postgresql://postgres:root@127.0.0.1:5432/task_board_test?serverVersion=16&charset=utf8
+          SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
+        run: composer test -- --testsuite functional
+
   code-style:
     name: Code Style
     runs-on: ubuntu-latest

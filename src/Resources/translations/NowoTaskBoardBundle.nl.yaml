@@ -631,7 +631,7 @@ task_board.sync.error.unmatched_column_kept_last: "Kolom “%column%” behouden
 task_board.sync.error.unmatched_column_kept_failed: "Kolom “%column%” behouden: verwijderen is niet gelukt."
 task_board.sync.error.unmatched_columns_incomplete: "Ongebruikte kolommen behouden: de import heeft niet de hele bron gelezen."
 task_board.sync.error.unmatched_columns_denied: "Ongebruikte kolommen behouden: je mag op dit bord geen kolommen verwijderen."
-task_board.sync.error.unmatched_columns_unknown: "Ongebruikte kolommen behouden: de statussen van de provider konden niet worden gelezen."
+task_board.sync.error.unmatched_columns_unknown: "Ongebruikte kolommen behouden: de statussen van de provider konden niet worden gelezen. Verwijder ze handmatig als je ze niet wilt."
 task_board.sync.details.task_type: "Taaktype"
 task_board.sync.details.locations: "Lijsten"
 task_board.sync.details.tags: "Labels"

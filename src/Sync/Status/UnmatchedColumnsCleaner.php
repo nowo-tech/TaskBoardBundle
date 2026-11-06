@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\Status;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -180,9 +181,11 @@ final readonly class UnmatchedColumnsCleaner
     }
 
     /**
-     * Check and delete in one transaction. The row update takes the column's write lock first, so a task written meanwhile
-     * waits on its foreign key and is then seen, or the column is already gone and its insert fails: `ON DELETE SET
-     * NULL` can never empty a column here. DBAL sees rows no Doctrine filter hides.
+     * Check and delete in one transaction, under `SELECT ... FOR UPDATE` on the column row. A foreign key check takes a
+     * shared lock on that row (`FOR KEY SHARE` on PostgreSQL), so a task written at the same time waits, then is seen, or
+     * is refused because the column is gone: `ON DELETE SET NULL` can never empty a column here (audit HI-M1). A no-op
+     * `UPDATE` would not do: on PostgreSQL it takes `FOR NO KEY UPDATE`, which does not conflict with `FOR KEY SHARE`.
+     * SQLite has no such clause and one writer at a time. DBAL sees rows no Doctrine filter hides.
      */
     private function deleteIfEmpty(BoardColumn $column): bool
     {
@@ -191,10 +194,10 @@ final readonly class UnmatchedColumnsCleaner
         $tasks      = $this->entityManager->getClassMetadata(Task::class);
         $table      = $connection->quoteIdentifier($columns->getTableName());
         $id         = $connection->quoteIdentifier($columns->getSingleIdentifierColumnName());
-        $position   = $connection->quoteIdentifier($columns->getColumnName('position'));
+        $lock       = $connection->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
 
-        return (bool) $connection->transactional(static function (Connection $db) use ($column, $tasks, $table, $id, $position): bool {
-            $db->executeStatement(sprintf('UPDATE %s SET %s = %s WHERE %s = ?', $table, $position, $position, $id), [$column->getId()]);
+        return (bool) $connection->transactional(static function (Connection $db) use ($column, $tasks, $table, $id, $lock): bool {
+            $db->fetchOne(sprintf('SELECT %s FROM %s WHERE %s = ?%s', $id, $table, $id, $lock), [$column->getId()]);
             $held = (int) $db->fetchOne(sprintf('SELECT COUNT(*) FROM %s WHERE %s = ?', $db->quoteIdentifier($tasks->getTableName()), $db->quoteIdentifier($tasks->getSingleAssociationJoinColumnName('column'))), [$column->getId()]);
             if ($held > 0) {
                 return false;

@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Schema change for every host: the sync's *Fields* document (audits HI-L2, HI-L3)](#schema-change-for-every-host-the-syncs-fields-document-audits-hi-l2-hi-l3)
   - [Schema change for every host: task history outlives its user (audit GWf-L1)](#schema-change-for-every-host-task-history-outlives-its-user-audit-gwf-l1)
 - [To 1.27.0](#to-1270)
   - [Schema change for every host: manual time outlives its user](#schema-change-for-every-host-manual-time-outlives-its-user)
@@ -136,21 +137,32 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 ### ClickUp comments (TB-SYNC-4)
 
 No action. Comments written or edited after the upgrade keep their lists, code blocks and mentions; a full sync rewrites
-those already imported, unless they were edited here. Comment bodies are compared by hash, so the first full sync after
-the upgrade counts every comment with such formatting as updated.
+those already imported. Comment bodies are compared by hash, so the first full sync counts every comment with such formatting as
+updated. A comment whose words did not change does not show the *edited* mark; one whose words changed does, for example an emoticon that
+now shows as itself. Comments edited here are not rewritten; they appear as conflicts in that run's report.
 
 ### Former people (TB-SYNC-4)
 
 Nothing changes unless you opt in. TaskBoard does not require TimeTrack.
 
-- **Hours of people with no user:** implement `OwnerlessTimeEntrySinkInterface` on your sink. With TimeTrackBundle 1.15:
-  `$candidate->user() ?? new ImportedTimeEntryPerson($candidate->person->getId(), $candidate->personName(), $scopeKey)`.
+- **Hours of people with no user:** implement `OwnerlessTimeEntrySinkInterface` on your sink. TimeTrack 1.15 is required for this; a plain user row on an entry that has no owner is refused:
+
+  ```php
+  $user = $candidate->user();
+  $owner = $user instanceof UserInterface
+      ? new ImportedTimeEntryClaim($user, $candidate->person->getId(), $scopeKey)
+      : new ImportedTimeEntryPerson($candidate->person->getId(), $candidate->personName(), $scopeKey);
+  ```
+
   If such a person is mapped later, `SYNC_PERSON_REASSIGNED` is your cue to move their entries, as for any re-association.
 - **Bulk action:** set `sync.people_bulk_former: true`. A host that overrides `connection_people.html.twig` draws `peopleFormerForm`
   (null when off or when nobody is undecided).
 - **Attribution:** implement `AttributionOnlyResolverInterface` on your `SyncPersonResolverInterface` and offer those users as
   candidates. A host that shows `SyncPersonView::$name` needs no change; it can read `$attributionOnly` to add a note.
-  Someone already projected keeps what was written until you call `reassign()` again for that person.
+  Someone already projected keeps what was written until you call `reassign()` again for that person. The flag is read by the sync: keep flagged users out of your assignable
+  lists, because file imports and the member UI do not consult it.
+- **Writes by e-mail (behaviour change, audit HI-M2).** A sync with no people session or no person reference for a row now writes a matched user as member or comment author only if they can
+  view the board and are not attribution only. Anyone else is left out and the comment keeps the name as text. Hosts that relied on assigning people without board access through this path must grant it first.
 
 ### Columns no status uses (TB-SYNC-4)
 
@@ -162,7 +174,7 @@ that cannot list them keeps every column and reports it.
 ### Everything possible from ClickUp (TB-SYNC-3 addendum)
 
 No schema change: what is new lives in `remote_meta` and the connection's `options` JSON. Run one full sync per linked board to fill it. The first import
-makes up to three more requests (task types, list, statuses). A template override of `_task_sync_details.html.twig` draws `taskType`, `locations`
+makes up to three more requests (task types, list, statuses). Columns the connection creates from now on take their status's colour and the provider's order among themselves; existing columns do not change. The completeness report gains rows for what the API does not give. A template override of `_task_sync_details.html.twig` draws `taskType`, `locations`
 and `tagColours` if wanted.
 
 Two options to decide on, both off by default:
@@ -170,6 +182,18 @@ Two options to decide on, both off by default:
 - `sync.include_multi_list_tasks`: tasks added to a list from another list join the import. Each appears once with all its lists.
 - `sync.full_sync_rereads_details`: if a new file turns out not to move ClickUp's `date_updated`, set it. Each full sync then spends the detail budget from the
   first tasks on, so raise `sync.watchers.max_detail_calls_per_run` above the board's size.
+
+### Schema change for every host: the sync's *Fields* document (audits HI-L2, HI-L3)
+
+`task_board_task_documents.sync_fields` marks the document the sync writes and holds the suppression records of erased lines. Any task written marks its document; run one full sync in `text` or `both` mode before erasing.
+
+MySQL 8 / MariaDB and PostgreSQL:
+
+```sql
+ALTER TABLE task_board_task_documents ADD sync_fields JSON DEFAULT NULL;
+```
+
+SQLite: `ALTER TABLE task_board_task_documents ADD COLUMN sync_fields CLOB DEFAULT NULL;`
 
 ### Schema change for every host: task history outlives its user (audit GWf-L1)
 

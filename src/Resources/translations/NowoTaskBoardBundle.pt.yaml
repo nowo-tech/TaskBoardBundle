@@ -631,7 +631,7 @@ task_board.sync.error.unmatched_column_kept_last: "Coluna «%column%» mantida: 
 task_board.sync.error.unmatched_column_kept_failed: "Coluna «%column%» mantida: não foi possível eliminá-la."
 task_board.sync.error.unmatched_columns_incomplete: "Colunas sem uso mantidas: a importação não leu toda a origem."
 task_board.sync.error.unmatched_columns_denied: "Colunas sem uso mantidas: não pode eliminar colunas neste quadro."
-task_board.sync.error.unmatched_columns_unknown: "Colunas sem uso mantidas: não foi possível ler os estados do fornecedor."
+task_board.sync.error.unmatched_columns_unknown: "Colunas sem uso mantidas: não foi possível ler os estados do fornecedor. Elimine-as manualmente se não as quiser."
 task_board.sync.details.task_type: "Tipo de tarefa"
 task_board.sync.details.locations: "Listas"
 task_board.sync.details.tags: "Etiquetas"

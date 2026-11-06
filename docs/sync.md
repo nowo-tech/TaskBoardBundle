@@ -592,7 +592,7 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
 be read), all the task's lists, and tag colours (plain hex only) are in the panel. Subtasks at any depth arrive flat with their `parent`, closed ones
 included (`subtasks=true`, `include_closed=true`). `sync.include_multi_list_tasks` sends `include_timl` on list sources; ClickUp documents it only on
 that endpoint, so a folder or space source does not send it. Columns the connection created take their status's colour and the provider's order among
-themselves at the end of the first import; every other column stays where it is, and nothing changes afterwards.
+themselves at the end of the first import; every other column stays where it is. A later run orders and colours only the columns it creates itself.
 
 ### Completeness report
 

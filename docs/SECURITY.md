@@ -6,6 +6,7 @@
 - [Threats and mitigations](#threats-and-mitigations)
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
+- [Sync writes by e-mail (fixed in 1.28.0)](#sync-writes-by-e-mail-fixed-in-1280)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Logging and personal data](#logging-and-personal-data)
@@ -119,13 +120,17 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.
 
+## Sync writes by e-mail (fixed in 1.28.0)
+
+A sync that has no people session or no person reference for a row (`SyncOptions::people` false, no directory attached, a row or comment with an e-mail but no valid id) matches users by e-mail or name. From 1.23.0 to 1.27.0 that path wrote the match as task member and comment author without asking whether the user could view the board, and a member row gives the task through `isTaskParticipant`. Since 1.28.0 it writes only a user who can view the board and is not attribution only (audit HI-M2; `emailPath.notWritten` counts the others). Until a host upgrades: make `TaskAssigneeProviderInterface::canBeAssigned()` refuse users without board access, have the import user resolver return null for them, and deny non-members through `TASK_ACCESS_CHECK`. No advisory: it needs a provider anomaly or a host's own setting, and the match is on the host's own users.
+
 ## Unmatched columns (since 1.28.0)
 
-`unmatchedColumns: delete` deletes board structure from a background run. It checks `canEditBoard` for the run's actor at that moment. The empty check and the delete share a transaction, under a write lock on the column row, because `task.column_id` is `ON DELETE SET NULL` and could otherwise silently unplace a task written at the same time. Audit status for this change: re-verification pending.
+`unmatchedColumns: delete` deletes board structure from a background run. It checks `canEditBoard` for the run's actor at that moment. The empty check and the delete share a transaction under `SELECT … FOR UPDATE` on the column row, because `task.column_id` is `ON DELETE SET NULL`: a task written at the same time waits, then is seen or refused. Audit HI, tested on MySQL and PostgreSQL with a second connection; re-verification pending.
 
 ## Task types, tag colours and descriptions (since 1.28.0)
 
-Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches a `style` attribute, so it is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern. Audit status for this change: re-verification pending.
+Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches the page through `data-nowo-task-vars`, like column colours, and is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern. Re-verification pending.
 
 ## Logging and personal data
 
@@ -144,7 +149,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low, 2026-11-06, re-verified at `0009885` (Appendix GW). No open Critical, High or Medium.** The 1.28.0 changes (TB-SYNC-4): re-verification pending.
+**AI security audit (REQ-SEC-004): Pass (conditional) / Medium at `561203a` (Appendix HI, 2026-11-06). HI-M1 and HI-M2 are fixed since then: re-verification pending.**
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
@@ -154,7 +159,7 @@ What the bundle does and does not do:
 
 | Duty | State |
 | --- | --- |
-| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). Changing `kernel.secret` makes erased values importable again if the provider still has them: a host that must keep a value out keeps its erasure log and runs it again after rotating. Since 1.28.0 the eraser also removes the lines of the *Fields* document in `text` and `both` modes (see the residual below). |
+| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). Changing `kernel.secret` makes erased values importable again if the provider still has them: a host that must keep a value out keeps its erasure log and runs it again after rotating. Since 1.28.0 the eraser also removes the lines of the *Fields* document in `text` and `both` modes and `exportByValue()` / `exportBoard()` read them (see the residual below). |
 | Blocking, Art. 32 LOPDGDD | The bundle has no blocking state. Erasure in Spain implies blocking for the limitation periods: the host keeps this outside and defines its policy. |
 | Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. Since 1.28.0 `exportPerson()` also names the comments they wrote, the tasks they created and the tasks they are assigned to or watch, by id. **Not in any export:** comment bodies and task text; the host adds them if it must. |
 | Minimisation and by default, Art. 5(1)(c) and 25 RGPD | See the default above. |
@@ -178,7 +183,10 @@ manager of the board, or by a manager alone when the author is gone; the removal
 
 Accepted residuals (audit GW, all pre-existing unless noted):
 
-- Low (since 1.27.0). In `text` and `both` modes `anonymise()` does not reach the *Fields* document, and a re-sync writes it again from what the provider still has, since no suppression record exists for a line: clear the value at the source. `eraseBoard()` with types cannot tell a type from a line, so `text` mode is only erased as a whole. `users` values there hold names, no e-mails.
+- Low (since 1.27.0). In `text` and `both` modes `anonymise()` does not reach the *Fields* document. `eraseByValue()` and `eraseBoard()` do, and keep a suppression record of each line, so the same line does not return on a re-sync; a different value does, as for typed values. A document holds at most 200 records. `eraseBoard()` with types cannot tell a type from a line, so `text` mode is only erased as a whole. Clear the value at the source too. `users` values there hold names, no e-mails.
+- Low (since 1.28.0). The *Fields* document is marked when the sync writes it. One written before 1.28.0 and not written since is recognised only strictly, by its title in the bundle's locales and nothing but `- **name**: value` lines; a person's added line keeps it from being recognised until the next write. Run one full sync before erasing.
+- Low. `anonymise: true` clears the user's reference and name on history rows, and `member_added` and `member_removed` values equal to the user's current label. A value written under an earlier label stays. The match is global, so the same label on another tenant's row is cleared too.
+- Host note: attribution only is read by the sync. Keep flagged users out of your assignable lists; file imports and the member UI do not consult it.
 - Host note: a `BOARD_ACCESS_CHECK` listener that grants every action makes every editor a board manager, including for removing another user's time entry.
 - `TimeTrackBundle` entries (`TimeEntry.user`) are that bundle's own; this rule and this audit do not reach them.
 - CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).

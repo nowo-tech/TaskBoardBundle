@@ -631,7 +631,7 @@ task_board.sync.error.unmatched_column_kept_last: "Colonne « %column% » conser
 task_board.sync.error.unmatched_column_kept_failed: "Colonne « %column% » conservée : suppression impossible."
 task_board.sync.error.unmatched_columns_incomplete: "Colonnes inutilisées conservées : l’import n’a pas lu toute la source."
 task_board.sync.error.unmatched_columns_denied: "Colonnes inutilisées conservées : vous ne pouvez pas supprimer de colonnes sur ce tableau."
-task_board.sync.error.unmatched_columns_unknown: "Colonnes inutilisées conservées : les statuts du fournisseur n’ont pas pu être lus."
+task_board.sync.error.unmatched_columns_unknown: "Colonnes inutilisées conservées : les statuts du fournisseur n’ont pas pu être lus. Supprimez-les à la main si vous n’en voulez pas."
 task_board.sync.details.task_type: "Type de tâche"
 task_board.sync.details.locations: "Listes"
 task_board.sync.details.tags: "Étiquettes"

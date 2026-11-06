@@ -70,7 +70,8 @@ final class SyncEverythingPossibleTest extends SyncPeopleFunctionalTestCase
         self::assertSame('Other list', $page->filter('[data-sync-detail="locations"] dd')->text());
         $badge = $page->filter('[data-sync-detail="tag-colours"] .badge');
         self::assertSame('urgent', $badge->text());
-        self::assertSame('background-color: #123456;color: #FFF;', $badge->attr('style'));
+        self::assertSame('{"--nowo-task-sync-tag-bg":"#123456","--nowo-task-sync-tag-fg":"#FFF"}', $badge->attr('data-nowo-task-vars'));
+        self::assertNull($badge->attr('style'));
 
         $again = $this->sync($board, full: true);
         self::assertSame(0, $again->stats['details.updated'] ?? 0, 'idempotent');
@@ -83,7 +84,7 @@ final class SyncEverythingPossibleTest extends SyncPeopleFunctionalTestCase
         $this->sync($board);
         $this->login($this->owner);
         $page = $this->client->request('GET', '/tools/task-board/task/' . $this->taskTitled('Typed')->getId());
-        self::assertSame('background-color: #123;', $page->filter('[data-sync-detail="tag-colours"] .badge')->attr('style'));
+        self::assertSame('{"--nowo-task-sync-tag-bg":"#123"}', $page->filter('[data-sync-detail="tag-colours"] .badge')->attr('data-nowo-task-vars'));
     }
 
     public function testRefusedTypesKeepTheLastNameAndTheReportSaysSo(): void

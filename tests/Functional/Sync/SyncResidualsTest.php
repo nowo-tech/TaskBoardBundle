@@ -26,6 +26,8 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 
 use function array_column;
+use function iterator_to_array;
+use function ksort;
 use function sort;
 
 /**
@@ -89,7 +91,7 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
 
         $fresh = $this->em->find(TaskBoard::class, $board->getId());
         self::assertInstanceOf(TaskBoard::class, $fresh);
-        self::assertSame(1, $eraser->eraseBoard($fresh));
+        $eraser->eraseBoard($fresh);
         $this->em->clear();
         $this->refreshOwner();
         foreach ($this->taskTitled('Doc')->getDocuments() as $document) {
@@ -97,6 +99,146 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
                 self::assertSame('', $document->getContent());
             }
         }
+    }
+
+    public function testTheEraserTrustsTheMarkNotTheShapeAndErasedLinesDoNotReturn(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $text  = "- **Contact**: zebulon@people.test\n- **Keep**: fine";
+        $this->put($this->fieldRow(1, $text));
+        $this->sync($board);
+        $task = $this->taskTitled('Doc');
+        // A person's document in the same shape, and a free line added to the sync's own.
+        $this->em->persist(new TaskDocument($task, 'Clients (ACME)', '- **Ana**: ana@client.test', $this->owner, 5));
+        $this->em->flush();
+        foreach ($task->getDocuments() as $document) {
+            if ($document->isSyncFields()) {
+                $document->setContent($document->getContent() . "\nCall zebulon@people.test first");
+            }
+        }
+        $this->em->flush();
+        $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
+        self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
+
+        // The export finds what the eraser can (`both` here: no typed row for these lines).
+        $found = iterator_to_array($eraser->exportByValue('zebulon@people.test', $board), false);
+        self::assertSame(['Contact'], array_column($found, 'field'));
+        self::assertSame('zebulon@people.test', $found[0]['text']);
+        self::assertSame($task->getId(), $found[0]['taskId']);
+
+        self::assertSame(2, $eraser->eraseByValue('zebulon@people.test', $board));
+        $this->assertDocuments(['Clients (ACME)' => '- **Ana**: ana@client.test', 'sync' => '- **Keep**: fine']);
+
+        // The same line from the provider does not return; a different value does.
+        $this->put($this->fieldRow(2, $text));
+        $this->sync($board, full: true);
+        $this->assertDocuments(['Clients (ACME)' => '- **Ana**: ana@client.test', 'sync' => '- **Keep**: fine']);
+        $this->put($this->fieldRow(3, "- **Contact**: other@people.test\n- **Keep**: fine"));
+        $this->sync($board, full: true);
+        $this->assertDocuments(['Clients (ACME)' => '- **Ana**: ana@client.test', 'sync' => "- **Contact**: other@people.test\n- **Keep**: fine"]);
+
+        // A whole board: the person's document stays.
+        $fresh = $this->em->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $fresh);
+        $eraser->eraseBoard($fresh);
+        $this->assertDocuments(['Clients (ACME)' => '- **Ana**: ana@client.test', 'sync' => '']);
+    }
+
+    public function testADocumentFromBeforeTheMarkIsRecognisedOnlyStrictly(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put($this->row('t1', 'Doc', 1));
+        $this->sync($board);
+        $task = $this->taskTitled('Doc');
+        $this->em->persist(new TaskDocument($task, 'Campos (ClickUp)', '- **Contact**: zebulon@people.test', $this->owner, 1));
+        $this->em->persist(new TaskDocument($task, 'Fields (ClickUp) draft', '- **Contact**: zebulon@people.test', $this->owner, 2));
+        $this->em->persist(new TaskDocument($task, 'Felder (ClickUp)', "My notes\n- **Contact**: zebulon@people.test", $this->owner, 3));
+        $this->em->flush();
+        $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
+        self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
+        self::assertSame(1, $eraser->eraseByValue('zebulon@people.test', $board));
+        $this->em->clear();
+        $this->refreshOwner();
+        $contents = [];
+        foreach ($this->taskTitled('Doc')->getDocuments() as $document) {
+            $contents[$document->getTitle()] = [$document->getContent(), $document->isSyncFields()];
+        }
+        self::assertSame(['', true], $contents['Campos (ClickUp)']);
+        self::assertFalse($contents['Fields (ClickUp) draft'][1]);
+        self::assertStringContainsString('zebulon', $contents['Fields (ClickUp) draft'][0]);
+        self::assertStringContainsString('zebulon', $contents['Felder (ClickUp)'][0]);
+    }
+
+    public function testAnonymisingForgetsTheNameInMemberHistoryRows(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $bob   = $this->viewer('bob@example.test');
+        $task  = new Task(board: $board, title: 'Mine', creator: $this->owner, column: $board->getColumns()->first() ?: null);
+        $this->em->persist($task);
+        $recorder = new TaskChangeRecorder();
+        $recorder->record($task, $this->owner, TaskChangeType::MemberAdded, null, 'bob@example.test');
+        $recorder->record($task, $this->owner, TaskChangeType::MemberRemoved, 'bob@example.test');
+        $recorder->record($task, $this->owner, TaskChangeType::MemberAdded, null, 'keep@example.test');
+        $this->em->flush();
+        $reassigner = self::getContainer()->get(TaskSyncPeopleReassigner::class);
+        self::assertInstanceOf(TaskSyncPeopleReassigner::class, $reassigner);
+
+        $reassigner->detachUser($bob, $this->owner, anonymise: true);
+
+        $table = 'task_board_task_change_history';
+        self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM ' . $table . " WHERE new_value = 'bob@example.test' OR old_value = 'bob@example.test'"));
+        self::assertSame(1, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM ' . $table . " WHERE new_value = 'keep@example.test'"));
+        self::assertSame(3, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM ' . $table . " WHERE change_type IN ('member_added', 'member_removed')"), 'the fact stays');
+    }
+
+    /** Audit HI-L5: the same words in another format do not mark the comment edited; other words do. */
+    public function testARendererRewriteIsNotAnEdit(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put($this->row('t1', 'One', 1));
+        $this->provider->setComments('t1', [
+            new RemoteComment('c1', 'one two [link](https://x.test/a)', null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
+            new RemoteComment('c2', 'before', null, 'Bob', new DateTimeImmutable('@1790000101'), author: self::ref('7')),
+        ]);
+        $this->workspace([self::member('7')]);
+        $this->sync($board);
+        $this->provider->setComments('t1', [
+            new RemoteComment('c1', "- one\n- **two** [link](https://x.test/a%20b)", null, 'Bob', new DateTimeImmutable('@1790000100'), author: self::ref('7')),
+            new RemoteComment('c2', 'after', null, 'Bob', new DateTimeImmutable('@1790000101'), author: self::ref('7')),
+        ]);
+        $report = $this->sync($board, full: true);
+        self::assertSame(2, $report->commentsUpdated);
+        $this->em->clear();
+        $this->refreshOwner();
+        $edited = [];
+        foreach ($this->em->getRepository(TaskComment::class)->findAll() as $comment) {
+            $edited[$comment->getBody()] = $comment->getEditedAt() !== null;
+        }
+        ksort($edited);
+        self::assertSame(["- one\n- **two** [link](https://x.test/a%20b)" => false, 'after' => true], $edited);
+    }
+
+    private function fieldRow(int $updated, string $text): RemoteTask
+    {
+        return new RemoteTask(
+            task: new ImportedTaskDto(title: 'Doc', externalId: 't1', status: 'To do', priority: TaskPriority::Normal, hasPriority: false),
+            remoteUpdatedAt: new DateTimeImmutable('@' . (1_790_000_000 + $updated)),
+            customFieldsText: $text,
+        );
+    }
+
+    /**
+     * @param array<string, string> $expected title ("sync" = the marked one) => content
+     */
+    private function assertDocuments(array $expected): void
+    {
+        $this->em->clear();
+        $this->refreshOwner();
+        $found = [];
+        foreach ($this->taskTitled('Doc')->getDocuments() as $document) {
+            $found[$document->isSyncFields() ? 'sync' : $document->getTitle()] = $document->getContent();
+        }
+        self::assertEquals($expected, $found);
     }
 
     public function testATaskDetailWithoutTheAttachmentsKeyLeavesNothingPending(): void

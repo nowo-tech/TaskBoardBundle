@@ -631,7 +631,7 @@ task_board.sync.error.unmatched_column_kept_last: "Columna «%column%» conserva
 task_board.sync.error.unmatched_column_kept_failed: "Columna «%column%» conservada: no se pudo eliminar."
 task_board.sync.error.unmatched_columns_incomplete: "Se conservaron las columnas sin uso: la importación no leyó todo el origen."
 task_board.sync.error.unmatched_columns_denied: "Se conservaron las columnas sin uso: no puedes eliminar columnas en este tablero."
-task_board.sync.error.unmatched_columns_unknown: "Se conservaron las columnas sin uso: no se pudieron leer los estados del proveedor."
+task_board.sync.error.unmatched_columns_unknown: "Se conservaron las columnas sin uso: no se pudieron leer los estados del proveedor. Elimínalas a mano si no las quieres."
 task_board.sync.details.task_type: "Tipo de tarea"
 task_board.sync.details.locations: "Listas"
 task_board.sync.details.tags: "Etiquetas"

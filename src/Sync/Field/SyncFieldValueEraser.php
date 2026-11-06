@@ -15,7 +15,9 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
+use function array_diff;
 use function array_filter;
+use function array_map;
 use function array_values;
 use function count;
 use function explode;
@@ -26,7 +28,7 @@ use function json_encode;
 use function mb_stripos;
 use function mb_strlen;
 use function preg_grep;
-use function str_ends_with;
+use function preg_match;
 use function str_starts_with;
 
 use const JSON_UNESCAPED_SLASHES;
@@ -43,6 +45,13 @@ final readonly class SyncFieldValueEraser
     private const PAGE = 500;
 
     private const MIN_NEEDLE = 3;
+
+    private const FIELD_LINE = '/^- \*\*.+?\*\*: /';
+
+    private const FIELD_LINE_PARTS = '/^- \*\*(.+?)\*\*: (.*)$/';
+
+    /** `task_board.sync.fields_document` in the bundle's locales, then "(<provider>)". */
+    private const LEGACY_TITLE = '/^(?:Fields|Campos|Felder|Champs|Campi|Velden) \(.+\)$/D';
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -80,7 +89,7 @@ final readonly class SyncFieldValueEraser
         $erased = $this->eraseRows($this->rows($board, $types));
 
         // Audit GWd-L4: a type cannot be told from a document's line, so `text` mode is only erased as a whole.
-        return $erased + ($types === null ? $this->eraseDocuments($board, static fn (string $line): bool => true) : 0);
+        return $erased + ($types === null ? $this->eraseDocuments($board, static fn (string $line): bool => preg_match(self::FIELD_LINE, $line) === 1) : 0);
     }
 
     /**
@@ -92,9 +101,13 @@ final readonly class SyncFieldValueEraser
      */
     public function exportByValue(string $value, ?TaskBoard $board): Generator
     {
+        $seen = [];
         foreach ($this->matching($value, $board) as $row) {
+            $seen[$row['taskId'] . '|' . $row['field']] = true;
             yield $this->exported($row);
         }
+        // Audit HI-L3: what the eraser can find, an access request finds too.
+        yield from $this->documentRows($board, $value, $seen);
     }
 
     /**
@@ -104,9 +117,12 @@ final readonly class SyncFieldValueEraser
      */
     public function exportBoard(TaskBoard $board): Generator
     {
+        $seen = [];
         foreach ($this->rows($board, null) as $row) {
+            $seen[$row['taskId'] . '|' . $row['field']] = true;
             yield $this->exported($row);
         }
+        yield from $this->documentRows($board, null, $seen);
     }
 
     /**
@@ -142,8 +158,23 @@ final readonly class SyncFieldValueEraser
     }
 
     /**
-     * Audit GWd-L4: the lines of a task's "Fields" document that match. Recognised by its shape, so a document somebody
-     * wrote is never touched: a title ending in "(<provider>)" and nothing but `- **name**: value` lines.
+     * Audit HI-L2: the sync's "Fields" document: marked when the sync writes it. One written before the mark is recognised
+     * only strictly: the title the sync gives it in any locale and nothing but `- **name**: value` lines. Anything else is
+     * somebody's document and is never touched.
+     */
+    private function isFieldsDocument(TaskDocument $document): bool
+    {
+        if ($document->isSyncFields()) {
+            return true;
+        }
+        $lines = explode("\n", $document->getContent());
+
+        return preg_match(self::LEGACY_TITLE, $document->getTitle()) === 1 && $lines === preg_grep(self::FIELD_LINE, $lines);
+    }
+
+    /**
+     * Removes the matching lines and keeps a suppression record of each, so a re-sync does not write them again (audit
+     * HI-L3). Returns the lines removed.
      *
      * @param callable(string): bool $matches
      */
@@ -151,14 +182,16 @@ final readonly class SyncFieldValueEraser
     {
         $erased = 0;
         foreach ($task->getDocuments() as $document) {
-            $lines = explode("\n", $document->getContent());
-            if (!str_ends_with($document->getTitle(), ')') || $lines !== preg_grep('/^- \*\*.+?\*\*: /', $lines)) {
+            if (!$this->isFieldsDocument($document)) {
                 continue;
             }
-            $kept = array_values(array_filter($lines, static fn (string $line): bool => !$matches($line)));
-            if ($kept !== $lines) {
+            $lines   = explode("\n", $document->getContent());
+            $kept    = array_values(array_filter($lines, static fn (string $line): bool => !$matches($line)));
+            $removed = array_values(array_diff($lines, $kept));
+            if ($removed !== []) {
+                $document->markSyncFields()->addErasedLines(array_map(fn (string $line): string => $this->suppression->record(null, $line), $removed));
                 $document->setContent(implode("\n", $kept));
-                $erased += count($lines) - count($kept);
+                $erased += count($removed);
             }
         }
 
@@ -173,10 +206,49 @@ final readonly class SyncFieldValueEraser
     private function eraseDocuments(?TaskBoard $board, callable $matches): int
     {
         $erased = 0;
-        $after  = '';
+        foreach ($this->tasksWithDocuments($board) as $task) {
+            $erased += $this->eraseDocumentLines($task, $matches);
+        }
+        $this->entityManager->flush();
+
+        return $erased;
+    }
+
+    /**
+     * Audit HI-L3: the lines of the "Fields" documents as export rows, except a field the rows already gave for that task.
+     *
+     * @param array<string, true> $seen task id + field
+     *
+     * @return Generator<int, array{boardId: string, taskId: string, field: string, type: string, text: string, value: mixed}>
+     */
+    private function documentRows(?TaskBoard $board, ?string $value, array $seen): Generator
+    {
+        foreach ($this->tasksWithDocuments($board) as $task) {
+            foreach ($task->getDocuments() as $document) {
+                if (!$this->isFieldsDocument($document)) {
+                    continue;
+                }
+                foreach (explode("\n", $document->getContent()) as $line) {
+                    if (preg_match(self::FIELD_LINE_PARTS, $line, $parts) !== 1 || isset($seen[$task->getId() . '|' . $parts[1]]) || ($value !== null && mb_stripos($line, $value) === false)) {
+                        continue;
+                    }
+                    yield ['boardId' => $task->getBoard()->getId(), 'taskId' => $task->getId(), 'field' => $parts[1], 'type' => SyncFieldType::Text->value, 'text' => $parts[2], 'value' => $parts[2]];
+                }
+            }
+        }
+    }
+
+    /**
+     * Tasks with a document that may be the sync's, a page at a time.
+     *
+     * @return Generator<int, Task>
+     */
+    private function tasksWithDocuments(?TaskBoard $board): Generator
+    {
+        $after = '';
         do {
             $query = $this->entityManager->createQueryBuilder()->select('t')->from(Task::class, 't')->join(TaskDocument::class, 'd', 'WITH', 'd.task = t')
-                ->where('t.id > :after')->andWhere('d.content LIKE :shape')->setParameter('after', $after)->setParameter('shape', '- **%')
+                ->where('t.id > :after')->andWhere('d.syncFields IS NOT NULL OR d.content LIKE :shape')->setParameter('after', $after)->setParameter('shape', '- **%')
                 ->groupBy('t.id')->orderBy('t.id', 'ASC')->setMaxResults(self::PAGE);
             if ($board instanceof TaskBoard) {
                 $query->andWhere('t.board = :board')->setParameter('board', $board);
@@ -185,12 +257,9 @@ final readonly class SyncFieldValueEraser
             $tasks = $query->getQuery()->getResult();
             foreach ($tasks as $task) {
                 $after = $task->getId();
-                $erased += $this->eraseDocumentLines($task, $matches);
+                yield $task;
             }
-            $this->entityManager->flush();
         } while (count($tasks) === self::PAGE);
-
-        return $erased;
     }
 
     /**

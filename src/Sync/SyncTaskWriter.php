@@ -43,6 +43,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
@@ -75,14 +76,17 @@ use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
+use function explode;
 use function hash;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_scalar;
 use function json_encode;
 use function max;
 use function mb_strtolower;
 use function method_exists;
+use function preg_replace;
 use function sha1;
 use function sort;
 use function sprintf;
@@ -150,6 +154,8 @@ final readonly class SyncTaskWriter
         private int $maxReplyCalls = 500,
         // Since 1.28.0: `sync.full_sync_rereads_details`.
         private bool $fullSyncRereadsDetails = false,
+        // Since 1.28.0 (audit HI-L3): lines of the "Fields" document the eraser removed.
+        private ?SyncFieldSuppression $suppression = null,
     ) {
     }
 
@@ -436,7 +442,7 @@ final readonly class SyncTaskWriter
             importSource: $ctx->scope,
         ));
         $peopleMode = $this->peopleMode($session, $row);
-        $users      = $peopleMode ? [] : $assignees->resolve($row);
+        $users      = $peopleMode ? [] : $this->writableUsers($ctx, $assignees->resolve($row));
         foreach ($users as $user) {
             $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
         }
@@ -495,7 +501,7 @@ final readonly class SyncTaskWriter
         $column       = $this->columnFor($ctx, $remote, $columns);
         $parent       = $this->parentOf($ctx, $row, $related);
         $peopleMode   = $this->peopleMode($session, $row);
-        $users        = $peopleMode ? [] : $assignees->resolve($row);
+        $users        = $peopleMode ? [] : $this->writableUsers($ctx, $assignees->resolve($row));
         $remoteValues = $this->remoteValues($row, $column, $users, $parent);
 
         /** @var array<string, true> $allowed */
@@ -713,6 +719,42 @@ final readonly class SyncTaskWriter
         }
     }
 
+    /** The words of a Markdown body: no link target, no marker, no white space. */
+    private function plainWords(string $markdown): string
+    {
+        $text = (string) preg_replace(['/\]\([^)\s]*\)/', '/^\s*(?:\d+\.|[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m'], ['', ''], $markdown);
+
+        return (string) preg_replace('/[\s*_`~\[\]\\\\]+/', '', $text);
+    }
+
+    /**
+     * Since 1.28.0 (audit HI-M2): the one rule of the e-mail path, the writes with no people session or no person reference:
+     * a user who cannot view the board, or whom the host flags as attribution only, is not written. A member row is a
+     * participant row, and a participant gets the task.
+     */
+    private function writableUser(SyncRunContext $ctx, ?object $user): ?object
+    {
+        if ($user === null || !$this->accessChecker->canViewBoard($user, $ctx->board) || $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) === true) {
+            if ($user !== null) {
+                $ctx->count('emailPath.notWritten');
+            }
+
+            return null;
+        }
+
+        return $user;
+    }
+
+    /**
+     * @param list<object> $users
+     *
+     * @return list<object>
+     */
+    private function writableUsers(SyncRunContext $ctx, array $users): array
+    {
+        return array_values(array_filter($users, fn (object $user): bool => $this->writableUser($ctx, $user) !== null));
+    }
+
     /**
      * Since 1.28.0: replies kept per remote comment.
      *
@@ -901,7 +943,7 @@ final readonly class SyncTaskWriter
             }
             // Since 1.25: through the directory (no "Originally by" line: the template shows the person reference).
             $person = $session instanceof PeopleSession && $remote->author !== null ? $session->person($remote->author, TaskSyncPerson::KIND_COMMENT) : null;
-            $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $assignees->userByEmail($remote->authorEmail) : null);
+            $author = $person instanceof TaskSyncPerson ? $session?->projected($person) : ($remote->authorEmail !== null ? $this->writableUser($ctx, $assignees->userByEmail($remote->authorEmail)) : null);
             $files ??= $this->store->attachmentsOf($task);
             $body = $this->commentBody($ctx, $task, $item, $remote, $author === null && !$person instanceof TaskSyncPerson, $files);
             if (!$known instanceof TaskSyncComment) {
@@ -911,7 +953,12 @@ final readonly class SyncTaskWriter
                 ++$ctx->commentsCreated;
                 continue;
             }
-            $known->getComment()->edit($body, []);
+            // Since 1.28.0 (audit HI-L5): the same words in another format are not an edit (a new renderer, not a person).
+            if ($this->plainWords($known->getComment()->getBody()) === $this->plainWords($body)) {
+                $known->getComment()->reformat($body);
+            } else {
+                $known->getComment()->edit($body, []);
+            }
             $known->written($remoteHash, $this->hash($body));
             ++$ctx->commentsUpdated;
         }
@@ -1013,7 +1060,10 @@ final readonly class SyncTaskWriter
     {
         $title = Text::cut(sprintf('%s (%s)', $this->trans('task_board.sync.fields_document', 'Fields'), $this->providerName($ctx)), 255);
         foreach ($task->getDocuments() as $document) {
-            if ($document->getTitle() === $title) {
+            if ($document->isSyncFields() || $document->getTitle() === $title) {
+                // Since 1.28.0 (audits HI-L2, HI-L3): marked as the sync's own; lines the eraser removed do not return.
+                $document->markSyncFields();
+                $text = $this->withoutErasedLines($document, $text);
                 if ($document->getContent() !== $text) {
                     $document->setContent($text);
                 }
@@ -1021,9 +1071,20 @@ final readonly class SyncTaskWriter
                 return;
             }
         }
-        $document = new TaskDocument($task, $title, $text, $ctx->actor, count($task->getDocuments()));
+        $document = (new TaskDocument($task, $title, $text, $ctx->actor, count($task->getDocuments())))->markSyncFields();
         $task->getDocuments()->add($document);
         $this->entityManager->persist($document);
+    }
+
+    private function withoutErasedLines(TaskDocument $document, string $text): string
+    {
+        $erased      = $document->erasedLines();
+        $suppression = $this->suppression;
+        if ($erased === [] || !$suppression instanceof SyncFieldSuppression) {
+            return $text;
+        }
+
+        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => !in_array($suppression->record(null, $line), $erased, true)));
     }
 
     /**

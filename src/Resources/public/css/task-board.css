@@ -1920,6 +1920,11 @@ dialog.nowo-task-dialog--native::backdrop {
     font-size: 0.8125rem;
 }
 
+.nowo-task-sync-tag {
+    background-color: var(--nowo-task-sync-tag-bg, transparent);
+    color: var(--nowo-task-sync-tag-fg, inherit);
+}
+
 .nowo-task-field {
     display: grid;
     gap: 0.4rem;

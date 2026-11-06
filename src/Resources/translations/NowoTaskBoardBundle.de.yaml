@@ -631,7 +631,7 @@ task_board.sync.error.unmatched_column_kept_last: "Spalte „%column%“ behalte
 task_board.sync.error.unmatched_column_kept_failed: "Spalte „%column%“ behalten: Sie konnte nicht gelöscht werden."
 task_board.sync.error.unmatched_columns_incomplete: "Ungenutzte Spalten behalten: Der Import hat nicht die ganze Quelle gelesen."
 task_board.sync.error.unmatched_columns_denied: "Ungenutzte Spalten behalten: Du darfst auf diesem Board keine Spalten löschen."
-task_board.sync.error.unmatched_columns_unknown: "Ungenutzte Spalten behalten: Die Status des Anbieters konnten nicht gelesen werden."
+task_board.sync.error.unmatched_columns_unknown: "Ungenutzte Spalten behalten: Die Status des Anbieters konnten nicht gelesen werden. Lösche sie von Hand, wenn du sie nicht brauchst."
 task_board.sync.details.task_type: "Aufgabentyp"
 task_board.sync.details.locations: "Listen"
 task_board.sync.details.tags: "Tags"

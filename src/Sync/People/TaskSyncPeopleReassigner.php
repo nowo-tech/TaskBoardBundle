@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -200,6 +201,13 @@ final readonly class TaskSyncPeopleReassigner
                 ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
             $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
                 ->setParameter('user', $user)->execute();
+        }
+        // Audit HI-L4: a member row's values are the label at the time; the fact of the change stays.
+        if ($forgetName) {
+            foreach (['oldValue', 'newValue'] as $field) {
+                $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label')
+                    ->setParameter('types', [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved])->setParameter('label', UserLabel::of($user))->execute();
+            }
         }
         // The bulk updates bypass the identity map: loaded tasks and comments follow.
         $map = $this->entityManager->getUnitOfWork()->getIdentityMap();
