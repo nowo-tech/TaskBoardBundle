@@ -617,3 +617,8 @@ task_board.sync.error.replies_budget: "Algumas respostas a comentários não for
 task_board.sync.people.prefill.name_suggestion: "Mesmo nome que %user%: escolha-o apenas se for a mesma pessoa"
 task_board.flash.task_restore_refused: "A tarefa não foi restaurada: foi atingido o limite de tarefas ativas."
 task_board.time.former_user: "Antigo utilizador"
+task_board.sync.people.attribution_only: "%user% (apenas atribuição, sem acesso)"
+task_board.sync.people.former_all: "Marcar todas as pessoas sem correspondência como antigas"
+task_board.sync.people.former_help: "O nome mantém-se nas tarefas, nos comentários e no histórico. Ninguém obtém acesso e ainda pode alterar cada pessoa abaixo."
+task_board.sync.people.flash.former: "%count% pessoas marcadas como antigas."
+task_board.sync.completeness.status.pending_person: "Pendente: esta pessoa não tem utilizador"

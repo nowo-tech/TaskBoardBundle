@@ -88,6 +88,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every link and image goes through `RemoteContentSanitizer::isSafeUrl()`; a refused target leaves the label as text.
   A comment whose segments give no text falls back to `comment_text`.
 
+### Added
+
+- **Former people's hours (TB-SYNC-4).** `Sync\Hook\OwnerlessTimeEntrySinkInterface`: a sink implementing it also receives the
+  entries of people with no host user. `ImportedTimeEntryCandidate::user()` is null, `isOwnerless()` true, and
+  `$person` and `personName()` say whose they are. A sink that only implements `ImportedTimeEntrySinkInterface` behaves as
+  before; its skipped entries now appear in the completeness report with their hours (`time_entries_unmapped`).
+- **Bulk former people.** `sync.people_bulk_former` (default `false`) adds *Mark every unmapped person as a former person*
+  to the People page and the POST route `board_connection_people_former`, with its own CSRF id. Mapping `external`, a human
+  decision the sync never overrides, changeable person by person. Dispatches `PeopleMappingChangedEvent`.
+- **Attribution only.** `Sync\Hook\AttributionOnlyResolverInterface`, optional on the host's person resolver, flags a candidate
+  such as a suspended member. A person mapped to them shows the user's label (`SyncPersonView::$attributionOnly`) and the
+  sink gets the user, but they are never written as creator, author or member, whatever the board access check says.
+
 ## [1.27.0] - 2026-11-06
 
 ### Added

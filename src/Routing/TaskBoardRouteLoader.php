@@ -91,6 +91,7 @@ final class TaskBoardRouteLoader extends Loader
             // Since 1.27.0 (TB-SYNC-2).
             $this->addRoute($collection, 'board_connection_people', 'people', ['GET'], TaskBoardConnectionController::class);
             $this->addRoute($collection, 'board_connection_people_save', 'peopleSave', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, 'board_connection_people_former', 'peopleFormer', ['POST'], TaskBoardConnectionController::class);
         }
 
         $this->addTenantCopies($collection);

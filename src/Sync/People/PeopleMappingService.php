@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
+use function array_map;
+use function array_values;
 use function class_exists;
 use function count;
 use function filter_var;
@@ -48,6 +50,9 @@ final readonly class PeopleMappingService
     /** The select value "Invite by e-mail" (only with a host inviter). */
     public const INVITE = '__invite';
 
+    /** Since 1.28.0: the most people one bulk action reads (the directory scan's own bound). */
+    private const MAX_BULK_PEOPLE = 100_000;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private TaskSyncPersonRepository $people,
@@ -77,6 +82,12 @@ final readonly class PeopleMappingService
         }
 
         return $candidates;
+    }
+
+    /** Since 1.28.0: the host flags the user as attribution only (see {@see TaskSyncPeopleDirectoryService::isAttributionOnly()}). */
+    public function isAttributionOnly(TaskBoard $board, object $user): bool
+    {
+        return $this->directories->isAttributionOnly($board, $user);
     }
 
     /** Whether the *Invite by e-mail* option is offered to the actor on this board. */
@@ -183,6 +194,41 @@ final readonly class PeopleMappingService
         }
 
         return new PeopleMappingResult($changes, $invited, count($this->people->pendingReassigns($directory)), $errors, $moved->withCursor(null));
+    }
+
+    /**
+     * Since 1.28.0: every person of the directory nobody decided yet (unmatched or suggested, not anonymised) becomes a
+     * former person: mapping `external`, a human decision the sync never overrides and that can be changed person by
+     * person. Nothing imported moves: they were never written as a host user. Returns the number of people changed.
+     *
+     * @throws PeopleMappingDeniedException
+     */
+    public function markUnmappedAsFormer(TaskSyncDirectory $directory, TaskBoard $board, object $actor): int
+    {
+        $this->directories->assertCanManage($directory, $actor, $board);
+        $decisions = [];
+        foreach ($this->people->forDirectory($directory, PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested), self::MAX_BULK_PEOPLE) as $person) {
+            if (!$person->isAnonymised() && $person->getReassignId() === null) {
+                $decisions[$person->getId()] = [$person->getMapping()->value, new PersonMappingDecision($person->getId(), PersonMappingDecision::EXTERNAL)];
+            }
+        }
+        if ($decisions === []) {
+            return 0;
+        }
+        $changed = $this->directories->applyMapping($directory, array_map(static fn (array $row): PersonMappingDecision => $row[1], array_values($decisions)), $actor, $board);
+        $changes = array_map(static fn (TaskSyncPerson $person): array => [
+            'personId'        => $person->getId(),
+            'previousMapping' => $decisions[$person->getId()][0],
+            'mapping'         => $person->getMapping()->value,
+            'previousUserId'  => null,
+            'userId'          => null,
+        ], $changed);
+        $this->eventDispatcher?->dispatch(
+            new PeopleMappingChangedEvent($board->getId(), $directory->getId(), SyncUser::id($actor), $changes, 0, 0),
+            TaskBoardEvents::SYNC_PEOPLE_MAPPING_CHANGED,
+        );
+
+        return count($changed);
     }
 
     /**

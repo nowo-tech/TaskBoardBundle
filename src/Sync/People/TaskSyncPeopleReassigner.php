@@ -236,7 +236,7 @@ final readonly class TaskSyncPeopleReassigner
         for ($index = $cursor->boardIndex; $index < count($connections); ++$index) {
             $connection = $connections[$index];
             $board      = $connection->getBoard();
-            $projected  = $target !== null && $this->accessChecker->canViewBoard($target, $board) && $this->resolver->isCandidate($board, $target) ? $target : null;
+            $projected  = $target !== null && $this->accessChecker->canViewBoard($target, $board) && $this->resolver->isCandidate($board, $target) && !$this->directories->isAttributionOnly($board, $target) ? $target : null;
             if ($target !== null && $projected === null) {
                 $report = $report->plus(new ReassignReport(notProjected: 1));
                 // Re-projection only ever adds rows where the user can view the board now; it never rewrites others.

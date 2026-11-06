@@ -20,6 +20,8 @@ final readonly class SyncPersonView
         public bool $external,
         public bool $anonymised,
         public ?bool $boardAccess = null,
+        // Since 1.28.0: `name` is a host user's label shown for attribution only: no membership, no board access.
+        public bool $attributionOnly = false,
     ) {
     }
 }

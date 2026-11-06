@@ -617,3 +617,8 @@ task_board.sync.error.replies_budget: "Sommige reacties op opmerkingen zijn niet
 task_board.sync.people.prefill.name_suggestion: "Zelfde naam als %user%: kies dit alleen als het dezelfde persoon is"
 task_board.flash.task_restore_refused: "De taak is niet hersteld: de limiet voor actieve taken is bereikt."
 task_board.time.former_user: "Voormalige gebruiker"
+task_board.sync.people.attribution_only: "%user% (alleen toeschrijving, geen toegang)"
+task_board.sync.people.former_all: "Markeer alle niet-gekoppelde personen als voormalig"
+task_board.sync.people.former_help: "Hun naam blijft op taken, reacties en in de geschiedenis staan. Niemand krijgt toegang en je kunt elke persoon hieronder nog wijzigen."
+task_board.sync.people.flash.former: "%count% personen als voormalig gemarkeerd."
+task_board.sync.completeness.status.pending_person: "In behandeling: geen gebruiker voor deze persoon"

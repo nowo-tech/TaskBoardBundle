@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Symfony\Contracts\Service\ResetInterface;
@@ -42,6 +44,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         private readonly TaskBoardResourceAccessChecker $accessChecker,
         private readonly ?TranslatorInterface $translator = null,
         private readonly ?string $userClass = null,
+        // Since 1.28.0: tells who is shown for attribution only.
+        private readonly ?SyncPersonResolverInterface $resolver = null,
     ) {
     }
 
@@ -193,14 +197,20 @@ final class SyncPeopleViewProvider implements ResetInterface
         $provider = $person->getDirectory()->getProvider();
         $user     = $person->getMappedUser();
         $access   = $user === null ? null : $this->accessChecker->canViewBoard($user, $task->getBoard());
+        // Since 1.28.0: attribution to a host user the board does not give access to: their label, nothing else.
+        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($task->getBoard(), $user);
+        if ($attribution) {
+            $access = false;
+        }
 
         return new SyncPersonView(
             personId: $person->getId(),
-            name: $this->name($person),
+            name: $attribution ? UserLabel::of($user) : $this->name($person),
             provider: $provider,
             external: $access !== true,
             anonymised: $person->isAnonymised(),
             boardAccess: $access,
+            attributionOnly: $attribution,
         );
     }
 

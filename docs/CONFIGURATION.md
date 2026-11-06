@@ -655,6 +655,7 @@ New routes (configurable like the others, copied under `tenancy.tenant_paths`): 
 New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`;
 since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
 Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.
+Since 1.28.0 `board_connection_people_former` (POST, CSRF) is added; it answers 404 unless `sync.people_bulk_former` is true.
 Since 1.27.0 the partials `manage/_connection_completeness.html.twig` (variable `completeness`, on the connection page)
 and `manage/_task_sync_details.html.twig` / `_task_sync_fields.html.twig` (task panel) are included by the bundle's
 templates; a host with its own `templates.connection` includes the first one itself.

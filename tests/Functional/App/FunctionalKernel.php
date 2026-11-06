@@ -146,6 +146,9 @@ final class FunctionalKernel extends Kernel
             // Since 1.27.0: the host's people candidates and inviter (used when a test sets sync.people.resolver / inviter).
             $services->set('app.people_resolver', ScriptedPeopleResolver::class)->autowire()->public();
             $services->set('app.people_inviter', RecordingPeopleInviter::class)->autowire()->public();
+            // Since 1.28.0: a sink that keeps ownerless time, and a resolver that flags attribution-only users.
+            $services->set('app.time_sink_ownerless', RecordingOwnerlessTimeSink::class)->public();
+            $services->set('app.people_resolver_attribution', AttributionPeopleResolver::class)->autowire()->public();
             if (!$this->realHttpClient) {
                 $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
             }
