@@ -7,11 +7,12 @@ namespace Nowo\TaskBoardBundle\Sync\Entity;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-use function hash_hmac;
 use function is_array;
+use function is_string;
 use function mb_substr;
 
 /**
@@ -67,13 +68,13 @@ class TaskSyncFieldValue
     }
 
     /**
-     * Since 1.27.0 (audit GW-M3): the value is gone. A keyed hash stays, so that a re-sync of the same value does not
-     * bring it back; a different value is imported as usual.
+     * Since 1.27.0 (audit GW-M3, GWd-L2): the value is gone; only its suppression record stays
+     * ({@see SyncFieldSuppression}).
      */
-    public function erase(DateTimeImmutable $now): void
+    public function erase(string $suppressionRecord, DateTimeImmutable $now): void
     {
         // @igor-ignore - Doctrine entity fields; instance-scoped, not a shared service.
-        [$this->value, $this->text, $this->updatedAt] = [[self::ERASED => $this->erasedHash($this->text)], '', $now];
+        [$this->value, $this->text, $this->updatedAt] = [[self::ERASED => $suppressionRecord], '', $now];
     }
 
     public function isErased(): bool
@@ -81,15 +82,10 @@ class TaskSyncFieldValue
         return is_array($this->value) && isset($this->value[self::ERASED]);
     }
 
-    /** Whether `$text` is what was erased here (the provider still has it). */
-    public function isErasedFor(string $text): bool
+    /** The suppression record of an erased value. */
+    public function suppressionRecord(): ?string
     {
-        return $this->isErased() && is_array($this->value) && $this->value[self::ERASED] === $this->erasedHash(mb_substr($text, 0, self::TEXT_MAX));
-    }
-
-    private function erasedHash(string $text): string
-    {
-        return hash_hmac('sha256', $text, $this->id);
+        return is_array($this->value) && is_string($this->value[self::ERASED] ?? null) ? $this->value[self::ERASED] : null;
     }
 
     public function getId(): string

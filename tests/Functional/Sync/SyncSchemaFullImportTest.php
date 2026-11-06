@@ -22,6 +22,7 @@ use function array_map;
 use function array_values;
 use function getenv;
 use function implode;
+use function in_array;
 use function preg_match;
 use function sort;
 use function str_starts_with;
@@ -37,8 +38,9 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
     public const NEW_TABLES = ['task_board_sync_fields', 'task_board_sync_field_values'];
 
     public const NEW_COLUMNS = [
-        'task_board_sync_comments' => ['parent_remote_id', 'resolved', 'assignee_person_id', 'remote_updated_at'],
-        'task_board_sync_items'    => ['remote_meta', 'custom_id'],
+        'task_board_sync_comments'     => ['parent_remote_id', 'resolved', 'assignee_person_id', 'remote_updated_at'],
+        'task_board_sync_items'        => ['remote_meta', 'custom_id', 'pending_reads'],
+        'task_board_task_time_entries' => ['user_name'],
     ];
 
     public function testTheNewTablesColumnsIndexesAndForeignKeys(): void
@@ -64,6 +66,11 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
             }
         }
         self::assertSame('SET NULL', $this->foreignKey($schema->getTable('task_board_sync_comments'), 'assignee_person_id')->onDelete());
+        // Files stay named after an unlink, and manual time stays when its user is deleted.
+        foreach (['task_board_sync_attachments' => 'item_id', 'task_board_task_time_entries' => 'user_id'] as $table => $column) {
+            self::assertFalse($schema->getTable($table)->getColumn($column)->getNotnull(), $table);
+            self::assertSame('SET NULL', $this->foreignKey($schema->getTable($table), $column)->onDelete(), $table);
+        }
     }
 
     public function testTheMigrationIsAdditiveOnMysqlPostgresqlAndSqlite(): void
@@ -79,6 +86,10 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
                 echo "\n-- " . $name . "\n" . implode(";\n", $sql) . ";\n";
             }
             foreach ($sql as $statement) {
+                // The two relaxed foreign keys are the only changes that are not additions (see the test above).
+                if (preg_match('/task_board_sync_attachments|task_board_task_time_entries/', $statement) === 1) {
+                    continue;
+                }
                 // SQLite adds a foreign-key column by rebuilding the table (copy, drop, create, copy back): run it with
                 // foreign keys off (UPGRADING). The other platforms only add.
                 self::assertDoesNotMatchRegularExpression($name === 'sqlite' ? '/^ALTER TABLE \S+ (DROP|CHANGE|MODIFY)\b/i' : '/^(DROP TABLE|ALTER TABLE \S+ (DROP|CHANGE|MODIFY))\b/i', $statement, $name . ': ' . $statement);
@@ -86,7 +97,7 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
             }
             $created = array_values(array_filter(array_map(static fn (string $s): ?string => preg_match('/^CREATE TABLE (\S+?)\s*\(/', $s, $m) === 1 ? $m[1] : null, $sql), static fn (?string $table): bool => $table !== null && !str_starts_with($table, '__temp__') && !isset(self::NEW_COLUMNS[$table])));
             sort($created);
-            self::assertSame(['task_board_sync_field_values', 'task_board_sync_fields'], $created, $name);
+            self::assertSame(['task_board_sync_field_values', 'task_board_sync_fields'], array_values(array_filter($created, static fn (?string $table): bool => !in_array($table, ['task_board_sync_attachments', 'task_board_sync_comments', 'task_board_task_time_entries'], true))), $name);
         }
     }
 
@@ -115,6 +126,18 @@ final class SyncSchemaFullImportTest extends SyncFunctionalTestCase
             }
             foreach ($columns as $column) {
                 $table->dropColumn($column);
+            }
+        }
+
+        // 1.26: both were NOT NULL and ON DELETE CASCADE.
+        foreach (['task_board_sync_attachments' => 'item_id', 'task_board_task_time_entries' => 'user_id'] as $name => $column) {
+            $table = $old->getTable($name);
+            $table->getColumn($column)->setNotnull(true);
+            foreach ($table->getForeignKeys() as $key => $foreignKey) {
+                if ($foreignKey->getLocalColumns() === [$column]) {
+                    $table->removeForeignKey($key);
+                    $table->addForeignKeyConstraint($foreignKey->getForeignTableName(), [$column], $foreignKey->getForeignColumns(), ['onDelete' => 'CASCADE'], $key);
+                }
             }
         }
 

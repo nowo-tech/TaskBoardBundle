@@ -74,7 +74,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         $item = $this->item($task);
         $meta = $item?->getRemoteMeta() ?? [];
 
-        unset($meta[SyncTaskDetailsWriter::META_ATTACHMENTS_READ]);
+        unset($meta[SyncTaskDetailsWriter::META_DETAIL_READ], $meta[SyncTaskDetailsWriter::META_REPLIES_READ]);
         if (!$item instanceof TaskSyncItem || ($meta === [] && $item->getCustomId() === null)) {
             return [];
         }

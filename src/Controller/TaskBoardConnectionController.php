@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
@@ -549,9 +550,16 @@ final class TaskBoardConnectionController extends AbstractController
         }
         // Since 1.27.0: what the run could not read is said, whatever the provider declares for the key.
         $stats = $report->stats ?? [];
-        foreach (['attachments' => 'attachments.unread', 'comment_replies' => 'comments.replies_unread'] as $key => $stat) {
-            if (($stats[$stat] ?? 0) > 0) {
-                $rows[] = ['key' => $key, 'tasks' => $stats[$stat], 'status' => 'not_read'];
+        // Audit GWd-L3: from what each task still has unread, so the next incremental run does not hide it.
+        $pending = $this->store->pendingReads($connection);
+        foreach ([
+            [TaskSyncItem::PENDING_ATTACHMENTS, 'attachments', 'not_read'],
+            [TaskSyncItem::PENDING_REPLIES, 'comment_replies', 'not_read'],
+            [TaskSyncItem::PENDING_DETAIL, 'task_detail', 'not_read'],
+            [TaskSyncItem::PENDING_DETAIL_REFUSED, 'task_detail', 'unavailable'],
+        ] as [$bit, $key, $status]) {
+            if (isset($pending[$bit])) {
+                $rows[] = ['key' => $key, 'tasks' => $pending[$bit], 'status' => $status];
             }
         }
         if (($stats[SyncTaskDetailsWriter::STAT_STATUS_FORBIDDEN] ?? 0) > 0) {

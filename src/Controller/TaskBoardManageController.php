@@ -27,6 +27,7 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
@@ -1013,6 +1014,14 @@ final class TaskBoardManageController extends AbstractController
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_time_remove'));
         $task   = $this->findTask($taskId, $user, true);
         $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
+        // Audit GWd-M2: the author of the entry or a manager of the board.
+        foreach ($task->getTimeEntries() as $entry) {
+            if ($entry->getId() === $entryId && !$this->resourceAccessChecker->canRemoveTimeEntry($user, $entry, $task)) {
+                $this->logRefused('time_entry_not_own');
+
+                throw $this->createAccessDeniedException('Only its author or a board manager may remove a time entry.');
+            }
+        }
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
         if ($logger->remove($task, $entryId, $user)) {
@@ -1272,8 +1281,10 @@ final class TaskBoardManageController extends AbstractController
             'subtaskImportForm'   => $this->resourceAccessChecker->canImportIntoTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
             'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
             'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
-            'deviation'           => TaskDeviation::of($task),
-            'subtaskDeviation'    => $descendants === [] ? null : TaskDeviation::sum($descendants),
+            // Since 1.27.0: the entries this user may remove (their own, or all for a board manager).
+            'removableTimeEntryIds' => array_values(array_map(static fn (TaskTimeEntry $entry): string => $entry->getId(), array_filter($task->getTimeEntries()->toArray(), fn (TaskTimeEntry $entry): bool => $this->resourceAccessChecker->canRemoveTimeEntry($user, $entry, $task)))),
+            'deviation'             => TaskDeviation::of($task),
+            'subtaskDeviation'      => $descendants === [] ? null : TaskDeviation::sum($descendants),
         ] + $this->withAvatars($task, $this->commentViewData($task, $user, $routeExtra));
     }
 

@@ -379,6 +379,15 @@ final class ClickUpTaskProviderTest extends TestCase
         self::assertNull($provider->fetchStatusHistory($credential, 'missing'), 'not served (404)');
     }
 
+    /** Since 1.27.0 (audit GWd-L4): a people value in the "Fields" document has names, never e-mails. */
+    public function testTheFieldsDocumentHasNoEmailsOfPeople(): void
+    {
+        $provider = $this->provider(['list/L/task?page=0' => new MockResponse((string) json_encode(['tasks' => [['id' => 'ok', 'name' => 'Ok', 'custom_fields' => [
+            ['id' => 'f1', 'name' => 'Owners', 'type' => 'users', 'value' => [['id' => 7, 'username' => 'User 7', 'email' => 'user7@example.test'], 'junk']],
+        ]]], 'last_page' => true]))]);
+        self::assertSame('- **Owners**: User 7', $provider->fetchTasks(new ProviderCredential('pk_test_token', 'conn-1'), 'L', null, null)->tasks[0]->customFieldsText);
+    }
+
     /** Since 1.27.0 (audit GW-L6, GW-I9, GW-L7): reply requests are budgeted, a 404 has no thread, dates are bounded. */
     public function testReplyBudgetGoneThreadsAndBoundedDates(): void
     {

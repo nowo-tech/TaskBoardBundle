@@ -616,3 +616,4 @@ task_board.sync.completeness.status.unavailable: "Non disponibile: il provider h
 task_board.sync.error.replies_budget: "Alcune risposte ai commenti non sono state lette: è stato raggiunto il limite di richieste dell'esecuzione."
 task_board.sync.people.prefill.name_suggestion: "Stesso nome di %user%: sceglilo solo se è la stessa persona"
 task_board.flash.task_restore_refused: "L'attività non è stata ripristinata: è stato raggiunto il limite di attività attive."
+task_board.time.former_user: "Ex utente"

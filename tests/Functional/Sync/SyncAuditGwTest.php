@@ -171,14 +171,14 @@ final class SyncAuditGwTest extends SyncPeopleFunctionalTestCase
         self::assertSame($this->taskTitled('t1')->getId(), $found[0]['taskId']);
 
         // Erasure, everywhere; a re-sync of the same value does not bring it back, and a new value is imported.
-        self::assertSame(1, $eraser->eraseByValue($mail));
+        self::assertSame(1, $eraser->eraseByValue($mail, null));
         $this->em->clear();
         $this->refreshOwner();
         $this->login($this->owner);
         $this->client->request('GET', self::BASE . 'task/' . $this->taskTitled('t1')->getId());
         self::assertStringNotContainsString('zebulon', (string) $this->client->getResponse()->getContent());
         self::assertStringNotContainsString('zebulon', (string) $this->em->getConnection()->fetchOne("SELECT field_value FROM task_board_sync_field_values WHERE value_text = ''"));
-        self::assertCount(0, iterator_to_array($eraser->exportByValue($mail), false));
+        self::assertCount(0, iterator_to_array($eraser->exportByValue($mail, null), false));
 
         $fields = static fn (string $contact): array => [
             new RemoteCustomField('f1', 'Contact', SyncFieldType::Email, 'email', [], [], $contact, $contact),
@@ -194,7 +194,7 @@ final class SyncAuditGwTest extends SyncPeopleFunctionalTestCase
         self::assertSame(1, $eraser->eraseBoard($this->freshBoard($board), [SyncFieldType::Phone]));
         self::assertSame(2, $eraser->eraseBoard($this->freshBoard($board)));
         $this->expectException(InvalidArgumentException::class);
-        iterator_to_array($eraser->exportByValue('ab'));
+        iterator_to_array($eraser->exportByValue('ab', null));
     }
 
     public function testARejectedValueNeitherFlipsTheFieldNorBecomesALink(): void

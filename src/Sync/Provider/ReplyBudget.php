@@ -14,15 +14,21 @@ final class ReplyBudget
     /** Threads left unread because the budget ran out. */
     public int $skipped = 0;
 
-    public function __construct(private readonly int $limit)
+    public function __construct(private readonly int $limit, private readonly bool $alreadyRead = false)
     {
+    }
+
+    /** Since 1.27.0: this version of the task's threads was read: no request, nothing to report. */
+    public static function alreadyRead(): self
+    {
+        return new self(0, true);
     }
 
     /** True when one more request may be made (and counts it). */
     public function take(): bool
     {
         if ($this->used >= $this->limit) {
-            ++$this->skipped;
+            $this->skipped += $this->alreadyRead ? 0 : 1;
 
             return false;
         }

@@ -616,3 +616,4 @@ task_board.sync.completeness.status.unavailable: "Nicht verfügbar: Der Anbieter
 task_board.sync.error.replies_budget: "Einige Kommentarantworten wurden nicht gelesen: Das Anfragelimit des Laufs wurde erreicht."
 task_board.sync.people.prefill.name_suggestion: "Gleicher Name wie %user%: nur auswählen, wenn es dieselbe Person ist"
 task_board.flash.task_restore_refused: "Die Aufgabe wurde nicht wiederhergestellt: Das Limit aktiver Aufgaben ist erreicht."
+task_board.time.former_user: "Ehemaliger Benutzer"

@@ -616,3 +616,4 @@ task_board.sync.completeness.status.unavailable: "Unavailable: the provider refu
 task_board.sync.error.replies_budget: "Some comment replies were not read: the request budget of the run was reached."
 task_board.sync.people.prefill.name_suggestion: "Same name as %user%: choose it only if it is the same person"
 task_board.flash.task_restore_refused: "The task was not restored: the limit of active tasks was reached."
+task_board.time.former_user: "Former user"

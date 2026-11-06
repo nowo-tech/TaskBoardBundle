@@ -616,3 +616,4 @@ task_board.sync.completeness.status.unavailable: "Indisponible : le fournisseur 
 task_board.sync.error.replies_budget: "Certaines réponses aux commentaires n'ont pas été lues : la limite de requêtes de l'exécution a été atteinte."
 task_board.sync.people.prefill.name_suggestion: "Même nom que %user% : à choisir seulement s'il s'agit de la même personne"
 task_board.flash.task_restore_refused: "La tâche n'a pas été restaurée : la limite de tâches actives est atteinte."
+task_board.time.former_user: "Ancien utilisateur"

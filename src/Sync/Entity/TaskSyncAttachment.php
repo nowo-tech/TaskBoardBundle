@@ -13,7 +13,8 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
  * Since 1.23: a provider file stored by the host for a task (reused while the remote id, size and date are the
- * same).
+ * same). Since 1.27.0 (audit GWd-M1) the row outlives an unlink (`item` = null), so that a later deletion of the task or
+ * board still names the file to the host.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_sync_attachments')]
@@ -26,8 +27,8 @@ class TaskSyncAttachment
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: TaskSyncItem::class)]
-        #[ORM\JoinColumn(name: 'item_id', nullable: false, onDelete: 'CASCADE')]
-        private TaskSyncItem $item,
+        #[ORM\JoinColumn(name: 'item_id', nullable: true, onDelete: 'SET NULL')]
+        private ?TaskSyncItem $item,
         #[ORM\ManyToOne(targetEntity: Task::class)]
         #[ORM\JoinColumn(name: 'task_id', nullable: false, onDelete: 'CASCADE')]
         private Task $task,
@@ -62,7 +63,8 @@ class TaskSyncAttachment
         return $this->id;
     }
 
-    public function getItem(): TaskSyncItem
+    /** Null once the board was unlinked. */
+    public function getItem(): ?TaskSyncItem
     {
         return $this->item;
     }

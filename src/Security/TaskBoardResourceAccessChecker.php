@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Security;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
@@ -138,6 +139,16 @@ final readonly class TaskBoardResourceAccessChecker
     /**
      * Viewing is required; a listener may additionally mark the task read-only.
      */
+    /**
+     * Since 1.27.0 (audit GWd-M2): who may delete a manual time entry of a task they can edit — its author or a manager
+     * of the board. An entry whose author no longer exists: a manager only. Without board scoping every editor is a
+     * manager, as for the other board-level actions.
+     */
+    public function canRemoveTimeEntry(object $user, TaskTimeEntry $entry, Task $task): bool
+    {
+        return $this->canEditTask($user, $task) && ($this->sameUser($user, $entry->getUser()) || $this->canManageBoard($user, $task->getBoard()));
+    }
+
     public function canEditTask(object $user, Task $task): bool
     {
         $event = $this->resolveTaskAccess($user, $task);

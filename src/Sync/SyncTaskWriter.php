@@ -660,16 +660,14 @@ final readonly class SyncTaskWriter
         try {
             $detail = $this->detail($ctx, $item, $remote);
             $this->taskFiles($ctx, $task, $item, $remote, $detail);
-            if ($ctx->options->importComments && $capabilities->comments) {
-                $this->syncComments($ctx, $task, $item, $assignees, $session);
-            }
+            $repliesRead = $ctx->options->importComments && $capabilities->comments && $this->syncComments($ctx, $task, $item, $remote, $assignees, $session);
             if ($session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter && $this->watchers($ctx) && $detail->watchersKnown) {
                 $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Watcher, $detail->watchers, TaskSyncPerson::KIND_WATCHER, $ctx->actor);
             }
             if ($this->checklists($ctx) && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
                 $this->checklistWriter->sync($ctx, $session, $item, $task, $detail);
             }
-            $this->detailsWriter?->write($ctx, $item, $task, $remote, $session, $detail->attachmentsKnown && !$remote->attachmentsKnown);
+            $this->detailsWriter?->write($ctx, $item, $task, $remote, $session, $detail !== $remote, $repliesRead);
         } catch (ProviderException $exception) {
             $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
             $ctx->warn('task_deferred');
@@ -694,21 +692,24 @@ final readonly class SyncTaskWriter
             return;
         }
         if ($remote->attachmentsKnown) {
+            $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
             $this->syncAttachments($ctx, $task, $item, $remote->attachments);
-        } elseif ($detail->attachmentsKnown) {
+        } elseif ($detail !== $remote && $detail->attachmentsKnown) {
             if ($detail->attachments !== []) {
                 $ctx->count('keys.attachments');
             }
+            $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, false);
             $this->syncAttachments($ctx, $task, $item, $detail->attachments);
-        } elseif (!$this->attachmentsRead($item, $remote)) {
+        } elseif (!$this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ) || $item->hasPendingRead(TaskSyncItem::PENDING_ATTACHMENTS)) {
+            $item->setPendingRead(TaskSyncItem::PENDING_ATTACHMENTS, true);
             $ctx->count('attachments.unread');
         }
     }
 
-    /** Since 1.27.0: the detail of this version of the task was already read (repeated full syncs make progress). */
-    private function attachmentsRead(TaskSyncItem $item, RemoteTask $remote): bool
+    /** Since 1.27.0: this version of the task was already read (repeated full syncs make progress). */
+    private function read(TaskSyncItem $item, RemoteTask $remote, string $marker): bool
     {
-        return ($item->getRemoteMeta()[SyncTaskDetailsWriter::META_ATTACHMENTS_READ] ?? null) === $remote->remoteUpdatedAt->getTimestamp();
+        return ($item->getRemoteMeta()[$marker] ?? null) === $remote->remoteUpdatedAt->getTimestamp();
     }
 
     /**
@@ -836,11 +837,16 @@ final readonly class SyncTaskWriter
         return $stored;
     }
 
-    private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, ImportAssigneeResolver $assignees, ?PeopleSession $session = null): void
+    /**
+     * @return bool whether a threaded provider read every thread of this version of the task
+     */
+    private function syncComments(SyncRunContext $ctx, Task $task, TaskSyncItem $item, RemoteTask $remoteTask, ImportAssigneeResolver $assignees, ?PeopleSession $session = null): bool
     {
         $existing = $this->store->commentsOf($item);
         $provider = $ctx->provider;
-        $replies  = new ReplyBudget(max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls')));
+        // Audit GWd-L3: threads already read for this version spend nothing, so the budget reaches the next tasks.
+        $done     = $this->read($item, $remoteTask, SyncTaskDetailsWriter::META_REPLIES_READ);
+        $replies  = $done ? ReplyBudget::alreadyRead() : new ReplyBudget(max(0, $this->maxReplyCalls - $ctx->stat('comments.reply_calls')));
         $comments = $provider instanceof ThreadedCommentProviderInterface
             ? $provider->fetchCommentsWithin($ctx->credential, $item->getExternalId(), $replies)
             : $provider->fetchComments($ctx->credential, $item->getExternalId());
@@ -887,6 +893,9 @@ final readonly class SyncTaskWriter
             $ctx->count('comments.replies_unread', $replies->skipped);
             $ctx->warn('replies_budget');
         }
+        $item->setPendingRead(TaskSyncItem::PENDING_REPLIES, $replies->skipped > 0);
+
+        return !$done && $replies->skipped === 0 && $provider instanceof ThreadedCommentProviderInterface;
     }
 
     /**
@@ -1124,13 +1133,32 @@ final readonly class SyncTaskWriter
     {
         $provider = $ctx->provider;
         $missing  = ($this->watchers($ctx) && !$remote->watchersKnown) || ($this->checklists($ctx) && !$remote->checklistsKnown)
-            || ($ctx->options->importAttachments && $provider->capabilities()->attachments && !$remote->attachmentsKnown && !$this->attachmentsRead($item, $remote));
-        if (!$missing || !$provider instanceof TaskDetailProviderInterface || ($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {
+            || ($ctx->options->importAttachments && $provider->capabilities()->attachments && !$remote->attachmentsKnown);
+        // A version already read spends no request, whatever the row lacks: the budget reaches the next tasks (audit GW).
+        if (!$missing || !$provider instanceof TaskDetailProviderInterface || $this->read($item, $remote, SyncTaskDetailsWriter::META_DETAIL_READ)) {
+            return $remote;
+        }
+        if (($ctx->stats['detail.calls'] ?? 0) >= $this->maxDetailCalls) {
+            $item->setPendingRead(TaskSyncItem::PENDING_DETAIL, true);
+
             return $remote;
         }
         $ctx->count('detail.calls');
+        try {
+            $detail = $provider->fetchTaskDetail($ctx->credential, $item->getExternalId());
+        } catch (ProviderException $exception) {
+            if ($exception->errorCode->isPassing()) {
+                throw $exception;
+            }
+            // Audit GWd-L1: one task the provider will always refuse does not stop the board; it is reported.
+            $ctx->count('detail.failed');
+            $item->setPendingRead(TaskSyncItem::PENDING_DETAIL_REFUSED, true);
 
-        return $provider->fetchTaskDetail($ctx->credential, $item->getExternalId()) ?? $remote;
+            return $remote;
+        }
+        $item->setPendingRead(TaskSyncItem::PENDING_DETAIL | TaskSyncItem::PENDING_DETAIL_REFUSED, false);
+
+        return $detail ?? $remote;
     }
 
     /** Since 1.25: watchers are imported — `sync.watchers.enabled` and the run's {@see SyncOptions::$watchers}. */

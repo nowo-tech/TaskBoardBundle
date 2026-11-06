@@ -132,8 +132,9 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 ## Personal data in synced tasks (RGPD / LOPDGDD)
 
-An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice. **The grade was Pass (conditional) /
-Medium at `993d4b0`; the fixes described here are in 1.27.0, re-verification pending.**
+An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
+
+**AI security audit (REQ-SEC-004): Pass (conditional) / Medium, 2026-11-06, re-verified at `7e22057` (Appendix GW). No open Critical or High.** The fixes made after that head (marked GWd below) are re-verification pending.
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
@@ -143,11 +144,11 @@ What the bundle does and does not do:
 
 | Duty | State |
 | --- | --- |
-| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, so clear it at the source too. A keyed hash of the value stays in the row to recognise it. Comment and task files are named in `TaskErasedEvent::$attachmentRefs` on deletion, and the host deletes them. |
+| Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). In `text` and `both` modes the eraser does not reach the *Fields* document. Comment and task files are named in `TaskErasedEvent::$attachmentRefs` on deletion, also after an unlink (GWd-M1), and the host deletes them. |
 | Blocking, Art. 32 LOPDGDD | The bundle has no blocking state. Erasure in Spain implies blocking for the limitation periods: the host keeps this outside and defines its policy. |
-| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportFor()` / `exportDirectory()` for people. **Not in any export:** estimates per task, comment assignments, comment bodies and task text; the host adds them if it must. |
+| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. **Not in any export:** comment bodies and task text; the host adds them if it must. |
 | Minimisation and by default, Art. 5(1)(c) and 25 RGPD | See the default above. |
-| Storage limitation, Art. 5(1)(e) RGPD | After an unlink, tasks and their field values stay, and stored files stay unless the task is deleted. Run `eraseBoard()` when the host's retention rule asks for it. |
+| Storage limitation, Art. 5(1)(e) RGPD | After an unlink, tasks, their field values and the rows that track stored files stay; a later deletion of the task or board names the files (GWd-M1). Run `eraseBoard()` when the host's retention rule asks for it. |
 | Information, Art. 14 RGPD; Art. 11 LOPDGDD | Data arrives indirectly from the provider. The people concerned, who may be customers and not staff, must be informed within a month or an exception documented. Host side. |
 | Roles and records, Art. 28 and 30 RGPD | The host is usually a processor for its tenants, and the import is a processing activity to record. Host side. |
 | Workplace, Art. 87 LOPDGDD and Art. 20 bis ET | Estimates and imported time per person can serve to monitor workers. Hosts must say so and limit their use. For counsel. |
@@ -155,13 +156,26 @@ What the bundle does and does not do:
 What `anonymise()` is: **pseudonymisation**. Name and e-mail go from the person row, so every view that reads references
 shows *Former user*. `provider_user_id`, the remote role, dates and `person:` links stay, so someone with access to the
 provider can re-identify the person. It does **not** reach field values other than `people`, comment bodies and
-`@mentions`, task titles and descriptions, the *Fields* document of `text` and `both` modes, or files.
+`@mentions`, task titles and descriptions, the *Fields* document of `text` and `both` modes, or files. The name on a manual time
+entry is cleared with `detachUser(..., anonymise: true)`, see below.
 
 Pruning a directory deletes a person referenced only from JSON (an estimate or a people field); views then show `—`.
 
-Known residuals, outside this change: any editor of a task may remove another user's manual time entry (since 1.15), and
-`TaskTimeEntry.user` is `ON DELETE CASCADE`, so deleting a **user** deletes their manual time. The rule on tracked time
-covers deleting tasks and boards. CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).
+**Tracked time (owner rule).** Deleting a task, a board **or a user** keeps all manual time. An entry whose user is gone keeps
+the name it was logged with (`user_name`) until it is forgotten: `detachUser(..., anonymise: true)`,
+`TaskTimeEntrySnapshotPurger::detachUser($user, true)` or `forgetUserName($name)`. An entry is removed only by its author or a
+manager of the board, or by a manager alone when the author is gone; the removal is recorded in the task's history (GWd-M2).
+
+Accepted residuals (audit GW, all pre-existing unless noted):
+
+- Low (since 1.27.0). `time_in_status` as *Unavailable* is shown for the latest run only; unread files, threads and details are
+  kept per task.
+- Low (since 1.27.0). In `text` and `both` modes the *Fields* document keeps values that `anonymise()` and the eraser do not
+  reach; `users` values there hold names, no e-mails.
+- Low. Deleting a user still deletes their entries in the task history (`TaskChangeHistory.user` is `ON DELETE CASCADE`). The
+  time itself stays. The rule on tracked time does not cover history rows.
+- `TimeTrackBundle` entries (`TimeEntry.user`) are that bundle's own; this rule and this audit do not reach them.
+- CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).
 
 ## Dependencies
 

@@ -126,7 +126,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Audit GW (2026-11-06, Pass conditional / Medium at `993d4b0`). **Re-verification pending.**
+Audit GW (2026-11-06): Pass (conditional) / Medium, re-verified at `7e22057`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd). The delta fixes below, after that head, are **re-verification pending**.
+
+- **Deleting a user keeps their manual time (owner rule, GWd-M2).** `task_board_task_time_entries.user_id` is nullable,
+  `ON DELETE SET NULL`, with a name snapshot (`user_name`). `TaskTimeEntry::getUser()` may return null. `detachUser()` of
+  the people reassigner and the new `TaskTimeEntrySnapshotPurger::detachUser()` forget the name on request.
+- **Removing a manual time entry (GWd-M2).** Only its author or a manager of the board; when the author no longer exists, a
+  manager only. **Behaviour change**, see UPGRADING.
+- **Files after an unlink (GWd-M1, also in 1.26.3).** The rows that track stored files stay through an unlink, so a later
+  deletion of the task or board names the files to the host.
+- **A lasting error on a task's detail (GWd-L1)** no longer stops the board: later tasks continue, the watermark moves,
+  and the report shows `task_detail` as *Unavailable*.
+- **Suppression record (GWd-L2).** Keyed with a subkey of `kernel.secret`, over the stored value
+  (`Sync\Field\SyncFieldSuppression`). `people` and `checkbox` values no longer stay erased after a remote change.
+- **Unread state (GWd-L3).** `task_board_sync_items.pending_reads` keeps what each task has unread, so the report no longer
+  depends on the latest run. Read markers per version let repeated full syncs reach the next tasks, for threads and for
+  details, whatever the rows lack.
+- **"Fields" document (GWd-L4).** A `users` value holds names only, no e-mails.
+- **`TaskSyncPersonRepository::exportPerson()` (I6):** one person's estimates, comment assignments and people fields.
+- **`SyncFieldValueEraser::eraseByValue()` / `exportByValue()`** take the board explicitly: `null` crosses every tenant.
+- **Release note (GW-L2):** boards synced by 1.26 and earlier that had a failed run may be missing comments, files and
+  fields. One full sync repairs them.
 
 - **List memory (GW-M1).** The list reads custom fields only for the rows drawn and never reads `remote_meta`: the custom
   id has its own column, `task_board_sync_items.custom_id`. Twig `task_board_sync_search_texts(tasks)`.

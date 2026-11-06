@@ -768,7 +768,8 @@ status. Linked tasks appear as *related* relations, and archived tasks are impor
 connection page lists every field of the provider's answers: imported, skipped (with the reason) or *Not imported yet*.
 What a run could not read is listed as *Not read* or *Unavailable*. Hosts choose which custom field types are imported
 (`sync.custom_fields.exclude_types`) and own erasure and access requests: [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
-**Tracked time is never deleted by a sync, or when a task or a board is deleted**: the entries stay, detached. Removing
+**Tracked time is never deleted by a sync, or when a task, a board or a user is deleted**: the entries stay, detached. A manual
+entry is removed only by its author or a board manager. Removing
 imported time is an explicit manager action in TimeTrack.
 
 **Archived tasks** (every host): `Task::archive()` / `restore()` / `isArchived()`. An archived task is hidden from the

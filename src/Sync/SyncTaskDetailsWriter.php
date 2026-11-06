@@ -18,7 +18,6 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Sync\Provider\StatusHistoryProviderInterface;
 
 use function array_map;
-use function in_array;
 use function is_array;
 
 use const DATE_ATOM;
@@ -40,16 +39,16 @@ final readonly class SyncTaskDetailsWriter
 
     public const STAT_STATUS_SKIPPED = 'statusHistory.skipped';
 
-    /** The remote date of the task when its detail (files) was last read. */
-    public const META_ATTACHMENTS_READ = 'attachmentsRead';
+    /** The remote date of the task when its detail was last read: a later run spends no request on this version. */
+    public const META_DETAIL_READ = 'detailRead';
+
+    /** The remote date of the task when all its threads were last read. */
+    public const META_REPLIES_READ = 'repliesRead';
 
     private const BASELINE_COMPLETED = 'completed';
 
     /** Remote keys are untrusted: the stats of a run stay bounded. */
     public const MAX_KEYS = 200;
-
-    /** Passing errors: the run handles them as usual and the task is retried. Any other keeps the last history. */
-    private const RETRIED = [ProviderErrorCode::AuthFailed, ProviderErrorCode::RateLimited, ProviderErrorCode::Timeout, ProviderErrorCode::Transport, ProviderErrorCode::ServerError];
 
     public function __construct(private int $maxStatusCalls = 200)
     {
@@ -71,7 +70,7 @@ final readonly class SyncTaskDetailsWriter
     /**
      * @throws ProviderException a passing error of the status history
      */
-    public function write(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, ?PeopleSession $session = null, bool $attachmentsRead = false): void
+    public function write(SyncRunContext $ctx, TaskSyncItem $item, Task $task, RemoteTask $remote, ?PeopleSession $session = null, bool $detailRead = false, bool $repliesRead = false): void
     {
         $details   = $remote->details ?? new RemoteTaskDetails();
         $meta      = $details->toArray();
@@ -86,9 +85,11 @@ final readonly class SyncTaskDetailsWriter
         if ($history !== null && $history !== []) {
             $meta['statusHistory'] = $history;
         }
-        $read = $attachmentsRead ? $remote->remoteUpdatedAt->getTimestamp() : ($item->getRemoteMeta()[self::META_ATTACHMENTS_READ] ?? null);
-        if ($read !== null) {
-            $meta[self::META_ATTACHMENTS_READ] = $read;
+        foreach ([self::META_DETAIL_READ => $detailRead, self::META_REPLIES_READ => $repliesRead] as $key => $read) {
+            $marker = $read ? $remote->remoteUpdatedAt->getTimestamp() : ($item->getRemoteMeta()[$key] ?? null);
+            if ($marker !== null) {
+                $meta[$key] = $marker;
+            }
         }
         $changedId   = $item->setCustomId($details->customId);
         $changedMeta = $item->setRemoteMeta($meta);
@@ -143,7 +144,7 @@ final readonly class SyncTaskDetailsWriter
         try {
             $statuses = $provider->fetchStatusHistory($ctx->credential, $item->getExternalId());
         } catch (ProviderException $exception) {
-            if (in_array($exception->errorCode, self::RETRIED, true)) {
+            if ($exception->errorCode->isPassing()) {
                 throw $exception;
             }
             if ($exception->errorCode === ProviderErrorCode::Forbidden) {

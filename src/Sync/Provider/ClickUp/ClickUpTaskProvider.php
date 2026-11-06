@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
@@ -878,6 +879,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
             $value = $field['value'] ?? null;
             if ($name === '' || $value === null || $value === '' || $value === [] || in_array($this->fieldParser->typeOf($this->stringOf($field['type'] ?? null))->value, $this->excludedFieldTypes, true)) {
                 continue;
+            }
+            // Audit GWd-L4: a people value without e-mails or other personal keys.
+            if (is_array($value) && $this->fieldParser->typeOf($this->stringOf($field['type'] ?? null)) === SyncFieldType::People) {
+                $value = implode(', ', array_map(static fn (RemotePersonRef $user): string => $user->name, $this->mapper->personRefs($value)));
             }
             $text    = is_bool($value) ? ($value ? 'yes' : 'no') : (is_scalar($value) ? (string) $value : (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             $lines[] = sprintf('- **%s**: %s', $name, $this->sanitizer->line($text, 500));

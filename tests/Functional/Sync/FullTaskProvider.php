@@ -35,12 +35,18 @@ final class FullTaskProvider extends InMemoryTaskProvider implements StatusHisto
 
     public int $detailCalls = 0;
 
+    /** @var array<string, ProviderException> */
+    public array $detailFailures = [];
+
     /** Threads each task's comments would read, one request each. */
     public int $threads = 0;
 
     public function fetchTaskDetail(ProviderCredential $credential, string $taskId): ?RemoteTask
     {
         ++$this->detailCalls;
+        if (isset($this->detailFailures[$taskId])) {
+            throw $this->detailFailures[$taskId];
+        }
 
         return $this->details[$taskId] ?? null;
     }

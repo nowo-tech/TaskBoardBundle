@@ -203,6 +203,30 @@ final readonly class SyncStore
         return $files;
     }
 
+    /**
+     * Since 1.27.0 (audit GWd-L3): how many tasks of the connection still have something unread, per
+     * `TaskSyncItem::PENDING_*` bit. The report reads this, so it does not depend on the latest run.
+     *
+     * @return array<int, int>
+     */
+    public function pendingReads(TaskBoardConnection $connection): array
+    {
+        /** @var list<array{pending: int|string, tasks: int|string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()->select('i.pendingReads AS pending', 'COUNT(i.id) AS tasks')->from(TaskSyncItem::class, 'i')
+            ->where('i.connection = :connection')->andWhere('i.pendingReads > 0')->setParameter('connection', $connection)
+            ->groupBy('i.pendingReads')->getQuery()->getArrayResult();
+        $counts = [];
+        foreach ([TaskSyncItem::PENDING_ATTACHMENTS, TaskSyncItem::PENDING_REPLIES, TaskSyncItem::PENDING_DETAIL, TaskSyncItem::PENDING_DETAIL_REFUSED] as $bit) {
+            foreach ($rows as $row) {
+                if (((int) $row['pending'] & $bit) !== 0) {
+                    $counts[$bit] = ($counts[$bit] ?? 0) + (int) $row['tasks'];
+                }
+            }
+        }
+
+        return $counts;
+    }
+
     public function findRun(string $id): ?TaskSyncRun
     {
         return $this->entityManager->find(TaskSyncRun::class, $id);
@@ -259,7 +283,8 @@ final readonly class SyncStore
         $items = $this->entityManager->createQueryBuilder()->select('i.id')->from(TaskSyncItem::class, 'i')->where('i.connection = :c')->setParameter('c', $connection)->getQuery()->getSingleColumnResult();
         foreach (array_chunk($items, self::CHUNK) as $chunk) {
             $this->entityManager->createQuery('DELETE FROM ' . TaskSyncComment::class . ' x WHERE x.item IN (:items)')->setParameter('items', $chunk)->execute();
-            $this->entityManager->createQuery('DELETE FROM ' . TaskSyncAttachment::class . ' x WHERE x.item IN (:items)')->setParameter('items', $chunk)->execute();
+            // Audit GWd-M1: kept, so that a later deletion of the task or board names the stored files.
+            $this->entityManager->createQuery('UPDATE ' . TaskSyncAttachment::class . ' x SET x.item = NULL WHERE x.item IN (:items)')->setParameter('items', $chunk)->execute();
         }
         $this->entityManager->createQuery('DELETE FROM ' . TaskSyncItem::class . ' x WHERE x.connection = :c')->setParameter('c', $connection)->execute();
         $this->entityManager->createQuery('DELETE FROM ' . TaskSyncRun::class . ' x WHERE x.connection = :c')->setParameter('c', $connection)->execute();
@@ -280,7 +305,7 @@ final readonly class SyncStore
         foreach ([TaskSyncComment::class, TaskSyncAttachment::class, TaskSyncMember::class] as $class) {
             foreach ($map[$class] ?? [] as $row) {
                 // getId() on the item reference never loads it (the row is gone).
-                if (($row instanceof TaskSyncComment || $row instanceof TaskSyncAttachment || $row instanceof TaskSyncMember) && isset($items[$row->getItem()->getId()])) {
+                if (($row instanceof TaskSyncComment || $row instanceof TaskSyncAttachment || $row instanceof TaskSyncMember) && isset($items[$row->getItem()?->getId() ?? ''])) {
                     $this->entityManager->detach($row);
                 }
             }

@@ -489,8 +489,8 @@ sniffing), and nothing remote is rendered unescaped.
 - **Leaving types out**: `sync.custom_fields.exclude_types` (default none). Excluded types are not read into the typed
   values or the "Fields" document; what is stored of them goes when the task is next written.
 - **Erasure and access**: see [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd). In `text` or `both` mode
-  the "Fields" document holds the values as plain text (a `users` value as raw JSON with names and e-mails), which
-  neither `anonymise()` nor the eraser reaches; prefer `typed`.
+  the "Fields" document holds the values as plain text (a `users` value as names), which neither `anonymise()` nor the
+  eraser reaches; prefer `typed`.
 - **Task panel**: a *Fields* section (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields(task)`): choices as
   badges (`data-color`), checkbox Yes/No, url as an external link (`rel="noopener noreferrer nofollow"`), email
   `mailto:`, rating as stars with an accessible label, progress as `<progress>`.
@@ -550,7 +550,9 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
   rewritten (since 1.23); attachments keep the provider's order.
 - **Task files**: ClickUp list rows have no `attachments`, so the task's detail (`GET task/{id}`) is read within
   `sync.watchers.max_detail_calls_per_run`. A task past the budget is counted as `attachments.unread` and shown as *Not
-  read*. A task already read is skipped until it changes, so repeated full syncs get through a large board.
+  read*. A version already read spends no request, whatever else the row lacks, so repeated full syncs get through a large
+  board. A lasting error on the detail (403, too large) leaves that task as it is, the run goes on, and it is listed as
+  `task_detail`, *Unavailable*; a passing one stops the run as usual.
 
 ### Completeness report
 
@@ -558,8 +560,10 @@ After each run the connection page lists, per key of the provider's task answers
 tasks and whether it is imported, skipped (with the provider's reason: not supported, not needed, internal) or **Not
 imported yet** (a key the provider does not declare; listed in the summary line). Every task the run read counts,
 written or not; an incremental run reads the tasks changed since the last one, so a full sync gives the whole picture.
-What the run could not read is listed above the rest: `attachments` and `comment_replies` as *Not read* (request budget),
-`time_in_status` as *Unavailable* (the provider refused the token).
+What is still unread is listed above the rest, from what each task keeps (`pending_reads`), so a later run does not hide
+it: `attachments`, `comment_replies` and `task_detail` as *Not read* (request budget; a full sync reaches the next tasks),
+`task_detail` as *Unavailable* (a lasting error). `time_in_status` is *Unavailable* when the provider refused the token in
+the latest run.
 The provider declares its keys with `Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the
 run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`, at most 200 keys per run:
 `completeness.keys`). Only keys and counts are stored, never values.
@@ -572,7 +576,7 @@ run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9
 Already since 1.25 (see [Tracked time](#tracked-time-since-125)): each entry (user through the People mapping, start,
 end, duration, description, billable, tags) reaches the host's `sync.time_entries.sink` one by one as an
 `ImportedTimeEntryCandidate`; since 1.27.0 `ImportedTimeEntryCandidate::user()` gives the mapped host user. The bundle
-never deletes tracked time: not on a re-sync, not when a task or a board is deleted. **Hosts that must never delete
+never deletes tracked time: not on a re-sync, not when a task, a board or a user is deleted. **Hosts that must never delete
 imported time ignore `$windowComplete`** (it only says a window was read in full).
 
 ## Events

@@ -82,9 +82,10 @@
             <li class="nowo-task-rows__item nowo-task-time-entries__item" data-time-entry-id="{{ entry.id }}">
                 <time datetime="{{ entry.loggedAt|date('Y-m-d') }}" class="nowo-task-time-entries__date">{{ entry.loggedAt|date('Y-m-d') }}</time>
                 <strong class="nowo-task-time-entries__minutes">{{ entry.minutes|nowo_task_board_duration }}</strong>
-                <span class="nowo-task-time-entries__user">{{ memberUi.member_label(entry.user)|trim }}</span>
+                {# Since 1.27.0: the account may be gone; the entry keeps the name it was logged with, until it is forgotten. #}
+                <span class="nowo-task-time-entries__user">{% if entry.user %}{{ memberUi.member_label(entry.user)|trim }}{% else %}{{ entry.userName|default('task_board.time.former_user'|trans({}, 'NowoTaskBoardBundle')) }}{% endif %}</span>
                 {% if entry.description %}<span class="nowo-task-time-entries__note">{{ entry.description }}</span>{% endif %}
-                {% if _canEdit %}
+                {% if _canEdit and entry.id in removableTimeEntryIds|default([]) %}
                     <button
                         type="submit"
                         form="nowo-task-time-remove-form"

@@ -22,6 +22,18 @@ use function is_string;
 #[ORM\Index(name: 'idx_task_board_sync_items_task', columns: ['task_id'])]
 class TaskSyncItem
 {
+    /** Since 1.27.0: the files could not be read (request budget, or the detail does not say). */
+    public const PENDING_ATTACHMENTS = 1;
+
+    /** Since 1.27.0: threads past the run's reply budget. */
+    public const PENDING_REPLIES = 2;
+
+    /** Since 1.27.0: the detail was not read (request budget). */
+    public const PENDING_DETAIL = 4;
+
+    /** Since 1.27.0: the provider refuses the detail with a lasting error. */
+    public const PENDING_DETAIL_REFUSED = 8;
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -63,6 +75,10 @@ class TaskSyncItem
      */
     #[ORM\Column(name: 'remote_meta', type: 'json', nullable: true)]
     private ?array $remoteMeta = null;
+
+    /** Since 1.27.0 (audit GWd-L3): what this task still has unread, `PENDING_*` bits; the report reads it. */
+    #[ORM\Column(name: 'pending_reads', type: 'smallint', options: ['default' => 0])]
+    private int $pendingReads = 0;
 
     /** Since 1.27.0 (TB-SYNC-3): the provider's own task reference (e.g. "DEV-123"); a column so that the list never reads `remote_meta`. */
     #[ORM\Column(name: 'custom_id', type: 'string', length: 64, nullable: true)]
@@ -223,6 +239,18 @@ class TaskSyncItem
     public function getRemoteMeta(): array
     {
         return $this->remoteMeta ?? [];
+    }
+
+    public function hasPendingRead(int $bit): bool
+    {
+        return ($this->pendingReads & $bit) !== 0;
+    }
+
+    /** Since 1.27.0: marks one `PENDING_*` bit. */
+    public function setPendingRead(int $bit, bool $pending): void
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->pendingReads = $pending ? $this->pendingReads | $bit : $this->pendingReads & ~$bit;
     }
 
     public function getCustomId(): ?string

@@ -616,3 +616,4 @@ task_board.sync.completeness.status.unavailable: "Niet beschikbaar: de provider 
 task_board.sync.error.replies_budget: "Sommige reacties op opmerkingen zijn niet gelezen: de verzoeklimiet van de uitvoering is bereikt."
 task_board.sync.people.prefill.name_suggestion: "Zelfde naam als %user%: kies dit alleen als het dezelfde persoon is"
 task_board.flash.task_restore_refused: "De taak is niet hersteld: de limiet voor actieve taken is bereikt."
+task_board.time.former_user: "Voormalige gebruiker"

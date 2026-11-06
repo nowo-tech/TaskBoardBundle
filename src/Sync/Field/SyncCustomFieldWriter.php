@@ -40,6 +40,8 @@ final readonly class SyncCustomFieldWriter
          * @var list<string>
          */
         private array $excludeTypes = [],
+        // Since 1.27.0 (audit GWd-L2): an erased value stays erased only while the provider sends the same one.
+        private ?SyncFieldSuppression $suppression = null,
     ) {
     }
 
@@ -72,7 +74,8 @@ final readonly class SyncCustomFieldWriter
                 $ctx->count('fields.values');
                 continue;
             }
-            if (!$value->isErasedFor($text) && $value->set($stored, $text, $now)) {
+            $suppressed = $value->isErased() && ($this->suppression?->record($stored, $text) ?? $value->suppressionRecord()) === $value->suppressionRecord();
+            if (!$suppressed && $value->set($stored, $text, $now)) {
                 $ctx->count('fields.values');
             }
         }

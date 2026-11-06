@@ -26,7 +26,8 @@ use const JSON_UNESCAPED_UNICODE;
 /**
  * Since 1.27.0 (audit GW-M3): erasure and access for custom field values, which are task content: `anonymise()` does
  * not reach them. For the host's data-subject requests (RGPD Art. 15, 17, 20): **the host authorises the caller**. An
- * erased value does not come back on a re-sync while the provider still has the same one; clear it there too.
+ * erased value does not come back on a re-sync while the provider still has the same one (a suppression record stays,
+ * {@see SyncFieldSuppression}); clear it there too. Not the "Fields" document of the `text` and `both` modes.
  */
 final readonly class SyncFieldValueEraser
 {
@@ -36,17 +37,21 @@ final readonly class SyncFieldValueEraser
 
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private SyncFieldSuppression $suppression,
         private ClockInterface $clock = new NativeClock(),
     ) {
     }
 
     /**
      * Erases every value holding `$value` (case-insensitive, anywhere in it; also past the 500 characters of the text
-     * column), on one board or on all of them.
+     * column).
+     *
+     * @param TaskBoard|null $board one board; **null = every board of every tenant**, which a multi-tenant host only
+     *                              passes for a request it has checked across tenants
      *
      * @return int the values erased
      */
-    public function eraseByValue(string $value, ?TaskBoard $board = null): int
+    public function eraseByValue(string $value, ?TaskBoard $board): int
     {
         return $this->eraseRows($this->matching($value, $board));
     }
@@ -66,9 +71,11 @@ final readonly class SyncFieldValueEraser
     /**
      * The values holding `$value`, for an access request.
      *
+     * @param TaskBoard|null $board one board; **null = every board of every tenant**, as in {@see self::eraseByValue()}
+     *
      * @return Generator<int, array{boardId: string, taskId: string, field: string, type: string, text: string, value: mixed}>
      */
-    public function exportByValue(string $value, ?TaskBoard $board = null): Generator
+    public function exportByValue(string $value, ?TaskBoard $board): Generator
     {
         foreach ($this->matching($value, $board) as $row) {
             yield $this->exported($row);
@@ -108,7 +115,7 @@ final readonly class SyncFieldValueEraser
         foreach ($rows as $row) {
             $value = $this->entityManager->find(TaskSyncFieldValue::class, $row['id']);
             if ($value instanceof TaskSyncFieldValue) {
-                $value->erase($this->clock->now());
+                $value->erase($this->suppression->record($value->getValue(), $value->getText()), $this->clock->now());
                 ++$erased;
             }
         }
