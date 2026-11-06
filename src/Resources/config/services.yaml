@@ -139,6 +139,7 @@ services:
             $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
             $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
             $syncBadgeConnectLink: '%nowo_task_board.sync.badge.connect_link%'
+            $logger: '@?logger'
 
     # Since 1.19: user text (comments, plain-text descriptions) → HTML; hosts alias the interface to their renderer.
     Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer: ~

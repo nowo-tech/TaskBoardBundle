@@ -147,8 +147,30 @@ No schema or configuration change. **Visual and markup change in every dialog** 
   outside (e.g. `body dialog.nowo-task-dialog--native { width; max-height; height: fit-content }`) can drop those rules
   and set the tokens once on `:root`.
 - Footer buttons read the UiKit theme slots of `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle` (`btn_secondary`,
-  `btn_primary`, `btn_danger`, `btn_danger_solid`); with UiKit 2's Bootstrap defaults the classes gain
-  `nowo-ui-btn nowo-ui-btn--…` next to the former `btn btn-…`.
+  `btn_primary`, `btn_danger`, `btn_danger_solid`) **when UiKit's theme extension is registered** (UiKit 2); with
+  UiKit 2's Bootstrap defaults the classes gain `nowo-ui-btn nowo-ui-btn--…` next to the former `btn btn-…`, and with
+  `framework_defaults: false` only the semantic and host classes remain. **A host that does not load UiKit's CSS
+  (`css/nowo-ui.css`) may see a visual change** of these buttons: load it, or map the slots back in the theme, e.g.
+
+  ```yaml
+  nowo_ui_kit:
+      theme:
+          bundles:
+              NowoTaskBoardBundle:
+                  classes:
+                      btn_secondary: 'btn btn-outline-secondary'
+  ```
+
+  Without UiKit's theme extension (UiKit 1.x) the 1.25 classes stay. A slot the theme cannot resolve also falls back
+  to them and is logged as a warning.
+- The `.nowo-task-dialog__danger` CSS is removed; an override that still renders that block loses its tinted strip.
+- **Form ids are page-unique per partial.** The new footer buttons find their form by id
+  (`nowo-task-board-add-task-form`, `nowo-task-board-add-column-form`, `nowo-task-board-edit-column-form`,
+  `nowo-task-board-column-delete-form`, `nowo-task-column-set-save-form`, `nowo-task-column-set-apply-form`,
+  `nowo-task-sync-unlink-form`, `nowo-task-sync-mass-archive-form`, `nowo-task-link-form`; the task-scoped ones end
+  with the task id). A host page that renders one of these partials **twice** (e.g. the same board dialogs in two
+  places, or the same task's panel twice) gets duplicate ids and the second copy's footer would submit the first
+  form: render each partial once per page (`_board_create_form` takes `id_prefix` for a second copy).
 - **Template overrides** of the dialog partials (`_add_task_modal`, `_add_column_modal`, `_edit_column_modal`,
   `_task_members_modal`, `_task_priority_modal`, `_task_links_modal`, `_column_sets_dialogs`,
   `_task_dependencies_section`, `_task_time_section`, `_task_subtask_import`, `_import_help`,

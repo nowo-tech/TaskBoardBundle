@@ -966,11 +966,6 @@ button.nowo-task-detail__priority-tag:hover {
     margin-top: 1rem;
 }
 
-.nowo-task-dialog__danger {
-    display: block;
-    border-top: 1px solid var(--tblr-border-color, #e6e7e9);
-}
-
 .nowo-task-detail__estimate {
     min-width: 140px;
 }

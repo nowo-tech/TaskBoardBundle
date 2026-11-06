@@ -101,6 +101,12 @@ one primary, the kits' two widths and a content height.
 - **Footer buttons from the theme.** Cancel / Close, the primary and the danger actions read the UiKit theme slots
   `btn_secondary`, `btn_primary`, `btn_danger`, `btn_danger_solid` of the theme bundle `NowoTaskBoardBundle` (new Twig
   function `nowo_task_board_btn_class(slot)`); without UiKit's theme extension the 1.25 Bootstrap classes stay.
+  With UiKit 2's theme extension the buttons carry UiKit's classes (`nowo-ui-btn nowo-ui-btn--secondary` … next to
+  the Bootstrap defaults, or only the host's theme classes with `framework_defaults: false`): a host that does not
+  load UiKit's CSS (`nowo-ui.css`) may see the footer buttons change. A slot the theme cannot resolve falls back to
+  the 1.25 classes and logs a warning (`logger`, when available).
+- **CSS:** the `.nowo-task-dialog__danger` rules are removed (no template renders the class since Edit column's
+  Delete moved to the footer); `.nowo-task-dialog__danger-help` stays.
 
 ### Added
 

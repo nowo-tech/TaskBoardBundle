@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
+use Psr\Log\LoggerInterface;
 use Throwable;
 use Twig\Environment;
 use Twig\Extension\AbstractExtension;
@@ -84,6 +85,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly string $connectionBadgeTemplate = '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         // Since 1.25.2: sync.badge.connect_link (false = the badge of an unlinked board renders nothing).
         private readonly bool $syncBadgeConnectLink = true,
+        // Since 1.26: warns when the UiKit theme cannot resolve a dialog button slot (null: silent fallback).
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -173,7 +176,17 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
 
         try {
             $class = $env->getExtension(ThemeExtension::class)->slotClass($context, $slot, self::THEME_BUNDLE);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // A host theme misconfiguration (or an older UiKit without the slot) must not break the dialog: the 1.25
+            // classes are used, and the logger says why.
+            $this->logger?->warning('TaskBoard dialog button: UiKit theme slot "{slot}" of {bundle} could not be resolved, using "{fallback}": {error}', [
+                'slot'      => $slot,
+                'bundle'    => self::THEME_BUNDLE,
+                'fallback'  => $fallback,
+                'error'     => $e->getMessage(),
+                'exception' => $e,
+            ]);
+
             return $fallback;
         }
 

@@ -12,8 +12,10 @@ use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\UiKitBundle\Theme\Theme;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use ReflectionProperty;
 use stdClass;
+use Throwable;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 use Twig\TwigFilter;
@@ -143,8 +145,24 @@ final class TaskBoardTwigExtensionTest extends TestCase
         self::assertStringContainsString('beacon-cancel', $extension->buttonClass($twig, [], 'btn_secondary'));
         self::assertStringContainsString('nowo-ui-btn--secondary', $extension->buttonClass($twig, [], 'btn_secondary'));
         self::assertStringContainsString('btn-primary', $extension->buttonClass($twig, [], 'btn_primary'));
-        // An unknown slot (an older UiKit) falls back to the 1.25 classes.
+        // An unknown slot (an older UiKit) falls back to the 1.25 classes, silently without a logger.
         self::assertSame('btn', $extension->buttonClass($twig, [], 'no_such_slot'));
+    }
+
+    /** Since 1.26 (audit GI-I1): a slot the UiKit theme cannot resolve is logged as a warning, then falls back. */
+    public function testButtonClassLogsAThemeFailure(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            self::stringContains('could not be resolved'),
+            self::callback(static fn (array $context): bool => $context['slot'] === 'no_such_slot' && $context['bundle'] === 'NowoTaskBoardBundle' && $context['fallback'] === 'btn' && $context['exception'] instanceof Throwable),
+        );
+        $extension = new TaskBoardTwigExtension('layout.html.twig', 'bootstrap', logger: $logger);
+        $twig      = new Environment(new ArrayLoader());
+        $twig->addExtension(new ThemeExtension(new Theme()));
+
+        self::assertSame('btn', $extension->buttonClass($twig, [], 'no_such_slot'));
+        self::assertStringContainsString('btn-primary', $extension->buttonClass($twig, [], 'btn_primary'));
     }
 
     public function testButtonClassFallsBackWithoutTheUiKitTheme(): void
