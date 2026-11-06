@@ -139,7 +139,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 No action. Comments written or edited after the upgrade keep their lists, code blocks and mentions; a full sync rewrites
 those already imported. Comment bodies are compared by hash, so the first full sync counts every comment with such formatting as
 updated. A comment whose text, link targets and numbers did not change does not show the *edited* mark. One that changed does, including a comment now shown with
-an ordered list or a link it did not have. Comments edited here are not rewritten; they appear as conflicts in that run's report.
+an ordered list or a link it did not have. Emphasis characters are ignored even inside a link target or a number, so an edit to those alone shows no mark. Comments edited here are not rewritten; they appear as conflicts in that run's report.
 
 ### Former people (TB-SYNC-4)
 

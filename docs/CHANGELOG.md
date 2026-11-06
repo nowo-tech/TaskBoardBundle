@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **History values (audit HI-L4).** `anonymise: true` also clears `member_added` and `member_removed` values equal to the user's current label.
 - **Edited mark (audits HI-L5, HId-L1).** A comment whose text, link targets and numbers did not change is rewritten without the mark.
 - Tag colours use `data-nowo-task-vars` instead of a `style` attribute (audit HI-I3).
-- Audit HI (2026-11-06): Pass (good) / Low at `<final>`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
+- Audit HI (2026-11-06): Pass (good) / Low at `532dbaa`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
 - **ClickUp comments keep their style (TB-SYNC-4).** `Sync\Provider\ClickUp\ClickUpCommentRenderer` replaces the private
   `segmentsToMarkdown()`: lists (bullet, ordered, checked, unchecked, toggled) nested by `indent`, fenced code blocks,
   `strike`, `link_mention`, `task_mention`, `emoticon`, and other typed segments with a target. ClickUp documents a Quill
