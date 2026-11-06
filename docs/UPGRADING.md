@@ -204,6 +204,19 @@ are read (ClickUp: a second pass with `archived=true`) and imported archived; be
 not created. `false` keeps the 1.26 rule. Each run also asks ClickUp for the *time in status* of the tasks it creates
 or changes (`sync.status_history.max_calls_per_run`, default 200; `0` = never).
 
+After the upgrade, **run one full sync per linked board** (`php bin/console nowo:task-board:sync <boardId> --full`, or the full refresh of
+the connection page):
+runs read only tasks changed since the last one, so without it the existing tasks get their fields, details and archived
+siblings when they next change. The time in status budget applies: repeat the full sync, or raise the budget, on boards
+with more tasks than the budget.
+
+BC notes: `Task::markCompleted()` gains an optional `?DateTimeImmutable $at`, so a host subclass that overrides it must
+add the parameter. `RemoteTaskPage` gains the optional `$passEnded`; a custom provider with several passes sets it on
+the last page of a pass, because an empty page otherwise stops the run (`paging_stopped`). Hosts with their own
+`templates.connection` include `@NowoTaskBoardBundle/manage/_connection_completeness.html.twig` (variable `completeness`)
+to show the report. The rule on tracked time does not change: deleting tasks or boards keeps all of it, manual and
+imported, detached.
+
 No schema change. People page (TB-SYNC-2): a linked board's connection page links a People page where managers map
 remote people to host users. Hosts with their own `templates.connection` can include
 `templates.connection_people_summary` (variable `peopleSummary`) or link `board_connection_people`. To put the page

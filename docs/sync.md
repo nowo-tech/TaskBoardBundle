@@ -519,16 +519,22 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
 - **Dates with time**: `start_date_time` / `due_date_time` say whether start and due carry a time of day (the dates
   themselves are the task's start and due, as before; ClickUp dates are UTC instants).
 - **Location**: the folder (unless hidden) and list names.
-- **Estimate per assignee** (`time_estimates_by_user`, TO CONFIRM against a live workspace).
+- **Estimate per assignee** (`time_estimates_by_user`, TO CONFIRM against a live workspace). Stored as a reference to
+  the person (`Sync\People\PersonToken`), not a name: `anonymise()` covers it; without a directory it shows `#<id>`.
 - **Recurrence**: a read-only text when the answer has one (`recurrence`; the v2 task answer usually has none, see the
   completeness report).
 - **Time in status** (`GET task/{id}/time_in_status`, `Sync\Provider\StatusHistoryProviderInterface`): for the tasks
   a run creates or changes, at most `sync.status_history.max_calls_per_run` per run; a table of status, since and
-  minutes. When ClickUp no longer serves it (404 / 410) the last one stays.
+  minutes. When ClickUp does not serve it (404 / 410, or another lasting error such as the 400 of a disabled ClickApp,
+  counted as `statusHistory.failed`) the last one stays and the run goes on. A passing error (rate limit, timeout, 5xx,
+  refused token) stops the run as usual and the task is read again by the next one. A task past the budget gets its
+  history when it next changes, or on a full sync.
 - **Linked tasks** (`linked_tasks`, non-blocking) become `related` relations to the other task (in the Gantt), like
   dependencies; the file import maps them the same way.
 - **Archived tasks** (`sync.import_archived`, default `true`): after the active pages, the archived ones are read
-  (ClickUp `archived=true`, cursor `a<n>`) and imported archived (reason `remote`).
+  (ClickUp `archived=true`, cursor `a<n>`, at least one more request per run) and imported archived (reason `remote`).
+  They do not count against the host's limit of new tasks (`SyncLimitCheckerInterface`), as a restore does. The id scan
+  of deletions still reads active tasks only.
 - Watchers are mapped to host users through the People mapping (since 1.25); description images are stored and
   rewritten (since 1.23); attachments keep the provider's order.
 
@@ -536,9 +542,14 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
 
 After each run the connection page lists, per key of the provider's task answers that carried a value, on how many
 tasks and whether it is imported, skipped (with the provider's reason: not supported, not needed, internal) or **Not
-imported yet** (a key the provider does not declare; listed in the summary line). The provider declares its keys with
-`Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the run's `keys.<key>` stats
-(`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`).
+imported yet** (a key the provider does not declare; listed in the summary line). Every task the run read counts,
+written or not; an incremental run reads the tasks changed since the last one, so a full sync gives the whole picture.
+The provider declares its keys with `Sync\Provider\FieldCoverageProviderInterface::fieldCoverage()`; the counts are the
+run's `keys.<key>` stats (`RemoteTask::$presentKeys`, keys validated as `[a-z0-9_]{1,40}`, at most 200 keys per run:
+`completeness.keys`). Only keys and counts are stored, never values.
+
+**After upgrading**, run one full sync per linked board so that existing tasks get all of this
+([UPGRADING](UPGRADING.md#unreleased)).
 
 ### Time entries one by one
 

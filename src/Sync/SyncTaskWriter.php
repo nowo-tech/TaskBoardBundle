@@ -163,6 +163,8 @@ final readonly class SyncTaskWriter
             $ctx->seen[$id] = true;
             $rows[$id]      = $remote;
             ++$ctx->tasksSeen;
+            // Since 1.27.0: the completeness report covers every task read, written or not.
+            $this->detailsWriter?->countKeys($ctx, $remote);
             if (!$ctx->highWatermark instanceof DateTimeImmutable || $remote->remoteUpdatedAt > $ctx->highWatermark) {
                 $ctx->highWatermark = $remote->remoteUpdatedAt;
             }
@@ -206,7 +208,8 @@ final readonly class SyncTaskWriter
                     ++$ctx->unchanged;
                 } else {
                     $plan[] = ['create', $id, $remote, null, $item];
-                    ++$newTasks;
+                    // An archived task is not an active one for the host's limit (like the restore below, in reverse).
+                    $newTasks += $remote->archived ? 0 : 1;
                 }
                 continue;
             }
@@ -647,6 +650,7 @@ final readonly class SyncTaskWriter
             if ($this->checklists($ctx) && $detail->checklistsKnown && $this->checklistWriter instanceof SyncChecklistWriter) {
                 $this->checklistWriter->sync($ctx, $session, $item, $task, $detail);
             }
+            $this->detailsWriter?->write($ctx, $item, $task, $remote, $session);
         } catch (ProviderException $exception) {
             $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
             $ctx->warn('task_deferred');
@@ -657,9 +661,8 @@ final readonly class SyncTaskWriter
             $this->fieldsDocument($ctx, $task, $remote->customFieldsText);
         }
         if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
-            $this->fieldWriter->write($ctx, $task, $remote->customFields);
+            $this->fieldWriter->write($ctx, $task, $remote->customFields, $session);
         }
-        $this->detailsWriter?->write($ctx, $item, $task, $remote);
     }
 
     /**

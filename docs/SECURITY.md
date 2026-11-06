@@ -50,6 +50,11 @@
 | **Token scope for time (since 1.25)** | Importing time needs an admin token, which is more powerful. | Every provider call is a `GET` to the constant base URI (`ProviderHttpClient` has no other verb); `assignee` ids come only from the directory; the run stores only `time_mode`. ClickUp tokens have no read-only scope: read-only is a bundle guarantee. |
 | **Resource abuse (since 1.25)** | Huge workspaces, endless window splits, mass reassign. | `max_windows_per_run`, window halving down to one hour, assignee chunks, the E5 cap, scans ≤ 15 calls, list search ≤ 40 calls, reassign batches with a cursor. |
 | **Remote names and descriptions (since 1.25)** | Controls, bidi or markup in names. | Names are one sanitised line (≤ 120); ids are pattern-checked; time-entry descriptions are plain text (controls and bidi stripped) and passed to the host only, never stored or logged by the bundle. |
+| **New provider calls (since 1.27.0)** | More outbound calls with the host's token; a remote answer that makes a run ask without end. | All `GET` through `ProviderHttpClient` to the constant base URI, with pattern-checked ids: `task/{id}/time_in_status` (`sync.status_history.max_calls_per_run`, only for tasks a run wrote; budget kept across slices), `comment/{id}/reply` (`max_comments_per_task`), the archived pass of `list/{id}/task` and `team/{id}/task` (same page caps and paging guard). The token never enters `remote_meta`, the stats or a cursor; cursors are `<n>` / `a<n>`. |
+| **Personal data in read-only data (since 1.27.0)** | Names copied into JSON escape `anonymise()`. | Estimates per assignee and `people` custom fields store `person:<id>` (or `ref:<provider user id>` without a directory); names are read from `task_board_sync_people` when shown. Test: the raw columns hold no name, and a forgotten person disappears from the panel. |
+| **Remote custom fields (since 1.27.0)** | Script, `javascript:` links, huge values or forged types. | `ClickUpCustomFieldParser`: types checked, text sanitised and cut, only http(s) URLs, valid e-mails, finite numbers, hex colours; choices capped; what does not fit is kept as text. Rendered escaped. `e-mail`, `phone` and text fields are task content, shown to whoever can see the task, and `anonymise()` does not touch them. |
+| **Remote keys in stats (since 1.27.0)** | An answer with thousands of keys grows the stored report, or injects markup into it. | Keys must match `[a-z0-9_]{1,40}`; at most 200 keys per run (`SyncTaskDetailsWriter::MAX_KEYS`); rendered escaped; values are never stored, only counts. |
+| **People page (since 1.27.0)** | A viewer reads remote e-mails, or re-maps someone. | `canManageBoardConnection` on every board of the directory (404 otherwise), CSRF on save, candidates only from the host's resolver, `SYNC_PEOPLE_MAPPING_CHANGED` with ids only; a mapping grants no access (projection rule). |
 | **Malicious import files** | Oversized or crafted CSV/JSON uploads. | Authenticated route only; Symfony file upload limits; parsers validate structure; import runs in orchestrator with explicit source selection. |
 
 ## Access control model
@@ -117,7 +122,9 @@ context holds only the action, the ids of the board objects (UUIDs) and counts. 
 e-mails, task titles or descriptions, comment bodies, link URLs, uploaded file names or contents, nor tokens.
 Since 1.25 the never-logged list also covers the sync's people: person names and e-mails, provider user ids together
 with names, and time-entry descriptions (logs and events carry directory, person and board ids and counts only). Names
-and e-mails of remote people live only in `task_board_sync_people` (cleared by `anonymise()`); no avatar URL is stored. There is
+and e-mails of remote people live only in `task_board_sync_people` (cleared by `anonymise()`); no avatar URL is stored.
+Since 1.27.0 `task_board_sync_items.remote_meta` and `people` custom fields keep references to those rows, not names. The
+exports `exportFor()` / `exportDirectory()` list the people, not their estimates per task. There is
 no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 ## Dependencies

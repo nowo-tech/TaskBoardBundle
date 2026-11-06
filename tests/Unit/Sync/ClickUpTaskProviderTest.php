@@ -340,7 +340,8 @@ final class ClickUpTaskProviderTest extends TestCase
         ];
         $odd      = ['id' => 'odd', 'name' => 'Odd', 'custom_id' => 'not valid!', 'points' => 'many', 'folder' => ['id' => 'f', 'name' => 'Hidden', 'hidden' => true], 'recurrence' => ['x']];
         $provider = $this->provider([
-            'list/L/task?page=0'       => new MockResponse((string) json_encode(['tasks' => [$row, $odd], 'last_page' => true])),
+            'list/L/task?page=0'       => new MockResponse((string) json_encode(['tasks' => [$row, $odd, ['id' => 'inf', 'name' => 'Inf', 'points' => '1e999']], 'last_page' => true])),
+            'task/dup/time_in_status'  => new MockResponse((string) json_encode(['current_status' => ['status' => 'open'], 'status_history' => [['status' => 'open', 'total_time' => ['by_minute' => 9]], ['status' => 'done', 'total_time' => ['by_minute' => 2]]]])),
             'list/L/task?page=1'       => new MockResponse((string) json_encode(['tasks' => [], 'last_page' => true])),
             'task/ok/time_in_status'   => new MockResponse((string) json_encode(['current_status' => ['status' => 'done', 'total_time' => ['by_minute' => 3, 'since' => '1790000000000']], 'status_history' => [['status' => 'to do', 'total_time' => ['by_minute' => 60, 'since' => '1789000000000']], ['status' => 'done', 'total_time' => []], 'junk', ['status' => '']]])),
             'task/new/time_in_status'  => new MockResponse((string) json_encode(['current_status' => ['status' => 'open'], 'status_history' => 'junk'])),
@@ -352,7 +353,10 @@ final class ClickUpTaskProviderTest extends TestCase
         self::assertSame(['a0', false], [$page->nextCursor, $page->lastPage], 'the archived pass follows the active pages');
         $details = $page->tasks[0]->details;
         self::assertSame(['DEV-123', '2.5', 1790000000, 1790000100, true, false, ['Folder', 'List'], 'Every week'], [$details?->customId, $details?->points, $details?->doneAt?->getTimestamp(), $details?->closedAt?->getTimestamp(), $details?->startHasTime, $details?->dueHasTime, $details?->path, $details?->recurrence]);
-        self::assertSame([['id' => '7', 'name' => 'Ana', 'minutes' => 90]], $details?->toArray()['estimates']);
+        self::assertSame(['7', 90], [$details?->estimates[0]['person']->providerUserId, $details?->estimates[0]['minutes']]);
+        self::assertArrayNotHasKey('estimates', (array) $details?->toArray(), 'no person name in the stored JSON');
+        self::assertTrue($page->passEnded, 'an empty last active page is not a stalled list');
+        self::assertNull($page->tasks[2]->details?->points, 'not a finite number');
         self::assertSame(['other', 'third'], array_map(static fn (array $d): string => $d[0], $page->tasks[0]->task->dependsOn));
         self::assertNotContains('Bad-Key', $page->tasks[0]->presentKeys);
         self::assertNotContains('empty', $page->tasks[0]->presentKeys);
@@ -362,13 +366,14 @@ final class ClickUpTaskProviderTest extends TestCase
 
         $archived = $provider->fetchTasks($credential, 'L', null, 'a0');
         self::assertSame('true', $this->requests[count($this->requests) - 1]['query']['archived']);
-        self::assertSame([null, true], [$archived->nextCursor, $archived->lastPage]);
+        self::assertSame([null, true, false], [$archived->nextCursor, $archived->lastPage, $archived->passEnded]);
 
         self::assertSame('imported', $provider->fieldCoverage()['custom_id']);
         $history = $provider->fetchStatusHistory($credential, 'ok');
         self::assertSame([['to do', 60, false], ['done', 3, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $history));
         self::assertSame(1790000000, $history[1]->since?->getTimestamp());
         self::assertSame([['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'new')));
+        self::assertSame([['done', 2, false], ['open', 0, true]], array_map(static fn (RemoteStatusTime $s): array => [$s->status, $s->minutes, $s->current], (array) $provider->fetchStatusHistory($credential, 'dup')), 'the current status goes last, once');
         self::assertSame([], $provider->fetchStatusHistory($credential, 'none'));
         self::assertNull($provider->fetchStatusHistory($credential, 'missing'), 'not served (404)');
     }

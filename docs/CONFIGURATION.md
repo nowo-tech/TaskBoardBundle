@@ -652,6 +652,11 @@ New routes (configurable like the others, copied under `tenancy.tenant_paths`): 
 New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`;
 since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
 Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.
+Since 1.27.0 the partials `manage/_connection_completeness.html.twig` (variable `completeness`, on the connection page)
+and `manage/_task_sync_details.html.twig` / `_task_sync_fields.html.twig` (task panel) are included by the bundle's
+templates; a host with its own `templates.connection` includes the first one itself.
+`sync.import_archived` and `sync.status_history.max_calls_per_run` cost provider requests: one more pass (at least one
+request per run) and one request per task written, see [sync.md](sync.md#everything-a-clickup-task-has-since-1270).
 
 Since 1.25.2, `sync.badge.connect_link: false` hides the board / list / Gantt header badge of an **unlinked** board
 (the *Connect provider* link and its strip) for hosts that offer the connection elsewhere (e.g. an import menu linking

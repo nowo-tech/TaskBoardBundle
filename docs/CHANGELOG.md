@@ -98,9 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read-only in `task_board_sync_items.remote_meta` and shown in the task panel (`_task_sync_details.html.twig`, Twig
   `task_board_sync_details()`). Linked tasks become `related` relations (also in file imports). Archived tasks are
   imported archived (`sync.import_archived`, default `true`; ClickUp reads an archived pass). New
-  `RemoteTaskDetails`, `RemoteStatusTime`, `RemoteTask::$details` / `$presentKeys`, `Task::markCompleted(?$at)`.
-- **Completeness report (TB-SYNC-3).** After each run the connection page lists every key of the provider's answers
-  with a value: imported, skipped (reason) or *Not imported yet*
+  `RemoteTaskDetails`, `RemoteStatusTime`, `RemoteTask::$details` / `$presentKeys`, `RemoteTaskPage::$passEnded`,
+  `Task::markCompleted(?$at)`. A lasting error of the time in status (`statusHistory.failed`) keeps the last one and
+  never fails a run; a passing one defers the task.
+- **People in read-only data (TB-SYNC-3).** Estimates per assignee and `people` custom fields store references
+  (`Sync\People\PersonToken`: `person:<id>`, or `ref:<provider user id>` without a directory), never a name or an
+  e-mail; names are read from `task_board_sync_people`, so `anonymise()` also covers them. New
+  `SyncPeopleViewProvider::personLabel()`.
+- **Completeness report (TB-SYNC-3).** After each run the connection page lists every key of the answers of the tasks
+  it read (written or not, at most 200 keys per run) with a value: imported, skipped (reason) or *Not imported yet*
   (`Sync\Provider\FieldCoverageProviderInterface`, `_connection_completeness.html.twig`).
 - **Schema change with `sync.enabled` only**: two new tables, four nullable columns on `task_board_sync_comments` and `task_board_sync_items.remote_meta`
   (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#unreleased)).

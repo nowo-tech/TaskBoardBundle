@@ -69,7 +69,8 @@ final class SyncTaskDetailsTest extends SyncFunctionalTestCase
         self::assertStringContainsString('2026-10-02', $details->filter('[data-sync-detail="closedAt"]')->text());
         self::assertStringContainsString('Start and due date', $details->filter('[data-sync-detail="times"]')->text());
         self::assertStringContainsString('Folder <b> › Backlog', $details->filter('[data-sync-detail="path"]')->text());
-        self::assertStringContainsString('Ana: 90 min', $details->filter('[data-sync-detail="estimates"]')->text());
+        // No people directory on this provider: the provider id, never the remote name.
+        self::assertStringContainsString('#7: 90 min', $details->filter('[data-sync-detail="estimates"]')->text());
         self::assertStringContainsString('Every week', $details->filter('[data-sync-detail="recurrence"]')->text());
         self::assertCount(2, $details->filter('[data-testid="nowo-task-sync-status-history"] tbody tr'));
         self::assertCount(1, $details->filter('tr[aria-current="true"]'));

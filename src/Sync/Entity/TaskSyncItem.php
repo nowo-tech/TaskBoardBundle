@@ -55,7 +55,6 @@ class TaskSyncItem
     #[ORM\Column(name: 'unmatched_people', type: 'json', nullable: true)]
     private ?array $unmatchedPeople = null;
 
-    /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
     /**
      * Since 1.27.0 (TB-SYNC-3): what the provider has besides the import row (custom id, points, done / closed dates,
      * time flags, location path, estimates per assignee, recurrence, status history), read-only on the task.
@@ -65,6 +64,7 @@ class TaskSyncItem
     #[ORM\Column(name: 'remote_meta', type: 'json', nullable: true)]
     private ?array $remoteMeta = null;
 
+    /** Since 1.25: 0 = written by 1.23 (creator and creation date are back-filled once), 1 = current. */
     #[ORM\Column(name: 'backfill_level', type: 'smallint', options: ['default' => 0])]
     private int $backfillLevel = 1;
 
@@ -222,14 +222,14 @@ class TaskSyncItem
     }
 
     /**
-     * Since 1.27.0: true when it changed.
+     * Since 1.27.0: true when it changed (MySQL's JSON type reorders keys: the order does not count as a change).
      *
      * @param array<string, mixed> $meta
      */
     public function setRemoteMeta(array $meta): bool
     {
-        $meta = $meta === [] ? null : $meta;
-        if ($meta === $this->remoteMeta) {
+        $meta = $meta === [] ? null : self::canonical($meta);
+        if ($meta === ($this->remoteMeta === null ? null : self::canonical($this->remoteMeta))) {
             return false;
         }
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
@@ -300,5 +300,22 @@ class TaskSyncItem
         $this->lastSeenRunId = $runId;
 
         return $this;
+    }
+
+    /**
+     * @param array<mixed> $value
+     *
+     * @return array<mixed>
+     */
+    private static function canonical(array $value): array
+    {
+        ksort($value);
+        foreach ($value as $key => $child) {
+            if (is_array($child)) {
+                $value[$key] = self::canonical($child);
+            }
+        }
+
+        return $value;
     }
 }

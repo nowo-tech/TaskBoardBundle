@@ -54,7 +54,6 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
-use function array_pop;
 use function array_push;
 use function array_reverse;
 use function array_slice;
@@ -68,6 +67,7 @@ use function implode;
 use function intdiv;
 use function is_array;
 use function is_bool;
+use function is_finite;
 use function is_float;
 use function is_int;
 use function is_numeric;
@@ -1329,23 +1329,17 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         if ($data === null) {
             return null;
         }
+        $current = $this->statusTime($data['current_status'] ?? null, true);
         $history = [];
         foreach (is_array($data['status_history'] ?? null) ? array_slice($data['status_history'], 0, 100) : [] as $row) {
             $status = $this->statusTime($row, false);
-            if ($status instanceof RemoteStatusTime) {
+            // The answer may list the current status among the others: it goes last, once.
+            if ($status instanceof RemoteStatusTime && $status->status !== $current?->status) {
                 $history[] = $status;
             }
         }
-        $current = $this->statusTime($data['current_status'] ?? null, true);
-        if ($current instanceof RemoteStatusTime) {
-            $last = $history === [] ? null : $history[count($history) - 1];
-            if ($last instanceof RemoteStatusTime && $last->status === $current->status) {
-                array_pop($history);
-            }
-            $history[] = $current;
-        }
 
-        return $history;
+        return $current instanceof RemoteStatusTime ? [...$history, $current] : $history;
     }
 
     private function statusTime(mixed $row, bool $current): ?RemoteStatusTime
@@ -1389,7 +1383,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
 
         return new RemoteTaskDetails(
             customId: preg_match('/^[A-Za-z0-9 _.:#-]{1,64}$/D', $customId) === 1 ? $customId : null,
-            points: (is_int($points) || is_float($points) || is_string($points)) && is_numeric($points) && strlen((string) $points) <= 20 ? (string) (0 + $points) : null,
+            points: (is_int($points) || is_float($points) || is_string($points)) && is_numeric($points) && is_finite((float) $points) && strlen((string) $points) <= 20 ? (string) (0 + $points) : null,
             doneAt: $this->date($row['date_done'] ?? null),
             closedAt: $this->date($row['date_closed'] ?? null),
             startHasTime: ($row['start_date_time'] ?? false) === true,
@@ -1444,7 +1438,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             default                              => null,
         };
 
-        return new RemoteTaskPage($tasks, $next, $next === null);
+        return new RemoteTaskPage($tasks, $next, $next === null, $last && $next !== null);
     }
 
     private function page(?string $cursor): int

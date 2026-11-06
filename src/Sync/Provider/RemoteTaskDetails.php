@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Provider;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 
 use function array_filter;
-use function array_map;
 
 use const DATE_ATOM;
 
@@ -18,7 +18,7 @@ use const DATE_ATOM;
 final readonly class RemoteTaskDetails
 {
     /**
-     * @param list<string> $path the source location, outermost first (space, folder, list)
+     * @param list<string> $path the source location, outermost first (folder, list)
      * @param list<array{person: RemotePersonRef, minutes: int}> $estimates the time estimate per assignee
      */
     public function __construct(
@@ -39,7 +39,8 @@ final readonly class RemoteTaskDetails
     }
 
     /**
-     * @return array<string, mixed> the JSON stored on the sync item (no personal data beyond names)
+     * @return array<string, mixed> the JSON stored on the sync item, without `estimates`: people are stored as references
+     *                              by {@see SyncTaskDetailsWriter} (no name, no e-mail)
      */
     public function toArray(): array
     {
@@ -51,7 +52,6 @@ final readonly class RemoteTaskDetails
             'startHasTime' => $this->startHasTime ?: null,
             'dueHasTime'   => $this->dueHasTime ?: null,
             'path'         => $this->path === [] ? null : $this->path,
-            'estimates'    => $this->estimates === [] ? null : array_map(static fn (array $e): array => ['id' => $e['person']->providerUserId, 'name' => $e['person']->name, 'minutes' => $e['minutes']], $this->estimates),
             'recurrence'   => $this->recurrence,
         ], static fn (mixed $value): bool => $value !== null);
     }

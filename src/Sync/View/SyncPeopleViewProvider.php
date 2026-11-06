@@ -14,10 +14,16 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
+use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
+use function array_map;
 use function explode;
+use function is_array;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Since 1.25: view models of the remote people of a synced task (Twig `task_board_sync_creator(task)`,
@@ -67,7 +73,28 @@ final class SyncPeopleViewProvider implements ResetInterface
         $item = $this->item($task);
         $meta = $item?->getRemoteMeta() ?? [];
 
-        return $meta === [] || !$item instanceof TaskSyncItem ? [] : $meta + ['provider' => $item->getConnection()->getProvider()];
+        if ($meta === [] || !$item instanceof TaskSyncItem) {
+            return [];
+        }
+        if (is_array($meta['estimates'] ?? null)) {
+            $meta['estimates'] = array_map(fn (array $estimate): array => ['name' => $this->personLabel((string) $estimate['person']), 'minutes' => $estimate['minutes']], $meta['estimates']);
+        }
+
+        return $meta + ['provider' => $item->getConnection()->getProvider()];
+    }
+
+    /**
+     * Since 1.27.0: the label of a {@see PersonToken}: the person's name (anonymised when forgotten), `#<id>` without a
+     * directory, `—` for a person no longer there.
+     */
+    public function personLabel(string $token): string
+    {
+        if (str_starts_with($token, PersonToken::REF_PREFIX)) {
+            return '#' . substr($token, strlen(PersonToken::REF_PREFIX));
+        }
+        $label = $this->tokenLabel($token);
+
+        return $label === $token ? '—' : $label;
     }
 
     /**

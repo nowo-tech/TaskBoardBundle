@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Symfony\Contracts\Service\ResetInterface;
 
+use function array_map;
 use function implode;
 use function in_array;
 use function is_array;
@@ -27,8 +28,10 @@ final class SyncFieldViewProvider implements ResetInterface
     /** @var array<string, array<string, list<string>>> board id => task id => texts */
     private array $search = [];
 
-    public function __construct(private readonly EntityManagerInterface $entityManager)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $entityManager,
+        private readonly ?SyncPeopleViewProvider $people = null,
+    ) {
     }
 
     /**
@@ -60,7 +63,7 @@ final class SyncFieldViewProvider implements ResetInterface
                 'name'    => $field->getName(),
                 'type'    => $field->getType()->value,
                 'value'   => $selected,
-                'text'    => $value->getText(),
+                'text'    => $field->getType() === SyncFieldType::People ? $this->peopleText($selected) : $value->getText(),
                 'choices' => $choices,
                 'config'  => $field->getConfig(),
             ];
@@ -82,7 +85,20 @@ final class SyncFieldViewProvider implements ResetInterface
                 ->getQuery()->getArrayResult();
             $this->search[$boardId] = [];
             foreach ($rows as $row) {
-                $this->search[$boardId][(string) $row['taskId']][] = $row['text'];
+                if ($row['text'] !== '') {
+                    $this->search[$boardId][(string) $row['taskId']][] = $row['text'];
+                }
+            }
+            // A people field keeps references: the names are read from the directory.
+            /** @var list<array{taskId: string, value: mixed}> $people */
+            $people = $this->entityManager->createQueryBuilder()
+                ->select('IDENTITY(v.task) AS taskId', 'v.value AS value')->from(TaskSyncFieldValue::class, 'v')
+                ->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
+                ->where('f.board = :board')->andWhere('f.type = :people')
+                ->setParameter('board', $task->getBoard())->setParameter('people', SyncFieldType::People->value)
+                ->getQuery()->getArrayResult();
+            foreach ($people as $row) {
+                $this->search[$boardId][(string) $row['taskId']][] = $this->peopleText($row['value']);
             }
             // Since 1.27.0: the provider's custom task id (e.g. "DEV-123") is searchable too.
             /** @var list<array{taskId: string|null, meta: array<string, mixed>|null}> $items */
@@ -98,6 +114,11 @@ final class SyncFieldViewProvider implements ResetInterface
         }
 
         return implode(' ', $this->search[$boardId][$task->getId()] ?? []);
+    }
+
+    private function peopleText(mixed $tokens): string
+    {
+        return implode(', ', array_map(fn (mixed $token): string => $this->people?->personLabel((string) $token) ?? '', is_array($tokens) ? $tokens : []));
     }
 
     public function reset(): void

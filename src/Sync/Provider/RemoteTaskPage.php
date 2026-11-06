@@ -14,6 +14,8 @@ final readonly class RemoteTaskPage
         public array $tasks,
         public ?string $nextCursor,
         public bool $lastPage,
+        /** Since 1.27.0: this page ends one pass and `nextCursor` starts another: an empty page here is not a stalled list. */
+        public bool $passEnded = false,
     ) {
     }
 }

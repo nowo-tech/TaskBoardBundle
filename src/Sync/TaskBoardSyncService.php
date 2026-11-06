@@ -418,7 +418,7 @@ final readonly class TaskBoardSyncService
                     if ($page->lastPage || $page->nextCursor === null) {
                         break;
                     }
-                    if ($ctx->tasksSeen === $seenWas) {
+                    if ($ctx->tasksSeen === $seenWas && !$page->passEnded) {
                         // A page that brings no new task (empty, or only ids already read): the list does not advance.
                         $ctx->warn('paging_stopped');
                         $ctx->pagingStopped = true;
