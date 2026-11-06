@@ -819,6 +819,49 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertCount(1, $flashes['warning'] ?? []);
     }
 
+    /**
+     * Since 1.26.2: the task panel offers the "Import subtasks" dialog only to who may import into the task
+     * (canImportIntoTask: edit rights and the ACTION_IMPORT_TASKS decision), the same check importIntoTask() makes.
+     */
+    public function testTheSubtaskImportDialogFollowsTheImportDecision(): void
+    {
+        // Editor with import granted (default): the dialog is offered.
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
+        self::assertTrue($this->rendered['canEditTask']);
+        self::assertInstanceOf(FormView::class, $this->rendered['subtaskImportForm']);
+
+        // Editor whose import is denied: may still edit the task, but gets no dialog and a 403 on POST.
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory(), dispatcher: $this->importDeniedDispatcher())->task($this->task->getId(), Request::create('/'));
+        self::assertTrue($this->rendered['canEditTask']);
+        self::assertNull($this->rendered['subtaskImportForm']);
+
+        $request = Request::create('/', 'POST');
+        try {
+            $this->controller($this->owner, dispatcher: $this->importDeniedDispatcher(), formData: new TaskImportFormData(TaskImportSource::TaskBoardCsv, $this->upload("title\nA")), currentRequest: $request)
+                ->importIntoTask($this->task->getId(), $request);
+            self::fail('A denied import must not run.');
+        } catch (AccessDeniedException) {
+            self::assertSame([], $this->extraTasks);
+        }
+
+        // Read-only viewer whose import a listener would grant: without edit rights there is no dialog either.
+        $this->controller($this->attacker, realFormFactory: $this->realFormFactory(), dispatcher: $this->readOnlyDispatcher())->task($this->task->getId(), Request::create('/'));
+        self::assertFalse($this->rendered['canEditTask']);
+        self::assertNull($this->rendered['subtaskImportForm']);
+    }
+
+    private function importDeniedDispatcher(): EventDispatcher
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_IMPORT_TASKS) {
+                $event->deny();
+            }
+        });
+
+        return $dispatcher;
+    }
+
     private function upload(string $content): UploadedFile
     {
         $path = (string) tempnam(sys_get_temp_dir(), 'tb-import-');

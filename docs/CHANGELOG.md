@@ -75,6 +75,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The task panel's "Import subtasks" dialog now follows the import decision.** The task view built
+  `subtaskImportForm` from `canEditTask()` instead of `canImportIntoTask()`, so an editor denied
+  `BoardAccessCheckEvent::ACTION_IMPORT_TASKS` (Beacon's `project.tasks.import`) still saw the dialog. It is now
+  offered only when `canImportIntoTask()` allows it. UI-only: the `importIntoTask` action already enforced
+  `canImportIntoTask()` and answered 403, so no import ran without the permission.
+
 ## [1.26.1] - 2026-11-06
 
 Manual and calendar entries from TimeTrack 1.14 (`TIME_ENTRY_CREATED`) now add to the task's time spent, like timer stops.

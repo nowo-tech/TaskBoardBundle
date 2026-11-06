@@ -472,6 +472,16 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'panel' => true]);
         self::assertStringNotContainsString('nowo-task-subtask-import', $readOnly);
+
+        // Since 1.26.2: an editor without the import permission (no form) keeps the add-subtask form but no dialog.
+        $editorNoImport = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'canEditTask' => true, 'panel' => true]);
+        self::assertStringContainsString('nowo-task-detail__inline-add', $editorNoImport);
+        self::assertStringNotContainsString('nowo-task-subtask-import', $editorNoImport);
+        self::assertStringNotContainsString('data-dialog="subtask-import"', $editorNoImport);
+
+        // A form without edit rights (never built by the controller) still shows no dialog.
+        $viewerWithForm = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => $form, 'canEditTask' => false, 'panel' => true]);
+        self::assertStringNotContainsString('data-dialog="subtask-import"', $viewerWithForm);
     }
 
     public function testBoardPageRenders(): void
