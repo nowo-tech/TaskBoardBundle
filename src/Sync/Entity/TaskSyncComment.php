@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\Entity;
 
+use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -44,6 +45,52 @@ class TaskSyncComment
     #[ORM\ManyToOne(targetEntity: TaskSyncPerson::class)]
     #[ORM\JoinColumn(name: 'author_person_id', nullable: true, onDelete: 'SET NULL')]
     private ?TaskSyncPerson $authorPerson = null;
+
+    /** Since 1.27.0 (TB-SYNC-3): the remote comment this one replies to (null = a top-level comment). */
+    #[ORM\Column(name: 'parent_remote_id', type: 'string', length: 128, nullable: true)]
+    private ?string $parentRemoteId = null;
+
+    /** Since 1.27.0: an assigned comment (action item) is resolved (null = not an action item). */
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    private ?bool $resolved = null;
+
+    /** Since 1.27.0: who the comment is assigned to (action item). */
+    #[ORM\ManyToOne(targetEntity: TaskSyncPerson::class)]
+    #[ORM\JoinColumn(name: 'assignee_person_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TaskSyncPerson $assigneePerson = null;
+
+    /** Since 1.27.0: when the provider last edited the comment (null = never, or unknown). */
+    #[ORM\Column(name: 'remote_updated_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $remoteUpdatedAt = null;
+
+    /** Since 1.27.0: the thread, action item and edit date of the remote comment. */
+    public function describe(?string $parentRemoteId, ?bool $resolved, ?TaskSyncPerson $assignee, ?DateTimeImmutable $remoteUpdatedAt): self
+    {
+        // @igor-ignore - Doctrine entity fields; instance-scoped, not a shared service.
+        [$this->parentRemoteId, $this->resolved, $this->assigneePerson, $this->remoteUpdatedAt] = [$parentRemoteId, $resolved, $assignee, $remoteUpdatedAt];
+
+        return $this;
+    }
+
+    public function getParentRemoteId(): ?string
+    {
+        return $this->parentRemoteId;
+    }
+
+    public function isResolved(): ?bool
+    {
+        return $this->resolved;
+    }
+
+    public function getAssigneePerson(): ?TaskSyncPerson
+    {
+        return $this->assigneePerson;
+    }
+
+    public function getRemoteUpdatedAt(): ?DateTimeImmutable
+    {
+        return $this->remoteUpdatedAt;
+    }
 
     public function getAuthorPerson(): ?TaskSyncPerson
     {

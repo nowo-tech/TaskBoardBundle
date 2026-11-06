@@ -79,6 +79,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Typed custom fields (TB-SYNC-3).** Board-level definitions (`task_board_sync_fields`) and typed values per task
+  (`task_board_sync_field_values`) for text, number, money, date (with time), dropdown, labels, checkbox, URL, e-mail,
+  phone, rating, progress, people and relationship; unknown types and values that do not fit are kept as text, never
+  dropped. Shown in the task panel (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields()`) and found by the
+  list search (`data-search-extra`, Twig `task_board_sync_search_text()`). `sync.custom_fields.mode`
+  (`typed` default, `text`, `both`): the 1.23 "Fields" document is kept as an option. New
+  `Sync\Provider\RemoteCustomField`, `RemoteTask::$customFields`, `Sync\Field\SyncFieldType`,
+  `Sync\Provider\ClickUp\ClickUpCustomFieldParser`, `Sync\Field\SyncCustomFieldWriter`.
+- **Comments in full (TB-SYNC-3).** Threaded replies, the files of each comment (copied with the attachment rules and
+  linked under the comment), assigned comments with their resolved state, and the remote edit date
+  (`RemoteComment::$parentId`, `$attachments`, `$assignee`, `$resolved`, `$updatedAt`; Twig
+  `task_board_sync_comment_meta()`). Reactions are not imported.
+- **Time entries**: `ImportedTimeEntryCandidate::user()` (the mapped host user). Imported time is never deleted.
+- **Schema change with `sync.enabled` only**: two new tables and four nullable columns on `task_board_sync_comments`
+  (DDL for MySQL, PostgreSQL and SQLite in [UPGRADING](UPGRADING.md#unreleased)).
+
 - **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
   `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
   `Sync\People\PeopleMappingService`: every remote person of the connection with a host-user select fed by the host's

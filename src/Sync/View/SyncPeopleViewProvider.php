@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\View;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -52,6 +53,34 @@ final class SyncPeopleViewProvider implements ResetInterface
         $person = $sync instanceof TaskSyncComment ? $sync->getAuthorPerson() : null;
 
         return $person instanceof TaskSyncPerson ? $this->view($person, $comment->getTask()) : null;
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): the thread and action item of an imported comment — `reply` (it answers another
+     * comment), `replyTo` (that comment's remote author, when known), `resolved` (null = not an action item),
+     * `assignee` (who it is assigned to) and `remoteEditedAt`. Null for a local comment.
+     *
+     * @return array{reply: bool, replyTo: SyncPersonView|null, resolved: bool|null, assignee: SyncPersonView|null, remoteEditedAt: DateTimeImmutable|null}|null
+     */
+    public function commentMetaOf(TaskComment $comment): ?array
+    {
+        $sync = $this->entityManager->getRepository(TaskSyncComment::class)->findOneBy(['comment' => $comment]);
+        if (!$sync instanceof TaskSyncComment) {
+            return null;
+        }
+        $task     = $comment->getTask();
+        $parentId = $sync->getParentRemoteId();
+        $parent   = $parentId === null ? null : $this->entityManager->getRepository(TaskSyncComment::class)->findOneBy(['item' => $sync->getItem(), 'remoteId' => $parentId]);
+        $replyTo  = $parent?->getAuthorPerson();
+        $assignee = $sync->getAssigneePerson();
+
+        return [
+            'reply'          => $parentId !== null,
+            'replyTo'        => $replyTo instanceof TaskSyncPerson ? $this->view($replyTo, $task) : null,
+            'resolved'       => $sync->isResolved(),
+            'assignee'       => $assignee instanceof TaskSyncPerson ? $this->view($assignee, $task) : null,
+            'remoteEditedAt' => $sync->getRemoteUpdatedAt(),
+        ];
     }
 
     /**

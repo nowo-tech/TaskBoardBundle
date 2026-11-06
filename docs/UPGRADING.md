@@ -129,6 +129,74 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### Schema change with `sync.enabled: true` only (TB-SYNC-3)
+
+Two new tables (typed custom fields) and four nullable columns on `task_board_sync_comments` (thread, action item,
+edit date). Additive: existing rows need no rewrite; hosts without `sync.enabled` see no change. Run
+`php bin/console doctrine:migrations:diff` and compare it with the statements below (without `table_prefix`; the
+schema test `SyncSchemaFullImportTest` asserts them). Rollback: drop the two tables and the four columns (1.26 ignores
+them).
+
+MySQL 8 / MariaDB:
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, field_value JSON NOT NULL, value_text VARCHAR(500) NOT NULL, updated_at DATETIME NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, INDEX idx_task_board_sync_field_values_field (field_id), UNIQUE INDEX uniq_task_board_sync_field_values_task_field (task_id, field_id), INDEX IDX_4F05C2928DB60186 (task_id), PRIMARY KEY (id));
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices JSON NOT NULL, config JSON NOT NULL, position INT DEFAULT 0 NOT NULL, updated_at DATETIME NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_sync_fields_board_remote (board_id, provider, remote_id), INDEX IDX_FDECA079E7EC5785 (board_id), PRIMARY KEY (id));
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL, ADD resolved TINYINT DEFAULT NULL, ADD remote_updated_at DATETIME DEFAULT NULL, ADD assignee_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL;
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+PostgreSQL:
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, field_value JSON NOT NULL, value_text VARCHAR(500) NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_field_values_field ON task_board_sync_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_field_values_task_field ON task_board_sync_field_values (task_id, field_id);
+CREATE INDEX IDX_4F05C2928DB60186 ON task_board_sync_field_values (task_id);
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices JSON NOT NULL, config JSON NOT NULL, position INT DEFAULT 0 NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_sync_fields_board_remote ON task_board_sync_fields (board_id, provider, remote_id);
+CREATE INDEX IDX_FDECA079E7EC5785 ON task_board_sync_fields (board_id);
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_field_values ADD CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_fields ADD CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_comments ADD parent_remote_id VARCHAR(128) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD resolved BOOLEAN DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD remote_updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD assignee_person_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_sync_comments ADD CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+SQLite (the comments table is rebuilt to add the foreign key: run it with `PRAGMA foreign_keys = OFF`):
+
+```sql
+CREATE TABLE task_board_sync_field_values (id VARCHAR(36) NOT NULL, field_value CLOB NOT NULL, value_text VARCHAR(500) NOT NULL, updated_at DATETIME NOT NULL, field_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_4F05C292443707B0 FOREIGN KEY (field_id) REFERENCES task_board_sync_fields (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_4F05C2928DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE INDEX idx_task_board_sync_field_values_field ON task_board_sync_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_field_values_task_field ON task_board_sync_field_values (task_id, field_id);
+CREATE INDEX IDX_4F05C2928DB60186 ON task_board_sync_field_values (task_id);
+CREATE TABLE task_board_sync_fields (id VARCHAR(36) NOT NULL, name VARCHAR(120) NOT NULL, field_type VARCHAR(16) NOT NULL, remote_type VARCHAR(32) NOT NULL, choices CLOB NOT NULL, config CLOB NOT NULL, position INTEGER DEFAULT 0 NOT NULL, updated_at DATETIME NOT NULL, provider VARCHAR(32) NOT NULL, remote_id VARCHAR(128) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_FDECA079E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE UNIQUE INDEX uniq_task_board_sync_fields_board_remote ON task_board_sync_fields (board_id, provider, remote_id);
+CREATE INDEX IDX_FDECA079E7EC5785 ON task_board_sync_fields (board_id);
+CREATE TEMPORARY TABLE __temp__task_board_sync_comments AS SELECT id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id FROM task_board_sync_comments;
+DROP TABLE task_board_sync_comments;
+CREATE TABLE task_board_sync_comments (id VARCHAR(36) NOT NULL, remote_id VARCHAR(128) NOT NULL, body_hash VARCHAR(64) NOT NULL, local_hash VARCHAR(64) NOT NULL, item_id VARCHAR(36) NOT NULL, comment_id VARCHAR(36) NOT NULL, author_person_id VARCHAR(36) DEFAULT NULL, parent_remote_id VARCHAR(128) DEFAULT NULL, resolved BOOLEAN DEFAULT NULL, remote_updated_at DATETIME DEFAULT NULL, assignee_person_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_BDECD5F5126F525E FOREIGN KEY (item_id) REFERENCES task_board_sync_items (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F5F8697D13 FOREIGN KEY (comment_id) REFERENCES task_board_task_comments (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59A9F6C6E FOREIGN KEY (author_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE, CONSTRAINT FK_BDECD5F59954D125 FOREIGN KEY (assignee_person_id) REFERENCES task_board_sync_people (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
+INSERT INTO task_board_sync_comments (id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id) SELECT id, remote_id, body_hash, local_hash, item_id, comment_id, author_person_id FROM __temp__task_board_sync_comments;
+DROP TABLE __temp__task_board_sync_comments;
+CREATE UNIQUE INDEX uniq_task_board_sync_comments_item_remote ON task_board_sync_comments (item_id, remote_id);
+CREATE INDEX IDX_BDECD5F5126F525E ON task_board_sync_comments (item_id);
+CREATE INDEX IDX_BDECD5F5F8697D13 ON task_board_sync_comments (comment_id);
+CREATE INDEX IDX_BDECD5F59A9F6C6E ON task_board_sync_comments (author_person_id);
+CREATE INDEX IDX_BDECD5F59954D125 ON task_board_sync_comments (assignee_person_id);
+```
+
+Behaviour change with `sync.enabled`: **`sync.custom_fields.mode` defaults to `typed`**: custom fields become typed
+values shown in the task panel, and the 1.23 "Fields (ClickUp)" task document is no longer updated (existing documents
+stay). Set `mode: both` (or `text`) to keep updating it.
+
 No schema change. People page (TB-SYNC-2): a linked board's connection page links a People page where managers map
 remote people to host users. Hosts with their own `templates.connection` can include
 `templates.connection_people_summary` (variable `peopleSummary`) or link `board_connection_people`. To put the page

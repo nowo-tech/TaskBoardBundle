@@ -231,6 +231,9 @@
                 {% endif %}
             </dl>
 
+            {# Since 1.27.0 (TB-SYNC-3): the provider's typed custom fields (read-only). #}
+            {{ include('@NowoTaskBoardBundle/manage/_task_sync_fields.html.twig', {fields: task_board_sync_fields(task)}, with_context: false) }}
+
             <section class="nowo-task-detail__section nowo-task-detail__description">
                 {# Since 1.14.1: the widgets drawn without their label carry an aria-label (axe "label"). #}
                 <h3 class="nowo-task-detail__section-title">{{ 'task_board.task.description_section'|trans({}, 'NowoTaskBoardBundle') }}</h3>

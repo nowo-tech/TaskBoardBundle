@@ -139,6 +139,7 @@
                                 <tr
                                     data-nowo-task-board-list-filter-target="row"
                                     data-title="{{ task.title }}"
+                                    data-search-extra="{{ task_board_sync_search_text(task) }}"
                                     data-priority="{{ task.priority.value }}"
                                     data-column="{{ task.column ? task.column.name : '' }}"
                                     data-column-name="{{ task.column ? task.column.name : '' }}"

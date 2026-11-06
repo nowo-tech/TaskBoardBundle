@@ -96,7 +96,8 @@ export default class ListFilterController extends Controller<HTMLElement> {
 
         this.rowTargets.forEach((row) => {
             const visible = matchesListFilter(
-                row.dataset.title ?? '',
+                // Since 1.27.0: also the provider's custom field values (and custom task ids) of the row.
+                `${row.dataset.title ?? ''} ${row.dataset.searchExtra ?? ''}`,
                 row.dataset.priority ?? '',
                 row.dataset.column ?? '',
                 search,

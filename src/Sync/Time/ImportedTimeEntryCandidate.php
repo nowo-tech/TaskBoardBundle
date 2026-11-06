@@ -20,4 +20,13 @@ final readonly class ImportedTimeEntryCandidate
         public ?Task $task,
     ) {
     }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): the host user the entry belongs to — the person's mapped user (People page or verified
+     * e-mail match), else null. Only mapped people's entries reach the sink, so null means the mapping changed since.
+     */
+    public function user(): ?object
+    {
+        return $this->person->getMapping()->isMapped() ? $this->person->getMappedUser() : null;
+    }
 }

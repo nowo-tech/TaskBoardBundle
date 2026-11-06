@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Twig;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -14,6 +15,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
@@ -87,7 +89,35 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly bool $syncBadgeConnectLink = true,
         // Since 1.26: warns when the UiKit theme cannot resolve a dialog button slot (null: silent fallback).
         private readonly ?LoggerInterface $logger = null,
+        // Since 1.27.0 (TB-SYNC-3): typed custom fields of synced tasks (null when `sync.enabled` is false).
+        private readonly ?SyncFieldViewProvider $syncFields = null,
     ) {
+    }
+
+    /**
+     * Since 1.27.0: the typed custom fields of a synced task ([] without sync).
+     *
+     * @return list<array{name: string, type: string, value: mixed, text: string, choices: list<array{id: string, name: string, color: string|null}>, config: array<string, int|string>}>
+     */
+    public function syncFields(Task $task): array
+    {
+        return $this->syncFields?->fieldsOf($task) ?? [];
+    }
+
+    /** Since 1.27.0: the custom field values of a task as one line (list search; '' without sync). */
+    public function syncSearchText(Task $task): string
+    {
+        return $this->syncFields?->searchTextOf($task) ?? '';
+    }
+
+    /**
+     * Since 1.27.0: thread and action item of an imported comment (null without sync or for a local comment).
+     *
+     * @return array{reply: bool, replyTo: SyncPersonView|null, resolved: bool|null, assignee: SyncPersonView|null, remoteEditedAt: DateTimeImmutable|null}|null
+     */
+    public function syncCommentMeta(TaskComment $comment): ?array
+    {
+        return $this->syncPeople?->commentMetaOf($comment);
     }
 
     /** Since 1.25: the remote creator of a synced task (null without sync or for a local task). */
@@ -153,6 +183,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_comment_author', $this->syncCommentAuthor(...)),
             new TwigFunction('task_board_sync_unmatched', $this->syncUnmatched(...)),
             new TwigFunction('task_board_sync_token', $this->syncToken(...)),
+            new TwigFunction('task_board_sync_fields', $this->syncFields(...)),
+            new TwigFunction('task_board_sync_search_text', $this->syncSearchText(...)),
+            new TwigFunction('task_board_sync_comment_meta', $this->syncCommentMeta(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
             new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true]),
         ];

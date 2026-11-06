@@ -629,6 +629,7 @@ final readonly class TaskBoardSyncService
             $ctx->actor = $this->entityManager->find($actor[0], $actor[1]) ?? $ctx->actor;
         }
         $ctx->positions = [];
+        $ctx->fields    = [];
     }
 
     /** A caller may pass an actor detached by an earlier clear: the run records the managed instance. */

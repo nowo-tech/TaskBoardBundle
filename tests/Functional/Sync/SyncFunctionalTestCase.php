@@ -43,6 +43,8 @@ abstract class SyncFunctionalTestCase extends FunctionalTestCase
         'limit_checker'       => 'app.sync_limits',
         'container_cache_ttl' => 0,
         'providers'           => ['clickup' => ['enabled' => false]],
+        // Since 1.27.0: the 1.23 tests read the "Fields" document; the typed fields are written too.
+        'custom_fields' => ['mode' => 'both'],
     ]];
 
     protected InMemoryTaskProvider $provider;

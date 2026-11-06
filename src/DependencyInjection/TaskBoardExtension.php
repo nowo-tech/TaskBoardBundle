@@ -73,6 +73,7 @@ use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
+use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
@@ -310,9 +311,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$listAsTag', (bool) $sync['list_as_tag'])
             ->setArgument('$checklistsEnabled', (bool) $sync['checklists']['enabled'])
             ->setArgument('$watchersEnabled', (bool) $sync['watchers']['enabled'])
-            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run']);
+            ->setArgument('$maxDetailCalls', (int) $sync['watchers']['max_detail_calls_per_run'])
+            ->setArgument('$fieldsMode', (string) $sync['custom_fields']['mode']);
         $container->getDefinition(TaskBoardTwigExtension::class)
-            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class));
+            ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class))
+            ->setArgument('$syncFields', new Reference(SyncFieldViewProvider::class));
     }
 
     private function serviceOr(mixed $id, string $default): string

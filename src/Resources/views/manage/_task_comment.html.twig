@@ -23,6 +23,14 @@
             {% endif %}
             <time class="nowo-task-activity__time" datetime="{{ comment.createdAt|date('c') }}">{{ comment.createdAt|date('Y-m-d H:i') }}</time>
             {% if comment.editedAt and not comment.deleted %}<span class="nowo-task-comment__edited">{{ 'task_board.comment.edited'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+            {# Since 1.27.0 (TB-SYNC-3): an imported reply, assigned comment (action item) and its resolved state. #}
+            {% set _meta = task_board_sync_comment_meta(comment) %}
+            {% if _meta %}
+                {% if _meta.reply %}<span class="badge nowo-task-badge" data-sync-comment-reply>{{ (_meta.replyTo ? 'task_board.sync.comment.reply_to' : 'task_board.sync.comment.reply')|trans({'%name%': _meta.replyTo ? _meta.replyTo.name : ''}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.assignee %}<span class="badge nowo-task-badge" data-sync-comment-assigned>{{ 'task_board.sync.comment.assigned'|trans({'%name%': _meta.assignee.name}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.resolved is not null %}<span class="badge nowo-task-badge" data-sync-comment-resolved="{{ _meta.resolved ? '1' : '0' }}">{{ (_meta.resolved ? 'task_board.sync.comment.resolved' : 'task_board.sync.comment.open')|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.remoteEditedAt %}<span class="nowo-task-comment__edited">{{ 'task_board.sync.comment.edited_remote'|trans({'%date%': _meta.remoteEditedAt|date('Y-m-d H:i')}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+            {% endif %}
             {% if _mine %}<span class="nowo-task-sr-only">{{ 'task_board.comment.mentions_you'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
         </div>
         {% if comment.deleted %}

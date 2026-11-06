@@ -605,6 +605,8 @@ nowo_task_board:
         badge:
             connect_link: true        # since 1.25.2: false = an unlinked board shows no badge (no "Connect provider" link)
             progress: false           # since 1.26.3: true = the bundle's badge shows a determinate bar of the running run
+        custom_fields:
+            mode: typed               # since 1.27.0: typed (field definitions + typed values) | text (1.23 "Fields" document) | both
         # Since 1.25 (ClickUp full import; see sync.md):
         list_as_tag: false            # tag "list:<name>" on tasks of a folder / space source
         lookup:

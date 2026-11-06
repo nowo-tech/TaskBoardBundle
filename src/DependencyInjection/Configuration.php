@@ -732,6 +732,12 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                         ->end()
                         // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
+                        ->arrayNode('custom_fields')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->enumNode('mode')->values(['typed', 'text', 'both'])->defaultValue('typed')->info('Since 1.27.0 (TB-SYNC-3): typed = board-level field definitions and typed values per task (task panel, list search); text = the 1.23 "Fields (<provider>)" task document only; both.')->end()
+                            ->end()
+                        ->end()
                         ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()
                         ->arrayNode('lookup')
                             ->addDefaultsIfNotSet()

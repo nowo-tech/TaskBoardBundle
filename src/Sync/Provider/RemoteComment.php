@@ -23,6 +23,19 @@ final readonly class RemoteComment
         public array $inlineImageUrls = [],
         /** Since 1.25: the author as a person of the source (`authorEmail` / `authorName` stay for BC). */
         public ?RemotePersonRef $author = null,
+        /** Since 1.27.0 (TB-SYNC-3): the comment this one replies to (null = top level). */
+        public ?string $parentId = null,
+        /**
+         * Since 1.27.0: the files attached to the comment (copied like task attachments).
+         *
+         * @var list<RemoteAttachment>
+         */
+        public array $attachments = [],
+        /** Since 1.27.0: an assigned comment (action item): its assignee and whether it is resolved. */
+        public ?RemotePersonRef $assignee = null,
+        public ?bool $resolved = null,
+        /** Since 1.27.0: when the provider says the comment was last edited (null = unknown). */
+        public ?DateTimeImmutable $updatedAt = null,
     ) {
     }
 }

@@ -45,6 +45,12 @@ final readonly class RemoteTask
         /** Since 1.25: the list of the task (sources with several lists). */
         public ?string $listId = null,
         public ?string $listName = null,
+        /**
+         * Since 1.27.0 (TB-SYNC-3): the custom fields, typed (definitions and values).
+         *
+         * @var list<RemoteCustomField>
+         */
+        public array $customFields = [],
     ) {
     }
 

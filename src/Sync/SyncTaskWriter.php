@@ -41,6 +41,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
+use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
@@ -62,6 +63,7 @@ use Stringable;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
+use function addcslashes;
 use function array_filter;
 use function array_key_last;
 use function array_keys;
@@ -131,6 +133,9 @@ final readonly class SyncTaskWriter
         private bool $watchersEnabled = true,
         private ?SyncChecklistWriter $checklistWriter = null,
         private int $maxDetailCalls = 500,
+        // Since 1.27.0 (TB-SYNC-3): typed custom fields (`sync.custom_fields.mode`: typed, text or both).
+        private ?SyncCustomFieldWriter $fieldWriter = null,
+        private string $fieldsMode = 'typed',
     ) {
     }
 
@@ -641,8 +646,11 @@ final readonly class SyncTaskWriter
 
             throw $exception;
         }
-        if ($remote->customFieldsText !== null) {
+        if ($remote->customFieldsText !== null && $this->fieldsMode !== 'typed') {
             $this->fieldsDocument($ctx, $task, $remote->customFieldsText);
+        }
+        if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
+            $this->fieldWriter->write($ctx, $task, $remote->customFields);
         }
     }
 
@@ -775,9 +783,13 @@ final readonly class SyncTaskWriter
     {
         $existing = $this->store->commentsOf($item);
         foreach ($ctx->provider->fetchComments($ctx->credential, $item->getExternalId()) as $remote) {
-            $remoteHash = $this->hash($remote->body);
+            // Since 1.27.0: the files of the comment are part of what makes it change.
+            $remoteHash = $this->hash($remote->attachments === [] ? $remote->body : [$remote->body, array_map(static fn (RemoteAttachment $file): array => [$file->id, $file->size, $file->updatedAt?->getTimestamp()], $remote->attachments)]);
             $known      = $existing[$remote->id] ?? null;
+            // Since 1.27.0 (TB-SYNC-3): thread, action item and edit date, refreshed on every fetch.
+            $assignee = $session instanceof PeopleSession && $remote->assignee !== null ? $session->person($remote->assignee, TaskSyncPerson::KIND_COMMENT) : null;
             if ($known instanceof TaskSyncComment && $known->getBodyHash() === $remoteHash) {
+                $known->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt);
                 continue;
             }
             // Since 1.25: through the directory (no "Originally by" line: the template shows the person reference).
@@ -787,10 +799,11 @@ final readonly class SyncTaskWriter
             if (!$known instanceof TaskSyncComment) {
                 $comment = new TaskComment($task, $author ?? $ctx->actor, $body, [], $remote->createdAt);
                 $this->entityManager->persist($comment);
-                $this->entityManager->persist((new TaskSyncComment($item, $comment, Text::cut($remote->id, 128), $remoteHash, $this->hash($body)))->setAuthorPerson($person));
+                $this->entityManager->persist((new TaskSyncComment($item, $comment, Text::cut($remote->id, 128), $remoteHash, $this->hash($body)))->setAuthorPerson($person)->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt));
                 ++$ctx->commentsCreated;
                 continue;
             }
+            $known->describe($remote->parentId, $remote->resolved, $assignee, $remote->updatedAt);
             $comment = $known->getComment();
             if ($comment->isDeleted() || $this->hash($comment->getBody()) !== $known->getLocalHash()) {
                 $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $item->getExternalId(), 'comment', $this->sanitizer->line($remote->body, 200));
@@ -815,8 +828,21 @@ final readonly class SyncTaskWriter
                 '%provider%' => $this->providerName($ctx),
             ]) . "\n\n" . $body;
         }
+        // Since 1.27.0 (TB-SYNC-3): the comment's files are copied like task attachments (same host allow-list, size
+        // caps and type sniffing) and linked under the comment; a refused file is named without a link.
+        $files = [];
+        foreach ($remote->attachments as $attachment) {
+            $stored  = $ctx->options->importAttachments ? $this->download($ctx, $task, $attachment, false) : null;
+            $name    = addcslashes($this->sanitizer->line($attachment->name, 120), '\\`*_[]()<>!#~|');
+            $files[] = $stored instanceof StoredAttachment ? sprintf('- [%s](%s)', $name, $stored->url) : '- ' . $name;
+        }
+        $body = $this->sanitizer->markdown($body, TaskComment::MAX_LENGTH);
+        if ($files === []) {
+            return $body;
+        }
 
-        return $this->sanitizer->markdown($body, TaskComment::MAX_LENGTH);
+        // The stored URLs are the host's own (not remote input): appended after the remote text is sanitised.
+        return Text::cut($body . "\n\n" . $this->trans('task_board.sync.comment_attachments', 'Attachments:') . "\n" . implode("\n", $files), TaskComment::MAX_LENGTH);
     }
 
     private function fieldsDocument(SyncRunContext $ctx, Task $task, string $text): void

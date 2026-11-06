@@ -50,6 +50,7 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
+use function array_push;
 use function array_reverse;
 use function array_slice;
 use function array_unique;
@@ -147,6 +148,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         private LoggerInterface $logger = new NullLogger(),
         // Since 1.25: list searches are cached per connection reference (never per token) when a pool is given.
         private ?CacheItemPoolInterface $lookupCache = null,
+        // Since 1.27.0 (TB-SYNC-3): typed custom fields.
+        private ClickUpCustomFieldParser $fieldParser = new ClickUpCustomFieldParser(),
     ) {
     }
 
@@ -267,6 +270,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
     {
         $path     = sprintf('task/%s/comment', $this->checkId($taskId));
         $comments = [];
+        $replies  = [];
         $query    = [];
         // Audit EG-L2: raw rows count, at most ceil(max / 25) + 1 pages, and a page that does not move stops.
         $pageCap = intdiv($this->maxComments + self::COMMENT_PAGE_SIZE - 1, self::COMMENT_PAGE_SIZE) + 1;
@@ -277,6 +281,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
                 $comment = $this->toRemoteComment($row);
                 if ($comment instanceof RemoteComment && count($comments) < $this->maxComments) {
                     $comments[] = $comment;
+                    // Since 1.27.0 (TB-SYNC-3): threads; the replies are read after the top-level comments.
+                    if (is_numeric($row['reply_count'] ?? null) && (int) $row['reply_count'] > 0) {
+                        $replies[$comment->id] = true;
+                    }
                 }
             }
             $oldest = $rows === [] ? [] : $rows[count($rows) - 1];
@@ -288,8 +296,28 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             $query = $next;
         }
 
-        // The API answers newest first.
-        return array_reverse($comments);
+        // The API answers newest first; each thread follows its comment, oldest reply first.
+        $threaded = [];
+        $budget   = $this->maxComments - count($comments);
+        foreach (array_reverse($comments) as $comment) {
+            $threaded[] = $comment;
+            if ($budget <= 0 || !isset($replies[$comment->id])) {
+                continue;
+            }
+            // Unconfirmed against the live API (GET comment/{id}/reply); validated by Beacon after deploy.
+            $thread = [];
+            foreach ($this->items($this->get($credential, sprintf('comment/%s/reply', $this->checkId($comment->id))), 'comments') as $row) {
+                $reply = $this->toRemoteComment($row, $comment->id);
+                if ($reply instanceof RemoteComment && $budget > 0) {
+                    $thread[] = $reply;
+                    --$budget;
+                }
+            }
+            usort($thread, static fn (RemoteComment $a, RemoteComment $b): int => $a->createdAt <=> $b->createdAt);
+            array_push($threaded, ...$thread);
+        }
+
+        return $threaded;
     }
 
     public function existingTaskIds(ProviderCredential $credential, string $listId): iterable
@@ -642,13 +670,14 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             status: is_array($row['status'] ?? null) ? $this->status($row['status'], 0) : null,
             listId: is_array($row['list'] ?? null) && ($listId = $this->itemId($row['list'])) !== '' ? $listId : null,
             listName: is_array($row['list'] ?? null) && ($listName = $this->name($row['list'])) !== '' ? $listName : null,
+            customFields: $this->fieldParser->parse($row['custom_fields'] ?? null),
         );
     }
 
     /**
      * @param array<mixed> $row
      */
-    private function toRemoteComment(array $row): ?RemoteComment
+    private function toRemoteComment(array $row, ?string $parentId = null): ?RemoteComment
     {
         $id = $this->itemId($row);
         if ($id === '') {
@@ -658,6 +687,9 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
         $body     = $segments !== [] ? $this->segmentsToMarkdown($segments) : $this->stringOf($row['comment_text'] ?? null);
         $body     = $this->sanitizer->markdown($body, 5000);
         $user     = is_array($row['user'] ?? null) ? $row['user'] : [];
+        // Since 1.27.0: an assigned comment (action item) and its resolved state; unconfirmed field names
+        // (`assignee`, `resolved`, `date_updated`), validated by Beacon after deploy.
+        $assignee = $this->mapper->personRef($row['assignee'] ?? null);
 
         return new RemoteComment(
             id: $id,
@@ -667,7 +699,33 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             createdAt: $this->date($row['date'] ?? null) ?? new DateTimeImmutable('@0'),
             inlineImageUrls: $this->imageUrls($body),
             author: $this->mapper->personRef($user),
+            parentId: $parentId,
+            attachments: $this->commentAttachments($segments),
+            assignee: $assignee,
+            resolved: $assignee instanceof RemotePersonRef && is_bool($row['resolved'] ?? null) ? $row['resolved'] : null,
+            updatedAt: $this->date($row['date_updated'] ?? null),
         );
+    }
+
+    /**
+     * Since 1.27.0: the attachment segments of a comment (`{type: attachment, attachment: {id, title, url, size,
+     * mimetype}}`; unconfirmed against the live API).
+     *
+     * @param array<mixed> $segments
+     *
+     * @return list<RemoteAttachment>
+     */
+    private function commentAttachments(array $segments): array
+    {
+        $files = [];
+        foreach ($segments as $segment) {
+            if (!is_array($segment) || ($segment['type'] ?? null) !== 'attachment' || !is_array($segment['attachment'] ?? null)) {
+                continue;
+            }
+            $files = [...$files, ...$this->attachments(['attachments' => [$segment['attachment']]])];
+        }
+
+        return $files;
     }
 
     /**
@@ -686,6 +744,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Peopl
             if (($segment['type'] ?? null) === 'image' && is_array($segment['image'] ?? null)) {
                 $url = $this->stringOf($segment['image']['url'] ?? null);
                 $out .= $url !== '' ? sprintf('![%s](%s)', $this->stringOf($segment['image']['name'] ?? 'image'), $url) : '';
+                continue;
+            }
+            if (($segment['type'] ?? null) === 'attachment') {
+                // Since 1.27.0: copied as a file of the comment (commentAttachments()).
                 continue;
             }
             if (($segment['type'] ?? null) === 'tag' && is_array($segment['user'] ?? null)) {

@@ -24,6 +24,7 @@ mapping of the sync tables and no header change.
 - [Tracked time (since 1.25)](#tracked-time-since-125)
 - [Pre-scans and re-association (since 1.25)](#pre-scans-and-re-association-since-125)
 - [People page and step (since 1.27.0)](#people-page-and-step-since-1270)
+- [Everything a ClickUp task has (since 1.27.0)](#everything-a-clickup-task-has-since-1270)
 - [Events](#events)
 - [Testing with the in-memory provider](#testing-with-the-in-memory-provider)
 - [Adding a provider](#adding-a-provider)
@@ -150,7 +151,8 @@ bundle keeps the hash of the value it last wrote (`task_board_sync_items.field_h
 
 A conflict on the same remote value is noted once. An empty remote value never clears a local one. Comments are imported
 once per remote id and updated when the provider edits them, unless they were edited here (a conflict on "comment").
-Custom fields go to a task document "Fields (ClickUp)" that the sync keeps up to date.
+Custom fields are typed values since 1.27.0 (`sync.custom_fields.mode`); with `text` or `both` they also go to a task
+document "Fields (ClickUp)" that the sync keeps up to date.
 
 ## Deletions and the mass-archive guard
 
@@ -461,6 +463,57 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
   the board and on every board sharing the directory, else 404: remote e-mails are only shown to those managers.
 - **Scope.** The mapping is stored per directory: per connection by default (`board:<id>`), or per provider workspace
   and host tenant when the host's `directoryScope()` returns a shared scope.
+
+## Everything a ClickUp task has (since 1.27.0)
+
+TB-SYNC-3. Remote data is untrusted everywhere: values are type-checked, text is sanitised and cut, links must be
+`http(s)`, files go through `RemoteFileFetcher` (provider attachment hosts only, no private addresses, size caps, type
+sniffing), and nothing remote is rendered unescaped.
+
+### Typed custom fields
+
+`sync.custom_fields.mode`: `typed` (default), `text` (the 1.23 Markdown document only) or `both`.
+
+- **Definitions** per board (`task_board_sync_fields`: provider field id, name, type, remote type, choices, config,
+  position), refreshed when the provider renames or retypes a field. **Values** per task
+  (`task_board_sync_field_values`: the typed value as JSON and a one-line text). The provider is their source: a value
+  it drops is removed; there is no local editing. A re-sync writes nothing when nothing changed.
+- **Types** (`Sync\Field\SyncFieldType`): text (ClickUp `text`, `short_text`), number, money (`currency`, ISO code),
+  date (`date`, with time when the field says so; UTC), dropdown (`drop_down`), labels, checkbox, url, email, phone,
+  rating (`emoji`, 1–10 stars), progress (`automatic_progress` / `manual_progress`, 0–100), people (`users`, names as
+  given by ClickUp) and relationship (`tasks`, `list_relationship`). **Any other type, and any value that does not fit
+  its type, is kept as text: nothing is dropped** (e.g. a `javascript:` URL shows as text, never as a link).
+- **Task panel**: a *Fields* section (`_task_sync_fields.html.twig`, Twig `task_board_sync_fields(task)`): choices as
+  badges (`data-color`), checkbox Yes/No, url as an external link (`rel="noopener noreferrer nofollow"`), email
+  `mailto:`, rating as stars with an accessible label, progress as `<progress>`.
+- **List view**: each row carries `data-search-extra` (Twig `task_board_sync_search_text(task)`, one query per board
+  and request): the list search finds tasks by their field values.
+- Report counters (`SyncReport::stat()`): `fields.defined`, `fields.values`, `fields.cleared`.
+
+### Comments in full
+
+- **Threads**: replies (`GET comment/{id}/reply`, read for comments with `reply_count > 0`; the replies count against
+  `sync.max_comments_per_task`) follow their comment, oldest first. `task_board_sync_comments.parent_remote_id`; the
+  comment shows *Reply to <name>*.
+- **Files**: the attachment segments of a comment are copied like task attachments (same checks and budgets) and
+  listed under the comment body (*Attachments:* with links to the host's stored copies; a refused file is named
+  without a link). The comment is rewritten when its text or its files change.
+- **Assigned comments (action items)**: the assignee (through the people directory) and the resolved state
+  (`assignee_person_id`, `resolved`), shown as *Assigned to <name>* and *Resolved* / *Open* badges; they are
+  refreshed on every fetch without rewriting the comment.
+- **Edit date**: `remote_updated_at` (*edited in the provider on …*).
+- Twig `task_board_sync_comment_meta(comment)`: `reply`, `replyTo`, `resolved`, `assignee`, `remoteEditedAt`.
+- Not imported: reactions (optional in the request).
+- **TO CONFIRM** against a real workspace: the reply endpoint and the field names `assignee`, `resolved`,
+  `date_updated` and the `attachment` segment shape.
+
+### Time entries one by one
+
+Already since 1.25 (see [Tracked time](#tracked-time-since-125)): each entry (user through the People mapping, start,
+end, duration, description, billable, tags) reaches the host's `sync.time_entries.sink` one by one as an
+`ImportedTimeEntryCandidate`; since 1.27.0 `ImportedTimeEntryCandidate::user()` gives the mapped host user. The bundle
+never deletes tracked time: not on a re-sync, not when a task or a board is deleted. **Hosts that must never delete
+imported time ignore `$windowComplete`** (it only says a window was read in full).
 
 ## Events
 

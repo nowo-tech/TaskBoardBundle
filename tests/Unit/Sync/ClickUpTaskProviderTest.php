@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -272,6 +273,53 @@ final class ClickUpTaskProviderTest extends TestCase
         }
         $this->expectException(ProviderException::class);
         $provider->findContainer(new ProviderCredential('pk_wrong', 'c'), 'L');
+    }
+
+    /**
+     * Since 1.27.0 (TB-SYNC-3): threads (replies after their comment, oldest first, within the comment cap), comment
+     * files, assigned comments and their resolved state, the edit date, and typed custom fields on the task.
+     */
+    public function testThreadsActionItemsCommentFilesAndTypedFields(): void
+    {
+        $file     = ['id' => 'att1', 'title' => 'spec.pdf', 'url' => 'https://t000.p.clickup-attachments.com/att1/spec.pdf', 'size' => 10, 'mimetype' => 'application/pdf'];
+        $provider = $this->provider([
+            'task/T/comment?' => new MockResponse((string) json_encode(['comments' => [
+                ['id' => 'c2', 'comment_text' => 'Second', 'date' => '1790000002000', 'reply_count' => 0],
+                ['id' => 'c1', 'comment' => [['text' => 'See '], ['type' => 'attachment', 'text' => 'spec.pdf', 'attachment' => $file], ['type' => 'attachment']], 'date' => '1790000001000', 'reply_count' => '2', 'assignee' => ['id' => 7, 'username' => 'Ana'], 'resolved' => true, 'date_updated' => '1790000009000', 'user' => ['id' => 5, 'username' => 'Bob']],
+            ]])),
+            'comment/c1/reply' => new MockResponse((string) json_encode(['comments' => [
+                ['id' => 'r2', 'comment_text' => 'Later reply', 'date' => '1790000004000'],
+                ['id' => 'r1', 'comment_text' => 'First reply', 'date' => '1790000003000', 'resolved' => true],
+                ['comment_text' => 'no id'],
+            ]])),
+            'list/L/task' => new MockResponse((string) json_encode(['tasks' => [['id' => 'ok', 'name' => 'Ok', 'custom_fields' => [['id' => 'f1', 'name' => 'Budget', 'type' => 'currency', 'type_config' => ['currency_type' => 'USD'], 'value' => '10']]]], 'last_page' => true])),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+
+        $comments = [...$provider->fetchComments($credential, 'T')];
+        self::assertSame(['c1', 'r1', 'r2', 'c2'], array_map(static fn (RemoteComment $c): string => $c->id, $comments));
+        self::assertSame([null, 'c1', 'c1', null], array_map(static fn (RemoteComment $c): ?string => $c->parentId, $comments));
+        self::assertSame('See', trim($comments[0]->body), 'the attachment segment is a file, not text');
+        self::assertCount(1, $comments[0]->attachments);
+        self::assertSame('spec.pdf', $comments[0]->attachments[0]->name);
+        self::assertSame('7', $comments[0]->assignee?->providerUserId);
+        self::assertTrue($comments[0]->resolved);
+        self::assertSame(1790000009, $comments[0]->updatedAt?->getTimestamp());
+        self::assertNull($comments[1]->resolved, 'resolved without an assignee is no action item');
+        self::assertSame('https://api.clickup.com/api/v2/comment/c1/reply', $this->requests[1]['url']);
+        $task = $provider->fetchTasks($credential, 'L', null, null)->tasks[0];
+        self::assertSame('10 USD', $task->customFields[0]->text);
+
+        // The cap counts the replies: with two comments at most, no reply is read.
+        $capped = $this->provider(['task/T/comment?' => new MockResponse((string) json_encode(['comments' => [['id' => 'c1', 'comment_text' => 'A', 'reply_count' => 3], ['id' => 'c0', 'comment_text' => 'B']]]))], maxComments: 2);
+        self::assertCount(2, [...$capped->fetchComments($credential, 'T')]);
+        self::assertCount(1, $this->requests);
+        $one = $this->provider([
+            'task/T/comment?'  => new MockResponse((string) json_encode(['comments' => [['id' => 'c1', 'comment_text' => 'A', 'reply_count' => 3]]])),
+            'comment/c1/reply' => new MockResponse((string) json_encode(['comments' => [['id' => 'r1', 'comment_text' => 'x'], ['id' => 'r2', 'comment_text' => 'y']]])),
+        ], maxComments: 2);
+        self::assertSame(['c1', 'r1'], array_map(static fn (RemoteComment $c): string => $c->id, [...$one->fetchComments($credential, 'T')]));
+
     }
 
     /**
