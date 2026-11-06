@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.26.3](#to-1263)
 - [To 1.26.2](#to-1262)
 - [To 1.26.1](#to-1261)
 - [To 1.26.0](#to-1260)
@@ -127,6 +128,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 1.26.3
+
+From **1.26.2**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 No schema change; the default output is unchanged. The connection badge data gains `activeRunId`, `progressUrl`,
 `total`, `processed` and `pollInterval`, and the option `sync.badge.progress` (default `false`) shows a determinate

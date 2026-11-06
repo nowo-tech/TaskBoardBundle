@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.26.3] - 2026-11-06](#1263---2026-11-06)
 - [[1.26.2] - 2026-11-06](#1262---2026-11-06)
 - [[1.26.1] - 2026-11-06](#1261---2026-11-06)
 - [[1.26.0] - 2026-11-06](#1260---2026-11-06)
@@ -75,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [1.26.3] - 2026-11-06
+
+The connection badge data carries the running sync's progress (`activeRunId`, `progressUrl` for managers, `total`, `processed`); opt-in `sync.badge.progress` draws a determinate bar in the bundle's badge.
 
 ### Added
 
@@ -1544,7 +1549,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.26.2...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.26.3...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
