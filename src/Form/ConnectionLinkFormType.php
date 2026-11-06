@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Form;
 
 use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -46,6 +47,17 @@ final class ConnectionLinkFormType extends AbstractType
             'choices'     => $options['column_choices'],
             'required'    => false,
             'placeholder' => 'task_board.sync.option.fallback_first',
+        ]);
+        // Since 1.28.0: columns no provider status maps to, at the end of the first import. Only empty ones ever go.
+        $this->addWithDefaults($builder, 'unmatchedColumns', ChoiceType::class, [
+            'label'   => 'task_board.sync.option.unmatched_columns',
+            'choices' => [
+                'task_board.sync.option.unmatched_columns_keep'   => TaskBoardConnection::UNMATCHED_KEEP,
+                'task_board.sync.option.unmatched_columns_delete' => TaskBoardConnection::UNMATCHED_DELETE,
+            ],
+            'required'    => false,
+            'placeholder' => false,
+            'empty_data'  => TaskBoardConnection::UNMATCHED_KEEP,
         ]);
         $this->addCheckbox($builder, 'importComments', [
             'label'    => 'task_board.sync.option.import_comments',

@@ -151,6 +151,13 @@ Nothing changes unless you opt in. TaskBoard does not require TimeTrack.
   candidates. A host that shows `SyncPersonView::$name` needs no change; it can read `$attributionOnly` to add a note.
   Someone already projected keeps what was written until you call `reassign()` again for that person.
 
+### Columns no status uses (TB-SYNC-4)
+
+Nothing changes by default and there is no schema change: the choice and its marker live in the connection's `options` JSON. A host that
+draws its own columns step posts `task_board_sync_link[unmatchedColumns]`, or passes `unmatchedColumns` to `TaskBoardSyncService::link()`.
+Connections linked earlier stay on `keep`. The deletion needs the provider's statuses (`SourceProviderInterface::listStatuses()`): a provider
+that cannot list them keeps every column and reports it.
+
 ## To 1.27.0
 
 From **1.26.3**:

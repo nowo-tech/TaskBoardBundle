@@ -100,6 +100,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Attribution only.** `Sync\Hook\AttributionOnlyResolverInterface`, optional on the host's person resolver, flags a candidate
   such as a suspended member. A person mapped to them shows the user's label (`SyncPersonView::$attributionOnly`) and the
   sink gets the user, but they are never written as creator, author or member, whatever the board access check says.
+- **Columns no status uses (TB-SYNC-4).** `ConnectionLinkFormType::unmatchedColumns`, `keep` (default) or `delete`, accepted when
+  posted; `sync.unmatched_columns_choice` (default `false`) draws it on the bundle's link page. `delete` acts once per connection,
+  marked on the connection, at the end of the first import when every slice completed without error. Only empty columns go: any task
+  row counts, and check and delete share a transaction. A column holding tasks stays and is listed in the run report; a board keeps one
+  column; tasks never move; later syncs never delete a column; same permission as *Delete column*, logged as `column_delete` with
+  `origin: sync_unmatched_columns`. New event `TaskBoardEvents::SYNC_UNMATCHED_COLUMNS_RESOLVED`. Counted in
+  `columns.unmatchedDeleted` and `columns.unmatchedKept`.
 
 ## [1.27.0] - 2026-11-06
 

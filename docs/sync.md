@@ -375,6 +375,14 @@ own, else the union of its lists'), `resolveListFromUrl()` (only `https://app.cl
 call) and `searchLists()` (at most 40 calls; cached 300 s in `sync.lookup.cache_pool`, keyed by a hash of the connection
 reference, never the token). With `sync.list_as_tag` tasks of a multi-list source get the tag `list:<name>`.
 
+### Columns no status uses (since 1.28.0)
+
+With `unmatchedColumns: delete`, at the end of the first import, each board column that no provider status maps to is deleted if it is
+empty. A status maps through the dialog's map (`__skip` maps to nothing), else by the same name; the fallback column counts as mapped.
+Whatever cannot be decided keeps the column and says so in the run report: a source not read to the end, edit permission lost during
+the run, statuses the provider did not give, a database refusal. The decision is marked on the connection before anything is deleted, so
+a failure is never retried by a later sync. A run that fails is not the end of the first import: the retry still decides.
+
 ## Tracked time (since 1.25)
 
 The bundle **never writes TimeTrack data**. With `sync.time_entries.sink` set and `SyncOptions::$timeEntries`, a

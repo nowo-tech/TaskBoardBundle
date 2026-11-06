@@ -6,6 +6,7 @@
 - [Threats and mitigations](#threats-and-mitigations)
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
+- [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -116,6 +117,10 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 - **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.
+
+## Unmatched columns (since 1.28.0)
+
+`unmatchedColumns: delete` deletes board structure from a background run. It checks `canEditBoard` for the run's actor at that moment. The empty check and the delete share a transaction, under a write lock on the column row, because `task.column_id` is `ON DELETE SET NULL` and could otherwise silently unplace a task written at the same time. Audit status for this change: re-verification pending.
 
 ## Logging and personal data
 

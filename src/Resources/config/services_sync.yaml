@@ -105,6 +105,7 @@ services:
             $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
             $peopleStep: '%nowo_task_board.sync.people.step%'
             $peopleBulkFormer: '%nowo_task_board.sync.people_bulk_former%'
+            $unmatchedColumnsChoice: '%nowo_task_board.sync.unmatched_columns_choice%'
             $peoplePageSize: '%nowo_task_board.sync.people.page_size%'
         tags: ['controller.service_arguments']
 
@@ -164,6 +165,8 @@ services:
             $secret: '%kernel.secret%'
     Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter: ~
     Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider: ~
+
+    Nowo\TaskBoardBundle\Sync\Status\UnmatchedColumnsCleaner: ~
 
     Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase:
         arguments:
