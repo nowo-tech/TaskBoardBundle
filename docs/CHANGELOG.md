@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Audit GW (2026-11-06): Pass (conditional) / Medium, re-verified at `7e22057`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd). The delta fixes below, after that head, are **re-verification pending**.
+Audit GW (2026-11-06): Pass (good) / Low, re-verified at `0009885`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
 
 - **Deleting a user keeps their manual time (owner rule, GWd-M2).** `task_board_task_time_entries.user_id` is nullable,
   `ON DELETE SET NULL`, with a name snapshot (`user_name`). `TaskTimeEntry::getUser()` may return null. `detachUser()` of
