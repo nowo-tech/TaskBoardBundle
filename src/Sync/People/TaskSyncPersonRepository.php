@@ -349,7 +349,50 @@ final readonly class TaskSyncPersonRepository
             ->where('c.assigneePerson = :person')->setParameter('person', $person)
             ->getQuery()->getArrayResult();
 
-        return ['person' => $this->exportRow($person), 'estimates' => $this->estimatesOf($person->getDirectory(), $token), 'commentAssignments' => $assigned, 'fields' => $this->fieldsNaming($person->getDirectory(), $token)];
+        // Since 1.28.0 (audit I6): the links counts() counts, by id.
+        /** @var list<array{taskId: string}> $created */
+        $created = $this->entityManager->createQueryBuilder()->select('IDENTITY(i.task) AS taskId')->from(TaskSyncItem::class, 'i')
+            ->where('i.creatorPerson = :person')->andWhere('i.task IS NOT NULL')->setParameter('person', $person)->getQuery()->getArrayResult();
+        /** @var list<array{taskId: string, commentId: string}> $written */
+        $written = $this->entityManager->createQueryBuilder()->select('IDENTITY(i.task) AS taskId', 'IDENTITY(c.comment) AS commentId')->from(TaskSyncComment::class, 'c')->join('c.item', 'i')
+            ->where('c.authorPerson = :person')->setParameter('person', $person)->getQuery()->getArrayResult();
+        /** @var list<array{taskId: string, role: string}> $members */
+        $members = $this->entityManager->createQueryBuilder()->select('IDENTITY(i.task) AS taskId', 'm.memberRole AS role')->from(TaskSyncMember::class, 'm')->join('m.item', 'i')
+            ->where('m.person = :person')->setParameter('person', $person)->getQuery()->getArrayResult();
+        $unlisted = [];
+        foreach ($this->unmatchedTasksOf($person) as $row) {
+            $unlisted[] = $row;
+        }
+
+        return ['person' => $this->exportRow($person), 'estimates' => $this->estimatesOf($person->getDirectory(), $token), 'commentAssignments' => $assigned, 'fields' => $this->fieldsNaming($person->getDirectory(), $token), 'tasksCreated' => array_column($created, 'taskId'), 'commentsWritten' => $written, 'taskRoles' => [...$members, ...$unlisted]];
+    }
+
+    /**
+     * Assignee and watcher roles of a person who is listed on the task rather than a member row (`unmatched_people`).
+     *
+     * @return list<array{taskId: string, role: string}>
+     */
+    private function unmatchedTasksOf(TaskSyncPerson $person): array
+    {
+        $found = [];
+        $after = '';
+        do {
+            /** @var list<TaskSyncItem> $page */
+            $page = $this->entityManager->createQueryBuilder()->select('i')->from(TaskSyncItem::class, 'i')->join('i.connection', 'c')
+                ->where('c.directory = :directory')->andWhere('i.id > :after')->andWhere('i.task IS NOT NULL')
+                ->setParameter('directory', $person->getDirectory())->setParameter('after', $after)
+                ->orderBy('i.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getResult();
+            foreach ($page as $item) {
+                $after = $item->getId();
+                foreach (PeopleProjection::ROLES as $role) {
+                    if (in_array($person->getId(), $item->unmatchedPeople($role->value), true)) {
+                        $found[] = ['taskId' => (string) $item->getTask()?->getId(), 'role' => $role->value];
+                    }
+                }
+            }
+        } while (count($page) === self::EXPORT_PAGE);
+
+        return $found;
     }
 
     /**

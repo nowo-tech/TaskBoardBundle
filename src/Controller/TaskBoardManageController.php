@@ -1328,7 +1328,10 @@ final class TaskBoardManageController extends AbstractController
                 }
             }
             foreach ($task->getChangeHistory() as $entry) {
-                $users[] = $entry->getUser();
+                // Since 1.28.0: a row whose author's account is gone keeps only the name.
+                if ($entry->getUser() !== null) {
+                    $users[] = $entry->getUser();
+                }
             }
             $this->avatars->prime($users);
         }

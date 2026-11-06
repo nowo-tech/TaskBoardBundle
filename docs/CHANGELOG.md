@@ -91,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GWf-I1): it stays so on the first read, a full sync asks again, and a second answer without the key counts as no files (ClickUp documents the key for tasks with files only). No stored file is touched. An already read version still reads a thread whose
   `reply_count` is above the replies kept here, so a reply that does not move `date_updated` arrives on a full sync (audit GWf-I2).
   `sync.full_sync_rereads_details` (default `false`) does the same for files, at the cost of the detail budget.
+- **Audit residuals.** GWf-L1: `TaskChangeHistory.user` is `ON DELETE SET NULL` with a `user_name` snapshot, so a history row, `time_removed` included, outlives its
+  author's account; `detachUser()` detaches it, and with `anonymise: true` forgets the name. GWd-L4: `eraseByValue()` and `eraseBoard()` also remove the lines of the *Fields* document
+  in `text` and `both` modes, recognised by its shape, so a document somebody wrote is untouched. I6: `exportPerson()` adds `tasksCreated`, `commentsWritten` and `taskRoles`.
+  *UPGRADING* no longer tells hosts to call TimeTrack's `removeForUser()` during account erasure, which deletes time.
 
 ### Added
 
