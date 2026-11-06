@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Schema change for every host: task history outlives its user (audit GWf-L1)](#schema-change-for-every-host-task-history-outlives-its-user-audit-gwf-l1)
 - [To 1.27.0](#to-1270)
   - [Schema change for every host: manual time outlives its user](#schema-change-for-every-host-manual-time-outlives-its-user)
   - [Schema change with `sync.enabled: true` only (TB-SYNC-3)](#schema-change-with-syncenabled-true-only-tb-sync-3)
