@@ -194,6 +194,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
          * @var list<string>
          */
         private array $excludedFieldTypes = [],
+        // Since 1.28.0 (TB-SYNC-4): lists, nesting, code blocks and mentions of a comment.
+        private ClickUpCommentRenderer $commentRenderer = new ClickUpCommentRenderer(),
     ) {
     }
 
@@ -745,9 +747,13 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
             return null;
         }
         $segments = is_array($row['comment'] ?? null) ? $row['comment'] : [];
-        $body     = $segments !== [] ? $this->segmentsToMarkdown($segments) : $this->stringOf($row['comment_text'] ?? null);
-        $body     = $this->sanitizer->markdown($body, 5000);
-        $user     = is_array($row['user'] ?? null) ? $row['user'] : [];
+        $body     = $segments !== [] ? $this->commentRenderer->render($segments) : '';
+        // Since 1.28.0: segments that gave no text (no file among them either) do not lose the comment's plain text.
+        if (trim($body) === '' && $this->commentAttachments($segments) === []) {
+            $body = $this->stringOf($row['comment_text'] ?? null);
+        }
+        $body = $this->sanitizer->markdown($body, 5000);
+        $user = is_array($row['user'] ?? null) ? $row['user'] : [];
         // Since 1.27.0: an assigned comment (action item) and its resolved state; unconfirmed field names
         // (`assignee`, `resolved`, `date_updated`), validated by Beacon after deploy.
         $assignee = $this->mapper->personRef($row['assignee'] ?? null);
@@ -787,57 +793,6 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         }
 
         return $files;
-    }
-
-    /**
-     * ClickUp rich text (a list of {text, attributes, type}) as Markdown.
-     *
-     * @param array<mixed> $segments
-     */
-    private function segmentsToMarkdown(array $segments): string
-    {
-        $out = '';
-        foreach ($segments as $segment) {
-            if (!is_array($segment)) {
-                continue;
-            }
-            $attributes = is_array($segment['attributes'] ?? null) ? $segment['attributes'] : [];
-            if (($segment['type'] ?? null) === 'image' && is_array($segment['image'] ?? null)) {
-                $url = $this->stringOf($segment['image']['url'] ?? null);
-                $out .= $url !== '' ? sprintf('![%s](%s)', $this->stringOf($segment['image']['name'] ?? 'image'), $url) : '';
-                continue;
-            }
-            if (($segment['type'] ?? null) === 'attachment') {
-                // Since 1.27.0: copied as a file of the comment (commentAttachments()).
-                continue;
-            }
-            if (($segment['type'] ?? null) === 'tag' && is_array($segment['user'] ?? null)) {
-                $out .= '@' . $this->stringOf($segment['user']['username'] ?? '');
-                continue;
-            }
-            // Raw text: the spaces between segments are part of the comment.
-            $text = is_string($segment['text'] ?? null) ? $segment['text'] : '';
-            if (trim($text) === '') {
-                $out .= $text;
-                continue;
-            }
-            if (($attributes['code'] ?? false) === true) {
-                $text = '`' . $text . '`';
-            }
-            if (($attributes['bold'] ?? false) === true) {
-                $text = '**' . $text . '**';
-            }
-            if (($attributes['italic'] ?? false) === true) {
-                $text = '*' . $text . '*';
-            }
-            $link = $attributes['link'] ?? null;
-            if (is_string($link) && $link !== '') {
-                $text = sprintf('[%s](%s)', $text, $link);
-            }
-            $out .= $text;
-        }
-
-        return $out;
     }
 
     /**

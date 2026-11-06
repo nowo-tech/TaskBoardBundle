@@ -515,6 +515,16 @@ sniffing), and nothing remote is rendered unescaped.
 - **TO CONFIRM** against a real workspace: the reply endpoint and the field names `assignee`, `resolved`,
   `date_updated` and the `attachment` segment shape.
 
+**Style (since 1.28.0).** A comment's segments become GitHub-flavoured Markdown. Block attributes (`list`, `indent`,
+`code-block`, and Quill's `blockquote` and `header`) count on the line feed that ends a line, which is what ClickUp
+documents, and on the line's text, in the nested (`{"list": {"list": "bullet"}}`) and the flat form. A task mention links
+to `https://app.clickup.com/t/<id>` when the segment has no address of its own; it does not point at the imported task
+here. `underline`, `color` and `background-color` have no Markdown form: the text stays and the style does not.
+
+Descriptions come from `markdown_description` through `RemoteContentSanitizer`: a GFM table stays a table, and anything
+that looks like an HTML tag stays visible as text (`\<u>`, rendered `<u>`), in a table cell too. The sanitizer also
+escapes `<` inside inline code spans, so a span shows its backslash there: block code keeps its text exactly.
+
 ### Dates, points, links, ids, location, status history, archived tasks, recurrence
 
 Kept read-only on the synced task (`task_board_sync_items.remote_meta`) and shown in the task panel's *From
