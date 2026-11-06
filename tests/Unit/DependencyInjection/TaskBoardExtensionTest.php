@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
@@ -34,6 +35,7 @@ use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
+use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -107,6 +109,28 @@ final class TaskBoardExtensionTest extends TestCase
         // The resource exclusion leaves only Symfony's "excluded" marker, never a listener.
         self::assertTrue(!$without->hasDefinition(ImportedTimeAggregatorListener::class) || $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('container.excluded'));
         self::assertFalse($without->hasDefinition(ImportedTimeAggregatorListener::class) && $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('kernel.event_listener'));
+    }
+
+    /** Since 1.26.1: manual / calendar entries are aggregated only with TimeTrack >= 1.14 (TIME_ENTRY_CREATED). */
+    public function testTimeSpentAggregatorListensToCreatedEntriesOnlyWhenTheEventExists(): void
+    {
+        if (!class_exists(TimeEntryCreatedEvent::class)) {
+            self::markTestSkipped('nowo-tech/time-track-bundle >= 1.14 is not installed.');
+        }
+        $with = new ContainerBuilder();
+        $with->setParameter('kernel.environment', 'test');
+        $with->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $with);
+        $tags = $with->getDefinition(TimeSpentAggregatorListener::class)->getTag('kernel.event_listener');
+        self::assertSame([['event' => 'nowo_time_track.time_entry.created', 'method' => 'onTimeEntryCreated']], $tags);
+
+        // TimeTrack < 1.14: no tag; the TIMER_STOP attribute alone still applies.
+        $without = new ContainerBuilder();
+        $without->setParameter('kernel.environment', 'test');
+        $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension(timeTrackEntryCreatedEvent: 'Nowo\\TimeTrackBundle\\Event\\MissingCreatedEvent'))->load([['user_class' => User::class]], $without);
+        self::assertTrue($without->hasDefinition(TimeSpentAggregatorListener::class));
+        self::assertSame([], $without->getDefinition(TimeSpentAggregatorListener::class)->getTag('kernel.event_listener'));
     }
 
     public function testWeekStartResolverFollowsTheGanttConfig(): void
