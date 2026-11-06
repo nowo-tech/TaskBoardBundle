@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.26.3] - 2026-11-06](#1263---2026-11-06)
 - [[1.26.2] - 2026-11-06](#1262---2026-11-06)
 - [[1.26.1] - 2026-11-06](#1261---2026-11-06)
 - [[1.26.0] - 2026-11-06](#1260---2026-11-06)
@@ -78,13 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The running run in the header badge (TB-SYNC-1).** `nowo_task_board_connection(board)` (the board, list and Gantt
-  header badge) also returns `activeRunId`, `progressUrl` (route `board_connection_progress`, only for users who may
-  manage the connection), the run's `total` / `processed` and `pollInterval`, so a host badge can drive the
-  `nowo-task-board-sync-progress` controller: a determinate bar, a polite live region (at most one update every 5 s) and
-  *Show the result* when the run ends, without reloading. New option `sync.badge.progress` (default `false`): `true`
-  renders that bar in the bundle's own badge; the default output is unchanged. `SyncReport::processed()` (written +
-  skipped) is the bar's numerator, also used by the progress endpoint.
 - **People page and step (TB-SYNC-2).** Routes `board_connection_people` / `board_connection_people_save`, templates
   `connection_people` / `connection_people_summary`, form `ConnectionPeopleFormType`, service
   `Sync\People\PeopleMappingService`: every remote person of the connection with a host-user select fed by the host's
@@ -97,6 +91,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mapped / not mapped people with a link; the progress JSON gains `unmappedPeople`. Config `sync.people.step`,
   `inviter`, `page_size`, `candidate_limit`, `reapply_seconds`. `TaskSyncPersonRepository::pendingReassigns()`.
   No schema change.
+
+## [1.26.3] - 2026-11-06
+
+The connection badge data carries the running sync's progress (`activeRunId`, `progressUrl` for managers, `total`, `processed`); opt-in `sync.badge.progress` draws a determinate bar in the bundle's badge.
+
+### Added
+
+- **The running run in the header badge (TB-SYNC-1).** `nowo_task_board_connection(board)` (the board, list and Gantt
+  header badge) also returns `activeRunId`, `progressUrl` (route `board_connection_progress`, only for users who may
+  manage the connection), the run's `total` / `processed` and `pollInterval`, so a host badge can drive the
+  `nowo-task-board-sync-progress` controller: a determinate bar, a polite live region (at most one update every 5 s) and
+  *Show the result* when the run ends, without reloading. New option `sync.badge.progress` (default `false`): `true`
+  renders that bar in the bundle's own badge; the default output is unchanged. `SyncReport::processed()` (written +
+  skipped) is the bar's numerator, also used by the progress endpoint.
 
 ## [1.26.2] - 2026-11-06
 
@@ -1556,7 +1564,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.26.2...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.26.3...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

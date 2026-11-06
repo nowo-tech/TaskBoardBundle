@@ -23,7 +23,7 @@ mapping of the sync tables and no header change.
 - [Statuses and sources (since 1.25)](#statuses-and-sources-since-125)
 - [Tracked time (since 1.25)](#tracked-time-since-125)
 - [Pre-scans and re-association (since 1.25)](#pre-scans-and-re-association-since-125)
-- [People page and step (since 1.27.0)](#people-page-and-step-since-127)
+- [People page and step (since 1.27.0)](#people-page-and-step-since-1270)
 - [Events](#events)
 - [Testing with the in-memory provider](#testing-with-the-in-memory-provider)
 - [Adding a provider](#adding-a-provider)

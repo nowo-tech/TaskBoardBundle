@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 1.26.3](#to-1263)
 - [To 1.26.2](#to-1262)
 - [To 1.26.1](#to-1261)
 - [To 1.26.0](#to-1260)
@@ -128,17 +129,25 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-No schema change; the default output is unchanged. The connection badge data gains `activeRunId`, `progressUrl`,
-`total`, `processed` and `pollInterval`, and the option `sync.badge.progress` (default `false`) shows a determinate
-progress bar in the bundle's badge. A host with its own `templates.connection_badge` can wire the bar itself
-([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
-
-People page (TB-SYNC-2), no schema change: a linked board's connection page links a People page where managers map
+No schema change. People page (TB-SYNC-2): a linked board's connection page links a People page where managers map
 remote people to host users. Hosts with their own `templates.connection` can include
 `templates.connection_people_summary` (variable `peopleSummary`) or link `board_connection_people`. To put the page
 between linking and the first import, set `sync.people.step: true`; for *Invite by e-mail*, set `sync.people.inviter`.
 The candidates are those of `sync.people.resolver` (`SyncPersonResolverInterface::candidates()`): a host without a
-resolver gets the board's assignable users. See [sync.md](sync.md#people-page-and-step-since-127).
+resolver gets the board's assignable users. See [sync.md](sync.md#people-page-and-step-since-1270).
+
+## To 1.26.3
+
+From **1.26.2**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No schema change; the default output is unchanged. The connection badge data gains `activeRunId`, `progressUrl`,
+`total`, `processed` and `pollInterval`, and the option `sync.badge.progress` (default `false`) shows a determinate
+progress bar in the bundle's badge. A host with its own `templates.connection_badge` can wire the bar itself
+([CONFIGURATION](CONFIGURATION.md#provider-sync-since-123)).
 
 ## To 1.26.2
 
