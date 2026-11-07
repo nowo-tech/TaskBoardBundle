@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.1.0] - 2026-11-07](#210---2026-11-07)
 - [[2.0.2] - 2026-11-07](#202---2026-11-07)
 - [[2.0.1] - 2026-11-07](#201---2026-11-07)
 - [[2.0.0] - 2026-11-07](#200---2026-11-07)
@@ -84,11 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#unreleased).
+## [2.1.0] - 2026-11-07
+
+Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#to-210).
 
 ### Changed
 
-- A synced task with no start date keeps none, instead of storing its creation date as the start (audit HY-L3). The Gantt draws it as before. Tasks already synced keep what they have: see [UPGRADING](UPGRADING.md#unreleased).
+- A synced task with no start date keeps none, instead of storing its creation date as the start (audit HY-L3). The Gantt draws it as before. Tasks already synced keep what they have: see [UPGRADING](UPGRADING.md#to-210).
 
 ### Added
 
@@ -1828,7 +1831,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.1.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
