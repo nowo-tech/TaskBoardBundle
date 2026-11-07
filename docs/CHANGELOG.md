@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `<final>`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
+Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
 
 ### Changed
 

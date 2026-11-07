@@ -146,7 +146,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Target: **2.0.0**. Audit HX (2026-11-07): Pass (good) / Low at `<final>`.
+Target: **2.0.0**. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`.
 
 ### To 2.0.0: UiKit page contract
 

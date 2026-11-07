@@ -141,7 +141,7 @@ Remote text: type and list names are single clean lines, escaped by Twig. A list
 ## UiKit migration (2.0.0)
 
 - **Quota event.** `TaskBoardEvents::QUOTA_CHECK` is a host hook, not a permission. The paths that do not ask are listed in [USAGE](USAGE.md#host-hooks-since-200). An import's count is taken before it writes, inside its transaction.
-- **First board on a GET.** `first_board_provisioner` runs only for a user the create check and the quota accept. A provisioner writes on a GET: it must be idempotent, as a repeated visit finds a board and does not call it again.
+- **First board on a GET.** `first_board_provisioner` runs only for a user the create check and the quota accept. A provisioner writes on a GET: it must be idempotent, as a repeated visit finds a board and does not call it again. Two visits at the same moment can both find none: a host's provisioner handles that.
 - **Tenant list check.** A refusal with a tenant answers 404, so the tenant's existence is not told apart.
 - **Help link.** `import.help_link` keeps the URL guard of 1.22.1 for `url`. `access_attribute` needs `security.authorization_checker`; without it the link is not shown.
 - **Runtime confirm.** `window.confirm` stays only when UiKit's confirm script is missing, so a destructive action never goes unasked.
@@ -165,7 +165,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `<final>` (Appendix HX, 2026-11-07), for 2.0.0.** 1.30.0: Pass (good) / Low at `2515e98` (Appendix HS).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `08e51a4` (Appendix HX, 2026-11-07), for 2.0.0.** 1.30.0: Pass (good) / Low at `2515e98` (Appendix HS).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
