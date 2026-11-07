@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
+use Twig\Environment;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
@@ -134,6 +141,8 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly bool $peopleBulkFormer = false,
         // Since 1.28.0: the bundle's own link page offers `unmatchedColumns` (it is always accepted when posted).
         private readonly bool $unmatchedColumnsChoice = false,
+        // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
+        private readonly TaskBoardPages $pages = new TaskBoardPages(),
     ) {
     }
 
@@ -143,7 +152,7 @@ final class TaskBoardConnectionController extends AbstractController
         $board      = $this->findManagedBoard($boardId, $user);
         $connection = $this->store->findConnection($board);
         if ($connection instanceof TaskBoardConnection) {
-            return $this->render($this->templates['connection'], $this->linkedView($board, $connection));
+            return $this->render($this->templates['connection'], ['page' => $this->connectionPageModel($board)] + $this->linkedView($board, $connection));
         }
 
         $provider = $this->pickProvider((string) $request->query->get('provider', ''));
@@ -174,6 +183,7 @@ final class TaskBoardConnectionController extends AbstractController
         }
 
         return $this->render($this->templates['connection'], [
+            'page' => $this->connectionPageModel($board),
             'board'             => $board,
             'connection'        => null,
             'providers'         => $this->providers->all(),
@@ -534,6 +544,28 @@ final class TaskBoardConnectionController extends AbstractController
             '%conflicts%' => (string) count($report->conflicts),
             '%files%'     => (string) $report->files->copied,
         ], 'NowoTaskBoardBundle');
+    }
+
+    /** Since 2.0.0: the show scaffold's model of the connection page; its two states fill `nowo_ui_show_sections`. */
+    private function connectionPageModel(TaskBoard $board): ShowPage
+    {
+        $boardUrl = $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]);
+        $twig     = $this->container->get('twig');
+
+        return new ShowPage(
+            new PageHeader(
+                TaskBoardPages::label('task_board.sync.page.title'),
+                TaskBoardPages::label('task_board.sync.page.subtitle'),
+                [
+                    new Action(label: TaskBoardPages::label('task_board.view.back_board'), href: $boardUrl),
+                    ...($this->dashboardRoute !== null ? [Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'))] : []),
+                ],
+                [new Crumb(TaskBoardTwigExtension::boardLabel($board), $boardUrl)],
+                breadcrumbsMode: 'own',
+            ),
+            bundle: TaskBoardPages::BUNDLE,
+            layout: $twig instanceof Environment ? $this->pages->layout($twig) : null,
+        );
     }
 
     /**

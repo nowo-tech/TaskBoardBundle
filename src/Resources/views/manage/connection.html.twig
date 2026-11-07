@@ -1,5 +1,4 @@
-{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
-{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
 {#
     Since 1.23: the provider connection of a board. Unlinked: provider, stored connection, the container browser and
     the import options. Linked: status, Refresh, progress, people (since 1.27.0), history, Unlink. Override with
@@ -16,21 +15,7 @@
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block nowo_ui_document_title %}{{ 'task_board.sync.page.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
-
-{% block nowo_ui_page_header %}
-    {{ nowo_ui_page_header(nowo_task_board_header({
-        title: 'task_board.sync.page.title'|trans({}, 'NowoTaskBoardBundle'),
-        intro: 'task_board.sync.page.subtitle'|trans({}, 'NowoTaskBoardBundle'),
-        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
-        actions: [
-            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle')},
-        ],
-        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
-    })) }}
-{% endblock %}
-
-{% block nowo_ui_content %}
+{% block nowo_ui_show_sections %}
 
     {% if connection %}
         {% block nowo_task_board_connection_linked %}
