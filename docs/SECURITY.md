@@ -10,7 +10,7 @@
 - [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
-- [UiKit migration (2.0.0, audit status: pending batch audit)](#uikit-migration-200-audit-status-pending-batch-audit)
+- [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -138,7 +138,7 @@ The scope and its fields come from the browser. A select refuses a value it did 
 
 Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches the page through `data-nowo-task-vars`, like column colours, and is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern.
 
-## UiKit migration (2.0.0, audit status: pending batch audit)
+## UiKit migration (2.0.0)
 
 - **Quota event.** `TaskBoardEvents::QUOTA_CHECK` is a host hook, not a permission. The paths that do not ask are listed in [USAGE](USAGE.md#host-hooks-since-200). An import's count is taken before it writes, inside its transaction.
 - **First board on a GET.** `first_board_provisioner` runs only for a user the create check and the quota accept. A provisioner writes on a GET: it must be idempotent, as a repeated visit finds a board and does not call it again.
@@ -165,7 +165,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `2515e98` (Appendix HS, 2026-11-07), for 1.30.0.** 1.29.0: Pass (good) / Low at `cc80289` (Appendix HN).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `<final>` (Appendix HX, 2026-11-07), for 2.0.0.** 1.30.0: Pass (good) / Low at `2515e98` (Appendix HS).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

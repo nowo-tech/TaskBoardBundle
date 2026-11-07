@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.0.0. Audit status: pending batch audit. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
+Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `<final>`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
 
 ### Changed
 
@@ -90,7 +90,7 @@ Target: 2.0.0. Audit status: pending batch audit. See [UPGRADING](UPGRADING.md#t
 - All 15 dialogs use the kit's `dialog` partial and overlay registry. The five `window.confirm` calls use `nowoUiAskConfirm`. Alerts, avatars, the header, the Markdown description's fold (`show_more`) and the subtask tree (`tree`, every group open) come from the kit.
 - `--nowo-task-*` tokens fall back to `--nowo-ui-*` instead of `--tblr-*`. Framework classes leave the markup, through theme slots.
 - Flashes are translated when added.
-- **BREAKING. Board, list and Gantt chrome (T6).** The views are header tabs, the Gantt scale is the kit's `tabs`, each list group is the kit's `table`, and the filters use `filters_collapse` by default. The controller `nowo-task-board-filter-collapse` goes.
+- **BREAKING. Board, list and Gantt chrome (T6).** The views are header tabs, the Gantt scale is the kit's `tabs`, each list group is the kit's `table`, and the filters fold on UiKit's markup with a bundle controller that needs no host peer (`nowo-task-board-filter-fold`, replacing `nowo-task-board-filter-collapse`). A filter restored on Back or reload opens the fold.
 
 ### Added
 

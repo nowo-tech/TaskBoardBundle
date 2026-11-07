@@ -146,7 +146,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Target: **2.0.0**. Audit status: pending batch audit.
+Target: **2.0.0**. Audit HX (2026-11-07): Pass (good) / Low at `<final>`.
 
 ### To 2.0.0: UiKit page contract
 
@@ -170,7 +170,7 @@ A layout that renders `{% block body %}` and has no `nowo_ui_page_header` still 
 
 **Flashes.** The controller translates a flash when it adds it, because the layout's flash partial knows no bundle domain. A host's own `flash` handling of the keys `task_board.flash.*` now receives text.
 
-**Access checker.** `TenantAwareTaskBoardAccessCheckerInterface::canListBoards(object $user, ?string $tenantKey = null)`: implementers **must widen the signature**, or PHP refuses the class. With a tenant, a refusal answers 404 on its index and create route.
+**Access checker.** `TenantAwareTaskBoardAccessCheckerInterface::canListBoards(object $user, ?string $tenantKey = null)`: implementers **must widen the signature**, or PHP refuses the class. With a tenant, a refusal answers 404 on its index and create route. Widening is not enough to narrow a list: return false for a tenant the user may not list.
 
 **Twig.** `nowo_task_board_btn_class()` is deprecated, use `nowo_ui_class(slot, 'NowoTaskBoardBundle')`.
 
@@ -185,22 +185,22 @@ A layout that renders `{% block body %}` and has no `nowo_ui_page_header` still 
 | `nowo-task-board-description__text`, the controller `nowo-task-board-description` | `show_more`. `nowo-task-board-description` stays on its root |
 | Controllers `nowo-task-board-dialog`, `data-dialog` on an opener, `data-open-on-connect` | `data-nowo-ui-dialog-open="<id>"`, `partials/_open_modal_on_load`. `data-dialog` stays only on the dialogs that had it |
 | `data-nowo-task-board-activity-filter#confirm`, `data-confirm-message` | `data-confirm` on a form or submit button |
-| `nowo-task-list__filter-panel`, `__filter-toggle`, `__filter-body`, `__filter-count`, `__filter-caret`, the controller `nowo-task-board-filter-collapse` | `nowo-ui-filters-collapse*`. `nowo-task-list__filters`, `nowo-task-board-list-filters` stay |
+| `nowo-task-list__filter-panel`, `__filter-toggle`, `__filter-body`, `__filter-count`, `__filter-caret`, the controller `nowo-task-board-filter-collapse` | `nowo-ui-filters-collapse*`, controller `nowo-task-board-filter-fold`. `nowo-task-list__filters`, `nowo-task-board-list-filters` stay |
 | `nowo-task-list__table-wrap`, `nowo-task-list__table` | `[data-nowo-ui-region="table"]`, `nowo-ui-table*`. `nowo-task-list__row` and every row `data-*` stay |
 | `nowo-task-gantt__scale`, `is-active` on it | The `tabs` partial, `aria-current` on the link. `data-scale` and `nowo-task-gantt__scales` stay |
 | Header action links to the other views | Tabs in `[data-nowo-ui-region="area-nav"]` |
 | Test ids `nowo-task-board-index-empty`, `nowo-task-board-list` on the index, `nowo-task-board-index-boards` | `[data-nowo-ui-region="empty"]`, `[data-testid="nowo-task-board-index"]` |
 | Framework literals in the markup (`btn`, `btn-*`, `card*`, `alert*`, `badge bg-*`, `row`, `col-*`, `mb-*`, `d-flex`, `page-header`, `text-secondary`) | Theme slots of `NowoTaskBoardBundle`, or `nowo-task-*` helpers |
 
-CSS that relied on `.btn`, `.card` or `.page-header` inside task pages must move: on Beacon, `.tasks-views ~ .page-header`. `--tblr-*` no longer reaches these pages: set `--nowo-task-*` or `--nowo-ui-*`, see [THEMING](THEMING.md).
+CSS that relied on `.btn`, `.card` or `.page-header` inside task pages must move: on Beacon, `.tasks-views ~ .page-header` and `.page-header:has(~ .nowo-task-sync-people)`. `nowo-task-subtree` is now a `div` with the kit's `ul` inside, so a rule with `.nowo-task-subtree > .nowo-task-subtree__item` stops matching. `nowo-task-dialog__actions` is a `footer` in a dialog. `--tblr-*` no longer reaches these pages: set `--nowo-task-*` or `--nowo-ui-*`, see [THEMING](THEMING.md). `--nowo-task-overlay-blur` now defaults to `0`; it was `2px`.
 
-**Peers.** The list's filter fold is UiKit's `filters-collapse` Stimulus peer, and its groups use `collapse-panel`. Register them in your host. Without them the filters and groups stay open and the toggles do nothing. The fold's state is now a cookie, and its count covers server values only, because these filters run in the browser: the count stays at zero, and it no longer opens by itself when a filter is active.
+**Filter fold.** The list's filters fold with the bundle's own controller, on UiKit's markup and its cookie, with no peer to register. A host with the kit's `filters-collapse` peer changes nothing: the peer is only on a host's `templates.filters_collapse`, so the toggle never answers twice. A filter the browser restores on Back or reload is applied and opens the fold, whichever drives it. The count is live; the line is only shown folded. The list's groups still use UiKit's `collapse-panel` peer, as since 1.13: without it they stay open.
 
 **People stays a declared unique page.** It is one long form with a row per person, its own filter pills and pager, and it saves everything at once. The form scaffold's body-only mode would add only a wrapper, so the page fills the canonical blocks and takes its parts from slots. See [TEMPLATES](TEMPLATES.md#unique-pages).
 
 **Not in this step.** Drag and drop stays on the board's own controller until UiKit's `sortable` passes a test on a real device. Moved to 2.1: the connection dialog (TB-5), `task_panel.mode: drawer` (TB-11), and `multi-select` for the dependency picker, which needs a Tom Select peer the bundle does not load.
 
-**New, opt-in.** `tenancy.open_single_board`, `tenancy.first_board_provisioner`, `TaskBoardEvents::QUOTA_CHECK`, `import.help_link`, `templates.task_time_before`, `templates.page_header`, `board.toolbar`, `task_panel.toolbar` with `data-nowo-task-board-open`, and the public hooks `data-nowo-task-title`, `data-nowo-task-column`, `data-nowo-task-panel`. See [USAGE](USAGE.md#host-hooks-since-200). `board.icon_form_type` accepts UiKit's `EmojiPickerType`.
+**New, opt-in.** `tenancy.open_single_board`, `tenancy.first_board_provisioner`, `TaskBoardEvents::QUOTA_CHECK`, `import.help_link`, `templates.task_time_before`, `templates.page_header`, `board.toolbar`, `task_panel.toolbar` with `data-nowo-task-board-open`, and the public hooks `data-nowo-task-title`, `data-nowo-task-column`, `data-nowo-task-panel`. See [USAGE](USAGE.md#host-hooks-since-200). `board.icon_form_type` accepts UiKit's `EmojiPickerType`. Add its script, `nowo_ui_script_names()|merge(['emoji-picker'])`; without it the field is a plain text input.
 
 ## To 1.30.0
 
