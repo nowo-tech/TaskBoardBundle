@@ -255,8 +255,13 @@ nowo_task_board:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `templates.layout` | `@NowoTaskBoardBundle/layout.html.twig` | Twig layout extended by manage pages (Twig global `nowo_task_board_layout`). **Host apps set this to the project layout** (or a one-file bridge). Default is the bundle demo layout only. |
-| `templates.css_framework` | `tabler` | Host CSS stack hint (Twig global `nowo_task_board_css_framework`). Values: `bootstrap5`, `bootstrap` (alias), `bootstrap4`, `tabler` (Bootstrap-compatible), `tailwind`, `foundation`, `custom`, `none`. Default matches the demo Tabler CDN. Invalid values are rejected. |
+| `web_ui.layout_template` | `null` | Since 2.0.0: layout of the pages; null = `nowo_ui_kit.layouts.admin`. |
+| `web_ui.templates.<page>` | none | Since 2.0.0: template per page; wins over `templates.<page>`. |
+| `templates.layout` | `null` | Deprecated since 2.0.0: use `web_ui.layout_template`. |
+| `templates.page_header` | `true` | Since 2.0.0: `false` leaves the header out of the board, list, Gantt and import pages. |
+| `board.toolbar` | `true` | Since 2.0.0: `false` leaves the strip above the board out. |
+| `task_panel.toolbar` | `true` | Since 2.0.0: `false` leaves the trail and actions out of the panel. |
+| `templates.css_framework` | `null` | Deprecated since 2.0.0 and ignored: set `nowo_ui_kit.css_framework`. |
 | `templates.index` | `@NowoTaskBoardBundle/manage/index.html.twig` | Boards index page. |
 | `templates.board` | `@NowoTaskBoardBundle/manage/board.html.twig` | Kanban board page. |
 | `templates.list` | `@NowoTaskBoardBundle/manage/list.html.twig` | List view page. |
@@ -282,8 +287,6 @@ nowo_task_board:
 
 | Piece | Role |
 |-------|------|
-| Twig global `nowo_task_board_layout` | Value of `templates.layout` |
-| Twig global `nowo_task_board_css_framework` | Value of `templates.css_framework` |
 | `@NowoTaskBoardBundle/layout.html.twig` | Demo full-HTML layout (Tabler CDN + navbar when `css_framework` is `tabler` / Bootstrap). Used only when `templates.layout` keeps the default. |
 
 ### CSS framework
@@ -295,11 +298,7 @@ nowo_task_board:
 | `tailwind` / `foundation` | Accepted for host alignment; pages still emit Bootstrap/Tabler classes until macros exist — provide compatible CSS or map via your layout. |
 | `custom` / `none` | Rely on semantic `nowo-ui-*` classes and **host CSS**. Do not expect Bootstrap utility classes to style the UI. |
 
-When you point `templates.layout` at the project, the demo Tabler CDN is skipped; your stack must provide styles matching `css_framework`. Bundle CSS/JS (`task-board.css` / `task-board.js`) are always loaded from manage pages via `parent()` stacking.
-
-Your project layout (or bridge) **must define** `stylesheets` and `javascripts` blocks so `{{ parent() }}` can stack assets.
-
-**Content blocks:** pages fill `body`. The demo layout also exposes `nowo_ui_content` nested under `body` for bridges. If your project layout uses a different content block name, add a thin bridge (see `@NowoTaskBoardBundle/layout_integrate_host.html.twig`) and set `templates.layout` to that bridge:
+Since 2.0.0 the pages fill the UiKit canonical blocks, see [TEMPLATES](TEMPLATES.md). A pre-2.0 layout goes through a bridge until 3.0, see [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
 
 ```yaml
 nowo_task_board:

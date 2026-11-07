@@ -10,6 +10,7 @@
 - [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
+- [UiKit migration (2.0.0, audit status: pending batch audit)](#uikit-migration-200-audit-status-pending-batch-audit)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -136,6 +137,16 @@ The scope and its fields come from the browser. A select refuses a value it did 
 ## Task types, tag colours and descriptions (since 1.28.0)
 
 Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches the page through `data-nowo-task-vars`, like column colours, and is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern.
+
+## UiKit migration (2.0.0, audit status: pending batch audit)
+
+- **Quota event.** `TaskBoardEvents::QUOTA_CHECK` is a host hook, not a permission. The paths that do not ask are listed in [USAGE](USAGE.md#host-hooks-since-200). An import's count is taken before it writes, inside its transaction.
+- **First board on a GET.** `first_board_provisioner` runs only for a user the create check and the quota accept. A provisioner writes on a GET: it must be idempotent, as a repeated visit finds a board and does not call it again.
+- **Tenant list check.** A refusal with a tenant answers 404, so the tenant's existence is not told apart.
+- **Help link.** `import.help_link` keeps the URL guard of 1.22.1 for `url`. `access_attribute` needs `security.authorization_checker`; without it the link is not shown.
+- **Runtime confirm.** `window.confirm` stays only when UiKit's confirm script is missing, so a destructive action never goes unasked.
+- **Avatars.** Pictures now pass UiKit's `AvatarUrlPolicy`: https without userinfo, or a same-origin path.
+- **Subtask nodes.** Titles reach `tree` as text, escaped by the partial, and in `data-*` attributes through `nowo_ui_safe_attrs`.
 
 ## Logging and personal data
 

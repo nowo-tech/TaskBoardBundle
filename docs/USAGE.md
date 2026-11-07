@@ -30,6 +30,7 @@
   - [No inline styles](#no-inline-styles)
 - [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
   - [Theming with design tokens](#theming-with-design-tokens)
+- [Host hooks (since 2.0.0)](#host-hooks-since-200)
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
 - [Task colour and dialogs (since 1.14)](#task-colour-and-dialogs-since-114)
@@ -230,20 +231,47 @@ Overrides and demos must not reintroduce raw `<form>` / `<input>` / `<select>` /
 {{ form_end(advanceForm) }}
 ```
 
-## Layout without forking pages
-
-1. Set `nowo_task_board.templates.layout` to your project layout (e.g. `base.html.twig`) or a one-file bridge — see [CONFIGURATION.md — Layout integration](CONFIGURATION.md#layout-integration-req-ui-001).
-2. Set `nowo_task_board.templates.css_framework` to match your stack (`tabler` default, or `bootstrap5` / `custom` / …). Twig global: `nowo_task_board_css_framework`.
-3. Manage pages `{% extends nowo_task_board_layout %}` and call `{{ parent() }}` in `stylesheets` / `javascripts` so host and bundle assets (`task-board.css` / `task-board.js`) stack.
-4. Default `@NowoTaskBoardBundle/layout.html.twig` is a **demo** full HTML document (Tabler CDN when `css_framework` is Tabler/Bootstrap). Host apps should not rely on forking it for production chrome.
-5. Manage markup ships Tabler / Bootstrap 5-compatible classes. With `custom`, style semantic `nowo-ui-*` classes from the host — you do not need to fork every page.
+## Host hooks (since 2.0.0)
 
 ```yaml
 nowo_task_board:
+    tenancy:
+        open_single_board: true            # a tenant index opens the only board the user sees; ?boards=1 keeps the list
+        first_board_provisioner: App\Tasks\FirstBoard   # FirstBoardProvisionerInterface, called on an empty tenant index
+    import:
+        help_link:
+            route: app_manual              # or url
+            label: tasks.import.help       # translated with translation_domain
+            anchor_from: source            # the #anchor follows the import source
+            access_attribute: ROLE_MANUAL  # is_granted() before rendering
+            external: auto                 # auto: a new tab for a URL on another host
     templates:
-        layout: 'base.html.twig'
-        css_framework: bootstrap5   # or tabler | custom
+        task_time_before: tasks/_timer.html.twig   # before the Time section of the task page and panel
 ```
+
+**Chrome a host draws itself.** `templates.page_header: false` leaves the header out of the board, list, Gantt and import pages. `board.toolbar: false` leaves the strip above the board out; its dialogs stay, and any element with `data-nowo-task-board-open="column-set-save"` or `"column-set-apply"` opens them. `task_panel.toolbar: false` leaves the trail and actions out of the panel.
+
+**Quota.** `TaskBoardEvents::QUOTA_CHECK` asks before a write. `TaskBoardQuotaCheckEvent` holds `action` (`board_create`, `task_create`, `import`), `tenantKey`, `board`, `count` and `actor`; `deny($reason)` refuses it and shows the reason, which you pass translated.
+
+| Write path | Asks | On refusal |
+| --- | --- | --- |
+| New board | `board_create` | Flash and redirect, or 422 with the form on a dialog request |
+| First board on a visit (`single_board`, `first_board_provisioner`) | `board_create` | The empty index |
+| New task, inline add | `task_create` | Flash and redirect |
+| New subtask | `task_create` | Flash and redirect |
+| Import into a board or a task, web and command | `import`, with the tasks the file would create, before anything is written | The reason as the import's error |
+| Provider sync, restoring or reopening a task | No: `SyncLimitCheckerInterface` | See [sync](sync.md) |
+| `TaskManager::create()` called by host code | No: the host asks | |
+
+**Tenant list check.** A `TenantAwareTaskBoardAccessCheckerInterface` answers `canListBoards($user, $tenantKey)`. With a tenant, a refusal is a 404 on its index and create route.
+
+**Emoji picker.** `board.icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType` swaps the icon field. The bundle's constraints still apply.
+
+**Remote dialogs.** TaskBoard answers redirects. Set `nowo_ui_kit.remote_dialog.convert_redirects: true`, and `step_routes` for steps, to answer a dialog request with 204 and the redirect header.
+
+## Layout without forking pages
+
+Since 2.0.0: set `nowo_task_board.web_ui.layout_template` to a layout that renders the UiKit canonical blocks, or leave it null for `nowo_ui_kit.layouts.admin`. See [TEMPLATES](TEMPLATES.md) and [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
 
 ## Multi-tenant hosts (since 1.10)
 

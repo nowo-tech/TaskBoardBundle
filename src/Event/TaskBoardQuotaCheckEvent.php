@@ -36,6 +36,7 @@ final class TaskBoardQuotaCheckEvent extends Event
 
     public function deny(string $reason): void
     {
+        // @igor-ignore - An event object, one per dispatch; not a shared service.
         $this->reason = $reason;
         $this->stopPropagation();
     }
