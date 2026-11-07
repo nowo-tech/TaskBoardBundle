@@ -26,7 +26,10 @@ use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\Label;
 use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\Table;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -102,6 +105,10 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         // Since 2.0.0 (TB-3): templates.task_time_before, included before the task's Time section.
         private readonly ?string $taskTimeBefore = null,
         private readonly ?UrlGeneratorInterface $urls = null,
+        // Since 2.0.0 (TB-10): templates.page_header, board.toolbar and task_panel.toolbar.
+        private readonly bool $pageHeader = true,
+        private readonly bool $boardToolbar = true,
+        private readonly bool $panelToolbar = true,
     ) {
     }
 
@@ -223,6 +230,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_legacy_blocks', $this->pages->legacyBlocks(...), ['needs_environment' => true]),
             new TwigFunction('nowo_task_board_header', $this->pageHeader(...), ['needs_context' => true]),
             new TwigFunction('nowo_task_board_subtask_nodes', $this->subtaskNodes(...)),
+            new TwigFunction('nowo_task_board_list_table', $this->listTable(...)),
             // Since 1.30.0 (spec 211).
             new TwigFunction('nowo_task_board_description', $this->boardDescription(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_label', self::boardLabel(...)),
@@ -292,6 +300,57 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         }
 
         return $nodes;
+    }
+
+    /**
+     * Since 2.0.0 (K3): the table of one group of the list view. The row attributes carry what the client filters, sort and
+     * totals read; the cells come from `_list_row_cells.html.twig`.
+     *
+     * @param iterable<Task> $tasks
+     */
+    public function listTable(iterable $tasks, ?string $panelTargetPath = null): Table
+    {
+        $search = $this->syncSearchTexts($tasks);
+        $label  = static fn (string $key): Label => TaskBoardPages::label($key);
+        $time   = 'nowo-task-list__time-col nowo-task-list__num';
+
+        return new Table(
+            [
+                new Column('title', $label('task_board.form.task.title')),
+                new Column('people', $label('task_board.task.people')),
+                new Column('due', $label('task_board.form.task.due')),
+                new Column('priority', $label('task_board.form.task.priority')),
+                new Column('tags', $label('task_board.form.task.tags')),
+                new Column('estimate', $label('task_board.time.estimate'), class: $time),
+                new Column('spent', $label('task_board.time.spent'), class: $time),
+                new Column('deviation', $label('task_board.time.deviation'), class: $time),
+            ],
+            $tasks,
+            responsive: 'scroll',
+            bundle: TaskBoardPages::BUNDLE,
+            rowAttributes: function (Task $task) use ($search, $panelTargetPath): array {
+                $deviation = TaskDeviation::of($task);
+                $column    = $task->getColumn()?->getName() ?? '';
+
+                return [
+                    'class'                                   => 'nowo-task-list__row' . ($task->isCompleted() ? ' is-done' : ''),
+                    'data-nowo-task-board-list-filter-target' => 'row',
+                    'data-title'                              => $task->getTitle(),
+                    'data-nowo-task-title'                    => $task->getTitle(),
+                    'data-nowo-task-column'                   => $column !== '' ? $column : null,
+                    'data-search-extra'                       => $search[$task->getId()] ?? '',
+                    'data-priority'                           => $task->getPriority()->value,
+                    'data-column'                             => $column,
+                    'data-column-name'                        => $column,
+                    'data-due'                                => $task->getDueAt()?->format('Y-m-d') ?? '',
+                    'data-task-id'                            => $task->getId(),
+                    'data-estimate'                           => $deviation->hasEstimate() ? $deviation->estimatedMinutes : '',
+                    'data-spent'                              => $deviation->spentMinutes,
+                    'data-over'                               => $deviation->isOver() ? '1' : '0',
+                    'data-task-panel-url'                     => $this->urls?->generate($this->routeName('task_panel'), ['taskId' => $task->getId()] + ($panelTargetPath !== null && $panelTargetPath !== '' ? ['_target_path' => $panelTargetPath] : [])),
+                ];
+            },
+        );
     }
 
     /**
@@ -498,6 +557,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             'nowo_task_board_sync_badge_connect_link' => $this->syncBadgeConnectLink,
             // Since 2.0.0 (TB-3): templates.task_time_before.
             'nowo_task_board_task_time_before' => $this->taskTimeBefore,
+            // Since 2.0.0 (TB-10): the switches of the chrome a host draws itself.
+            'nowo_task_board_ui' => ['page_header' => $this->pageHeader, 'board_toolbar' => $this->boardToolbar, 'panel_toolbar' => $this->panelToolbar],
         ];
     }
 }

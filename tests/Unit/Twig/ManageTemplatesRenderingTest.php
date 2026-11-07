@@ -766,8 +766,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             'dashboardRoute' => null,
         ]);
 
-        self::assertStringContainsString('data-controller="nowo-task-board-filter-collapse"', $html);
-        self::assertMatchesRegularExpression('/class="nowo-task-list__filter-toggle"[^>]*data-controller="disclosure-icon"[^>]*aria-expanded="true"[^>]*aria-controls="nowo-task-list-filters-/', $html);
+        self::assertStringContainsString('data-controller="filters-collapse"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-board-value="' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
         self::assertMatchesRegularExpression('/name="sort"[^>]*data-nowo-task-board-list-filter-target="sort"|data-nowo-task-board-list-filter-target="sort"[^>]*name="sort"/', $html);
@@ -775,7 +774,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertMatchesRegularExpression('/data-nowo-task-board-list-filter-target="timeColumns"[^>]*data-nowo-task-filter-ignore/', $html);
         self::assertMatchesRegularExpression('/data-estimate="90"\s+data-spent="120"\s+data-over="1"/', $html);
         self::assertMatchesRegularExpression('/data-estimate=""\s+data-spent="0"\s+data-over="0"/', $html);
-        self::assertStringContainsString('<tfoot class="nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">', $html);
+        self::assertStringContainsString('<tfoot class="nowo-ui-table__foot nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">', $html);
         self::assertStringContainsString('nowo-task-list__totals', $html);
         self::assertStringContainsString('+30 min (+33 %)', $html);
         self::assertStringNotContainsString(' style="', $html);
@@ -794,7 +793,7 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         self::assertStringNotContainsString('nowo-task-board-filter-collapse', $html);
         self::assertStringNotContainsString('nowo-task-list__filter-toggle', $html);
-        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-board-list-filters nowo-task-list__filters issue-filters panel"[^>]*>\s*<div class="host-fold" data-key="nowo-task-board-list-' . $this->board->getId() . '" data-fold-key="nowo-task-board-list-' . $this->board->getId() . '"/', $html);
+        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-list__filters issue-filters panel"[^>]*>\s*<div class="host-fold" data-key="nowo-task-board-list-' . $this->board->getId() . '" data-fold-key="nowo-task-board-list-' . $this->board->getId() . '"/', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
     }
 
@@ -813,7 +812,8 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         self::assertStringContainsString('data-week-start="sunday"', $html);
         self::assertStringContainsString('nowo-task-gantt--months', $html);
-        self::assertMatchesRegularExpression('/href="[^"]*scale=months"[^>]*class="nowo-task-gantt__scale is-active"[^>]*aria-current="true"/', $html);
+        self::assertMatchesRegularExpression('/<a[^>]*href="[^"]*scale=months"[^>]*aria-current="[^"]*"/', $html);
+        self::assertStringContainsString('data-action="nowo-task-board-gantt#rememberScale"', $html);
         self::assertStringContainsString('href="/tools/task-board/board/' . $this->board->getId() . '/gantt?scale=hours"', $html);
         self::assertStringContainsString('task_board.gantt.clamped_months', $html);
         self::assertStringContainsString('nowo-task-gantt__bar-spent', $html);
@@ -1214,7 +1214,7 @@ final class ManageTemplatesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig')));
+        $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig'), urls: new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new ThemeExtension(new Theme()));
         // The task page's scaffold reads it; the pages with a model of their own pass theirs.
         $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE));

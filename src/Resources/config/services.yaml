@@ -138,6 +138,9 @@ services:
             $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
             $syncBadgeConnectLink: '%nowo_task_board.sync.badge.connect_link%'
             $taskTimeBefore: '%nowo_task_board.templates.task_time_before%'
+            $pageHeader: '%nowo_task_board.templates.page_header%'
+            $boardToolbar: '%nowo_task_board.board.toolbar%'
+            $panelToolbar: '%nowo_task_board.task_panel.toolbar%'
 
     # Since 2.0.0: the layout of the pages (web_ui.layout_template, or the deprecated templates.layout).
     Nowo\TaskBoardBundle\Ui\TaskBoardPages:

@@ -1672,38 +1672,10 @@ details.nowo-task-section[open] > summary,
     font-size: 0.8125rem;
 }
 
-.nowo-task-list__table-wrap {
-    overflow-x: auto;
-}
 
-.nowo-task-list__table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-}
 
-.nowo-task-list__table th {
-    padding: 0.4rem 1rem;
-    border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    color: var(--nowo-task-muted, var(--nowo-ui-muted));
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-align: start;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
 
-.nowo-task-list__table td {
-    padding: 0.5rem 1rem;
-    border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    vertical-align: middle;
-}
 
-.nowo-task-list__table th:first-child,
-.nowo-task-list__table td:first-child {
-    width: 55%;
-}
 
 .nowo-task-list__row:hover {
     background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
@@ -1744,8 +1716,8 @@ details.nowo-task-section[open] > summary,
 }
 
 @media (max-width: 640px) {
-    .nowo-task-list__table th:nth-child(n + 4),
-    .nowo-task-list__table td:nth-child(n + 4) {
+    .nowo-task-list__group-body table th:nth-child(n + 4),
+    .nowo-task-list__group-body table td:nth-child(n + 4) {
         display: none;
     }
 }
@@ -1765,6 +1737,12 @@ details.nowo-task-section[open] > summary,
 
 
 
+
+/* The kit draws the backdrop too; these two tokens still set it for hosts that use them (since 1.13.1). */
+dialog.nowo-task-dialog--native::backdrop {
+    background: var(--nowo-task-overlay, var(--nowo-ui-overlay, rgb(15 23 42 / 0.45)));
+    backdrop-filter: blur(var(--nowo-task-overlay-blur, 0));
+}
 
 /* Since 2.0.0 the kit's `dialog` draws the shell, sizes it and scrolls its body: this only lays out the bundle's content. */
 .nowo-task-dialog--native .nowo-task-dialog__body {
@@ -2368,48 +2346,11 @@ details.nowo-task-section[open] > summary,
  * New tokens: --nowo-task-gantt-spent (the time-spent fill of a bar), --nowo-task-overrun (over-estimate marks,
  * default the danger colour), --nowo-task-on-track / --nowo-task-under (deviation colours, default success / warning).
  */
-.nowo-task-list__filter-panel {
-    margin-bottom: 1rem;
-}
 
-.nowo-task-list__filter-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    border-radius: var(--nowo-task-radius-sm, var(--nowo-ui-radius));
-    background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-}
 
-.nowo-task-list__filter-toggle:hover {
-    background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
-}
 
-.nowo-task-list__filter-toggle:focus-visible {
-    outline: 2px solid var(--nowo-task-accent, var(--nowo-ui-primary));
-    outline-offset: 2px;
-}
 
-.nowo-task-list__filter-count {
-    min-width: 1.25rem;
-    padding: 0 0.35rem;
-    border-radius: 999px;
-    background: var(--nowo-task-accent, var(--nowo-ui-primary));
-    color: #fff;
-    font-size: 0.6875rem;
-    line-height: 1.25rem;
-    text-align: center;
-}
 
-.nowo-task-list__filter-panel .nowo-task-list__filters {
-    margin-bottom: 0;
-}
 
 .nowo-task-board-list-filters .nowo-task-check {
     display: flex;
@@ -2437,8 +2378,8 @@ details.nowo-task-section[open] > summary,
     white-space: nowrap;
 }
 
-.nowo-task-list__table tfoot th,
-.nowo-task-list__table tfoot td {
+.nowo-task-list__group-body table tfoot th,
+.nowo-task-list__group-body table tfoot td {
     border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     color: var(--nowo-task-muted, var(--nowo-ui-muted));
     font-size: 0.8125rem;
@@ -2648,38 +2589,10 @@ select.nowo-task-dependency-picker option {
     flex-basis: 100%;
 }
 
-.nowo-task-gantt__scales {
-    display: inline-flex;
-    padding: 0.15rem;
-    border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    border-radius: var(--nowo-task-radius-sm, var(--nowo-ui-radius));
-    background: var(--nowo-task-surface-muted, var(--nowo-ui-surface-muted));
-}
 
-.nowo-task-gantt__scale {
-    padding: 0.2rem 0.65rem;
-    border-radius: calc(var(--nowo-task-radius-sm, var(--nowo-ui-radius)) - 2px);
-    color: var(--nowo-task-muted, var(--nowo-ui-muted));
-    font-size: 0.8125rem;
-    font-weight: 500;
-    text-decoration: none;
-}
 
-.nowo-task-gantt__scale:hover {
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
-}
 
-.nowo-task-gantt__scale.is-active {
-    background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-    font-weight: 600;
-}
 
-.nowo-task-gantt__scale:focus-visible {
-    outline: 2px solid var(--nowo-task-accent, var(--nowo-ui-primary));
-    outline-offset: 1px;
-}
 
 .nowo-task-gantt__notice {
     margin: 0;
@@ -2772,10 +2685,6 @@ details.nowo-task-section > summary {
 
 
 
-.nowo-task-list__filter-caret {
-    display: inline-flex;
-    color: var(--nowo-task-muted, var(--nowo-ui-muted));
-}
 
 /*
  * Since 1.15: a very tall board column may scroll inside itself — set --nowo-task-column-max-height (e.g. 70vh) and
@@ -3550,6 +3459,8 @@ a.nowo-task-nav__step:focus-visible {
 }
 
 .nowo-task-board-list__name { font-weight: 600; }
+
+.nowo-task-gantt__scales { flex: 0 0 auto; }
 
 /* Since 2.0.0: small layout helpers of the bundle's own markup, in place of framework utilities. */
 .nowo-task-flex { display: flex; }

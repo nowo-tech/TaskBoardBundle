@@ -653,3 +653,4 @@ task_board.form.board.advanced: "Avancé"
 task_board.board.show_more: "Afficher plus"
 task_board.board.show_less: "Afficher moins"
 task_board.index.views: Vues
+task_board.view.label: Vues

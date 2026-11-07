@@ -505,6 +505,7 @@ final class Configuration implements ConfigurationInterface
                         // Since 1.27.0 (TB-SYNC-2): the People page and the People summary of the connection page.
                         ->scalarNode('connection_people')->defaultValue('@NowoTaskBoardBundle/manage/connection_people.html.twig')->end()
                         ->scalarNode('connection_people_summary')->defaultValue('@NowoTaskBoardBundle/manage/_connection_people_summary.html.twig')->end()
+                        ->booleanNode('page_header')->defaultTrue()->info('Since 2.0.0: false leaves the page header out of the board, list, Gantt and import pages, for a host that draws its own.')->end()
                         ->scalarNode('task_time_before')
                             ->defaultNull()
                             ->info('Since 2.0.0: a template included before the Time section of the task page and panel, with the page variables (task), e.g. a timer. null = nothing.')
@@ -622,6 +623,7 @@ final class Configuration implements ConfigurationInterface
                             ->defaultNull()
                             ->info('Since 1.24: service id of a Nowo\\TaskBoardBundle\\View\\TaskBoardDefaultViewResolverInterface (the view a board opens in for a user: board, list or gantt). The plain board route redirects to the list / Gantt route; ?view=board, XHR and links from the same board keep the board view. null = always the board view.')
                         ->end()
+                        ->booleanNode('toolbar')->defaultTrue()->info('Since 2.0.0: false leaves the strip above the board out. The column-set dialogs stay; a host button opens them with data-nowo-task-board-open.')->end()
                         // Since 1.30.0 (spec 211).
                         ->booleanNode('icon')->defaultFalse()->info('Since 1.30.0: true = the New board form asks for an icon, one emoji of at most 16 bytes. An icon a board already has always shows.')->end()
                         ->scalarNode('icon_form_type')->defaultNull()->info('Since 1.30.0: form type of the icon field, e.g. an emoji picker. The bundle\'s constraints always apply. null = a text input.')->end()
@@ -640,6 +642,12 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                             ->info('Since 1.24: request header of the host dialogs (e.g. X-Beacon-Dialog). An invalid New board submission carrying it answers 422 with only the create form (manage/_board_create_form.html.twig) for the dialog; without it, 422 with the index page and the New board dialog open. null = always the index page.')
                         ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_panel')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('toolbar')->defaultTrue()->info('Since 2.0.0: false leaves the trail and actions out of the task panel, for a host drawer with its own.')->end()
                     ->end()
                 ->end()
                 ->arrayNode('import')

@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingBoardProvisioner;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TenantCreateChecker;
+use Nowo\UiKitBundle\Form\EmojiPickerType;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -276,6 +277,61 @@ final class HostHooksTest extends FunctionalTestCase
         self::assertResponseStatusCodeSame(204);
         self::assertTrue($this->client->getResponse()->headers->has('X-Nowo-Redirect'));
         self::assertNotNull($board->getId());
+    }
+
+    public function testTheChromeSwitchesLeaveTheHeaderToolbarAndPanelToolbarOut(): void
+    {
+        $this->boot([
+            'templates'  => ['page_header' => false],
+            'board'      => ['toolbar' => false],
+            'task_panel' => ['toolbar' => false],
+        ]);
+        $board = $this->board();
+        $task  = $this->task($board, 'A task');
+        $id    = $board->getId();
+
+        foreach (['/board/' . $id, '/board/' . $id . '/list', '/board/' . $id . '/gantt', '/board/' . $id . '/import'] as $path) {
+            $crawler = $this->client->request('GET', self::BASE . $path);
+            self::assertResponseIsSuccessful();
+            self::assertCount(0, $crawler->filter('[data-nowo-ui-region="header"]'), $path);
+        }
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $id);
+        self::assertCount(0, $crawler->filter('.nowo-task-board__toolbar, .nowo-task-column-sets__save'));
+        self::assertCount(1, $crawler->filter('dialog#nowo-task-column-set-save'));
+        self::assertCount(1, $crawler->filter('dialog#nowo-task-column-set-apply'));
+
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . '/panel');
+        self::assertCount(0, $crawler->filter('.nowo-task-detail__toolbar'));
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId());
+        self::assertCount(1, $crawler->filter('.nowo-task-detail__toolbar'), 'the page keeps it');
+    }
+
+    public function testByDefaultTheChromeIsThereAndTheViewsAreTabs(): void
+    {
+        $this->boot([]);
+        $board   = $this->board();
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId());
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="header"]'));
+        self::assertCount(3, $crawler->filter('[data-nowo-ui-region="area-nav"] a'));
+        self::assertCount(1, $crawler->filter('.nowo-task-board__toolbar .nowo-task-column-sets__save[data-nowo-task-board-open="column-set-save"]'));
+    }
+
+    public function testAnEmojiPickerIsTheIconFieldAndTheConstraintsStay(): void
+    {
+        $this->boot(['board' => ['icon' => true, 'icon_form_type' => EmojiPickerType::class]]);
+        $crawler = $this->client->request('GET', self::BASE);
+        self::assertCount(1, $crawler->filter('dialog [data-nowo-ui-emoji-picker] input[name="task_board_form[icon]"], dialog input[name="task_board_form[icon]"]'));
+
+        $post = static fn (string $icon): array => ['task_board_form' => ['name' => 'With icon', 'icon' => $icon, '_token' => PredictableCsrfTokenManager::value('task_board_form')]];
+        $this->client->request('POST', self::BASE . '/create', $post('not an emoji'));
+        self::assertResponseStatusCodeSame(422);
+        self::assertCount(0, $this->em->getRepository(TaskBoard::class)->findAll());
+
+        $this->client->request('POST', self::BASE . '/create', $post('🚀'));
+        self::assertResponseRedirects();
+        $board = $this->em->getRepository(TaskBoard::class)->findOneBy(['name' => 'With icon']);
+        self::assertInstanceOf(TaskBoard::class, $board);
+        self::assertSame('🚀', $board->getIcon());
     }
 
     public function testTheImportPagePrintsNoRawFormKeys(): void

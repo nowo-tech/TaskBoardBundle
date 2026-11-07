@@ -35,6 +35,8 @@
     #}
     <div class="nowo-task-detail nowo-task-panel" data-controller="nowo-task-board-task-members-modal nowo-task-board-task-priority-modal">
         {% block nowo_task_toolbar %}
+        {# Since 2.0.0 (TB-10): task_panel.toolbar: false leaves it out of the panel. #}
+        {% if not panel|default(false) or nowo_task_board_ui.panel_toolbar %}
         <div class="nowo-task-detail__toolbar">
             <nav class="nowo-task-detail__trail" aria-label="{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}">
                 <a href="{{ path(nowo_task_board_route('index')) }}">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</a>
@@ -59,6 +61,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
         {% endblock %}
 
         {% block nowo_task_navigation %}

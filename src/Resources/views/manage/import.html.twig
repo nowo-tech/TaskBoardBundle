@@ -14,6 +14,9 @@
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
+{# Since 2.0.0 (TB-10): templates.page_header. #}
+{% block nowo_ui_page_header %}{% if nowo_task_board_ui.page_header %}{{ parent() }}{% endif %}{% endblock %}
+
 {% block nowo_ui_form_body %}
     {{ form_row(importForm.source) }}
                         {# Since 1.22.1: the host's help under the source select — override this block (templates.import extending this page), or set help_link / the Twig global nowo_task_board_import_help_link. #}

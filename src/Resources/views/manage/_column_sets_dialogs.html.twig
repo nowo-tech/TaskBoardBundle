@@ -3,15 +3,19 @@
     (columnSetApplyForm, the list of columnSets with their delete forms in columnSetDeleteForms). Kit dialogs
     (Escape closes them, focus returns to the button). Since 1.26 (dialog rule v2) each footer sits outside the scrolling body, its primary bound with form="…"
     (nowo-task-column-set-save-form, nowo-task-column-set-apply-form); without sets, Add columns has Close only.
+    Since 2.0.0 (TB-10) with board.toolbar: false the buttons go and a host's button opens the dialogs with
+    data-nowo-task-board-open="column-set-save|column-set-apply".
 #}
 {% set columnSets = columnSets|default([]) %}
 <div class="nowo-task-column-sets">
-    <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-column-sets__save" data-nowo-ui-dialog-open="nowo-task-column-set-save">
+    {% if nowo_task_board_ui.board_toolbar %}
+    <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-column-sets__save" data-nowo-ui-dialog-open="nowo-task-column-set-save" data-nowo-task-board-open="column-set-save">
         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.column_set.save'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
-    <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-column-sets__apply" data-nowo-ui-dialog-open="nowo-task-column-set-apply">
+    <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-column-sets__apply" data-nowo-ui-dialog-open="nowo-task-column-set-apply" data-nowo-task-board-open="column-set-apply">
         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'columns'}) }}{{ 'task_board.column_set.apply'|trans({}, 'NowoTaskBoardBundle') }}
     </button>
+    {% endif %}
 
     {% set _body %}
         {{ form_start(columnSetForm, {action: path(nowo_task_board_route('column_set_create'), {boardId: board.id}), method: 'POST', attr: {id: 'nowo-task-column-set-save-form', class: 'nowo-task-dialog__body'}}) }}

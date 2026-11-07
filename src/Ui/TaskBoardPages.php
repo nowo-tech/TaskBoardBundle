@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Ui;
 
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\AreaNav;
+use Nowo\UiKitBundle\View\AreaNavItem;
 use Nowo\UiKitBundle\View\Crumb;
 use Nowo\UiKitBundle\View\Label;
 use Nowo\UiKitBundle\View\PageHeader;
@@ -22,7 +24,7 @@ use function trigger_deprecation;
  * instead of the canonical blocks) in a deprecated bridge, and builds the page headers. Configuration only: no request
  * state, safe in worker mode.
  *
- * @phpstan-type HeaderSpec array{title: Label|string, intro?: Label|string|null, crumb?: array{href: string, label: Label|string}|null, actions?: list<array{href?: string, label: Label|string, icon?: string|null, variant?: string|null, attributes?: array<string, string|int|float|bool|null>, dialog?: string|null}>, back?: string|null}
+ * @phpstan-type HeaderSpec array{title: Label|string, intro?: Label|string|null, crumb?: array{href: string, label: Label|string}|null, actions?: list<array{href?: string, label: Label|string, icon?: string|null, variant?: string|null, attributes?: array<string, string|int|float|bool|null>, dialog?: string|null}>, back?: string|null, tabs?: list<array{href: string, label: Label|string, icon?: string|null, active?: bool}>}
  */
 final readonly class TaskBoardPages
 {
@@ -109,7 +111,7 @@ final readonly class TaskBoardPages
      * (the id of a dialog the action opens). `back`: a URL that adds the host's way back, the 1.x `dashboardRoute` action.
      * Text arrives already translated, as in the templates that call this.
      *
-     * @param array{title: Label|string, intro?: Label|string|null, crumb?: array{href: string, label: Label|string}|null, actions?: list<array{href?: string, label: Label|string, icon?: string|null, variant?: string|null, attributes?: array<string, bool|float|int|string|null>, dialog?: string|null}>, back?: string|null} $spec
+     * @param array{title: Label|string, intro?: Label|string|null, crumb?: array{href: string, label: Label|string}|null, actions?: list<array{href?: string, label: Label|string, icon?: string|null, variant?: string|null, attributes?: array<string, bool|float|int|string|null>, dialog?: string|null}>, back?: string|null, tabs?: list<array{href: string, label: Label|string, icon?: string|null, active?: bool}>} $spec
      */
     public static function header(array $spec, string $iconSet = 'tabler-icons'): PageHeader
     {
@@ -128,6 +130,11 @@ final readonly class TaskBoardPages
         if (is_string($spec['back'] ?? null)) {
             $actions[] = new Action(label: self::label('task_board.action.back'), href: $spec['back']);
         }
+        $tabs = [];
+        foreach ($spec['tabs'] ?? [] as $tab) {
+            $icon   = $tab['icon'] ?? null;
+            $tabs[] = new AreaNavItem($tab['label'], $tab['href'], $tab['active'] ?? false, icon: is_string($icon) && $iconSet === 'ux_icon' ? 'tabler:' . $icon : $icon);
+        }
         $crumb = $spec['crumb'] ?? null;
 
         return new PageHeader(
@@ -135,6 +142,7 @@ final readonly class TaskBoardPages
             intro: $spec['intro'] ?? null,
             actions: $actions,
             breadcrumbs: $crumb !== null ? [new Crumb($crumb['label'], $crumb['href'])] : [],
+            tabs: $tabs !== [] ? new AreaNav($tabs, self::label('task_board.view.label')) : null,
             breadcrumbsMode: 'own',
         );
     }

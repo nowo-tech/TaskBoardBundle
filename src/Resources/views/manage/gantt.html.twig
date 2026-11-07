@@ -15,15 +15,16 @@
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
 {% block nowo_ui_page_header %}
-    {{ nowo_ui_page_header(nowo_task_board_header({
+    {% if nowo_task_board_ui.page_header %}{{ nowo_ui_page_header(nowo_task_board_header({
         title: board.name ~ ' — ' ~ ('task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle')),
         crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
-        actions: [
+        tabs: [
             {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle')},
             {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), active: true},
         ],
         back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
-    })) }}
+    })) }}{% endif %}
 {% endblock %}
 
 {% block nowo_ui_content %}
@@ -56,17 +57,19 @@
         {# Since 1.13: one toolbar (what the chart shows and its legend) on the bundle's own classes. #}
         <div class="nowo-task-gantt__toolbar">
             <p class="nowo-task-gantt__subtitle">{{ 'task_board.gantt.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</p>
-            <nav class="nowo-task-gantt__scales" aria-label="{{ 'task_board.gantt.scale'|trans({}, 'NowoTaskBoardBundle') }}">
-                {% for option in scales|default([]) %}
-                    <a
-                        href="{{ path(nowo_task_board_route('gantt'), {boardId: board.id, scale: option.value}) }}"
-                        class="nowo-task-gantt__scale{{ option.value == _scale ? ' is-active' : '' }}"
-                        data-scale="{{ option.value }}"
-                        data-action="nowo-task-board-gantt#rememberScale"
-                        {% if option.value == _scale %}aria-current="true"{% endif %}
-                    >{{ ('task_board.gantt.scale_' ~ option.value)|trans({}, 'NowoTaskBoardBundle') }}</a>
-                {% endfor %}
-            </nav>
+            {% set _scale_items = (scales|default([]))|map(option => {
+                label: ('task_board.gantt.scale_' ~ option.value)|trans({}, 'NowoTaskBoardBundle'),
+                href: path(nowo_task_board_route('gantt'), {boardId: board.id, scale: option.value}),
+                current: option.value == _scale,
+                attr: {'data-scale': option.value, 'data-action': 'nowo-task-board-gantt#rememberScale'},
+            }) %}
+            {{ include(nowo_ui_partial('tabs', 'NowoTaskBoardBundle'), {
+                items: _scale_items,
+                label: 'task_board.gantt.scale'|trans({}, 'NowoTaskBoardBundle'),
+                level: 'secondary',
+                attr: {class: 'nowo-task-gantt__scales'},
+                bundle: 'NowoTaskBoardBundle',
+            }, false) }}
             <ul class="nowo-task-gantt__legend">
                 <li>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</li>
                 <li><span class="nowo-task-gantt__legend-today" aria-hidden="true"></span>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</li>

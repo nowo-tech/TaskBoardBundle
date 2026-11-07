@@ -68,6 +68,12 @@ describe('task-board.css', () => {
     expect(rules('.nowo-task-dialog--native .nowo-task-dialog__actions .nowo-ui-btn')).toMatch(/min-height:\s*2rem/);
   });
 
+  it('keeps the backdrop tokens hosts set (2.0)', () => {
+    const backdrop = rules('dialog.nowo-task-dialog--native::backdrop');
+    expect(backdrop).toMatch(/--nowo-task-overlay,/);
+    expect(backdrop).toMatch(/--nowo-task-overlay-blur,/);
+  });
+
   it('leaves the dialog shell to the kit (2.0)', () => {
     expect(rules('dialog.nowo-task-dialog--native')).toBe('');
     expect(rules('.nowo-task-dialog--native .nowo-task-dialog__body')).not.toMatch(/overflow|padding/);
