@@ -85,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit: re-verification pending. See [UPGRADING](UPGRADING.md#unreleased).
+Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit HZ (2026-11-07): Pass (good) / Low. See [UPGRADING](UPGRADING.md#unreleased).
 
 ### Fixed
 
@@ -95,7 +95,8 @@ Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permissi
 
 ### Documentation
 
-- `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides.
+- `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides. `[]` is not a denial: access stays the checker's (audit HZ-L2).
+- The board index's block table in `docs/USAGE.md` lists the 2.0 blocks; it still named the 1.x ones.
 
 ## [2.1.0] - 2026-11-07
 

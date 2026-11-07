@@ -154,17 +154,17 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Target: 2.1.1. No schema or configuration change. Audit: re-verification pending.
+Target: 2.1.1. No schema or configuration change. Audit HZ (2026-11-07): Pass (good) / Low.
 
 **New board on the index.**
 
 - With no boards, `[data-testid="nowo-task-board-new"]` is gone and `[data-testid="nowo-task-board-new-empty"]` is the only button: a test or script that clicks the header's button on an empty list must use the other one. With boards nothing changes.
-- A host that replaces UiKit's `empty` partial must print `empty.action`, as the kit's does, or an empty list has no way to create a board.
+- A host that replaces UiKit's `empty` partial must print `empty.action`, as the kit's does, or an empty list has no button for creating a board. A `templates.index` override that skips `page.empty` is in the same case. Then only `?new=1` and the `<noscript>` form remain, and only if the override keeps the `nowo_ui_modals` and `nowo_ui_list_after` blocks.
 - It is now primary on a host with `nowo_ui_kit.action_variants: {create: secondary}`. That map is for actions without an explicit variant.
 
 **Views column.** The buttons end under their heading, through `.nowo-ui-cell--end > .nowo-task-board-list__views`, and stay at the start in a card. A host's own list through `manage/_board_list_item.html.twig` does not change. To keep them at the start, set `justify-content: flex-start` on that selector.
 
-**Scope providers.** Nothing changes, but check yours: any scope shows New board on the index, so a provider that always offers a personal scope shows it to someone who only reads the tenant of the page. Return `[]` from `scopes()` on a tenant's page where the user may not create. See [CONFIGURATION](CONFIGURATION.md#new-board-since-130).
+**Scope providers.** Nothing changes, but check yours: any scope shows New board on the index, so a provider that always offers a personal scope shows it to someone who only reads the tenant of the page. Return `[]` from `scopes()` on a tenant's page where the user may not create. `[]` is not a denial: `canCreateBoard()` must refuse that tenant too, or the button shows and the create route creates there without `resolve()`. See [CONFIGURATION](CONFIGURATION.md#new-board-since-130).
 
 ## To 2.1.0
 

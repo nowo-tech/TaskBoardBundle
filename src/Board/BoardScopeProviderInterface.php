@@ -21,6 +21,8 @@ interface BoardScopeProviderInterface
      * scope that is always there, such as a personal one, shows the button to someone who only reads the tenant of the
      * page. On a tenant's page where this user may not create (`$current` is that tenant), return [] (since 2.1.1, stated
      * here): `canCreateBoard()` then decides the button and the create route, and that page offers no other scope either.
+     * [] is not a denial: the route creates in that tenant, without `resolve()`, unless the checker refuses. Access stays
+     * the checker's.
      *
      * @return list<BoardScope>
      */

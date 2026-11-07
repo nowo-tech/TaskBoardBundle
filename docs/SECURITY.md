@@ -129,7 +129,7 @@ A sync that has no people session or no person reference for a row (`SyncOptions
 
 ## New board scope step (since 1.30)
 
-Any scope offers New board on the index without asking `canCreateBoard()`. A provider returns `[]` on a tenant's page where the user may not create, so that the check decides the button and the create route ([CONFIGURATION](CONFIGURATION.md#new-board-since-130)). A button is not a permission: the create route still checks the resolved tenant. 2.1.1 documents this and changes no check; audit status: re-verification pending.
+Any scope offers New board on the index without asking `canCreateBoard()`. A provider returns `[]` on a tenant's page where the user may not create, so that the check decides the button and the create route ([CONFIGURATION](CONFIGURATION.md#new-board-since-130)). `[]` is not a denial: with a checker that allows the tenant (the default), the button shows and the create route creates there without calling `resolve()`. Access stays the checker's. A button is not a permission: the create route still checks the tenant. 2.1.1 documents this and changes no check. Audit HZ (2026-11-07): Pass (good) / Low.
 
 The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. A board with no tenant has no database check on its slug: NULL is distinct in a unique index, so two creates at the same moment can store the same slug. The bundle routes by id, so nothing breaks in it; a host reading by slug alone should not rely on one row.
 
@@ -181,7 +181,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `3c105a1` (Appendix HY, 2026-11-07), for 2.1.0.** 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
