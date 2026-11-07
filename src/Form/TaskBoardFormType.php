@@ -15,6 +15,8 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -25,6 +27,7 @@ use Symfony\Component\Validator\Constraints\Regex;
 use function array_filter;
 use function array_values;
 use function count;
+use function is_array;
 use function trim;
 
 /**
@@ -155,10 +158,16 @@ final class TaskBoardFormType extends AbstractType
             'expanded'                  => true,
             'multiple'                  => false,
             'placeholder'               => false,
-            // One scope: nothing to choose.
-            'empty_data'  => count($scopes) === 1 ? $scopes[0]->id : '',
-            'constraints' => [new NotBlank(message: $requiredMessage)],
+            'constraints'               => [new NotBlank(message: $requiredMessage)],
         ]);
+        // One scope: nothing to choose, whatever was posted for it. An expanded choice has no `empty_data` on every Symfony.
+        if (count($scopes) === 1) {
+            $only = $scopes[0]->id;
+            $builder->addEventListener(FormEvents::PRE_SUBMIT, static function (FormEvent $event) use ($only): void {
+                $data = $event->getData();
+                $event->setData(['scope' => $only] + (is_array($data) ? $data : []));
+            });
+        }
         $all = $builder->create('scopeFields', FormType::class, ['mapped' => false, 'label' => false, 'required' => false]);
         foreach ($scopes as $scope) {
             $branch = $all->create($scope->id, FormType::class, ['label' => false, 'required' => false]);
