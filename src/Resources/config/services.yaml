@@ -15,6 +15,7 @@ services:
             - '../../Dto/'
             - '../../Event/'
             - '../../Enum/'
+            - '../../Validation/'
             - '../../Exception/'
             - '../../ValueObject/'
             - '../../Import/Dto/'
@@ -175,6 +176,11 @@ services:
     Nowo\TaskBoardBundle\Service\TaskBoardCreator:
         arguments:
             $defaultColumns: '%nowo_task_board.board.default_columns%'
+
+    # Since 2.2.0 (spec 213): the rules of comments, for every write path.
+    Nowo\TaskBoardBundle\Service\TaskCommentPolicy:
+        arguments:
+            $readersCanComment: '%nowo_task_board.comments.readers_can_comment%'
 
     # Since 1.25: the erase cursor is signed with the application secret (audit FP-L3).
     Nowo\TaskBoardBundle\Service\TaskBoardEraser:

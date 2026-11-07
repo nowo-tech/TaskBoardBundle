@@ -9,14 +9,13 @@ use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Override;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
  * Since 1.16: a task comment — the text (the `nowo-task-board-mention` controller offers @mentions while typing) and
@@ -43,7 +42,7 @@ final class TaskCommentFormType extends AbstractType
                 'label'       => 'task_board.comment.body',
                 'label_attr'  => ['class' => 'nowo-task-sr-only'],
                 'empty_data'  => '',
-                'constraints' => [new NotBlank(), new Length(max: TaskComment::MAX_LENGTH)],
+                'constraints' => TaskConstraints::commentBody(),
                 'attr'        => [
                     'class'                             => 'form-control nowo-task-comment__input',
                     'rows'                              => 3,

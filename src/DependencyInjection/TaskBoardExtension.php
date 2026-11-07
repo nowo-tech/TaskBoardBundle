@@ -417,9 +417,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$fullSyncRereadsDetails', (bool) $sync['full_sync_rereads_details']);
         $container->getDefinition(SyncCustomFieldWriter::class)
             ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
-        // Audit GW-L8: restoring a task by hand asks the host's limit too.
-        $container->getDefinition(TaskBoardManageController::class)
-            ->setArgument('$syncLimits', new Reference(SyncLimitCheckerInterface::class));
         $container->getDefinition(SyncTaskDetailsWriter::class)
             ->setArgument('$maxStatusCalls', (int) $sync['status_history']['max_calls_per_run']);
         $container->getDefinition(TaskBoardTwigExtension::class)

@@ -8,8 +8,8 @@ use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
-use Nowo\TaskBoardBundle\Support\BoardIcon;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
@@ -20,9 +20,7 @@ use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Constraints\Regex;
 
 use function array_filter;
 use function array_values;
@@ -48,17 +46,14 @@ final class TaskBoardFormType extends AbstractType
                 'help'        => 'task_board.form.board.icon_help',
                 'required'    => false,
                 'empty_data'  => null,
-                'constraints' => [
-                    new Length(max: BoardIcon::MAX_BYTES, countUnit: Length::COUNT_BYTES, maxMessage: $options['icon_too_long_message']),
-                    new Regex(pattern: BoardIcon::PATTERN, message: $options['icon_invalid_message']),
-                ],
+                'constraints' => TaskConstraints::boardIcon($options['icon_too_long_message'], $options['icon_invalid_message']),
             ] + $options['icon_form_options']);
         }
         $this->addText($builder, 'name', [
             // Since 1.21: an empty or missing name is a NotBlank error, not a TypeError on the DTO (string).
             'empty_data'  => '',
             'label'       => 'task_board.form.board.name',
-            'constraints' => [new NotBlank(), new Length(max: 255)],
+            'constraints' => TaskConstraints::boardName(),
             'attr'        => ['maxlength' => 255],
         ]);
         $this->addText($builder, 'slug', [
@@ -67,7 +62,7 @@ final class TaskBoardFormType extends AbstractType
             // Since 1.14.1: an empty slug is '' (the board creator derives it from the name), not null.
             'empty_data'  => '',
             'help'        => 'task_board.form.board.slug_help',
-            'constraints' => [new Length(max: 255)],
+            'constraints' => TaskConstraints::boardSlug(),
             'attr'        => ['maxlength' => 255],
         ]);
         // Since 1.30.0 (spec 211): `board.description_form_type` replaces the widget with no Twig override.

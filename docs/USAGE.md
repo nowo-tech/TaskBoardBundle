@@ -76,6 +76,10 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Log time | `task_time` | Since 1.15: minutes, day and note (POST + CSRF) |
 | Remove time entry | `task_time_remove` | Since 1.15 (POST + CSRF) |
 
+### Deleting and renaming outside the UI (since 2.2)
+
+The UI has no delete task or rename board. A host calling the services can: `TaskBoardEraser::eraseTask($task, $actor)` deletes a task and its subtasks and keeps tracked time, detached (a task that follows a provider is refused); `TaskBoardEditor::update($board, $name, $description, $actor)` keeps the slug and dispatches `BOARD_UPDATED`. Check access first with `TaskBoardResourceAccessChecker`, and validate with `Validation\TaskConstraints`, the rules the forms use.
+
 ## TimeTrack integration (optional)
 
 When TimeTrack is installed and configured with `nowo_task_board.task_provider`:

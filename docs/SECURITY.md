@@ -12,6 +12,7 @@
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
+- [Shared write rules (2.2, re-verification pending)](#shared-write-rules-22-re-verification-pending)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -161,6 +162,10 @@ Both opt-in.
 - **Runtime confirm.** `window.confirm` stays only when UiKit's confirm script is missing, so a destructive action never goes unasked.
 - **Avatars.** Pictures now pass UiKit's `AvatarUrlPolicy`: https without userinfo, or a same-origin path.
 - **Subtask nodes.** Titles reach `tree` as text, escaped by the partial, and in `data-*` attributes through `nowo_ui_safe_attrs`.
+
+## Shared write rules (2.2, re-verification pending)
+
+Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. `tests/Functional/Characterization` pins the UI's output.
 
 ## Logging and personal data
 

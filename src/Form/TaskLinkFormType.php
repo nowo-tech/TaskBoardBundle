@@ -9,13 +9,11 @@ use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Constraints\Url;
 
 /**
  * @extends AbstractType<TaskLinkFormData>
@@ -38,24 +36,19 @@ final class TaskLinkFormType extends AbstractType
             // Since 1.21: an empty or missing URL is a NotBlank error, not a TypeError on the DTO (string).
             'empty_data'  => '',
             'label'       => 'task_board.form.link.url',
-            'constraints' => [
-                new NotBlank(),
-                // Rendered as href: only http(s) — rejects javascript:, data:, vbscript:…
-                new Url(protocols: ['http', 'https'], requireTld: false),
-                new Length(max: 2048),
-            ],
-            'attr' => ['maxlength' => 2048],
+            'constraints' => TaskConstraints::linkUrl(),
+            'attr'        => ['maxlength' => 2048],
         ]);
         $this->addText($builder, 'label', [
             'label'       => 'task_board.form.link.label',
             'required'    => false,
-            'constraints' => [new Length(max: 255)],
+            'constraints' => TaskConstraints::linkLabel(),
             'attr'        => ['maxlength' => 255],
         ]);
         $this->addText($builder, 'externalId', [
             'label'       => 'task_board.form.link.external_id',
             'required'    => false,
-            'constraints' => [new Length(max: 128)],
+            'constraints' => TaskConstraints::linkExternalId(),
             'attr'        => ['maxlength' => 128],
             'help'        => 'task_board.form.link.external_id_help',
         ]);

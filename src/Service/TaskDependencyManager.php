@@ -93,6 +93,23 @@ final readonly class TaskDependencyManager
     }
 
     /**
+     * Since 2.2.0 (spec 213): the dependencies joining the two tasks, in either direction.
+     *
+     * @return list<TaskDependency>
+     */
+    public function findBetween(Task $task, Task $other): array
+    {
+        $found = [];
+        foreach ([...$task->getOutgoingDependencies(), ...$task->getIncomingDependencies()] as $dependency) {
+            if ($dependency->getSourceTask()->getId() === $other->getId() || $dependency->getTargetTask()->getId() === $other->getId()) {
+                $found[] = $dependency;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * Every dependency of the given tasks, once.
      *
      * @param list<Task> $tasks

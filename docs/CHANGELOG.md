@@ -85,6 +85,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. No behaviour, schema or configuration change for a host.
+
+### Added
+
+- `Service\TaskManager::restore()` and `archive()`, with their history; `restore()` asks the host's limit and throws `TaskReopenRefusedException` when it refuses.
+- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`.
+- `Service\TaskBoardEditor::update()`: name and description of a board, the slug unchanged, `TaskBoardEvents::BOARD_UPDATED` (`BoardUpdatedEvent`).
+- `Service\TaskCommentPolicy`: who may write, edit and delete a comment.
+- `Validation\TaskConstraints`: the rules of the fields a write takes.
+- `Service\TaskDependencyManager::findBetween()`, `Dto\TaskFormData::fromTask()`.
+
+### Changed
+
+- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. The controller no longer takes `$syncLimits`, as `TaskManager` already holds the limit.
+
 ## [2.1.0] - 2026-11-07
 
 Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#to-210).

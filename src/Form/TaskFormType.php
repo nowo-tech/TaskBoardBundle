@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Form;
 
-use DateTimeInterface;
 use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TagInputBundle\Form\TagType;
@@ -14,6 +13,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Form\DataTransformer\MinutesToDurationTransformer;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ColorType;
@@ -26,9 +26,6 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\Callback;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Constraints\Regex;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 use function class_exists;
@@ -41,10 +38,10 @@ final class TaskFormType extends AbstractType
 {
     use FormOptionsTrait;
     /** Since 1.15: the longest title (task_board_tasks.title is VARCHAR(255)). */
-    public const TITLE_MAX = 255;
+    public const TITLE_MAX = TaskConstraints::TITLE_MAX;
 
     /** Since 1.14: a task colour is #rrggbb (the column holds 7 characters). */
-    public const COLOR_PATTERN = '/^#[0-9a-fA-F]{6}$/D';
+    public const COLOR_PATTERN = TaskConstraints::TASK_COLOR_PATTERN;
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -54,10 +51,9 @@ final class TaskFormType extends AbstractType
 
         $this->addText($builder, 'title', [
             // Since 1.21: an empty or missing title is a NotBlank error, not a TypeError on the DTO (string).
-            'empty_data' => '',
-            'label'      => 'task_board.form.task.title',
-            // Since 1.15: the column is VARCHAR(255) — a longer title is a form error, not a database error.
-            'constraints' => [new NotBlank(), new Length(max: self::TITLE_MAX)],
+            'empty_data'  => '',
+            'label'       => 'task_board.form.task.title',
+            'constraints' => TaskConstraints::taskTitle(),
             'attr'        => ['maxlength' => self::TITLE_MAX],
         ]);
 
@@ -116,7 +112,7 @@ final class TaskFormType extends AbstractType
                 'constraints'     => [new Callback(static function (mixed $startAt, ExecutionContextInterface $context): void {
                     $form  = $context->getObject();
                     $dueAt = $form instanceof FormInterface ? $form->getParent()?->get('dueAt')->getData() : null;
-                    if ($startAt instanceof DateTimeInterface && $dueAt instanceof DateTimeInterface && $startAt > $dueAt) {
+                    if (TaskConstraints::startsAfterDue($startAt, $dueAt)) {
                         $context->buildViolation('task_board.form.task.start_after_due')
                             ->setTranslationDomain('NowoTaskBoardBundle')
                             ->addViolation();
@@ -153,7 +149,7 @@ final class TaskFormType extends AbstractType
             $this->addWithDefaults($builder, 'color', HiddenType::class, [
                 'label'       => 'task_board.form.task.color',
                 'required'    => false,
-                'constraints' => [new Regex(pattern: self::COLOR_PATTERN)],
+                'constraints' => TaskConstraints::taskColor(),
             ]);
             $this->addWithDefaults($builder, 'customColor', ColorType::class, [
                 'label'    => 'task_board.form.task.custom_color',
