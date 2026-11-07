@@ -78,6 +78,7 @@ use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
+use function end;
 use function explode;
 use function hash;
 use function implode;
@@ -87,6 +88,7 @@ use function json_encode;
 use function max;
 use function mb_strtolower;
 use function method_exists;
+use function preg_match_all;
 use function preg_replace;
 use function preg_split;
 use function rawurldecode;
@@ -94,13 +96,17 @@ use function sha1;
 use function sort;
 use function sprintf;
 use function str_contains;
+use function str_ends_with;
 use function str_starts_with;
+use function substr;
+use function substr_count;
 use function time;
 use function trim;
 
 use const JSON_PRESERVE_ZERO_FRACTION;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
+use const PREG_SET_ORDER;
 use const PREG_SPLIT_DELIM_CAPTURE;
 
 /**
@@ -248,6 +254,10 @@ final readonly class SyncTaskWriter
             }
             // Since 1.29.0: a task that stays completed after the restore adds nothing to the limit.
             if ($task->isArchived() && (!$task->isCompleted() || $remote->status?->type?->isDone() !== true)) {
+                ++$newTasks;
+            }
+            // Since 1.29.0 (audit HN-M1): the provider reopens a completed task: it is active again.
+            if (!$task->isArchived() && !$remote->archived && $task->isCompleted() && $remote->status?->type instanceof RemoteStatusType && !$remote->status->type->isDone()) {
                 ++$newTasks;
             }
             $plan[] = [$task->isArchived() ? 'restore' : ($remote->archived ? 'archive' : 'update'), $id, $remote, $task, $item];
@@ -742,6 +752,32 @@ final readonly class SyncTaskWriter
     }
 
     /**
+     * Since 1.29.0 (audit HN-L3): every address of a Markdown body, whatever its form: inline with or without a title, angle
+     * brackets, reference definitions, bare URLs and autolinks. A different set is an edit. `%2F`, `%3A`, `%40`, `%3F`, `%23` and
+     * `%5C` stay encoded, because decoding them could change where the address leads.
+     *
+     * @return list<string>
+     */
+    private function linkTargets(string $markdown): array
+    {
+        preg_match_all('/\]\(\s*<?([^\s<>]+)|^\s*\[[^\]\n]+\]:\s*<?([^\s<>]+)|\b((?:https?:\/\/|mailto:)[^\s<>"\'\]]+)/im', $markdown, $matches, PREG_SET_ORDER);
+        $targets = [];
+        foreach ($matches as $match) {
+            $target = (string) preg_replace('/%(2f|3a|40|3f|23|5c)/i', '%25$1', end($match));
+            $target = rawurldecode($target);
+            // A closing parenthesis of the Markdown around it, not of the address.
+            while (str_ends_with($target, ')') && substr_count($target, ')') > substr_count($target, '(')) {
+                $target = substr($target, 0, -1);
+            }
+            $targets[$target] = true;
+        }
+        $targets = array_map(strval(...), array_keys($targets));
+        sort($targets);
+
+        return $targets;
+    }
+
+    /**
      * Since 1.28.0 (audit HI-M2): the one rule of the e-mail path, the writes with no people session or no person reference:
      * a user who cannot view the board, or whom the host flags as attribution only, is not written. A member row is a
      * participant row, and a participant gets the task.
@@ -971,7 +1007,7 @@ final readonly class SyncTaskWriter
                 continue;
             }
             // Since 1.28.0 (audit HI-L5): the same words in another format are not an edit (a new renderer, not a person).
-            if ($this->plainWords($known->getComment()->getBody()) === $this->plainWords($body)) {
+            if ($this->plainWords($known->getComment()->getBody()) === $this->plainWords($body) && $this->linkTargets($known->getComment()->getBody()) === $this->linkTargets($body)) {
                 $known->getComment()->reformat($body);
             } else {
                 $known->getComment()->edit($body, []);

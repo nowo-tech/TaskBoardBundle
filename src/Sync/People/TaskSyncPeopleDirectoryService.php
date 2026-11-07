@@ -142,6 +142,10 @@ final readonly class TaskSyncPeopleDirectoryService
         }
         if ($person->refresh($name, $normalized === null ? null : Text::cut((string) $remote->email, 254), $normalized === null ? null : Text::cut($normalized, 254), $role, $kind, $now)) {
             $session->count('people.changedEmail');
+            // Since 1.29.0 (audit HN-L4): someone saved them as they were; with a new e-mail they are due again.
+            if (!$person->getMapping()->isHumanDecision() && !$person->getMapping()->isMapped()) {
+                $person->clearReview();
+            }
         }
         if ($person->isAnonymised() || $person->getMapping()->isHumanDecision()) {
             return $person;

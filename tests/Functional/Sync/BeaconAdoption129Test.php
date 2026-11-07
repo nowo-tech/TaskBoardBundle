@@ -8,16 +8,20 @@ use DateInterval;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncMode;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
+use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldValueEraser;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
@@ -151,6 +155,200 @@ final class BeaconAdoption129Test extends SyncPeopleFunctionalTestCase
         $this->sync($board, full: true);
         self::assertContains([1, 0], TestSyncLimitChecker::$calls);
         self::assertNotContains([2, 0], TestSyncLimitChecker::$calls);
+    }
+
+    /**
+     * Audit HN-M1: reopening is asked, by every move action, and a refusal moves nothing.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function reopeningMoves(): iterable
+    {
+        yield 'drag' => ['move'];
+        yield 'drag from a fetch' => ['moveXhr'];
+        yield 'previous' => ['previous'];
+        yield 'column' => ['column'];
+    }
+
+    #[DataProvider('reopeningMoves')]
+    public function testAMoveThatReopensAsksTheLimit(string $how): void
+    {
+        $board   = $this->boardWithColumns('To do', 'Finished');
+        $columns = [];
+        foreach ($board->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+        $task = (new Task(board: $board, title: 'Done', creator: $this->owner, column: $columns['Finished']))->markCompleted();
+        $this->em->persist($task);
+        $this->em->flush();
+        [$taskId, $toDo] = [$task->getId(), $columns['To do']->getId()];
+        $this->login($this->owner);
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        $send = function () use ($how, $taskId, $toDo): void {
+            match ($how) {
+                'move'     => $this->client->request('POST', '/tools/task-board/task/' . $taskId . '/move', ['columnId' => $toDo, 'position' => 0, '_token' => PredictableCsrfTokenManager::value('task_board_task_move')]),
+                'moveXhr'  => $this->client->xmlHttpRequest('POST', '/tools/task-board/task/' . $taskId . '/move', ['columnId' => $toDo, 'position' => 0, '_token' => PredictableCsrfTokenManager::value('task_board_task_move')]),
+                'previous' => $this->client->request('POST', '/tools/task-board/task/' . $taskId . '/advance', ['action' => 'previous', '_token' => PredictableCsrfTokenManager::value('task_board_task_advance')]),
+                default    => $this->client->request('POST', '/tools/task-board/task/' . $taskId . '/advance', ['columnId' => $toDo, '_token' => PredictableCsrfTokenManager::value('task_board_task_advance')]),
+            };
+        };
+        $send();
+        if ($how === 'moveXhr') {
+            self::assertResponseStatusCodeSame(409);
+            $json = json_decode((string) $this->client->getResponse()->getContent(), true);
+            self::assertIsArray($json);
+            self::assertSame('active_tasks', $json['refused']);
+            self::assertStringContainsString('limit', (string) $json['message']);
+        }
+        $this->em->clear();
+        $this->refreshOwner();
+        $kept = $this->taskTitled('Done');
+        self::assertTrue($kept->isCompleted(), 'refused: still completed');
+        self::assertSame('Finished', $kept->getColumn()?->getName(), 'and where it was');
+        self::assertContains([1, 0], TestSyncLimitChecker::$calls);
+
+        // The refusal shows on the next page.
+        $page = $this->client->request('GET', '/tools/task-board/board/' . $board->getId());
+        self::assertStringContainsString('reopening it would go over the limit', $page->html());
+
+        TestSyncLimitChecker::$refuseTasks = false;
+        $this->login($this->owner);
+        $send();
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertFalse($this->taskTitled('Done')->isCompleted(), 'allowed: it moves');
+    }
+
+    /** Moves that do not reopen ask nothing: completing, an open task, within the last column, an archived task. */
+    public function testMovesThatReopenNothingAskNothing(): void
+    {
+        $board   = $this->boardWithColumns('To do', 'Finished');
+        $columns = [];
+        foreach ($board->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+        $open = new Task(board: $board, title: 'Open', creator: $this->owner, column: $columns['To do']);
+        $done = (new Task(board: $board, title: 'Done', creator: $this->owner, column: $columns['Finished']))->markCompleted();
+        $this->em->persist($open);
+        $this->em->persist($done);
+        $this->em->flush();
+        $this->login($this->owner);
+        TestSyncLimitChecker::$refuseTasks = true;
+        $move                              = fn (Task $task, string $column): mixed => $this->client->request('POST', '/tools/task-board/task/' . $task->getId() . '/move', ['columnId' => $column, 'position' => 0, '_token' => PredictableCsrfTokenManager::value('task_board_task_move')]);
+        $move($done, $columns['Finished']->getId());
+        $move($open, $columns['To do']->getId());
+        $this->client->request('POST', '/tools/task-board/task/' . $open->getId() . '/advance', ['action' => 'done', '_token' => PredictableCsrfTokenManager::value('task_board_task_advance')]);
+        self::assertSame([], TestSyncLimitChecker::$calls);
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertTrue($this->taskTitled('Open')->isCompleted());
+    }
+
+    /** Audit HN-M1: a provider reopen asks; a task the provider also says is done, or still archives, does not. */
+    public function testASyncReopenAsksTheLimit(): void
+    {
+        $board = $this->boardWithColumns('To do', 'Finished');
+        $done  = new RemoteStatus('Finished', RemoteStatusType::Done, null, 1);
+        $open  = new RemoteStatus('To do', RemoteStatusType::Open, null, 0);
+        $this->put($this->row('t1', 'One', 1, status: 'Finished', remoteStatus: $done));
+        $this->sync($board);
+        self::assertTrue($this->taskTitled('One')->isCompleted());
+
+        $this->put($this->row('t1', 'One', 2, status: 'Finished', remoteStatus: $done));
+        TestSyncLimitChecker::$calls = [];
+        $this->sync($board, full: true);
+        self::assertSame([], array_filter(TestSyncLimitChecker::$calls, static fn (array $call): bool => $call[0] > 0), 'still done');
+
+        TestSyncLimitChecker::$refuseTasks = true;
+        $this->put($this->row('t1', 'One', 3, status: 'To do', remoteStatus: $open));
+        $report = $this->sync($board, full: true);
+        self::assertSame(SyncStatus::Refused, $report->status);
+        self::assertTrue($this->taskTitled('One')->isCompleted(), 'refused: nothing written');
+
+        TestSyncLimitChecker::$refuseTasks = false;
+        TestSyncLimitChecker::$calls       = [];
+        $this->sync($board, full: true);
+        self::assertContains([1, 0], TestSyncLimitChecker::$calls);
+        self::assertFalse($this->taskTitled('One')->isCompleted());
+    }
+
+    /** Audit HN-L1: exact contexts; string ids holding wildcards touch no other member's row. */
+    public function testMemberRowsGoByTheExactId(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $task  = new Task(board: $board, title: 'Mine', creator: $this->owner, column: $board->getColumns()->first() ?: null);
+        $this->em->persist($task);
+        $member = static fn (string $id, string $label): object => new class($id, $label) {
+            public function __construct(private readonly string $id, private readonly string $email)
+            {
+            }
+
+            public function getId(): string
+            {
+                return $this->id;
+            }
+
+            public function getEmail(): string
+            {
+                return $this->email;
+            }
+        };
+        $recorder = new TaskChangeRecorder();
+        foreach (['axb' => 'x@e.test', 'a_b' => 'u@e.test', 'other' => 'o@e.test'] as $id => $label) {
+            $recorder->recordMember($task, $this->owner, TaskChangeType::MemberAdded, $member($id, $label), 'assignee');
+        }
+        $this->em->flush();
+        $reassigner = self::getContainer()->get(TaskSyncPeopleReassigner::class);
+        self::assertInstanceOf(TaskSyncPeopleReassigner::class, $reassigner);
+        $forget = new ReflectionMethod(TaskSyncPeopleReassigner::class, 'forgetMemberRows');
+
+        $forget->invoke($reassigner, $member('a_b', 'u@e.test'));
+        $forget->invoke($reassigner, $member('%', 'nobody@e.test'));
+
+        $db     = $this->em->getConnection();
+        $values = $db->fetchFirstColumn("SELECT new_value FROM task_board_task_change_history WHERE change_type = 'member_added' AND new_value IS NOT NULL ORDER BY new_value");
+        self::assertSame(['o@e.test', 'x@e.test'], $values);
+    }
+
+    /** Audit HN-L4: a new e-mail makes a reviewed person due again; a former person stays decided. */
+    public function testAChangedEmailMakesAReviewedPersonDueAgain(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->workspace([new RemotePerson('1', 'Ann', 'ann@remote.test', RemoteRole::Member)]);
+        $this->put($this->row('t1', 'One', 1, assignees: [new RemotePersonRef('1', 'Ann', 'ann@remote.test')]));
+        $this->sync($board);
+        $this->login($this->owner);
+        $this->client->request('POST', '/tools/task-board/board/' . $board->getId() . '/connection/people/save?filter=all&page=1', ['task_board_sync_people' => [
+            'p_' . $this->personOf('1')->getId() => '',
+            '_token'                             => PredictableCsrfTokenManager::value('task_board_connection_people'),
+        ]]);
+        $this->em->clear();
+        $this->refreshOwner();
+        $people = self::getContainer()->get(TaskSyncPersonRepository::class);
+        self::assertInstanceOf(TaskSyncPersonRepository::class, $people);
+        self::assertSame(0, $people->unreviewedCount($this->personOf('1')->getDirectory()));
+
+        $this->workspace([new RemotePerson('1', 'Ann', 'new@remote.test', RemoteRole::Member)]);
+        $this->sync($board, full: true);
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertSame(1, $people->unreviewedCount($this->personOf('1')->getDirectory()));
+    }
+
+    /** Info HN-I1: said, not silent. */
+    public function testTimeEntriesWarnsWhenItCannotRun(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put($this->row('t1', 'One', 1));
+        $this->sync($board);
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+        $tester = new CommandTester((new Application($kernel))->find('nowo:task-board:sync'));
+        self::assertSame(Command::SUCCESS, $tester->execute(['boardId' => $board->getId(), '--time-entries' => true]));
+        self::assertStringContainsString('read no time', $tester->getDisplay());
+        self::assertSame(Command::SUCCESS, $tester->execute(['boardId' => $board->getId()]));
+        self::assertStringNotContainsString('read no time', $tester->getDisplay());
     }
 
     /** 3. A log without the value: after rotating `kernel.secret`, a host repeats the erasure by task and field. */

@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -31,6 +32,7 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_keys;
+use function array_map;
 use function count;
 use function max;
 
@@ -202,15 +204,8 @@ final readonly class TaskSyncPeopleReassigner
             $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
                 ->setParameter('user', $user)->execute();
         }
-        // Audit HId-L4: since 1.29.0 a member row names its member by id in `context`; only older rows go by label.
         if ($forgetName) {
-            $types = [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved];
-            $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.oldValue = NULL, h.newValue = NULL, h.context = NULL WHERE h.changeType IN (:types) AND h.context LIKE :member')
-                ->setParameter('types', $types)->setParameter('member', '% user:' . SyncUser::id($user))->execute();
-            foreach (['oldValue', 'newValue'] as $field) {
-                $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label AND (h.context IS NULL OR h.context NOT LIKE :marked)')
-                    ->setParameter('types', $types)->setParameter('label', UserLabel::of($user))->setParameter('marked', '% user:%')->execute();
-            }
+            $this->forgetMemberRows($user);
         }
         // The bulk updates bypass the identity map: loaded tasks and comments follow.
         $map = $this->entityManager->getUnitOfWork()->getIdentityMap();
@@ -237,6 +232,25 @@ final readonly class TaskSyncPeopleReassigner
         $this->entityManager->flush();
 
         return new ReassignReport(creators: $counts[0], comments: $counts[1], boards: $counts[2], documents: $counts[3]);
+    }
+
+    /**
+     * Audit HId-L4: since 1.29.0 a member row names its member by id in `context`; only older rows go by label.
+     */
+    private function forgetMemberRows(object $user): void
+    {
+        $types = [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved];
+        // Exact values, not LIKE: an id may hold `_` or `%` (audit HN-L1).
+        $id = SyncUser::id($user);
+        if ($id !== null) {
+            $contexts = array_map(static fn (TaskMemberRole $role): string => $role->value . ' user:' . $id, TaskMemberRole::cases());
+            $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.oldValue = NULL, h.newValue = NULL, h.context = NULL WHERE h.changeType IN (:types) AND h.context IN (:contexts)')
+                ->setParameter('types', $types)->setParameter('contexts', $contexts)->execute();
+        }
+        foreach (['oldValue', 'newValue'] as $field) {
+            $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label AND (h.context IS NULL OR h.context NOT LIKE :marked)')
+                ->setParameter('types', $types)->setParameter('label', UserLabel::of($user))->setParameter('marked', '% user:%')->execute();
+        }
     }
 
     /**

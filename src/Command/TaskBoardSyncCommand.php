@@ -108,6 +108,11 @@ final class TaskBoardSyncCommand extends Command
             $board  = $this->boards->findById($report->boardId) ?? $board;
         } while ($report->status === SyncStatus::Paused);
 
+        // Since 1.29.0: said, not silent: the phase needs a sink, a people directory and a provider that serves time.
+        if ($input->getOption('time-entries') === true && $report->time->mode === null && $report->status === SyncStatus::Succeeded) {
+            $io->getErrorStyle()->warning('--time-entries read no time: it needs sync.time_entries.sink, a people directory and a provider that serves tracked time, and a dry run reads none.');
+        }
+
         if ($input->getOption('format') === 'json') {
             $output->writeln((string) json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         } else {

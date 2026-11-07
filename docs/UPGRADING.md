@@ -144,11 +144,12 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 No schema change.
 
-- **Limit checker:** `SyncLimitCheckerInterface::check()` is now called with 0 new tasks when a restored task is completed. A host whose active-task metric counts completed tasks must count them when they are created or reopened, not on restore.
+- **Limit checker:** `check()` is called with 0 new tasks when a restored task is completed, and with 1 when a task is reopened by a move or by the sync. A refused move stays where it was. Deleting a column can still reopen tasks, with no check. File imports that reopen a task (`ImportedTaskUpdater`) do not ask either: the host's import check counts rows. `TaskManager` moves throw `TaskReopenRefusedException` on a refusal; a host calling them directly must catch it. `POST .../move` answers 409 with `{refused, message}` to an `XMLHttpRequest`, and redirects with a flash otherwise.
 - **`context` of `member_added` and `member_removed`** is now `<role> user:<id>`. The bundle's history section shows the role; a template override should read the part before the space. Older rows keep the role alone.
-- **Summary count:** `unreviewedCount()` leaves out people someone saved as *Not mapped*. `unmappedCount()` gives the earlier number.
+- **Summary count:** `unreviewedCount()` leaves out people someone saved as *Not mapped*. `unmappedCount()` gives the earlier number. Saving the page counts every row shown as reviewed, including rows left as they were. A reviewed person whose e-mail changes at the provider counts again.
 - **Labels:** text in the three `former_user` keys changed. A host that overrides them or tests the text should check it.
-- **`--time-entries`:** a scheduled command that should read hours adds the option. Without a sink it does nothing.
+- **`--time-entries`:** a scheduled command that should read hours adds the option. With no sink, no directory or a provider without time it reads nothing and prints a warning.
+- **Rotating `kernel.secret`:** run a full sync, then repeat `eraseField()`: before the sync there is no value to erase and it returns 0.
 
 ## To 1.28.0
 

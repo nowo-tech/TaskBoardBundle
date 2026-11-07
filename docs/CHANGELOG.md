@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`nowo:task-board:sync --time-entries`.** A command run can read tracked time (`SyncOptions::timeEntries`), which only code could ask for. It needs `sync.time_entries.sink`.
-- **`SyncFieldValueEraser::eraseField($task, $fieldName)`.** Erases one field of one task without the value, for an erasure log that keeps none: repeat it after changing `kernel.secret`.
+- **`SyncFieldValueEraser::eraseField($task, $fieldName)`.** Erases one field of one task without the value, for an erasure log that keeps none. After changing `kernel.secret`, run a full sync, then repeat it: before the sync there is no value to erase and it returns 0.
 - **`TaskChangeRecorder::recordMember()`.** A member row names its member by id in `context` (`assignee user:7`).
 
 ### Changed
@@ -95,7 +95,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quota on restore.** A completed task adds nothing to active tasks, so restoring it asks the limit for none: by hand, by the sync's scan, and by a page when the provider also says it is done. A task the provider reopens still counts.
 - **Saving *Not mapped*** is a decision: the person leaves the summary's "not mapped yet" count and stays free to match by e-mail later. The bulk action still reaches them (`TaskSyncPersonRepository::unmappedCount()`).
 - **Audit residuals.** The edited mark keeps `*`, `_` and `~` inside a link or image target. A value-alone suppression record ignores case, and records written by 1.28.0 still hold. The e-mail path's memo is skipped for a user with no id. `anonymise: true` clears member rows by the member's id; only rows from before 1.29 go by label (HId-L4).
-- Audit status of these changes: re-verification pending.
+- **Reopening asks the limit (audit HN-M1).** A move or a provider status that reopens a completed task asks `SyncLimitCheckerInterface` for one active task; a refused move stays where it was, and the sync's page is refused. `POST .../move` answers 409 to a fetch. Deleting a column and file imports stay free, as documented.
+- `--time-entries` warns when it cannot run. Member rows are cleared by exact context, not `LIKE` (audit HN-L1). The edited mark also compares every address as a set (audit HN-L3). A changed e-mail makes a reviewed person due again (audit HN-L4).
+- Audit HN (2026-11-07): Pass (good) / Low at `<final>`. Open residuals are listed in [SECURITY](SECURITY.md#personal-data-in-synced-tasks-rgpd--lopdgdd).
 
 ## [1.28.0] - 2026-11-06
 
