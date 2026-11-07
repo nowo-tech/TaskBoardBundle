@@ -6,6 +6,20 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
@@ -224,6 +238,45 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
+        $this->registerApi($container, $loader, $config);
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): `api.*`. With `enabled: false` nothing is registered: no route, service, listener or parameter.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerApi(ContainerBuilder $container, YamlFileLoader $loader, array $config): void
+    {
+        $api = $config['api'];
+        if (!$api['enabled']) {
+            return;
+        }
+        if (!is_string($api['hooks']['authenticator']) || $api['hooks']['authenticator'] === '') {
+            throw new LogicException('nowo_task_board.api.enabled needs api.hooks.authenticator: the service id of a Nowo\\TaskBoardBundle\\Api\\Hook\\TaskApiAuthenticatorInterface (the host keeps the tokens).');
+        }
+        if ($config['security']['allow_unauthenticated']) {
+            throw new LogicException('nowo_task_board.api.enabled cannot be used with security.allow_unauthenticated: every board would be open to every token.');
+        }
+        if (!$config['security']['resource_scoping'] && !$api['host_decides_access']) {
+            throw new LogicException('nowo_task_board.api.enabled with security.resource_scoping: false opens every board to every token unless listeners deny it. Set api.host_decides_access: true if yours do.');
+        }
+
+        $container->setParameter('nowo_task_board.api.prefix', $api['prefix']);
+        $container->setParameter('nowo_task_board.api.quota_listener_required', $api['quota_listener_required']);
+        $container->setParameter('nowo_task_board.api.max_body_bytes', $api['max_body_bytes']);
+        $loader->load('services_api.yaml');
+        $container->setAlias(TaskApiAuthenticatorInterface::class, $api['hooks']['authenticator']);
+        $container->setAlias(TaskApiRateLimiterInterface::class, $this->serviceOr($api['hooks']['rate_limiter'], DenyingTaskApiRateLimiter::class));
+        $container->setAlias(TaskApiPlanGateInterface::class, $this->serviceOr($api['hooks']['plan_gate'], DenyingTaskApiPlanGate::class));
+        $container->setAlias(TaskApiWorkspaceInterface::class, $this->serviceOr($api['hooks']['workspace'], EmptyTaskApiWorkspace::class));
+        $container->setAlias(TaskApiUsersInterface::class, $this->serviceOr($api['hooks']['users'], EmptyTaskApiUsers::class));
+        $container->setAlias(TaskApiTimeEntriesInterface::class, $this->serviceOr($api['hooks']['time_entries'], DenyingTaskApiTimeEntries::class));
+        $container->setAlias(TaskApiAttachmentsInterface::class, $this->serviceOr($api['hooks']['attachments'], DenyingTaskApiAttachments::class));
+        if (is_string($api['hooks']['idempotency_store']) && $api['hooks']['idempotency_store'] !== '') {
+            $container->setAlias(TaskApiIdempotencyStoreInterface::class, $api['hooks']['idempotency_store']);
+        }
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
     }
 
     /**

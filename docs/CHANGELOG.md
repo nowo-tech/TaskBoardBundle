@@ -85,10 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. No behaviour, schema or configuration change for a host.
+Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
 
 ### Added
 
+- **Task API, skeleton (`api.*`).** `GET /v2/user`, `GET /v2/team` under `api.prefix`; the request pipeline (failed-token limit, authenticator, security user, rate limit), `Api\Security\TaskApiGuard` (level ∩ access ∩ where), `Api\TaskApiCapability`, one `{err, ECODE}` shape. Hooks in `Api\Hook`, where every default denies; event `TaskBoardEvents::API_WRITE`. The build refuses `security.allow_unauthenticated` and, without `api.host_decides_access`, `security.resource_scoping: false`.
 - `Service\TaskManager::restore()` and `archive()`, with their history; `restore()` asks the host's limit and throws `TaskReopenRefusedException` when it refuses.
 - `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`.
 - `Service\TaskBoardEditor::update()`: name and description of a board, the slug unchanged, `TaskBoardEvents::BOARD_UPDATED` (`BoardUpdatedEvent`).

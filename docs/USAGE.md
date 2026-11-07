@@ -30,6 +30,7 @@
   - [No inline styles](#no-inline-styles)
 - [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
   - [Theming with design tokens](#theming-with-design-tokens)
+- [Task API (since 2.2)](#task-api-since-22)
 - [Host hooks (since 2.0.0)](#host-hooks-since-200)
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
@@ -235,6 +236,10 @@ Overrides and demos must not reintroduce raw `<form>` / `<input>` / `<select>` /
     {% endfor %}
 {{ form_end(advanceForm) }}
 ```
+
+## Task API (since 2.2)
+
+A REST API shaped like ClickUp's, off by default: see [API](API.md).
 
 ## Host hooks (since 2.0.0)
 

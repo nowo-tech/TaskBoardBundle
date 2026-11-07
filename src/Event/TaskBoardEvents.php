@@ -130,6 +130,9 @@ final class TaskBoardEvents
     /** Since 2.2.0 (spec 213): {@see BoardUpdatedEvent}. */
     public const BOARD_UPDATED = 'nowo_task_board.board_updated';
 
+    /** Since 2.2.0 (spec 213): {@see TaskApiWriteEvent}, one per write through the API. */
+    public const API_WRITE = 'nowo_task_board.api_write';
+
     /** Since 1.28.0: {@see UnmatchedColumnsResolvedEvent}. */
     public const SYNC_UNMATCHED_COLUMNS_RESOLVED = 'nowo_task_board.sync_unmatched_columns_resolved';
 }

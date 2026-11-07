@@ -1,0 +1,30 @@
+# Since 2.2.0 (spec 213): the Task API, loaded only with `api.enabled: true`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries: ~
+    Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace: ~
+    Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments: ~
+
+    Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener:
+        arguments:
+            $prefix: '%nowo_task_board.api.prefix%'
+
+    Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer: ~
+
+    # Public: any in-process caller reaches the operations and the guard without HTTP.
+    Nowo\TaskBoardBundle\Api\Security\TaskApiGuard:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController:
+        public: true
+        tags: ['controller.service_arguments']

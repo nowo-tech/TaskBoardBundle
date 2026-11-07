@@ -16,6 +16,8 @@ services:
             - '../../Event/'
             - '../../Enum/'
             - '../../Validation/'
+            # Since 2.2.0 (spec 213): loaded only with `api.enabled` (services_api.yaml).
+            - '../../Api/'
             - '../../Exception/'
             - '../../ValueObject/'
             - '../../Import/Dto/'

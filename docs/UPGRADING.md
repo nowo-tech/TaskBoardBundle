@@ -154,7 +154,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Target: 2.2.0, spec 213. Audit status: re-verification pending. No schema or configuration change, and the UI's output stays as it was.
+Target: 2.2.0, spec 213. Audit status: re-verification pending. No schema or configuration change is needed, and the UI's output stays as it was. The Task API is off unless you set `api.enabled: true`: see [API](API.md).
 
 A host that builds `TaskBoardManageController` by hand instead of through the container: the `$syncLimits` argument is gone, and the limit a restore asks is the one given to `TaskManager` (`$limits`).
 

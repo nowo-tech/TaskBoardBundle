@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Routing;
 
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Symfony\Component\Config\Loader\Loader;
@@ -21,6 +23,12 @@ use function substr;
  */
 final class TaskBoardRouteLoader extends Loader
 {
+    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, action]. */
+    private const API_ROUTES = [
+        'user' => ['/v2/user', 'user'],
+        'team' => ['/v2/team', 'teams'],
+    ];
+
     /** Default base path of the manage routes (routes.index.path). */
     private const DEFAULT_BASE = '/tools/task-board';
 
@@ -38,6 +46,8 @@ final class TaskBoardRouteLoader extends Loader
         // Since 2.1.0 (spec 214): these routes exist only with their option, so a host's route lists stay as they are.
         private readonly bool $taskNumbersEnabled = false,
         private readonly bool $calendarEnabled = false,
+        // Since 2.2.0 (spec 213): the API's base path with `api.enabled`; null: no API route at all.
+        private readonly ?string $apiPrefix = null,
     ) {
     }
 
@@ -105,6 +115,7 @@ final class TaskBoardRouteLoader extends Loader
         }
 
         $this->addTenantCopies($collection);
+        $this->addApiRoutes($collection);
 
         return $collection;
     }
@@ -136,6 +147,29 @@ final class TaskBoardRouteLoader extends Loader
                 $methods,
             ),
         );
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): stateless, one path per tenant-free resource: no `route_prefix` and no tenant copies. After the
+     * copies, which only read `routes`.
+     */
+    private function addApiRoutes(RouteCollection $collection): void
+    {
+        if ($this->apiPrefix === null) {
+            return;
+        }
+
+        foreach (self::API_ROUTES as $name => [$path, $action]) {
+            $collection->add('nowo_task_board_api_' . $name, new Route(
+                $this->apiPrefix . $path,
+                ['_controller' => TaskApiIdentityController::class . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
+                [],
+                [],
+                '',
+                [],
+                ['GET'],
+            ));
+        }
     }
 
     /**
