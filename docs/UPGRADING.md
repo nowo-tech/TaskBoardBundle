@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 2.0.1](#to-201)
 - [To 2.0.0](#to-200)
   - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
 - [To 1.30.0](#to-1300)
@@ -146,6 +147,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 2.0.1
+
+From **2.0.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 Target: 2.0.1. No schema or configuration change. A sync that failed on an all-digit remote id imports its page on the next run. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`.
 
