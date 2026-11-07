@@ -124,6 +124,9 @@ final class TaskBoardEvents
     /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
     public const BOARD_DELETED = 'nowo_task_board.board_deleted';
 
+    /** Since 2.0.0: {@see TaskBoardQuotaCheckEvent}, before a board or tasks are written. */
+    public const QUOTA_CHECK = 'nowo_task_board.quota_check';
+
     /** Since 1.28.0: {@see UnmatchedColumnsResolvedEvent}. */
     public const SYNC_UNMATCHED_COLUMNS_RESOLVED = 'nowo_task_board.sync_unmatched_columns_resolved';
 }

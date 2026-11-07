@@ -12,6 +12,9 @@ use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
  */
 final class TenantCreateChecker implements TenantAwareTaskBoardAccessCheckerInterface
 {
+    /** Since 2.0.0: the tenant whose board list this checker refuses. */
+    public const UNLISTED_TENANT = 'hidden';
+
     /** @var list<string|null> The tenant keys canCreateBoard() was asked about. */
     public array $asked = [];
 
@@ -27,8 +30,8 @@ final class TenantCreateChecker implements TenantAwareTaskBoardAccessCheckerInte
         return $tenantKey === null || $tenantKey === 'acme';
     }
 
-    public function canListBoards(object $user): bool
+    public function canListBoards(object $user, ?string $tenantKey = null): bool
     {
-        return true;
+        return $tenantKey !== self::UNLISTED_TENANT;
     }
 }

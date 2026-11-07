@@ -45,7 +45,7 @@
                         {{ form_row(importForm.source) }}
                         {# Since 1.22.1: the host's help under the source select — override this block (templates.import extending this page), or set help_link / the Twig global nowo_task_board_import_help_link. #}
                         {% block import_help %}{% endblock %}
-                        {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(null)), source: importForm.source.vars.value|default('')}) }}
+                        {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(nowo_task_board_configured_help_link())), source: importForm.source.vars.value|default('')}) }}
                         {% for child in importForm %}
                             {% if not child.rendered %}
                                 {{ form_row(child) }}

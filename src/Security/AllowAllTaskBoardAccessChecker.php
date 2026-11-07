@@ -19,7 +19,7 @@ final class AllowAllTaskBoardAccessChecker implements TenantAwareTaskBoardAccess
         return true;
     }
 
-    public function canListBoards(object $user): bool
+    public function canListBoards(object $user, ?string $tenantKey = null): bool
     {
         return true;
     }

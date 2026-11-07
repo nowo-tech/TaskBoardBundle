@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
+use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
@@ -213,6 +214,23 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
         $this->registerBoardCreation($container, $config['board']);
+        $this->registerHostHooks($container, $config);
+    }
+
+    /**
+     * Since 2.0.0: `tenancy.open_single_board`, `tenancy.first_board_provisioner` and `import.help_link`.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerHostHooks(ContainerBuilder $container, array $config): void
+    {
+        $provisioner = $config['tenancy']['first_board_provisioner'];
+        $container->getDefinition(TaskBoardManageController::class)
+            ->setArgument('$openSingleBoard', $config['tenancy']['open_single_board'])
+            ->setArgument('$firstBoardProvisioner', is_string($provisioner) && $provisioner !== '' ? new Reference($provisioner) : null);
+        $container->getDefinition(ImportHelpLinkResolver::class)
+            ->setArgument('$config', $config['import']['help_link'])
+            ->setArgument('$authorization', new Reference('security.authorization_checker', ContainerInterface::NULL_ON_INVALID_REFERENCE));
     }
 
     /**

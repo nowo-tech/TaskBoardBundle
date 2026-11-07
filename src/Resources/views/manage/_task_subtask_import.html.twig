@@ -24,7 +24,7 @@
                 <div class="nowo-task-field">{{ form_row(subtaskImportForm.source) }}</div>
                 {# Since 1.22.1: a place for the host's help under the source select (block, or the help_link parameter). #}
                 {% block import_help %}{% endblock %}
-                {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(null)), source: subtaskImportForm.source.vars.value|default('')}) }}
+                {{ include('@NowoTaskBoardBundle/manage/_import_help_link.html.twig', {link: help_link|default(nowo_task_board_import_help_link|default(nowo_task_board_configured_help_link())), source: subtaskImportForm.source.vars.value|default('')}) }}
                 {% for child in subtaskImportForm %}
                     {% if not child.rendered %}
                         <div class="nowo-task-field">{{ form_row(child) }}</div>

@@ -5,6 +5,7 @@
     Since 1.24: link.anchor_from = 'source' makes the link's #anchor follow the selected import source
     (`taskboard_json` → `#taskboard-json`): rendered from `source` (the select's current value) and kept up to date by
     the nowo-task-board-select-anchor controller when the select changes. Default null: the URL is used as given.
+    Since 2.0.0: link.external = true opens it in a new tab with rel="noopener noreferrer" (`import.help_link.external`).
 #}
 {% if link is iterable and link.url|default('') is not empty and link.label|default('') is not empty %}
     {% set _raw = link.url ~ '' %}
@@ -22,5 +23,5 @@
         {% set _base = _url|split('#')|first %}
         {% set _url = _anchor matches '{^[a-z0-9-]+$}' ? _base ~ '#' ~ _anchor : _base %}
     {% endif %}
-    <p class="nowo-task-import__help-link small mb-2"{% if _follow %} data-controller="nowo-task-board-select-anchor" data-nowo-task-board-select-anchor-selector-value="select[name$='[source]']"{% endif %}><a href="{{ _url }}" data-testid="nowo-task-import-help-link"{% if _follow %} data-nowo-task-board-select-anchor-target="link"{% endif %}>{{ link.label }}</a></p>
+    <p class="nowo-task-import__help-link small mb-2"{% if _follow %} data-controller="nowo-task-board-select-anchor" data-nowo-task-board-select-anchor-selector-value="select[name$='[source]']"{% endif %}><a href="{{ _url }}" data-testid="nowo-task-import-help-link"{% if link.external|default(false) %} target="_blank" rel="noopener noreferrer"{% endif %}{% if _follow %} data-nowo-task-board-select-anchor-target="link"{% endif %}>{{ link.label }}</a></p>
 {% endif %}

@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
@@ -100,6 +101,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         // Since 1.30.0 (spec 211).
         private readonly ?BoardTenantLabelProviderInterface $tenantLabels = null,
         private readonly ?TokenStorageInterface $tokenStorage = null,
+        // Since 2.0.0: `import.help_link`.
+        private readonly ImportHelpLinkResolver $importHelpLink = new ImportHelpLinkResolver(),
     ) {
     }
 
@@ -219,6 +222,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_description', $this->boardDescription(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_label', self::boardLabel(...)),
             new TwigFunction('nowo_task_board_tenant_labels', $this->tenantLabelsOf(...)),
+            // Since 2.0.0: `import.help_link`, resolved per render.
+            new TwigFunction('nowo_task_board_configured_help_link', $this->importHelpLink->resolve(...)),
         ];
     }
 
