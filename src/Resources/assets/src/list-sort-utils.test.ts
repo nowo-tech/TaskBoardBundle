@@ -32,6 +32,7 @@ describe('compareRows by number', () => {
         expect(compareRows(numbered(2), numbered(10), 'number')).toBeLessThan(0);
         expect(compareRows(numbered(10), numbered(2), 'number')).toBeGreaterThan(0);
         expect(compareRows(numbered(), numbered(2), 'number')).toBeGreaterThan(0);
+        expect(compareRows(numbered(2), numbered(), 'number')).toBeLessThan(0);
         expect(readSortRow({ number: '12' }, 0).number).toBe(12);
         expect(readSortRow({ number: '' }, 0).number).toBeUndefined();
     });
