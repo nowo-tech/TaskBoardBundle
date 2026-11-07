@@ -35,6 +35,14 @@ describe('task-board.css', () => {
     expect(rules('.nowo-task-detail__meta')).toMatch(/padding-top:\s*0/);
   });
 
+  it('ends the Views buttons in an end-aligned table cell only, and keeps them at the start in a card (2.1.1)', () => {
+    expect(rules('.nowo-ui-cell--end > .nowo-task-board-list__views')).toMatch(/justify-content:\s*flex-end/);
+    // No general rule: a host's own list (_board_list_item) has no such cell and stays as it was.
+    expect(rules('.nowo-task-board-list__views')).not.toMatch(/justify-content/);
+    // Inside the card container query; its selector must outweigh the rule above.
+    expect(rules('.nowo-ui-table--cards > tbody > tr > td > .nowo-task-board-list__views')).toMatch(/justify-content:\s*flex-start/);
+  });
+
   it('sizes the Gantt grid to its timeline so the sticky title column stays in view', () => {
     expect(rules('.nowo-task-gantt__grid')).toMatch(/width:\s*max-content/);
   });

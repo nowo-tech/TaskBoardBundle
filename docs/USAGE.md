@@ -399,8 +399,8 @@ classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`
 
 ## Board index and default view (since 1.24)
 
-The board index (`templates.index`, `manage/index.html.twig`) is a list page: the header with its actions (*New
-board*, for whoever may create a board here), one panel with the boards or an empty state, and the **New board**
+The board index (`templates.index`, `manage/index.html.twig`) is a list page: the header with its actions, one panel with the boards or an empty state, *New board* for whoever may
+create a board here (since 2.1.1 one button: in the header when there are boards, else in the empty state), and the **New board**
 dialog (`nowo-task-board-dialog`), with a `<noscript>` copy of the form under the list. Blocks for a page extending it:
 
 | Block | Content |

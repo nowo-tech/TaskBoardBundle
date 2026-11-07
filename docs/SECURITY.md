@@ -129,6 +129,8 @@ A sync that has no people session or no person reference for a row (`SyncOptions
 
 ## New board scope step (since 1.30)
 
+Any scope offers New board on the index without asking `canCreateBoard()`. A provider returns `[]` on a tenant's page where the user may not create, so that the check decides the button and the create route ([CONFIGURATION](CONFIGURATION.md#new-board-since-130)). A button is not a permission: the create route still checks the resolved tenant. 2.1.1 documents this and changes no check; audit status: re-verification pending.
+
 The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. A board with no tenant has no database check on its slug: NULL is distinct in a unique index, so two creates at the same moment can store the same slug. The bundle routes by id, so nothing breaks in it; a host reading by slug alone should not rely on one row.
 
 ## Unmatched columns (since 1.28.0)

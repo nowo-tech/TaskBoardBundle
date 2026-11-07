@@ -85,6 +85,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit: re-verification pending. See [UPGRADING](UPGRADING.md#unreleased).
+
+### Fixed
+
+- The board index drew two New board buttons when there were no boards. There is now one: in the header when there are boards, otherwise in the empty state. The empty state takes the same check as the header did, so a list emptied by the list check or by board access keeps the button.
+- New board is primary whatever the host's `nowo_ui_kit.action_variants.create` says. It is the page's main action, and an explicit variant is how UiKit keeps one (`Action::create()` does the same).
+- The Board / List / Gantt buttons of the index end under their Views heading. On a phone, where cards replace the table, they stay at the start beside their label.
+
+### Documentation
+
+- `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides.
+
 ## [2.1.0] - 2026-11-07
 
 Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#to-210).

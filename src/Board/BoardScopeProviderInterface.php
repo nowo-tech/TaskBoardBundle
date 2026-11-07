@@ -17,6 +17,11 @@ interface BoardScopeProviderInterface
      * skipped. Runs on every board index, because the New board dialog is part of that page, so it must be cheap, and an
      * exception here takes the board list down with it.
      *
+     * The list also decides who sees New board on the index: any scope shows it, without asking `canCreateBoard()`. So a
+     * scope that is always there, such as a personal one, shows the button to someone who only reads the tenant of the
+     * page. On a tenant's page where this user may not create (`$current` is that tenant), return [] (since 2.1.1, stated
+     * here): `canCreateBoard()` then decides the button and the create route, and that page offers no other scope either.
+     *
      * @return list<BoardScope>
      */
     public function scopes(object $user, ?TaskBoardTenant $current): array;

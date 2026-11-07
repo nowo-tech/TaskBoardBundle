@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PreferredViewResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TenantCreateChecker;
+use Symfony\Component\DomCrawler\Crawler;
 
 /**
  * Since 1.24 (Beacon audit KIT-67): the board index as a list page with a New board dialog, the tenant on the create
@@ -71,6 +72,63 @@ final class BoardIndexTest extends FunctionalTestCase
         // ?new=1 does not open a dialog the user cannot use.
         $this->client->request('GET', self::BASE . '?new=1');
         self::assertSelectorNotExists('dialog');
+    }
+
+    /** Since 2.1.1: one New board, in the empty state when there are no boards, in the header when there are. */
+    public function testWithNoBoardsTheOneNewBoardIsInTheEmptyState(): void
+    {
+        $this->login($this->owner);
+
+        $this->assertTheOnlyNewBoardIs('nowo-task-board-new-empty', $this->client->request('GET', self::BASE));
+
+        // An invalid create answered on an empty list: the dialog opens, and closing it leaves the one button.
+        $crawler = $this->client->request('POST', self::BASE . '/create', ['task_board_form' => ['name' => '', '_token' => PredictableCsrfTokenManager::value('task_board_form')]]);
+        self::assertResponseStatusCodeSame(422);
+        $this->assertTheOnlyNewBoardIs('nowo-task-board-new-empty', $crawler);
+    }
+
+    public function testWithBoardsTheOneNewBoardIsInTheHeader(): void
+    {
+        $this->board('Roadmap');
+        $this->login($this->owner);
+
+        $this->assertTheOnlyNewBoardIs('nowo-task-board-new', $this->client->request('GET', self::BASE));
+        self::assertSelectorNotExists('[data-nowo-ui-region="empty"]');
+    }
+
+    /** Since 2.1.1: boards the user cannot list leave an empty list, not a user with no way to create. */
+    public function testAListEmptiedByTheListCheckKeepsNewBoard(): void
+    {
+        self::$taskBoardConfig = ['security' => ['list_roles' => ['ROLE_ADMIN']]];
+        self::ensureKernelShutdown();
+        $this->setUp();
+        $this->board('Roadmap');
+        $this->login($this->owner);
+
+        $crawler = $this->client->request('GET', self::BASE);
+
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-list-item"]'));
+        $this->assertTheOnlyNewBoardIs('nowo-task-board-new-empty', $crawler);
+    }
+
+    /** Since 2.1.1: as above with boards another user owns and this one may not view, so the filter removes every row. */
+    public function testAListEmptiedByTheBoardFilterKeepsNewBoard(): void
+    {
+        $this->board('Theirs', creator: $this->user('someone-else@example.com'));
+        $this->login($this->owner);
+
+        $crawler = $this->client->request('GET', self::BASE);
+
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-list-item"]'));
+        $this->assertTheOnlyNewBoardIs('nowo-task-board-new-empty', $crawler);
+    }
+
+    private function assertTheOnlyNewBoardIs(string $testid, Crawler $crawler): void
+    {
+        $openers = $crawler->filter('[data-nowo-ui-dialog-open="nowo-task-board-create"]');
+        self::assertCount(1, $openers);
+        self::assertSame($testid, $openers->attr('data-testid'));
+        self::assertCount($testid === 'nowo-task-board-new-empty' ? 1 : 0, $crawler->filter('[data-nowo-ui-region="empty"] [data-nowo-ui-dialog-open]'));
     }
 
     public function testAnInvalidCreateAnswers422WithTheDialogOpenAndTheValuesAndErrorsKept(): void
