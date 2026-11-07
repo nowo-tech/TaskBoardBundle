@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `<final>`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#unreleased).
+Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#unreleased).
 
 ### Changed
 

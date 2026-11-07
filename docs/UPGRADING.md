@@ -153,7 +153,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Spec 214, target 2.1.0. Audit HY (2026-11-07): Pass (good) / Low at `<final>`.
+Spec 214, target 2.1.0. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`.
 
 ### Schema change for every host: `task_board_tasks.number`
 
