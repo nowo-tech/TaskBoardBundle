@@ -33,6 +33,7 @@ use function array_flip;
 use function array_intersect_key;
 use function array_keys;
 use function array_map;
+use function array_merge;
 use function bin2hex;
 use function count;
 use function is_scalar;
@@ -133,12 +134,14 @@ final readonly class TaskBoardEraser
         foreach ($levels as $level) {
             $this->refuseLinked($level);
         }
+        // Audit IA-M1: the files a sync stored outlive an unlink (GWd-M1), so the host learns of them here, or never.
+        $refs = $this->storedRefsOf(array_merge(...$levels));
 
         $boardId = $board->getId();
         $deleted = 0;
         foreach (array_reverse($levels) as $level) {
             foreach ($level as $erased) {
-                $this->eventDispatcher?->dispatch(new TaskErasedEvent($erased->getId(), $boardId, $erased->getTitle(), [], count($erased->getTimeEntries())), TaskBoardEvents::TASK_ERASED);
+                $this->eventDispatcher?->dispatch(new TaskErasedEvent($erased->getId(), $boardId, $erased->getTitle(), $refs[$erased->getId()] ?? [], count($erased->getTimeEntries())), TaskBoardEvents::TASK_ERASED);
                 $board->getTasks()->removeElement($erased);
                 $erased->getParent()?->getSubtasks()->removeElement($erased);
                 $this->entityManager->remove($erased);
@@ -168,6 +171,43 @@ final readonly class TaskBoardEraser
             ->getResult();
 
         return $subtasks;
+    }
+
+    /**
+     * The storage refs of the files a sync stored for the tasks, per task id, read and their rows removed (a database that
+     * does not enforce the foreign key would keep them, with nothing left to name them).
+     *
+     * @param list<Task> $tasks
+     *
+     * @return array<string, list<string>>
+     */
+    private function storedRefsOf(array $tasks): array
+    {
+        if (!$this->syncService instanceof TaskBoardSyncService) {
+            return [];
+        }
+        /** @var list<array{taskId: string, ref: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(a.task) AS taskId', 'a.storedRef AS ref')
+            ->from(TaskSyncAttachment::class, 'a')
+            ->where('a.task IN (:tasks)')
+            ->setParameter('tasks', $tasks)
+            ->getQuery()
+            ->getArrayResult();
+        $refs = [];
+        foreach ($rows as $row) {
+            $refs[(string) $row['taskId']][] = (string) $row['ref'];
+        }
+        if ($refs !== []) {
+            $this->entityManager->createQueryBuilder()
+                ->delete(TaskSyncAttachment::class, 'a')
+                ->where('a.task IN (:tasks)')
+                ->setParameter('tasks', $tasks)
+                ->getQuery()
+                ->execute();
+        }
+
+        return $refs;
     }
 
     /**
