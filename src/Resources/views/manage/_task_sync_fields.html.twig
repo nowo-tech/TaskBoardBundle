@@ -25,7 +25,7 @@
                             <progress max="100" value="{{ field.value }}" aria-label="{{ field.name }}"></progress> {{ field.text }}
                         {% elseif field.type == 'dropdown' or field.type == 'labels' %}
                             {% for choice in field.choices %}
-                                <span class="badge nowo-task-badge"{% if choice.color %} data-color="{{ choice.color }}"{% endif %}>{{ choice.name }}</span>
+                                <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge"{% if choice.color %} data-color="{{ choice.color }}"{% endif %}>{{ choice.name }}</span>
                             {% endfor %}
                         {% else %}
                             {{ field.text }}

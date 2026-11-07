@@ -1,7 +1,7 @@
 {% if tags is not empty %}
     <div class="nowo-task-tags{% if wrapper_class|default('') %} {{ wrapper_class }}{% endif %}">
         {% for tag in tags %}
-            <span class="badge bg-purple-lt text-purple nowo-task-tag">{{ tag }}</span>
+            <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-tag">{{ tag }}</span>
         {% endfor %}
     </div>
 {% endif %}

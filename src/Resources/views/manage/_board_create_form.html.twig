@@ -2,7 +2,7 @@
     Since 1.24: the New board form, one partial for the index dialog, its <noscript> copy and the 422 answer of an
     invalid create in a host dialog (board.create_dialog_header). Values and errors of an invalid submission are kept.
     Variables: form (the TaskBoardFormType view, posted to the board_create route of the current tenant);
-    in_dialog (default false: adds Cancel, which closes the surrounding nowo-task-board-dialog);
+    in_dialog (default false: adds Cancel, which closes the surrounding kit dialog);
     id_prefix (default '': prefixes the field ids and the form id, so a second copy of the form on the page keeps its
     labels); since 1.26 with_actions (default true; false: no action row, the index dialog renders Cancel and Create in
     its footer with form="nowo-task-board-create-form"). The form id is `<id_prefix>nowo-task-board-create-form`; the
@@ -49,7 +49,7 @@
                 <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _id_prefix ~ 'nowo-task-board-create-form' }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
             {% if _in_dialog %}
-                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
             <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-create-submit">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}

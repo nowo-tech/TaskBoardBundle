@@ -3,16 +3,16 @@
     warnings / errors as messages. runs, summaries. Override with templates.connection_history.
 #}
 {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as labels %}
-<section class="card" aria-labelledby="nowo-task-sync-history-title" data-testid="nowo-task-sync-history">
-    <div class="card-header">
-        <h2 class="card-title" id="nowo-task-sync-history-title">{{ 'task_board.sync.history.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+<section class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }}" aria-labelledby="nowo-task-sync-history-title" data-testid="nowo-task-sync-history">
+    <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+        <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}" id="nowo-task-sync-history-title">{{ 'task_board.sync.history.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
     </div>
     {% if runs is empty %}
-        <div class="card-body text-secondary">{{ 'task_board.sync.history.empty'|trans({}, 'NowoTaskBoardBundle') }}</div>
+        <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.sync.history.empty'|trans({}, 'NowoTaskBoardBundle') }}</div>
     {% else %}
         {#- A scrolling region is reachable with the keyboard (WCAG 2.1.1, axe scrollable-region-focusable). -#}
-        <div class="table-responsive" tabindex="0" role="region" aria-labelledby="nowo-task-sync-history-title">
-            <table class="table card-table table-vcenter">
+        <div class="{{ nowo_ui_class('table_wrap', 'NowoTaskBoardBundle') }}" tabindex="0" role="region" aria-labelledby="nowo-task-sync-history-title">
+            <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }}">
                 <caption class="visually-hidden">{{ 'task_board.sync.history.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
                 <thead>
                     <tr>
@@ -34,7 +34,7 @@
                                 {% if report and (report.conflicts is not empty or report.warnings is not empty or report.errors is not empty or report.refusalCode) %}
                                     <details class="nowo-task-sync__details">
                                         <summary>{{ 'task_board.sync.history.details'|trans({}, 'NowoTaskBoardBundle') }}</summary>
-                                        <ul class="mb-0">
+                                        <ul class="nowo-task-mb-0">
                                             {% for conflict in report.conflicts %}
                                                 <li>{{ 'task_board.sync.history.conflict'|trans({'%task%': conflict.taskTitle, '%field%': ('task_board.sync.field.' ~ conflict.field)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</li>
                                             {% endfor %}

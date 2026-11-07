@@ -4,7 +4,7 @@
     Variables: boards.
 #}
 {% set _tenantLabels = nowo_task_board_tenant_labels(boards) %}
-<ul class="nowo-task-board-list list-unstyled mb-0" role="list" data-testid="nowo-task-board-list">
+<ul class="nowo-task-board-list nowo-task-plain-list nowo-task-mb-0" role="list" data-testid="nowo-task-board-list">
     {% for board in boards %}
         {{ include('@NowoTaskBoardBundle/manage/_board_list_item.html.twig', {board: board, tenantLabels: _tenantLabels}) }}
     {% endfor %}

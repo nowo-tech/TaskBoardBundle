@@ -42,16 +42,16 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertSame('Open Roadmap as a Gantt chart', $item->filter('[data-testid="nowo-task-board-view-gantt"]')->attr('aria-label'));
 
         // New board opens the dialog; the dialog holds the one create form, closed until asked.
-        self::assertSame('board-create', $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('data-dialog'));
+        self::assertSame('nowo-task-board-create', $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('data-nowo-ui-dialog-open'));
         $dialog = $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
         self::assertCount(1, $dialog);
-        self::assertNull($dialog->attr('data-open-on-connect'));
+        self::assertCount(0, $crawler->filter('#nowo-ui-open-modal-on-load'));
         self::assertSame(self::BASE . '/create', $dialog->filter('form')->attr('action'));
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-index-empty"]'));
 
         // ?new=1 opens it on load (a host's "New board" link).
         $crawler = $this->client->request('GET', self::BASE . '?new=1');
-        self::assertSame('', $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]')->attr('data-open-on-connect'));
+        self::assertStringContainsString('nowo-task-board-create', $crawler->filter('#nowo-ui-open-modal-on-load')->text(null, false));
     }
 
     public function testAnEmptyIndexShowsTheEmptyStateAndHidesCreationFromWhoMayNotCreate(): void
@@ -85,7 +85,7 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertResponseStatusCodeSame(422);
         self::assertResponseHeaderSame('Cache-Control', 'no-store, private');
         $dialog = $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
-        self::assertSame('', $dialog->attr('data-open-on-connect'));
+        self::assertStringContainsString('nowo-task-board-create', $crawler->filter('#nowo-ui-open-modal-on-load')->text(null, false));
         self::assertSame('Kept <b>text</b>', $dialog->filter('textarea[name="task_board_form[description]"]')->text());
         self::assertGreaterThan(0, $dialog->filter('.invalid-feedback, .form-error-message, ul li')->count(), 'the name error is shown');
         self::assertSelectorTextContains('[role="alert"]', 'The board was not created');

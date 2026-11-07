@@ -231,16 +231,16 @@
     {# Since 1.23: the archived tasks of the board (a provider sync archives the tasks the provider deleted). #}
     {% block nowo_task_board_archived %}
         {% if archivedTasks|default([]) is not empty %}
-            <details class="nowo-task-section nowo-task-list__archived mt-4" data-testid="nowo-task-archived">
+            <details class="nowo-task-section nowo-task-list__archived nowo-task-mt-4" data-testid="nowo-task-archived">
                 <summary class="nowo-task-section__title">{{ 'task_board.list.archived'|trans({'%count%': archivedTasks|length}, 'NowoTaskBoardBundle') }}</summary>
-                <ul class="list-unstyled mt-2">
+                <ul class="nowo-task-plain-list nowo-task-mt-2">
                     {% for task in archivedTasks %}
-                        <li class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <li class="nowo-task-flex nowo-task-wrap nowo-task-center nowo-task-gap nowo-task-mb-2">
                             <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}">{{ task.title }}</a>
-                            <span class="badge bg-secondary-lt">{{ ('task_board.task.archive_reason.' ~ (task.archiveReason ?? 'user'))|trans({}, 'NowoTaskBoardBundle') }}</span>
+                            <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }}">{{ ('task_board.task.archive_reason.' ~ (task.archiveReason ?? 'user'))|trans({}, 'NowoTaskBoardBundle') }}</span>
                             {% if restoreForms[task.id] is defined %}
                                 {{ form_start(restoreForms[task.id], {action: path(nowo_task_board_route('task_restore'), {taskId: task.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
+                                    <button type="submit" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
                                 {{ form_end(restoreForms[task.id]) }}
                             {% endif %}
                         </li>

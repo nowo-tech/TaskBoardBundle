@@ -5,7 +5,7 @@
 #}
 {% set total = latestReport and latestReport.total ? latestReport.total : null %}
 {% set processed = latestReport ? latestReport.created + latestReport.updated + latestReport.unchanged + latestReport.skipped : 0 %}
-<section class="nowo-task-sync__progress mb-3" aria-labelledby="nowo-task-sync-progress-title"
+<section class="nowo-task-sync__progress nowo-task-mb-3" aria-labelledby="nowo-task-sync-progress-title"
     data-controller="nowo-task-board-sync-progress"
     data-nowo-task-board-sync-progress-url-value="{{ progressUrl }}"
     data-nowo-task-board-sync-progress-interval-value="{{ pollInterval|default(2000) }}"
@@ -16,13 +16,13 @@
     {% else %}
         <progress class="nowo-task-sync__bar" aria-labelledby="nowo-task-sync-progress-title" data-nowo-task-board-sync-progress-target="bar"></progress>
     {% endif %}
-    <p role="status" aria-live="polite" aria-atomic="true" class="mb-2" data-nowo-task-board-sync-progress-target="status">{{ latestSummary|default('task_board.sync.progress.starting'|trans({}, 'NowoTaskBoardBundle')) }}</p>
-    <p class="mb-2" hidden data-nowo-task-board-sync-progress-target="done">
+    <p role="status" aria-live="polite" aria-atomic="true" class="nowo-task-mb-2" data-nowo-task-board-sync-progress-target="status">{{ latestSummary|default('task_board.sync.progress.starting'|trans({}, 'NowoTaskBoardBundle')) }}</p>
+    <p class="nowo-task-mb-2" hidden data-nowo-task-board-sync-progress-target="done">
         <a href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}">{{ 'task_board.sync.progress.show_result'|trans({}, 'NowoTaskBoardBundle') }}</a>
     </p>
     {% if cancelForm %}
         {{ form_start(cancelForm, {action: path(nowo_task_board_route('board_connection_cancel'), {boardId: board.id, runId: activeRun.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
-            <button type="submit" class="btn btn-outline-danger btn-sm" data-nowo-task-board-sync-progress-target="cancel">{{ 'task_board.sync.progress.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" class="{{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-nowo-task-board-sync-progress-target="cancel">{{ 'task_board.sync.progress.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
         {{ form_end(cancelForm) }}
     {% endif %}
 </section>

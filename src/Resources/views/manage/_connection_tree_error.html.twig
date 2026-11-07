@@ -1,7 +1,7 @@
 {# Since 1.23: why a level of the container browser could not be read (never the provider's answer). #}
-<div class="alert alert-danger" role="alert" data-testid="nowo-task-sync-tree-error">
+<div class="{{ nowo_ui_class('flash_error', 'NowoTaskBoardBundle') }}" role="alert" data-testid="nowo-task-sync-tree-error">
     {{ ('task_board.sync.error.' ~ error)|trans({}, 'NowoTaskBoardBundle') }}
     {% if credentialFormUrl|default(null) and error in ['auth_failed', 'forbidden'] %}
-        <a href="{{ credentialFormUrl }}" class="alert-link">{{ 'task_board.sync.connect.replace_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
+        <a href="{{ credentialFormUrl }}" class="">{{ 'task_board.sync.connect.replace_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
     {% endif %}
 </div>

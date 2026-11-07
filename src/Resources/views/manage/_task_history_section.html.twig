@@ -95,7 +95,7 @@
                                         <span>{{ entry.newValue }}</span>
                                     {% endif %}
                                     {% if entry.context %}
-                                        <span class="badge bg-green-lt nowo-task-badge">{{ ('task_board.member.' ~ entry.context|split(' ')|first)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                        <span class="{{ nowo_ui_class('badge_success', 'NowoTaskBoardBundle') }} nowo-task-badge">{{ ('task_board.member.' ~ entry.context|split(' ')|first)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                     {% endif %}
                                 {% elseif entry.changeType.value in ['dependency_added', 'dependency_removed'] %}
                                     {# Since 1.15: the relation and the other task. #}

@@ -30,7 +30,7 @@
                 <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="locations"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.locations'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.locations|map(l => l.name ?: l.id)|join(', ') }}</dd></div>
             {% endif %}
             {% if details.tagColours is defined and details.tagColours is not empty %}
-                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="tag-colours"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.tags'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{% for _tag, _c in details.tagColours %}<span class="badge nowo-task-sync-tag"{% if _c is not empty %} data-nowo-task-vars="{{ {'--nowo-task-sync-tag-bg': _c.bg|default(null), '--nowo-task-sync-tag-fg': _c.fg|default(null)}|filter(v => v is not null)|json_encode }}"{% endif %}>{{ _tag }}</span> {% endfor %}</dd></div>
+                <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="tag-colours"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.tags'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{% for _tag, _c in details.tagColours %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-sync-tag"{% if _c is not empty %} data-nowo-task-vars="{{ {'--nowo-task-sync-tag-bg': _c.bg|default(null), '--nowo-task-sync-tag-fg': _c.fg|default(null)}|filter(v => v is not null)|json_encode }}"{% endif %}>{{ _tag }}</span> {% endfor %}</dd></div>
             {% endif %}
             {% if details.path is defined %}
                 <div class="nowo-task-detail__field nowo-task-detail__attr" data-sync-detail="path"><dt class="nowo-task-detail__field-label"><span>{{ 'task_board.sync.details.path'|trans({}, 'NowoTaskBoardBundle') }}</span></dt><dd class="nowo-task-detail__field-value">{{ details.path|join(' › ') }}</dd></div>
@@ -43,7 +43,7 @@
             {% endif %}
         </dl>
         {% if details.statusHistory is defined %}
-            <table class="table table-sm nowo-task-sync-status-history" data-testid="nowo-task-sync-status-history">
+            <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }} nowo-task-sync-status-history" data-testid="nowo-task-sync-status-history">
                 <caption>{{ 'task_board.sync.details.status_history'|trans({}, 'NowoTaskBoardBundle') }}</caption>
                 <thead><tr><th scope="col">{{ 'task_board.sync.details.status'|trans({}, 'NowoTaskBoardBundle') }}</th><th scope="col">{{ 'task_board.sync.details.since'|trans({}, 'NowoTaskBoardBundle') }}</th><th scope="col">{{ 'task_board.sync.details.time'|trans({}, 'NowoTaskBoardBundle') }}</th></tr></thead>
                 <tbody>

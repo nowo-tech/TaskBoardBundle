@@ -13,7 +13,7 @@
             'aria-label': 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle'),
         },
     }) }}
-    <button type="submit" class="btn btn-sm btn-primary nowo-task-inline-add__submit">{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <button type="submit" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }} nowo-task-inline-add__submit">{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}</button>
     {% for child in form %}
         {% if not child.rendered %}
             {{ form_widget(child) }}

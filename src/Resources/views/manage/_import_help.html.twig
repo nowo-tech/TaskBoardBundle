@@ -1,19 +1,12 @@
 {#
     Since 1.18: the help modal of every import — what each format imports and how to prepare the file; the bundle's
     own CSV / JSON with its columns, the subtask tree, start dates and the Gantt relations, with an example.
-    Inside an element with data-controller="nowo-task-board-dialog"; the trigger is
-    `<button data-action="nowo-task-board-dialog#open" data-dialog="import-help">`.
+    The trigger is `<button data-nowo-ui-dialog-open="nowo-task-import-help-<helpId>">`.
     Variables: scope ('board': into the board, 'task': as subtasks of a task), helpId (unique id suffix).
 #}
 {% set _scope = scope|default('board') %}
 {% set _t = 'task_board.import.help.' %}
-<dialog class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide nowo-task-import-help" data-nowo-task-board-dialog-target="dialog" data-dialog="import-help" aria-labelledby="nowo-task-import-help-title-{{ helpId|default('board') }}">
-    <div class="nowo-task-dialog__header">
-        <h2 class="nowo-task-dialog__title" id="nowo-task-import-help-title-{{ helpId|default('board') }}">{{ (_t ~ 'modal_title')|trans({}, 'NowoTaskBoardBundle') }}</h2>
-        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
-            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
-        </button>
-    </div>
+{% set _body %}
     <div class="nowo-task-dialog__body nowo-task-import-help__body">
         <p>{{ (_t ~ 'intro_' ~ _scope)|trans({}, 'NowoTaskBoardBundle') }}</p>
 
@@ -61,7 +54,18 @@ release,,Release,To do,2026-11-13,2026-11-13,1h,design;api</code></pre>
         <p class="nowo-task-import-help__note">{{ (_t ~ 'options')|trans({}, 'NowoTaskBoardBundle') }}</p>
     </div>
     {# Since 1.26 (dialog rule v2): the footer, outside the scrolling body; a guide has one action. #}
-    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-        <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ (_t ~ 'got_it')|trans({}, 'NowoTaskBoardBundle') }}</button>
-    </div>
-</dialog>
+{% endset %}
+{% set _footer %}
+        <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ (_t ~ 'got_it')|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-import-help-' ~ helpId|default('board'),
+    title: (_t ~ 'modal_title')|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide nowo-task-import-help',
+    size: 'wide',
+    attr: {'data-dialog': 'import-help'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+}, false) }}

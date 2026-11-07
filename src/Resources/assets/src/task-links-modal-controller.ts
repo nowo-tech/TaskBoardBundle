@@ -1,14 +1,10 @@
 import { Controller } from '@hotwired/stimulus';
-import { ModalToggle } from './modal-toggle';
+import { openKitDialog } from './dialog-utils';
 
-/**
- * Add/edit task links in a dialog on the task detail page (since 1.14 a native <dialog>; the Bootstrap `.modal`
- * markup of older template overrides keeps working).
- */
+/** Add and edit task links in a dialog on the task detail page. Removing one asks first through `data-confirm`. */
 export default class TaskLinksModalController extends Controller<HTMLElement> {
     static targets = [
         'modal',
-        'backdrop',
         'form',
         'deleteForm',
         'deleteButton',
@@ -27,9 +23,7 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         editTitle: String,
     };
 
-    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
-
-    declare readonly backdropTarget: HTMLElement;
+    declare readonly modalTarget: HTMLDialogElement;
 
     declare readonly formTarget: HTMLFormElement;
 
@@ -47,8 +41,6 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
 
     declare readonly externalIdTarget: HTMLInputElement;
 
-    declare readonly hasBackdropTarget: boolean;
-
     declare readonly hasDeleteFormTarget: boolean;
 
     declare readonly hasDeleteButtonTarget: boolean;
@@ -63,15 +55,12 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
 
     declare readonly editTitleValue: string;
 
-    private toggle: ModalToggle | null = null;
-
     openAdd(event: Event): void {
         event.preventDefault();
         this.resetForm(this.createUrlValue);
         this.titleTarget.textContent = this.addTitleValue;
         this.toggleDeleteForm(false);
-        this.modal().show();
-        this.focusUrlField();
+        openKitDialog(this.modalTarget, event.currentTarget as Element, this.urlTarget);
     }
 
     openEdit(event: Event): void {
@@ -95,26 +84,7 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         }
 
         this.toggleDeleteForm(true);
-        this.modal().show();
-        this.focusUrlField();
-    }
-
-    close(): void {
-        this.modal().hide();
-    }
-
-    closeOnBackdrop(event: Event): void {
-        if (this.modal().isBackdrop(event.target)) {
-            this.close();
-        }
-    }
-
-    /** Since 1.12: the confirmation of "Remove link" (no inline handler, so a strict CSP keeps it working). */
-    confirmDelete(event: Event): void {
-        const message = (event.currentTarget as HTMLElement | null)?.dataset.confirmMessage ?? '';
-        if ('' !== message && !window.confirm(message)) {
-            event.preventDefault();
-        }
+        openKitDialog(this.modalTarget, event.currentTarget as Element, this.urlTarget);
     }
 
     private resetForm(action: string): void {
@@ -130,15 +100,5 @@ export default class TaskLinksModalController extends Controller<HTMLElement> {
         if (this.hasDeleteButtonTarget) {
             this.deleteButtonTarget.hidden = !visible;
         }
-    }
-
-    private focusUrlField(): void {
-        window.requestAnimationFrame(() => this.urlTarget.focus());
-    }
-
-    private modal(): ModalToggle {
-        this.toggle ??= new ModalToggle(this.modalTarget, this.hasBackdropTarget ? this.backdropTarget : null, () => this.close());
-
-        return this.toggle;
     }
 }

@@ -27,13 +27,13 @@
 
 {% block nowo_ui_content %}
 
-    <div class="row row-cards">
-        <div class="col-12 col-lg-8">
-            <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ 'task_board.import.form.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+    <div class="nowo-task-grid">
+        <div class="nowo-task-grid__cell nowo-task-grid__main">
+            <div class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }}">
+                <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+                    <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}">{{ 'task_board.import.form.title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
                 </div>
-                <div class="card-body">
+                <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
                     {{ form_start(importForm, {
                         action: path(nowo_task_board_route('board_import'), {boardId: board.id}),
                         method: 'POST',
@@ -48,22 +48,22 @@
                                 {{ form_row(child) }}
                             {% endif %}
                         {% endfor %}
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">
                             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.form.submit'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     {{ form_end(importForm) }}
                 </div>
             </div>
         </div>
-        <div class="col-12 col-lg-4">
+        <div class="nowo-task-grid__cell nowo-task-grid__aside">
             {# Since 1.18: what each format imports and how, in a help modal. #}
-            <div class="card nowo-task-import-help-card" data-controller="nowo-task-board-dialog">
-                <div class="card-header">
-                    <h3 class="card-title">{{ 'task_board.import.help.title'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+            <div class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-import-help-card">
+                <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+                    <h3 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}">{{ 'task_board.import.help.title'|trans({}, 'NowoTaskBoardBundle') }}</h3>
                 </div>
-                <div class="card-body">
-                    <p class="text-secondary small">{{ 'task_board.import.help.intro_board'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                    <button type="button" class="btn btn-outline-secondary" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
+                <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
+                    <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small">{{ 'task_board.import.help.intro_board'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-import-help-board-{{ board.id }}">
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
                     {{ include('@NowoTaskBoardBundle/manage/_import_help.html.twig', {scope: 'board', helpId: 'board-' ~ board.id}) }}

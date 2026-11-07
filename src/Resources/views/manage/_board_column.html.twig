@@ -63,7 +63,7 @@
     {% elseif (canEditBoard ?? true) %}
     <button
         type="button"
-        class="btn btn-sm btn-ghost-primary w-100 nowo-task-board__add-task-btn nowo-task-column__add-task"
+        class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} nowo-task-w-full nowo-task-board__add-task-btn nowo-task-column__add-task"
         data-action="click->nowo-task-board-add-task-modal#open"
         data-column-id="{{ column.id }}"
         data-column-name="{{ column.name|e('html_attr') }}"

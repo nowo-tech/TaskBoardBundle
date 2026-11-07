@@ -10,15 +10,15 @@
 {% if error|default(null) %}
     {{ include('@NowoTaskBoardBundle/manage/_connection_tree_error.html.twig', {error: error}) }}
 {% elseif level.items is empty %}
-    <p class="text-secondary small mb-0" data-testid="nowo-task-sync-empty">{{ 'task_board.sync.browser.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small nowo-task-mb-0" data-testid="nowo-task-sync-empty">{{ 'task_board.sync.browser.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
 {% else %}
-    <ul class="nowo-task-tree__group list-unstyled" data-depth="{{ depth }}">
+    <ul class="nowo-task-tree__group nowo-task-plain-list" data-depth="{{ depth }}">
         {% for item in level.items %}
             {% if not item.selectable %}
                 {% set groupId = 'nowo-task-tree-' ~ item.id|replace({':': '-'}) %}
                 {% set isOpen = tree[item.id] is defined %}
                 <li class="nowo-task-tree__node">
-                    <button type="submit" class="btn btn-link nowo-task-tree__toggle"
+                    <button type="submit" class="{{ nowo_ui_class('btn_link', 'NowoTaskBoardBundle') }} nowo-task-tree__toggle"
                         formaction="{{ path(nowo_task_board_route('board_connection_containers'), {boardId: board.id, open: open|default([])}) }}"
                         formmethod="post" formnovalidate name="parent" value="{{ item.id }}"
                         aria-expanded="{{ isOpen ? 'true' : 'false' }}" aria-controls="{{ groupId }}"
@@ -42,6 +42,6 @@
         {% endfor %}
     </ul>
     {% if level.nextCursor %}
-        <p class="text-secondary small">{{ 'task_board.sync.browser.more'|trans({}, 'NowoTaskBoardBundle') }}</p>
+        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small">{{ 'task_board.sync.browser.more'|trans({}, 'NowoTaskBoardBundle') }}</p>
     {% endif %}
 {% endif %}

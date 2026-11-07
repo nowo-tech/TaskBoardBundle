@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { askConfirm } from './ask-confirm';
 import { stepOf } from './task-nav-utils';
 
 /**
@@ -57,8 +58,13 @@ export default class TaskNavController extends Controller<HTMLElement> {
         if (event.defaultPrevented || !this.dirty || '' === this.unsavedValue) {
             return;
         }
-        if (!window.confirm(this.unsavedValue)) {
-            event.preventDefault();
-        }
+        // Not destructive, and the answer comes later: stop the link, then follow it on a yes.
+        event.preventDefault();
+        const href = (event.currentTarget as HTMLAnchorElement | null)?.href ?? '';
+        void askConfirm(this.unsavedValue, false).then((confirmed) => {
+            if (confirmed && href !== '') {
+                window.location.assign(href);
+            }
+        });
     }
 }

@@ -14,7 +14,7 @@
             {% set _remote = task_board_sync_comment_author(comment) %}
             {% if _remote and _remote.external %}
                 <strong>{{ 'task_board.sync.people.external'|trans({'%name%': _remote.name, '%provider%': ('task_board.sync.provider.' ~ _remote.provider)|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</strong>
-                {% if _remote.boardAccess is same as(false) %}<span class="badge nowo-task-badge">{{ 'task_board.sync.people.no_board_access'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _remote.boardAccess is same as(false) %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge">{{ 'task_board.sync.people.no_board_access'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
             {% elseif comment.author is null and comment.authorName %}
                 {# Since 1.25 (audit FP-M1): the account is gone; the comment keeps the name it was written with. #}
                 <strong>{{ comment.authorName }}</strong>
@@ -26,9 +26,9 @@
             {# Since 1.27.0 (TB-SYNC-3): an imported reply, assigned comment (action item) and its resolved state. #}
             {% set _meta = task_board_sync_comment_meta(comment) %}
             {% if _meta %}
-                {% if _meta.reply %}<span class="badge nowo-task-badge" data-sync-comment-reply>{{ (_meta.replyTo ? 'task_board.sync.comment.reply_to' : 'task_board.sync.comment.reply')|trans({'%name%': _meta.replyTo ? _meta.replyTo.name : ''}, 'NowoTaskBoardBundle') }}</span>{% endif %}
-                {% if _meta.assignee %}<span class="badge nowo-task-badge" data-sync-comment-assigned>{{ 'task_board.sync.comment.assigned'|trans({'%name%': _meta.assignee.name}, 'NowoTaskBoardBundle') }}</span>{% endif %}
-                {% if _meta.resolved is not null %}<span class="badge nowo-task-badge" data-sync-comment-resolved="{{ _meta.resolved ? '1' : '0' }}">{{ (_meta.resolved ? 'task_board.sync.comment.resolved' : 'task_board.sync.comment.open')|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.reply %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge" data-sync-comment-reply>{{ (_meta.replyTo ? 'task_board.sync.comment.reply_to' : 'task_board.sync.comment.reply')|trans({'%name%': _meta.replyTo ? _meta.replyTo.name : ''}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.assignee %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge" data-sync-comment-assigned>{{ 'task_board.sync.comment.assigned'|trans({'%name%': _meta.assignee.name}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+                {% if _meta.resolved is not null %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge" data-sync-comment-resolved="{{ _meta.resolved ? '1' : '0' }}">{{ (_meta.resolved ? 'task_board.sync.comment.resolved' : 'task_board.sync.comment.open')|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
                 {% if _meta.remoteEditedAt %}<span class="nowo-task-comment__edited">{{ 'task_board.sync.comment.edited_remote'|trans({'%date%': _meta.remoteEditedAt|date('Y-m-d H:i')}, 'NowoTaskBoardBundle') }}</span>{% endif %}
             {% endif %}
             {% if _mine %}<span class="nowo-task-sr-only">{{ 'task_board.comment.mentions_you'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
@@ -42,7 +42,7 @@
             {% if _editForm or _deletable %}
                 <div class="nowo-task-comment__actions">
                     {% if _editForm %}
-                        <button type="button" class="btn btn-sm btn-ghost-secondary" data-action="nowo-task-board-activity-filter#edit" aria-expanded="false" aria-controls="nowo-task-comment-edit-{{ comment.id }}">
+                        <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-activity-filter#edit" aria-expanded="false" aria-controls="nowo-task-comment-edit-{{ comment.id }}">
                             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}{{ 'task_board.comment.edit'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>
                     {% endif %}
@@ -51,9 +51,8 @@
                             type="submit"
                             form="nowo-task-comment-delete-form"
                             formaction="{{ path(nowo_task_board_route('task_comment_delete'), {taskId: comment.task.id, commentId: comment.id}|merge(taskRouteExtra|default({}))) }}"
-                            class="btn btn-sm btn-ghost-secondary"
+                            class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}"
                             data-confirm="{{ 'task_board.comment.delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
-                            data-action="nowo-task-board-activity-filter#confirm"
                         >
                             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.comment.delete'|trans({}, 'NowoTaskBoardBundle') }}
                         </button>

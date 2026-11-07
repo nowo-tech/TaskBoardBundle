@@ -230,7 +230,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
         // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form (1.26: the footer
         // is outside the scrolling body).
-        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__footer nowo-task-dialog__actions">\s*<button type="button" class="[^"]*" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="[^"]*nowo-task-members__add-button">/', $html);
+        self::assertMatchesRegularExpression('/<footer class="[^"]*nowo-task-dialog__footer nowo-task-dialog__actions"[^>]*>\s*<button type="button" class="[^"]*" data-nowo-ui-dialog-close>[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="[^"]*nowo-task-members__add-button">/', $html);
         self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);
@@ -249,7 +249,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-card-color&quot;:&quot;#ef4444&quot;}"', $board);
         self::assertSame(1, substr_count($board, 'nowo-task-card--colored'));
         // The add task dialog is native and offers the colour.
-        self::assertStringContainsString('class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"', $board);
+        self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide', $board);
         self::assertStringContainsString('name="task_form[customColor]"', $board);
         self::assertStringNotContainsString('class="modal', $board);
         self::assertStringNotContainsString(' style="', $board);
@@ -547,7 +547,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $this->task->getId() . '/panel?_target_path=/tools/task-board/board/' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('task_board.action.delete_column', $html);
         self::assertStringContainsString('COLUMN_ID&#x2F;delete', $html);
-        self::assertStringContainsString('<dialog class="nowo-task-dialog nowo-task-dialog--native"', $html);
+        self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native', $html);
         self::assertStringContainsString('/column-sets/apply', $html);
         self::assertStringContainsString('action="/delete-set"', $html);
         self::assertSame(1, substr_count($html, 'nowo-task-column-sets__delete'));
@@ -562,8 +562,8 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertSame('nowo-task-board-column-delete-help', $delete->attr('aria-describedby'));
         $deleteForm = $editColumn->filter('form#nowo-task-board-column-delete-form');
         self::assertSame('hidden', $deleteForm->attr('hidden'));
-        self::assertSame('submit->nowo-task-board-edit-column-modal#confirmDelete', $deleteForm->attr('data-action'));
-        self::assertSame('nowo-task-board-edit-column-form', $editColumn->filter('.nowo-task-dialog__footer .btn-primary')->attr('form'));
+        self::assertNotEmpty($deleteForm->attr('data-confirm'));
+        self::assertSame('nowo-task-board-edit-column-form', $editColumn->filter('.nowo-task-dialog__footer .nowo-ui-btn--primary')->attr('form'));
         self::assertCount(1, $editColumn->filter('#nowo-task-board-column-delete-help'));
         self::assertStringContainsString('nowo-task-dialog__actions--split', (string) $editColumn->filter('.nowo-task-dialog__footer')->attr('class'));
         self::assertStringNotContainsString('nowo-task-dialog__danger"', $html);
@@ -586,10 +586,10 @@ final class ManageTemplatesRenderingTest extends TestCase
         // Without sets the dialog has nothing to apply: Close only (1.26).
         $footer = (new Crawler($html))->filter('dialog[data-dialog="apply"] .nowo-task-dialog__footer button');
         self::assertCount(1, $footer);
-        self::assertSame('nowo-task-board-dialog#close', $footer->attr('data-action'));
+        self::assertNotNull($footer->attr('data-nowo-ui-dialog-close'));
         $this->assertDialogAnatomy($html, 5);
         // Without columnDeleteForm the edit column footer is not split.
-        self::assertSame('nowo-task-dialog__footer nowo-task-dialog__actions', (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
+        self::assertStringNotContainsString('--split', (string) (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
         // A two-column board without columnDeleteForm (older controllers) has no delete button.
         self::assertStringNotContainsString('task_board.action.delete_column', $html);
     }
@@ -1155,14 +1155,14 @@ final class ManageTemplatesRenderingTest extends TestCase
             self::assertGreaterThanOrEqual(3, count($children));
             $header = new Crawler($children[0]);
             $footer = new Crawler($children[count($children) - 1]);
-            self::assertStringContainsString('nowo-task-dialog__header', (string) $header->attr('class'));
-            self::assertCount(1, $header->filter('.nowo-task-dialog__title'));
-            self::assertCount(1, $header->filter('button.nowo-task-dialog__close'));
+            self::assertStringContainsString('nowo-ui-dialog__header', (string) $header->attr('class'));
+            self::assertCount(1, $header->filter('.nowo-ui-dialog__title'));
+            self::assertCount(1, $header->filter('button.nowo-ui-dialog__close'));
             self::assertCount(1, (new Crawler($dialog))->filter('.nowo-task-dialog__body'));
             self::assertStringContainsString('nowo-task-dialog__footer', (string) $footer->attr('class'));
 
             $buttons   = $footer->filter('button');
-            $primaries = $footer->filter('.btn-primary, .btn-danger');
+            $primaries = $footer->filter('.nowo-ui-btn--primary, .nowo-ui-btn--danger-solid');
             self::assertGreaterThanOrEqual(1, $buttons->count());
             self::assertLessThanOrEqual(1, $primaries->count());
             if ($primaries->count() === 1) {

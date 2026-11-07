@@ -94,7 +94,7 @@
 
 .nowo-task-board__column-edit:hover {
     color: var(--nowo-task-accent, var(--nowo-ui-primary));
-    background: var(--nowo-task-hover, var(--tblr-active-bg, rgba(32, 107, 196, 0.06)));
+    background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
 }
 
 .nowo-task-board__column-header:active {
@@ -269,7 +269,7 @@ body.modal-open {
 
 .nowo-task-detail__field-edit:hover {
     color: var(--nowo-task-accent, var(--nowo-ui-primary));
-    background: var(--nowo-task-hover, var(--tblr-active-bg, rgba(32, 107, 196, 0.06)));
+    background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
 }
 
 .nowo-task-detail__field-value {
@@ -446,7 +446,7 @@ body.modal-open {
     flex-shrink: 0;
 }
 
-.nowo-task-detail__status-actions .btn {
+.nowo-task-detail__status-actions .nowo-ui-btn {
     padding-inline: 0.5rem;
 }
 
@@ -931,40 +931,10 @@ button.nowo-task-detail__priority-tag:hover {
     white-space: nowrap;
 }
 
-.nowo-task-dialog--native {
-    padding: 0;
-    border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
-    background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: inherit;
-}
 
-.nowo-task-dialog--native::backdrop {
-    background: rgba(15, 23, 42, 0.45);
-}
 
-.nowo-task-dialog__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 1rem 1rem 0;
-}
 
-.nowo-task-dialog__title {
-    margin: 0;
-}
 
-.nowo-task-dialog__body {
-    padding: 1rem;
-}
-
-.nowo-task-dialog__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
 
 .nowo-task-detail__estimate {
     min-width: 140px;
@@ -1046,7 +1016,7 @@ button.nowo-task-detail__priority-tag:hover {
     height: 1em;
 }
 
-.btn .nowo-task-icon,
+.nowo-ui-btn .nowo-task-icon,
 .nowo-task-section__title .nowo-task-icon {
     margin-inline-end: 0.35rem;
 }
@@ -1600,14 +1570,18 @@ details.nowo-task-section[open] > summary,
     margin-inline-start: auto;
 }
 
+/* Since 2.0.0 the kit's `avatar` draws the chip; this is the stack on a card, and its "+N". */
 .nowo-task-avatar {
     display: inline-flex;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--nowo-task-surface, var(--nowo-ui-surface));
+}
+
+.nowo-task-avatar--more {
     align-items: center;
     justify-content: center;
     width: 1.5rem;
     height: 1.5rem;
-    border: 2px solid var(--nowo-task-surface, var(--nowo-ui-surface));
-    border-radius: 999px;
     background: var(--nowo-task-accent-soft, var(--nowo-ui-info-bg));
     color: var(--nowo-task-accent, var(--nowo-ui-primary));
     font-size: 0.6875rem;
@@ -1809,84 +1783,20 @@ details.nowo-task-section[open] > summary,
  * minus 2rem (UiKit's defaults as fallbacks: the tokens have no :root value, a host sets them once). Header and footer
  * stay in view, only the body scrolls.
  */
-dialog.nowo-task-dialog--native {
-    position: fixed;
-    inset: 0;
-    width: var(--nowo-dialog-width-md, min(40rem, calc(100vw - 2rem)));
-    height: fit-content;
-    max-height: calc(100vh - 2rem);
-    max-height: min(var(--nowo-dialog-height-md, min(36rem, calc(100dvh - 2rem))), calc(100dvh - 2rem));
-    margin: auto;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
-    background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
-    box-shadow: 0 20px 50px rgb(0 0 0 / 0.3);
-}
 
-dialog.nowo-task-dialog--native:not([open]) {
-    display: none;
-}
 
-dialog.nowo-task-dialog--native[open] {
-    display: flex;
-    flex-direction: column;
-}
 
-dialog.nowo-task-dialog--native::backdrop {
-    /* Since 1.13.1 a token: hosts give every dialog the same backdrop as their own modals. */
-    background: var(--nowo-task-overlay, rgb(15 23 42 / 0.55));
-    backdrop-filter: blur(var(--nowo-task-overlay-blur, 2px));
-}
 
-.nowo-task-dialog--native .nowo-task-dialog__header {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    background: var(--nowo-task-surface-muted, var(--nowo-ui-surface-muted));
-}
 
-.nowo-task-dialog--native .nowo-task-dialog__title {
-    margin: 0;
-    font-size: 1.0625rem;
-    font-weight: 600;
-}
 
-.nowo-task-dialog__close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    border: 0;
-    border-radius: var(--nowo-task-radius-sm, var(--nowo-ui-radius));
-    background: transparent;
-    color: var(--nowo-task-muted, var(--nowo-ui-muted));
-    cursor: pointer;
-}
 
-.nowo-task-dialog__close:hover,
-.nowo-task-dialog__close:focus-visible {
-    background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
-    color: inherit;
-}
 
+/* Since 2.0.0 the kit's `dialog` draws the shell, sizes it and scrolls its body: this only lays out the bundle's content. */
 .nowo-task-dialog--native .nowo-task-dialog__body {
     display: grid;
-    flex: 1 1 auto;
     align-content: start;
     gap: 1rem;
-    min-height: 0;
     margin: 0;
-    padding: 1rem 1.25rem 1.25rem;
-    overflow: auto;
 }
 
 .nowo-task-dialog--native .nowo-task-dialog__actions {
@@ -1894,18 +1804,9 @@ dialog.nowo-task-dialog--native::backdrop {
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
-    margin-top: 0.25rem;
 }
 
 /* Since 1.26 (dialog rule v2): the footer, outside the scrolling body — Cancel, then the one primary, last. */
-.nowo-task-dialog--native .nowo-task-dialog__footer {
-    flex: none;
-    align-items: center;
-    margin: 0;
-    padding: 0.75rem 1.25rem;
-    border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
-    background: var(--nowo-task-surface-muted, var(--nowo-ui-surface-muted));
-}
 
 .nowo-task-dialog__help {
     margin: 0;
@@ -2263,11 +2164,6 @@ dialog.nowo-task-dialog--native::backdrop {
  * Since 1.14 — the add task, people, priority and link dialogs are native dialogs too (same tokens as 1.13), the task
  * colour (palette with "No colour", Gantt bar, card edge, activity swatch).
  */
-dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
-    width: var(--nowo-dialog-width-wide, min(56rem, calc(100vw - 2rem)));
-    max-height: calc(100vh - 2rem);
-    max-height: min(var(--nowo-dialog-height-wide, min(52rem, calc(100dvh - 2rem))), calc(100dvh - 2rem));
-}
 
 .nowo-task-dialog__grid {
     display: grid;
@@ -2345,8 +2241,6 @@ dialog.nowo-task-dialog--native.nowo-task-dialog--wide {
     width: 2rem;
     height: 2rem;
     border-radius: 999px;
-    background: var(--nowo-task-accent-soft, var(--nowo-ui-info-bg));
-    color: var(--nowo-task-accent, var(--nowo-ui-primary));
     font-size: 0.8125rem;
     font-weight: 700;
 }
@@ -3104,7 +2998,7 @@ details.nowo-task-section > summary {
  * Since 1.16.1 — phone tap targets of at least 32px (column edit, a tag's remove button, the dialog footer buttons);
  * the people dialog's Close and Add member share the footer like the other dialogs.
  */
-.nowo-task-dialog--native .nowo-task-dialog__actions .btn {
+.nowo-task-dialog--native .nowo-task-dialog__actions .nowo-ui-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3143,7 +3037,7 @@ details.nowo-task-section > summary {
         background: var(--tag-remove-btn-bg--hover);
     }
 
-    .nowo-task-dialog__close {
+    .nowo-task-dialog--native .nowo-ui-dialog__close {
         min-width: 2rem;
         min-height: 2rem;
     }
@@ -3619,26 +3513,6 @@ a.nowo-task-nav__step:focus-visible {
     }
 }
 
-/* Since 1.23: task member pictures over the initial chips (the fallback in task-board.js brings the initial back). */
-.nowo-task-member-avatar {
-    position: relative;
-    overflow: hidden;
-}
-
-.nowo-task-member-avatar__image {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: inherit;
-    object-fit: cover;
-    background: var(--nowo-task-surface, var(--nowo-ui-surface));
-}
-
-.nowo-task-member-avatar.has-image {
-    color: transparent;
-}
-
 /* Since 1.23: the connection badge's text keeps AA contrast on its soft background (the framework's azure text is 3:1). */
 .nowo-task-sync-badge .nowo-task-sync-badge__label {
     color: var(--nowo-task-sync-badge-color, #1c5d99) !important;
@@ -3695,13 +3569,6 @@ a.nowo-task-nav__step:focus-visible {
     margin-top: 0.25rem;
 }
 
-.nowo-task-board-description__text.is-folded {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-}
 
 .nowo-task-board-list__tenant {
     display: block;
@@ -3709,4 +3576,37 @@ a.nowo-task-nav__step:focus-visible {
 
 .nowo-task-board-create__advanced > summary {
     cursor: pointer;
+}
+
+/* Since 2.0.0: a Markdown description in a board list, clamped; a fold has no place there. */
+.nowo-task-board-list__description--markdown {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+}
+
+/* Since 2.0.0: small layout helpers of the bundle's own markup, in place of framework utilities. */
+.nowo-task-flex { display: flex; }
+.nowo-task-wrap { flex-wrap: wrap; }
+.nowo-task-gap { gap: 0.5rem; }
+.nowo-task-center { align-items: center; }
+.nowo-task-grow { flex: 1 1 0; min-width: 0; }
+.nowo-task-shrink { flex: 0 0 auto; }
+.nowo-task-small { font-size: 0.875em; }
+.nowo-task-w-full { width: 100%; }
+.nowo-task-plain-list { list-style: none; padding-left: 0; margin: 0; }
+.nowo-task-mb-0 { margin-bottom: 0; }
+.nowo-task-mb-1 { margin-bottom: 0.25rem; }
+.nowo-task-mb-2 { margin-bottom: 0.5rem; }
+.nowo-task-mb-3 { margin-bottom: 1rem; }
+.nowo-task-mb-4 { margin-bottom: 1.5rem; }
+.nowo-task-mt-2 { margin-top: 0.5rem; }
+.nowo-task-mt-3 { margin-top: 1rem; }
+.nowo-task-mt-4 { margin-top: 1.5rem; }
+.nowo-task-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 62rem) {
+    .nowo-task-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+    .nowo-task-grid > .nowo-task-grid__cell:only-child { grid-column: 1 / -1; }
 }

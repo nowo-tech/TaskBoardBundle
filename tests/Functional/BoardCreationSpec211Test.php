@@ -167,7 +167,7 @@ final class BoardCreationSpec211Test extends FunctionalTestCase
         $page = $this->client->request('GET', '/tools/task-board/board/' . $board->getId());
         self::assertResponseIsSuccessful();
         self::assertSame('🚀 Rocket', $page->filter('h1')->text());
-        self::assertCount(1, $page->filter('[data-controller="nowo-task-board-description"]'));
+        self::assertCount(1, $page->filter('[data-nowo-ui-show-more]'));
         self::assertStringNotContainsString('<script>x</script>', (string) $this->client->getResponse()->getContent());
         foreach (['list', 'gantt'] as $view) {
             $other = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/' . $view);
@@ -176,7 +176,7 @@ final class BoardCreationSpec211Test extends FunctionalTestCase
         }
 
         $plainPage = $this->client->request('GET', '/tools/task-board/board/' . $plain->getId());
-        self::assertCount(0, $plainPage->filter('[data-controller="nowo-task-board-description"]'));
+        self::assertCount(0, $plainPage->filter('[data-nowo-ui-show-more]'));
         self::assertStringContainsString('&lt;i&gt;plain&lt;/i&gt;', (string) $this->client->getResponse()->getContent());
 
         $index = $this->client->request('GET', '/tools/task-board');

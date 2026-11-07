@@ -2,21 +2,27 @@
     Since 1.23: the mass-archive guard held tasks back — a translated refusal, and for managers an explicit
     "Refresh and archive anyway" behind a confirm dialog (its own CSRF token id). massArchiveForm, massArchiveCount.
 #}
-<div class="alert alert-warning" role="alert" data-testid="nowo-task-sync-mass-archive" data-controller="nowo-task-board-dialog">
-    <p class="mb-2">{{ 'task_board.sync.mass_archive.text'|trans({'%count%': massArchiveCount.count|default('?'), '%total%': massArchiveCount.total|default('?')}, 'NowoTaskBoardBundle') }}</p>
-    <button type="button" class="btn btn-outline-danger btn-sm" data-action="nowo-task-board-dialog#open" data-dialog="mass-archive">{{ 'task_board.sync.mass_archive.action'|trans({}, 'NowoTaskBoardBundle') }}</button>
-    <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="mass-archive" aria-labelledby="nowo-task-sync-mass-archive-title">
-        <div class="nowo-task-dialog__header">
-            <h2 class="nowo-task-dialog__title" id="nowo-task-sync-mass-archive-title">{{ 'task_board.sync.mass_archive.confirm_title'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-            <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}</button>
-        </div>
+<div class="{{ nowo_ui_class('flash_warning', 'NowoTaskBoardBundle') }}" role="alert" data-testid="nowo-task-sync-mass-archive">
+    <p class="nowo-task-mb-2">{{ 'task_board.sync.mass_archive.text'|trans({'%count%': massArchiveCount.count|default('?'), '%total%': massArchiveCount.total|default('?')}, 'NowoTaskBoardBundle') }}</p>
+    <button type="button" class="{{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-sync-mass-archive">{{ 'task_board.sync.mass_archive.action'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {% set _body %}
         {# Since 1.26 (dialog rule v2): the actions in the footer, outside the body (form="nowo-task-sync-mass-archive-form"). #}
         {{ form_start(massArchiveForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {id: 'nowo-task-sync-mass-archive-form', class: 'nowo-task-dialog__body'}}) }}
             <p>{{ 'task_board.sync.mass_archive.confirm_text'|trans({'%count%': massArchiveCount.count|default('?')}, 'NowoTaskBoardBundle') }}</p>
         {{ form_end(massArchiveForm) }}
-        <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-            <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {% endset %}
+    {% set _footer %}
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
             <button type="submit" form="nowo-task-sync-mass-archive-form" class="{{ nowo_ui_class('btn_danger_solid', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-mass-archive-confirm">{{ 'task_board.sync.mass_archive.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
-        </div>
-    </dialog>
+    {% endset %}
+    {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+        id: 'nowo-task-sync-mass-archive',
+        title: 'task_board.sync.mass_archive.confirm_title'|trans({}, 'NowoTaskBoardBundle'),
+        bundle: 'NowoTaskBoardBundle',
+        root_class: 'nowo-task-dialog nowo-task-dialog--native',
+        attr: {'data-dialog': 'mass-archive'},
+        body: _body,
+        footer: _footer,
+        footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+    }, false) }}
 </div>

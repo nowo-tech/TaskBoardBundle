@@ -8,6 +8,7 @@
 
 {% block nowo_ui_scripts %}
     {{ parent() }}
+    <script src="{{ asset('js/nowo-ui-show-more.js', 'nowo_ui_kit') }}" defer></script>
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
@@ -80,7 +81,7 @@
             <div class="nowo-task-board__add-column">
                 <button
                     type="button"
-                    class="btn btn-icon btn-outline-primary nowo-task-board__add-column-btn"
+                    class="{{ nowo_ui_class('btn_icon', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-board__add-column-btn"
                     data-action="click->nowo-task-board-add-column-modal#open"
                     title="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
                     aria-label="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
