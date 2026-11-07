@@ -8,8 +8,12 @@ use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\BoardCreatedEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
 use Nowo\TaskBoardBundle\Support\SlugGenerator;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Creates task boards with default kanban columns.
@@ -29,6 +33,10 @@ final readonly class TaskBoardCreator
     public function __construct(
         private TaskBoardRepositoryInterface $boardRepository,
         private array $defaultColumns = self::DEFAULT_COLUMNS,
+        // Since 1.30.0 (spec 211).
+        private ?EventDispatcherInterface $eventDispatcher = null,
+        private bool $transliterateSlug = false,
+        private ?string $descriptionFormat = null,
     ) {
     }
 
@@ -38,7 +46,8 @@ final readonly class TaskBoardCreator
      */
     public function create(TaskBoardFormData $data, object $creator, ?string $tenantKey = null, ?ColumnSet $columnSet = null): TaskBoard
     {
-        $slug = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : SlugGenerator::fromName($data->name));
+        $generated = $this->transliterateSlug ? SlugGenerator::transliterated($data->name) : SlugGenerator::fromName($data->name);
+        $slug      = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : $generated, $tenantKey);
 
         $board = new TaskBoard(
             name: $data->name,
@@ -47,6 +56,8 @@ final readonly class TaskBoardCreator
             description: $data->description,
         );
         $board->setTenantKey($tenantKey);
+        $board->setIcon($data->icon !== '' ? $data->icon : null);
+        $board->setDescriptionFormat($this->descriptionFormat);
 
         $columns = $columnSet instanceof ColumnSet && $columnSet->getItems() !== [] ? $columnSet->getItems() : $this->defaultColumns;
         foreach ($columns as $position => $columnDef) {
@@ -60,6 +71,7 @@ final readonly class TaskBoardCreator
         }
 
         $this->boardRepository->save($board);
+        $this->eventDispatcher?->dispatch(new BoardCreatedEvent($board, $creator, $data->scope), TaskBoardEvents::BOARD_CREATED);
 
         return $board;
     }
@@ -67,15 +79,24 @@ final readonly class TaskBoardCreator
     /**
      * Appends a numeric suffix when the slug is taken, so the unique index never makes the flush fail.
      */
-    private function uniqueSlug(string $slug): string
+    private function uniqueSlug(string $slug, ?string $tenantKey): string
     {
         $candidate = $slug;
         $suffix    = 2;
 
-        while ($this->boardRepository->findBySlug($candidate) instanceof TaskBoard) {
+        while ($this->takenSlug($candidate, $tenantKey)) {
             $candidate = $slug . '-' . $suffix++;
         }
 
         return $candidate;
+    }
+
+    private function takenSlug(string $slug, ?string $tenantKey): bool
+    {
+        $board = $this->boardRepository instanceof TenantBoardSlugLookupInterface
+            ? $this->boardRepository->findBySlugInTenant($slug, $tenantKey)
+            : $this->boardRepository->findBySlug($slug);
+
+        return $board instanceof TaskBoard;
     }
 }

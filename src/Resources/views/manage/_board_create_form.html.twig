@@ -11,15 +11,43 @@
 {% set _in_dialog = in_dialog|default(false) %}
 {% set _id_prefix = id_prefix|default('') %}
 {% set _with_actions = with_actions ?? true %}
-{{ form_start(form, {action: path(nowo_task_board_route('board_create')), method: 'POST', attr: {id: _id_prefix ~ 'nowo-task-board-create-form', class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': 'nowo-task-board-create-form'}}) }}
+{% set _step_attr = form.scope is defined ? {'data-controller': 'nowo-task-board-create-steps', 'data-nowo-task-board-create-steps-start-value': (form.scope.vars.data is not empty or form.vars.errors|length > 0 or form.vars.submitted) ? 2 : 1} : {} %}
+{{ form_start(form, {action: path(nowo_task_board_route('board_create')), method: 'POST', attr: _step_attr|merge({id: _id_prefix ~ 'nowo-task-board-create-form', class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': 'nowo-task-board-create-form'})}) }}
     {{ form_errors(form) }}
+    {#- Since 1.30.0 (spec 211): the scope step, only with a host's board.scope_provider. Without JavaScript all of it shows. -#}
+    {% set _steps = form.scope is defined %}
+    {% if _steps %}
+        <div class="nowo-task-board-create__scopes" data-nowo-task-board-create-steps-target="scopes" data-testid="nowo-task-board-create-scopes"{% if form.scope|length == 1 %} hidden{% endif %}>
+            {{ form_row(form.scope) }}
+            <button type="button" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-action="nowo-task-board-create-steps#next" data-testid="nowo-task-board-create-next">{{ 'task_board.form.board.scope_next'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        </div>
+    {% endif %}
+    {% if _steps %}<div class="nowo-task-board-create__details" data-nowo-task-board-create-steps-target="details" data-testid="nowo-task-board-create-details">{% endif %}
+    {% if _steps %}
+        {% for _branch in form.scopeFields %}
+            <div data-nowo-task-board-create-steps-target="scopeFields" data-scope="{{ _branch.vars.name }}">{{ form_widget(_branch) }}</div>
+        {% endfor %}
+        {% do form.scopeFields.setRendered() %}
+    {% endif %}
     {% for child in form %}
         {% if not child.rendered %}
-            {{ _id_prefix is empty or 'hidden' in child.vars.block_prefixes ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
+            {% if form.vars.advanced_slug|default(false) and child.vars.name == 'slug' %}
+                <details class="nowo-task-board-create__advanced" data-testid="nowo-task-board-create-advanced"{% if child.vars.errors|length > 0 %} open{% endif %}>
+                    <summary>{{ 'task_board.form.board.advanced'|trans({}, 'NowoTaskBoardBundle') }}</summary>
+                    {{ _id_prefix is empty ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
+                </details>
+            {% else %}
+                {{ _id_prefix is empty or 'hidden' in child.vars.block_prefixes ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
+            {% endif %}
         {% endif %}
     {% endfor %}
+    {% if _steps %}</div>{% endif %}
     {% if _with_actions %}
         <div class="nowo-task-dialog__actions"{% if _in_dialog %} data-nowo-ui-dialog-actions{% endif %}>
+            {% if _in_dialog and form.scope is defined %}
+                {#- Interim: a host's remote dialog lifts this row to its footer. UiKit's lift to the header uses the same attribute. -#}
+                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _id_prefix ~ 'nowo-task-board-create-form' }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            {% endif %}
             {% if _in_dialog %}
                 <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}

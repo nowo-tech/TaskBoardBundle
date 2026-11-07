@@ -13,7 +13,7 @@ use SortDirection;
 /**
  * Doctrine ORM implementation for task boards.
  */
-final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardRepositoryInterface
+final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardRepositoryInterface, TenantBoardSlugLookupInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -82,6 +82,13 @@ final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardReposito
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+
+        return $board instanceof TaskBoard ? $board : null;
+    }
+
+    public function findBySlugInTenant(string $slug, ?string $tenantKey): ?TaskBoard
+    {
+        $board = $this->entityManager->getRepository(TaskBoard::class)->findOneBy(['slug' => $slug, 'tenantKey' => $tenantKey]);
 
         return $board instanceof TaskBoard ? $board : null;
     }

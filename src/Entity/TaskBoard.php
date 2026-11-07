@@ -9,7 +9,9 @@ use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
+use Nowo\TaskBoardBundle\Support\BoardIcon;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -18,8 +20,12 @@ use SortDirection;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_boards')]
 #[ORM\Index(name: 'idx_task_board_boards_tenant', columns: ['tenant_key'])]
+// Since 1.30.0: unique per tenant. A global index would tell one tenant that another tenant has a slug.
+#[ORM\UniqueConstraint(name: 'uniq_task_board_boards_tenant_slug', columns: ['tenant_key', 'slug'])]
 class TaskBoard
 {
+    public const FORMAT_MARKDOWN = 'markdown';
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -41,6 +47,14 @@ class TaskBoard
     #[ORM\Column(name: 'creator_name', type: 'string', length: 180, nullable: true)]
     private ?string $creatorName;
 
+    /** Since 1.30.0 (spec 211): one emoji shown before the name ({@see BoardIcon}). */
+    #[ORM\Column(type: 'string', length: 16, nullable: true)]
+    private ?string $icon = null;
+
+    /** Since 1.30.0 (spec 211): {@see self::FORMAT_MARKDOWN}; null is plain text, as every board before it. */
+    #[ORM\Column(name: 'description_format', type: 'string', length: 16, nullable: true)]
+    private ?string $descriptionFormat = null;
+
     /** @var Collection<int, BoardColumn> */
     #[ORM\OneToMany(targetEntity: BoardColumn::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['position' => SortDirection::Ascending])]
@@ -59,7 +73,7 @@ class TaskBoard
     public function __construct(
         #[ORM\Column(type: 'string', length: 255)]
         private string $name,
-        #[ORM\Column(type: 'string', length: 255, unique: true)]
+        #[ORM\Column(type: 'string', length: 255)]
         private string $slug,
         // Since 1.25 (audit FP-L7): nullable, ON DELETE SET NULL; deleting the creator's account keeps the board.
         #[ORM\ManyToOne(targetEntity: User::class)]
@@ -97,6 +111,38 @@ class TaskBoard
         $this->name = Text::cut($name, 255);
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedAt = new DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function getIcon(): ?string
+    {
+        return $this->icon;
+    }
+
+    /**
+     * @throws InvalidArgumentException when it is not one emoji of at most {@see BoardIcon::MAX_BYTES} bytes
+     */
+    public function setIcon(?string $icon): self
+    {
+        if ($icon !== null && !BoardIcon::isValid($icon)) {
+            throw new InvalidArgumentException('A board icon is one emoji of at most ' . BoardIcon::MAX_BYTES . ' bytes.');
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->icon = $icon;
+
+        return $this;
+    }
+
+    public function getDescriptionFormat(): ?string
+    {
+        return $this->descriptionFormat;
+    }
+
+    public function setDescriptionFormat(?string $format): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->descriptionFormat = $format === self::FORMAT_MARKDOWN ? self::FORMAT_MARKDOWN : null;
 
         return $this;
     }

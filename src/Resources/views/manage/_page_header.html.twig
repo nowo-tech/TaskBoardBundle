@@ -3,11 +3,14 @@
         <div class="col">
             {% if breadcrumbRoute|default(null) and breadcrumbLabel|default(null) %}
                 <div class="text-secondary small mb-1">
-                    <a href="{{ path(breadcrumbRoute, breadcrumbParams|default({})) }}" class="text-reset">{{ breadcrumbLabel }}</a>
+                    <a href="{{ path(breadcrumbRoute, breadcrumbParams|default({})) }}" class="text-reset">{% if breadcrumbIcon|default(null) %}<span class="nowo-task-board-icon" aria-hidden="true">{{ breadcrumbIcon }}</span> {% endif %}{{ breadcrumbLabel }}</a>
                 </div>
             {% endif %}
-            <h1 class="page-title">{{ pageTitle }}</h1>
-            {% if pageSubtitle|default(null) %}
+            <h1 class="page-title">{% if pageTitleIcon|default(null) %}<span class="nowo-task-board-icon" aria-hidden="true">{{ pageTitleIcon }}</span> {% endif %}{{ pageTitle }}</h1>
+            {#- Since 1.30.0 (spec 211): a Markdown description replaces the plain subtitle. -#}
+            {% if pageDescriptionBoard|default(null) and pageDescriptionBoard.description and pageDescriptionBoard.descriptionFormat == 'markdown' %}
+                {{ include('@NowoTaskBoardBundle/manage/_board_description.html.twig', {board: pageDescriptionBoard}) }}
+            {% elseif pageSubtitle|default(null) %}
                 <p class="text-secondary mb-0">{{ pageSubtitle }}</p>
             {% endif %}
         </div>

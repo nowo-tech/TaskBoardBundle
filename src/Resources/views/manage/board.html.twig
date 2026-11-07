@@ -17,6 +17,8 @@
     {% block nowo_task_board_toolbar %}
     {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
         pageTitle: board.name,
+        pageTitleIcon: board.icon,
+        pageDescriptionBoard: board,
         pageSubtitle: board.description,
         breadcrumbRoute: nowo_task_board_route('index'),
         breadcrumbLabel: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),

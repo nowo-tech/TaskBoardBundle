@@ -29,6 +29,7 @@
   - [Custom importers](#custom-importers)
 - [Provider sync (since 1.23)](#provider-sync-since-123)
 - [Assets](#assets)
+- [New board (since 1.30)](#new-board-since-130)
 
 ## Required
 
@@ -710,3 +711,23 @@ Rebuild after changes:
 ```bash
 pnpm install && pnpm run build
 ```
+
+## New board (since 1.30)
+
+All off by default, under `nowo_task_board.board`:
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `icon` | `false` | The New board form asks for an icon. An icon a board already has always shows |
+| `icon_form_type`, `icon_form_options` | `null`, `{}` | The icon widget, such as an emoji picker. The bundle's constraints always apply |
+| `description_format` | `text` | `markdown` for new boards: rendered through `TaskTextRendererInterface`, which must escape, and folded after three lines |
+| `description_form_type`, `description_form_options` | `null`, `{}` | The description widget, with no Twig override |
+| `advanced_slug` | `false` | Folds the slug under *Advanced* and transliterates it |
+| `scope_provider` | `null` | Service id of a `Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface` |
+| `tenant_label_provider` | `null` | Service id of a `Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface` |
+
+**Scope step.** `scopes()` lists what the user may create in now; none means no step, one means step 1 is skipped. `BoardScope::$fields` are drawn per scope and posted as `task_board_form[scopeFields][<scope>][<field>]`; the bundle forces them to `required: false` and drops their `constraints`, because they sit in a branch the user may not have chosen, so `resolve()` validates. A select's choices still refuse a forged value. Without JavaScript all the fields show. `nowo-task-board-create-steps:step-shown` fires on the form when step 2 opens.
+
+**Back button.** It carries `data-nowo-ui-dialog-back`, so a dialog that lifts it can place it; until then it sits with the other actions.
+
+**Widgets in step 2.** A widget in step 2 mounts while the step is hidden. Tested in a real browser (Chromium) with `MilkdownEditorType` on 2026-11-07: it needs no mounting on reveal, typing and saving work after the step opens, after Back, and after a 422. A widget that measures itself can listen to `step-shown`.

@@ -142,6 +142,46 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### Schema change for every host: board icon, description format, slugs per tenant
+
+`task_board_boards` gains `icon` and `description_format`, both nullable, and its slug index moves from `slug` to `tenant_key, slug`. Existing rows need nothing: a null format is plain text as today. The old index name comes from `doctrine:migrations:diff` if yours differs. Replace the table name if you use `table_prefix`.
+
+MySQL 8 / MariaDB:
+
+```sql
+ALTER TABLE task_board_boards ADD icon VARCHAR(16) DEFAULT NULL, ADD description_format VARCHAR(16) DEFAULT NULL;
+DROP INDEX UNIQ_97612D99989D9B62 ON task_board_boards;
+CREATE UNIQUE INDEX uniq_task_board_boards_tenant_slug ON task_board_boards (tenant_key, slug);
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_boards ADD icon VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD description_format VARCHAR(16) DEFAULT NULL;
+DROP INDEX UNIQ_97612D99989D9B62;
+CREATE UNIQUE INDEX uniq_task_board_boards_tenant_slug ON task_board_boards (tenant_key, slug);
+```
+
+SQLite:
+
+```sql
+ALTER TABLE task_board_boards ADD COLUMN icon VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD COLUMN description_format VARCHAR(16) DEFAULT NULL;
+DROP INDEX UNIQ_97612D99989D9B62;
+CREATE UNIQUE INDEX uniq_task_board_boards_tenant_slug ON task_board_boards (tenant_key, slug);
+```
+
+Rollback: two tenants may now hold the same slug, so rename those before restoring a global index.
+
+### New board, spec 211
+
+Nothing changes in the form until you set a `board.*` option. See [CONFIGURATION](CONFIGURATION.md#new-board-since-130).
+
+- A host looking boards up by slug alone must add the tenant: slugs are no longer unique across tenants. A custom board repository can implement `TenantBoardSlugLookupInterface`; without it the creator keeps the global lookup.
+- **Scope step:** with `scope_provider`, `board_create` checks `canCreateBoard()` on the tenant `resolve()` returns, not on the URL's. The URL's tenant must still resolve for the user: a page with no tenant posts through one the user always has. A refusal from `resolve()` or the check is one form error, 422.
+- **Editor in step 2:** Milkdown needs no mounting on reveal; see *New board* in CONFIGURATION.
+
 ## To 1.29.0
 
 From **1.28.0**:

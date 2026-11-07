@@ -38,7 +38,7 @@
             <nav class="nowo-task-detail__trail" aria-label="{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}">
                 <a href="{{ path(nowo_task_board_route('index')) }}">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</a>
                 <span aria-hidden="true">/</span>
-                <a href="{{ path(nowo_task_board_route('board'), {boardId: task.board.id}) }}">{{ task.board.name }}</a>
+                <a href="{{ path(nowo_task_board_route('board'), {boardId: task.board.id}) }}">{{ include('@NowoTaskBoardBundle/manage/_board_title.html.twig', {board: task.board}, with_context: false)|trim }}</a>
             </nav>
             <div class="nowo-task-detail__actions">
                 {% if panel|default(false) %}

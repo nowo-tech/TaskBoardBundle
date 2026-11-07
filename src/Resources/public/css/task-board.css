@@ -3685,3 +3685,28 @@ a.nowo-task-nav__step:focus-visible {
 .nowo-task-index__empty {
     color: var(--nowo-task-muted, var(--tblr-secondary, #626976));
 }
+
+/* Since 1.30.0 (spec 211). */
+.nowo-task-board-icon {
+    margin-inline-end: 0.35em;
+}
+
+.nowo-task-board-description {
+    margin-top: 0.25rem;
+}
+
+.nowo-task-board-description__text.is-folded {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+}
+
+.nowo-task-board-list__tenant {
+    display: block;
+}
+
+.nowo-task-board-create__advanced > summary {
+    cursor: pointer;
+}

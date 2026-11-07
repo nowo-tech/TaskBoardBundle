@@ -80,6 +80,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **New board, generic parts of spec 211.** All opt-in under `board.*`:
+  - `icon` (`TaskBoard::$icon`): one emoji of at most 16 bytes, stored apart from the name, shown before it in the header, lists and breadcrumbs. `icon_form_type` swaps the input for a picker; the constraints stay. A long joined emoji is refused with a message saying why.
+  - `description_format: markdown` (`TaskBoard::$descriptionFormat`): rendered through the host's `TaskTextRendererInterface`, folded after three lines with *Show more*. Existing boards stay plain text.
+  - `description_form_type` replaces the description editor with no Twig override.
+  - `advanced_slug` folds the slug under *Advanced* and transliterates it.
+  - `scope_provider`, `BoardScopeProviderInterface`: a scope step in the create form. The bundle draws the steps; the host supplies scopes and fields and resolves the tenant. The create check runs on the resolved tenant, and the redirect uses its slug.
+  - `tenant_label_provider`, `BoardTenantLabelProviderInterface`: the tenant label and icon in board lists, one call per list. `TaskBoardTenant` gains `$icon`.
+- `TaskBoardEvents::BOARD_CREATED` (`BoardCreatedEvent`), for every create. Twig `nowo_task_board_description()`, `nowo_task_board_label()`, `nowo_task_board_tenant_labels()`, partial `_board_title.html.twig`.
+
+### Changed
+
+- **Slugs are unique per tenant**, not globally. A global suffix told one tenant that another tenant had that slug. Schema change, see UPGRADING.
+- `symfony/string` is a direct requirement, for transliteration.
+- Audit status of these changes: re-verification pending.
+
 ## [1.29.0] - 2026-11-07
 
 ### Added

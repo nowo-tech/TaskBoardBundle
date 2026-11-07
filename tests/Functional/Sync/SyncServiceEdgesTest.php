@@ -165,9 +165,11 @@ final class SyncServiceEdgesTest extends SyncFunctionalTestCase
         $board = $this->board();
         $this->put($this->remote('h1', 'One', 1));
         $em = $this->em;
-        // A listener breaks the entity manager (a duplicate board slug): the run fails, its history cannot be saved.
+        // A listener breaks the entity manager (a duplicate slug in the tenant): the run fails, its history cannot be saved.
+        $board->setTenantKey('tenant-a');
+        $em->flush();
         $this->dispatcher()->addListener(TaskBoardEvents::SYNC_STARTED, static function (SyncStartedEvent $event) use ($em): void {
-            $em->persist(new TaskBoard('Dup', $event->board->getSlug(), $event->board->getCreator()));
+            $em->persist((new TaskBoard('Dup', $event->board->getSlug(), $event->board->getCreator()))->setTenantKey('tenant-a'));
             $em->flush();
         });
 

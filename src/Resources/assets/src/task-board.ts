@@ -23,6 +23,8 @@ import ActivityFilterController from './activity-filter-controller';
 import ContainerBrowserController from './container-browser-controller';
 import SyncProgressController from './sync-progress-controller';
 import SelectAnchorController from './select-anchor-controller';
+import BoardCreateStepsController from './board-create-steps-controller';
+import BoardDescriptionController from './board-description-controller';
 import { observeCssVars } from './css-vars';
 import { installAvatarFallback } from './avatar-fallback';
 
@@ -34,6 +36,8 @@ if (typeof __TASK_BOARD_BUILD_TIME__ !== 'undefined') {
 
 const application = Application.start();
 application.register('nowo-task-board', BoardController);
+application.register('nowo-task-board-create-steps', BoardCreateStepsController);
+application.register('nowo-task-board-description', BoardDescriptionController);
 application.register('nowo-task-board-add-task-modal', AddTaskModalController);
 application.register('nowo-task-board-add-column-modal', AddColumnModalController);
 application.register('nowo-task-board-list-filter', ListFilterController);

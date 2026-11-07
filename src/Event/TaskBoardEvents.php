@@ -118,6 +118,9 @@ final class TaskBoardEvents
     /** {@see BoardErasedEvent}, once the board is empty (since 1.25). */
     public const BOARD_EMPTIED = 'nowo_task_board.board_emptied';
 
+    /** {@see BoardCreatedEvent}, after the board is saved (since 1.30.0). */
+    public const BOARD_CREATED = 'nowo_task_board.board_created';
+
     /** {@see BoardErasedEvent}, once the board is deleted (since 1.25). */
     public const BOARD_DELETED = 'nowo_task_board.board_deleted';
 

@@ -7,6 +7,7 @@
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
 - [Sync writes by e-mail (fixed in 1.28.0)](#sync-writes-by-e-mail-fixed-in-1280)
+- [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Logging and personal data](#logging-and-personal-data)
@@ -123,6 +124,10 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 ## Sync writes by e-mail (fixed in 1.28.0)
 
 A sync that has no people session or no person reference for a row (`SyncOptions::people` false, no directory attached, a row or comment with an e-mail but no valid id) matches users by e-mail or name. From 1.23.0 to 1.27.0 that path wrote the match as task member and comment author without asking whether the user could view the board, and a member row gives the task through `isTaskParticipant`. Since 1.28.0 it writes only a user who can view the board and is not attribution only (audit HI-M2; `emailPath.notWritten` counts the others). Until a host upgrades: make `TaskAssigneeProviderInterface::canBeAssigned()` refuse users without board access, have the import user resolver return null for them, and deny non-members through `TASK_ACCESS_CHECK`. No advisory: it needs a provider anomaly or a host's own setting, and the match is on the host's own users. The answer is kept per user for one slice, so a permission removed during a slice applies from the next.
+
+## New board scope step (since 1.30)
+
+The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. Audit status: re-verification pending.
 
 ## Unmatched columns (since 1.28.0)
 
