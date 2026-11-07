@@ -1176,7 +1176,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             memberAssigner: new TaskMemberAssigner($taskRepository, $recorder),
             ganttBuilder: new TaskGanttBuilder(),
             importOrchestrator: new TaskImportOrchestrator([new TaskBoardCsvImporter()], $taskRepository, $columnManager, $recorder, $this->createMock(TaskImportUserResolverInterface::class), $this->createMock(EntityManagerInterface::class)),
-            translator: $translator ? $this->identityTranslator() : $this->createMock(TranslatorInterface::class),
+            translator: $this->identityTranslator(),
             routes: array_fill_keys(['index', 'board', 'task', 'board_import', 'task_member_remove', 'task_priority', 'column_set_delete', 'task_create'], ['path' => '/', 'name' => 'route']),
             templates: array_fill_keys(['index', 'board', 'list', 'gantt', 'task', 'import'], 'template.html.twig'),
             userClass: TestUser::class,

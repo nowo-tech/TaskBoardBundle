@@ -8,24 +8,22 @@
     Blocks: nowo_task_board_toolbar (the header), index_actions (the header actions), index_board_item (one board,
     `board` and `loop` in context), index_empty (no boards).
 #}
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block javascripts %}
+{% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block title %}{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+{% block nowo_ui_document_title %}{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
-{% block container_class %}container container-narrow{% endblock %}
-
-{% block body %}
+{% block nowo_ui_content %}
     {# Without canCreateBoard (a page rendered by a 1.23 host controller) the form shows, as before. #}
     {% set _can_create = canCreateBoard ?? true %}
     <div class="nowo-task-index" data-controller="nowo-task-board-dialog" data-testid="nowo-task-board-index">
@@ -52,9 +50,7 @@
             </div>
         {% endblock %}
 
-        {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
-
-        <section class="card nowo-task-index__boards" aria-labelledby="nowo-task-index-boards-title" data-testid="nowo-task-board-index-boards">
+            <section class="card nowo-task-index__boards" aria-labelledby="nowo-task-index-boards-title" data-testid="nowo-task-board-index-boards">
             <div class="card-header">
                 <h2 class="card-title" id="nowo-task-index-boards-title">{{ 'task_board.index.your_boards'|trans({}, 'NowoTaskBoardBundle') }}</h2>
             </div>
@@ -94,10 +90,10 @@
                 {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling body. #}
                 <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
                     {% if boardForm.scope is defined %}
-                        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
                     {% endif %}
-                    <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-testid="nowo-task-board-create-submit">
+                    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-create-submit">
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
                     </button>
                 </div>

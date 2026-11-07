@@ -1,36 +1,39 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block javascripts %}
+{% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+{% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
-{% block body %}
+{% block nowo_ui_page_header %}
     {% block nowo_task_board_toolbar %}
-    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
-        pageTitle: board.name,
-        pageTitleIcon: board.icon,
-        pageDescriptionBoard: board,
-        pageSubtitle: board.description,
-        breadcrumbRoute: nowo_task_board_route('index'),
-        breadcrumbLabel: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle'),
-        headerActions: ((canEditBoard ?? true) ? [
-            {href: path(nowo_task_board_route('board_import'), {boardId: board.id}), icon: 'upload', label: 'task_board.import.action'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+    {{ nowo_ui_page_header(nowo_task_board_header({
+        title: nowo_task_board_label(board),
+        intro: board.descriptionFormat == 'markdown' ? null : board.description,
+        crumb: {href: path(nowo_task_board_route('index'), {}), label: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle')},
+        actions: ((canEditBoard ?? true) ? [
+            {href: path(nowo_task_board_route('board_import'), {boardId: board.id}), icon: 'upload', label: 'task_board.import.action'|trans({}, 'NowoTaskBoardBundle')},
         ] : [])|merge([
-            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
-            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')},
         ]),
-        dashboardRoute: dashboardRoute|default(null),
-    }) }}
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}
     {% endblock %}
+{% endblock %}
+
+{% block nowo_ui_content %}
+    {% if board.description and board.descriptionFormat == 'markdown' %}
+        {{ include('@NowoTaskBoardBundle/manage/_board_description.html.twig', {board: board}) }}
+    {% endif %}
 
     {# Since 1.23: the board's provider connection (badge, Refresh, Connect provider); nothing without sync. #}
     {% block nowo_task_board_connection %}
@@ -38,10 +41,6 @@
     {% endblock %}
 
     {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
-
-    {% block nowo_task_board_flashes %}
-        {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
-    {% endblock %}
 
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"

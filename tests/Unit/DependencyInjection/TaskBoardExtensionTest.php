@@ -63,12 +63,8 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertSame(User::class, $container->getParameter('nowo_task_board.user_class'));
         self::assertSame('task_board_tasks', $container->getParameter('nowo_task_board.tasks_table'));
-        self::assertSame('@NowoTaskBoardBundle/layout.html.twig', $container->getParameter('nowo_task_board.templates.layout'));
-        self::assertSame('tabler', $container->getParameter('nowo_task_board.templates.css_framework'));
+        self::assertNull($container->getParameter('nowo_task_board.web_ui.layout_template'));
         self::assertTrue($container->hasDefinition(TaskBoardTwigExtension::class));
-        $twigDefinition = $container->getDefinition(TaskBoardTwigExtension::class);
-        self::assertSame('%nowo_task_board.templates.layout%', $twigDefinition->getArgument('$layoutTemplate'));
-        self::assertSame('%nowo_task_board.templates.css_framework%', $twigDefinition->getArgument('$cssFramework'));
         self::assertTrue($container->hasAlias(TaskRepositoryInterface::class));
 
         $managerRegistry = $container->getDefinition(DoctrineOrmTaskRepository::class)->getArgument('$managerRegistry');
@@ -243,7 +239,7 @@ final class TaskBoardExtensionTest extends TestCase
             'templates'  => ['layout' => 'base.html.twig'],
         ]], $container);
 
-        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.templates.layout'));
+        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.web_ui.layout_template'));
         self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.templates')['layout']);
     }
 
@@ -258,7 +254,6 @@ final class TaskBoardExtensionTest extends TestCase
             'templates'  => ['css_framework' => 'bootstrap5'],
         ]], $container);
 
-        self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates.css_framework'));
         self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates')['css_framework']);
     }
 
@@ -345,7 +340,7 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertTrue($container->hasDefinition(TaskManager::class));
     }
 
-    public function testPrependSeedsFormKitAndUiKitDefaults(): void
+    public function testPrependSeedsFormKitDefaultsAndLeavesUiKitAlone(): void
     {
         $container = new ContainerBuilder();
         $container->registerExtension($this->stubExtension('nowo_form_kit'));
@@ -358,19 +353,25 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame('bootstrap', $formKit[0]['css_framework']);
         self::assertSame('NowoTaskBoardBundle', $formKit[0]['profiles']['task_board']['translation_domain']);
 
-        self::assertSame([['css_framework' => 'bootstrap5', 'icon_set' => 'bootstrap-icons']], $container->getExtensionConfig('nowo_ui_kit'));
+        // Since 2.0.0 templates.css_framework is ignored: UiKit's own configuration decides.
+        self::assertSame([], $container->getExtensionConfig('nowo_ui_kit'));
     }
 
-    public function testPrependUiKitUsesTablerIconsForTabler(): void
+    public function testWebUiWinsOverTheDeprecatedTemplatesKeys(): void
     {
         $container = new ContainerBuilder();
-        $container->registerExtension($this->stubExtension('nowo_ui_kit'));
-        $container->prependExtensionConfig('nowo_ui_kit', ['css_framework' => 'tabler']);
-        $container->prependExtensionConfig('nowo_task_board', ['user_class' => User::class]);
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'security'   => ['allow_unauthenticated' => true],
+            'templates'  => ['layout' => 'old.html.twig', 'index' => 'old_index.html.twig', 'board' => 'old_board.html.twig'],
+            'web_ui'     => ['layout_template' => 'new.html.twig', 'templates' => ['index' => 'new_index.html.twig']],
+        ]], $container);
 
-        (new TaskBoardExtension())->prepend($container);
-
-        self::assertSame(['icon_set' => 'tabler-icons'], $container->getExtensionConfig('nowo_ui_kit')[0]);
+        self::assertSame('new.html.twig', $container->getParameter('nowo_task_board.web_ui.layout_template'));
+        $templates = $container->getParameter('nowo_task_board.templates');
+        self::assertIsArray($templates);
+        self::assertSame('new_index.html.twig', $templates['index']);
+        self::assertSame('old_board.html.twig', $templates['board']);
     }
 
     public function testPrependKeepsHostFormKitAndUiKitSettings(): void

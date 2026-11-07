@@ -13,8 +13,8 @@
             <p>{{ 'task_board.sync.unlink.text'|trans({'%list%': connection.containerLabel}, 'NowoTaskBoardBundle') }}</p>
         {{ form_end(unlinkForm) }}
         <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            <button type="submit" form="nowo-task-sync-unlink-form" class="{{ nowo_task_board_btn_class('btn_danger_solid') }}" data-testid="nowo-task-sync-unlink-confirm">{{ 'task_board.sync.unlink.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" form="nowo-task-sync-unlink-form" class="{{ nowo_ui_class('btn_danger_solid', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-unlink-confirm">{{ 'task_board.sync.unlink.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
         </div>
     </dialog>
 </div>

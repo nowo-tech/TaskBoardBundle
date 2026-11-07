@@ -148,9 +148,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.route_prefix', $config['route_prefix']);
         $container->setParameter('nowo_task_board.dashboard_route', $config['dashboard_route']);
         $container->setParameter('nowo_task_board.routes', $config['routes']);
+        // Since 2.0.0: web_ui.* is the canonical name; templates.* still works, deprecated.
+        $config['templates'] = $config['web_ui']['templates'] + $config['templates'];
         $container->setParameter('nowo_task_board.templates', $config['templates']);
-        $container->setParameter('nowo_task_board.templates.layout', $config['templates']['layout']);
-        $container->setParameter('nowo_task_board.templates.css_framework', $config['templates']['css_framework']);
+        $container->setParameter('nowo_task_board.web_ui.layout_template', $config['web_ui']['layout_template'] ?? $config['templates']['layout']);
         $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
         $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
         $container->setParameter('nowo_task_board.templates.connection_badge', $config['templates']['connection_badge']);
@@ -529,7 +530,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ]);
         }
 
-        $this->prependUiKitDefaults($container);
         $this->prependTiptapTaskProfile($container);
     }
 
@@ -644,49 +644,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
         if ($seed !== []) {
             $container->prependExtensionConfig('nowo_form_kit', $seed);
-        }
-    }
-
-    /**
-     * When UiKit is installed, seed nowo_ui_kit.css_framework / icon_set from templates
-     * so kit macros resolve the same stack. Does not override keys the host already set.
-     */
-    private function prependUiKitDefaults(ContainerBuilder $container): void
-    {
-        if (!$container->hasExtension('nowo_ui_kit')) {
-            return;
-        }
-
-        $hostHasCssFramework = false;
-        $hostHasIconSet      = false;
-        foreach ($container->getExtensionConfig('nowo_ui_kit') as $cfg) {
-            if (array_key_exists('css_framework', $cfg)) {
-                $hostHasCssFramework = true;
-            }
-            if (array_key_exists('icon_set', $cfg)) {
-                $hostHasIconSet = true;
-            }
-        }
-
-        if ($hostHasCssFramework && $hostHasIconSet) {
-            return;
-        }
-
-        $config    = $this->processConfiguration(new Configuration(), $container->getExtensionConfig(Configuration::ALIAS));
-        $templates = is_array($config['templates'] ?? null) ? $config['templates'] : [];
-        $defaults  = [];
-
-        if (!$hostHasCssFramework) {
-            $fw                        = (string) ($templates['css_framework'] ?? 'tabler');
-            $defaults['css_framework'] = $fw === 'bootstrap' ? 'bootstrap5' : $fw;
-        }
-        if (!$hostHasIconSet) {
-            $fwForIcons           = (string) ($defaults['css_framework'] ?? $templates['css_framework'] ?? 'tabler');
-            $defaults['icon_set'] = $fwForIcons === 'tabler' ? 'tabler-icons' : 'bootstrap-icons';
-        }
-
-        if ($defaults !== []) {
-            $container->prependExtensionConfig('nowo_ui_kit', $defaults);
         }
     }
 

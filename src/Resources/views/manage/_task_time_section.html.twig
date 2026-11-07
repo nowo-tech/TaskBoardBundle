@@ -133,8 +133,8 @@
                 {% endfor %}
             {{ form_end(timeEntryForm) }}
             <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
             </div>
         </dialog>
     {% endif %}

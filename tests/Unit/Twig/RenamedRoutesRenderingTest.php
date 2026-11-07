@@ -16,6 +16,9 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\Theme\Theme;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -170,10 +173,12 @@ final class RenamedRoutesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes));
+        $twig->addExtension(new TaskBoardTwigExtension($routes, pages: new TaskBoardPages('layout.html.twig')));
+        $twig->addExtension(new ThemeExtension(new Theme()));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/assets/' . $path));
+        $twig->addGlobal('app', ['flashes' => [], 'request' => null]);
 
         return $twig;
     }

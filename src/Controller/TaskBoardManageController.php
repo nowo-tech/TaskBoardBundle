@@ -85,6 +85,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -1899,6 +1900,15 @@ final class TaskBoardManageController extends AbstractController
     private function requireColumnSets(): ColumnSetManager
     {
         return $this->columnSetManager ?? throw new NotFoundHttpException('Column sets are not available.');
+    }
+
+    /**
+     * Since 2.0.0: flashes are translated here. The layout prints them through UiKit's `flashes` partial, or a host's, and
+     * neither knows this bundle's domain. Text that is no key (a host's refusal reason) stays as it is.
+     */
+    protected function addFlash(string $type, mixed $message): void
+    {
+        parent::addFlash($type, is_string($message) ? $this->translator->trans($message, [], TaskBoardPages::DOMAIN) : $message);
     }
 
     private function requireUser(): UserInterface

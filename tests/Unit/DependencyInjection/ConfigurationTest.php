@@ -22,8 +22,9 @@ final class ConfigurationTest extends TestCase
 
         self::assertSame('task_board_', $config['table_prefix']);
         self::assertSame('/tools/task-board', $config['routes']['index']['path']);
-        self::assertSame('@NowoTaskBoardBundle/layout.html.twig', $config['templates']['layout']);
-        self::assertSame('tabler', $config['templates']['css_framework']);
+        self::assertNull($config['web_ui']['layout_template']);
+        self::assertNull($config['templates']['layout']);
+        self::assertNull($config['templates']['css_framework']);
         self::assertFalse($config['security']['allow_unauthenticated']);
         self::assertSame(['ROLE_USER'], $config['security']['access_roles']);
         self::assertTrue($config['security']['resource_scoping']);

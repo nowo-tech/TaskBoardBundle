@@ -24,6 +24,8 @@ use function str_contains;
  */
 final class Configuration implements ConfigurationInterface
 {
+    private const PACKAGE = 'nowo-tech/task-board-bundle';
+
     public const ALIAS = 'nowo_task_board';
 
     /** @var list<string> Host CSS stacks accepted by templates.css_framework (REQ-UI-001). */
@@ -458,18 +460,35 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('web_ui')
+                    ->addDefaultsIfNotSet()
+                    ->info('Since 2.0.0: the UiKit page contract (REQ-UI-003).')
+                    ->children()
+                        ->scalarNode('layout_template')
+                            ->defaultNull()
+                            ->info('Layout the pages extend. null = nowo_ui_kit.layouts.admin. A pre-2.0 layout without the UiKit canonical blocks goes through a deprecated bridge.')
+                        ->end()
+                        ->arrayNode('templates')
+                            ->info('Template per page id (index, board, list, gantt, task, import, connection, connection_people, ...). Wins over the same key of templates.')
+                            ->useAttributeAsKey('page')
+                            ->scalarPrototype()->end()
+                            ->defaultValue([])
+                        ->end()
+                    ->end()
+                ->end()
                 ->arrayNode('templates')
                     ->addDefaultsIfNotSet()
                     ->children()
                         ->scalarNode('layout')
-                            ->defaultValue('@NowoTaskBoardBundle/layout.html.twig')
-                            ->cannotBeEmpty()
-                            ->info('Twig layout extended by manage pages via global nowo_task_board_layout (REQ-UI-001). Host apps set this to the project layout or a one-file bridge. Default is the bundle demo layout (Tabler CDN).')
+                            ->defaultNull()
+                            ->setDeprecated(self::PACKAGE, '2.0', 'The "%path%.%node%" option is deprecated, use "nowo_task_board.web_ui.layout_template" instead.')
+                            ->info('Deprecated since 2.0.0: use web_ui.layout_template.')
                         ->end()
                         ->enumNode('css_framework')
-                            ->values(self::CSS_FRAMEWORKS)
-                            ->defaultValue('tabler')
-                            ->info('Host-chosen CSS stack (REQ-UI-001). Twig global nowo_task_board_css_framework. Default tabler matches the demo layout CDN. Values: bootstrap (alias of bootstrap5), bootstrap4, bootstrap5, tabler (Bootstrap-compatible), tailwind, foundation, custom, none. Manage pages ship Tabler/Bootstrap 5 classes; custom relies on host CSS / semantic nowo-ui-* classes.')
+                            ->values([null, ...self::CSS_FRAMEWORKS])
+                            ->defaultNull()
+                            ->setDeprecated(self::PACKAGE, '2.0', 'The "%path%.%node%" option is deprecated and ignored, set "nowo_ui_kit.css_framework" instead.')
+                            ->info('Deprecated since 2.0.0 and ignored: the pages take their classes from nowo_ui_kit.')
                         ->end()
                         ->scalarNode('index')->defaultValue('@NowoTaskBoardBundle/manage/index.html.twig')->end()
                         ->scalarNode('board')->defaultValue('@NowoTaskBoardBundle/manage/board.html.twig')->end()

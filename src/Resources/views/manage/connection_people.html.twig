@@ -1,4 +1,5 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 {#
     Since 1.27.0 (TB-SYNC-2): the People page of a linked board — each remote person (assignees, creators, watchers,
     commenters, time-entry users, workspace members) with a host-user select pre-filled by e-mail, then by name. Saving
@@ -8,30 +9,33 @@
     firstImportPending. Override with templates.connection_people.
 #}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block title %}{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+{% block nowo_ui_scripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
 
-{% block body %}
+{% block nowo_ui_document_title %}{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+
+{% block nowo_ui_page_header %}
     {% set _provider = (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') %}
-    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
-        pageTitle: 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle'),
-        pageSubtitle: 'task_board.sync.people.subtitle'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle'),
-        breadcrumbRoute: nowo_task_board_route('board'),
-        breadcrumbParams: {boardId: board.id},
-        breadcrumbLabel: board.name,
-        breadcrumbIcon: board.icon,
-        headerActions: [
-            {href: path(nowo_task_board_route('board_connection'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+    {{ nowo_ui_page_header(nowo_task_board_header({
+        title: 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle'),
+        intro: 'task_board.sync.people.subtitle'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle'),
+        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
+        actions: [
+            {href: path(nowo_task_board_route('board_connection'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle')},
         ],
-        dashboardRoute: dashboardRoute|default(null),
-    }) }}
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}
+{% endblock %}
 
-    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+{% block nowo_ui_content %}
+    {% set _provider = (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') %}
 
     {% block nowo_task_board_connection_people %}
         <section class="card nowo-task-sync-people" aria-labelledby="nowo-task-sync-people-title" data-testid="nowo-task-sync-people">
@@ -122,7 +126,7 @@
                         {#- Since 1.28.0 (sync.people_bulk_former). -#}
                         {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'mt-3'}}) }}
                             <p class="text-secondary small mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                            <button type="submit" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                            <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
                         {{ form_end(peopleFormerForm) }}
                     {% endif %}
 

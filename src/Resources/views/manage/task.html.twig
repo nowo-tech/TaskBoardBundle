@@ -1,22 +1,20 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 {% use '@NowoTaskBoardBundle/manage/_task_blocks.html.twig' %}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block javascripts %}
+{% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block title %}{{ task.title }}{% endblock %}
+{% block nowo_ui_document_title %}{{ task.title }}{% endblock %}
 
-{% block container_class %}container container-narrow{% endblock %}
-
-{% block body %}
+{% block nowo_ui_content %}
     {# Since 1.25.1: stable hook of the task page for integrations (e.g. the TimeTrack browser extension). Only the
        page has it: the panel fragment (task_panel.html.twig) carries its own .nowo-task-panel-fragment hook. #}
     <div class="nowo-task-page" data-task-id="{{ task.id }}">

@@ -32,12 +32,12 @@
                 {% endfor %}
             {{ form_end(subtaskImportForm) }}
             <div class="nowo-task-dialog__footer nowo-task-dialog__actions nowo-task-dialog__actions--split">
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }} nowo-task-subtask-import__help" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-subtask-import__help" data-action="nowo-task-board-dialog#open" data-dialog="import-help">
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.import.help.open'|trans({}, 'NowoTaskBoardBundle') }}
                 </button>
                 <div class="nowo-task-dialog__actions-end">
-                    <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    <button type="submit" form="nowo-task-subtask-import-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    <button type="submit" form="nowo-task-subtask-import-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'upload'}) }}{{ 'task_board.import.subtasks.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
                 </div>
             </div>
         </dialog>

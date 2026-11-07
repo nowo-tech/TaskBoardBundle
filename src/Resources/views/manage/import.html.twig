@@ -1,34 +1,31 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block javascripts %}
+{% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block title %}{{ 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+{% block nowo_ui_document_title %}{{ 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
 
-{% block body %}
-    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
-        pageTitle: 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle'),
-        pageSubtitle: 'task_board.import.subtitle'|trans({}, 'NowoTaskBoardBundle'),
-        breadcrumbRoute: nowo_task_board_route('board'),
-        breadcrumbRouteParams: {boardId: board.id},
-        breadcrumbParams: {boardId: board.id},
-        breadcrumbLabel: board.name,
-        breadcrumbIcon: board.icon,
-        headerActions: [
-            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+{% block nowo_ui_page_header %}
+    {{ nowo_ui_page_header(nowo_task_board_header({
+        title: 'task_board.import.title'|trans({}, 'NowoTaskBoardBundle'),
+        intro: 'task_board.import.subtitle'|trans({}, 'NowoTaskBoardBundle'),
+        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
+        actions: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle')},
         ],
-        dashboardRoute: dashboardRoute|default(null),
-    }) }}
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}
+{% endblock %}
 
-    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+{% block nowo_ui_content %}
 
     <div class="row row-cards">
         <div class="col-12 col-lg-8">

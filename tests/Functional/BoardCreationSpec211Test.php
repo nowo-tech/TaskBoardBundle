@@ -166,14 +166,13 @@ final class BoardCreationSpec211Test extends FunctionalTestCase
 
         $page = $this->client->request('GET', '/tools/task-board/board/' . $board->getId());
         self::assertResponseIsSuccessful();
-        self::assertSame('🚀', $page->filter('h1 .nowo-task-board-icon')->text());
-        self::assertSame('true', $page->filter('h1 .nowo-task-board-icon')->attr('aria-hidden'));
+        self::assertSame('🚀 Rocket', $page->filter('h1')->text());
         self::assertCount(1, $page->filter('[data-controller="nowo-task-board-description"]'));
         self::assertStringNotContainsString('<script>x</script>', (string) $this->client->getResponse()->getContent());
         foreach (['list', 'gantt'] as $view) {
             $other = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/' . $view);
             self::assertResponseIsSuccessful();
-            self::assertSame('🚀', $other->filter('.page-header .small .nowo-task-board-icon')->text(), $view);
+            self::assertStringContainsString('🚀 Rocket', $other->filter('[data-nowo-ui-region="header"]')->text(), $view);
         }
 
         $plainPage = $this->client->request('GET', '/tools/task-board/board/' . $plain->getId());

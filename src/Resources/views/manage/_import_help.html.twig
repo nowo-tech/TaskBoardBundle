@@ -62,6 +62,6 @@ release,,Release,To do,2026-11-13,2026-11-13,1h,design;api</code></pre>
     </div>
     {# Since 1.26 (dialog rule v2): the footer, outside the scrolling body; a guide has one action. #}
     <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-        <button type="button" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-action="nowo-task-board-dialog#close">{{ (_t ~ 'got_it')|trans({}, 'NowoTaskBoardBundle') }}</button>
+        <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ (_t ~ 'got_it')|trans({}, 'NowoTaskBoardBundle') }}</button>
     </div>
 </dialog>

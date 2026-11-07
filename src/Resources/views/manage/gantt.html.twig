@@ -1,33 +1,31 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block javascripts %}
+{% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block title %}{{ board.name }} — {{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+{% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
-{% block container_class %}container container-wide{% endblock %}
-
-{% block body %}
-    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
-        pageTitle: board.name ~ ' — ' ~ ('task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle')),
-        breadcrumbRoute: nowo_task_board_route('board'),
-        breadcrumbParams: {boardId: board.id},
-        breadcrumbLabel: board.name,
-        breadcrumbIcon: board.icon,
-        headerActions: [
-            {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
-            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
+{% block nowo_ui_page_header %}
+    {{ nowo_ui_page_header(nowo_task_board_header({
+        title: board.name ~ ' — ' ~ ('task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle')),
+        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
+        actions: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},
         ],
-        dashboardRoute: dashboardRoute|default(null),
-    }) }}
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}
+{% endblock %}
+
+{% block nowo_ui_content %}
     {# Since 1.23: the board's provider connection (badge, Refresh, Connect provider); nothing without sync. #}
     {% block nowo_task_board_connection %}
         {{ include(nowo_task_board_connection_badge_template|default('@NowoTaskBoardBundle/manage/_connection_badge.html.twig'), {sync: nowo_task_board_connection(board)}) }}

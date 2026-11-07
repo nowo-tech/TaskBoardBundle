@@ -28,8 +28,8 @@
             {% endfor %}
         {{ form_end(columnSetForm) }}
         <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            <button type="submit" form="nowo-task-column-set-save-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" form="nowo-task-column-set-save-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
         </div>
     </dialog>
 
@@ -82,10 +82,10 @@
         </div>
         <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
             {% if columnSets is empty %}
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% else %}
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" form="nowo-task-column-set-apply-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ 'task_board.column_set.apply_action'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-column-set-apply-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ 'task_board.column_set.apply_action'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
         </div>
     </dialog>

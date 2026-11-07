@@ -6,7 +6,8 @@
     every write route (the panel's _target_path).
 #}
 {% block nowo_task_body %}
-    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+    {# The page's flashes come from the layout; a panel is a fragment with no layout. #}
+    {% if panel|default(false) %}{{ include(nowo_ui_partial('flashes', 'NowoTaskBoardBundle'), {bundle: 'NowoTaskBoardBundle'}) }}{% endif %}
     {# Since 1.23: an archived task (opened by URL) says so; it is restored from the list view. #}
     {% if task.archived|default(false) %}
         <div class="alert alert-secondary" role="status" data-testid="nowo-task-archived-notice">{{ 'task_board.task.archived_notice'|trans({}, 'NowoTaskBoardBundle') }}</div>

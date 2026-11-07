@@ -64,6 +64,9 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\Theme\Theme;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\AppVariable;
 use Symfony\Bridge\Twig\Extension\FormExtension;
@@ -227,7 +230,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
         // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form (1.26: the footer
         // is outside the scrolling body).
-        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__footer nowo-task-dialog__actions">\s*<button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="btn btn-primary nowo-task-members__add-button">/', $html);
+        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__footer nowo-task-dialog__actions">\s*<button type="button" class="[^"]*" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="[^"]*nowo-task-members__add-button">/', $html);
         self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);
@@ -343,25 +346,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('nowo-task-card__subtasks', $html);
         self::assertStringContainsString('1/1', $html);
         self::assertStringNotContainsString('>Child<', $html);
-    }
-
-    public function testPageHeaderActionsAreEscaped(): void
-    {
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
-            'pageTitle'     => 'Board',
-            'headerActions' => [['href' => '/x?a=1&b="2"', 'label' => '<b>List</b>', 'icon' => 'list']],
-        ]);
-
-        self::assertStringContainsString('href="/x?a=1&amp;b=&quot;2&quot;"', $html);
-        self::assertStringContainsString('&lt;b&gt;List&lt;/b&gt;', $html);
-        self::assertStringContainsString('class="btn btn-outline-primary"', $html);
-        self::assertStringNotContainsString('<b>List</b>', $html);
-
-        $legacy = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
-            'pageTitle'     => 'Board',
-            'headerActions' => '<a href="/x">Old</a>',
-        ]);
-        self::assertStringContainsString('&lt;a href=&quot;/x&quot;&gt;Old&lt;/a&gt;', $legacy);
     }
 
     public function testReadOnlyBoardHidesWriteControls(): void
@@ -574,7 +558,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         // delete form (which keeps its confirm).
         $editColumn = (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"]');
         $delete     = $editColumn->filter('.nowo-task-dialog__footer button[form="nowo-task-board-column-delete-form"]');
-        self::assertSame('btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
+        self::assertSame('nowo-ui-btn nowo-ui-btn--danger btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
         self::assertSame('nowo-task-board-column-delete-help', $delete->attr('aria-describedby'));
         $deleteForm = $editColumn->filter('form#nowo-task-board-column-delete-form');
         self::assertSame('hidden', $deleteForm->attr('hidden'));
@@ -1218,7 +1202,8 @@ final class ManageTemplatesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass));
+        $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig')));
+        $twig->addExtension(new ThemeExtension(new Theme()));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

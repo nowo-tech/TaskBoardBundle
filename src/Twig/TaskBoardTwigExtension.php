@@ -23,11 +23,12 @@ use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
-use Psr\Log\LoggerInterface;
+use Nowo\UiKitBundle\View\PageHeader;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
-use Throwable;
+use Twig\DeprecatedCallableInfo;
 use Twig\Environment;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
@@ -50,6 +51,7 @@ use function sprintf;
 use function str_replace;
 use function strtolower;
 use function strtr;
+use function trigger_deprecation;
 use function trim;
 use function usort;
 
@@ -62,23 +64,13 @@ use const PHP_URL_SCHEME;
  */
 final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsInterface
 {
-    /** Since 1.26: the UiKit theme bundle key of the dialog buttons (`nowo_ui_kit.theme.bundles.NowoTaskBoardBundle`). */
+    /** Since 1.26: the UiKit theme bundle key (`nowo_ui_kit.theme.bundles.NowoTaskBoardBundle`). */
     public const THEME_BUNDLE = 'NowoTaskBoardBundle';
-
-    /** Since 1.26: the classes of a dialog button without the UiKit theme (UiKit 1.x): the Bootstrap ones of 1.25. */
-    private const BUTTON_FALLBACK = [
-        'btn_primary'      => 'btn btn-primary',
-        'btn_secondary'    => 'btn btn-outline-secondary',
-        'btn_danger'       => 'btn btn-outline-danger',
-        'btn_danger_solid' => 'btn btn-danger',
-    ];
 
     /**
      * @param array<string, array{path?: string, name?: string}> $routes Configured `routes` tree (logical key => path/name)
      */
     public function __construct(
-        private readonly string $layoutTemplate,
-        private readonly string $cssFramework,
         private readonly array $routes = [],
         private readonly TaskObjectLinkResolver $linkResolver = new TaskObjectLinkResolver(),
         private readonly ?string $filtersCollapse = null,
@@ -94,8 +86,6 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly string $connectionBadgeTemplate = '@NowoTaskBoardBundle/manage/_connection_badge.html.twig',
         // Since 1.25.2: sync.badge.connect_link (false = the badge of an unlinked board renders nothing).
         private readonly bool $syncBadgeConnectLink = true,
-        // Since 1.26: warns when the UiKit theme cannot resolve a dialog button slot (null: silent fallback).
-        private readonly ?LoggerInterface $logger = null,
         // Since 1.27.0 (TB-SYNC-3): typed custom fields of synced tasks (null when `sync.enabled` is false).
         private readonly ?SyncFieldViewProvider $syncFields = null,
         // Since 1.30.0 (spec 211).
@@ -103,6 +93,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TokenStorageInterface $tokenStorage = null,
         // Since 2.0.0: `import.help_link`.
         private readonly ImportHelpLinkResolver $importHelpLink = new ImportHelpLinkResolver(),
+        // Since 2.0.0: the layout of the pages and their headers.
+        private readonly TaskBoardPages $pages = new TaskBoardPages(),
     ) {
     }
 
@@ -217,7 +209,12 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_comment_meta', $this->syncCommentMeta(...)),
             new TwigFunction('task_board_sync_details', $this->syncDetails(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
-            new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true]),
+            new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true, 'deprecation_info' => new DeprecatedCallableInfo('nowo-tech/task-board-bundle', '2.0', 'nowo_ui_class')]),
+            // Since 2.0.0: the UiKit page contract.
+            new TwigFunction('nowo_task_board_page_layout', $this->pages->layout(...), ['needs_environment' => true]),
+            new TwigFunction('nowo_task_board_legacy_layout', $this->pages->legacyLayout(...), ['needs_environment' => true]),
+            new TwigFunction('nowo_task_board_legacy_blocks', $this->pages->legacyBlocks(...), ['needs_environment' => true]),
+            new TwigFunction('nowo_task_board_header', $this->pageHeader(...), ['needs_context' => true]),
             // Since 1.30.0 (spec 211).
             new TwigFunction('nowo_task_board_description', $this->boardDescription(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_label', self::boardLabel(...)),
@@ -228,38 +225,30 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     }
 
     /**
-     * Since 1.26 (dialog rule v2): the classes of a dialog footer button from the UiKit theme slot (`btn_secondary`
-     * for Cancel / Close, `btn_primary`, `btn_danger` for a secondary destructive action, `btn_danger_solid` for the
-     * confirm of a destructive dialog) of the `NowoTaskBoardBundle` theme bundle, so a host restyles them in
-     * `nowo_ui_kit.theme`; the Bootstrap classes of 1.25 without UiKit's theme extension (UiKit 1.x) or for an unknown
-     * slot.
+     * The classes of a theme slot of the bundle.
+     *
+     * @deprecated since 2.0.0, use `nowo_ui_class(slot, 'NowoTaskBoardBundle')`. Removed in 3.0.
      *
      * @param array<string, mixed> $context
      */
     public function buttonClass(Environment $env, array $context, string $slot): string
     {
-        $fallback = self::BUTTON_FALLBACK[$slot] ?? 'btn';
-        if (!$env->hasExtension(ThemeExtension::class)) {
-            return $fallback;
-        }
+        trigger_deprecation('nowo-tech/task-board-bundle', '2.0', 'The Twig function "nowo_task_board_btn_class" is deprecated, use "nowo_ui_class(slot, \'%s\')".', self::THEME_BUNDLE);
 
-        try {
-            $class = $env->getExtension(ThemeExtension::class)->slotClass($context, $slot, self::THEME_BUNDLE);
-        } catch (Throwable $e) {
-            // A host theme misconfiguration (or an older UiKit without the slot) must not break the dialog: the 1.25
-            // classes are used, and the logger says why.
-            $this->logger?->warning('TaskBoard dialog button: UiKit theme slot "{slot}" of {bundle} could not be resolved, using "{fallback}": {error}', [
-                'slot'      => $slot,
-                'bundle'    => self::THEME_BUNDLE,
-                'fallback'  => $fallback,
-                'error'     => $e->getMessage(),
-                'exception' => $e,
-            ]);
+        return $env->getExtension(ThemeExtension::class)->slotClass($context, $slot, self::THEME_BUNDLE);
+    }
 
-            return $fallback;
-        }
+    /**
+     * Since 2.0.0: the page header of a page (Twig `nowo_task_board_header`), see {@see TaskBoardPages::header()}.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $spec
+     */
+    public function pageHeader(array $context, array $spec): PageHeader
+    {
+        $iconSet = $context['nowo_ui_kit_icon_set'] ?? null;
 
-        return trim($class) !== '' ? $class : $fallback;
+        return TaskBoardPages::header($spec, is_string($iconSet) ? $iconSet : 'tabler-icons');
     }
 
     /**
@@ -457,8 +446,6 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     public function getGlobals(): array
     {
         return [
-            'nowo_task_board_layout'        => $this->layoutTemplate,
-            'nowo_task_board_css_framework' => $this->cssFramework,
             // Since 1.17: the host's filter fold partial and filter card classes for the list view.
             'nowo_task_board_filters_collapse'   => $this->filtersCollapse,
             'nowo_task_board_filters_form_class' => $this->filtersFormClass,

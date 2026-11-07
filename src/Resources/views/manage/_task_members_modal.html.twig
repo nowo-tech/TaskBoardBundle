@@ -69,10 +69,10 @@
         </section>
     </div>
     <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-task-members-modal#close">
+        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-members-modal#close">
             {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
-        <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }} nowo-task-members__add-button">
+        <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }} nowo-task-members__add-button">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
     </div>
