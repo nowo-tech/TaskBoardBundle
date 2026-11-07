@@ -151,7 +151,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-Spec 214, target 2.1.0. Audit status: pending batch audit.
+Spec 214, target 2.1.0. Audit HY (2026-11-07): Pass (good) / Low at `<final>`.
 
 ### Schema change for every host: `task_board_tasks.number`
 
@@ -199,7 +199,7 @@ bin/console nowo:task-board:numbers-backfill
 
 - Set `task_numbers.enabled: true`. Default scope `tenant`: the boards of a tenant share a sequence, and a board with no tenant key uses its own id.
 - Allow the new route `task_by_number` wherever your host lists routes (access catalogue, breadcrumbs, one per tenant path). It exists only with the option.
-- Destroying a tenant: call `TaskNumberLedger::purgeScope($tenantKey)` in the same flow. The bundle never does it: deleting tasks or emptying a board keeps the ledger, so numbers are not handed out again. Purge only a key that is never reused, once its tasks are gone.
+- Destroying a tenant (FR-005): delete its tasks, then call `TaskNumberLedger::purgeScope($tenantKey)` in the same flow. It throws `TaskNumberScopeInUseException` while a task still carries a number in that scope, and an alias of a task moved away does not count. The bundle never purges by itself: deleting tasks or emptying a board keeps the ledger, so numbers are not handed out again. Purge only a key that is never reused.
 - An alias of a task moved to another tenant redirects there only when the tenant resolver accepts the task's tenant key as a slug. A host whose slugs differ from its keys answers 404 for it.
 - With the reservation inside a caller's transaction the bundle opens a second connection from the same parameters (`Connection::getParams()`) for a moment, with a 2-second lock wait on MySQL and PostgreSQL. Count it in the connection limit of sync workers. If it cannot get the counter (the caller's transaction holds it, as a fixture purge does) the counter joins the caller's transaction, after that wait, once per flush with new tasks: a big fixture load with many flushes after a purge is slower. SQLite always joins the transaction.
 
@@ -211,7 +211,16 @@ bin/console nowo:task-board:numbers-backfill
 - A host's own task repository needs `TaskCalendarRepositoryInterface`.
 - A chip carries `data-task-panel-url`, like a card, for a host's drawer.
 - A date changed on a linked board is a local edit: the provider is not written to, and the sync's per-field rule keeps it.
-- Known: the sync stores the creation day as `start_at` of a task with no start date (since 1.23, for the Gantt), so such tasks show as a bar from that day.
+- A synced task with no start date now keeps none, so it is on the calendar only by its due date, or in the undated count (audit HY-L3). This applies to every sync host, with or without the calendar. The Gantt does not change: `Task::getPlannedStart()` falls back to the creation day. The task form shows an empty start where it showed the creation day.
+- Tasks synced before this version keep the creation day as their start, and show from that day on the calendar. Nothing needs doing unless you turn the calendar on and want them cleared:
+
+  ```sql
+  UPDATE task_board_tasks SET start_at = NULL
+  WHERE start_at = created_at AND id IN (SELECT task_id FROM task_board_sync_items WHERE task_id IS NOT NULL);
+  ```
+
+  This also clears a start the provider really set to the very moment of creation. The sync sees a cleared row as a local edit, so a start the provider sets later becomes a conflict note rather than being applied.
+- A file import still stores the creation date as the start of a row with no start date (`TaskImportOrchestrator`), by an existing test, so such tasks show from that day.
 
 ## To 2.0.0
 

@@ -109,9 +109,20 @@ final class TaskScheduleTest extends CalendarTestCase
         $task = $this->dated($this->board(), 'Task', '2026-11-10', '2026-11-12');
         $this->login($this->owner);
 
-        foreach (['2026-02-31', 'tomorrow', '2026-11-10 12:00'] as $day) {
+        foreach (['2026-02-31', 'tomorrow', '2026-11-10 12:00', '0000-01-01', '0001-01-01', '1969-12-31', '2201-01-01', '9999-12-31'] as $day) {
             $this->schedule($task, '2026-11-10', $day);
             self::assertResponseStatusCodeSame(422, $day);
+        }
+    }
+
+    public function testTheYearsTheCalendarShowsAreAccepted(): void
+    {
+        $task = $this->dated($this->board(), 'Task', null, '2026-11-12');
+        $this->login($this->owner);
+
+        foreach (['1970-01-01', '2200-12-31'] as $day) {
+            $this->schedule($task, '', $day);
+            self::assertResponseIsSuccessful($day);
         }
     }
 

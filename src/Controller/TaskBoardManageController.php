@@ -962,7 +962,8 @@ final class TaskBoardManageController extends AbstractController
             return null;
         }
         $day = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
-        if (!$day instanceof DateTimeImmutable || $day->format('Y-m-d') !== $value) {
+        // Audit HY-L1: only the years the calendar shows. Year 0000 also fails on PostgreSQL.
+        if (!$day instanceof DateTimeImmutable || $day->format('Y-m-d') !== $value || !$this->calendarBuilder->isInRange($day)) {
             throw new InvalidArgumentException('Not a day.');
         }
 

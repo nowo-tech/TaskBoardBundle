@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Number;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Exception\TaskNumberScopeInUseException;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
@@ -178,8 +179,10 @@ final class TaskNumberAssignmentTest extends TaskNumberTestCase
     /** FR-005: what the host calls when a tenant is destroyed. */
     public function testPurgeScopeForgetsOnlyThatScope(): void
     {
-        $this->task($this->board('One', tenantKey: 'acme'), 'a');
+        $gone = $this->task($this->board('One', tenantKey: 'acme'), 'a');
         $this->task($this->board('Two', tenantKey: 'other'), 'b');
+        $this->em->remove($gone);
+        $this->em->flush();
 
         $this->ledger()->purgeScope('acme');
 
@@ -187,6 +190,45 @@ final class TaskNumberAssignmentTest extends TaskNumberTestCase
         self::assertSame(0, (int) $db->fetchOne(sprintf('SELECT COUNT(*) FROM %s WHERE scope_key = ?', TaskNumberEntry::TABLE), ['acme']));
         self::assertSame(0, (int) $db->fetchOne(sprintf('SELECT COUNT(*) FROM %s WHERE scope_key = ?', TaskNumberCounter::TABLE), ['acme']));
         self::assertSame(1, (int) $db->fetchOne(sprintf('SELECT COUNT(*) FROM %s WHERE scope_key = ?', TaskNumberEntry::TABLE), ['other']));
+    }
+
+    /** Audit HY-L2: with a task left, a new one would share its number. */
+    public function testPurgeScopeRefusesWhileATaskCarriesANumberThere(): void
+    {
+        $board = $this->board('One', tenantKey: 'acme');
+        $task  = $this->task($board, 'a');
+
+        try {
+            $this->ledger()->purgeScope('acme');
+            self::fail('The purge should have been refused.');
+        } catch (TaskNumberScopeInUseException $exception) {
+            self::assertStringContainsString('acme', $exception->getMessage());
+        }
+        self::assertSame($task, $this->ledger()->find('acme', 1));
+        self::assertSame(2, $this->task($board, 'b')->getNumber());
+    }
+
+    public function testPurgeScopeRefusesForABoardWithoutATenant(): void
+    {
+        $board = $this->board('One');
+        $this->task($board, 'a');
+
+        $this->expectException(TaskNumberScopeInUseException::class);
+        $this->ledger()->purgeScope($board->getId());
+    }
+
+    /** A task moved away keeps only an alias here: the scope it left can go. */
+    public function testPurgeScopeAllowsAnAliasOfATaskMovedAway(): void
+    {
+        $to   = $this->board('Two', tenantKey: 'other');
+        $task = $this->task($this->board('One', tenantKey: 'acme'), 'moved');
+        $this->moveTo($task, $to);
+        $this->em->flush();
+
+        $this->ledger()->purgeScope('acme');
+
+        self::assertNull($this->ledger()->find('acme', 1));
+        self::assertSame($task, $this->ledger()->find('other', 1));
     }
 
     /** FR-003: a range reserved and never written is a gap, not a duplicate. */

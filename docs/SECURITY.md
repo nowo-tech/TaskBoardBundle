@@ -141,14 +141,14 @@ Remote text: type and list names are single clean lines, escaped by Twig. A list
 
 ## Task numbers and calendar (since 2.1)
 
-Audit status: pending batch audit. Both opt-in.
+Both opt-in.
 
 | Area | What it does |
 | --- | --- |
 | `task_by_number` | A number names a task only inside the tenant of the URL, or `?board=` after the board's own checks. The task then passes `canViewTask()`. Unknown, retired, unreadable and bad input answer the same 404, so a number's existence does not leak |
 | Alias across tenants | The redirect needs `canViewTask()` and the tenant resolver accepting the task's tenant for this user. Otherwise 404 |
-| `task_schedule` | CSRF (`task_board_task_schedule`), then 404 out of tenant or unreadable, 403 without `canEditTask()`. Both dates are required, so a partial request never clears one; dates are strict `Y-m-d`, with start not after due |
-| `TaskNumberLedger` | No access check: hosts check what `find()` and `findInScopes()` return. `purgeScope()` deletes a scope's numbers, and is the host's to call, on a tenant that is gone for good |
+| `task_schedule` | CSRF (`task_board_task_schedule`), then 404 out of tenant or unreadable, 403 without `canEditTask()`. Both dates are required, so a partial request never clears one; dates are strict `Y-m-d` in years 1970 to 2200, with start not after due |
+| `TaskNumberLedger` | No access check: hosts check what `find()` and `findInScopes()` return. `purgeScope()` deletes a scope's numbers, is the host's to call on a tenant that is gone for good, and refuses while a task still carries a number there |
 | Second connection | A reservation inside a caller's transaction opens a short-lived connection with the same parameters, and writes only the counter. If that fails, it falls back to the caller's transaction: a gap at most, never a duplicate |
 | Calendar page | Reads only tasks of a board the user may view. URL filters are checked against what the board offers. Task titles reach the page through Twig escaping and the client redraws from the server's HTML (`DOMParser`, `importNode`) of its own same-origin page |
 
@@ -179,7 +179,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `08e51a4` (Appendix HX, 2026-11-07), for 2.0.0.** 1.30.0: Pass (good) / Low at `2515e98` (Appendix HS).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `<final>` (Appendix HY, 2026-11-07), for 2.1.0.** 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

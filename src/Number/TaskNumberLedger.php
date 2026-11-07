@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Number;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Exception\TaskNumberScopeInUseException;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 
@@ -60,10 +61,27 @@ final readonly class TaskNumberLedger
 
     /**
      * Forgets a scope's counter and ledger, for a tenant that is destroyed and whose key is never reused (spec 214, FR-005: the
-     * host decides when). Deleting them while tasks remain would hand their numbers out again.
+     * host decides when, after its tasks are gone). Audit HY-L2: while a task still has its current number in the scope it refuses,
+     * because a new task would then get the same number. An alias of a task moved to another scope does not count.
+     *
+     * @throws TaskNumberScopeInUseException
      */
     public function purgeScope(string $scopeKey): void
     {
+        $inUse = (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(t.id)')
+            ->from(Task::class, 't')
+            ->innerJoin('t.board', 'b')
+            ->innerJoin(TaskNumberEntry::class, 'e', 'WITH', 'e.task = t AND e.number = t.number')
+            ->where('e.scopeKey = :scope')
+            ->andWhere('b.tenantKey = :scope OR b.id = :scope')
+            ->setParameter('scope', $scopeKey)
+            ->getQuery()
+            ->getSingleScalarResult();
+        if ($inUse > 0) {
+            throw TaskNumberScopeInUseException::forScope($scopeKey, $inUse);
+        }
+
         // @igor-ignore - A static closure run at once by transactional(): nothing is kept in the service.
         $this->entityManager->getConnection()->transactional(static function (Connection $db) use ($scopeKey): void {
             $db->delete(TaskNumberEntry::TABLE, ['scope_key' => $scopeKey]);

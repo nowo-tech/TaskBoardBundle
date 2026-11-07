@@ -48,12 +48,20 @@ final readonly class TaskCalendarBuilder
     {
         if (is_string($value)) {
             $day = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
-            if ($day instanceof DateTimeImmutable && $day->format('Y-m-d') === $value && (int) $day->format('Y') >= self::MIN_YEAR && (int) $day->format('Y') <= self::MAX_YEAR) {
+            if ($day instanceof DateTimeImmutable && $day->format('Y-m-d') === $value && $this->isInRange($day)) {
                 return $day;
             }
         }
 
         return $this->clock->now()->setTime(0, 0);
+    }
+
+    /** Whether the calendar can show the day, so whether a task may be scheduled on it (audit HY-L1). */
+    public function isInRange(DateTimeImmutable $day): bool
+    {
+        $year = (int) $day->format('Y');
+
+        return $year >= self::MIN_YEAR && $year <= self::MAX_YEAR;
     }
 
     /**

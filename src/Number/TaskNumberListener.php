@@ -84,8 +84,12 @@ final readonly class TaskNumberListener
     {
         $task    = $args->getObject();
         $manager = $args->getObjectManager();
-        if ($task instanceof Task && isset($manager->getUnitOfWork()->getEntityChangeSet($task)['number'])) {
-            $this->writeEntry($manager->getConnection(), $task);
+        if ($task instanceof Task) {
+            // The board, not the number: the new number can equal the old one, and it still needs its row in the new scope.
+            $old = $manager->getUnitOfWork()->getEntityChangeSet($task)['board'][0] ?? null;
+            if ($old instanceof TaskBoard && $this->scope->keyOf($old) !== $this->scope->keyOf($task->getBoard())) {
+                $this->writeEntry($manager->getConnection(), $task);
+            }
         }
     }
 
