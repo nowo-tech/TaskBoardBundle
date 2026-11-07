@@ -55,6 +55,12 @@ describe('task-board.css', () => {
     expect(css).toMatch(/@container nowo-task-attrs \(max-width: 30rem\)\s*\{\s*\.nowo-task-detail__attr\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
   });
 
+  it('keeps the cells of a board inside their card, so the kit label never lies over the value (2.0.1)', () => {
+    const card = css.slice(css.indexOf('@container nowo-ui-table (max-width: 39.99rem)'));
+    expect(card).toMatch(/td:has\([^)]*nowo-task-board-list__name[^)]*\)\s*\{\s*box-sizing:\s*border-box/);
+    expect(card).toMatch(/\.nowo-task-board-list__description\s*\{[^}]*white-space:\s*normal/);
+  });
+
   it('keeps a deviation duration on one line', () => {
     expect(rules('.nowo-task-deviation__table td')).toMatch(/white-space:\s*nowrap/);
   });

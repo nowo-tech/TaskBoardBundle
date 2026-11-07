@@ -9,6 +9,7 @@
   - [Schema change with `task_numbers.enabled: true` only](#schema-change-with-task_numbersenabled-true-only)
   - [Task numbers: what a host does](#task-numbers-what-a-host-does)
   - [Calendar: what a host does](#calendar-what-a-host-does)
+- [To 2.0.1](#to-201)
 - [To 2.0.0](#to-200)
   - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
 - [To 1.30.0](#to-1300)
@@ -219,8 +220,18 @@ bin/console nowo:task-board:numbers-backfill
   WHERE start_at = created_at AND id IN (SELECT task_id FROM task_board_sync_items WHERE task_id IS NOT NULL);
   ```
 
-  This also clears a start the provider really set to the very moment of creation. The sync sees a cleared row as a local edit, so a start the provider sets later becomes a conflict note rather than being applied.
-- A file import still stores the creation date as the start of a row with no start date (`TaskImportOrchestrator`), by an existing test, so such tasks show from that day.
+  A start the provider sets later is applied as usual. The exception is a row whose provider start really was the very moment of creation: this clears it too, the sync sees that as a local edit, and a later change at the provider becomes a conflict note.
+- `TaskImportOrchestrator:464` keeps the source's creation date as start, so imported tasks show from that day; to change later.
+
+## To 2.0.1
+
+From **2.0.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target: 2.0.1. No schema or configuration change. A sync that failed on an all-digit remote id imports its page on the next run. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`.
 
 ## To 2.0.0
 

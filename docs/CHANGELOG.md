@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.0.1] - 2026-11-07](#201---2026-11-07)
 - [[2.0.0] - 2026-11-07](#200---2026-11-07)
 - [[1.30.0] - 2026-11-07](#1300---2026-11-07)
 - [[1.29.0] - 2026-11-07](#1290---2026-11-07)
@@ -97,6 +98,19 @@ Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `<final>`. 
 - The number on the card, the panel and task page (with *Copy*), the list (column, *Sort*, search), the subtask tree and the Gantt tooltip. Twig: `nowo_task_board_number()`.
 - **Calendar view** (`calendar.enabled`, route `calendar`, `web_ui.templates.calendar`): month, week and list modes, the week start of `WeekStartResolverInterface`, everything in the URL (`mode`, `date`, `assignee`, `priority`, `tag`, `column`, `completed`, `subtasks`), a query bounded by the visible days and capped by `board.max_tasks`, and a count of undated tasks. On a phone it opens in list mode. `calendar` is a valid answer of `board.default_view_resolver`.
 - **Reschedule**: route `task_schedule` and `TaskManager::reschedule()`, with the history and `TaskUpdatedEvent` of the task form. Drag the body (UiKit's `sortable`), drag an edge, or use the *Reschedule* dialog; arrow keys move between the days; a move shows *Undo*. No drag on a phone or a touch screen. A time of day is kept. Only years 1970 to 2200 are accepted, those the calendar shows (audit HY-L1). `task_create` comes back to the calendar with `?calendar=1` and `_target_path`.
+
+## [2.0.1] - 2026-11-07
+
+Target: 2.0.1. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`. Both bugs are from audit HY, and neither is a security issue.
+
+### Fixed
+
+- The board link and buttons on a phone: a long description no longer widens the card, whose label caught taps over them.
+- A sync no longer fails on a remote task whose id is all digits. All-digit attachment ids and checklist item ids are handled the same way.
+
+### Changed
+
+- The sync's error logs add `at`, the file and line of an unexpected failure, beside its class. Never its message.
 
 ## [2.0.0] - 2026-11-07
 
@@ -1799,7 +1813,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.0.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

@@ -3421,6 +3421,22 @@ a.nowo-task-nav__step:focus-visible {
     white-space: nowrap;
 }
 
+/*
+ * Since 2.0.1 (audit HY-A): inside a card a board's cells stay within the card. The kit's card cell is 100% wide plus its padding
+ * and its absolute label is a share of that wider cell, so without these two rules the label lay over the value and took its taps.
+ */
+@container nowo-ui-table (max-width: 39.99rem) {
+    .nowo-ui-table--cards > tbody > tr > td:has(> .nowo-task-board-list__name, > .nowo-task-board-list__views) {
+        box-sizing: border-box;
+    }
+
+    .nowo-task-board-list__description {
+        overflow: visible;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+}
+
 .nowo-task-board-list__views {
     display: flex;
     flex-wrap: wrap;
