@@ -137,6 +137,7 @@ services:
             $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
             $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
             $syncBadgeConnectLink: '%nowo_task_board.sync.badge.connect_link%'
+            $taskTimeBefore: '%nowo_task_board.templates.task_time_before%'
 
     # Since 2.0.0: the layout of the pages (web_ui.layout_template, or the deprecated templates.layout).
     Nowo\TaskBoardBundle\Ui\TaskBoardPages:

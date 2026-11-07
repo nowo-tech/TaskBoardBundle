@@ -4,15 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
-use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
-use Nowo\UiKitBundle\View\Action;
-use Nowo\UiKitBundle\View\Column;
-use Nowo\UiKitBundle\View\Crumb;
-use Nowo\UiKitBundle\View\EmptyState;
-use Nowo\UiKitBundle\View\FormPage;
-use Nowo\UiKitBundle\View\ListPage;
-use Nowo\UiKitBundle\View\PageHeader;
-use Twig\Environment;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
@@ -94,8 +85,17 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -116,6 +116,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
@@ -802,7 +803,9 @@ final class TaskBoardManageController extends AbstractController
             return $this->renderTaskPanel($request, $task, $user, $taskForm, $taskForm->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK);
         }
 
-        return $this->render($this->templates['task'], $this->taskViewData($task, $user, $taskForm));
+        return $this->render($this->templates['task'], [
+            'page' => new ShowPage(new PageHeader($task->getTitle()), bundle: TaskBoardPages::BUNDLE, layout: $this->pageLayout()),
+        ] + $this->taskViewData($task, $user, $taskForm));
     }
 
     /**
@@ -1703,7 +1706,7 @@ final class TaskBoardManageController extends AbstractController
      */
     private function indexPage(array $boards, bool $canCreate): ListPage
     {
-        $newBoard = fn (string $testid): Action => new Action(
+        $newBoard = static fn (string $testid): Action => new Action(
             kind: 'create',
             label: TaskBoardPages::label('task_board.index.new_board'),
             icon: 'plus',

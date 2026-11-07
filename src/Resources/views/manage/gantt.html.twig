@@ -8,6 +8,7 @@
 
 {% block nowo_ui_scripts %}
     {{ parent() }}
+    <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
@@ -146,6 +147,8 @@
                             data-task-id="{{ item.id }}"
                             data-deviation="{{ item.deviationStatus ?? 'none' }}"
                             data-title="{{ item.title }}"
+                            data-nowo-task-title="{{ item.title }}"
+                            {% if item.columnName ?? null %}data-nowo-task-column="{{ item.columnName }}"{% endif %}
                             {% if item.columnName ?? null %}data-column-name="{{ item.columnName }}"{% endif %}
                             data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
                             {# Since 1.14 a task's own colour paints its bar (otherwise the priority colours). #}

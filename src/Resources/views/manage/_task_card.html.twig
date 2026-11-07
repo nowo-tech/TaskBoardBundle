@@ -15,7 +15,8 @@
     data-nowo-task-board-target="task"
     data-task-id="{{ task.id }}"
     data-title="{{ task.title }}"
-    {% if task.column %}data-column-name="{{ task.column.name }}"{% endif %}
+    data-nowo-task-title="{{ task.title }}"
+    {% if task.column %}data-column-name="{{ task.column.name }}" data-nowo-task-column="{{ task.column.name }}"{% endif %}
     data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
     data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
 >

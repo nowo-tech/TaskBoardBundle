@@ -1,5 +1,9 @@
-{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
-{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
+{#
+    Task page (web_ui.templates.task). Since 2.0.0 on the UiKit show scaffold; variable page (ShowPage). The trail, the actions
+    and the editable title stay in nowo_task_toolbar and the edit form, so the scaffold's header stays empty: the title is a
+    field. Blocks: nowo_task_body and the blocks of _task_blocks.html.twig.
+#}
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
 {% use '@NowoTaskBoardBundle/manage/_task_blocks.html.twig' %}
 
 {% block nowo_ui_styles %}
@@ -9,14 +13,17 @@
 
 {% block nowo_ui_scripts %}
     {{ parent() }}
+    <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
 {% block nowo_ui_document_title %}{{ task.title }}{% endblock %}
 
-{% block nowo_ui_content %}
+{% block nowo_ui_page_header %}{% endblock %}
+
+{% block nowo_ui_show_after %}
     {# Since 1.25.1: stable hook of the task page for integrations (e.g. the TimeTrack browser extension). Only the
-       page has it: the panel fragment (task_panel.html.twig) carries its own .nowo-task-panel-fragment hook. #}
+       page has it: the panel fragment (task_panel.html.twig) carries its own hook. #}
     <div class="nowo-task-page" data-task-id="{{ task.id }}">
         {{ block('nowo_task_body') }}
     </div>

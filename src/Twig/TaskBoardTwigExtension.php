@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
@@ -26,6 +27,7 @@ use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
 use Nowo\UiKitBundle\View\PageHeader;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Twig\DeprecatedCallableInfo;
@@ -61,6 +63,8 @@ use const PHP_URL_SCHEME;
 
 /**
  * Twig globals for the TaskBoard manage Web UI (REQ-UI-001).
+ *
+ * @phpstan-import-type HeaderSpec from TaskBoardPages
  */
 final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsInterface
 {
@@ -95,6 +99,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ImportHelpLinkResolver $importHelpLink = new ImportHelpLinkResolver(),
         // Since 2.0.0: the layout of the pages and their headers.
         private readonly TaskBoardPages $pages = new TaskBoardPages(),
+        // Since 2.0.0 (TB-3): templates.task_time_before, included before the task's Time section.
+        private readonly ?string $taskTimeBefore = null,
+        private readonly ?UrlGeneratorInterface $urls = null,
     ) {
     }
 
@@ -215,6 +222,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_legacy_layout', $this->pages->legacyLayout(...), ['needs_environment' => true]),
             new TwigFunction('nowo_task_board_legacy_blocks', $this->pages->legacyBlocks(...), ['needs_environment' => true]),
             new TwigFunction('nowo_task_board_header', $this->pageHeader(...), ['needs_context' => true]),
+            new TwigFunction('nowo_task_board_subtask_nodes', $this->subtaskNodes(...)),
             // Since 1.30.0 (spec 211).
             new TwigFunction('nowo_task_board_description', $this->boardDescription(...), ['is_safe' => ['html']]),
             new TwigFunction('nowo_task_board_label', self::boardLabel(...)),
@@ -242,13 +250,48 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * Since 2.0.0: the page header of a page (Twig `nowo_task_board_header`), see {@see TaskBoardPages::header()}.
      *
      * @param array<string, mixed> $context
-     * @param array<string, mixed> $spec
+     * @param HeaderSpec $spec
      */
     public function pageHeader(array $context, array $spec): PageHeader
     {
         $iconSet = $context['nowo_ui_kit_icon_set'] ?? null;
 
         return TaskBoardPages::header($spec, is_string($iconSet) ? $iconSet : 'tabler-icons');
+    }
+
+    /**
+     * Since 2.0.0: subtasks as the nodes of UiKit's `tree` partial, every group expanded. `taskTree` avoids a query per node.
+     *
+     * @param iterable<Task> $tasks
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function subtaskNodes(iterable $tasks, ?TaskTree $taskTree = null, bool $panel = false, string $panelTargetPath = ''): array
+    {
+        $nodes = [];
+        foreach ($tasks as $task) {
+            $link = ['class' => 'nowo-task-subtree__title', 'data-title' => $task->getTitle(), 'data-nowo-task-title' => $task->getTitle()];
+            if ($panel && $this->urls instanceof UrlGeneratorInterface) {
+                $link['data-task-panel-url'] = $this->urls->generate($this->routeName('task_panel'), ['taskId' => $task->getId(), '_target_path' => $panelTargetPath]);
+            }
+            $children = $taskTree instanceof TaskTree ? $taskTree->childrenOf($task) : $task->getSubtasks();
+            $nodes[]  = [
+                'id'        => $task->getId(),
+                'label'     => $task->getTitle(),
+                'href'      => $this->urls?->generate($this->routeName('task'), ['taskId' => $task->getId()]) ?? '#',
+                'expanded'  => true,
+                'children'  => $this->subtaskNodes($children, $taskTree, $panel, $panelTargetPath),
+                'link_attr' => $link,
+                'item_attr' => [
+                    'class'        => 'nowo-task-subtree__item' . ($task->isCompleted() ? ' is-done' : ''),
+                    'data-task-id' => $task->getId(),
+                ] + ($task->getColumn() !== null ? ['data-nowo-task-column' => $task->getColumn()->getName()] : []),
+                'task'     => $task,
+                'progress' => $taskTree instanceof TaskTree ? $taskTree->progress($task) : SubtaskProgress::of($task),
+            ];
+        }
+
+        return $nodes;
     }
 
     /**
@@ -453,6 +496,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             'nowo_task_board_connection_badge_template' => $this->connectionBadgeTemplate,
             // Since 1.25.2: sync.badge.connect_link.
             'nowo_task_board_sync_badge_connect_link' => $this->syncBadgeConnectLink,
+            // Since 2.0.0 (TB-3): templates.task_time_before.
+            'nowo_task_board_task_time_before' => $this->taskTimeBefore,
         ];
     }
 }

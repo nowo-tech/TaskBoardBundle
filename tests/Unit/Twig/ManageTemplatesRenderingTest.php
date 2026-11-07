@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 
-use Nowo\UiKitBundle\View\Column;
-use Nowo\UiKitBundle\View\EmptyState;
-use Nowo\UiKitBundle\View\FormPage;
-use Nowo\UiKitBundle\View\ListPage;
-use Nowo\UiKitBundle\View\PageHeader;
 use DateTimeImmutable;
 use DOMElement;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
@@ -72,6 +67,12 @@ use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Theme\Theme;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\AppVariable;
 use Symfony\Bridge\Twig\Extension\FormExtension;
@@ -320,7 +321,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         foreach (['Level 1', 'Level 2', 'Level 3', 'Level 4'] as $title) {
             self::assertStringContainsString($title, $html);
         }
-        self::assertStringContainsString('data-depth="3"', $html);
+        self::assertStringContainsString('aria-level="4"', $html);
         // Level 1 counts its 3 descendants, one of them done.
         self::assertStringContainsString('1/3', $html);
         self::assertStringContainsString('<a href="/projects/1/issues/12" class="nowo-task-link__label">BEACON-12 Crash</a>', $html);
@@ -1215,6 +1216,8 @@ final class ManageTemplatesRenderingTest extends TestCase
         $twig->addExtension(new FormExtension());
         $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig')));
         $twig->addExtension(new ThemeExtension(new Theme()));
+        // The task page's scaffold reads it; the pages with a model of their own pass theirs.
+        $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

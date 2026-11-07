@@ -152,6 +152,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $config['templates'] = $config['web_ui']['templates'] + $config['templates'];
         $container->setParameter('nowo_task_board.templates', $config['templates']);
         $container->setParameter('nowo_task_board.web_ui.layout_template', $config['web_ui']['layout_template'] ?? $config['templates']['layout']);
+        $container->setParameter('nowo_task_board.templates.task_time_before', $config['templates']['task_time_before']);
         $container->setParameter('nowo_task_board.templates.filters_collapse', $config['templates']['filters_collapse']);
         $container->setParameter('nowo_task_board.templates.filters_form_class', $config['templates']['filters_form_class']);
         $container->setParameter('nowo_task_board.templates.connection_badge', $config['templates']['connection_badge']);

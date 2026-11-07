@@ -21,6 +21,8 @@ use function trigger_deprecation;
  * (`web_ui.layout_template`, null = `nowo_ui_kit.layouts.admin`), wraps a pre-2.0 layout (one that renders `{% block body %}`
  * instead of the canonical blocks) in a deprecated bridge, and builds the page headers. Configuration only: no request
  * state, safe in worker mode.
+ *
+ * @phpstan-type HeaderSpec array{title: Label|string, intro?: Label|string|null, crumb?: array{href: string, label: Label|string}|null, actions?: list<array{href?: string, label: Label|string, icon?: string|null, variant?: string|null, attributes?: array<string, string|int|float|bool|null>, dialog?: string|null}>, back?: string|null}
  */
 final readonly class TaskBoardPages
 {

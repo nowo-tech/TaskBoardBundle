@@ -1,0 +1,15 @@
+{# Since 2.0.0: the counter, the column and the tags of a subtask, after its link in the kit tree. node. #}
+{% set _task = node.task %}
+{% if node.progress.total > 0 %}
+    <span class="nowo-task-subtree__progress" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': node.progress.done, '%total%': node.progress.total}, 'NowoTaskBoardBundle') }}">
+        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}, with_context: false) }} {{ node.progress.done }}/{{ node.progress.total }}
+    </span>
+{% endif %}
+{% if _task.column or _task.tags is not empty %}
+    <div class="nowo-task-subtree__meta">
+        {% if _task.column %}
+            <span class="nowo-task-subtree__column nowo-task-badge" title="{{ 'task_board.task.status'|trans({}, 'NowoTaskBoardBundle') }}">{{ _task.column.name }}</span>
+        {% endif %}
+        {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: _task.tags, wrapper_class: 'nowo-task-subtree__tags'}, with_context: false) }}
+    </div>
+{% endif %}

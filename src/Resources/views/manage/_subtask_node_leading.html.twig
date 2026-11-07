@@ -1,0 +1,4 @@
+{# Since 2.0.0: the check icon of a subtask, inside its link in the kit tree. node. #}
+<span class="nowo-task-subtree__check nowo-task-detail__subtask-check{{ node.task.completed ? ' is-done' : '' }}" aria-hidden="true">
+    {{- include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: (node.task.completed ? 'circle-check' : 'circle')}, with_context: false) -}}
+</span>

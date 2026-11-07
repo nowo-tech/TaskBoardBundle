@@ -8,6 +8,7 @@
 
 {% block nowo_ui_scripts %}
     {{ parent() }}
+    <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
@@ -140,6 +141,8 @@
                                 <tr
                                     data-nowo-task-board-list-filter-target="row"
                                     data-title="{{ task.title }}"
+                                    data-nowo-task-title="{{ task.title }}"
+                                    {% if task.column %}data-nowo-task-column="{{ task.column.name }}"{% endif %}
                                     data-search-extra="{{ _syncSearch[task.id]|default('') }}"
                                     data-priority="{{ task.priority.value }}"
                                     data-column="{{ task.column ? task.column.name : '' }}"

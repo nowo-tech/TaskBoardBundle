@@ -236,6 +236,48 @@ final class HostHooksTest extends FunctionalTestCase
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-import-help-link"]'));
     }
 
+    public function testTheTaskTimeSlotRendersOnThePageAndThePanel(): void
+    {
+        $this->boot(['templates' => ['task_time_before' => 'host_timer.html.twig']]);
+        $task = $this->task($this->board(), 'Timed');
+
+        foreach (['', '/panel'] as $suffix) {
+            $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . $suffix);
+            self::assertResponseIsSuccessful();
+            self::assertCount(1, $crawler->filter('[data-testid="host-timer"]'), $suffix);
+        }
+    }
+
+    public function testThePublicHooksExistOnCardsRowsBarsSubtasksAndThePanel(): void
+    {
+        $this->boot([]);
+        $board  = $this->board();
+        $parent = $this->task($board, 'Parent');
+        $this->task($board, 'Child', parent: $parent);
+
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId());
+        self::assertSame('To do', $crawler->filter('.nowo-task-card[data-nowo-task-title="Parent"]')->attr('data-nowo-task-column'));
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/list');
+        self::assertCount(2, $crawler->filter('tr[data-nowo-task-title]'));
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $parent->getId() . '/panel');
+        self::assertCount(1, $crawler->filter('[data-nowo-task-panel]'));
+        $child = $crawler->filter('.nowo-task-subtree [role="treeitem"][data-nowo-task-title="Child"]');
+        self::assertCount(1, $child);
+        self::assertNotNull($child->attr('data-task-panel-url'));
+        self::assertSame('Child', $child->attr('data-title'));
+    }
+
+    public function testADialogRequestToTheConnectionRoutesIsAnsweredByTheKit(): void
+    {
+        // TB-6 asks no code of this bundle: UiKit's listener converts the redirect of a dialog request.
+        $this->boot(['__ui_kit' => ['remote_dialog' => ['convert_redirects' => true]]]);
+        $board = $this->board();
+        $this->client->request('POST', self::BASE . '/create', ['task_board_form' => ['name' => 'Via dialog', '_token' => PredictableCsrfTokenManager::value('task_board_form')]], [], ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseStatusCodeSame(204);
+        self::assertTrue($this->client->getResponse()->headers->has('X-Nowo-Redirect'));
+        self::assertNotNull($board->getId());
+    }
+
     private function import(TaskBoard $board): void
     {
         $file = tempnam(sys_get_temp_dir(), 'tb');

@@ -3,11 +3,13 @@
     they are sent with fetch (X-Requested-With: XMLHttpRequest or a Turbo frame). Hosts load it into a side drawer:
     the same blocks as the task page (edit form, members, priority, subtasks, links); every form posts to the usual
     routes with _target_path = panelTargetPath, so without fetch they come back to the board, list or Gantt page.
-    The page around it must load task-board.css / task-board.js (the board, list and Gantt pages do).
+    The page around it must load task-board.css / task-board.js (the board, list and Gantt pages do), and js/nowo-ui-tree.js
+    for the subtask tree's keyboard (without it the links still work). Since 2.0.0 `data-nowo-task-panel` is the public hook.
 #}
 {% use '@NowoTaskBoardBundle/manage/_task_blocks.html.twig' %}
 <div
     class="nowo-task-panel-fragment"
+    data-nowo-task-panel
     data-task-id="{{ task.id }}"
     data-task-url="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}"
     data-panel-target-path="{{ panelTargetPath|default('') }}"

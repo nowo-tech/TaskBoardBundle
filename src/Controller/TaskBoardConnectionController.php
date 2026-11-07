@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
-use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
-use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
-use Nowo\UiKitBundle\View\Action;
-use Nowo\UiKitBundle\View\Crumb;
-use Nowo\UiKitBundle\View\PageHeader;
-use Nowo\UiKitBundle\View\ShowPage;
-use Twig\Environment;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
@@ -59,6 +52,12 @@ use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -74,6 +73,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
@@ -183,7 +183,7 @@ final class TaskBoardConnectionController extends AbstractController
         }
 
         return $this->render($this->templates['connection'], [
-            'page' => $this->connectionPageModel($board),
+            'page'              => $this->connectionPageModel($board),
             'board'             => $board,
             'connection'        => null,
             'providers'         => $this->providers->all(),

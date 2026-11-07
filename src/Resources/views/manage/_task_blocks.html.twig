@@ -301,7 +301,6 @@
             {# Since 1.10: the whole subtree (any depth) through the recursive partial. #}
             {{ include('@NowoTaskBoardBundle/manage/_subtask_tree.html.twig', {
                 tasks: taskTree|default(null) ? taskTree.childrenOf(task) : task.subtasks,
-                depth: 0,
             }) }}
         </div>
         {# Read-only users (since 1.10) see the tree without the add form. #}
@@ -332,6 +331,8 @@
 
     {% block nowo_task_time %}
     {# Since 1.15: estimate, time spent, the deviation and the manual time entries. #}
+    {# Since 2.0.0 (TB-3): a host's part before the Time section, e.g. a timer. #}
+    {% if nowo_task_board_task_time_before|default(null) %}{{ include(nowo_task_board_task_time_before) }}{% endif %}
     {{ include('@NowoTaskBoardBundle/manage/_task_time_section.html.twig') }}
     {% endblock %}
 

@@ -1350,11 +1350,6 @@ details.nowo-task-section[open] > summary,
     border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
 }
 
-.nowo-task-subtree__row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-}
 
 .nowo-task-subtree__check {
     margin-top: 0.15rem;
@@ -1365,14 +1360,6 @@ details.nowo-task-section[open] > summary,
     color: var(--nowo-task-success, var(--nowo-ui-success-text));
 }
 
-.nowo-task-subtree__body {
-    display: flex;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    min-width: 0;
-}
 
 .nowo-task-subtree__title {
     color: inherit;
@@ -1390,20 +1377,8 @@ details.nowo-task-section[open] > summary,
 }
 
 .nowo-task-subtree__progress,
-.nowo-task-subtree__summary {
-    color: var(--nowo-task-muted, var(--nowo-ui-muted));
-    font-size: 0.8125rem;
-}
 
-.nowo-task-subtree__children {
-    margin: 0.35rem 0 0 0.55rem;
-    padding-inline-start: 1rem;
-    border-inline-start: 2px solid var(--nowo-task-border, var(--nowo-ui-border));
-}
 
-.nowo-task-subtree__children .nowo-task-subtree__item {
-    padding: 0.3rem 0;
-}
 
 .nowo-task-subtree__empty {
     padding: 0.75rem 1.25rem;
@@ -2795,17 +2770,7 @@ details.nowo-task-section > summary {
     gap: 0.4rem;
 }
 
-.nowo-task-subtree__summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    cursor: pointer;
-    list-style: none;
-}
 
-.nowo-task-subtree__summary::-webkit-details-marker {
-    display: none;
-}
 
 .nowo-task-list__filter-caret {
     display: inline-flex;
@@ -3285,9 +3250,6 @@ a.nowo-task-nav__step:focus-visible {
 }
 
 /* Subtask row: title on the left, status and tags as badges in a right-hand column. */
-.nowo-task-subtree__row {
-    align-items: center;
-}
 
 .nowo-task-subtree__check {
     margin-top: 0;
