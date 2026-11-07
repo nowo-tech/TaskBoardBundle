@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -7,9 +8,14 @@ import { expect, test, type Page } from '@playwright/test';
  */
 function watch(page: Page): string[] {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => {
+    // The demo's dev toolbar, cancelled when a test navigates: WebKit reports it as a page error.
+    if (!/_wdt/.test(e.message)) {
+      errors.push(e.message);
+    }
+  });
   page.on('console', (m) => {
-    if (m.type() === 'error' && !/Failed to load resource|favicon|mercure/.test(m.text())) {
+    if (m.type() === 'error' && !/Failed to load resource|favicon|mercure|_wdt/.test(m.text())) {
       errors.push(m.text());
     }
   });
@@ -158,6 +164,8 @@ test('import and connection pages on their scaffolds', async ({ page }) => {
   await page.goto(`${board}/import`);
   await expect(page.locator('[data-nowo-ui-page="form"] select[name="task_import_form[source]"]')).toBeVisible();
   await expect(page.locator('body')).not.toContainText('task_import_form.');
+  const axe = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
+  expect(axe.violations.map((v) => v.id)).toEqual([]);
   await page.locator('[data-nowo-ui-dialog-open^="nowo-task-import-help-board-"]').click();
   await expect(page.locator('dialog.nowo-task-import-help')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -176,7 +184,6 @@ test('list and Gantt keep working under the kit layout', async ({ page }) => {
   await expect(page.locator('h1').first()).toBeVisible();
   // K3: the kit's table, the filter fold, the time columns and their totals.
   await expect(page.locator('[data-nowo-ui-region="table"] tr.nowo-task-list__row').first()).toBeVisible();
-  await expect(page.locator('form.nowo-task-list__filters [data-controller="filters-collapse"]')).toBeAttached();
   const rows = page.locator('tr[data-nowo-task-title]');
   const total = await rows.count();
   await page.locator('input[data-nowo-task-board-list-filter-target="search"]').fill('zzzz-no-such-task');
@@ -193,4 +200,97 @@ test('list and Gantt keep working under the kit layout', async ({ page }) => {
   await expect(page).toHaveURL(/scale=weeks/);
   await expect(page.locator('.nowo-task-gantt--weeks')).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+/** Appendix HX-L1: the filter toggle works with no host peer, in the bundle's demo. */
+test('list: the filter toggle folds and unfolds, the state and the count hold', async ({ page, context }) => {
+  const errors = watch(page);
+  await openBoard(page);
+  const board = page.url().replace(/\?.*$/, '');
+  await context.clearCookies({ name: 'nowo_ui_filters_collapsed' });
+  await page.goto(`${board}/list`);
+  const toggle = page.locator('form.nowo-task-list__filters .nowo-ui-filters-collapse__toggle');
+  const search = page.locator('input[data-nowo-task-board-list-filter-target="search"]');
+  const summary = page.locator('form.nowo-task-list__filters .nowo-ui-filters-collapse__summary');
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(search).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(search).toBeHidden();
+  await expect(summary).toBeVisible();
+
+  // Folded across a reload, through the cookie.
+  await page.reload({ waitUntil: 'load' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(search).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(search).toBeVisible();
+  await expect(summary).toBeHidden();
+
+  // A filter folded on purpose stays folded and is counted.
+  await search.fill('zzzz-no-such-task');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(summary).toContainText('1');
+  expect(errors).toEqual([]);
+  await context.clearCookies({ name: 'nowo_ui_filters_collapsed' });
+});
+
+/** Appendix HX-L2: a filter the browser restores is applied and never folded away. */
+for (const how of ['back', 'reload'] as const) {
+  test(`list: a filter restored on ${how} is applied and opens the fold`, async ({ page, context }) => {
+    await openBoard(page);
+    const board = page.url().replace(/\?.*$/, '');
+    const id = board.split('/').pop() ?? '';
+    await context.clearCookies({ name: 'nowo_ui_filters_collapsed' });
+    await page.goto(`${board}/list`);
+    const search = page.locator('input[data-nowo-task-board-list-filter-target="search"]');
+    const rows = page.locator('tr[data-nowo-task-title]');
+    await search.fill('zzzz-no-such-task');
+    await expect(rows.filter({ visible: true })).toHaveCount(0);
+
+    // The card is folded in the server's answer, as a user's earlier fold would leave it.
+    const url = new URL(board);
+    await context.addCookies([{ name: 'nowo_ui_filters_collapsed', value: encodeURIComponent(`nowo-task-board-list-${id}`), domain: url.hostname, path: '/' }]);
+    if (how === 'back') {
+      await page.goto(`${board}?view=board`, { waitUntil: 'load' });
+      await page.goBack({ waitUntil: 'load' });
+    } else {
+      await page.reload({ waitUntil: 'load' });
+    }
+    await page.waitForTimeout(500);
+
+    const value = await search.inputValue();
+    test.info().annotations.push({ type: 'restored', description: value });
+    if (value !== '') {
+      await expect(search).toBeVisible();
+      await expect(page.locator('form.nowo-task-list__filters .nowo-ui-filters-collapse__toggle')).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('form.nowo-task-list__filters .nowo-ui-filters-collapse__summary')).toBeHidden();
+      await expect(rows.filter({ visible: true })).toHaveCount(0);
+    } else {
+      // This browser restored nothing here: every row shows, folded or not.
+      await expect(rows.filter({ visible: true })).toHaveCount(await rows.count());
+    }
+    await context.clearCookies({ name: 'nowo_ui_filters_collapsed' });
+  });
+}
+
+/** Appendix HX-L3: a link row does not widen the task page. */
+test('task page: no sideways scroll at 1280 px with a link row', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openBoard(page);
+  const href = await page.locator('.nowo-task-card a[href*="/task/"]').first().getAttribute('href');
+  await page.goto(href ?? '/');
+  if ((await page.locator('.nowo-task-detail__link-row').count()) === 0) {
+    await page.locator('[data-action*="nowo-task-board-task-links-modal#openAdd"]').first().click();
+    const dialog = page.locator('dialog[data-nowo-task-board-task-links-modal-target="modal"]');
+    await dialog.locator('input[data-nowo-task-board-task-links-modal-target="url"]').fill('https://example.test/some/long/path');
+    await dialog.locator('footer button[form="nowo-task-link-form"]').click();
+    await expect(page.locator('.nowo-task-detail__link-row').first()).toBeVisible();
+  }
+  const width = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(width).toBeLessThanOrEqual(1280);
 });

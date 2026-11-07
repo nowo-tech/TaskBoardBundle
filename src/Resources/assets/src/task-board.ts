@@ -22,6 +22,7 @@ import ContainerBrowserController from './container-browser-controller';
 import SyncProgressController from './sync-progress-controller';
 import SelectAnchorController from './select-anchor-controller';
 import BoardCreateStepsController from './board-create-steps-controller';
+import FilterFoldController from './filter-fold-controller';
 import { installFormConfirm } from './ask-confirm';
 import { installBoardOpeners } from './board-openers';
 import { observeCssVars } from './css-vars';
@@ -38,6 +39,8 @@ application.register('nowo-task-board-create-steps', BoardCreateStepsController)
 application.register('nowo-task-board-add-task-modal', AddTaskModalController);
 application.register('nowo-task-board-add-column-modal', AddColumnModalController);
 application.register('nowo-task-board-list-filter', ListFilterController);
+// Since 2.0.0: the filter fold works with no host peer (a bundle identifier, so a host's own peer never toggles it twice).
+application.register('nowo-task-board-filter-fold', FilterFoldController);
 application.register('nowo-task-board-subtask-tree', SubtaskTreeController);
 application.register('nowo-task-board-task-status', TaskStatusController);
 application.register('nowo-task-board-task-members-modal', TaskMembersModalController);

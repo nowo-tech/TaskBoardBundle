@@ -48,12 +48,12 @@
     {% import '@NowoTaskBoardBundle/manage/_task_member_label.html.twig' as memberUi %}
     <div class="nowo-task-list" data-controller="nowo-task-board-list-filter" data-nowo-task-board-list-filter-board-value="{{ board.id }}">
         {#
-            Since 2.0.0 UiKit's fold by default (`filters-collapse` peer: without it the filters stay open);
-            templates.filters_collapse replaces it, templates.filters_form_class adds the host's classes to the form.
+            Since 2.0.0 UiKit's fold driven by the bundle (no host peer needed); templates.filters_collapse replaces it,
+            templates.filters_form_class adds the host's classes to the form.
         #}
         {% set _tb_filters_class = ('nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-list__filters ' ~ nowo_task_board_filters_form_class|default(''))|trim %}
         {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: _tb_filters_class, 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
-            {{ include(nowo_task_board_filters_collapse|default('@NowoUiKitBundle/partials/_filters_collapse.html.twig'), {key: 'nowo-task-board-list-' ~ board.id, fold_key: 'nowo-task-board-list-' ~ board.id, form: filterForm, filter_form: filterForm}) }}
+            {{ include(nowo_task_board_filters_collapse|default('@NowoTaskBoardBundle/manage/_list_filter_fold.html.twig'), {key: 'nowo-task-board-list-' ~ board.id, fold_key: 'nowo-task-board-list-' ~ board.id, form: filterForm, filter_form: filterForm}) }}
             {% for child in filterForm %}
                 {% if not child.rendered %}
                     {{ form_row(child) }}

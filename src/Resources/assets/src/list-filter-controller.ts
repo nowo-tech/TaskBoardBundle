@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { openFold } from './filter-fold-utils';
 import { matchesListFilter } from './list-filter-utils';
 import { compareRows, readSortRow } from './list-sort-utils';
 import { readMap, writeEntry } from './storage';
@@ -46,12 +47,37 @@ export default class ListFilterController extends Controller<HTMLElement> {
 
     declare readonly boardValue: string;
 
+    /** Since 2.0.0: a browser restores field values on Back or reload, some of them after connect. */
+    private readonly onPageShow = (): void => {
+        this.applyRestored();
+    };
+
     connect(): void {
         if (this.hasTimeColumnsTarget && readMap(TIME_COLUMNS_KEY)[this.boardValue] === true) {
             this.timeColumnsTarget.checked = true;
         }
         this.showTimeColumns();
+        this.applyRestored();
+        window.addEventListener('pageshow', this.onPageShow);
+    }
+
+    disconnect(): void {
+        window.removeEventListener('pageshow', this.onPageShow);
+    }
+
+    /** The rows follow the fields, and an active filter is never folded away. */
+    private applyRestored(): void {
         this.applyFilters();
+        if (this.activeFilters()) {
+            openFold(this.element.querySelector('form'));
+        }
+    }
+
+    private activeFilters(): boolean {
+        return (this.hasSearchTarget && this.searchTarget.value !== '')
+            || (this.hasPriorityTarget && this.priorityTarget.value !== '')
+            || (this.hasColumnTarget && this.columnTarget.value !== '')
+            || (this.hasOverEstimateTarget && this.overEstimateTarget.checked);
     }
 
     filter(): void {

@@ -1342,11 +1342,11 @@ details.nowo-task-section[open] > summary,
 }
 
 /* Subtasks as a checklist; deeper levels indented under a guide line. */
-.nowo-task-detail__subtask-list > .nowo-task-subtree > .nowo-task-subtree__item {
+.nowo-task-detail__subtask-list .nowo-task-subtree__item {
     padding: 0.55rem 1.25rem;
 }
 
-.nowo-task-detail__subtask-list > .nowo-task-subtree > .nowo-task-subtree__item + .nowo-task-subtree__item {
+.nowo-task-detail__subtask-list .nowo-task-subtree__item + .nowo-task-subtree__item {
     border-top: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
 }
 
@@ -1356,7 +1356,7 @@ details.nowo-task-section[open] > summary,
     color: var(--nowo-task-muted, var(--nowo-ui-muted));
 }
 
-.nowo-task-subtree__item.is-done > .nowo-task-subtree__row .nowo-task-subtree__check {
+.nowo-task-subtree__item.is-done > a .nowo-task-subtree__check {
     color: var(--nowo-task-success, var(--nowo-ui-success-text));
 }
 
@@ -1371,7 +1371,7 @@ details.nowo-task-section[open] > summary,
     text-decoration: underline;
 }
 
-.nowo-task-subtree__item.is-done > .nowo-task-subtree__row .nowo-task-subtree__title {
+.nowo-task-subtree__item.is-done > .nowo-task-subtree__title {
     color: var(--nowo-task-muted, var(--nowo-ui-muted));
     text-decoration: line-through;
 }
@@ -3461,6 +3461,9 @@ a.nowo-task-nav__step:focus-visible {
 .nowo-task-board-list__name { font-weight: 600; }
 
 .nowo-task-gantt__scales { flex: 0 0 auto; }
+
+/* Since 2.0.0: no framework sets border-box here, and this row is `width: 100%` with padding. */
+.nowo-task-detail__link-row { box-sizing: border-box; }
 
 /* Since 2.0.0: small layout helpers of the bundle's own markup, in place of framework utilities. */
 .nowo-task-flex { display: flex; }

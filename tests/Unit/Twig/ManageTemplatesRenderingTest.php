@@ -766,7 +766,8 @@ final class ManageTemplatesRenderingTest extends TestCase
             'dashboardRoute' => null,
         ]);
 
-        self::assertStringContainsString('data-controller="filters-collapse"', $html);
+        self::assertStringContainsString('data-controller="nowo-task-board-filter-fold"', $html);
+        self::assertStringNotContainsString('data-controller="filters-collapse"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-board-value="' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
         self::assertMatchesRegularExpression('/name="sort"[^>]*data-nowo-task-board-list-filter-target="sort"|data-nowo-task-board-list-filter-target="sort"[^>]*name="sort"/', $html);
