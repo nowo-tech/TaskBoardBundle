@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.1.1] - 2026-11-07](#211---2026-11-07)
 - [[2.1.0] - 2026-11-07](#210---2026-11-07)
 - [[2.0.2] - 2026-11-07](#202---2026-11-07)
 - [[2.0.1] - 2026-11-07](#201---2026-11-07)
@@ -98,7 +99,22 @@ Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. No be
 
 ### Changed
 
-- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. The controller no longer takes `$syncLimits`, as `TaskManager` already holds the limit.
+- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. Its `$syncLimits` argument stays in place but is deprecated and ignored: `TaskManager` holds the same limit (audit IA-I1).
+
+## [2.1.1] - 2026-11-07
+
+Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit HZ (2026-11-07): Pass (good) / Low. See [UPGRADING](UPGRADING.md#to-211).
+
+### Fixed
+
+- The board index drew two New board buttons when there were no boards. There is now one: in the header when there are boards, otherwise in the empty state. The empty state takes the same check as the header did, so a list emptied by the list check or by board access keeps the button.
+- New board is primary whatever the host's `nowo_ui_kit.action_variants.create` says. It is the page's main action, and an explicit variant is how UiKit keeps one (`Action::create()` does the same).
+- The Board / List / Gantt buttons of the index end under their Views heading. On a phone, where cards replace the table, they stay at the start beside their label.
+
+### Documentation
+
+- `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides. `[]` is not a denial: access stays the checker's (audit HZ-L2).
+- The board index's block table in `docs/USAGE.md` lists the 2.0 blocks; it still named the 1.x ones.
 
 ## [2.1.0] - 2026-11-07
 
@@ -1846,7 +1862,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.1.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

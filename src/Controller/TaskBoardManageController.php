@@ -1895,7 +1895,9 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
-     * Since 2.0.0 (TB-4): the view model of the index page.
+     * Since 2.0.0 (TB-4): the view model of the index page. Since 2.1.1 one New board: in the header when there are boards,
+     * else in the empty state, which the scaffold draws whenever there are no rows and which takes the same `$canCreate`.
+     * It is the page's main action, so its variant is explicit: `nowo_ui_kit.action_variants` is for actions without one.
      *
      * @param list<TaskBoard> $boards
      */
@@ -1911,10 +1913,11 @@ final class TaskBoardManageController extends AbstractController
             kind: 'create',
             label: TaskBoardPages::label('task_board.index.new_board'),
             icon: $plus,
+            variant: 'primary',
             attributes: ['data-testid' => $testid, 'aria-haspopup' => 'dialog'],
             dialogId: TaskBoardPages::BOARD_CREATE_DIALOG,
         );
-        $actions = $canCreate ? [$newBoard('nowo-task-board-new')] : [];
+        $actions = $canCreate && $boards !== [] ? [$newBoard('nowo-task-board-new')] : [];
         if ($this->dashboardRoute !== null) {
             $actions[] = Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'));
         }

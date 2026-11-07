@@ -739,6 +739,8 @@ All off by default, under `nowo_task_board.board`:
 | `scope_provider` | `null` | Service id of a `Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface` |
 | `tenant_label_provider` | `null` | Service id of a `Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface` |
 
+**Who sees New board.** With a provider, any scope shows the button on the index, without asking `canCreateBoard()`. A scope that is always there, such as a personal one, therefore shows it to someone who only reads the tenant of the page. On a tenant's page where the user may not create, `scopes()` returns `[]`: `canCreateBoard()` then decides the button and the create route, and that page offers no other scope either. `[]` is not a denial: unless `canCreateBoard()` refuses that tenant, the button shows and the create route creates there without calling `resolve()`. Access stays the checker's, so a host whose rules live only in `resolve()` must put them in its access checker too.
+
 **Scope step.** `scopes()` lists what the user may create in now; none means no step, one means step 1 is skipped. `BoardScope::$fields` are drawn per scope and posted as `task_board_form[scopeFields][<scope>][<field>]`; the bundle forces them to `required: false` and drops their `constraints`, because they sit in a branch the user may not have chosen, so `resolve()` validates. A select's choices still refuse a forged value. Without JavaScript all the fields show. `nowo-task-board-create-steps:step-shown` fires on the form when step 2 opens.
 
 **Back button.** It carries `data-nowo-ui-dialog-back`, so a dialog that lifts it can place it; until then it sits with the other actions.
