@@ -113,6 +113,10 @@ final class TaskScheduleTest extends CalendarTestCase
             $this->schedule($task, '2026-11-10', $day);
             self::assertResponseStatusCodeSame(422, $day);
         }
+
+        // A bad start must not be reported as a bad due date.
+        self::assertSame('The dates could not be changed.', $this->schedule($task, '1969-12-31', '2026-11-12')['message']);
+        self::assertResponseStatusCodeSame(422);
     }
 
     public function testTheYearsTheCalendarShowsAreAccepted(): void

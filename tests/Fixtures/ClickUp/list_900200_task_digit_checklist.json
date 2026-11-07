@@ -1,0 +1,86 @@
+{
+  "tasks": [
+    {
+      "id": "8digit1",
+      "name": "Design the screens",
+      "markdown_description": "Mock-ups.",
+      "status": {
+        "status": "complete",
+        "color": "#6bc950",
+        "type": "closed",
+        "orderindex": 3
+      },
+      "date_created": "1793000000000",
+      "date_updated": "1793100000000",
+      "archived": false,
+      "creator": {
+        "id": 1000001,
+        "username": "User 1",
+        "email": "user1@example.test",
+        "profilePicture": null
+      },
+      "assignees": [
+        {
+          "id": 1000002,
+          "username": "User 2",
+          "email": "user2@example.test",
+          "profilePicture": null
+        },
+        {
+          "id": 1000005,
+          "username": "User 5",
+          "email": null,
+          "profilePicture": null
+        }
+      ],
+      "watchers": [
+        {
+          "id": 1000003,
+          "username": "User 3",
+          "email": "user3@example.test",
+          "profilePicture": null
+        },
+        {
+          "id": "bad id!",
+          "username": "Ignored"
+        }
+      ],
+      "checklists": [
+        {
+          "id": "cl-9",
+          "name": "Digits",
+          "orderindex": 0,
+          "items": [
+            {
+              "id": "5",
+              "name": "Its own parent",
+              "orderindex": 0,
+              "resolved": false,
+              "assignee": null,
+              "parent": "5"
+            },
+            {
+              "id": "6",
+              "name": "Child",
+              "orderindex": 1,
+              "resolved": false,
+              "assignee": null,
+              "parent": "5"
+            }
+          ]
+        }
+      ],
+      "time_spent": 5400500,
+      "list": {
+        "id": "900200",
+        "name": "List 2"
+      },
+      "tags": [],
+      "parent": null,
+      "priority": null,
+      "url": "https://app.clickup.com/t/86a1x1",
+      "attachments": []
+    }
+  ],
+  "last_page": true
+}

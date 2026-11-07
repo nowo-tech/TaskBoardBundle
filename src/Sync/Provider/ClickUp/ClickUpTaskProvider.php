@@ -1085,10 +1085,10 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
                     $known[$itemId] = $item;
                 }
             }
-            foreach ($known as $itemId => $item) {
-                $itemId                                                                   = (string) $itemId; // Audit HY-B: an all-digit item id is an integer key, and a parent is compared as text.
-                $parent                                                                   = $this->stringOf($item['parent'] ?? null);
-                $children[isset($known[$parent]) && $parent !== $itemId ? $parent : ''][] = $item;
+            // Audit HY-B: the id is read from the item, because an all-digit key is an integer and never equals a parent's text.
+            foreach ($known as $item) {
+                $parent                                                                                = $this->stringOf($item['parent'] ?? null);
+                $children[isset($known[$parent]) && $parent !== $this->itemId($item) ? $parent : ''][] = $item;
             }
             $items = [];
             $this->flatten($children, '', null, $items, [], $budget);

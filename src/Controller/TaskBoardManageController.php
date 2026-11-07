@@ -893,7 +893,7 @@ final class TaskBoardManageController extends AbstractController
         } catch (InvalidTaskScheduleException) {
             $error = 'task_board.form.task.start_after_due';
         } catch (InvalidArgumentException) {
-            $error = 'task_board.form.task.due_invalid';
+            $error = 'task_board.calendar.failed';
         }
 
         $date    = ($task->getDueAt() ?? $task->getStartAt())?->format('Y-m-d');
