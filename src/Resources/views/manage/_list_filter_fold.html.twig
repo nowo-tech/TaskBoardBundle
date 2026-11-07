@@ -15,12 +15,14 @@
     many: 'filters_collapse.many'|trans({}, 'NowoUiKitBundle'),
 } %}
 {% set _label = _collapsed ? _labels.expand : _labels.collapse %}
+{# Since 2.0.2: under ux_icon the kit's default of these kinds is Bootstrap: ask for Tabler unless the host maps the kind. #}
+{% set _ux = nowo_ui_kit_icon_set|default('tabler-icons') == 'ux_icon' %}
 <div class="nowo-ui-filters-collapse{{ _collapsed ? ' is-collapsed' }}" data-controller="nowo-task-board-filter-fold"
     data-nowo-task-board-filter-fold-key-value="{{ fold_key }}"
     data-nowo-task-board-filter-fold-messages-value="{{ _labels|json_encode }}">
     <button type="button" class="nowo-ui-filters-collapse__toggle nowo-ui-corner-tab nowo-ui-corner-tab--under" data-nowo-task-board-filter-fold-target="toggle" data-action="nowo-task-board-filter-fold#toggle" aria-expanded="{{ _collapsed ? 'false' : 'true' }}" aria-label="{{ _label }}" title="{{ _label }}" data-testid="nowo-task-list-filter-toggle">
-        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--expanded" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: 'chevron_up'}) }}</span>
-        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--collapsed" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: 'chevron_down'}) }}</span>
+        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--expanded" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: _ux and nowo_ui_kit_action_icons.chevron_up is not defined ? 'tabler:chevron-up' : 'chevron_up'}) }}</span>
+        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--collapsed" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: _ux and nowo_ui_kit_action_icons.chevron_down is not defined ? 'tabler:chevron-down' : 'chevron_down'}) }}</span>
     </button>
     <p class="nowo-ui-filters-collapse__summary" data-nowo-task-board-filter-fold-target="summary"{{ _collapsed ? '' : ' hidden' }}>{{ _labels.none }}</p>
 </div>

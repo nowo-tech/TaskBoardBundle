@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.0.2] - 2026-11-07](#202---2026-11-07)
 - [[2.0.1] - 2026-11-07](#201---2026-11-07)
 - [[2.0.0] - 2026-11-07](#200---2026-11-07)
 - [[1.30.0] - 2026-11-07](#1300---2026-11-07)
@@ -98,6 +99,20 @@ Target: 2.1.0, spec 214. Audit HY (2026-11-07): Pass (good) / Low at `<final>`. 
 - The number on the card, the panel and task page (with *Copy*), the list (column, *Sort*, search), the subtask tree and the Gantt tooltip. Twig: `nowo_task_board_number()`.
 - **Calendar view** (`calendar.enabled`, route `calendar`, `web_ui.templates.calendar`): month, week and list modes, the week start of `WeekStartResolverInterface`, everything in the URL (`mode`, `date`, `assignee`, `priority`, `tag`, `column`, `completed`, `subtasks`), a query bounded by the visible days and capped by `board.max_tasks`, and a count of undated tasks. On a phone it opens in list mode. `calendar` is a valid answer of `board.default_view_resolver`.
 - **Reschedule**: route `task_schedule` and `TaskManager::reschedule()`, with the history and `TaskUpdatedEvent` of the task form. Drag the body (UiKit's `sortable`), drag an edge, or use the *Reschedule* dialog; arrow keys move between the days; a move shows *Undo*. No drag on a phone or a touch screen. A time of day is kept. Only years 1970 to 2200 are accepted, those the calendar shows (audit HY-L1). `task_create` comes back to the calendar with `?calendar=1` and `_target_path`.
+
+## [2.0.2] - 2026-11-07
+
+Target: 2.0.2. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
+
+### Fixed
+
+- The board index and the list page no longer answer 500 on a host with `nowo_ui_kit.icon_set: ux_icon` that imports Tabler only (`Icon "bi:plus" not found`, then `Icon "bi:chevron-up" not found`). The New board action asks for `tabler:plus` and the filter fold for `tabler:chevron-up` and `tabler:chevron-down` there. Output on a webfont host does not change.
+- The all-digit checklist item fix of 2.0.1 survives `rector process`: the parent check reads the id from the item instead of casting the array key, a cast rector removes as useless. An all-digit item that names itself as parent stays on the list.
+- `nowo_ui_kit.action_icons.create` now sets the icon of New board, whatever the icon set; `chevron_up` and `chevron_down` keep setting the filter fold's. The bundle's own `plus` used to win over the host's map.
+
+### Documentation
+
+- The list of Tabler icons to import on `ux_icon` (`docs/USAGE.md`) adds the ones it was missing.
 
 ## [2.0.1] - 2026-11-07
 
@@ -1813,7 +1828,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.0.2...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

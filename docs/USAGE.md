@@ -593,11 +593,13 @@ A dark theme redefines them under its own selector (e.g. `[data-theme="dark"]`).
 
 The icons go through UiKit's `components/_icon.html.twig` with `nowo_ui_kit_icon_set` — no icon webfont is needed:
 with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti ti-<name>`. A host on `ux_icon` imports
-the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, calendar,
-calendar-event, check, chevron-down, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play,
-columns, device-floppy, external-link, flag, git-branch, grip-vertical, history, layout-columns, layout-kanban,
-help, line-dashed, link, list, list-tree, notes, palette, pencil, plus, subtask, tags, trash, upload, user-minus, user-plus,
-users, x.
+the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, building, calendar,
+calendar-event, chart-bar, check, chevron-down, chevron-up, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play, hourglass,
+columns, device-floppy, download, external-link, flag, folder, git-branch, grip-vertical, history, layout-columns, layout-grid, layout-kanban,
+help, line-dashed, link, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
+users, x. Mapping `create`, `chevron_up` or `chevron_down` in `nowo_ui_kit.action_icons` replaces New board's `plus` and the filter fold's chevrons (since 2.0.2).
+
+Each icon of `board.column_icons` is imported too, since every board page draws them in its column dialogs. The default is the 30 in `Configuration::DEFAULT_COLUMN_ICONS`; set `board.column_icons` to a shorter list to import fewer.
 
 ### Inline new task
 

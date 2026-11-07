@@ -9,6 +9,7 @@
   - [Schema change with `task_numbers.enabled: true` only](#schema-change-with-task_numbersenabled-true-only)
   - [Task numbers: what a host does](#task-numbers-what-a-host-does)
   - [Calendar: what a host does](#calendar-what-a-host-does)
+- [To 2.0.2](#to-202)
 - [To 2.0.1](#to-201)
 - [To 2.0.0](#to-200)
   - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
@@ -222,6 +223,20 @@ bin/console nowo:task-board:numbers-backfill
 
   A start the provider sets later is applied as usual. The exception is a row whose provider start really was the very moment of creation: this clears it too, the sync sees that as a local edit, and a later change at the provider becomes a conflict note.
 - `TaskImportOrchestrator:464` keeps the source's creation date as start, so imported tasks show from that day; to change later.
+
+## To 2.0.2
+
+From **2.0.1**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target: 2.0.2. No schema or configuration change. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
+
+On `nowo_ui_kit.icon_set: ux_icon`, New board now asks for `tabler:plus` and the list's filter fold for `tabler:chevron-up` and `tabler:chevron-down`: import them (`php bin/console ux:icons:import tabler:plus tabler:chevron-up tabler:chevron-down`), or map `create`, `chevron_up` and `chevron_down` in `nowo_ui_kit.action_icons`. A host that set `action_icons.create` now sees that icon on New board, not the bundle's plus.
+
+A Tabler-only host must also have every icon in `docs/USAGE.md`, including `hourglass` and the icons of `board.column_icons`: a missing one is a 500 on the board and task pages, unless `ux_icons.ignore_not_found` is on.
 
 ## To 2.0.1
 
