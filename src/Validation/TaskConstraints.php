@@ -46,6 +46,8 @@ final class TaskConstraints
 
     public const BOARD_TEXT_MAX = 255;
 
+    public const TAG_MAX = 64;
+
     /** @return list<Constraint> */
     public static function taskTitle(): array
     {
@@ -57,6 +59,12 @@ final class TaskConstraints
     public static function taskColor(): array
     {
         return [new Regex(pattern: self::TASK_COLOR_PATTERN)];
+    }
+
+    /** @return list<Constraint> */
+    public static function tagName(): array
+    {
+        return [new NotBlank(), new Length(max: self::TAG_MAX)];
     }
 
     /** @return list<Constraint> */

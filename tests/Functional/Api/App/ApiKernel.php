@@ -7,11 +7,13 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Api\App;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as DoctrineConfiguration;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingAttachmentStorage;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
+use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\UiKitBundle\NowoUiKitBundle;
@@ -95,6 +97,11 @@ final class ApiKernel extends Kernel
         $services->set('app.api_host', ApiTestHost::class)->autowire()->public();
         $services->set('app.api_firewall', ApiFirewallAuthenticator::class);
         $services->set('app.tenant_resolver', ScriptedTenantResolver::class);
+        // The host's plan limits and its audit of API writes.
+        $services->set('app.quota_listener', RecordingQuotaListener::class)->public()
+            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);
+        $services->set('app.api_audit', ApiAuditRecorder::class)->public()
+            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_WRITE]);
         $container->extension('doctrine', [
             'dbal' => ['url' => FunctionalKernel::databaseUrl()],
             'orm'  => [

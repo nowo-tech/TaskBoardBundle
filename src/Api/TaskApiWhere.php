@@ -54,6 +54,12 @@ final readonly class TaskApiWhere
         return $this->reachesTenant($board->getTenantKey()) || (!$this->everything && in_array($board->getId(), $this->boardIds, true));
     }
 
+    /** Whether the board's id is named, whatever its tenant (a board that no longer exists, for a replay). */
+    public function namesBoard(string $boardId): bool
+    {
+        return !$this->everything && in_array($boardId, $this->boardIds, true);
+    }
+
     /**
      * The whole tenant: creating a board there needs this. A board without a tenant is reached only by everything.
      */

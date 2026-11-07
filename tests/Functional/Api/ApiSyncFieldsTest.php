@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
+use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
 
 /**
@@ -48,5 +53,48 @@ final class ApiSyncFieldsTest extends ApiTestCase
 
         $this->get('/api/tasks/v2/task/' . $task->getId());
         self::assertSame([['id' => $field->getId(), 'name' => 'Story points', 'type' => 'number', 'value' => 8]], $this->json()['custom_fields']);
+    }
+
+    public function testTheHostsLimitOfActiveTasksRefusesAReopening(): void
+    {
+        // The limit TaskManager asks when a completed task leaves the done column (sync.limit_checker), as in the UI.
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = new Task(board: $board, title: 'Done', creator: $this->owner, column: $board->getColumns()->last() ?: null);
+        $item                 = new Task(board: $board, title: 'Item', creator: $this->owner, column: $board->getColumns()->last() ?: null, parent: $done, tags: ['checklist:Steps']);
+        $this->em->persist($done->markCompleted());
+        $this->em->persist($item->markCompleted());
+        $this->em->flush();
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        try {
+            $this->send('PUT', '/api/tasks/v2/task/' . $done->getId(), ['status' => 'To do']);
+            $this->assertRefused(403, 'PLAN_002');
+            $this->send('PUT', '/api/tasks/v2/checklist/' . TaskApiReadSerializer::checklistId($done->getId(), 'Steps') . '/checklist_item/' . $item->getId(), ['resolved' => false]);
+            $this->assertRefused(403, 'PLAN_002');
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
+        self::assertTrue($this->em->find(Task::class, $item->getId())?->isCompleted());
+    }
+
+    public function testATaskThatFollowsAProviderIsNotDeletedThroughTheApi(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $task                 = $this->task($board, 'Synced');
+        $connection           = new TaskBoardConnection($board, 'clickup', 'list', 'conn-1', 'L1', 'Backlog');
+        $this->em->persist($connection);
+        $this->em->persist(new TaskSyncItem($connection, $board->getId(), $task, 'remote-1', new DateTimeImmutable('@1790000000')));
+        $this->em->flush();
+        $this->issueToken();
+
+        $this->send('DELETE', '/api/tasks/v2/task/' . $task->getId());
+
+        $this->assertRefused(409, 'TASK_002');
+        self::assertCount(1, $this->em->getRepository(Task::class)->findAll());
     }
 }

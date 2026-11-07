@@ -28,6 +28,39 @@ A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignore
 
 **What a page shows of other tasks.** Subtasks, dependencies and links are shown only when the token may open the other task too. For *My tasks*, the checklist items of its own tasks are shown whoever created them, as it manages those checklists.
 
+## Write endpoints
+
+Every write goes through the services the UI uses: its plan limits, events (notifications, mentions, activity), history and validation. Each answers like ClickUp; a field nothing read is listed in `warnings` (`unknown`, or `not_supported` for a ClickUp field with no equivalent here) and is never saved.
+
+| Endpoint | Level | Notes |
+|---|---|---|
+| `POST /v2/list/{id}/task` | Tasks | `name`, `description` / `markdown_content`, `status` (a column's name), `priority` (1 urgent to 4 low), `due_date`, `start_date`, `time_estimate`, `tags`, `assignees`, `parent` (same board). Asks the host's plan limit |
+| `PUT /v2/task/{id}` | My tasks (own: `status`, dates, `description` only) | `name`, `priority`, `time_estimate`, `assignees` and `watchers` (`add`, `rem`), `archived` need Tasks. A status change moves the task as the board does: the done column completes it, leaving it reopens it within the host's limit |
+| `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
+| `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`; mentions are not read |
+| `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | |
+| `POST /v2/task/{id}/field/{field_id}` | Tasks | Always 409 `FIELD_001`: custom fields are a provider's, read-only |
+| `POST /v2/task/{id}/dependency`, `DELETE` with `?depends_on=` or `?dependency_of=` | Tasks | Within a board (`LINK_002`); no cycle or duplicate (`LINK_001`) |
+| `POST`, `DELETE /v2/task/{id}/link/{links_to}` | Tasks | A `Related` relation |
+| `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
+| `POST /v2/checklist/{id}/checklist_item`, `PUT`, `DELETE …/checklist_item/{item}` | My tasks (own) | An item is a subtask tagged `checklist:<name>`, counted against the plan's active tasks. `resolved` moves it to the done column or back to the first. *My tasks* assigns an item only to its own person. Deleting archives it |
+
+**Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.
+
+**Several changes in one request** are saved one service at a time, as the UI's separate forms are. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one.
+
+### Idempotency
+
+Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`):
+
+- **Scope:** the token. The same key from another token is another key.
+- **Expiry:** 24 hours from the first attempt.
+- **Retry of the same request** (method, path and body; JSON compared with its keys sorted): the first answer, its status and body, with `Idempotency-Replayed: true`. The write does not run again.
+- **Same key, different request:** 409 `IDEMP_002`. While the first attempt runs: 409 `IDEMP_001`; a claim left for 5 minutes by a process that died is taken over.
+- **Refusals and errors are not kept:** a retry is decided afresh.
+- **A replay is checked again:** the pipeline, and whether the token still reaches what the write touched (a board that is gone leaves its tenant), else 404.
+- **Storage:** the bundle's table `task_board_api_idempotency` (hashes of the token id and key, never either; the answer, which can hold task text). Expired rows go on each claim and with `nowo:task-board:api:purge-idempotency`. On revoking a token or erasing its person, call `TaskApiIdempotencyStoreInterface::forget()` with the scope `sha256('nowo-task-board-api|' . $tokenId)`. A host may replace the store with `api.hooks.idempotency_store`; the table is then not mapped. A store that fails refuses keyed writes with 503 `IDEMP_004`.
+
 ## Differences from ClickUp (so far)
 
 - Ids are strings: the bundle's UUIDs, and the host's ids for people.
@@ -38,6 +71,9 @@ A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignore
 - `GET /v2/task/{id}/member` lists the task's members, not everyone who can open it.
 - Dependencies stay within a board; `Related` and `Duplicates` read as `linked_tasks`.
 - Task order defaults to `created` ascending; `reverse=true` flips it.
+- `priority: null` reads as normal: every task has a priority.
+- Deleting a checklist or an item archives it.
+- A comment's mentions, `notify_all` and assignee are not read.
 
 ## Off by default
 

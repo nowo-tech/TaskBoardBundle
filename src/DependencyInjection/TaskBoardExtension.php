@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
+use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -277,6 +278,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias(TaskApiAttachmentsInterface::class, $this->serviceOr($api['hooks']['attachments'], DenyingTaskApiAttachments::class));
         if (is_string($api['hooks']['idempotency_store']) && $api['hooks']['idempotency_store'] !== '') {
             $container->setAlias(TaskApiIdempotencyStoreInterface::class, $api['hooks']['idempotency_store']);
+        } else {
+            // Since 2.2.0: the bundle's own store, on the bundle's entity manager; its table is mapped in prepend().
+            $container->setDefinition(DoctrineTaskApiIdempotencyStore::class, (new Definition(DoctrineTaskApiIdempotencyStore::class))
+                ->setAutowired(true)
+                ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName))));
+            $container->setAlias(TaskApiIdempotencyStoreInterface::class, DoctrineTaskApiIdempotencyStore::class);
         }
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
@@ -562,6 +569,19 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
     }
 
+    /** Since 2.2.0: whether a host set `api.hooks.idempotency_store` (then the bundle's table is not mapped). */
+    private function apiStoreReplaced(ContainerBuilder $container): bool
+    {
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            $store = is_array($config['api'] ?? null) && is_array($config['api']['hooks'] ?? null) ? ($config['api']['hooks']['idempotency_store'] ?? null) : null;
+            if (is_string($store) && $store !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function syncEnabled(ContainerBuilder $container): bool
     {
         return $this->optionEnabled($container, 'sync');
@@ -631,6 +651,23 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.
         if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'api')) {
             $container->prependExtensionConfig('doctrine', ['orm' => ['dql' => ['string_functions' => [JsonTextFunction::NAME => JsonTextFunction::class]]]]);
+        }
+
+        // Since 2.2.0 (spec 213): the idempotency table, only with api.enabled and the bundle's own store.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'api') && !$this->apiStoreReplaced($container)) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardApi' => [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Api/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Api\\Entity',
+                            'alias'     => 'TaskBoardApi',
+                        ],
+                    ],
+                ],
+            ]);
         }
 
         // Since 2.1.0 (spec 214): the counter and the ledger are mapped only with task_numbers.enabled.

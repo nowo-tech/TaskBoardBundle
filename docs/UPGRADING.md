@@ -157,6 +157,8 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 Target: 2.2.0, spec 213. Audit status: re-verification pending. No schema or configuration change is needed, and the UI's output stays as it was. The Task API is off unless you set `api.enabled: true`: see [API](API.md).
 
+**Schema change with `api.enabled: true` only** (and no `api.hooks.idempotency_store`): the table `task_board_api_idempotency`. Generate it with `doctrine:migrations:diff`; it holds keys for 24 hours, so it needs no data migration. A host with the API off changes nothing.
+
 `TaskBoardManageController`'s `$syncLimits` argument is deprecated and ignored, kept in its place so positional arguments do not move: a restore asks the limit given to `TaskManager` (`$limits`), which the container wires from the same `sync.limit_checker`. A host that builds either by hand passes the limit to `TaskManager`.
 
 ## To 2.1.1

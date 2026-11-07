@@ -328,6 +328,22 @@ final class TaskApiReadSerializer
         return $answer;
     }
 
+    /**
+     * One checklist of the task by its name; one with no item yet is empty (it is not stored until it has one).
+     *
+     * @return array<string, mixed>
+     */
+    public function checklist(Task $task, TaskApiTaskPage $page, string $name): array
+    {
+        foreach ($this->checklists($task, $page) as $checklist) {
+            if ($checklist['name'] === $name) {
+                return $checklist;
+            }
+        }
+
+        return ['id' => self::checklistId($task->getId(), $name), 'task_id' => $task->getId(), 'name' => $name, 'orderindex' => '0', 'resolved' => 0, 'unresolved' => 0, 'items' => []];
+    }
+
     /** A checklist has no row of its own: its id names the task and the checklist's name. */
     public static function checklistId(string $taskId, string $name): string
     {

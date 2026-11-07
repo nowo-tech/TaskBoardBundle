@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Api;
 
 use DateTimeImmutable;
 use LogicException;
+use Nowo\TaskBoardBundle\Api\Entity\TaskApiIdempotencyRecord;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
@@ -165,6 +166,13 @@ final class TaskApiValuesTest extends TestCase
     {
         $this->assertRefused(400, 'INPUT_002', static fn () => TaskApiTaskFilter::fromQuery(['statuses' => 5]));
         self::assertSame(['open'], TaskApiTaskFilter::fromQuery(['statuses' => 'Open'])->statuses);
+    }
+
+    public function testTheIdempotencyRowHoldsHashesAndTheAnswer(): void
+    {
+        $row = new TaskApiIdempotencyRecord('scope-hash', 'key-hash', 'fp', new DateTimeImmutable('@1'), new DateTimeImmutable('@86401'), 200, '{}', 'tenant', 'board');
+
+        self::assertSame(['scope-hash', 'key-hash', 200, 'board'], [$row->scope, $row->keyHash, $row->status, $row->boardId]);
     }
 
     public function testAControllerOutsideThePipelineHasNoPrincipal(): void

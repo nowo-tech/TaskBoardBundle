@@ -11,7 +11,9 @@ use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Symfony\Component\HttpKernel\KernelInterface;
 
+use function is_string;
 use function json_decode;
+use function json_encode;
 
 /**
  * The bundle on {@see ApiKernel}, every hook scripted through {@see ApiTestHost}.
@@ -51,7 +53,7 @@ abstract class ApiTestCase extends FunctionalTestCase
 
     protected function issueToken(TaskApiLevel $level = TaskApiLevel::Full, ?TaskApiWhere $where = null, string $email = 'owner@example.com', string $token = self::TOKEN): void
     {
-        ApiTestHost::$tokens[$token] = ['email' => $email, 'level' => $level, 'where' => $where ?? TaskApiWhere::everything()];
+        ApiTestHost::$tokens[$token] = ['email' => $email, 'level' => $level, 'where' => $where ?? TaskApiWhere::everything(), 'id' => $token];
     }
 
     /**
@@ -63,6 +65,18 @@ abstract class ApiTestCase extends FunctionalTestCase
             $server['HTTP_AUTHORIZATION'] = $authorization;
         }
         $this->client->request('GET', $path, [], [], $server);
+    }
+
+    /**
+     * A write: `$body` as JSON, or the raw string given.
+     *
+     * @param array<string, mixed>|string|null $body
+     * @param array<string, string> $headers HTTP_* server keys
+     */
+    protected function send(string $method, string $path, array|string|null $body = null, array $headers = [], string $token = self::TOKEN): void
+    {
+        $content = is_string($body) ? $body : ($body === null ? '' : (string) json_encode($body));
+        $this->client->request($method, $path, [], [], $headers + ['HTTP_AUTHORIZATION' => $token, 'CONTENT_TYPE' => 'application/json'], $content);
     }
 
     /**

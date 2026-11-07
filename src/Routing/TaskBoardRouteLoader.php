@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Routing;
 
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -24,7 +25,7 @@ use function substr;
  */
 final class TaskBoardRouteLoader extends Loader
 {
-    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action]. */
+    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action, method (GET when absent)]. */
     private const API_ROUTES = [
         'user'          => ['/v2/user', TaskApiIdentityController::class, 'user'],
         'team'          => ['/v2/team', TaskApiIdentityController::class, 'teams'],
@@ -41,6 +42,24 @@ final class TaskBoardRouteLoader extends Loader
         'task'          => ['/v2/task/{taskId}', TaskApiReadController::class, 'task'],
         'task_comments' => ['/v2/task/{taskId}/comment', TaskApiReadController::class, 'comments'],
         'task_members'  => ['/v2/task/{taskId}/member', TaskApiReadController::class, 'members'],
+        // Since 2.2.0 (spec 213): writes.
+        'task_create'       => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
+        'task_update'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
+        'task_delete'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
+        'comment_create'    => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        'tag_add'           => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'addTag', 'POST'],
+        'tag_remove'        => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'removeTag', 'DELETE'],
+        'field_set'         => ['/v2/task/{taskId}/field/{fieldId}', TaskApiWriteController::class, 'setField', 'POST'],
+        'dependency_add'    => ['/v2/task/{taskId}/dependency', TaskApiWriteController::class, 'addDependency', 'POST'],
+        'dependency_remove' => ['/v2/task/{taskId}/dependency', TaskApiWriteController::class, 'removeDependency', 'DELETE'],
+        'link_add'          => ['/v2/task/{taskId}/link/{linksTo}', TaskApiWriteController::class, 'addLink', 'POST'],
+        'link_remove'       => ['/v2/task/{taskId}/link/{linksTo}', TaskApiWriteController::class, 'removeLink', 'DELETE'],
+        'checklist_create'  => ['/v2/task/{taskId}/checklist', TaskApiWriteController::class, 'createChecklist', 'POST'],
+        'checklist_update'  => ['/v2/checklist/{checklistId}', TaskApiWriteController::class, 'updateChecklist', 'PUT'],
+        'checklist_delete'  => ['/v2/checklist/{checklistId}', TaskApiWriteController::class, 'deleteChecklist', 'DELETE'],
+        'item_create'       => ['/v2/checklist/{checklistId}/checklist_item', TaskApiWriteController::class, 'createItem', 'POST'],
+        'item_update'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'updateItem', 'PUT'],
+        'item_delete'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'deleteItem', 'DELETE'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -173,15 +192,16 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        foreach (self::API_ROUTES as $name => [$path, $controller, $action]) {
+        foreach (self::API_ROUTES as $name => $route) {
+            [$path, $controller, $action] = $route;
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+'],
                 [],
                 '',
                 [],
-                ['GET'],
+                [$route[3] ?? 'GET'],
             ));
         }
     }

@@ -37,3 +37,23 @@ services:
     Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
         public: true
         tags: ['controller.service_arguments']
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController:
+        public: true
+        tags: ['controller.service_arguments']
+        arguments:
+            $maxBodyBytes: '%nowo_task_board.api.max_body_bytes%'
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiAudit:
+        arguments:
+            $quotaListenerRequired: '%nowo_task_board.api.quota_listener_required%'
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener: ~
+
+    Nowo\TaskBoardBundle\Api\Command\TaskApiPurgeIdempotencyCommand: ~

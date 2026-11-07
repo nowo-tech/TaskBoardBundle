@@ -182,6 +182,21 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * Whether an answer kept for this token may be given again: what the write touched is still within reach. A board that
+     * is gone leaves its tenant, which where and the tenant check must still reach.
+     */
+    public function mayReplay(TaskApiPrincipal $principal, ?string $tenantKey, ?string $boardId): bool
+    {
+        $board = $boardId === null ? null : $this->boards->findById($boardId);
+        if ($board instanceof TaskBoard) {
+            return $this->reachesBoard($principal, $board);
+        }
+
+        return ($principal->where->reachesTenant($tenantKey) || ($boardId !== null && $principal->where->namesBoard($boardId)))
+            && $this->ownsTenant($principal->user, $tenantKey);
+    }
+
+    /**
      * @throws TaskApiRefusal
      */
     public function requireLevel(TaskApiPrincipal $principal, TaskApiCapability $capability): void
