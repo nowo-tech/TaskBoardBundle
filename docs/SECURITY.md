@@ -167,7 +167,7 @@ Both opt-in.
 
 ## Shared write rules (2.2, re-verification pending)
 
-Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. `tests/Functional/Characterization` pins the UI's output.
+Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. After an unlink, the files a sync stored for the subtree are named in `TaskErasedEvent::$attachmentRefs` and their rows removed, on every database (audit IA-M1): the host deletes them, as for `deleteBoard()`. `tests/Functional/Characterization` pins the UI's output.
 
 ## Logging and personal data
 

@@ -92,6 +92,7 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -163,6 +164,7 @@ final class TaskBoardManageController extends AbstractController
      * @param list<string> $columnIcons `board.column_icons` (since 1.11)
      * @param int $maxTasks `board.max_tasks` (since 1.21): the most tasks a board, list, Gantt or task page loads
      */
+    // @phpstan-ignore constructor.unusedParameter ($syncLimits: deprecated, kept for positional callers, audit IA-I1)
     public function __construct(
         private readonly TaskBoardAccessCheckerInterface $accessChecker,
         private readonly TaskBoardRepositoryInterface $boardRepository,
@@ -203,6 +205,9 @@ final class TaskBoardManageController extends AbstractController
         // invalid board create (`board.create_dialog_header`).
         private readonly ?TaskBoardDefaultViewResolverInterface $defaultViewResolver = null,
         private readonly ?string $createDialogHeader = null,
+        // Since 1.27.0, deprecated since 2.2.0 and ignored (audit IA-I1): kept in its place so positional arguments do not
+        // move. A restore asks `TaskManager`'s limit, which the container wires from the same `sync.limit_checker`.
+        ?SyncLimitCheckerInterface $syncLimits = null,
         // Since 1.30.0 (spec 211).
         private readonly ?BoardScopeProviderInterface $scopeProvider = null,
         /** @var array<string, mixed> */

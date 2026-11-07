@@ -91,7 +91,7 @@ Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. No be
 ### Added
 
 - `Service\TaskManager::restore()` and `archive()`, with their history; `restore()` asks the host's limit and throws `TaskReopenRefusedException` when it refuses.
-- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`.
+- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`. The files a sync stored for the subtree, kept after an unlink, are named in each `TaskErasedEvent` and their rows removed, so the host can delete them (audit IA-M1).
 - `Service\TaskBoardEditor::update()`: name and description of a board, the slug unchanged, `TaskBoardEvents::BOARD_UPDATED` (`BoardUpdatedEvent`).
 - `Service\TaskCommentPolicy`: who may write, edit and delete a comment.
 - `Validation\TaskConstraints`: the rules of the fields a write takes.
