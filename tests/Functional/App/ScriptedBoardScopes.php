@@ -40,7 +40,7 @@ final class ScriptedBoardScopes implements BoardScopeProviderInterface, BoardTen
     public function scopes(object $user, ?TaskBoardTenant $current): array
     {
         $all = [
-            'personal' => new BoardScope('personal', 'Personal', '🙂', preselected: self::$preselected === 'personal'),
+            'personal' => new BoardScope('personal', 'Personal', '🙂', 'Only <you>', preselected: self::$preselected === 'personal'),
             'org'      => new BoardScope('org', 'Organization', fields: ['organization' => new BoardScopeField(ChoiceType::class, [
                 'label'       => 'Organization',
                 'choices'     => ['Acme' => 'acme', 'Other' => 'other'],

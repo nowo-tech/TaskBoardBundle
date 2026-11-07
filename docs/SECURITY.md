@@ -127,7 +127,7 @@ A sync that has no people session or no person reference for a row (`SyncOptions
 
 ## New board scope step (since 1.30)
 
-The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. Audit status: re-verification pending.
+The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. A board with no tenant has no database check on its slug: NULL is distinct in a unique index, so two creates at the same moment can store the same slug. The bundle routes by id, so nothing breaks in it; a host reading by slug alone should not rely on one row.
 
 ## Unmatched columns (since 1.28.0)
 
@@ -154,7 +154,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `cc80289` (Appendix HN, 2026-11-07), for 1.29.0.** 1.28.0: Pass (good) / Low at `532dbaa` (Appendix HI); its first round at `561203a` was Pass (conditional) / Medium.
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `<final>` (Appendix HS, 2026-11-07), for 1.30.0.** 1.29.0: Pass (good) / Low at `cc80289` (Appendix HN).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

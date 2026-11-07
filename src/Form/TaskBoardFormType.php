@@ -149,7 +149,9 @@ final class TaskBoardFormType extends AbstractType
         }
         $choices = [];
         foreach ($scopes as $scope) {
-            $choices[trim(($scope->icon ?? '') . ' ' . $scope->label)] = $scope->id;
+            // Printed escaped by the form theme, and part of the radio's name for a screen reader.
+            $label                                                                                                              = trim(($scope->icon ?? '') . ' ' . $scope->label);
+            $choices[$scope->description !== null && $scope->description !== '' ? $label . ': ' . $scope->description : $label] = $scope->id;
         }
         $this->addWithDefaults($builder, 'scope', ChoiceType::class, [
             'label'                     => 'task_board.form.board.scope',

@@ -15,6 +15,9 @@ use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
 use Nowo\TaskBoardBundle\Support\SlugGenerator;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function mb_substr;
+use function strlen;
+
 /**
  * Creates task boards with default kanban columns.
  */
@@ -85,7 +88,9 @@ final readonly class TaskBoardCreator
         $suffix    = 2;
 
         while ($this->takenSlug($candidate, $tenantKey)) {
-            $candidate = $slug . '-' . $suffix++;
+            // Audit HS-L2: the column holds 255 characters, so the suffix takes its room from the slug.
+            $ending    = '-' . $suffix++;
+            $candidate = mb_substr($slug, 0, 255 - strlen($ending)) . $ending;
         }
 
         return $candidate;

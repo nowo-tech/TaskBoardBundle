@@ -246,6 +246,37 @@ final class BoardCreationSpec211Test extends FunctionalTestCase
         $board->setIcon('text');
     }
 
+    /** Audit HS-L2: the suffix fits the column. MySQL and PostgreSQL refused 257 characters with a 500. */
+    public function testALongSlugThatIsTakenStillFits(): void
+    {
+        ScriptedBoardScopes::$answers['personal:'] = new TaskBoardTenant('tenant-a', 'org-a', 'Acme');
+        $slug                                      = str_repeat('é', 255);
+        foreach ([1, 2, 3, 4] as $run) {
+            $this->create(['name' => 'Long', 'slug' => $slug, 'scope' => 'personal']);
+            self::assertResponseRedirects(null, null, 'create ' . $run);
+        }
+        $this->em->clear();
+        $this->refreshOwnerRow();
+        $slugs = array_map(static fn (TaskBoard $board): string => $board->getSlug(), $this->em->getRepository(TaskBoard::class)->findBy(['name' => 'Long']));
+        sort($slugs);
+        self::assertCount(4, array_unique($slugs));
+        foreach ($slugs as $stored) {
+            self::assertSame(255, mb_strlen($stored));
+            self::assertTrue(mb_check_encoding($stored, 'UTF-8'));
+        }
+        self::assertContains($slug, $slugs);
+        self::assertContains(mb_substr($slug, 0, 253) . '-4', $slugs);
+    }
+
+    public function testAScopeDescriptionIsShownEscaped(): void
+    {
+        $this->login($this->owner);
+        $page = $this->client->request('GET', '/tools/task-board');
+        $text = $page->filter('#nowo-task-board-create-form [data-testid="nowo-task-board-create-scopes"]')->text();
+        self::assertStringContainsString('Personal: Only <you>', $text);
+        self::assertStringContainsString('Only &lt;you&gt;', (string) $this->client->getResponse()->getContent());
+    }
+
     public function testAScopeIdIsChecked(): void
     {
         $this->expectException(InvalidArgumentException::class);

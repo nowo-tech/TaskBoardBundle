@@ -16,6 +16,7 @@ final readonly class BoardScope
     /**
      * @param string $id `[a-z0-9_-]{1,32}`
      * @param string $label shown as it is (already translated)
+     * @param string|null $description shown after the label in the scope step, escaped
      * @param array<string, BoardScopeField> $fields by field name, `[A-Za-z0-9_]+`
      * @param bool $preselected the step opens on this scope (e.g. the page the dialog came from)
      */

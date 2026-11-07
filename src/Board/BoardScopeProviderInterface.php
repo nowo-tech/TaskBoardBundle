@@ -14,7 +14,8 @@ interface BoardScopeProviderInterface
 {
     /**
      * What this user may create in, now. Empty: no scope step and today's check on the URL's tenant. One scope: step 1 is
-     * skipped.
+     * skipped. Runs on every board index, because the New board dialog is part of that page, so it must be cheap, and an
+     * exception here takes the board list down with it.
      *
      * @return list<BoardScope>
      */

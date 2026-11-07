@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Slugs are unique per tenant**, not globally. A global suffix told one tenant that another tenant had that slug. Schema change, see UPGRADING.
 - `symfony/string` is a direct requirement, for transliteration.
-- Audit status of these changes: re-verification pending.
+- Audit HS (2026-11-07): Pass (good) / Low at `<final>`. Open residuals are listed in [SECURITY](SECURITY.md#new-board-scope-step-since-130).
 
 ## [1.29.0] - 2026-11-07
 
