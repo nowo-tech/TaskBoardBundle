@@ -149,7 +149,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `<final>` (Appendix HN, 2026-11-07), for 1.29.0.** 1.28.0: Pass (good) / Low at `532dbaa` (Appendix HI); its first round at `561203a` was Pass (conditional) / Medium.
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `cc80289` (Appendix HN, 2026-11-07), for 1.29.0.** 1.28.0: Pass (good) / Low at `532dbaa` (Appendix HI); its first round at `561203a` was Pass (conditional) / Medium.
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
