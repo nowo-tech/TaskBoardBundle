@@ -28,7 +28,7 @@
 | **Task forms** | Symfony forms for board/task creation and updates (title, description, links, members). |
 | **Configuration** | `nowo_task_board` YAML (routes, table prefix, access checker, team resolver). |
 | **Provider sync (since 1.23, opt-in)** | Server-side calls to a task provider's API with the host's token, file downloads from the provider's attachment hosts, remote text stored as Markdown. |
-| **Task API (since 2.2, opt-in)** | Stateless routes under `api.prefix`, off by default. Token authentication is the host's; `Api\Security\TaskApiRequestListener` and `TaskApiGuard` fail closed. See [API](API.md). Audit status: re-verification pending. |
+| **Task API (since 2.2, opt-in)** | Stateless routes under `api.prefix`, off by default. Token authentication is the host's; `Api\Security\TaskApiRequestListener` and `TaskApiGuard` fail closed. Audit IA: a token whose user the access checker refuses counts as a failed token (L1); with tenancy the guard asks the bundle's tenant resolver too (L2); the security-user check compares ids, not classes, and an `access_control` refusal reads as 403 (I2, I3, documented in [API](API.md)). `TaskManager::archive()` dispatches no domain event, as no UI archive exists; the API's write audit is `API_WRITE` (I5). Audit status: re-verification pending. |
 | **TimeTrack bridge** | Optional. When TimeTrack is installed, task provider exposes trackable tasks; access gated by `TaskAccessGuard`. |
 
 ## Threats and mitigations
@@ -131,6 +131,8 @@ A sync that has no people session or no person reference for a row (`SyncOptions
 
 ## New board scope step (since 1.30)
 
+Any scope offers New board on the index without asking `canCreateBoard()`. A provider returns `[]` on a tenant's page where the user may not create, so that the check decides the button and the create route ([CONFIGURATION](CONFIGURATION.md#new-board-since-130)). `[]` is not a denial: with a checker that allows the tenant (the default), the button shows and the create route creates there without calling `resolve()`. Access stays the checker's. A button is not a permission: the create route still checks the tenant. 2.1.1 documents this and changes no check. Audit HZ (2026-11-07): Pass (good) / Low.
+
 The scope and its fields come from the browser. A select refuses a value it did not offer, `BoardScopeProviderInterface::resolve()` must check permissions again, and the bundle then asks `canCreateBoard()` for the resolved tenant. Refusals share one message, so they do not say whether a tenant exists. Slugs are unique per tenant so that a suffix tells nothing about another tenant. A board icon is validated as one emoji and printed escaped, marked decorative. A Markdown description goes through the host's text renderer, which must escape what the user typed; the output is printed raw, as for task text. A board with no tenant has no database check on its slug: NULL is distinct in a unique index, so two creates at the same moment can store the same slug. The bundle routes by id, so nothing breaks in it; a host reading by slug alone should not rely on one row.
 
 ## Unmatched columns (since 1.28.0)
@@ -166,7 +168,7 @@ Both opt-in.
 
 ## Shared write rules (2.2, re-verification pending)
 
-Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. `tests/Functional/Characterization` pins the UI's output.
+Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. After an unlink, the files a sync stored for the subtree are named in `TaskErasedEvent::$attachmentRefs` and their rows removed, on every database (audit IA-M1): the host deletes them, as for `deleteBoard()`. `tests/Functional/Characterization` pins the UI's output.
 
 ## Logging and personal data
 
@@ -185,7 +187,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `3c105a1` (Appendix HY, 2026-11-07), for 2.1.0.** 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

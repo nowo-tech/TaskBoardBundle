@@ -37,6 +37,10 @@ final readonly class TaskApiWhere
     }
 
     /**
+     * Each entry grants on its own: a named tenant reaches all its boards, and a named board is reached even when its tenant
+     * is not listed (audit IA-I4, as intended: a token for one board of a project names the board, not the project). The
+     * person's access, the host's workspace and the tenant check still apply to it.
+     *
      * @param list<string> $tenantKeys
      * @param list<string> $boardIds
      */

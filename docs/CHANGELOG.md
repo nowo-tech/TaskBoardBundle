@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.1.1] - 2026-11-07](#211---2026-11-07)
 - [[2.1.0] - 2026-11-07](#210---2026-11-07)
 - [[2.0.2] - 2026-11-07](#202---2026-11-07)
 - [[2.0.1] - 2026-11-07](#201---2026-11-07)
@@ -92,7 +93,7 @@ Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. Opt-i
 - **Task API, read endpoints.** Spaces, folders (none), lists, tasks with ClickUp's filters and 100 per page, a task, comments, members, tags, imported custom fields and time entries (through the host's time hook). Lists hold and count only what the token may read; each list answers in a fixed number of queries. See [API](API.md).
 - **Task API, skeleton (`api.*`).** `GET /v2/user`, `GET /v2/team` under `api.prefix`; the request pipeline (failed-token limit, authenticator, security user, rate limit), `Api\Security\TaskApiGuard` (level ∩ access ∩ where), `Api\TaskApiCapability`, one `{err, ECODE}` shape. Hooks in `Api\Hook`, where every default denies; event `TaskBoardEvents::API_WRITE`. The build refuses `security.allow_unauthenticated` and, without `api.host_decides_access`, `security.resource_scoping: false`.
 - `Service\TaskManager::restore()` and `archive()`, with their history; `restore()` asks the host's limit and throws `TaskReopenRefusedException` when it refuses.
-- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`.
+- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`. The files a sync stored for the subtree, kept after an unlink, are named in each `TaskErasedEvent` and their rows removed, so the host can delete them (audit IA-M1).
 - `Service\TaskBoardEditor::update()`: name and description of a board, the slug unchanged, `TaskBoardEvents::BOARD_UPDATED` (`BoardUpdatedEvent`).
 - `Service\TaskCommentPolicy`: who may write, edit and delete a comment.
 - `Validation\TaskConstraints`: the rules of the fields a write takes.
@@ -100,7 +101,22 @@ Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. Opt-i
 
 ### Changed
 
-- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. The controller no longer takes `$syncLimits`, as `TaskManager` already holds the limit.
+- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. Its `$syncLimits` argument stays in place but is deprecated and ignored: `TaskManager` holds the same limit (audit IA-I1).
+
+## [2.1.1] - 2026-11-07
+
+Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit HZ (2026-11-07): Pass (good) / Low. See [UPGRADING](UPGRADING.md#to-211).
+
+### Fixed
+
+- The board index drew two New board buttons when there were no boards. There is now one: in the header when there are boards, otherwise in the empty state. The empty state takes the same check as the header did, so a list emptied by the list check or by board access keeps the button.
+- New board is primary whatever the host's `nowo_ui_kit.action_variants.create` says. It is the page's main action, and an explicit variant is how UiKit keeps one (`Action::create()` does the same).
+- The Board / List / Gantt buttons of the index end under their Views heading. On a phone, where cards replace the table, they stay at the start beside their label.
+
+### Documentation
+
+- `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides. `[]` is not a denial: access stays the checker's (audit HZ-L2).
+- The board index's block table in `docs/USAGE.md` lists the 2.0 blocks; it still named the 1.x ones.
 
 ## [2.1.0] - 2026-11-07
 
@@ -1848,7 +1864,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.1.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

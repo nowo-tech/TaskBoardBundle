@@ -142,6 +142,10 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         }
         $this->requireSecurityUser($principal);
         if (!$this->accessChecker->canAccess($principal->user)) {
+            // Audit IA-L1: the same answer as a bad token, and counted as one, so it cannot drive the host's
+            // authenticator without limit.
+            $this->rateLimiter->registerFailedToken($clientIp);
+
             throw $this->invalidToken();
         }
 

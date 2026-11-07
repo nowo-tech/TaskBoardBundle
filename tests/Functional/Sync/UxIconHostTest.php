@@ -106,6 +106,27 @@ final class UxIconHostTest extends SyncPeopleFunctionalTestCase
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-board-new"] svg[data-icon="tabler:plus"]'));
     }
 
+    /**
+     * Since 2.1.1: New board is the page's main action, so `action_variants: {create: secondary}`, which is for the create
+     * actions in rows and panels, leaves it primary. Both places it can be drawn.
+     */
+    public function testAHostCreateVariantLeavesNewBoardPrimary(): void
+    {
+        $this->reboot(['icon_set' => 'ux_icon', 'action_variants' => ['create' => 'secondary']]);
+        $this->login($this->owner);
+
+        $crawler = $this->client->request('GET', self::BASE);
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('btn-primary', (string) $crawler->filter('[data-testid="nowo-task-board-new-empty"]')->attr('class'));
+        self::assertStringNotContainsString('btn-secondary', (string) $crawler->filter('[data-testid="nowo-task-board-new-empty"]')->attr('class'));
+
+        $this->board();
+        $crawler = $this->client->request('GET', self::BASE);
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('btn-primary', (string) $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('class'));
+        self::assertStringNotContainsString('btn-secondary', (string) $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('class'));
+    }
+
     public function testTheFiltersFoldDrawsTablerChevrons(): void
     {
         $board = $this->board();

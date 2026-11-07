@@ -59,6 +59,33 @@ final class BoardCreationSpec211Test extends FunctionalTestCase
         $this->owner = $owner;
     }
 
+    /**
+     * Since 2.1.1: any scope offers New board, whatever `canCreateBoard()` says about the page's tenant. So a provider
+     * returns [] on a page whose tenant the user may not create in, and the check then decides the page and the POST.
+     */
+    public function testAnyScopeOffersNewBoardAndNoScopeLeavesItToTheCreateCheck(): void
+    {
+        self::$taskBoardConfig['security'] = ['create_roles' => ['ROLE_ADMIN']];
+        self::ensureKernelShutdown();
+        parent::setUp();
+        $this->login($this->owner);
+
+        // The personal scope alone is enough: this is the reader who sees the button.
+        ScriptedBoardScopes::$offered = ['personal'];
+        $crawler                      = $this->client->request('GET', '/tools/task-board');
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="empty"] [data-testid="nowo-task-board-new-empty"]'));
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-dialog-open="nowo-task-board-create"]'));
+
+        // The provider's way out: no scope, so the check refuses the button and the create route.
+        ScriptedBoardScopes::$offered = [];
+        $crawler                      = $this->client->request('GET', '/tools/task-board');
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('[data-nowo-ui-dialog-open="nowo-task-board-create"], dialog'));
+        $this->create(['name' => 'Refused']);
+        self::assertResponseStatusCodeSame(403);
+    }
+
     public function testAScopeResolvesTheTenantAndTheEventSaysSo(): void
     {
         ScriptedBoardScopes::$answers['org:acme'] = new TaskBoardTenant('tenant-a', 'org-a', 'Acme');

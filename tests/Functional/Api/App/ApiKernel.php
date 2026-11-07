@@ -94,6 +94,7 @@ final class ApiKernel extends Kernel
         $services->set('logger', RecordingLogger::class)->public();
         $services->set('app.api_host', ApiTestHost::class)->autowire()->public();
         $services->set('app.api_firewall', ApiFirewallAuthenticator::class);
+        $services->set('app.tenant_resolver', ScriptedTenantResolver::class);
         $container->extension('doctrine', [
             'dbal' => ['url' => FunctionalKernel::databaseUrl()],
             'orm'  => [

@@ -3435,12 +3435,22 @@ a.nowo-task-nav__step:focus-visible {
         overflow-wrap: anywhere;
         white-space: normal;
     }
+
+    /* Since 2.1.1: a card's value starts next to its label, as the kit does for every end-aligned column. */
+    .nowo-ui-table--cards > tbody > tr > td > .nowo-task-board-list__views {
+        justify-content: flex-start;
+    }
 }
 
 .nowo-task-board-list__views {
     display: flex;
     flex-wrap: wrap;
     gap: 0.375rem;
+}
+
+/* Since 2.1.1: in the index's end-aligned Views column the buttons end under their heading, not a host's own list. */
+.nowo-ui-cell--end > .nowo-task-board-list__views {
+    justify-content: flex-end;
 }
 
 .nowo-task-index__empty {
