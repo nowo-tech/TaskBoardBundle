@@ -176,13 +176,14 @@ Rollback: two tenants may now hold the same slug, and two boards with no tenant 
 
 ### New board, spec 211
 
-Nothing changes in the form until you set a `board.*` option. See [CONFIGURATION](CONFIGURATION.md#new-board-since-130).
+Nothing changes in the form until you set a `board.*` option. See [CONFIGURATION](CONFIGURATION.md#new-board-since-130). Pages with no option set differ from 1.29.0 in whitespace only.
 
 - A host looking boards up by slug alone must add the tenant: slugs are no longer unique across tenants. A custom board repository can implement `TenantBoardSlugLookupInterface`; without it the creator keeps the global lookup.
 - **Scope step:** with `scope_provider`, `board_create` checks `canCreateBoard()` on the tenant `resolve()` returns, not on the URL's. The URL's tenant must still resolve for the user: a page with no tenant posts through one the user always has. A refusal from `resolve()` or the check is one form error, 422.
 - **Editor in step 2:** Milkdown needs no mounting on reveal; see *New board* in CONFIGURATION.
 - **`scopes()` runs on every board index**, because the New board dialog is part of that page. Keep it cheap: an exception there takes the list down too.
 - **`BOARD_CREATED`** fires after the board is committed. A listener that throws gives the user an error for a board that exists, and a retry makes a second one: catch your own errors. The same holds for a `TaskBoardTenant` whose slug does not fit the tenant route.
+- Give each scope its own text: two scopes with the same label and description show as one, the later.
 - **Without tenancy** the database no longer checks slugs: see SECURITY.
 
 ## To 1.29.0
