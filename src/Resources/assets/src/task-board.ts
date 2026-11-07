@@ -23,6 +23,7 @@ import SyncProgressController from './sync-progress-controller';
 import SelectAnchorController from './select-anchor-controller';
 import BoardCreateStepsController from './board-create-steps-controller';
 import FilterFoldController from './filter-fold-controller';
+import CalendarController from './calendar-controller';
 import { installFormConfirm } from './ask-confirm';
 import { installBoardOpeners } from './board-openers';
 import { observeCssVars } from './css-vars';
@@ -47,6 +48,8 @@ application.register('nowo-task-board-task-members-modal', TaskMembersModalContr
 application.register('nowo-task-board-task-priority-modal', TaskPriorityModalController);
 application.register('nowo-task-board-task-links-modal', TaskLinksModalController);
 application.register('nowo-task-board-gantt', GanttController);
+// Since 2.1.0 (spec 214).
+application.register('nowo-task-board-calendar', CalendarController);
 application.register('nowo-task-board-edit-column-modal', EditColumnModalController);
 application.register('nowo-task-board-picker', PickerController);
 application.register('nowo-task-board-option-filter', OptionFilterController);

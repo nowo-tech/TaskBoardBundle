@@ -20,7 +20,7 @@
     data-move-url="{{ path(nowo_task_board_route('task_move'), {taskId: task.id}) }}"
     data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
 >
-    <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title">{{ task.title }}</a>
+    {% if nowo_task_board_number(task) %}<span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span>{% endif %}<a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title">{{ task.title }}</a>
     {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'nowo-task-card__tags'}) }}
     {# Since 1.12 (ClickUp-like): priority flag, due date (late in the danger colour), estimate, subtasks and assignees. #}
     <div class="nowo-task-card__meta">

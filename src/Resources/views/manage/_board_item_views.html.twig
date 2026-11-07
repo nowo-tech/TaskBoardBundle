@@ -4,7 +4,7 @@
         {route: 'board', params: {view: 'board'}, icon: 'layout-kanban', label: 'task_board.view.board', aria: 'task_board.index.open_board', slot: 'btn_primary'},
         {route: 'list', params: {}, icon: 'list', label: 'task_board.view.list', aria: 'task_board.index.open_list', slot: 'btn_secondary'},
         {route: 'gantt', params: {}, icon: 'chart-bar', label: 'task_board.view.gantt', aria: 'task_board.index.open_gantt', slot: 'btn_secondary'},
-    ] %}
+    ]|merge(nowo_task_board_calendar_enabled() ? [{route: 'calendar', params: {}, icon: 'calendar', label: 'task_board.view.calendar', aria: 'task_board.index.open_calendar', slot: 'btn_secondary'}] : []) %}
         <a href="{{ path(nowo_task_board_route(view.route), {boardId: board.id}|merge(view.params)) }}" class="{{ nowo_ui_class(view.slot, 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" aria-label="{{ view.aria|trans({'%name%': board.name}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-view-{{ view.route }}">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: view.icon}) }}{{ view.label|trans({}, 'NowoTaskBoardBundle') }}
         </a>

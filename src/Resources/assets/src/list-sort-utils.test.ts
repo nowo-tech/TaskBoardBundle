@@ -26,6 +26,17 @@ describe('compareRows', () => {
     });
 });
 
+describe('compareRows by number', () => {
+    it('sorts by number, a task with none last', () => {
+        const numbered = (number?: number) => ({ ...row('T', 'low', '', 'Done', 0), number });
+        expect(compareRows(numbered(2), numbered(10), 'number')).toBeLessThan(0);
+        expect(compareRows(numbered(10), numbered(2), 'number')).toBeGreaterThan(0);
+        expect(compareRows(numbered(), numbered(2), 'number')).toBeGreaterThan(0);
+        expect(readSortRow({ number: '12' }, 0).number).toBe(12);
+        expect(readSortRow({ number: '' }, 0).number).toBeUndefined();
+    });
+});
+
 describe('readSortRow', () => {
     it('reads the row data with defaults', () => {
         expect(readSortRow({ title: 'T', priority: 'high', due: '2026-10-01', column: 'Doing' }, 4)).toEqual(row('T', 'high', '2026-10-01', 'Doing', 4));

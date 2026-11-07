@@ -27,6 +27,8 @@ use function strtolower;
 #[ORM\Index(name: 'task_board_tasks_board_archived_idx', columns: ['board_id', 'archived_at'])]
 // Since 1.25 (KIT-74): open tasks of a board by due date (due-date alerts and reminders).
 #[ORM\Index(name: 'task_board_tasks_board_open_due_idx', columns: ['board_id', 'completed_at', 'due_at'])]
+// Since 2.1.0 (spec 214): the tasks a backfill still has to number.
+#[ORM\Index(name: 'task_board_tasks_number_idx', columns: ['number'])]
 #[ORM\HasLifecycleCallbacks]
 class Task
 {
@@ -77,6 +79,13 @@ class Task
     /** Since 1.14: the task's own colour (#rrggbb), e.g. its Gantt bar; null keeps the priority colours. */
     #[ORM\Column(type: 'string', length: 7, nullable: true)]
     private ?string $color = null;
+
+    /**
+     * Since 2.1.0 (spec 214, `task_numbers.enabled`): the task's readable number (`#123`) in its scope; null with the option
+     * off, or until a backfill reaches an older task. Assigned at persistence; the ledger is what makes it unique.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $number = null;
 
     /** @var Collection<int, TaskChangeHistory> */
     #[ORM\OneToMany(targetEntity: TaskChangeHistory::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -173,6 +182,22 @@ class Task
     public function getBoard(): TaskBoard
     {
         return $this->board;
+    }
+
+    public function getNumber(): ?int
+    {
+        return $this->number;
+    }
+
+    /**
+     * For the number listener only: no host code assigns a number.
+     */
+    public function assignNumber(int $number): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->number = $number;
+
+        return $this;
     }
 
     public function getTitle(): string

@@ -9,7 +9,7 @@
 {% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
-    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+    {% if nowo_task_board_numbers_enabled() %}<script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>{% endif %}<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
@@ -23,7 +23,7 @@
             {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle')},
             {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle'), active: true},
             {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')},
-        ],
+        ]|merge(nowo_task_board_calendar_tabs(board, 'task_board.view.calendar'|trans({}, 'NowoTaskBoardBundle'))),
         back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
     })) }}
     {% endblock %}{% endif %}
@@ -109,7 +109,7 @@
                         {# Since 1.15: the totals of the rows the filters show (kept up to date by the list filter controller). #}
                         {% block nowo_ui_table_foot %}
                             <tr>
-                                <th scope="row" colspan="5">{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="row" colspan="{{ nowo_task_board_numbers_enabled() ? 6 : 5 }}">{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}</th>
                                 <td class="nowo-task-list__num" data-total="estimate">—</td>
                                 <td class="nowo-task-list__num" data-total="spent">—</td>
                                 <td class="nowo-task-list__num" data-total="deviation">—</td>

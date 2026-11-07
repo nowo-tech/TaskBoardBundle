@@ -1,0 +1,68 @@
+{#
+    Since 2.1.0 (spec 214, FR-019, FR-020, FR-025, FR-031): the month and week grid. role="grid": arrow keys move between the days
+    (nowo-task-board-calendar). Each day is a `sortable` list, and a bar is an item of the day it starts in. On a phone the bars
+    are hidden: a month shows counts and a week shows `__phone-list`. Variables: those of calendar.html.twig.
+#}
+{% set _names = 'task_board.calendar.weekdays'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
+{% set _focus = calendar.today >= calendar.firstDay and calendar.today <= calendar.lastDay ? calendar.today : calendar.firstDay %}
+<div
+    class="nowo-task-cal__grid"
+    role="grid"
+    aria-label="{{ 'task_board.calendar.grid_label'|trans({'%board%': board.name}, 'NowoTaskBoardBundle') }}"
+    data-nowo-task-board-calendar-target="grid"
+    {% if calendar.anyEditable %}
+    data-nowo-ui-sortable="nowo-task-cal"
+    data-nowo-ui-sortable-labels="{{ {
+        grabbed: 'task_board.calendar.sr_grabbed'|trans({}, 'NowoTaskBoardBundle'),
+        moved: 'task_board.calendar.sr_moved'|trans({}, 'NowoTaskBoardBundle'),
+        movedToList: 'task_board.calendar.sr_moved_to_day'|trans({}, 'NowoTaskBoardBundle'),
+        cancelled: 'task_board.calendar.sr_cancelled'|trans({}, 'NowoTaskBoardBundle'),
+        refused: 'task_board.calendar.sr_refused'|trans({}, 'NowoTaskBoardBundle'),
+        reverted: 'task_board.calendar.sr_reverted'|trans({}, 'NowoTaskBoardBundle'),
+        edge: 'task_board.calendar.sr_edge'|trans({}, 'NowoTaskBoardBundle'),
+    }|json_encode|e('html_attr') }}"
+    {% endif %}
+>
+    <div class="nowo-task-cal__week nowo-task-cal__week--head" role="row">
+        {% for weekday in calendar.weekdays %}
+            <div class="nowo-task-cal__weekday" role="columnheader">{{ _names[weekday - 1] ?? weekday }}</div>
+        {% endfor %}
+    </div>
+    {% for week in calendar.weeks %}
+        <div class="nowo-task-cal__week" role="row">
+            {% for day in week %}
+                <div
+                    class="nowo-task-cal__day{{ day.inPeriod ? '' : ' is-outside' }}{{ day.today ? ' is-today' : '' }}{{ day.weekend ? ' is-weekend' : '' }}"
+                    role="gridcell"
+                    tabindex="{{ day.date == _focus ? 0 : -1 }}"
+                    data-date="{{ day.date }}"
+                    {% if day.today %}aria-current="date"{% endif %}
+                    {% if calendar.anyEditable %}data-nowo-ui-sortable-zone{% endif %}
+                >
+                    <div class="nowo-task-cal__day-head">
+                        <a class="nowo-task-cal__day-number" href="{{ path(nowo_task_board_route('calendar'), {boardId: board.id}|merge(calendarQuery)|merge({mode: 'list', date: day.date})) }}#nowo-task-cal-day-{{ day.date }}" title="{{ 'task_board.calendar.day_tasks'|trans({'%date%': day.date, '%count%': day.entries|length}, 'NowoTaskBoardBundle') }}"><span class="nowo-task-sr-only">{{ day.date }} </span><span aria-hidden="true">{{ day.day }}</span>{% if day.entries is not empty %} <span class="nowo-task-cal__day-count">({{ day.entries|length }})</span>{% endif %}</a>
+                        {% if canEditBoard %}
+                            <button type="button" class="nowo-task-cal__add" data-action="nowo-task-board-add-task-modal#open" data-due-date="{{ day.date }}" data-column-name="{{ day.date }}" aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
+                        {% endif %}
+                    </div>
+                    <ul class="nowo-task-cal__chips nowo-task-plain-list"{% if calendar.anyEditable %} data-nowo-ui-sortable-list="{{ day.date }}" data-nowo-ui-sortable-list-label="{{ day.date }}"{% endif %}>
+                        {% for chip in day.chips %}
+                            {{ include('@NowoTaskBoardBundle/manage/_calendar_chip.html.twig') }}
+                        {% endfor %}
+                    </ul>
+                    {% if day.more > 0 %}
+                        <a class="nowo-task-cal__more" href="{{ path(nowo_task_board_route('calendar'), {boardId: board.id}|merge(calendarQuery)|merge({mode: 'list', date: day.date})) }}#nowo-task-cal-day-{{ day.date }}">{{ 'task_board.calendar.more'|trans({'%count%': day.more}, 'NowoTaskBoardBundle') }}</a>
+                    {% endif %}
+                    {% if calendar.mode.value == 'week' and day.entries is not empty %}
+                        <ul class="nowo-task-cal__phone-list nowo-task-plain-list">
+                            {% for entry in day.entries %}
+                                {{ include('@NowoTaskBoardBundle/manage/_calendar_row.html.twig') }}
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+</div>
+{% if calendar.placed == 0 %}<p class="nowo-task-cal__empty">{{ 'task_board.calendar.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>{% endif %}

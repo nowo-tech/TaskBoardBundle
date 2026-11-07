@@ -96,7 +96,7 @@ final class TaskListFilterType extends AbstractType
                     'task_board.list.sort_priority' => 'priority',
                     'task_board.list.sort_due'      => 'due',
                     'task_board.list.sort_column'   => 'column',
-                ],
+                ] + ($options['task_numbers'] ? ['task_board.list.sort_number' => 'number'] : []),
                 'attr' => [
                     'class'                              => 'form-select',
                     'data-' . self::STIMULUS . '-target' => 'sort',
@@ -140,11 +140,14 @@ final class TaskListFilterType extends AbstractType
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
             'priorities'         => [],
             'column_names'       => [],
+            // Since 2.1.0 (spec 214): the list can sort by task number.
+            'task_numbers' => false,
             // Since 1.13.1 no inline handler (strict CSP): the list filter controller stops the submit.
             'attr' => ['data-action' => 'submit->' . self::STIMULUS . '#prevent'],
         ]);
         $resolver->setAllowedTypes('priorities', 'string[]');
         $resolver->setAllowedTypes('column_names', 'string[]');
+        $resolver->setAllowedTypes('task_numbers', 'bool');
     }
 
     #[Override]

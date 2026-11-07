@@ -5,7 +5,7 @@
 #}
 {% set _body %}
     {{ form_start(taskForm, {
-        action: path(nowo_task_board_route('task_create'), {boardId: board.id}),
+        action: path(nowo_task_board_route('task_create'), {boardId: board.id}|merge(addTaskQuery|default({}))),
         method: 'POST',
         attr: {id: 'nowo-task-board-add-task-form', class: 'nowo-task-dialog__body'},
     }) }}
@@ -24,7 +24,7 @@
             {% if taskForm.startAt is defined %}
                 <div class="nowo-task-field">{{ form_row(taskForm.startAt) }}</div>
             {% endif %}
-            <div class="nowo-task-field">{{ form_row(taskForm.dueAt) }}</div>
+            <div class="nowo-task-field">{{ form_row(taskForm.dueAt, addTaskQuery|default(null) ? {attr: {'data-nowo-task-board-add-task-modal-target': 'dueField'}} : {}) }}</div>
         </div>
         <div class="nowo-task-field">{{ form_row(taskForm.tags) }}</div>
         {% if taskForm.color is defined %}

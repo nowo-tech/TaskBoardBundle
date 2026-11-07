@@ -82,6 +82,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.1.0, spec 214. Audit status: pending batch audit. Opt-in: with `task_numbers.enabled` and `calendar.enabled` off (the defaults) no route, service, table or output changes, except the one column below. See [UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- **Task numbers** (`task_numbers.enabled`, `task_numbers.scope`): a readable `#123` per task, per tenant by default or per board. Assigned at persistence by a Doctrine listener, so the manager, the importers, the sync and its checklists all get one. Numbers come from a counter (`task_board_number_counters`) and a ledger (`task_board_task_numbers`): never reused, a deleted task's number retires, a task moved to another scope gets a new number and keeps the old one as an alias. The reservation commits in a short transaction of its own, on a second connection when the caller is in a transaction, so a sync page never holds a counter. `Task::getNumber()`, for the spec 213 serializers.
+- `nowo:task-board:numbers-backfill`: numbers older tasks per scope in creation order. Resumable, and a no-op once none is left.
+- `TaskNumberLedger`: `find()`, `findInScopes()` for a host's search, `purgeScope()` for a destroyed tenant.
+- Route `task_by_number` (`/n/{number}` under each tenant path; `?board=` where no tenant names the scope). Unknown, retired and unreadable answer the same 404.
+- The number on the card, the panel and task page (with *Copy*), the list (column, *Sort*, search), the subtask tree and the Gantt tooltip. Twig: `nowo_task_board_number()`.
+- **Calendar view** (`calendar.enabled`, route `calendar`, `web_ui.templates.calendar`): month, week and list modes, the week start of `WeekStartResolverInterface`, everything in the URL (`mode`, `date`, `assignee`, `priority`, `tag`, `column`, `completed`, `subtasks`), a query bounded by the visible days and capped by `board.max_tasks`, and a count of undated tasks. On a phone it opens in list mode. `calendar` is a valid answer of `board.default_view_resolver`.
+- **Reschedule**: route `task_schedule` and `TaskManager::reschedule()`, with the history and `TaskUpdatedEvent` of the task form. Drag the body (UiKit's `sortable`), drag an edge, or use the *Reschedule* dialog; arrow keys move between the days; a move shows *Undo*. No drag on a phone or a touch screen. A time of day is kept. `task_create` comes back to the calendar with `?calendar=1` and `_target_path`.
+
 ## [2.0.0] - 2026-11-07
 
 Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).

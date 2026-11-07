@@ -1,0 +1,29 @@
+{#
+    Since 2.1.0 (spec 214, FR-020, FR-027, FR-028): a task's bar in one week. Without the right to edit it has no drag and no action.
+    The edges exist only for a task with both dates, in the week where that date is. Variables: chip, panelTargetPath.
+#}
+{% set entry = chip.entry %}
+{% set task = entry.task %}
+{% set _edit = entry.editable %}
+<li
+    class="nowo-task-cal__chip nowo-task-cal__chip--{{ task.priority.value }}{{ task.completed ? ' is-completed' : '' }}{{ entry.overdue ? ' is-overdue' : '' }}{{ chip.startsHere ? '' : ' is-continued' }}{{ chip.endsHere ? '' : ' is-continuing' }}{{ task.color ? ' nowo-task-cal__chip--colored' : '' }}"
+    data-nowo-task-vars="{{ {'--nowo-task-cal-span': chip.span, '--nowo-task-cal-lane': chip.lane}|merge(task.color ? {'--nowo-task-cal-color': task.color} : {})|json_encode }}"
+    data-task-id="{{ task.id }}"
+    data-title="{{ task.title }}"
+    data-nowo-task-title="{{ task.title }}"
+    {% if task.column %}data-column-name="{{ task.column.name }}" data-nowo-task-column="{{ task.column.name }}"{% endif %}
+    data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: task.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
+    data-span="{{ chip.span }}"
+    {% if _edit %}
+    data-nowo-ui-sortable-item="{{ task.id }}"
+    data-nowo-ui-sortable-label="{{ task.title }}"
+    data-schedule-url="{{ path(nowo_task_board_route('task_schedule'), {taskId: task.id}) }}"
+    data-start="{{ entry.start }}"
+    data-due="{{ entry.due }}"
+    {% endif %}
+>
+    {% if _edit and entry.hasRange and chip.startsHere %}<span class="nowo-task-cal__edge nowo-task-cal__edge--start" data-edge="start" data-nowo-ui-sortable-ignore data-action="pointerdown->nowo-task-board-calendar#startEdge" title="{{ 'task_board.calendar.edge_start'|trans({}, 'NowoTaskBoardBundle') }}"></span>{% endif %}
+    <a class="nowo-task-cal__chip-title" href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" title="{{ task.title }}">{% if entry.overdue %}<span class="nowo-task-sr-only">{{ 'task_board.calendar.overdue'|trans({}, 'NowoTaskBoardBundle') }}: </span>{% endif %}{% if nowo_task_board_number(task) %}<span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span> {% endif %}{{ task.title }}</a>
+    {% if _edit %}<button type="button" class="nowo-task-cal__reschedule" data-nowo-ui-sortable-ignore data-action="nowo-task-board-calendar#openReschedule" aria-label="{{ 'task_board.calendar.reschedule_task'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.reschedule'|trans({}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar'}) }}</button>{% endif %}
+    {% if _edit and entry.hasRange and chip.endsHere %}<span class="nowo-task-cal__edge nowo-task-cal__edge--end" data-edge="due" data-nowo-ui-sortable-ignore data-action="pointerdown->nowo-task-board-calendar#startEdge" title="{{ 'task_board.calendar.edge_end'|trans({}, 'NowoTaskBoardBundle') }}"></span>{% endif %}
+</li>

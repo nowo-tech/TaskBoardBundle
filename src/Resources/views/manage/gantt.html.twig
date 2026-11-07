@@ -9,7 +9,7 @@
 {% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
-    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+    {% if nowo_task_board_numbers_enabled() %}<script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>{% endif %}<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.gantt.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
@@ -22,7 +22,7 @@
             {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle')},
             {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},
             {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), active: true},
-        ],
+        ]|merge(nowo_task_board_calendar_tabs(board, 'task_board.view.calendar'|trans({}, 'NowoTaskBoardBundle'))),
         back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
     })) }}{% endif %}
 {% endblock %}
@@ -156,7 +156,7 @@
                             data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: item.id}|merge(panelTargetPath|default(null) ? {_target_path: panelTargetPath} : {})) }}"
                             {# Since 1.14 a task's own colour paints its bar (otherwise the priority colours). #}
                             data-nowo-task-vars="{{ {'--gantt-start': item.startIndex + 1, '--gantt-end': item.endIndex + 2}|merge(item.color ? {'--nowo-task-bar-color': item.color} : {})|json_encode }}"
-                            title="{{ _when }}{{ _time ? ' · ' ~ _time : '' }}"
+                            title="{{ nowo_task_board_number(item.number) ? nowo_task_board_number(item.number) ~ ' · ' : '' }}{{ _when }}{{ _time ? ' · ' ~ _time : '' }}"
                         >
                             {% if item.spentPercent ?? null %}
                                 {# Since 1.15: the time spent against the estimate (capped at the bar's end). #}

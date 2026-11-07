@@ -1,0 +1,114 @@
+{#
+    Since 2.1.0 (spec 214): a board's dated tasks on a calendar (`calendar.enabled`). Month, week and list modes; everything it
+    shows is in the URL. Drag uses UiKit's `sortable`, with the routes that need no pointer (Reschedule, keyboard). Variables: board,
+    calendar (Dto\TaskCalendarView), calendarModes, calendarQuery, calendarFiltered, filterForm, undatedCount, taskWindow,
+    canEditBoard, taskForm, scheduleForm, panelTargetPath, dashboardRoute.
+#}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_scripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
+    <script src="{{ asset('js/nowo-ui-sortable.js', 'nowo_ui_kit') }}" defer></script>
+    <script src="{{ asset('js/nowo-ui-toast.js', 'nowo_ui_kit') }}" defer></script>
+    {% if nowo_task_board_numbers_enabled() %}<script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>{% endif %}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
+
+{% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.calendar.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+
+{% block nowo_ui_page_header %}
+    {% if nowo_task_board_ui.page_header %}{{ nowo_ui_page_header(nowo_task_board_header({
+        title: board.name ~ ' — ' ~ ('task_board.calendar.title'|trans({}, 'NowoTaskBoardBundle')),
+        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
+        tabs: [
+            {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle')},
+            {href: path(nowo_task_board_route('calendar'), {boardId: board.id}), icon: 'calendar', label: 'task_board.view.calendar'|trans({}, 'NowoTaskBoardBundle'), active: true},
+        ],
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}{% endif %}
+{% endblock %}
+
+{% block nowo_ui_content %}
+    {% block nowo_task_board_connection %}
+        {{ include(nowo_task_board_connection_badge_template|default('@NowoTaskBoardBundle/manage/_connection_badge.html.twig'), {sync: nowo_task_board_connection(board)}) }}
+    {% endblock %}
+
+    {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
+    {% if taskWindow.capped %}<p class="nowo-task-board__window-notice">{{ 'task_board.calendar.capped'|trans({}, 'NowoTaskBoardBundle') }}</p>{% endif %}
+
+    {% set _mode = calendar.mode.value %}
+    {% set _route = nowo_task_board_route('calendar') %}
+    {% set _base = {boardId: board.id}|merge(calendarQuery) %}
+    <div
+        class="nowo-task-cal nowo-task-cal--{{ _mode }}"
+        data-controller="nowo-task-board-calendar nowo-task-board-add-task-modal"
+        data-nowo-task-board-calendar-csrf-token-value="{{ csrf_token('task_board_task_schedule') }}"
+        data-nowo-task-board-calendar-failed-value="{{ 'task_board.calendar.failed'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        data-nowo-task-board-calendar-undo-value="{{ 'task_board.calendar.undo'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        data-nowo-task-board-calendar-undone-value="{{ 'task_board.calendar.undone'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"
+        data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.calendar.add_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+    >
+        {% block nowo_task_board_calendar_filters %}
+        {% set _filters_class = ('nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-cal__filters ' ~ nowo_task_board_filters_form_class|default(''))|trim %}
+        {{ form_start(filterForm, {attr: filterForm.vars.attr|merge({class: _filters_class, 'aria-label': 'task_board.list.filters'|trans({}, 'NowoTaskBoardBundle')})}) }}
+            {{ include(nowo_task_board_filters_collapse|default('@NowoTaskBoardBundle/manage/_list_filter_fold.html.twig'), {key: 'nowo-task-board-calendar-' ~ board.id, fold_key: 'nowo-task-board-calendar-' ~ board.id, form: filterForm, filter_form: filterForm}) }}
+            {% for child in filterForm %}
+                {% if not child.rendered %}
+                    {{ form_row(child) }}
+                {% endif %}
+            {% endfor %}
+            <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}">{{ 'task_board.calendar.apply'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            {% if calendarFiltered %}<a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" href="{{ path(_route, {boardId: board.id, mode: _mode, date: calendar.date}) }}">{{ 'task_board.calendar.reset'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
+        {{ form_end(filterForm) }}
+        {% endblock %}
+
+        <div class="nowo-task-cal__toolbar">
+            <nav class="nowo-task-cal__nav" aria-label="{{ 'task_board.calendar.title'|trans({}, 'NowoTaskBoardBundle') }}">
+                <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" href="{{ path(_route, _base|merge({mode: _mode, date: calendar.previous})) }}" rel="prev">{{ 'task_board.calendar.previous'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" href="{{ path(_route, _base|merge({mode: _mode, date: calendar.today})) }}">{{ 'task_board.calendar.today'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" href="{{ path(_route, _base|merge({mode: _mode, date: calendar.next})) }}" rel="next">{{ 'task_board.calendar.next'|trans({}, 'NowoTaskBoardBundle') }}</a>
+            </nav>
+            {% set _months = 'task_board.gantt.month_names'|trans({}, 'NowoTaskBoardBundle')|split(',') %}
+            {% set _month = _months[(calendar.date|date('n')) - 1] ?? calendar.date|date('M') %}
+            <h2 class="nowo-task-cal__period" data-testid="nowo-task-cal-period">{{ _mode == 'week' ? calendar.firstDay ~ ' → ' ~ calendar.lastDay : _month ~ ' ' ~ calendar.date|date('Y') }}</h2>
+            {{ include(nowo_ui_partial('tabs', 'NowoTaskBoardBundle'), {
+                items: calendarModes|map(option => {
+                    label: {month: 'task_board.calendar.mode_month', week: 'task_board.calendar.mode_week', list: 'task_board.calendar.mode_list'}[option.value]|trans({}, 'NowoTaskBoardBundle'),
+                    href: path(_route, _base|merge({mode: option.value, date: calendar.date})),
+                    current: option.value == _mode,
+                }),
+                label: 'task_board.calendar.mode'|trans({}, 'NowoTaskBoardBundle'),
+                level: 'secondary',
+                attr: {class: 'nowo-task-cal__modes'},
+                bundle: 'NowoTaskBoardBundle',
+            }, false) }}
+        </div>
+
+        {% if undatedCount > 0 %}
+            <p class="nowo-task-cal__undated"><a href="{{ path(nowo_task_board_route('list'), {boardId: board.id}) }}" data-testid="nowo-task-cal-undated">{{ 'task_board.calendar.undated'|trans({'%count%': undatedCount}, 'NowoTaskBoardBundle') }}</a></p>
+        {% endif %}
+
+        <div class="nowo-task-cal__body" data-nowo-task-board-calendar-target="body">
+            {{ include(_mode == 'list' ? '@NowoTaskBoardBundle/manage/_calendar_list.html.twig' : '@NowoTaskBoardBundle/manage/_calendar_grid.html.twig') }}
+        </div>
+
+        {# The kit's toast, filled by the controller for the result of a move. #}
+        <template data-nowo-task-board-calendar-target="toastSuccess">{{ include(nowo_ui_partial('toasts', 'NowoTaskBoardBundle'), {flashes: {success: ['-']}, bundle: 'NowoTaskBoardBundle'}, false) }}</template>
+        <template data-nowo-task-board-calendar-target="toastError">{{ include(nowo_ui_partial('toasts', 'NowoTaskBoardBundle'), {flashes: {error: ['-']}, bundle: 'NowoTaskBoardBundle'}, false) }}</template>
+
+        {% if scheduleForm %}{{ include('@NowoTaskBoardBundle/manage/_calendar_reschedule_dialog.html.twig') }}{% endif %}
+        {% if canEditBoard and taskForm %}
+            {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig', {addTaskQuery: {calendar: 1, _target_path: panelTargetPath}}) }}
+        {% endif %}
+    </div>
+{% endblock %}

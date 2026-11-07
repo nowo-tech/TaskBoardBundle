@@ -38,6 +38,8 @@ final readonly class TaskGanttItem
         // Since 1.15: H:i of the start and end when the task has a due time (hours scale), null for whole days.
         public ?string $startTime = null,
         public ?string $endTime = null,
+        // Since 2.1.0 (spec 214, FR-009): shown in the bar's tooltip.
+        public ?int $number = null,
     ) {
     }
 }
