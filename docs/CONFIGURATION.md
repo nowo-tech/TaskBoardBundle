@@ -552,7 +552,7 @@ A host whose requests already use more than about 55 MB before the import should
 
 An import runs in one database transaction: if it fails anywhere, nothing of it is kept. Two imports into the same board at the same time can each create a task for the same source id (they do not lock the board; this was already so before 1.22.2): import one file at a time.
 
-See [UPGRADING](UPGRADING.md#unreleased) for the measurements.
+See [UPGRADING](UPGRADING.md#to-1300) for the measurements.
 
 ### Cross-board lookup (since 1.22)
 
