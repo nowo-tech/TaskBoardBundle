@@ -150,6 +150,21 @@ final class ApiPipelineTest extends ApiTestCase
         self::assertSame(0, ApiTestHost::$consumed);
     }
 
+    public function testATokenWhoseUserIsRefusedCountsAsAFailedToken(): void
+    {
+        // Audit IA-L1 (the auditor's proof, turned): the same 401 as a bad token, and throttled as one.
+        $this->user('guest@example.com', ['ROLE_GUEST']);
+        $this->issueToken(email: 'guest@example.com');
+
+        for ($i = 0; $i < 3; ++$i) {
+            $this->get('/api/tasks/v2/user');
+            $this->assertRefused(401, 'OAUTH_019');
+        }
+
+        self::assertSame(['127.0.0.1', '127.0.0.1', '127.0.0.1'], ApiTestHost::$failedIps);
+        self::assertSame(0, ApiTestHost::$consumed);
+    }
+
     public function testAPrincipalTheFirewallDoesNotStandBehindFailsClosed(): void
     {
         $other = $this->user('other@example.com');

@@ -28,7 +28,7 @@
 | **Task forms** | Symfony forms for board/task creation and updates (title, description, links, members). |
 | **Configuration** | `nowo_task_board` YAML (routes, table prefix, access checker, team resolver). |
 | **Provider sync (since 1.23, opt-in)** | Server-side calls to a task provider's API with the host's token, file downloads from the provider's attachment hosts, remote text stored as Markdown. |
-| **Task API (since 2.2, opt-in)** | Stateless routes under `api.prefix`, off by default. Token authentication is the host's; `Api\Security\TaskApiRequestListener` and `TaskApiGuard` fail closed. See [API](API.md). Audit status: re-verification pending. |
+| **Task API (since 2.2, opt-in)** | Stateless routes under `api.prefix`, off by default. Token authentication is the host's; `Api\Security\TaskApiRequestListener` and `TaskApiGuard` fail closed. Audit IA: a token whose user the access checker refuses counts as a failed token (L1); with tenancy the guard asks the bundle's tenant resolver too (L2); the security-user check compares ids, not classes, and an `access_control` refusal reads as 403 (I2, I3, documented in [API](API.md)). `TaskManager::archive()` dispatches no domain event, as no UI archive exists; the API's write audit is `API_WRITE` (I5). Audit status: re-verification pending. |
 | **TimeTrack bridge** | Optional. When TimeTrack is installed, task provider exposes trackable tasks; access gated by `TaskAccessGuard`. |
 
 ## Threats and mitigations

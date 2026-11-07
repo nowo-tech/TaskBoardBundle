@@ -17,6 +17,8 @@ use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskCommentPolicy;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Stringable;
 
 use function is_scalar;
@@ -40,6 +42,8 @@ final readonly class TaskApiGuard
         private TaskCommentPolicy $comments,
         private TaskApiWorkspaceInterface $workspace,
         private TaskApiPlanGateInterface $planGate,
+        // Audit IA-L2: with tenancy, the tenant check the UI makes through TaskBoardTenantContext::owns().
+        private ?TaskBoardTenantContext $tenantContext = null,
     ) {
     }
 
@@ -116,6 +120,7 @@ final readonly class TaskApiGuard
     private function reachesBoard(TaskApiPrincipal $principal, TaskBoard $board): bool
     {
         return $principal->where->reachesBoard($board)
+            && $this->ownsTenant($principal->user, $board->getTenantKey())
             && $this->workspace->spaceOfTenant($principal, $board->getTenantKey()) !== null
             && $this->access->canViewBoard($principal->user, $board);
     }
@@ -131,6 +136,20 @@ final readonly class TaskApiGuard
         if (!$capability->allows($principal->level)) {
             throw TaskApiRefusal::levelRefused();
         }
+    }
+
+    /**
+     * With tenancy, the bundle's own answer on the tenant, whatever the host's workspace says: the resolver must open the
+     * tenant whose slug is its key for this person, as the UI asks of the tenant in its URL. A board without a tenant is not
+     * served under tenancy, as in the UI.
+     */
+    private function ownsTenant(object $user, ?string $tenantKey): bool
+    {
+        if ($this->tenantContext?->isEnabled() !== true) {
+            return true;
+        }
+
+        return $tenantKey !== null && $this->tenantContext->tenantOfKey($tenantKey, $user) instanceof TaskBoardTenant;
     }
 
     private function sameUser(object $user, ?object $other): bool
