@@ -109,7 +109,8 @@ final class ApiKernel extends Kernel
                 + ['main' => ['lazy' => true, 'provider' => 'app']],
         ]);
         $container->extension('twig', ['strict_variables' => true]);
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class, 'api' => $this->api + ['enabled' => true, 'hooks' => [
+        // Like Beacon: no resource scoping, the host's listeners decide (one configuration, so one container, for most tests).
+        $container->extension('nowo_task_board', ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false], 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
             'authenticator' => 'app.api_host',
             'rate_limiter'  => 'app.api_host',
             'plan_gate'     => 'app.api_host',

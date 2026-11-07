@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -95,6 +96,17 @@ final class TaskApiExtensionTest extends TestCase
         foreach ([...array_keys($container->getDefinitions()), ...array_keys($container->getAliases())] as $id) {
             self::assertStringNotContainsString('TaskBoardBundle\\Api\\', $id);
         }
+    }
+
+    public function testSettingTheOptionOffEqualsNotSettingIt(): void
+    {
+        $unset = $this->load([]);
+        $off   = $this->load(['api' => ['enabled' => false, 'prefix' => '/elsewhere', 'hooks' => ['authenticator' => 'app.auth', 'rate_limiter' => 'app.limiter']]]);
+
+        self::assertSame(array_keys($unset->getDefinitions()), array_keys($off->getDefinitions()));
+        self::assertSame(array_keys($unset->getAliases()), array_keys($off->getAliases()));
+        self::assertSame($unset->getParameterBag()->all(), $off->getParameterBag()->all());
+        self::assertEquals($unset->getDefinition(TaskBoardRouteLoader::class)->getArguments(), $off->getDefinition(TaskBoardRouteLoader::class)->getArguments());
     }
 
     /**

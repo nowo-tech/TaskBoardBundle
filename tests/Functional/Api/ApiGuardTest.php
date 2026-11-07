@@ -34,8 +34,6 @@ final class ApiGuardTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$api        = ['host_decides_access' => true];
-        static::$hostConfig = ['security' => ['resource_scoping' => false]];
         parent::setUp();
         ApiTestHost::$tenants = [self::TENANT];
         $this->board          = $this->board(tenantKey: self::TENANT);

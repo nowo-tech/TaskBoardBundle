@@ -8,15 +8,12 @@ use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Tools\SchemaTool;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
-use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\RouterInterface;
 
 use function array_filter;
-use function array_keys;
 use function array_map;
 use function get_debug_type;
 use function is_array;
@@ -88,34 +85,6 @@ final class ApiOffHostTest extends FunctionalTestCase
             self::assertFalse(str_contains($class->getTableName(), 'api'), $class->getTableName());
         }
         self::assertSame([], array_filter((new SchemaTool($this->em))->getUpdateSchemaSql($metadata), static fn (string $sql): bool => str_contains($sql, 'api')));
-    }
-
-    public function testSettingTheOptionOffChangesNothingAgainstNotSettingIt(): void
-    {
-        $withoutTheNode = $this->snapshot(self::$kernel);
-        self::ensureKernelShutdown();
-
-        $off = new FunctionalKernel(['api' => ['enabled' => false, 'hooks' => ['authenticator' => 'no.such.service', 'rate_limiter' => 'no.such.service']]]);
-        $off->boot();
-
-        self::assertSame($withoutTheNode, $this->snapshot($off));
-        $off->shutdown();
-    }
-
-    /**
-     * @return array{routes: list<string>, services: list<string>}
-     */
-    private function snapshot(?KernelInterface $kernel): array
-    {
-        self::assertInstanceOf(KernelInterface::class, $kernel);
-        $container = $kernel->getContainer()->get('test.service_container');
-        self::assertInstanceOf(ContainerInterface::class, $container);
-        $router = $container->get('router');
-        self::assertInstanceOf(RouterInterface::class, $router);
-        $routes = array_keys($router->getRouteCollection()->all());
-        sort($routes);
-
-        return ['routes' => array_map('strval', $routes), 'services' => $this->serviceIds($container)];
     }
 
     /**
