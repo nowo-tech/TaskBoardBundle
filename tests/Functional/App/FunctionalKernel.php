@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as Doctrine
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -133,9 +134,17 @@ final class FunctionalKernel extends Kernel
             'firewalls' => ['main' => ['lazy' => true, 'provider' => 'app']],
         ]);
         $container->extension('twig', ['strict_variables' => true]);
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + $this->taskBoard);
+        // A test may set UiKit's options under this key (TB-6); it is not a bundle option.
+        if (isset($this->taskBoard['__ui_kit'])) {
+            $container->extension('nowo_ui_kit', $this->taskBoard['__ui_kit']);
+        }
+        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + array_diff_key($this->taskBoard, ['__ui_kit' => true]));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).
         $container->services()->set('app.board_scopes', ScriptedBoardScopes::class)->public();
+        // Since 2.0.0: the host's plan limits and first-board provisioning.
+        $container->services()->set('app.quota_listener', RecordingQuotaListener::class)->public()
+            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);
+        $container->services()->set('app.first_board', RecordingBoardProvisioner::class)->autowire()->public();
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // Since 1.23: the host side of the provider sync, with a scriptable provider and no network.
             $services = $container->services();

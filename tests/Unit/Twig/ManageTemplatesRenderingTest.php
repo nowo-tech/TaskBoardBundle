@@ -64,6 +64,15 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\Theme\Theme;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\AppVariable;
 use Symfony\Bridge\Twig\Extension\FormExtension;
@@ -227,7 +236,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
         // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form (1.26: the footer
         // is outside the scrolling body).
-        self::assertMatchesRegularExpression('/<div class="nowo-task-dialog__footer nowo-task-dialog__actions">\s*<button type="button" class="btn btn-outline-secondary" data-action="click->nowo-task-board-task-members-modal#close">[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="btn btn-primary nowo-task-members__add-button">/', $html);
+        self::assertMatchesRegularExpression('/<footer class="[^"]*nowo-task-dialog__footer nowo-task-dialog__actions"[^>]*>\s*<button type="button" class="[^"]*" data-nowo-ui-dialog-close>[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="[^"]*nowo-task-members__add-button">/', $html);
         self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);
@@ -246,7 +255,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-card-color&quot;:&quot;#ef4444&quot;}"', $board);
         self::assertSame(1, substr_count($board, 'nowo-task-card--colored'));
         // The add task dialog is native and offers the colour.
-        self::assertStringContainsString('class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"', $board);
+        self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide', $board);
         self::assertStringContainsString('name="task_form[customColor]"', $board);
         self::assertStringNotContainsString('class="modal', $board);
         self::assertStringNotContainsString(' style="', $board);
@@ -312,7 +321,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         foreach (['Level 1', 'Level 2', 'Level 3', 'Level 4'] as $title) {
             self::assertStringContainsString($title, $html);
         }
-        self::assertStringContainsString('data-depth="3"', $html);
+        self::assertStringContainsString('aria-level="4"', $html);
         // Level 1 counts its 3 descendants, one of them done.
         self::assertStringContainsString('1/3', $html);
         self::assertStringContainsString('<a href="/projects/1/issues/12" class="nowo-task-link__label">BEACON-12 Crash</a>', $html);
@@ -343,25 +352,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('nowo-task-card__subtasks', $html);
         self::assertStringContainsString('1/1', $html);
         self::assertStringNotContainsString('>Child<', $html);
-    }
-
-    public function testPageHeaderActionsAreEscaped(): void
-    {
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
-            'pageTitle'     => 'Board',
-            'headerActions' => [['href' => '/x?a=1&b="2"', 'label' => '<b>List</b>', 'icon' => 'list']],
-        ]);
-
-        self::assertStringContainsString('href="/x?a=1&amp;b=&quot;2&quot;"', $html);
-        self::assertStringContainsString('&lt;b&gt;List&lt;/b&gt;', $html);
-        self::assertStringContainsString('class="btn btn-outline-primary"', $html);
-        self::assertStringNotContainsString('<b>List</b>', $html);
-
-        $legacy = $this->twig()->render('@NowoTaskBoardBundle/manage/_page_header.html.twig', [
-            'pageTitle'     => 'Board',
-            'headerActions' => '<a href="/x">Old</a>',
-        ]);
-        self::assertStringContainsString('&lt;a href=&quot;/x&quot;&gt;Old&lt;/a&gt;', $legacy);
     }
 
     public function testReadOnlyBoardHidesWriteControls(): void
@@ -406,6 +396,8 @@ final class ManageTemplatesRenderingTest extends TestCase
     public function testIndexPageRenders(): void
     {
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name'), new Column('views')], [$this->board], bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'canCreateBoard' => true,
             'boards'         => [$this->board],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView(),
             'dashboardRoute' => null,
@@ -563,7 +555,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $this->task->getId() . '/panel?_target_path=/tools/task-board/board/' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('task_board.action.delete_column', $html);
         self::assertStringContainsString('COLUMN_ID&#x2F;delete', $html);
-        self::assertStringContainsString('<dialog class="nowo-task-dialog nowo-task-dialog--native"', $html);
+        self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native', $html);
         self::assertStringContainsString('/column-sets/apply', $html);
         self::assertStringContainsString('action="/delete-set"', $html);
         self::assertSame(1, substr_count($html, 'nowo-task-column-sets__delete'));
@@ -574,12 +566,12 @@ final class ManageTemplatesRenderingTest extends TestCase
         // delete form (which keeps its confirm).
         $editColumn = (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"]');
         $delete     = $editColumn->filter('.nowo-task-dialog__footer button[form="nowo-task-board-column-delete-form"]');
-        self::assertSame('btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
+        self::assertSame('nowo-ui-btn nowo-ui-btn--danger btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
         self::assertSame('nowo-task-board-column-delete-help', $delete->attr('aria-describedby'));
         $deleteForm = $editColumn->filter('form#nowo-task-board-column-delete-form');
         self::assertSame('hidden', $deleteForm->attr('hidden'));
-        self::assertSame('submit->nowo-task-board-edit-column-modal#confirmDelete', $deleteForm->attr('data-action'));
-        self::assertSame('nowo-task-board-edit-column-form', $editColumn->filter('.nowo-task-dialog__footer .btn-primary')->attr('form'));
+        self::assertNotEmpty($deleteForm->attr('data-confirm'));
+        self::assertSame('nowo-task-board-edit-column-form', $editColumn->filter('.nowo-task-dialog__footer .nowo-ui-btn--primary')->attr('form'));
         self::assertCount(1, $editColumn->filter('#nowo-task-board-column-delete-help'));
         self::assertStringContainsString('nowo-task-dialog__actions--split', (string) $editColumn->filter('.nowo-task-dialog__footer')->attr('class'));
         self::assertStringNotContainsString('nowo-task-dialog__danger"', $html);
@@ -602,10 +594,10 @@ final class ManageTemplatesRenderingTest extends TestCase
         // Without sets the dialog has nothing to apply: Close only (1.26).
         $footer = (new Crawler($html))->filter('dialog[data-dialog="apply"] .nowo-task-dialog__footer button');
         self::assertCount(1, $footer);
-        self::assertSame('nowo-task-board-dialog#close', $footer->attr('data-action'));
+        self::assertNotNull($footer->attr('data-nowo-ui-dialog-close'));
         $this->assertDialogAnatomy($html, 5);
         // Without columnDeleteForm the edit column footer is not split.
-        self::assertSame('nowo-task-dialog__footer nowo-task-dialog__actions', (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
+        self::assertStringNotContainsString('--split', (string) (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
         // A two-column board without columnDeleteForm (older controllers) has no delete button.
         self::assertStringNotContainsString('task_board.action.delete_column', $html);
     }
@@ -774,8 +766,8 @@ final class ManageTemplatesRenderingTest extends TestCase
             'dashboardRoute' => null,
         ]);
 
-        self::assertStringContainsString('data-controller="nowo-task-board-filter-collapse"', $html);
-        self::assertMatchesRegularExpression('/class="nowo-task-list__filter-toggle"[^>]*data-controller="disclosure-icon"[^>]*aria-expanded="true"[^>]*aria-controls="nowo-task-list-filters-/', $html);
+        self::assertStringContainsString('data-controller="nowo-task-board-filter-fold"', $html);
+        self::assertStringNotContainsString('data-controller="filters-collapse"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-board-value="' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
         self::assertMatchesRegularExpression('/name="sort"[^>]*data-nowo-task-board-list-filter-target="sort"|data-nowo-task-board-list-filter-target="sort"[^>]*name="sort"/', $html);
@@ -783,7 +775,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertMatchesRegularExpression('/data-nowo-task-board-list-filter-target="timeColumns"[^>]*data-nowo-task-filter-ignore/', $html);
         self::assertMatchesRegularExpression('/data-estimate="90"\s+data-spent="120"\s+data-over="1"/', $html);
         self::assertMatchesRegularExpression('/data-estimate=""\s+data-spent="0"\s+data-over="0"/', $html);
-        self::assertStringContainsString('<tfoot class="nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">', $html);
+        self::assertStringContainsString('<tfoot class="nowo-ui-table__foot nowo-task-list__time-col" data-nowo-task-board-list-filter-target="totals">', $html);
         self::assertStringContainsString('nowo-task-list__totals', $html);
         self::assertStringContainsString('+30 min (+33 %)', $html);
         self::assertStringNotContainsString(' style="', $html);
@@ -802,7 +794,7 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         self::assertStringNotContainsString('nowo-task-board-filter-collapse', $html);
         self::assertStringNotContainsString('nowo-task-list__filter-toggle', $html);
-        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-board-list-filters nowo-task-list__filters issue-filters panel"[^>]*>\s*<div class="host-fold" data-key="nowo-task-board-list-' . $this->board->getId() . '" data-fold-key="nowo-task-board-list-' . $this->board->getId() . '"/', $html);
+        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-list__filters issue-filters panel"[^>]*>\s*<div class="host-fold" data-key="nowo-task-board-list-' . $this->board->getId() . '" data-fold-key="nowo-task-board-list-' . $this->board->getId() . '"/', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="overEstimate"', $html);
     }
 
@@ -821,7 +813,8 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         self::assertStringContainsString('data-week-start="sunday"', $html);
         self::assertStringContainsString('nowo-task-gantt--months', $html);
-        self::assertMatchesRegularExpression('/href="[^"]*scale=months"[^>]*class="nowo-task-gantt__scale is-active"[^>]*aria-current="true"/', $html);
+        self::assertMatchesRegularExpression('/<a[^>]*href="[^"]*scale=months"[^>]*aria-current="[^"]*"/', $html);
+        self::assertStringContainsString('data-action="nowo-task-board-gantt#rememberScale"', $html);
         self::assertStringContainsString('href="/tools/task-board/board/' . $this->board->getId() . '/gantt?scale=hours"', $html);
         self::assertStringContainsString('task_board.gantt.clamped_months', $html);
         self::assertStringContainsString('nowo-task-gantt__bar-spent', $html);
@@ -1025,6 +1018,8 @@ final class ManageTemplatesRenderingTest extends TestCase
     {
         $set  = new ColumnSet('Kanban');
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name')], [], empty: new EmptyState('task_board.index.no_boards'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'canCreateBoard' => true,
             'boards'         => [],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), ['column_set_choices' => ['Kanban' => $set->getId()]])->createView(),
             'dashboardRoute' => null,
@@ -1058,15 +1053,17 @@ final class ManageTemplatesRenderingTest extends TestCase
 
     public function testImportPageRenders(): void
     {
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
+        $importForm = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData())->createView();
+        $html       = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
+            'page'           => new FormPage(new PageHeader('Roadmap'), $importForm, bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
             'board'          => $this->board,
-            'importForm'     => $this->factory()->create(TaskImportFormType::class, new TaskImportFormData())->createView(),
+            'importForm'     => $importForm,
             'dashboardRoute' => null,
         ]);
 
         self::assertStringContainsString('Roadmap', $html);
         // Since 1.18: the help modal says what each format imports, with the own format's columns and examples.
-        self::assertStringContainsString('data-dialog="import-help"', $html);
+        self::assertStringContainsString('data-nowo-ui-dialog-open="nowo-task-import-help-board-' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('task_board.import.help.intro_board', $html);
         self::assertStringContainsString('task_board.import.help.col_depends_on', $html);
         self::assertStringContainsString('task_board.import.help.source_trello_json', $html);
@@ -1171,14 +1168,14 @@ final class ManageTemplatesRenderingTest extends TestCase
             self::assertGreaterThanOrEqual(3, count($children));
             $header = new Crawler($children[0]);
             $footer = new Crawler($children[count($children) - 1]);
-            self::assertStringContainsString('nowo-task-dialog__header', (string) $header->attr('class'));
-            self::assertCount(1, $header->filter('.nowo-task-dialog__title'));
-            self::assertCount(1, $header->filter('button.nowo-task-dialog__close'));
+            self::assertStringContainsString('nowo-ui-dialog__header', (string) $header->attr('class'));
+            self::assertCount(1, $header->filter('.nowo-ui-dialog__title'));
+            self::assertCount(1, $header->filter('button.nowo-ui-dialog__close'));
             self::assertCount(1, (new Crawler($dialog))->filter('.nowo-task-dialog__body'));
             self::assertStringContainsString('nowo-task-dialog__footer', (string) $footer->attr('class'));
 
             $buttons   = $footer->filter('button');
-            $primaries = $footer->filter('.btn-primary, .btn-danger');
+            $primaries = $footer->filter('.nowo-ui-btn--primary, .nowo-ui-btn--danger-solid');
             self::assertGreaterThanOrEqual(1, $buttons->count());
             self::assertLessThanOrEqual(1, $primaries->count());
             if ($primaries->count() === 1) {
@@ -1218,7 +1215,10 @@ final class ManageTemplatesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass));
+        $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig'), urls: new UrlGenerator($collection, new RequestContext())));
+        $twig->addExtension(new ThemeExtension(new Theme()));
+        // The task page's scaffold reads it; the pages with a model of their own pass theirs.
+        $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

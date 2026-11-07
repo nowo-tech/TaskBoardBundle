@@ -1,0 +1,26 @@
+{#
+    Since 2.0.0: the list's filter fold, UiKit's `filters_collapse` markup and CSS driven by the bundle's own controller, so it
+    works with no host peer. A host that wants the kit's peer sets templates.filters_collapse to the kit's partial, or its own.
+    First child of the form. Same cookie as the kit's. The filters run in the browser, so the count is the controller's: the
+    line starts empty and a restored filter opens the fold (list filter controller). Variables: fold_key.
+#}
+{% set _cookie = 'nowo_ui_filters_collapsed' %}
+{% set _request = app.request|default(null) %}
+{% set _collapsed = _request and fold_key in (_request.cookies.get(_cookie, '')|split(',')) %}
+{% set _labels = {
+    collapse: 'filters_collapse.collapse'|trans({}, 'NowoUiKitBundle'),
+    expand: 'filters_collapse.expand'|trans({}, 'NowoUiKitBundle'),
+    none: 'filters_collapse.none'|trans({}, 'NowoUiKitBundle'),
+    one: 'filters_collapse.one'|trans({}, 'NowoUiKitBundle'),
+    many: 'filters_collapse.many'|trans({}, 'NowoUiKitBundle'),
+} %}
+{% set _label = _collapsed ? _labels.expand : _labels.collapse %}
+<div class="nowo-ui-filters-collapse{{ _collapsed ? ' is-collapsed' }}" data-controller="nowo-task-board-filter-fold"
+    data-nowo-task-board-filter-fold-key-value="{{ fold_key }}"
+    data-nowo-task-board-filter-fold-messages-value="{{ _labels|json_encode }}">
+    <button type="button" class="nowo-ui-filters-collapse__toggle nowo-ui-corner-tab nowo-ui-corner-tab--under" data-nowo-task-board-filter-fold-target="toggle" data-action="nowo-task-board-filter-fold#toggle" aria-expanded="{{ _collapsed ? 'false' : 'true' }}" aria-label="{{ _label }}" title="{{ _label }}" data-testid="nowo-task-list-filter-toggle">
+        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--expanded" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: 'chevron_up'}) }}</span>
+        <span class="nowo-ui-filters-collapse__icon nowo-ui-filters-collapse__icon--collapsed" aria-hidden="true">{{ include('@NowoUiKitBundle/components/_icon.html.twig', {name: 'chevron_down'}) }}</span>
+    </button>
+    <p class="nowo-ui-filters-collapse__summary" data-nowo-task-board-filter-fold-target="summary"{{ _collapsed ? '' : ' hidden' }}>{{ _labels.none }}</p>
+</div>

@@ -52,6 +52,12 @@ use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -67,6 +73,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
@@ -134,6 +141,8 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly bool $peopleBulkFormer = false,
         // Since 1.28.0: the bundle's own link page offers `unmatchedColumns` (it is always accepted when posted).
         private readonly bool $unmatchedColumnsChoice = false,
+        // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
+        private readonly TaskBoardPages $pages = new TaskBoardPages(),
     ) {
     }
 
@@ -143,7 +152,7 @@ final class TaskBoardConnectionController extends AbstractController
         $board      = $this->findManagedBoard($boardId, $user);
         $connection = $this->store->findConnection($board);
         if ($connection instanceof TaskBoardConnection) {
-            return $this->render($this->templates['connection'], $this->linkedView($board, $connection));
+            return $this->render($this->templates['connection'], ['page' => $this->connectionPageModel($board)] + $this->linkedView($board, $connection));
         }
 
         $provider = $this->pickProvider((string) $request->query->get('provider', ''));
@@ -174,6 +183,7 @@ final class TaskBoardConnectionController extends AbstractController
         }
 
         return $this->render($this->templates['connection'], [
+            'page'              => $this->connectionPageModel($board),
             'board'             => $board,
             'connection'        => null,
             'providers'         => $this->providers->all(),
@@ -536,6 +546,28 @@ final class TaskBoardConnectionController extends AbstractController
         ], 'NowoTaskBoardBundle');
     }
 
+    /** Since 2.0.0: the show scaffold's model of the connection page; its two states fill `nowo_ui_show_sections`. */
+    private function connectionPageModel(TaskBoard $board): ShowPage
+    {
+        $boardUrl = $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]);
+        $twig     = $this->container->get('twig');
+
+        return new ShowPage(
+            new PageHeader(
+                TaskBoardPages::label('task_board.sync.page.title'),
+                TaskBoardPages::label('task_board.sync.page.subtitle'),
+                [
+                    new Action(label: TaskBoardPages::label('task_board.view.back_board'), href: $boardUrl),
+                    ...($this->dashboardRoute !== null ? [Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'))] : []),
+                ],
+                [new Crumb(TaskBoardTwigExtension::boardLabel($board), $boardUrl)],
+                breadcrumbsMode: 'own',
+            ),
+            bundle: TaskBoardPages::BUNDLE,
+            layout: $twig instanceof Environment ? $this->pages->layout($twig) : null,
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -676,7 +708,8 @@ final class TaskBoardConnectionController extends AbstractController
         if (!$this->cache instanceof CacheInterface || $this->containerCacheTtl <= 0) {
             return $load();
         }
-        $key  = 'nowo_task_board.sync.containers.' . hash('sha256', $provider->id() . "\x1F" . $choice->ref . "\x1F" . ($parent ?? '') . "\x1F" . ($cursor ?? '') . "\x1F" . $board->getId());
+        $key = 'nowo_task_board.sync.containers.' . hash('sha256', $provider->id() . "\x1F" . $choice->ref . "\x1F" . ($parent ?? '') . "\x1F" . ($cursor ?? '') . "\x1F" . $board->getId());
+        // @igor-ignore - The cache runs this closure at once and does not keep it.
         $data = $this->cache->get($key, function (ItemInterface $item) use ($load): string {
             $item->expiresAfter($this->containerCacheTtl);
 

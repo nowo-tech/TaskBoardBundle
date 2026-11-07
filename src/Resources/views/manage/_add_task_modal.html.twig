@@ -3,19 +3,7 @@
     title, priority and column, description, estimate and due date, tags and the task colour. Since 1.26 (dialog
     rule v2) Cancel and Add task sit in the footer, outside the scrolling form (form="nowo-task-board-add-task-form").
 #}
-<dialog
-    class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
-    data-nowo-task-board-add-task-modal-target="modal"
-    aria-labelledby="nowo-task-board-add-task-modal-title"
->
-    <div class="nowo-task-dialog__header">
-        <h2 class="nowo-task-dialog__title" id="nowo-task-board-add-task-modal-title" data-nowo-task-board-add-task-modal-target="title">
-            {{ 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle') }}
-        </h2>
-        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-add-task-modal#close">
-            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
-        </button>
-    </div>
+{% set _body %}
     {{ form_start(taskForm, {
         action: path(nowo_task_board_route('task_create'), {boardId: board.id}),
         method: 'POST',
@@ -52,12 +40,24 @@
             {% endif %}
         {% endfor %}
     {{ form_end(taskForm) }}
-    <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-add-task-modal#close">
+{% endset %}
+{% set _footer %}
+        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>
             {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
-        <button type="submit" form="nowo-task-board-add-task-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+        <button type="submit" form="nowo-task-board-add-task-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
-    </div>
-</dialog>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-board-add-task-modal',
+    title: 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
+    size: 'wide',
+    attr: {'data-nowo-task-board-add-task-modal-target': 'modal'},
+    title_attr: {'data-nowo-task-board-add-task-modal-target': 'title'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+}, false) }}

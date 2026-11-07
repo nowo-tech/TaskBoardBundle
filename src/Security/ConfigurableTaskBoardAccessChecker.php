@@ -37,7 +37,10 @@ final readonly class ConfigurableTaskBoardAccessChecker implements TenantAwareTa
         return $this->hasAnyRole($this->createRoles);
     }
 
-    public function canListBoards(object $user): bool
+    /**
+     * `security.list_roles`; the tenant is ignored, as in {@see self::canCreateBoard()}.
+     */
+    public function canListBoards(object $user, ?string $tenantKey = null): bool
     {
         return $this->hasAnyRole($this->listRoles);
     }

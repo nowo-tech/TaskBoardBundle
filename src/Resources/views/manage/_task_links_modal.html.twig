@@ -3,19 +3,7 @@
     (dialog rule v2) the footer sits outside the scrolling form: Remove link (secondary, danger outline, edit only) on
     the left, Cancel and Save (form="nowo-task-link-form") on the right.
 #}
-<dialog
-    class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide"
-    data-nowo-task-board-task-links-modal-target="modal"
-    aria-labelledby="nowo-task-board-task-links-modal-title"
->
-    <div class="nowo-task-dialog__header">
-        <h2 class="nowo-task-dialog__title" id="nowo-task-board-task-links-modal-title" data-nowo-task-board-task-links-modal-target="title">
-            {{ 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle') }}
-        </h2>
-        <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#close">
-            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
-        </button>
-    </div>
+{% set _body %}
     {{ form_start(linkForm, {
         action: path(nowo_task_board_route('task_link'), {taskId: task.id}|merge(taskRouteExtra|default({}))),
         method: 'POST',
@@ -40,32 +28,42 @@
         {% endfor %}
     {{ form_end(linkForm) }}
     {# REQ-TWIG-005: the links modal controller sets the action per link before submitting. #}
-    {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm'}}) }}
+    {{ form_start(linkRemoveForm, {action: '#', attr: {id: 'nowo-task-link-delete-form', hidden: 'hidden', 'data-nowo-task-board-task-links-modal-target': 'deleteForm', 'data-confirm': 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle')}}) }}
         {% for child in linkRemoveForm %}
             {% if not child.rendered %}
                 {{ form_row(child) }}
             {% endif %}
         {% endfor %}
     {{ form_end(linkRemoveForm) }}
-    <div class="nowo-task-dialog__footer nowo-task-dialog__actions nowo-task-dialog__actions--split">
+{% endset %}
+{% set _footer %}
         <button
             type="submit"
             form="nowo-task-link-delete-form"
-            class="{{ nowo_task_board_btn_class('btn_danger') }} nowo-task-btn-danger"
+            class="{{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }} nowo-task-btn-danger"
             hidden
             data-nowo-task-board-task-links-modal-target="deleteButton"
-            data-confirm-message="{{ 'task_board.task.link_delete_confirm'|trans({}, 'NowoTaskBoardBundle') }}"
-            data-action="click->nowo-task-board-task-links-modal#confirmDelete"
         >
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}{{ 'task_board.action.remove_link'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
         <div class="nowo-task-dialog__actions-end">
-            <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="click->nowo-task-board-task-links-modal#close">
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>
                 {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
-            <button type="submit" form="nowo-task-link-form" class="{{ nowo_task_board_btn_class('btn_primary') }}">
+            <button type="submit" form="nowo-task-link-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>
-    </div>
-</dialog>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-board-task-links-modal' ~ '-' ~ task.id,
+    title: 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
+    size: 'wide',
+    attr: {'data-nowo-task-board-task-links-modal-target': 'modal'},
+    title_attr: {'data-nowo-task-board-task-links-modal-target': 'title'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions nowo-task-dialog__actions--split'},
+}, false) }}

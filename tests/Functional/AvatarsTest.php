@@ -70,16 +70,19 @@ final class AvatarsTest extends FunctionalTestCase
         $this->login($this->owner);
 
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId());
-        self::assertSame('<span class="nowo-task-avatar" title="p1@example.com">P</span>', $this->html($crawler->filter('.nowo-task-avatar')->first()));
+        self::assertSame('p1@example.com', $crawler->filter('.nowo-task-avatar')->first()->attr('title'));
+        self::assertSame('P', $crawler->filter('.nowo-task-avatar')->first()->text());
         self::assertSame('<span class="nowo-task-avatar nowo-task-avatar--more">+2</span>', $this->html($crawler->filter('.nowo-task-avatar--more')));
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list');
-        self::assertSame('<span class="nowo-task-avatar" title="p1@example.com">P</span>', $this->html($crawler->filter('.nowo-task-avatar')->first()));
+        self::assertSame('p1@example.com', $crawler->filter('.nowo-task-avatar')->first()->attr('title'));
+        self::assertSame('P', $crawler->filter('.nowo-task-avatar')->first()->text());
 
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $crowded->getId());
-        self::assertSame('<span class="nowo-task-detail__member-chip-avatar" aria-hidden="true">P</span>', $this->html($crawler->filter('.nowo-task-detail__member-chip-avatar')->first()));
-        self::assertSame('<span class="nowo-task-members__avatar" aria-hidden="true">P</span>', $this->html($crawler->filter('.nowo-task-members__avatar')->first()));
-        self::assertSame('<span class="nowo-task-detail__history-avatar" aria-hidden="true">C</span>', $this->html($crawler->filter('.nowo-task-comment .nowo-task-detail__history-avatar')->first()));
-        self::assertSame('<span class="nowo-task-detail__history-avatar" aria-hidden="true">H</span>', $this->html($crawler->filter('.nowo-task-detail__history-item .nowo-task-detail__history-avatar')->first()));
+        // Beside a printed name the chip is decorative.
+        foreach (['.nowo-task-detail__member-chip-avatar' => 'P', '.nowo-task-members__avatar' => 'P', '.nowo-task-comment .nowo-task-detail__history-avatar' => 'C', '.nowo-task-detail__history-item .nowo-task-detail__history-avatar' => 'H'] as $selector => $initial) {
+            self::assertSame($initial, $crawler->filter($selector)->first()->text(), $selector);
+            self::assertSame('true', $crawler->filter($selector . ' > [aria-hidden]')->first()->attr('aria-hidden'), $selector);
+        }
         self::assertCount(0, $crawler->filter('img.nowo-task-member-avatar__image'));
     }
 
@@ -96,14 +99,17 @@ final class AvatarsTest extends FunctionalTestCase
 
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId());
         $first   = $crawler->filter('.nowo-task-avatars')->first()->filter('.nowo-task-avatar');
-        self::assertSame('<span class="nowo-task-avatar nowo-task-member-avatar has-image" role="img" aria-label="p1@example.com" title="p1@example.com">P<img class="nowo-task-member-avatar__image" src="/files/p1/s64" alt width="24" height="24" loading="lazy" decoding="async" referrerpolicy="same-origin"></span>', $this->html($first->eq(0)));
-        self::assertSame('<span class="nowo-task-avatar" title="p2@example.com">P</span>', $this->html($first->eq(1)), 'a rejected URL keeps the initial');
+        self::assertSame('p1@example.com', $first->eq(0)->attr('title'));
+        self::assertSame('/files/p1/s64', $first->eq(0)->filter('img')->attr('src'));
+        self::assertSame('', $first->eq(0)->filter('img')->attr('alt'));
+        self::assertCount(0, $first->eq(1)->filter('img'), 'a rejected URL keeps the initial');
+        self::assertSame('P', $first->eq(1)->text());
         self::assertSame('https://cdn.example.test/p3.webp', $first->eq(2)->filter('img')->attr('src'));
 
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $crowded->getId());
         $comment = $crawler->filter('.nowo-task-comment .nowo-task-detail__history-avatar img');
         self::assertSame('32', $comment->attr('width'));
-        self::assertSame('true', $crawler->filter('.nowo-task-comment .nowo-task-detail__history-avatar')->first()->attr('aria-hidden'));
+        self::assertSame('true', $crawler->filter('.nowo-task-comment .nowo-task-detail__history-avatar > [aria-hidden]')->first()->attr('aria-hidden'));
         self::assertDoesNotMatchRegularExpression('/<img[^>]*\s(style|on\w+)=/i', (string) $this->client->getResponse()->getContent());
     }
 

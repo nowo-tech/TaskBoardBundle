@@ -130,8 +130,6 @@ services:
     # REQ-UI-001: Twig globals from templates.layout / templates.css_framework.
     Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension:
         arguments:
-            $layoutTemplate: '%nowo_task_board.templates.layout%'
-            $cssFramework: '%nowo_task_board.templates.css_framework%'
             $routes: '%nowo_task_board.routes%'
             $filtersCollapse: '%nowo_task_board.templates.filters_collapse%'
             $filtersFormClass: '%nowo_task_board.templates.filters_form_class%'
@@ -139,7 +137,15 @@ services:
             $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
             $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
             $syncBadgeConnectLink: '%nowo_task_board.sync.badge.connect_link%'
-            $logger: '@?logger'
+            $taskTimeBefore: '%nowo_task_board.templates.task_time_before%'
+            $pageHeader: '%nowo_task_board.templates.page_header%'
+            $boardToolbar: '%nowo_task_board.board.toolbar%'
+            $panelToolbar: '%nowo_task_board.task_panel.toolbar%'
+
+    # Since 2.0.0: the layout of the pages (web_ui.layout_template, or the deprecated templates.layout).
+    Nowo\TaskBoardBundle\Ui\TaskBoardPages:
+        arguments:
+            $layoutTemplate: '%nowo_task_board.web_ui.layout_template%'
 
     # Since 1.19: user text (comments, plain-text descriptions) → HTML; hosts alias the interface to their renderer.
     Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer: ~

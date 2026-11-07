@@ -479,6 +479,7 @@ final readonly class SyncTaskWriter
         // A row with an item is linked (planned as an update) or a tombstone (skipped): a new task has none.
         $item = new TaskSyncItem($ctx->connection, $ctx->board->getId(), $task, $id, $remote->remoteUpdatedAt);
         $this->entityManager->persist($item);
+        // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
         $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId)->setCreatorPerson($creator);
         if ($peopleMode && $session instanceof PeopleSession && $this->peopleWriter instanceof SyncPeopleWriter) {
             $this->peopleWriter->syncMembers($session, $item, $task, TaskMemberRole::Assignee, $row->assigneeRefs, TaskSyncPerson::KIND_ASSIGNEE, $ctx->actor);
@@ -537,8 +538,10 @@ final readonly class SyncTaskWriter
             } elseif ($remoteHash === $baseline[0]) {
                 continue;
             } elseif ($localHash === $remoteHash) {
+                // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
                 $item->setBaseline($field, $remoteHash, $localHash)->setConflictHash($field, null);
             } elseif ($item->conflictHash($field) !== $remoteHash) {
+                // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
                 $item->setConflictHash($field, $remoteHash);
                 $conflicts[$field] = $this->preview($field, $value, $column, $row);
             }
@@ -579,12 +582,14 @@ final readonly class SyncTaskWriter
             $changed = true;
         }
         foreach (array_keys($allowed) as $field) {
+            // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
             $item->setBaseline($field, $this->hash($remoteValues[$field]), $this->hash($this->localValue($task, $field)))->setConflictHash($field, null);
         }
         if ($conflicts !== []) {
             $this->noteConflicts($ctx, $task, $id, $conflicts);
         }
         $this->queueRelations($ctx, $task, $row, $related);
+        // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
         $item->setRemoteUpdatedAt($remote->remoteUpdatedAt)->setLastSeenRunId($ctx->runId);
         if (!$restoring) {
             $changed ? ++$ctx->updated : ++$ctx->unchanged;
@@ -856,6 +861,7 @@ final readonly class SyncTaskWriter
             }
             $link = $known?->getLink();
             if ($link instanceof TaskLink) {
+                // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
                 $link->setUrl($stored->url)->setLabel($stored->name);
             } else {
                 $link = new TaskLink($task, TaskLinkType::Attachment, $stored->url, $stored->name);
@@ -1237,6 +1243,7 @@ final readonly class SyncTaskWriter
                 continue;
             }
             // Since 1.28.0: the status's colour now; its order at the end of the first import.
+            // @igor-ignore - Its own service's write method for this sync page; it keeps no state between calls.
             $column = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255), color: $remote->status?->color));
             $ctx->connection->addCreatedColumn($column->getId());
             $byName[mb_strtolower($status)] = $column;
@@ -1494,6 +1501,7 @@ final readonly class SyncTaskWriter
     private function addDependency(SyncRunContext $ctx, Task $task, Task $other, TaskDependencyType $type): void
     {
         try {
+            // @igor-ignore - Its own service's write method for this sync page; it keeps no state between calls.
             $this->dependencyManager->add($task, $other, $type, $ctx->actor);
             ++$ctx->dependenciesCreated;
         } catch (InvalidTaskDependencyException $exception) {

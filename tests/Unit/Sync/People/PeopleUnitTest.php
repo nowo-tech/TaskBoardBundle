@@ -174,7 +174,7 @@ final class PeopleUnitTest extends TestCase
 
     public function testTheTwigFunctionsWithoutSync(): void
     {
-        $extension = new TaskBoardTwigExtension('base.html.twig', 'tabler');
+        $extension = new TaskBoardTwigExtension();
         $board     = $this->board();
         $task      = new Task(board: $board, title: 'T', creator: new PeopleUnitUser(1, 'a@example.test'));
 

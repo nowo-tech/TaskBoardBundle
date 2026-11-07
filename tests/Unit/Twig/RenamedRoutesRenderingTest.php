@@ -16,6 +16,9 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\Theme\Theme;
+use Nowo\UiKitBundle\Twig\ThemeExtension;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -27,6 +30,7 @@ use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\Forms;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Generator\UrlGenerator;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Translation\IdentityTranslator;
@@ -82,7 +86,7 @@ final class RenamedRoutesRenderingTest extends TestCase
 
         self::assertStringContainsString('/host/board/' . $this->board->getId() . '/gantt', $html);
         self::assertStringContainsString('data-nowo-task-board-list-filter-target="priority"', $html);
-        self::assertStringContainsString('class="nowo-task-board-list-filters nowo-task-list__filters"', $html);
+        self::assertStringContainsString('class="nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-list__filters"', $html);
         self::assertStringContainsString('/host/task/' . $this->task->getId(), $html);
     }
 
@@ -170,10 +174,12 @@ final class RenamedRoutesRenderingTest extends TestCase
             FormRenderer::class => static fn (): FormRenderer => new FormRenderer($engine),
         ]));
         $twig->addExtension(new FormExtension());
-        $twig->addExtension(new TaskBoardTwigExtension('layout.html.twig', 'tabler', $routes));
+        $twig->addExtension(new TaskBoardTwigExtension($routes, pages: new TaskBoardPages('layout.html.twig'), urls: new UrlGenerator($collection, new RequestContext())));
+        $twig->addExtension(new ThemeExtension(new Theme()));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/assets/' . $path));
+        $twig->addGlobal('app', ['flashes' => [], 'request' => new Request()]);
 
         return $twig;
     }

@@ -94,15 +94,24 @@ class TaskSyncAttachment
     /** The remote file changed: the row now describes the new stored copy (updated in place, the key stays unique). */
     public function replace(?int $remoteSize, ?DateTimeImmutable $remoteUpdatedAt, StoredAttachment $stored, string $name, string $mime, ?TaskLink $link): void
     {
-        $this->remoteSize      = $remoteSize;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->remoteSize = $remoteSize;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->remoteUpdatedAt = $remoteUpdatedAt;
-        $this->storedRef       = $stored->ref;
-        $this->storedUrl       = $stored->url;
-        $this->name            = $name;
-        $this->mime            = $mime;
-        $this->size            = $stored->size;
-        $this->sha256          = $stored->sha256;
-        $this->link            = $link;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->storedRef = $stored->ref;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->storedUrl = $stored->url;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->name = $name;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->mime = $mime;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->size = $stored->size;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->sha256 = $stored->sha256;
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+        $this->link = $link;
     }
 
     public function stored(): StoredAttachment

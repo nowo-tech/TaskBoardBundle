@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ImportLimitExceededException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
@@ -31,6 +32,7 @@ use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
+use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Support\Text;
@@ -91,6 +93,8 @@ final readonly class TaskImportOrchestrator
         private int $maxRows = self::DEFAULT_MAX_ROWS,
         // Since 1.22.2 (audit EB-L7): rows per flush; memory stays flat whatever the size of the file.
         private int $batchSize = self::DEFAULT_BATCH_SIZE,
+        // Since 2.0.0: the host's quota listeners (TaskBoardEvents::QUOTA_CHECK), asked for the tasks the file would create.
+        private TaskBoardQuota $quota = new TaskBoardQuota(),
     ) {
     }
 
@@ -223,6 +227,20 @@ final readonly class TaskImportOrchestrator
             $batch = [];
             $dirty = false;
         };
+        $keyed     = $this->keyRows($this->orderRowsForHierarchy($rows), $scope, $parentTask);
+        $elsewhere = $this->findOnOtherBoards($board, $source, $scope, $keyed, $known, $parentTask);
+        // Since 2.0.0: before anything is written (columns included). Only rows that create a task count.
+        $adding = [];
+        foreach ($keyed as [, $key]) {
+            if (!isset($known[$key]) && !isset($elsewhere[$key])) {
+                $adding[$key] = true;
+            }
+        }
+        $refusal = $adding === [] ? null : $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_IMPORT, $board->getTenantKey(), $board, count($adding), $actor);
+        if ($refusal !== null) {
+            return new TaskImportResult(errors: [$refusal]);
+        }
+
         $columnsByName  = $this->indexColumnsByName($board);
         $columnsCreated = 0;
         $warnings       = [];
@@ -243,8 +261,6 @@ final readonly class TaskImportOrchestrator
             ++$columnsCreated;
         }
 
-        $keyed     = $this->keyRows($this->orderRowsForHierarchy($rows), $scope, $parentTask);
-        $elsewhere = $this->findOnOtherBoards($board, $source, $scope, $keyed, $known, $parentTask);
         /** @var array<string, bool> $editable whether the actor may edit each task (by id), asked once */
         $editable = [];
         $canEdit  = function (Task $task) use (&$editable, $actor): bool {
@@ -302,6 +318,7 @@ final readonly class TaskImportOrchestrator
                 $task                     = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $find, $canEdit, $warnings);
                 $editable[$task->getId()] = true;
                 foreach ($assignees->resolve($row) as $user) {
+                    // @igor-ignore - $task is a Doctrine entity of this import, not a shared service.
                     $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
                 }
                 $this->changeRecorder->recordCreated($task, $actor);

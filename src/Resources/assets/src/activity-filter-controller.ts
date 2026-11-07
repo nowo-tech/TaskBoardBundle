@@ -42,11 +42,4 @@ export default class ActivityFilterController extends Controller<HTMLElement> {
             item?.querySelector('[aria-controls]')?.setAttribute('aria-expanded', 'false');
         }
     }
-
-    confirm(event: Event): void {
-        const message = (event.currentTarget as HTMLElement).dataset.confirm ?? '';
-        if (message !== '' && !window.confirm(message)) {
-            event.preventDefault();
-        }
-    }
 }

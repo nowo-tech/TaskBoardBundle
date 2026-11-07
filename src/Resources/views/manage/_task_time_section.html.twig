@@ -11,13 +11,13 @@
 {% if subtaskDeviation|default(null) %}
     {% set _rows = _rows|merge([{label: 'task_board.time.subtasks_sum'|trans({}, 'NowoTaskBoardBundle'), value: subtaskDeviation, own: false}]) %}
 {% endif %}
-<section class="nowo-task-section nowo-task-detail nowo-task-detail__timesheet" data-controller="nowo-task-board-dialog">
+<section class="nowo-task-section nowo-task-detail nowo-task-detail__timesheet">
     <header class="nowo-task-section__header nowo-task-detail__section-header">
         <h2 class="nowo-task-section__title" id="nowo-task-time-title-{{ task.id }}">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'hourglass'}) }}{{ 'task_board.time.section'|trans({}, 'NowoTaskBoardBundle') }}
         </h2>
         {% if _canEdit %}
-            <button type="button" class="btn btn-sm btn-outline-primary" data-action="nowo-task-board-dialog#open" data-dialog="time">
+            <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-time-dialog-{{ task.id }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         {% endif %}
@@ -90,7 +90,7 @@
                         type="submit"
                         form="nowo-task-time-remove-form"
                         formaction="{{ path(nowo_task_board_route('task_time_remove'), {taskId: task.id, entryId: entry.id}|merge(taskRouteExtra|default({}))) }}"
-                        class="btn btn-sm btn-ghost-secondary nowo-task-time-entries__remove"
+                        class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-time-entries__remove"
                         title="{{ 'task_board.time.remove'|trans({}, 'NowoTaskBoardBundle') }}"
                     >
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}<span class="nowo-task-sr-only">{{ 'task_board.time.remove'|trans({}, 'NowoTaskBoardBundle') }}</span>
@@ -112,13 +112,7 @@
             {% endfor %}
         {{ form_end(timeEntryRemoveForm) }}
 
-        <dialog class="nowo-task-dialog nowo-task-dialog--native" data-nowo-task-board-dialog-target="dialog" data-dialog="time" aria-labelledby="nowo-task-time-dialog-title-{{ task.id }}">
-            <div class="nowo-task-dialog__header">
-                <h2 class="nowo-task-dialog__title" id="nowo-task-time-dialog-title-{{ task.id }}">{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-                <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
-                </button>
-            </div>
+        {% set _body %}
             {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
             {{ form_start(timeEntryForm, {method: 'POST', attr: {id: 'nowo-task-time-form-' ~ task.id, class: 'nowo-task-dialog__body'}}) }}
                 <div class="nowo-task-dialog__grid">
@@ -132,10 +126,20 @@
                     {% endif %}
                 {% endfor %}
             {{ form_end(timeEntryForm) }}
-            <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            </div>
-        </dialog>
+        {% endset %}
+        {% set _footer %}
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endset %}
+        {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+            id: 'nowo-task-time-dialog-' ~ task.id,
+            title: 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle'),
+            bundle: 'NowoTaskBoardBundle',
+            root_class: 'nowo-task-dialog nowo-task-dialog--native',
+            attr: {'data-dialog': 'time'},
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
     {% endif %}
 </section>

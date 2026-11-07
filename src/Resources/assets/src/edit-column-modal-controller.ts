@@ -1,11 +1,12 @@
 import { Controller } from '@hotwired/stimulus';
+import { openKitDialog } from './dialog-utils';
 
 /**
- * Opens the edit-column modal and posts the updated name / color / icon (since 1.11); the delete form (since 1.11)
- * posts to the column's delete URL after a confirmation.
+ * Opens the edit-column dialog and posts the updated name / color / icon (since 1.11); the delete form (since 1.11) posts to
+ * the column's delete URL, asking first through `data-confirm`.
  */
 export default class EditColumnModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'backdrop', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'title'];
+    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'title'];
 
     static values = {
         updateUrlTemplate: String,
@@ -23,9 +24,7 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
 
     declare deleteUrlTemplateValue: string;
 
-    declare readonly modalTarget: HTMLElement | HTMLDialogElement;
-
-    declare readonly backdropTarget: HTMLElement;
+    declare readonly modalTarget: HTMLDialogElement;
 
     declare readonly formTarget: HTMLFormElement;
 
@@ -34,8 +33,6 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
     declare readonly colorInputTarget: HTMLInputElement;
 
     declare readonly titleTarget: HTMLElement;
-
-    declare readonly hasBackdropTarget: boolean;
 
     declare readonly hasColorInputTarget: boolean;
 
@@ -75,83 +72,10 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
             this.titleTarget.textContent = this.titleTemplateValue.replace('%column%', columnName);
         }
 
-        this.showModal();
-        window.requestAnimationFrame(() => this.nameInputTarget.focus());
-    }
-
-    confirmDelete(event: Event): void {
-        const message = (event.currentTarget as HTMLElement).dataset.confirm ?? '';
-        if (message !== '' && !window.confirm(message)) {
-            event.preventDefault();
-        }
+        openKitDialog(this.modalTarget, trigger, this.nameInputTarget);
     }
 
     stopDrag(event: Event): void {
         event.stopPropagation();
-    }
-
-    close(): void {
-        this.hideModal();
-    }
-
-    closeOnBackdrop(event: Event): void {
-        if (event.target === this.backdropTarget) {
-            this.close();
-        }
-    }
-
-    private closeOnDialogBackdrop = (event: MouseEvent): void => {
-        if (event.target === this.modalTarget) {
-            this.close();
-        }
-    };
-
-    closeOnEscape = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') {
-            this.close();
-        }
-    };
-
-    private showModal(): void {
-        // Since 1.13 the dialogs are native <dialog> elements (top layer, Escape and the focus trap from the browser).
-        if (this.modalTarget instanceof HTMLDialogElement) {
-            if (!this.modalTarget.open) {
-                this.modalTarget.addEventListener('click', this.closeOnDialogBackdrop);
-                this.modalTarget.showModal();
-            }
-
-            return;
-        }
-        this.modalTarget.classList.add('show');
-        this.modalTarget.style.display = 'block';
-        this.modalTarget.removeAttribute('aria-hidden');
-        this.modalTarget.setAttribute('aria-modal', 'true');
-        document.body.classList.add('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.add('show');
-        }
-
-        document.addEventListener('keydown', this.closeOnEscape);
-    }
-
-    private hideModal(): void {
-        if (this.modalTarget instanceof HTMLDialogElement) {
-            this.modalTarget.removeEventListener('click', this.closeOnDialogBackdrop);
-            this.modalTarget.close();
-
-            return;
-        }
-        this.modalTarget.classList.remove('show');
-        this.modalTarget.style.display = 'none';
-        this.modalTarget.setAttribute('aria-hidden', 'true');
-        this.modalTarget.removeAttribute('aria-modal');
-        document.body.classList.remove('modal-open');
-
-        if (this.hasBackdropTarget) {
-            this.backdropTarget.classList.remove('show');
-        }
-
-        document.removeEventListener('keydown', this.closeOnEscape);
     }
 }

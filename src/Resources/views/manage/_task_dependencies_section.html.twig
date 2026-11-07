@@ -8,7 +8,7 @@
 {% set _canEdit = (canEditTask ?? true) and dependencyForm|default(null) is not null %}
 {% set _rows = task.outgoingDependencies|map(d => {dependency: d, other: d.targetTask, relation: d.dependencyType.relation(false)})
     |merge(task.incomingDependencies|map(d => {dependency: d, other: d.sourceTask, relation: d.dependencyType.relation(true)})) %}
-<details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__dependencies" data-controller="nowo-task-board-dialog">
+<details class="nowo-task-section nowo-task-detail__relation nowo-task-detail__dependencies">
     <summary class="nowo-task-section__header nowo-task-detail__relation-summary" data-controller="disclosure-icon">
         {{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}
         <span class="nowo-task-section__title" id="nowo-task-dependencies-title-{{ task.id }}">
@@ -26,7 +26,7 @@
                         type="submit"
                         form="nowo-task-dependency-remove-form"
                         formaction="{{ path(nowo_task_board_route('task_dependency_remove'), {taskId: task.id, dependencyId: row.dependency.id}|merge(taskRouteExtra|default({}))) }}"
-                        class="btn btn-sm btn-ghost-secondary nowo-task-dependencies__remove"
+                        class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-dependencies__remove"
                         title="{{ 'task_board.dependency.remove'|trans({}, 'NowoTaskBoardBundle') }}"
                     >
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}<span class="nowo-task-sr-only">{{ 'task_board.dependency.remove_named'|trans({'%title%': row.other.title}, 'NowoTaskBoardBundle') }}</span>
@@ -40,7 +40,7 @@
 
     {% if _canEdit %}
         <div class="nowo-task-section__body nowo-task-dependencies__actions">
-            <button type="button" class="btn btn-sm btn-outline-primary" data-action="nowo-task-board-dialog#open" data-dialog="dependency">
+            <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-dependency-dialog-{{ task.id }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>
@@ -54,13 +54,7 @@
             {% endfor %}
         {{ form_end(dependencyRemoveForm) }}
 
-        <dialog class="nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide" data-nowo-task-board-dialog-target="dialog" data-dialog="dependency" aria-labelledby="nowo-task-dependency-dialog-title-{{ task.id }}">
-            <div class="nowo-task-dialog__header">
-                <h2 class="nowo-task-dialog__title" id="nowo-task-dependency-dialog-title-{{ task.id }}">{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-                <button type="button" class="nowo-task-dialog__close" aria-label="{{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-dialog#close">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'x'}) }}
-                </button>
-            </div>
+        {% set _body %}
             {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
             {{ form_start(dependencyForm, {method: 'POST', attr: {id: 'nowo-task-dependency-form-' ~ task.id, class: 'nowo-task-dialog__body', 'data-controller': 'nowo-task-board-option-filter'}}) }}
                 <p class="nowo-task-dialog__help">{{ 'task_board.dependency.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
@@ -74,10 +68,21 @@
                     {% endif %}
                 {% endfor %}
             {{ form_end(dependencyForm) }}
-            <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" form="nowo-task-dependency-form-{{ task.id }}" class="{{ nowo_task_board_btn_class('btn_primary') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            </div>
-        </dialog>
+        {% endset %}
+        {% set _footer %}
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="submit" form="nowo-task-dependency-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endset %}
+        {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+            id: 'nowo-task-dependency-dialog-' ~ task.id,
+            title: 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle'),
+            bundle: 'NowoTaskBoardBundle',
+            root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
+            size: 'wide',
+            attr: {'data-dialog': 'dependency'},
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
     {% endif %}
 </details>

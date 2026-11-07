@@ -1,4 +1,5 @@
-{% extends nowo_task_board_layout %}
+{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
+{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
 {#
     Since 1.27.0 (TB-SYNC-2): the People page of a linked board — each remote person (assignees, creators, watchers,
     commenters, time-entry users, workspace members) with a host-user select pre-filled by e-mail, then by name. Saving
@@ -8,63 +9,66 @@
     firstImportPending. Override with templates.connection_people.
 #}
 
-{% block stylesheets %}
+{% block nowo_ui_styles %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
     <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
 {% endblock %}
 
-{% block title %}{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+{% block nowo_ui_scripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
 
-{% block body %}
+{% block nowo_ui_document_title %}{{ 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle') }} — {{ board.name }}{% endblock %}
+
+{% block nowo_ui_page_header %}
     {% set _provider = (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') %}
-    {{ include('@NowoTaskBoardBundle/manage/_page_header.html.twig', {
-        pageTitle: 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle'),
-        pageSubtitle: 'task_board.sync.people.subtitle'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle'),
-        breadcrumbRoute: nowo_task_board_route('board'),
-        breadcrumbParams: {boardId: board.id},
-        breadcrumbLabel: board.name,
-        breadcrumbIcon: board.icon,
-        headerActions: [
-            {href: path(nowo_task_board_route('board_connection'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
+    {{ nowo_ui_page_header(nowo_task_board_header({
+        title: 'task_board.sync.people.title'|trans({}, 'NowoTaskBoardBundle'),
+        intro: 'task_board.sync.people.subtitle'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle'),
+        crumb: {href: path(nowo_task_board_route('board'), {boardId: board.id}), label: (board.icon ? board.icon ~ ' ' : '') ~ board.name},
+        actions: [
+            {href: path(nowo_task_board_route('board_connection'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle')},
         ],
-        dashboardRoute: dashboardRoute|default(null),
-    }) }}
+        back: dashboardRoute|default(null) ? path(dashboardRoute) : null,
+    })) }}
+{% endblock %}
 
-    {{ include('@NowoTaskBoardBundle/manage/_flashes.html.twig') }}
+{% block nowo_ui_content %}
+    {% set _provider = (provider ? provider.labelKey : 'task_board.sync.provider.unknown')|trans({}, 'NowoTaskBoardBundle') %}
 
     {% block nowo_task_board_connection_people %}
-        <section class="card nowo-task-sync-people" aria-labelledby="nowo-task-sync-people-title" data-testid="nowo-task-sync-people">
-            <div class="card-header">
-                <h2 class="card-title" id="nowo-task-sync-people-title">{{ _provider }} · {{ connection.containerLabel }}</h2>
+        <section class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-sync-people" aria-labelledby="nowo-task-sync-people-title" data-testid="nowo-task-sync-people">
+            <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+                <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}" id="nowo-task-sync-people-title">{{ _provider }} · {{ connection.containerLabel }}</h2>
             </div>
-            <div class="card-body">
+            <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
                 {% if firstImportPending %}
-                    <p class="alert alert-info" data-testid="nowo-task-sync-people-step">{{ 'task_board.sync.people.step_help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                    <p class="{{ nowo_ui_class('flash_info', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-step">{{ 'task_board.sync.people.step_help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
                 {% endif %}
-                <p class="text-secondary">{{ 'task_board.sync.people.help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.sync.people.help'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
                 {% if pendingReassigns > 0 %}
-                    <p class="alert alert-warning" role="status" data-testid="nowo-task-sync-people-pending">{{ 'task_board.sync.people.pending'|trans({'%count%': pendingReassigns}, 'NowoTaskBoardBundle') }}</p>
+                    <p class="{{ nowo_ui_class('flash_warning', 'NowoTaskBoardBundle') }}" role="status" data-testid="nowo-task-sync-people-pending">{{ 'task_board.sync.people.pending'|trans({'%count%': pendingReassigns}, 'NowoTaskBoardBundle') }}</p>
                 {% endif %}
 
                 {% if directory is null %}
-                    <p class="text-secondary" data-testid="nowo-task-sync-people-none">{{ 'task_board.sync.people.none_yet'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
+                    <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-none">{{ 'task_board.sync.people.none_yet'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
                 {% else %}
-                    <nav class="nav nav-pills mb-3" aria-label="{{ 'task_board.sync.people.filter'|trans({}, 'NowoTaskBoardBundle') }}">
+                    <nav class="nav nav-pills nowo-task-mb-3" aria-label="{{ 'task_board.sync.people.filter'|trans({}, 'NowoTaskBoardBundle') }}">
                         {% for _f in ['all', 'unmapped'] %}
                             <a class="nav-link{{ filter == _f ? ' active' : '' }}" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: _f}) }}"{% if filter == _f %} aria-current="page"{% endif %}>{{ ('task_board.sync.people.filter.' ~ _f)|trans({}, 'NowoTaskBoardBundle') }}</a>
                         {% endfor %}
                     </nav>
 
                     {% if rows is empty %}
-                        <p class="text-secondary" data-testid="nowo-task-sync-people-empty">{{ 'task_board.sync.people.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-empty">{{ 'task_board.sync.people.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
                     {% endif %}
 
                     {{ form_start(peopleForm, {method: 'POST', attr: {id: 'nowo-task-sync-people-form'}}) }}
                         {% if rows is not empty %}
                             {#- A scrolling region is reachable with the keyboard (WCAG 2.1.1). -#}
-                            <div class="table-responsive" tabindex="0" role="region" aria-labelledby="nowo-task-sync-people-title">
-                                <table class="table card-table table-vcenter">
+                            <div class="{{ nowo_ui_class('table_wrap', 'NowoTaskBoardBundle') }}" tabindex="0" role="region" aria-labelledby="nowo-task-sync-people-title">
+                                <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }}">
                                     <caption class="visually-hidden">{{ 'task_board.sync.people.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
                                     <thead>
                                         <tr>
@@ -77,23 +81,23 @@
                                             {% set _person = row.person %}
                                             <tr data-testid="nowo-task-sync-person-row">
                                                 <td>
-                                                    <div class="d-flex align-items-center gap-2">
+                                                    <div class="nowo-task-flex nowo-task-center nowo-task-gap">
                                                         <span class="avatar avatar-sm nowo-task-member-avatar" aria-hidden="true">{{ _person.name|slice(0, 1)|upper }}</span>
                                                         <div>
                                                             <div id="nowo-task-sync-person-{{ _person.id }}">{{ _person.name }}</div>
-                                                            {% if _person.email %}<div class="text-secondary small">{{ _person.email }}</div>{% endif %}
-                                                            <div class="small">
+                                                            {% if _person.email %}<div class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small">{{ _person.email }}</div>{% endif %}
+                                                            <div class="nowo-task-small">
                                                                 {% if row.prefill == 'name' %}
-                                                                    <span class="badge bg-yellow-lt" data-testid="nowo-task-sync-person-suggestion">{{ 'task_board.sync.people.prefill.name_suggestion'|trans({'%user%': candidateLabels[row.suggestedUserId]|default('')}, 'NowoTaskBoardBundle') }}</span>
+                                                                    <span class="{{ nowo_ui_class('badge_warning', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-person-suggestion">{{ 'task_board.sync.people.prefill.name_suggestion'|trans({'%user%': candidateLabels[row.suggestedUserId]|default('')}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% elseif row.prefill == 'email' %}
-                                                                    <span class="badge bg-yellow-lt" data-testid="nowo-task-sync-person-prefill">{{ ('task_board.sync.people.prefill.' ~ row.prefill)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                    <span class="{{ nowo_ui_class('badge_warning', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-person-prefill">{{ ('task_board.sync.people.prefill.' ~ row.prefill)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% elseif row.prefill == 'mapped' %}
-                                                                    <span class="badge bg-green-lt">{{ ('task_board.sync.people.state.' ~ _person.mapping.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                    <span class="{{ nowo_ui_class('badge_success', 'NowoTaskBoardBundle') }}">{{ ('task_board.sync.people.state.' ~ _person.mapping.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% elseif row.prefill == 'external' %}
-                                                                    <span class="badge bg-secondary-lt">{{ 'task_board.sync.people.state.external'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                    <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }}">{{ 'task_board.sync.people.state.external'|trans({}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% endif %}
                                                                 {% if row.pending %}
-                                                                    <span class="badge bg-orange-lt">{{ 'task_board.sync.people.reapplying'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                                                    <span class="{{ nowo_ui_class('badge_warning', 'NowoTaskBoardBundle') }}">{{ 'task_board.sync.people.reapplying'|trans({}, 'NowoTaskBoardBundle') }}</span>
                                                                 {% endif %}
                                                             </div>
                                                         </div>
@@ -106,14 +110,14 @@
                                 </table>
                             </div>
                         {% endif %}
-                        <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                        <div class="nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-center nowo-task-mt-3">
                             {% if rows is not empty or firstImportPending %}
-                                <button type="submit" class="btn btn-primary" data-testid="nowo-task-sync-people-save">
+                                <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-save">
                                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ (firstImportPending ? 'task_board.sync.people.save_import' : 'task_board.sync.people.save')|trans({}, 'NowoTaskBoardBundle') }}
                                 </button>
                             {% endif %}
                             {% if firstImportPending %}
-                                <button type="submit" name="skip" value="1" class="btn btn-outline-secondary" data-testid="nowo-task-sync-people-skip">{{ 'task_board.sync.people.skip'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                                <button type="submit" name="skip" value="1" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-skip">{{ 'task_board.sync.people.skip'|trans({}, 'NowoTaskBoardBundle') }}</button>
                             {% endif %}
                         </div>
                     {{ form_end(peopleForm) }}
@@ -121,15 +125,15 @@
                     {% if peopleFormerForm|default(null) %}
                         {#- Since 1.28.0 (sync.people_bulk_former). -#}
                         {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'mt-3'}}) }}
-                            <p class="text-secondary small mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                            <button type="submit" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                            <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small nowo-task-mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                            <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
                         {{ form_end(peopleFormerForm) }}
                     {% endif %}
 
                     {% if page > 1 or hasNext %}
-                        <nav class="d-flex gap-2 mt-3" aria-label="{{ 'task_board.sync.people.pages'|trans({}, 'NowoTaskBoardBundle') }}">
-                            {% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page - 1}) }}">{{ 'task_board.sync.people.previous'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
-                            {% if hasNext %}<a class="btn btn-sm btn-outline-secondary" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page + 1}) }}" data-testid="nowo-task-sync-people-next">{{ 'task_board.sync.people.next'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
+                        <nav class="nowo-task-flex nowo-task-gap nowo-task-mt-3" aria-label="{{ 'task_board.sync.people.pages'|trans({}, 'NowoTaskBoardBundle') }}">
+                            {% if page > 1 %}<a class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page - 1}) }}">{{ 'task_board.sync.people.previous'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
+                            {% if hasNext %}<a class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: filter, page: page + 1}) }}" data-testid="nowo-task-sync-people-next">{{ 'task_board.sync.people.next'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
                         </nav>
                     {% endif %}
                 {% endif %}

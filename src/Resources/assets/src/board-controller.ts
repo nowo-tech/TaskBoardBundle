@@ -163,15 +163,20 @@ export default class BoardController extends Controller<HTMLElement> {
             body.set('_token', this.moveCsrfTokenValue);
         }
 
-        const response = await fetch(moveUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-            body: body.toString(),
-            credentials: 'same-origin',
-        });
+        try {
+            const response = await fetch(moveUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                body: body.toString(),
+                credentials: 'same-origin',
+            });
 
-        // 409: the host's limit refused reopening the task; the page shows why.
-        if (response.ok || response.status === 409) {
+            // 409: the host's limit refused reopening the task; the page shows why.
+            if (response.ok || response.status === 409) {
+                window.location.reload();
+            }
+        } catch {
+            // The request did not finish (offline, or the page is leaving): the board shows what the server has.
             window.location.reload();
         }
 

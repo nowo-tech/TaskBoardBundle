@@ -278,6 +278,7 @@ class TaskBoardConnection
 
     public function markUnmatchedColumnsResolved(DateTimeImmutable $at): self
     {
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->options[self::OPTION_UNMATCHED_RESOLVED] = $at->format(DATE_ATOM);
 
         return $this;
@@ -291,6 +292,7 @@ class TaskBoardConnection
     public function setStatusHistoryUnavailable(bool $unavailable): self
     {
         if ($unavailable) {
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->options[self::OPTION_HISTORY_UNAVAILABLE] = true;
         } else {
             unset($this->options[self::OPTION_HISTORY_UNAVAILABLE]);
@@ -302,6 +304,7 @@ class TaskBoardConnection
     /** Since 1.28.0: the columns this connection created, by id (colour and order follow the provider's statuses once). */
     public function addCreatedColumn(string $columnId): self
     {
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->options[self::OPTION_CREATED_COLUMNS] = trim(($this->options[self::OPTION_CREATED_COLUMNS] ?? '') . ' ' . $columnId);
 
         return $this;
@@ -337,6 +340,7 @@ class TaskBoardConnection
         if ($description === null) {
             unset($this->options[self::OPTION_SOURCE_DESCRIPTION]);
         } else {
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->options[self::OPTION_SOURCE_DESCRIPTION] = $description;
         }
 

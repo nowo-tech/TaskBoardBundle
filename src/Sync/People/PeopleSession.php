@@ -71,6 +71,7 @@ final class PeopleSession
     /** Adds to a counter. */
     public function count(string $name, int $by = 1): void
     {
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->stats[$name] = ($this->stats[$name] ?? 0) + $by;
     }
 
@@ -78,6 +79,7 @@ final class PeopleSession
     public function warn(string $code): void
     {
         if (!in_array($code, $this->warnings, true)) {
+            // @igor-ignore - Built per sync run, not a shared service.
             $this->warnings[] = $code;
         }
     }

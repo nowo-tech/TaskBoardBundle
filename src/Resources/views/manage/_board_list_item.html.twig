@@ -6,27 +6,7 @@
 #}
 <li class="nowo-task-board-list__item" data-testid="nowo-task-board-list-item">
     <div class="nowo-task-board-list__main">
-        <a class="nowo-task-board-list__name text-reset fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}</a>
-        {#- Since 1.30.0 (spec 211): tenantLabels from nowo_task_board_tenant_labels(). -#}
-        {% set _tenant = board.tenantKey ? (tenantLabels|default({}))[board.tenantKey]|default(null) : null %}
-        {% if _tenant %}
-            <span class="nowo-task-board-list__tenant text-secondary small" data-testid="nowo-task-board-list-tenant">{% if _tenant.icon %}<span aria-hidden="true">{{ _tenant.icon }}</span> {% endif %}{{ _tenant.label }}</span>
-        {% endif %}
-        {% if board.description and board.descriptionFormat == 'markdown' %}
-            {{ include('@NowoTaskBoardBundle/manage/_board_description.html.twig', {board: board, fold: false}) }}
-        {% elseif board.description %}
-            <p class="nowo-task-board-list__description text-secondary small mb-0">{{ board.description }}</p>
-        {% endif %}
+        {{ include('@NowoTaskBoardBundle/manage/_board_item_main.html.twig') }}
     </div>
-    <div class="nowo-task-board-list__views btn-list" role="group" aria-label="{{ 'task_board.index.views_of'|trans({'%name%': board.name}, 'NowoTaskBoardBundle') }}">
-        {% for view in [
-            {route: 'board', params: {view: 'board'}, icon: 'layout-kanban', label: 'task_board.view.board', aria: 'task_board.index.open_board', class: 'btn-primary'},
-            {route: 'list', params: {}, icon: 'list', label: 'task_board.view.list', aria: 'task_board.index.open_list', class: 'btn-outline-secondary'},
-            {route: 'gantt', params: {}, icon: 'chart-bar', label: 'task_board.view.gantt', aria: 'task_board.index.open_gantt', class: 'btn-outline-secondary'},
-        ] %}
-            <a href="{{ path(nowo_task_board_route(view.route), {boardId: board.id}|merge(view.params)) }}" class="btn btn-sm {{ view.class }}" aria-label="{{ view.aria|trans({'%name%': board.name}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-view-{{ view.route }}">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: view.icon}) }}{{ view.label|trans({}, 'NowoTaskBoardBundle') }}
-            </a>
-        {% endfor %}
-    </div>
+    {{ include('@NowoTaskBoardBundle/manage/_board_item_views.html.twig') }}
 </li>

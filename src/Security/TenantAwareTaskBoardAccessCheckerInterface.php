@@ -17,4 +17,10 @@ interface TenantAwareTaskBoardAccessCheckerInterface extends TaskBoardAccessChec
      * outside a tenant URL).
      */
     public function canCreateBoard(object $user, ?string $tenantKey = null): bool;
+
+    /**
+     * Since 2.0.0: whether `$user` may list the boards of the tenant `$tenantKey`. With a tenant, a refusal answers 404 on
+     * its index and create route. Without a tenant, a refusal shows an empty index, as before.
+     */
+    public function canListBoards(object $user, ?string $tenantKey = null): bool;
 }

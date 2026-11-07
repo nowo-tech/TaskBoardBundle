@@ -74,6 +74,7 @@ class TaskChangeHistory
     public function backfillUserName(): self
     {
         if ($this->userName === null && $this->user !== null) {
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->userName = Text::cut(UserLabel::of($this->user), Task::USER_NAME_MAX);
         }
 
@@ -84,8 +85,10 @@ class TaskChangeHistory
     public function detachUser(bool $forgetName = false): self
     {
         $this->backfillUserName();
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->user = null;
         if ($forgetName) {
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->userName = null;
         }
 

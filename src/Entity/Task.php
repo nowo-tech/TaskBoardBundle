@@ -255,6 +255,7 @@ class Task
         if ($this->parent === $parent) {
             return $this;
         }
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->parent?->children->removeElement($this);
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->parent = $parent;

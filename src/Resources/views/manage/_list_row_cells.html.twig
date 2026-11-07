@@ -1,0 +1,45 @@
+{#
+    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts.
+    The row's attributes (filter, sort, totals, panel) come from nowo_task_board_list_table().
+#}
+{% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
+{% set _deviation = nowo_task_board_deviation(task) %}
+<td class="{{ _cell }}">
+    <span class="nowo-task-list__title">
+        <span class="nowo-task-list__status-dot" aria-hidden="true"></span>
+        <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id, from: 'list'}) }}">{{ task.title }}</a>
+        {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}
+        {% if _comments > 0 %}
+            <span class="nowo-task-list__comments" title="{{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'message-circle'}) }}{{ _comments }}<span class="nowo-task-sr-only"> {{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}</span></span>
+        {% endif %}
+    </span>
+</td>
+<td class="{{ _cell }}">
+    <span class="nowo-task-avatars">
+        {% for member in task.members|slice(0, 3) %}
+            {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-avatar', size: 24, labelled: true}, with_context: false) }}
+        {% else %}
+            <span class="nowo-task-list__none">—</span>
+        {% endfor %}
+    </span>
+</td>
+<td class="{{ _cell }} nowo-task-list__date" data-label="{{ 'task_board.form.task.due'|trans({}, 'NowoTaskBoardBundle') }}">
+    {% if task.dueAt %}
+        <time datetime="{{ task.dueAt|date('Y-m-d') }}" class="{{ not task.completed and task.dueAt|date('Y-m-d') < 'now'|date('Y-m-d') ? 'is-late' : '' }}">{{ task.dueAt|date('Y-m-d') }}</time>
+    {% else %}
+        <span class="nowo-task-list__none">—</span>
+    {% endif %}
+</td>
+<td class="{{ _cell }}">
+    <span class="nowo-task-priority nowo-task-priority--{{ task.priority.value }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ ('task_board.priority.' ~ task.priority.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+</td>
+<td class="{{ _cell }}">{{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags}) }}</td>
+<td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">{{ _deviation.hasEstimate ? _deviation.estimatedMinutes|nowo_task_board_duration : '—' }}</td>
+<td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">{{ _deviation.spentMinutes|nowo_task_board_duration }}</td>
+<td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">
+    {% if _deviation.hasEstimate %}
+        <span class="nowo-task-deviation-pill nowo-task-deviation-pill--{{ _deviation.status }}" title="{{ ('task_board.time.status.' ~ _deviation.status)|trans({}, 'NowoTaskBoardBundle') }}">{{ _deviation.difference|nowo_task_board_duration(true) }} ({{ _deviation.percent > 0 ? '+' : '' }}{{ _deviation.percent }} %)</span>
+    {% else %}
+        <span class="nowo-task-list__none">—</span>
+    {% endif %}
+</td>

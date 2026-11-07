@@ -9,7 +9,7 @@
             formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="previous"
-            class="btn nowo-task-detail__status-nav"
+            class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-detail__status-nav"
             {% if not columnNavigation.canPrevious %} disabled{% endif %}
             title="{{ 'task_board.action.previous_column'|trans({}, 'NowoTaskBoardBundle') }}"
         >
@@ -21,7 +21,7 @@
             {% set _statusColor = task.column ? task.column.color|nowo_task_board_safe_color : null %}
             <button
                 type="button"
-                class="btn nowo-task-detail__status-current{{ _statusColor ? ' nowo-task-detail__status-current--colored' : '' }}"
+                class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-detail__status-current{{ _statusColor ? ' nowo-task-detail__status-current--colored' : '' }}"
                 {% if _statusColor %}data-nowo-task-vars="{{ {'--nowo-column-color': _statusColor}|json_encode }}"{% endif %}
                 data-nowo-task-board-task-status-target="toggle"
                 data-action="nowo-task-board-task-status#toggle"
@@ -32,7 +32,7 @@
                 {% if columnNavigation.currentColumnName %}
                     <span class="nowo-task-detail__status-label">{{ columnNavigation.currentColumnName }}</span>
                 {% else %}
-                    <span class="text-secondary">{{ 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle') }}</span>
                 {% endif %}
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'chevron-down', class: 'nowo-task-detail__status-caret'}) }}
                 {% if columnNavigation.isCompleted %}
@@ -67,7 +67,7 @@
                         {% endif %}
                     </button>
                 {% else %}
-                    <span class="dropdown-item-text text-secondary">{{ 'task_board.task.no_columns'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                    <span class="dropdown-item-text {{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.no_columns'|trans({}, 'NowoTaskBoardBundle') }}</span>
                 {% endfor %}
             </div>
         </div>
@@ -79,7 +79,7 @@
             formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="next"
-            class="btn nowo-task-detail__status-nav"
+            class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-detail__status-nav"
             {% if not columnNavigation.canNext %} disabled{% endif %}
             title="{{ columnNavigation.nextColumnName ?? 'task_board.action.next_column'|trans({}, 'NowoTaskBoardBundle') }}"
         >
@@ -93,7 +93,7 @@
             formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
             name="action"
             value="done"
-            class="btn nowo-task-detail__status-nav nowo-task-detail__status-nav--done"
+            class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-detail__status-nav nowo-task-detail__status-nav--done"
             {% if not columnNavigation.canDone %} disabled{% endif %}
             title="{{ 'task_board.action.mark_done'|trans({}, 'NowoTaskBoardBundle') }}"
         >

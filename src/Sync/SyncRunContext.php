@@ -165,29 +165,52 @@ final class SyncRunContext
      */
     public function resumeFrom(SyncReport $previous): void
     {
-        $this->created             = $previous->created;
-        $this->updated             = $previous->updated;
-        $this->unchanged           = $previous->unchanged;
-        $this->archived            = $previous->archived;
-        $this->restored            = $previous->restored;
-        $this->columnsCreated      = $previous->columnsCreated;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->created = $previous->created;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->updated = $previous->updated;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->unchanged = $previous->unchanged;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->archived = $previous->archived;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->restored = $previous->restored;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->columnsCreated = $previous->columnsCreated;
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->dependenciesCreated = $previous->dependenciesCreated;
-        $this->commentsCreated     = $previous->commentsCreated;
-        $this->commentsUpdated     = $previous->commentsUpdated;
-        $this->skipReadOnly        = $previous->skips->readOnly;
-        $this->skipElsewhere       = $previous->skips->elsewhere;
-        $this->skipLocallyDeleted  = $previous->skips->locallyDeleted;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->commentsCreated = $previous->commentsCreated;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->commentsUpdated = $previous->commentsUpdated;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->skipReadOnly = $previous->skips->readOnly;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->skipElsewhere = $previous->skips->elsewhere;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->skipLocallyDeleted = $previous->skips->locallyDeleted;
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->skipLocallyArchived = $previous->skips->locallyArchived;
-        $this->skipRepeated        = $previous->skips->repeated;
-        $this->filesCopied         = $previous->files->copied;
-        $this->filesReused         = $previous->files->reused;
-        $this->filesRefused        = $previous->files->refused;
-        $this->bytes               = $previous->files->bytes;
-        $this->conflicts           = $previous->conflicts;
-        $this->warnings            = $previous->warnings;
-        $this->total               = $previous->total;
-        $this->startedAt           = $previous->startedAt;
-        $this->stats               = $previous->stats + $previous->people->toCounters() + $previous->time->toCounters();
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->skipRepeated = $previous->skips->repeated;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->filesCopied = $previous->files->copied;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->filesReused = $previous->files->reused;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->filesRefused = $previous->files->refused;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->bytes = $previous->files->bytes;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->conflicts = $previous->conflicts;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->warnings = $previous->warnings;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->total = $previous->total;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->startedAt = $previous->startedAt;
+        // @igor-ignore - Built per sync run, not a shared service.
+        $this->stats = $previous->stats + $previous->people->toCounters() + $previous->time->toCounters();
     }
 
     /** Since 1.25: one counter of {@see self::$stats} (0 when absent). */
@@ -199,6 +222,7 @@ final class SyncRunContext
     /** Since 1.25: adds to a counter of {@see self::$stats}. */
     public function count(string $name, int $by = 1): void
     {
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->stats[$name] = ($this->stats[$name] ?? 0) + $by;
     }
 
@@ -212,6 +236,7 @@ final class SyncRunContext
                 return;
             }
         }
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->warnings[] = new SyncError($code, $params);
     }
 

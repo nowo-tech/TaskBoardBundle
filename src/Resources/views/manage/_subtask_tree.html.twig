@@ -1,54 +1,22 @@
 {#
-    Recursive subtask tree (since 1.10): any depth, a done / total counter on every node with subtasks, nested levels
-    in <details> (expand / collapse without JavaScript).
-    Variables:
-      tasks     the nodes of this level (list of Task)
-      taskTree  Nowo\TaskBoardBundle\Support\TaskTree built from the board's tasks (one query); without it the
-                partial walks task.subtasks (a query per node)
-      depth     level of `tasks` (default 0)
+    The subtask tree (since 1.10, any depth, a done / total counter on every node). Since 2.0.0 UiKit's `tree` partial: an APG
+    treeview with js/nowo-ui-tree.js, every group expanded in the markup, so without the script the whole tree shows (owner
+    decision 2026-11-06). The check icon goes through leading_template, the counter, column and tags through actions_template.
+    Variables: tasks (the first level), taskTree (one query; without it the partial walks task.subtasks), panel,
+    panelTargetPath (the title then opens the subtask in the drawer).
 #}
-{% set depth = depth|default(0) %}
-{% set tree = taskTree|default(null) %}
-<ul class="nowo-task-subtree" data-depth="{{ depth }}">
-    {% for node in tasks %}
-        {% set children = tree ? tree.childrenOf(node) : node.subtasks %}
-        {% set progress = tree ? tree.progress(node) : nowo_task_board_subtask_progress(node) %}
-        <li class="nowo-task-subtree__item{{ node.completed ? ' is-done' : '' }}" data-task-id="{{ node.id }}">
-            <div class="nowo-task-subtree__row">
-                <span class="nowo-task-subtree__check nowo-task-detail__subtask-check{{ node.completed ? ' is-done' : '' }}" aria-hidden="true">
-                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: (node.completed ? 'circle-check' : 'circle')}) }}
-                </span>
-                {#
-                    Since 1.20: the title (and its subtask counter) on the left, the column and the tags as badges in a
-                    right-hand column; in the panel the title opens the subtask in the drawer (data-task-panel-url).
-                #}
-                <div class="nowo-task-subtree__body">
-                    <a href="{{ path(nowo_task_board_route('task'), {taskId: node.id}) }}" class="nowo-task-subtree__title"{% if panel|default(false) %} data-task-panel-url="{{ path(nowo_task_board_route('task_panel'), {taskId: node.id}|merge(taskRouteExtra|default({}))) }}"{% endif %} data-title="{{ node.title }}">{{ node.title }}</a>
-                    {% if progress.total > 0 %}
-                        <span class="nowo-task-subtree__progress" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
-                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }} {{ progress.done }}/{{ progress.total }}
-                        </span>
-                    {% endif %}
-                </div>
-                {% if node.column or node.tags is not empty %}
-                    <div class="nowo-task-subtree__meta">
-                        {% if node.column %}
-                            <span class="nowo-task-subtree__column nowo-task-badge" title="{{ 'task_board.task.status'|trans({}, 'NowoTaskBoardBundle') }}">{{ node.column.name }}</span>
-                        {% endif %}
-                        {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: node.tags, wrapper_class: 'nowo-task-subtree__tags'}) }}
-                    </div>
-                {% endif %}
-            </div>
-            {% if children|length > 0 %}
-                <details class="nowo-task-subtree__children" open>
-                    <summary class="nowo-task-subtree__summary" data-controller="disclosure-icon">{{ include('@NowoTaskBoardBundle/manage/_disclosure.html.twig') }}{{ 'task_board.task.subtasks_progress'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}</summary>
-                    {{ include('@NowoTaskBoardBundle/manage/_subtask_tree.html.twig', {tasks: children, depth: depth + 1}) }}
-                </details>
-            {% endif %}
-        </li>
-    {% else %}
-        {% if depth == 0 %}
-            <li class="nowo-task-subtree__empty nowo-task-detail__empty">{{ 'task_board.task.no_subtasks'|trans({}, 'NowoTaskBoardBundle') }}</li>
-        {% endif %}
-    {% endfor %}
-</ul>
+{% set _nodes = nowo_task_board_subtask_nodes(tasks, taskTree|default(null), panel|default(false), panelTargetPath|default('')) %}
+{% if _nodes is empty %}
+    <p class="nowo-task-subtree__empty nowo-task-detail__empty">{{ 'task_board.task.no_subtasks'|trans({}, 'NowoTaskBoardBundle') }}</p>
+{% else %}
+    <div class="nowo-task-subtree">
+        {{ include(nowo_ui_partial('tree', 'NowoTaskBoardBundle'), {
+            nodes: _nodes,
+            label: 'task_board.task.subtasks'|trans({}, 'NowoTaskBoardBundle'),
+            leading_template: '@NowoTaskBoardBundle/manage/_subtask_node_leading.html.twig',
+            actions_template: '@NowoTaskBoardBundle/manage/_subtask_node_meta.html.twig',
+            attr: {id: 'nowo-task-subtree-' ~ (_nodes|first).id},
+            bundle: 'NowoTaskBoardBundle',
+        }, false) }}
+    </div>
+{% endif %}

@@ -2,7 +2,7 @@
     Since 1.24: the New board form, one partial for the index dialog, its <noscript> copy and the 422 answer of an
     invalid create in a host dialog (board.create_dialog_header). Values and errors of an invalid submission are kept.
     Variables: form (the TaskBoardFormType view, posted to the board_create route of the current tenant);
-    in_dialog (default false: adds Cancel, which closes the surrounding nowo-task-board-dialog);
+    in_dialog (default false: adds Cancel, which closes the surrounding kit dialog);
     id_prefix (default '': prefixes the field ids and the form id, so a second copy of the form on the page keeps its
     labels); since 1.26 with_actions (default true; false: no action row, the index dialog renders Cancel and Create in
     its footer with form="nowo-task-board-create-form"). The form id is `<id_prefix>nowo-task-board-create-form`; the
@@ -19,7 +19,7 @@
     {% if _steps %}
         <div class="nowo-task-board-create__scopes" data-nowo-task-board-create-steps-target="scopes" data-testid="nowo-task-board-create-scopes"{% if form.scope|length == 1 %} hidden{% endif %}>
             {{ form_row(form.scope) }}
-            <button type="button" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-action="nowo-task-board-create-steps#next" data-testid="nowo-task-board-create-next">{{ 'task_board.form.board.scope_next'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-create-steps#next" data-testid="nowo-task-board-create-next">{{ 'task_board.form.board.scope_next'|trans({}, 'NowoTaskBoardBundle') }}</button>
         </div>
     {% endif %}
     {% if _steps %}<div class="nowo-task-board-create__details" data-nowo-task-board-create-steps-target="details" data-testid="nowo-task-board-create-details">{% endif %}
@@ -46,12 +46,12 @@
         <div class="nowo-task-dialog__actions"{% if _in_dialog %} data-nowo-ui-dialog-actions{% endif %}>
             {% if _in_dialog and form.scope is defined %}
                 {#- Interim: a host's remote dialog lifts this row to its footer. UiKit's lift to the header uses the same attribute. -#}
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _id_prefix ~ 'nowo-task-board-create-form' }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _id_prefix ~ 'nowo-task-board-create-form' }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
             {% if _in_dialog %}
-                <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
-            <button type="submit" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-testid="nowo-task-board-create-submit">
+            <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-create-submit">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>

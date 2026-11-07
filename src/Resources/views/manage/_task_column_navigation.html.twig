@@ -1,21 +1,21 @@
-<div class="card mb-4">
-    <div class="card-header">
-        <h2 class="card-title">{{ 'task_board.task.workflow'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+<div class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-mb-4">
+    <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+        <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.workflow'|trans({}, 'NowoTaskBoardBundle') }}</h2>
     </div>
-    <div class="card-body">
-        <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
-            <span class="text-secondary">{{ 'task_board.task.current_column'|trans({}, 'NowoTaskBoardBundle') }}:</span>
+    <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
+        <div class="nowo-task-flex nowo-task-center nowo-task-gap nowo-task-wrap nowo-task-mb-3">
+            <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.current_column'|trans({}, 'NowoTaskBoardBundle') }}:</span>
             {% if columnNavigation.currentColumnName %}
-                <span class="badge bg-blue-lt">{{ columnNavigation.currentColumnName }}</span>
+                <span class="{{ nowo_ui_class('badge_info', 'NowoTaskBoardBundle') }}">{{ columnNavigation.currentColumnName }}</span>
             {% else %}
-                <span class="text-secondary">—</span>
+                <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">—</span>
             {% endif %}
             {% if columnNavigation.isCompleted %}
-                <span class="badge bg-green-lt text-green">{{ 'task_board.task.completed_badge'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                <span class="{{ nowo_ui_class('badge_success', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.completed_badge'|trans({}, 'NowoTaskBoardBundle') }}</span>
             {% endif %}
         </div>
 
-        <div class="btn-list nowo-task-detail__status-actions">
+        <div class="nowo-task-detail__status-actions">
             <button
                 type="submit"
                 form="nowo-task-advance-form"
@@ -23,7 +23,7 @@
                 formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
                 name="action"
                 value="previous"
-                class="btn btn-outline-secondary"
+                class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}"
                 {% if not columnNavigation.canPrevious %} disabled{% endif %}
             >
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-left'}) }}
@@ -41,7 +41,7 @@
                 formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
                 name="action"
                 value="next"
-                class="btn btn-outline-primary"
+                class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}"
                 {% if not columnNavigation.canNext %} disabled{% endif %}
             >
                 {% if columnNavigation.nextColumnName %}
@@ -59,7 +59,7 @@
                 formaction="{{ path(nowo_task_board_route('task_advance'), {taskId: task.id}|merge(taskRouteExtra|default({}))) }}"
                 name="action"
                 value="done"
-                class="btn btn-success"
+                class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}"
                 {% if not columnNavigation.canDone %} disabled{% endif %}
             >
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'circle-check'}) }}

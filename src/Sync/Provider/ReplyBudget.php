@@ -47,6 +47,7 @@ final class ReplyBudget
         if (!$this->alreadyRead) {
             return true;
         }
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->grown = $replyCount > ($this->storedReplies[$commentId] ?? 0);
 
         return $this->grown;
@@ -58,12 +59,15 @@ final class ReplyBudget
         if ($this->alreadyRead && !$this->grown) {
             return false;
         }
+        // @igor-ignore - Built per sync run, not a shared service.
         $this->grown = false;
         if ($this->used >= $this->limit) {
+            // @igor-ignore - Built per sync run, not a shared service.
             $this->skipped += $this->alreadyRead ? 0 : 1;
 
             return false;
         }
+        // @igor-ignore - Built per sync run, not a shared service.
         ++$this->used;
 
         return true;

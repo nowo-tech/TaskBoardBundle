@@ -3,7 +3,7 @@
     providers, provider, choices, choice, credentialFormUrl, board.
 #}
 {% if providers|length > 1 %}
-    <nav class="mb-3" aria-label="{{ 'task_board.sync.connect.providers'|trans({}, 'NowoTaskBoardBundle') }}">
+    <nav class="nowo-task-mb-3" aria-label="{{ 'task_board.sync.connect.providers'|trans({}, 'NowoTaskBoardBundle') }}">
         <ul class="nav nav-pills">
             {% for item in providers %}
                 <li class="nav-item">
@@ -13,31 +13,31 @@
         </ul>
     </nav>
 {% elseif provider %}
-    <p class="mb-2"><strong>{{ 'task_board.sync.connect.provider'|trans({}, 'NowoTaskBoardBundle') }}</strong> {{ provider.labelKey|trans({}, 'NowoTaskBoardBundle') }}</p>
+    <p class="nowo-task-mb-2"><strong>{{ 'task_board.sync.connect.provider'|trans({}, 'NowoTaskBoardBundle') }}</strong> {{ provider.labelKey|trans({}, 'NowoTaskBoardBundle') }}</p>
 {% endif %}
 
 {% if provider %}
     {% if choices is empty %}
-        <div class="alert alert-info" role="note" data-testid="nowo-task-sync-no-connection">
+        <div class="{{ nowo_ui_class('flash_info', 'NowoTaskBoardBundle') }}" role="note" data-testid="nowo-task-sync-no-connection">
             {{ 'task_board.sync.connect.no_connection'|trans({'%provider%': provider.labelKey|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
             {% if credentialFormUrl %}
-                <a href="{{ credentialFormUrl }}" class="alert-link">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                <a href="{{ credentialFormUrl }}" class="">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
             {% endif %}
         </div>
     {% else %}
-        <nav class="mb-3" aria-label="{{ 'task_board.sync.connect.connections'|trans({}, 'NowoTaskBoardBundle') }}">
-            <p class="form-label mb-1">{{ 'task_board.sync.connect.connection'|trans({}, 'NowoTaskBoardBundle') }}</p>
-            <ul class="list-unstyled d-flex flex-wrap gap-2 mb-1">
+        <nav class="nowo-task-mb-3" aria-label="{{ 'task_board.sync.connect.connections'|trans({}, 'NowoTaskBoardBundle') }}">
+            <p class="{{ nowo_ui_class('form_label', 'NowoTaskBoardBundle') }} nowo-task-mb-1">{{ 'task_board.sync.connect.connection'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            <ul class="nowo-task-plain-list nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-mb-1">
                 {% for item in choices %}
                     <li>
-                        <a class="btn btn-sm {{ choice and choice.ref == item.ref ? 'btn-secondary' : 'btn-outline-secondary' }}" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id, provider: provider.id, connection: item.ref}) }}"{% if choice and choice.ref == item.ref %} aria-current="true"{% endif %}>
-                            {{ item.label }} <span class="text-secondary">…{{ item.lastFour }}</span>
+                        <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ choice and choice.ref == item.ref ? 'btn-secondary' : 'btn-outline-secondary' }}" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id, provider: provider.id, connection: item.ref}) }}"{% if choice and choice.ref == item.ref %} aria-current="true"{% endif %}>
+                            {{ item.label }} <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">…{{ item.lastFour }}</span>
                         </a>
                     </li>
                 {% endfor %}
             </ul>
             {% if credentialFormUrl %}
-                <a href="{{ credentialFormUrl }}" class="small">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                <a href="{{ credentialFormUrl }}" class="nowo-task-small">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
             {% endif %}
         </nav>
     {% endif %}

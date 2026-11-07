@@ -81,6 +81,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
+
+### Changed
+
+- **BREAKING. UiKit page contract (T1-T7).** Requires UiKit `^2.37`. The pages fill the canonical blocks. The index, import, connection and task pages use the kit's list, form and show scaffolds; the rest are declared unique pages in [TEMPLATES](TEMPLATES.md). `web_ui.layout_template` and `web_ui.templates.<page>` replace `templates.layout` and `templates.<page>`, which stay deprecated; a pre-2.0 layout goes through a bridge until 3.0. `templates.css_framework` is ignored and `nowo_ui_kit` is no longer seeded.
+- **BREAKING. `TenantAwareTaskBoardAccessCheckerInterface::canListBoards($user, $tenantKey)` (TB-8).** With a tenant, a refusal answers 404.
+- All 15 dialogs use the kit's `dialog` partial and overlay registry. The five `window.confirm` calls use `nowoUiAskConfirm`. Alerts, avatars, the header, the Markdown description's fold (`show_more`) and the subtask tree (`tree`, every group open) come from the kit.
+- `--nowo-task-*` tokens fall back to `--nowo-ui-*` instead of `--tblr-*`. Framework classes leave the markup, through theme slots.
+- Flashes are translated when added.
+- **BREAKING. Board, list and Gantt chrome (T6).** The views are header tabs, the Gantt scale is the kit's `tabs`, each list group is the kit's `table`, and the filters fold on UiKit's markup with a bundle controller that needs no host peer (`nowo-task-board-filter-fold`, replacing `nowo-task-board-filter-collapse`). A filter restored on Back or reload opens the fold.
+
+### Added
+
+- `TaskBoardEvents::QUOTA_CHECK` (`TaskBoardQuotaCheckEvent`), asked before a board, task, subtask or import writes (TB-9).
+- `tenancy.open_single_board` and `tenancy.first_board_provisioner` (`FirstBoardProvisionerInterface`), TB-7.
+- `import.help_link`, translated and permission-checked (TB-2).
+- `templates.page_header`, `board.toolbar`, `task_panel.toolbar`, `data-nowo-task-board-open` (TB-10).
+- `templates.task_time_before` (TB-3). Public hooks `data-nowo-task-title`, `data-nowo-task-column`, `data-nowo-task-panel` (TB-11).
+
+### Fixed
+
+- The import form printed FormKit's convention keys, such as `task_import_form.file.help`, as text with the seeded profile.
+- The subtask fold threw on a task with no subtasks. A drop whose request does not finish reloads the board.
+
+### Removed
+
+- `layout.html.twig`, `layout_integrate_host.html.twig` and the Tabler CDN, `manage/_page_header`, `manage/_flashes`, the dead `task_board/index` and `assets/src/task-board.css`. Controllers and helpers `dialog-controller`, `modal-toggle`, `avatar-fallback`, `board-description-controller`, `filter-collapse-controller`.
+- The `.modal` Bootstrap branch of the dialog controllers, kept for template overrides since 1.14.
+
+### Not in this step
+
+- Drag and drop moves to UiKit's `sortable` after the owner's test on a real device. TB-5, the `task_panel.mode: drawer` part of TB-11 and `multi-select` in the dependency picker move to 2.1.
+
 ## [1.30.0] - 2026-11-07
 
 ### Added

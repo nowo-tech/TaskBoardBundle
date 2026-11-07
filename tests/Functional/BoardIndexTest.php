@@ -31,7 +31,7 @@ final class BoardIndexTest extends FunctionalTestCase
         $crawler = $this->client->request('GET', self::BASE);
         self::assertResponseIsSuccessful();
 
-        $item = $crawler->filter('[data-testid="nowo-task-board-list"] [data-testid="nowo-task-board-list-item"]');
+        $item = $crawler->filter('[data-testid="nowo-task-board-index"] [data-testid="nowo-task-board-list-item"]');
         self::assertCount(1, $item);
         self::assertStringContainsString('Next quarter', $item->text());
         self::assertSame('Views of Roadmap', $item->filter('[role="group"]')->attr('aria-label'));
@@ -42,23 +42,23 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertSame('Open Roadmap as a Gantt chart', $item->filter('[data-testid="nowo-task-board-view-gantt"]')->attr('aria-label'));
 
         // New board opens the dialog; the dialog holds the one create form, closed until asked.
-        self::assertSame('board-create', $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('data-dialog'));
+        self::assertSame('nowo-task-board-create', $crawler->filter('[data-testid="nowo-task-board-new"]')->attr('data-nowo-ui-dialog-open'));
         $dialog = $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
         self::assertCount(1, $dialog);
-        self::assertNull($dialog->attr('data-open-on-connect'));
+        self::assertCount(0, $crawler->filter('#nowo-ui-open-modal-on-load'));
         self::assertSame(self::BASE . '/create', $dialog->filter('form')->attr('action'));
-        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-index-empty"]'));
+        self::assertCount(0, $crawler->filter('[data-nowo-ui-region="empty"]'));
 
         // ?new=1 opens it on load (a host's "New board" link).
         $crawler = $this->client->request('GET', self::BASE . '?new=1');
-        self::assertSame('', $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]')->attr('data-open-on-connect'));
+        self::assertStringContainsString('nowo-task-board-create', $crawler->filter('#nowo-ui-open-modal-on-load')->text(null, false));
     }
 
     public function testAnEmptyIndexShowsTheEmptyStateAndHidesCreationFromWhoMayNotCreate(): void
     {
         $this->login($this->owner);
         $crawler = $this->client->request('GET', self::BASE);
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-board-index-empty"] [data-testid="nowo-task-board-new-empty"]'));
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="empty"] [data-testid="nowo-task-board-new-empty"]'));
 
         self::$taskBoardConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
         self::ensureKernelShutdown();
@@ -66,7 +66,7 @@ final class BoardIndexTest extends FunctionalTestCase
         $this->login($this->owner);
         $crawler = $this->client->request('GET', self::BASE);
         self::assertResponseIsSuccessful();
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-board-index-empty"]'));
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="empty"]'));
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-new"], [data-testid="nowo-task-board-new-empty"], dialog'));
         // ?new=1 does not open a dialog the user cannot use.
         $this->client->request('GET', self::BASE . '?new=1');
@@ -85,7 +85,7 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertResponseStatusCodeSame(422);
         self::assertResponseHeaderSame('Cache-Control', 'no-store, private');
         $dialog = $crawler->filter('dialog[data-testid="nowo-task-board-create-dialog"]');
-        self::assertSame('', $dialog->attr('data-open-on-connect'));
+        self::assertStringContainsString('nowo-task-board-create', $crawler->filter('#nowo-ui-open-modal-on-load')->text(null, false));
         self::assertSame('Kept <b>text</b>', $dialog->filter('textarea[name="task_board_form[description]"]')->text());
         self::assertGreaterThan(0, $dialog->filter('.invalid-feedback, .form-error-message, ul li')->count(), 'the name error is shown');
         self::assertSelectorTextContains('[role="alert"]', 'The board was not created');
@@ -249,7 +249,7 @@ final class BoardIndexTest extends FunctionalTestCase
 
         $this->client->request('GET', '/t/other');
         self::assertResponseIsSuccessful();
-        self::assertSelectorExists('[data-testid="nowo-task-board-index-empty"]');
+        self::assertSelectorExists('[data-nowo-ui-region="empty"]');
         self::assertCount(0, $this->em->getRepository(TaskBoard::class)->findAll());
 
         $this->client->request('GET', '/t/acme');

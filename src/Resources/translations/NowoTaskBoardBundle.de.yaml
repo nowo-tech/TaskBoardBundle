@@ -652,3 +652,5 @@ task_board.form.board.scope_refused: "Das Board kann dort nicht erstellt werden.
 task_board.form.board.advanced: "Erweitert"
 task_board.board.show_more: "Mehr anzeigen"
 task_board.board.show_less: "Weniger anzeigen"
+task_board.index.views: Ansichten
+task_board.view.label: Ansichten

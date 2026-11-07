@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
 - [To 1.30.0](#to-1300)
   - [Schema change for every host: board icon, description format, slugs per tenant](#schema-change-for-every-host-board-icon-description-format-slugs-per-tenant)
   - [New board, spec 211](#new-board-spec-211)
@@ -144,6 +145,64 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+Target: **2.0.0**. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`.
+
+### To 2.0.0: UiKit page contract
+
+UiKit is required at `^2.37`. Update it first. Nothing changes in the database in this step.
+
+**Layout.** The bundle no longer ships a layout: `layout.html.twig`, `layout_integrate_host.html.twig`, the Tabler CDN and the global `nowo_task_board_layout` are gone.
+
+| Before | After |
+| --- | --- |
+| `templates.layout` | `web_ui.layout_template`, null = `nowo_ui_kit.layouts.admin`. The old key still works, deprecated |
+| `templates.<page>` | `web_ui.templates.<page>` wins; the old keys still work, deprecated |
+| `templates.css_framework`, global `nowo_task_board_css_framework` | Accepted and ignored until 3.0. Set `nowo_ui_kit.css_framework` |
+| `nowo_ui_kit` seeded from `templates.css_framework` | No seed. A host with no `nowo_ui_kit.css_framework` or `icon_set` now gets UiKit's defaults (`bootstrap5`), and no Tabler icon font is loaded for it |
+| Page blocks `title`, `stylesheets`, `javascripts`, `body`, `container_class` | `nowo_ui_document_title`, `nowo_ui_styles`, `nowo_ui_scripts`, `nowo_ui_page_header`, `nowo_ui_flashes`, `nowo_ui_content`, `nowo_ui_modals` |
+
+A layout that renders `{% block body %}` and has no `nowo_ui_page_header` still works through a bridge (`manage/_legacy_layout.html.twig`), removed in 3.0, and triggers a deprecation. To leave it, add the canonical blocks, or `{% use '@NowoUiKit/layout/_bridge.html.twig' %}`. Page width now comes from your layout or `theme.pages.<type>.classes.page_width`.
+
+**Templates and blocks that go.** `manage/_page_header`, `manage/_flashes`, `task_board/index`. On the index: `nowo_task_board_toolbar`, `index_actions`, `index_empty`, `index_board_item` (now `page.header.actions`, `page.empty`, `nowo_ui_list_row`). `nowo_task_board_flashes` goes on the board. A host template that extends a page and overrides `body` no longer renders: move it to `nowo_ui_content`, or for the index delete it. Kept: `nowo_task_board_toolbar` on the board and list, `nowo_task_board_list`, `nowo_task_board_connection*`, `_columns`, `_column`, `_list`, `_archived`, `nowo_task_body`, `_panel`, `_toolbar`, `_navigation`, `_subtasks`, `_time`, `_relations`, `import_help`.
+
+**Index and import pages** now take a `page` variable (`ListPage`, `FormPage`), as do the connection and task pages (`ShowPage`). A host controller that renders them must pass it. Index rows are table rows; `manage/_board_list_item` stays for a host's own list.
+
+**Flashes.** The controller translates a flash when it adds it, because the layout's flash partial knows no bundle domain. A host's own `flash` handling of the keys `task_board.flash.*` now receives text.
+
+**Access checker.** `TenantAwareTaskBoardAccessCheckerInterface::canListBoards(object $user, ?string $tenantKey = null)`: implementers **must widen the signature**, or PHP refuses the class. With a tenant, a refusal answers 404 on its index and create route. Widening is not enough to narrow a list: return false for a tenant the user may not list.
+
+Beacon: `TasksPlanLimitListener` stays while `issue_task_create` has no other check, because `QUOTA_CHECK` covers the bundle's own routes and imports only. `GeneralBoardOwnerGuard` goes only once the checker compares the tenant. `tasks/index` must go at upgrade. The connection overrides, `TaskConnectionDialogResponse` and `task_connection_controller` stay until TB-5.
+
+**Twig.** `nowo_task_board_btn_class()` is deprecated, use `nowo_ui_class(slot, 'NowoTaskBoardBundle')`.
+
+**Classes and hooks.** All 66 `nowo-task-*` names on Beacon's list were checked one by one against 2.0.0: each is still shipped, as a class in the markup or forms, or as a token in the CSS. That check is by name: it does not prove each class is on the same element or looks the same, so check your own rules on these pages. What goes:
+
+| Goes | Use |
+| --- | --- |
+| `nowo-task-dialog__header`, `__title`, `__close` | `nowo-ui-dialog__*`. `__footer`, `__actions`, `__body`, `--native`, `--wide` stay |
+| `nowo-task-member-avatar*` | `nowo-ui-avatar*`, inside the kept chip class. The avatar URL policy is UiKit's: https or a same-origin path |
+| `nowo-task-subtree__row`, `__body`, `__children`, `__summary` | `nowo-ui-tree__*`. `nowo-task-subtree`, `__item`, `__title`, `__check`, `__meta` stay |
+| `nowo-task-index*`, `.nowo-task-board-list` on the index | The list scaffold |
+| `nowo-task-board-description__text`, the controller `nowo-task-board-description` | `show_more`. `nowo-task-board-description` stays on its root |
+| Controllers `nowo-task-board-dialog`, `data-dialog` on an opener, `data-open-on-connect` | `data-nowo-ui-dialog-open="<id>"`, `partials/_open_modal_on_load`. `data-dialog` stays only on the dialogs that had it |
+| `data-nowo-task-board-activity-filter#confirm`, `data-confirm-message` | `data-confirm` on a form or submit button |
+| `nowo-task-list__filter-panel`, `__filter-toggle`, `__filter-body`, `__filter-count`, `__filter-caret`, the controller `nowo-task-board-filter-collapse` | `nowo-ui-filters-collapse*`, controller `nowo-task-board-filter-fold`. `nowo-task-list__filters`, `nowo-task-board-list-filters` stay |
+| `nowo-task-list__table-wrap`, `nowo-task-list__table` | `[data-nowo-ui-region="table"]`, `nowo-ui-table*`. `nowo-task-list__row` and every row `data-*` stay |
+| `nowo-task-gantt__scale`, `is-active` on it | The `tabs` partial, `aria-current` on the link. `data-scale` and `nowo-task-gantt__scales` stay |
+| Header action links to the other views | Tabs in `[data-nowo-ui-region="area-nav"]` |
+| Test ids `nowo-task-board-index-empty`, `nowo-task-board-list` on the index, `nowo-task-board-index-boards` | `[data-nowo-ui-region="empty"]`, `[data-testid="nowo-task-board-index"]` |
+| Framework literals in the markup (`btn`, `btn-*`, `card*`, `alert*`, `badge bg-*`, `row`, `col-*`, `mb-*`, `d-flex`, `page-header`, `text-secondary`) | Theme slots of `NowoTaskBoardBundle`, or `nowo-task-*` helpers |
+
+CSS that relied on `.btn`, `.card` or `.page-header` inside task pages must move: on Beacon, `.tasks-views ~ .page-header` and `.page-header:has(~ .nowo-task-sync-people)`. `nowo-task-subtree` is now a `div` with the kit's `ul` inside, so a rule with `.nowo-task-subtree > .nowo-task-subtree__item` stops matching. `nowo-task-dialog__actions` is a `footer` in a dialog. `--tblr-*` no longer reaches these pages: set `--nowo-task-*` or `--nowo-ui-*`, see [THEMING](THEMING.md). `--nowo-task-overlay-blur` now defaults to `0`; it was `2px`.
+
+**Filter fold.** The list's filters fold with the bundle's own controller, on UiKit's markup and its cookie, with no peer to register. A host with the kit's `filters-collapse` peer changes nothing: the peer is only on a host's `templates.filters_collapse`, so the toggle never answers twice. A filter the browser restores on Back or reload is applied and opens the fold, whichever drives it. The count is live; the line is only shown folded. A host that sets `templates.filters_collapse` to a partial with the `filters-collapse` controller must register that peer: without it, that toggle does nothing. The list's groups still use UiKit's `collapse-panel` peer, as since 1.13: without it they stay open.
+
+**People stays a declared unique page.** It is one long form with a row per person, its own filter pills and pager, and it saves everything at once. The form scaffold's body-only mode would add only a wrapper, so the page fills the canonical blocks and takes its parts from slots. See [TEMPLATES](TEMPLATES.md#unique-pages).
+
+**Not in this step.** Drag and drop stays on the board's own controller until UiKit's `sortable` passes a test on a real device. Moved to 2.1: the connection dialog (TB-5), `task_panel.mode: drawer` (TB-11), and `multi-select` for the dependency picker, which needs a Tom Select peer the bundle does not load.
+
+**New, opt-in.** `tenancy.open_single_board`, `tenancy.first_board_provisioner`, `TaskBoardEvents::QUOTA_CHECK`, `import.help_link`, `templates.task_time_before`, `templates.page_header`, `board.toolbar`, `task_panel.toolbar` with `data-nowo-task-board-open`, and the public hooks `data-nowo-task-title`, `data-nowo-task-column`, `data-nowo-task-panel`. See [USAGE](USAGE.md#host-hooks-since-200). `board.icon_form_type` accepts UiKit's `EmojiPickerType`. Add its script, `nowo_ui_script_names()|merge(['emoji-picker'])`; without it the field is a plain text input.
 
 ## To 1.30.0
 

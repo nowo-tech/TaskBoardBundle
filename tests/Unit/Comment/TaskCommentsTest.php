@@ -192,7 +192,7 @@ final class TaskCommentsTest extends TestCase
 
         self::assertSame('<p><strong>done</strong> <span class="nowo-task-mention" data-user-id="5">@Ann</span></p>', TaskBoardTwigExtension::commentBody($comment, null, $markdown));
 
-        $extension = new TaskBoardTwigExtension('layout.html.twig', 'tabler', [], new TaskObjectLinkResolver(), null, '', $markdown);
+        $extension = new TaskBoardTwigExtension([], new TaskObjectLinkResolver(), null, '', $markdown);
         self::assertSame('<p><strong>done</strong> <span class="nowo-task-mention nowo-task-mention--me" data-user-id="5">@Ann</span></p>', $extension->renderCommentBody($comment, '5'));
         self::assertSame('<p><strong>done</strong></p>', $extension->renderText('**done**'));
         self::assertSame('', $extension->renderText('  '));

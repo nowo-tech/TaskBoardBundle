@@ -124,9 +124,12 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withWorkspace(string $workspaceId, array $people = [], ?TimeAccess $timeAccess = null): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->workspaceId = $workspaceId;
-        $this->people      = $people;
-        $this->timeAccess  = $timeAccess ?? $this->timeAccess;
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
+        $this->people = $people;
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
+        $this->timeAccess = $timeAccess ?? $this->timeAccess;
 
         return $this;
     }
@@ -138,6 +141,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withTimeEntries(array $entries): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->timeEntries = $entries;
 
         return $this;
@@ -150,6 +154,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withTaskIntervals(string $taskId, ?array $entries): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->intervals[$taskId] = $entries;
 
         return $this;
@@ -162,6 +167,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function addSource(RemoteSource $source, array $listIds): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->sources[$source->location->containerId()] = [$source, $listIds];
 
         return $this;
@@ -174,6 +180,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withStatuses(string $containerId, array $statuses): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->statuses[$containerId] = $statuses;
 
         return $this;
@@ -181,6 +188,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     public function addContainer(RemoteContainer $container): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->containers[$container->parentId ?? ''][] = $container;
 
         return $this;
@@ -188,6 +196,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     public function putTask(string $listId, RemoteTask $task): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->tasks[$listId][$task->externalId()] = $task;
 
         return $this;
@@ -205,6 +214,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function setComments(string $taskId, array $comments): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->comments[$taskId] = $comments;
 
         return $this;
@@ -217,6 +227,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withApiGaps(array $gaps): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->apiGaps = $gaps;
 
         return $this;
@@ -229,6 +240,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withTaskTypes(array $types): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->taskTypes = $types;
 
         return $this;
@@ -253,6 +265,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
      */
     public function withFieldCoverage(array $coverage): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->coverage = $coverage;
 
         return $this;
@@ -266,6 +279,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
     /** The next call fails with `$failure` (queue several; null lets a call through). */
     public function failNext(?ProviderException $failure): self
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->failures[] = $failure;
 
         return $this;
@@ -471,6 +485,7 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     private function enter(ProviderCredential $credential, string $call): void
     {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->calls[] = $call;
         if ($this->failures !== []) {
             $failure = array_shift($this->failures);

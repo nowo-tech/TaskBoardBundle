@@ -1,11 +1,12 @@
 {#
-    Since 1.30.0 (spec 211): a Markdown description, through the host's text renderer. Folded after three lines with Show more;
-    without JavaScript, or when it fits, it shows whole. The `nowo-task-board-description` controller is the interim fold:
-    UiKit's can replace it, the markup keeps the text in one element. Variables: board; fold (default true).
+    Since 1.30.0 (spec 211): a Markdown board description, through the host's text renderer, folded after three lines with
+    Show more. Since 2.0.0 UiKit's `show_more` partial; the page loads js/nowo-ui-show-more.js. Without it the whole text shows.
 #}
-<div class="nowo-task-board-description nowo-task-text"{% if fold ?? true %} data-controller="nowo-task-board-description" data-nowo-task-board-description-more-value="{{ 'task_board.board.show_more'|trans({}, 'NowoTaskBoardBundle') }}" data-nowo-task-board-description-less-value="{{ 'task_board.board.show_less'|trans({}, 'NowoTaskBoardBundle') }}"{% endif %} data-testid="nowo-task-board-description">
-    <div class="nowo-task-board-description__text{% if not (fold ?? true) %} is-folded{% endif %}"{% if fold ?? true %} data-nowo-task-board-description-target="text"{% endif %}>{{ nowo_task_board_description(board) }}</div>
-    {% if fold ?? true %}
-        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }} btn-sm" data-nowo-task-board-description-target="toggle" data-action="nowo-task-board-description#toggle" aria-expanded="false" hidden>{{ 'task_board.board.show_more'|trans({}, 'NowoTaskBoardBundle') }}</button>
-    {% endif %}
-</div>
+{{ include(nowo_ui_partial('show_more', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-board-description-' ~ board.id,
+    content: nowo_task_board_description(board),
+    lines: 3,
+    labels: {more: 'task_board.board.show_more'|trans({}, 'NowoTaskBoardBundle'), less: 'task_board.board.show_less'|trans({}, 'NowoTaskBoardBundle')},
+    attr: {class: 'nowo-task-board-description nowo-task-text', 'data-testid': 'nowo-task-board-description'},
+    bundle: 'NowoTaskBoardBundle',
+}, false) }}

@@ -5,14 +5,14 @@
 #}
 {% if completeness is not empty %}
     {% set _missing = completeness|filter(row => row.status == 'not_imported_yet') %}
-    <details class="nowo-task-sync__completeness mb-3" data-testid="nowo-task-sync-completeness">
+    <details class="nowo-task-sync__completeness nowo-task-mb-3" data-testid="nowo-task-sync-completeness">
         <summary>
             {{ 'task_board.sync.completeness.title'|trans({}, 'NowoTaskBoardBundle') }}
             {% if _missing is not empty %}
                 <span data-testid="nowo-task-sync-not-imported">{{ 'task_board.sync.completeness.not_imported_yet_list'|trans({'%keys%': _missing|map(row => row.key)|join(', ')}, 'NowoTaskBoardBundle') }}</span>
             {% endif %}
         </summary>
-        <table class="table table-sm">
+        <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }}">
             <caption class="visually-hidden">{{ 'task_board.sync.completeness.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
             <thead>
                 <tr>

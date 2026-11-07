@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
+use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
@@ -67,6 +68,7 @@ use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
@@ -80,9 +82,20 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
+use Nowo\UiKitBundle\View\ShowPage;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -103,6 +116,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
@@ -182,6 +196,12 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?BoardScopeProviderInterface $scopeProvider = null,
         /** @var array<string, mixed> */
         private readonly array $boardFormOptions = [],
+        // Since 2.0.0: the host's quota listeners, `tenancy.open_single_board` and `tenancy.first_board_provisioner`.
+        private readonly TaskBoardQuota $quota = new TaskBoardQuota(),
+        private readonly bool $openSingleBoard = false,
+        private readonly ?FirstBoardProvisionerInterface $firstBoardProvisioner = null,
+        // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
+        private readonly TaskBoardPages $pages = new TaskBoardPages(),
     ) {
     }
 
@@ -189,16 +209,21 @@ final class TaskBoardManageController extends AbstractController
     {
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
+        $this->denyUnlessCanListTenant($user, $tenant);
         if ($tenant instanceof TaskBoardTenant && $this->tenantContext?->isSingleBoard() === true) {
             $board = $this->boardRepository->findOneByTenant($tenant->key);
             // Since 1.24 (audit EX-I2): the first board is created only for a user the create check accepts; the
-            // others see the (empty) index.
-            if (!$board instanceof TaskBoard && $this->canCreateBoard($user, $tenant->key)) {
+            // others see the (empty) index. Since 2.0.0 the quota event may refuse it too.
+            if (!$board instanceof TaskBoard && $this->mayProvisionBoard($user, $tenant)) {
                 $board = $this->boardCreator->create(new TaskBoardFormData(name: $tenant->label), $user, $tenant->key);
             }
             if ($board instanceof TaskBoard) {
                 return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
             }
+        }
+        $opened = $this->openedBoard($user, $tenant);
+        if ($opened instanceof TaskBoard) {
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $opened->getId()]);
         }
 
         $scopes = $this->scopeProvider?->scopes($user, $tenant) ?? [];
@@ -218,6 +243,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
+        $this->denyUnlessCanListTenant($user, $tenant);
         // Since 1.30.0 (spec 211): with a scope step the check runs on the tenant it resolves to, not on the URL's.
         $scopes = $this->scopeProvider?->scopes($user, $tenant) ?? [];
         if ($scopes === [] && !$this->canCreateBoard($user, $tenant?->key)) {
@@ -232,7 +258,16 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             // Since 1.30.0 (spec 211): the scope step decides the tenant; a refusal is one form error, whatever the reason.
             $target = $scopes === [] ? $tenant : $this->scopedTenant($user, $form, $data);
-            if ($scopes === [] || $target instanceof TaskBoardTenant) {
+            // Since 2.0.0: the host's quota may refuse the board.
+            $refusal = $scopes === [] || $target instanceof TaskBoardTenant ? $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_BOARD_CREATE, $target?->key, null, 1, $user) : null;
+            if ($refusal !== null) {
+                if (!$this->isDialogRequest($request)) {
+                    $this->addFlash('error', $refusal);
+
+                    return $this->redirectToRoute($this->routes['index']['name']);
+                }
+                $form->addError(new FormError($refusal));
+            } elseif ($scopes === [] || $target instanceof TaskBoardTenant) {
                 // Since 1.11: the columns of a column set the user may apply (another scope's set is ignored).
                 $set   = $data->columnSetId !== null ? $this->columnSetManager?->find($data->columnSetId, $user, null, $target?->key) : null;
                 $board = $this->boardCreator->create($data, $user, $target?->key, $set);
@@ -505,8 +540,13 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskFormData $data */
             $data    = $form->getData();
-            $created = $this->taskManager->create($board, $data, $user);
-            $this->logWrite('task_create', ['board_id' => $boardId, 'task_id' => $created->getId()]);
+            $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $board->getTenantKey(), $board, 1, $user);
+            if ($refusal !== null) {
+                $this->addFlash('error', $refusal);
+            } else {
+                $created = $this->taskManager->create($board, $data, $user);
+                $this->logWrite('task_create', ['board_id' => $boardId, 'task_id' => $created->getId()]);
+            }
         } elseif ($form->isSubmitted()) {
             // Since 1.15: a refused task (e.g. a title over 255 characters) says why instead of vanishing.
             $this->flashFormErrors($form);
@@ -526,7 +566,10 @@ final class TaskBoardManageController extends AbstractController
             throw $this->createAccessDeniedException('Task import denied.');
         }
 
-        $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
+        // Since 2.0.0 the form scaffold prints the form, so the form holds its own action.
+        $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData(), [
+            'action' => $this->generateUrl($this->routes['board_import']['name'], ['boardId' => $boardId]),
+        ]);
         $form->handleRequest($request);
 
         /** @var TaskImportFormData $data */
@@ -565,9 +608,27 @@ final class TaskBoardManageController extends AbstractController
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
         }
 
+        $view = $form->createView();
+
         return $this->render($this->templates['import'], [
+            'page' => new FormPage(
+                new PageHeader(
+                    TaskBoardPages::label('task_board.import.title'),
+                    TaskBoardPages::label('task_board.import.subtitle'),
+                    [
+                        Action::route('custom', $this->routes['board']['name'], ['boardId' => $boardId], TaskBoardPages::label('task_board.view.back_board')),
+                        ...($this->dashboardRoute !== null ? [Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'))] : []),
+                    ],
+                    [new Crumb(TaskBoardTwigExtension::boardLabel($board), $this->generateUrl($this->routes['board']['name'], ['boardId' => $boardId]))],
+                    breadcrumbsMode: 'own',
+                ),
+                $view,
+                TaskBoardPages::label('task_board.import.form.submit'),
+                bundle: TaskBoardPages::BUNDLE,
+                layout: $this->pageLayout(),
+            ),
             'board'          => $board,
-            'importForm'     => $form,
+            'importForm'     => $view,
             'dashboardRoute' => $this->dashboardRoute,
         ]);
     }
@@ -742,7 +803,9 @@ final class TaskBoardManageController extends AbstractController
             return $this->renderTaskPanel($request, $task, $user, $taskForm, $taskForm->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK);
         }
 
-        return $this->render($this->templates['task'], $this->taskViewData($task, $user, $taskForm));
+        return $this->render($this->templates['task'], [
+            'page' => new ShowPage(new PageHeader($task->getTitle()), bundle: TaskBoardPages::BUNDLE, layout: $this->pageLayout()),
+        ] + $this->taskViewData($task, $user, $taskForm));
     }
 
     /**
@@ -947,9 +1010,14 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskFormData $data */
             $data    = $form->getData();
-            $subtask = $this->taskManager->create($task->getBoard(), $data, $user, $task);
-            $this->logWrite('task_subtask', ['task_id' => $taskId, 'subtask_id' => $subtask->getId()]);
-            $this->addFlash('success', 'task_board.flash.subtask_created');
+            $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $task->getBoard()->getTenantKey(), $task->getBoard(), 1, $user);
+            if ($refusal !== null) {
+                $this->addFlash('error', $refusal);
+            } else {
+                $subtask = $this->taskManager->create($task->getBoard(), $data, $user, $task);
+                $this->logWrite('task_subtask', ['task_id' => $taskId, 'subtask_id' => $subtask->getId()]);
+                $this->addFlash('success', 'task_board.flash.subtask_created');
+            }
         } elseif ($form->isSubmitted()) {
             $this->flashFormErrors($form);
         }
@@ -1609,7 +1677,7 @@ final class TaskBoardManageController extends AbstractController
     private function renderIndex(UserInterface $user, ?TaskBoardTenant $tenant, FormInterface $form, FormInterface $fallbackForm, bool $openCreate, int $status = Response::HTTP_OK): Response
     {
         $boards = [];
-        if ($this->accessChecker->canListBoards($user)) {
+        if ($this->canListBoards($user, $tenant?->key)) {
             $candidates = $tenant instanceof TaskBoardTenant
                 ? $this->boardRepository->findActiveByTenant($tenant->key)
                 : $this->boardRepository->findAllActive();
@@ -1619,6 +1687,7 @@ final class TaskBoardManageController extends AbstractController
         $canCreate = $form->has('scope') || $this->canCreateBoard($user, $tenant?->key);
 
         return $this->render($this->templates['index'], [
+            'page'           => $this->indexPage($boards, $canCreate),
             'boards'         => $boards,
             'boardForm'      => $form,
             'dashboardRoute' => $this->dashboardRoute,
@@ -1628,6 +1697,93 @@ final class TaskBoardManageController extends AbstractController
             'boardFormFallback' => $fallbackForm,
             'openCreateBoard'   => $canCreate && $openCreate,
         ], new Response(status: $status));
+    }
+
+    /**
+     * Since 2.0.0 (TB-4): the view model of the index page.
+     *
+     * @param list<TaskBoard> $boards
+     */
+    private function indexPage(array $boards, bool $canCreate): ListPage
+    {
+        $newBoard = static fn (string $testid): Action => new Action(
+            kind: 'create',
+            label: TaskBoardPages::label('task_board.index.new_board'),
+            icon: 'plus',
+            attributes: ['data-testid' => $testid, 'aria-haspopup' => 'dialog'],
+            dialogId: TaskBoardPages::BOARD_CREATE_DIALOG,
+        );
+        $actions = $canCreate ? [$newBoard('nowo-task-board-new')] : [];
+        if ($this->dashboardRoute !== null) {
+            $actions[] = Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'));
+        }
+
+        return new ListPage(
+            new PageHeader(TaskBoardPages::label('task_board.index.title'), TaskBoardPages::label('task_board.index.subtitle'), $actions),
+            [new Column('name', TaskBoardPages::label('task_board.index.your_boards'), required: true), new Column('views', TaskBoardPages::label('task_board.index.views'), align: 'end')],
+            $boards,
+            empty: new EmptyState(
+                TaskBoardPages::label('task_board.index.no_boards'),
+                $canCreate ? TaskBoardPages::label('task_board.index.empty_hint') : null,
+                $canCreate ? $newBoard('nowo-task-board-new-empty') : null,
+            ),
+            bundle: TaskBoardPages::BUNDLE,
+            layout: $this->pageLayout(),
+            attributes: ['data-testid' => 'nowo-task-board-index'],
+            rowAttributes: static fn (): array => ['data-testid' => 'nowo-task-board-list-item'],
+        );
+    }
+
+    /** Since 2.0.0: `page.layout` of the scaffolds. */
+    private function pageLayout(): ?string
+    {
+        $twig = $this->container->get('twig');
+
+        return $twig instanceof Environment ? $this->pages->layout($twig) : null;
+    }
+
+    /**
+     * Since 2.0.0 (`tenancy.open_single_board`, `tenancy.first_board_provisioner`): the board a tenant's index opens: its
+     * only board, or a first one the provisioner creates. `?boards=1` keeps the list. Boards the user cannot see do not count.
+     */
+    private function openedBoard(UserInterface $user, ?TaskBoardTenant $tenant): ?TaskBoard
+    {
+        if (!$tenant instanceof TaskBoardTenant || (!$this->openSingleBoard && !$this->firstBoardProvisioner instanceof FirstBoardProvisionerInterface) || $this->currentRequest()?->query->has('boards') === true) {
+            return null;
+        }
+        $boards = $this->resourceAccessChecker->filterBoards($user, $this->boardRepository->findActiveByTenant($tenant->key), $tenant->key);
+        if ($boards !== []) {
+            return $this->openSingleBoard && count($boards) === 1 ? reset($boards) : null;
+        }
+
+        return $this->firstBoardProvisioner instanceof FirstBoardProvisionerInterface && $this->mayProvisionBoard($user, $tenant)
+            ? $this->firstBoardProvisioner->provision($tenant, $user)
+            : null;
+    }
+
+    /** A first board created on a visit asks what a create asks: the create check and the quota. */
+    private function mayProvisionBoard(UserInterface $user, TaskBoardTenant $tenant): bool
+    {
+        return $this->canCreateBoard($user, $tenant->key)
+            && $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_BOARD_CREATE, $tenant->key, null, 1, $user) === null;
+    }
+
+    /**
+     * The list check, with the tenant for a {@see TenantAwareTaskBoardAccessCheckerInterface} (since 2.0.0).
+     */
+    private function canListBoards(UserInterface $user, ?string $tenantKey): bool
+    {
+        return $this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface
+            ? $this->accessChecker->canListBoards($user, $tenantKey)
+            : $this->accessChecker->canListBoards($user);
+    }
+
+    /** Since 2.0.0: a tenant whose boards the checker refuses to list answers 404, on its index and its create route. */
+    private function denyUnlessCanListTenant(UserInterface $user, ?TaskBoardTenant $tenant): void
+    {
+        if ($tenant instanceof TaskBoardTenant && $this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface && !$this->accessChecker->canListBoards($user, $tenant->key)) {
+            throw $this->createNotFoundException();
+        }
     }
 
     /**
@@ -1823,6 +1979,15 @@ final class TaskBoardManageController extends AbstractController
     private function requireColumnSets(): ColumnSetManager
     {
         return $this->columnSetManager ?? throw new NotFoundHttpException('Column sets are not available.');
+    }
+
+    /**
+     * Since 2.0.0: flashes are translated here. The layout prints them through UiKit's `flashes` partial, or a host's, and
+     * neither knows this bundle's domain. Text that is no key (a host's refusal reason) stays as it is.
+     */
+    protected function addFlash(string $type, mixed $message): void
+    {
+        parent::addFlash($type, is_string($message) ? $this->translator->trans($message, [], TaskBoardPages::DOMAIN) : $message);
     }
 
     private function requireUser(): UserInterface
