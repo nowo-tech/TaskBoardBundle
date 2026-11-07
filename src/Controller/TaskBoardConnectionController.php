@@ -708,7 +708,8 @@ final class TaskBoardConnectionController extends AbstractController
         if (!$this->cache instanceof CacheInterface || $this->containerCacheTtl <= 0) {
             return $load();
         }
-        $key  = 'nowo_task_board.sync.containers.' . hash('sha256', $provider->id() . "\x1F" . $choice->ref . "\x1F" . ($parent ?? '') . "\x1F" . ($cursor ?? '') . "\x1F" . $board->getId());
+        $key = 'nowo_task_board.sync.containers.' . hash('sha256', $provider->id() . "\x1F" . $choice->ref . "\x1F" . ($parent ?? '') . "\x1F" . ($cursor ?? '') . "\x1F" . $board->getId());
+        // @igor-ignore - The cache runs this closure at once and does not keep it.
         $data = $this->cache->get($key, function (ItemInterface $item) use ($load): string {
             $item->expiresAfter($this->containerCacheTtl);
 

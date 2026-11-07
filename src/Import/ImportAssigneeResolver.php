@@ -68,6 +68,7 @@ final class ImportAssigneeResolver
         $names = $row->assigneeNames;
         if (count($emails) + count($names) > self::MAX_ASSIGNEES_PER_ROW) {
             // Audit EG-L6: a row resolves at most MAX_ASSIGNEES_PER_ROW assignees.
+            // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
             ++$this->rowsOverCap;
             $emails = array_slice($emails, 0, self::MAX_ASSIGNEES_PER_ROW, true);
             $names  = array_slice($names, 0, max(0, self::MAX_ASSIGNEES_PER_ROW - count($emails)));
@@ -78,7 +79,9 @@ final class ImportAssigneeResolver
             $user = $this->userByEmail((string) $email);
             if ($user !== null && !in_array($user, $users, true)) {
                 $users[] = $user;
+            // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
             } elseif ($user === null && ++$this->unresolvedEmails <= self::LISTED_UNRESOLVED) {
+                // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
                 $this->warnings[] = sprintf('Assignee "%s" for "%s" cannot be assigned on this board.', $email, $row->title);
             }
         }
@@ -89,6 +92,7 @@ final class ImportAssigneeResolver
                     $users[] = $matches[0];
                 }
             } else {
+                // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
                 $this->unresolvedNames[$name] = ($this->unresolvedNames[$name] ?? 0) + 1;
             }
         }
@@ -148,8 +152,10 @@ final class ImportAssigneeResolver
             return [];
         }
         if ($this->byName === null) {
+            // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
             $this->byName = [];
             foreach ($this->assigneeProvider->assignableUsers($this->board) as $user) {
+                // @igor-ignore - Built with `new` per import or sync page and excluded from the container: its counters end with it.
                 $this->byName[$this->normalize(UserLabel::of($user))][] = $user;
             }
         }

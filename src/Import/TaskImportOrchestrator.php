@@ -318,6 +318,7 @@ final readonly class TaskImportOrchestrator
                 $task                     = $this->create($board, $source, $scope, $row, $key, $byFingerprint, $index, $actor, $parentTask, $columnsByName, $positionIn, $imported, $known, $find, $canEdit, $warnings);
                 $editable[$task->getId()] = true;
                 foreach ($assignees->resolve($row) as $user) {
+                    // @igor-ignore - $task is a Doctrine entity of this import, not a shared service.
                     $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
                 }
                 $this->changeRecorder->recordCreated($task, $actor);

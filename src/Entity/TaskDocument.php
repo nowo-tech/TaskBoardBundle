@@ -74,6 +74,7 @@ class TaskDocument
 
     public function markSyncFields(): self
     {
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->syncFields ??= [];
 
         return $this;
@@ -92,6 +93,7 @@ class TaskDocument
      */
     public function addErasedLines(array $records): self
     {
+        // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
         $this->syncFields = ['erased' => array_slice(array_values(array_unique([...$this->erasedLines(), ...$records])), -self::MAX_ERASED_LINES)];
 
         return $this;

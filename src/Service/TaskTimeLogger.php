@@ -50,6 +50,7 @@ final readonly class TaskTimeLogger
             }
 
             $task->removeTimeEntry($entry);
+            // @igor-ignore - Repository write of this request's entry; the repository keeps no state of its own.
             $this->timeEntryRepository->remove($entry);
             $this->changeRecorder->record($task, $user, TaskChangeType::TimeRemoved, (string) $entry->getMinutes(), null, $entry->getLoggedAt()->format('Y-m-d'));
             $this->taskRepository->save($task);

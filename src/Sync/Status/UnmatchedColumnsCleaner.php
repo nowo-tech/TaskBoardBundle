@@ -196,6 +196,7 @@ final readonly class UnmatchedColumnsCleaner
         $id         = $connection->quoteIdentifier($columns->getSingleIdentifierColumnName());
         $lock       = $connection->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
 
+        // @igor-ignore - Doctrine runs this static closure at once and does not keep it.
         return (bool) $connection->transactional(static function (Connection $db) use ($column, $tasks, $table, $id, $lock): bool {
             $db->fetchOne(sprintf('SELECT %s FROM %s WHERE %s = ?%s', $id, $table, $id, $lock), [$column->getId()]);
             $held = (int) $db->fetchOne(sprintf('SELECT COUNT(*) FROM %s WHERE %s = ?', $db->quoteIdentifier($tasks->getTableName()), $db->quoteIdentifier($tasks->getSingleAssociationJoinColumnName('column'))), [$column->getId()]);
