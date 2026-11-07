@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
+use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
@@ -238,7 +239,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
-        $this->registerApi($container, $loader, $config);
+        $this->registerApi($container, $loader, $config, $emName);
     }
 
     /**
@@ -246,7 +247,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      *
      * @param array<string, mixed> $config
      */
-    private function registerApi(ContainerBuilder $container, YamlFileLoader $loader, array $config): void
+    private function registerApi(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
     {
         $api = $config['api'];
         if (!$api['enabled']) {
@@ -277,6 +278,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->setAlias(TaskApiIdempotencyStoreInterface::class, $api['hooks']['idempotency_store']);
         }
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
+        $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
     }
 
     /**

@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
@@ -19,6 +20,9 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskCommentPolicy;
 use Stringable;
 
+use function array_filter;
+use function array_map;
+use function array_values;
 use function is_scalar;
 use function method_exists;
 
@@ -52,7 +56,7 @@ final readonly class TaskApiGuard
         if (!$board instanceof TaskBoard || !$this->reachesBoard($principal, $board)) {
             throw TaskApiRefusal::notFound();
         }
-        $this->requirePlanAndLevel($principal, $board, $capability);
+        $this->requirePlanAndLevel($principal, $board->getTenantKey(), $capability);
 
         $allowed = match ($capability) {
             TaskApiCapability::ReadOwn, TaskApiCapability::ReadEverything => true,
@@ -81,7 +85,7 @@ final readonly class TaskApiGuard
         ) {
             throw TaskApiRefusal::notFound();
         }
-        $this->requirePlanAndLevel($principal, $task->getBoard(), $capability);
+        $this->requirePlanAndLevel($principal, $task->getBoard()->getTenantKey(), $capability);
 
         $allowed = match ($capability) {
             TaskApiCapability::ReadOwn, TaskApiCapability::ReadEverything  => true,
@@ -121,16 +125,83 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * A space the token reaches: the host answers for it, and where names its tenant or one of its boards. Reads only.
+     *
      * @throws TaskApiRefusal
      */
-    private function requirePlanAndLevel(TaskApiPrincipal $principal, TaskBoard $board, TaskApiCapability $capability): void
+    public function space(TaskApiPrincipal $principal, string $spaceId, TaskApiCapability $capability): TaskApiSpace
     {
-        if (!$this->planGate->allowsTasks($principal->user, $board->getTenantKey())) {
-            throw TaskApiRefusal::planRefused();
+        $space = $this->workspace->space($principal, $spaceId);
+        if (!$space instanceof TaskApiSpace || !$this->touches($principal, $space)) {
+            throw TaskApiRefusal::notFound();
         }
+        $this->requirePlanAndLevel($principal, $space->tenantKey, $capability);
+
+        return $space;
+    }
+
+    /**
+     * Whether a space of the host may be listed for the token: where names its tenant or one of its boards, and its plan holds
+     * the module. A list leaves the others out, without a word.
+     */
+    public function lists(TaskApiPrincipal $principal, TaskApiSpace $space): bool
+    {
+        return $this->touches($principal, $space) && $this->planGate->allowsTasks($principal->user, $space->tenantKey);
+    }
+
+    /**
+     * The active boards of a tenant the token reaches and the person may view, in the host's order.
+     *
+     * @return list<TaskBoard>
+     */
+    public function visibleBoards(TaskApiPrincipal $principal, ?string $tenantKey): array
+    {
+        $visible = [];
+        foreach ($this->boardsOfTenant($tenantKey) as $board) {
+            if ($principal->where->reachesBoard($board) && $this->access->canViewBoard($principal->user, $board)) {
+                $visible[] = $board;
+            }
+        }
+
+        return $visible;
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function requireLevel(TaskApiPrincipal $principal, TaskApiCapability $capability): void
+    {
         if (!$capability->allows($principal->level)) {
             throw TaskApiRefusal::levelRefused();
         }
+    }
+
+    private function touches(TaskApiPrincipal $principal, TaskApiSpace $space): bool
+    {
+        return $principal->where->touchesTenant($space->tenantKey, array_map(static fn (TaskBoard $board): string => $board->getId(), $this->boardsOfTenant($space->tenantKey)));
+    }
+
+    /**
+     * @return list<TaskBoard>
+     */
+    private function boardsOfTenant(?string $tenantKey): array
+    {
+        if ($tenantKey !== null) {
+            return $this->boards->findActiveByTenant($tenantKey);
+        }
+
+        return array_values(array_filter($this->boards->findAllActive(), static fn (TaskBoard $board): bool => $board->getTenantKey() === null));
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    private function requirePlanAndLevel(TaskApiPrincipal $principal, ?string $tenantKey, TaskApiCapability $capability): void
+    {
+        if (!$this->planGate->allowsTasks($principal->user, $tenantKey)) {
+            throw TaskApiRefusal::planRefused();
+        }
+        $this->requireLevel($principal, $capability);
     }
 
     private function sameUser(object $user, ?object $other): bool

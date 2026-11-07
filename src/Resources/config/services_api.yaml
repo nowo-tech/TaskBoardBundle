@@ -17,6 +17,11 @@ services:
             $prefix: '%nowo_task_board.api.prefix%'
 
     Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer: ~
+    Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer: ~
+
+    Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository:
+        arguments:
+            $syncEnabled: '%nowo_task_board.sync.enabled%'
 
     # Public: any in-process caller reaches the operations and the guard without HTTP.
     Nowo\TaskBoardBundle\Api\Security\TaskApiGuard:
@@ -26,5 +31,9 @@ services:
         public: true
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController:
+        public: true
+        tags: ['controller.service_arguments']
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
         public: true
         tags: ['controller.service_arguments']

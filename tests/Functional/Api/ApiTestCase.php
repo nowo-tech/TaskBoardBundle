@@ -76,6 +76,25 @@ abstract class ApiTestCase extends FunctionalTestCase
         return $decoded;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function listOf(string $key): array
+    {
+        $list = $this->json()[$key] ?? null;
+        self::assertIsArray($list);
+
+        return array_values($list);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function idsOf(string $key): array
+    {
+        return array_map(static fn (array $item): string => (string) $item['id'], $this->listOf($key));
+    }
+
     protected function assertRefused(int $status, string $ecode): void
     {
         self::assertResponseStatusCodeSame($status);

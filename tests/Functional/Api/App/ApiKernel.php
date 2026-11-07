@@ -10,7 +10,10 @@ use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
+use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingAttachmentStorage;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
+use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
+use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
@@ -116,7 +119,14 @@ final class ApiKernel extends Kernel
             'plan_gate'     => 'app.api_host',
             'workspace'     => 'app.api_host',
             'users'         => 'app.api_host',
+            'time_entries'  => 'app.api_host',
         ]]] + $this->taskBoard);
+        if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
+            // The host side of a provider sync, for the imported custom fields.
+            $services->set('app.sync_credentials', TestCredentialResolver::class)->public();
+            $services->set('app.sync_storage', RecordingAttachmentStorage::class)->public();
+            $services->set('app.sync_limits', TestSyncLimitChecker::class)->public();
+        }
     }
 
     /**

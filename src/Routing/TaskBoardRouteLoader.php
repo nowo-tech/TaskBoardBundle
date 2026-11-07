@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Routing;
 
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -23,10 +24,23 @@ use function substr;
  */
 final class TaskBoardRouteLoader extends Loader
 {
-    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, action]. */
+    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action]. */
     private const API_ROUTES = [
-        'user' => ['/v2/user', 'user'],
-        'team' => ['/v2/team', 'teams'],
+        'user'          => ['/v2/user', TaskApiIdentityController::class, 'user'],
+        'team'          => ['/v2/team', TaskApiIdentityController::class, 'teams'],
+        'spaces'        => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
+        'team_tasks'    => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        'time_entries'  => ['/v2/team/{teamId}/time_entries', TaskApiReadController::class, 'timeEntries'],
+        'space'         => ['/v2/space/{spaceId}', TaskApiReadController::class, 'space'],
+        'folders'       => ['/v2/space/{spaceId}/folder', TaskApiReadController::class, 'folders'],
+        'lists'         => ['/v2/space/{spaceId}/list', TaskApiReadController::class, 'lists'],
+        'space_tags'    => ['/v2/space/{spaceId}/tag', TaskApiReadController::class, 'tags'],
+        'list'          => ['/v2/list/{listId}', TaskApiReadController::class, 'list'],
+        'list_tasks'    => ['/v2/list/{listId}/task', TaskApiReadController::class, 'listTasks'],
+        'list_fields'   => ['/v2/list/{listId}/field', TaskApiReadController::class, 'fields'],
+        'task'          => ['/v2/task/{taskId}', TaskApiReadController::class, 'task'],
+        'task_comments' => ['/v2/task/{taskId}/comment', TaskApiReadController::class, 'comments'],
+        'task_members'  => ['/v2/task/{taskId}/member', TaskApiReadController::class, 'members'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -159,11 +173,11 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        foreach (self::API_ROUTES as $name => [$path, $action]) {
+        foreach (self::API_ROUTES as $name => [$path, $controller, $action]) {
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
-                ['_controller' => TaskApiIdentityController::class . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                [],
+                ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+'],
                 [],
                 '',
                 [],

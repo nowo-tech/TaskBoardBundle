@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiIdempotencyClaim;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiIdempotencyOutcome;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimePage;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
@@ -158,6 +159,12 @@ final class TaskApiValuesTest extends TestCase
         $principal = new TaskApiPrincipal(new stdClass(), TaskApiLevel::Tasks, TaskApiWhere::everything(), 'id', 'name');
         $event     = new TaskApiWriteEvent($principal, 'task.update', 'tenant', 'board', 'task', ['other' => 'x'], ['name']);
         self::assertSame(['name'], $event->changedFields);
+    }
+
+    public function testAFilterValueOfTheWrongTypeIsRefused(): void
+    {
+        $this->assertRefused(400, 'INPUT_002', static fn () => TaskApiTaskFilter::fromQuery(['statuses' => 5]));
+        self::assertSame(['open'], TaskApiTaskFilter::fromQuery(['statuses' => 'Open'])->statuses);
     }
 
     public function testAControllerOutsideThePipelineHasNoPrincipal(): void
