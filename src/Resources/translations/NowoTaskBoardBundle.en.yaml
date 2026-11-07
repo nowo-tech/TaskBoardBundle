@@ -640,3 +640,4 @@ task_board.sync.completeness.status.not_exposed: "Not exposed by the provider’
 task_board.sync.error.source_details_unavailable: "The source’s description could not be read."
 task_board.history.former_user: "Former person"
 task_board.flash.task_reopen_refused: "The task was not moved: reopening it would go over the limit of active tasks."
+task_board.flash.column_delete_refused: "The column was not deleted: it holds completed tasks, and reopening them would go over the limit of active tasks."

@@ -319,7 +319,14 @@ final class TaskBoardManageController extends AbstractController
         $board  = $this->findBoard($boardId, $user, true);
         $column = $this->findColumn($board, $columnId);
 
-        $deleted = $this->columnManager->delete($column);
+        try {
+            $deleted = $this->columnManager->delete($column);
+        } catch (TaskReopenRefusedException) {
+            $this->logRefused('column_delete_limit');
+            $this->addFlash('error', 'task_board.flash.column_delete_refused');
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
         if ($deleted) {
             $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);
         }

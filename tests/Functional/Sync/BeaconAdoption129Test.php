@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use DateInterval;
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -271,6 +272,105 @@ final class BeaconAdoption129Test extends SyncPeopleFunctionalTestCase
         $this->sync($board, full: true);
         self::assertContains([1, 0], TestSyncLimitChecker::$calls);
         self::assertFalse($this->taskTitled('One')->isCompleted());
+    }
+
+    /** Audit HNd-L1: completed here, still open at the provider, another field changes: nothing reopens, so nothing is asked. */
+    public function testATaskCompletedHereDoesNotRefuseTheSyncPage(): void
+    {
+        $board = $this->boardWithColumns('To do', 'Finished');
+        $open  = new RemoteStatus('To do', RemoteStatusType::Open, null, 0);
+        $this->put($this->row('t1', 'One', 1, remoteStatus: $open), $this->row('t2', 'Other', 2, remoteStatus: $open));
+        $this->sync($board);
+        $this->login($this->owner);
+        $this->client->request('POST', '/tools/task-board/task/' . $this->taskTitled('One')->getId() . '/advance', ['action' => 'done', '_token' => PredictableCsrfTokenManager::value('task_board_task_advance')]);
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertTrue($this->taskTitled('One')->isCompleted());
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        foreach ([3, 5] as $updated) {
+            $this->put($this->row('t1', 'One changed', $updated, remoteStatus: $open), $this->row('t2', 'Other ' . $updated, $updated + 1, remoteStatus: $open));
+            $report = $this->sync($board);
+            self::assertSame(SyncStatus::Succeeded, $report->status, 'run at ' . $updated);
+            self::assertSame('Other ' . $updated, $this->itemOf('t2')->getTask()?->getTitle(), 'the other task is written');
+            self::assertTrue($this->itemOf('t1')->getTask()?->isCompleted(), 'still completed');
+        }
+    }
+
+    /** Audit HNd-L2: deleting a column can reopen its tasks: asked, and a refusal keeps the column. */
+    public function testDeletingAColumnThatReopensAsksTheLimit(): void
+    {
+        $board   = $this->boardWithColumns('To do', 'Middle', 'Finished');
+        $columns = [];
+        foreach ($board->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+        foreach (['A', 'B'] as $title) {
+            $this->em->persist((new Task(board: $board, title: $title, creator: $this->owner, column: $columns['Finished']))->markCompleted());
+        }
+        $this->em->persist((new Task(board: $board, title: 'Gone', creator: $this->owner, column: $columns['Finished']))->markCompleted()->archive());
+        $this->em->flush();
+        $id  = $columns['Finished']->getId();
+        $url = '/tools/task-board/board/' . $board->getId() . '/column/' . $id . '/delete';
+        $this->em->clear();
+        $this->refreshOwner();
+        $this->login($this->owner);
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        $this->client->request('POST', $url, ['_token' => PredictableCsrfTokenManager::value('task_board_column_delete')]);
+        self::assertSame([[2, 0]], TestSyncLimitChecker::$calls, 'the two active ones, not the archived one');
+        $page = $this->client->followRedirect();
+        self::assertStringContainsString('The column was not deleted', $page->html());
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertInstanceOf(BoardColumn::class, $this->em->find(BoardColumn::class, $id), 'kept');
+        self::assertTrue($this->taskTitled('A')->isCompleted(), 'and nothing reopened');
+        self::assertSame('Finished', $this->taskTitled('A')->getColumn()?->getName());
+
+        TestSyncLimitChecker::$refuseTasks = false;
+        $this->login($this->owner);
+        $this->client->request('POST', $url, ['_token' => PredictableCsrfTokenManager::value('task_board_column_delete')]);
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertNull($this->em->find(BoardColumn::class, $id));
+        self::assertFalse($this->taskTitled('A')->isCompleted(), 'allowed: they reopen');
+    }
+
+    /** Audit HNd-L2: what reopens nothing asks nothing. */
+    public function testDeletingAColumnThatReopensNothingAsksNothing(): void
+    {
+        $board   = $this->boardWithColumns('First', 'Spare', 'Last');
+        $columns = [];
+        foreach ($board->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+        $this->em->persist(new Task(board: $board, title: 'Open', creator: $this->owner, column: $columns['Spare']));
+        $this->em->flush();
+        $spare = $columns['Spare']->getId();
+        $this->em->clear();
+        $this->refreshOwner();
+        $this->login($this->owner);
+        TestSyncLimitChecker::$refuseTasks = true;
+        $this->client->request('POST', '/tools/task-board/board/' . $board->getId() . '/column/' . $spare . '/delete', ['_token' => PredictableCsrfTokenManager::value('task_board_column_delete')]);
+        self::assertSame([], TestSyncLimitChecker::$calls);
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertSame('First', $this->taskTitled('Open')->getColumn()?->getName());
+
+        // The only column left is also the last: its tasks end up completed: nothing reopens.
+        $two   = $this->boardWithColumns('Stay', 'Finished');
+        $names = [];
+        foreach ($two->getColumns() as $column) {
+            $names[$column->getName()] = $column;
+        }
+        $this->em->persist((new Task(board: $two, title: 'Done there', creator: $this->owner, column: $names['Stay']))->markCompleted());
+        $this->em->flush();
+        [$twoId, $stay] = [$two->getId(), $names['Stay']->getId()];
+        $this->em->clear();
+        $this->refreshOwner();
+        $this->login($this->owner);
+        $this->client->request('POST', '/tools/task-board/board/' . $twoId . '/column/' . $stay . '/delete', ['_token' => PredictableCsrfTokenManager::value('task_board_column_delete')]);
+        self::assertSame([], TestSyncLimitChecker::$calls);
     }
 
     /** Audit HN-L1: exact contexts; string ids holding wildcards touch no other member's row. */

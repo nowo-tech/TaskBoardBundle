@@ -640,3 +640,4 @@ task_board.sync.completeness.status.not_exposed: "La API del proveedor no lo ofr
 task_board.sync.error.source_details_unavailable: "No se pudo leer la descripción del origen."
 task_board.history.former_user: "Antigua persona"
 task_board.flash.task_reopen_refused: "La tarea no se ha movido: reabrirla superaría el límite de tareas activas."
+task_board.flash.column_delete_refused: "La columna no se ha eliminado: tiene tareas completadas y reabrirlas superaría el límite de tareas activas."

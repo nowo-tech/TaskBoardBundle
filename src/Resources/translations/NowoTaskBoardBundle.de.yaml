@@ -640,3 +640,4 @@ task_board.sync.completeness.status.not_exposed: "Von der API des Anbieters nich
 task_board.sync.error.source_details_unavailable: "Die Beschreibung der Quelle konnte nicht gelesen werden."
 task_board.history.former_user: "Ehemalige Person"
 task_board.flash.task_reopen_refused: "Die Aufgabe wurde nicht verschoben: Ihre Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
+task_board.flash.column_delete_refused: "Die Spalte wurde nicht gelöscht: Sie enthält erledigte Aufgaben, und deren Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."

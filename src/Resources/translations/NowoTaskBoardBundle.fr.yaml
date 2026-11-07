@@ -640,3 +640,4 @@ task_board.sync.completeness.status.not_exposed: "Non exposé par l’API du fou
 task_board.sync.error.source_details_unavailable: "La description de la source n’a pas pu être lue."
 task_board.history.former_user: "Ancienne personne"
 task_board.flash.task_reopen_refused: "La tâche n’a pas été déplacée : la rouvrir dépasserait la limite de tâches actives."
+task_board.flash.column_delete_refused: "La colonne n’a pas été supprimée : elle contient des tâches terminées, et les rouvrir dépasserait la limite de tâches actives."

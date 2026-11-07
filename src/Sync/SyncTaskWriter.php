@@ -257,7 +257,9 @@ final readonly class SyncTaskWriter
                 ++$newTasks;
             }
             // Since 1.29.0 (audit HN-M1): the provider reopens a completed task: it is active again.
-            if (!$task->isArchived() && !$remote->archived && $task->isCompleted() && $remote->status?->type instanceof RemoteStatusType && !$remote->status->type->isDone()) {
+            // Audit HNd-L1: only if the column may be written: a task completed here stays completed, so it asks for nothing.
+            $columnBaseline = $item?->baseline('column');
+            if (!$task->isArchived() && !$remote->archived && $task->isCompleted() && $remote->status?->type instanceof RemoteStatusType && !$remote->status->type->isDone() && ($columnBaseline === null || $this->hash($this->localValue($task, 'column')) === $columnBaseline[1])) {
                 ++$newTasks;
             }
             $plan[] = [$task->isArchived() ? 'restore' : ($remote->archived ? 'archive' : 'update'), $id, $remote, $task, $item];

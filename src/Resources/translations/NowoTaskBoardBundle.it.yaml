@@ -640,3 +640,4 @@ task_board.sync.completeness.status.not_exposed: "Non esposto dall’API del pro
 task_board.sync.error.source_details_unavailable: "Non è stato possibile leggere la descrizione della fonte."
 task_board.history.former_user: "Ex persona"
 task_board.flash.task_reopen_refused: "L’attività non è stata spostata: riaprirla supererebbe il limite di attività attive."
+task_board.flash.column_delete_refused: "La colonna non è stata eliminata: contiene attività completate e riaprirle supererebbe il limite di attività attive."
