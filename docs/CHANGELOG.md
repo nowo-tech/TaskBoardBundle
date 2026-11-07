@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.0.1. Audit status: fixes verified by delta. Both bugs are from audit HY, and neither is a security issue.
+Target: 2.0.1. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`. Both bugs are from audit HY, and neither is a security issue.
 
 ### Fixed
 
