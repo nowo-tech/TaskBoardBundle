@@ -27,6 +27,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 
 use function array_filter;
@@ -34,6 +35,7 @@ use function array_map;
 use function array_values;
 use function in_array;
 use function spl_object_id;
+use function str_starts_with;
 
 /**
  * Since 2.2.0 (spec 213): what the API reads, without HTTP: each method takes the principal and applies every check, so
@@ -269,8 +271,22 @@ final readonly class TaskApiReadOperations
         $ids      = array_map(static fn (Task $task): string => $task->getId(), $tasks);
         $subtasks = [];
         foreach ($this->queries->subtasksOf($ids) as $subtask) {
-            $subtasks[(string) $subtask->getParent()?->getId()][] = $subtask;
+            // Audit IA-M2: only the subtasks the token may open; a checklist item of a task it reaches is part of that task
+            // (owner: My tasks manages the checklists of its own tasks).
+            if ($this->isChecklistItem($subtask) || $this->guard->canSeeTask($principal, $subtask)) {
+                $subtasks[(string) $subtask->getParent()?->getId()][] = $subtask;
+            }
         }
+        // Audit IA-I7: a relation is shown only when the token may open the other task too.
+        $dependencies = array_values(array_filter($this->queries->dependenciesOf($ids), function (TaskDependency $dependency) use ($principal, $ids): bool {
+            foreach ([$dependency->getSourceTask(), $dependency->getTargetTask()] as $end) {
+                if (!in_array($end->getId(), $ids, true) && !$this->guard->canSeeTask($principal, $end)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
         $spaces = [];
         $users  = [];
         foreach ($tasks as $task) {
@@ -294,7 +310,7 @@ final readonly class TaskApiReadOperations
             spaces: $spaces,
             profiles: $profiles['profiles'],
             userIds: $profiles['ids'],
-            dependencies: $this->queries->dependenciesOf($ids),
+            dependencies: $dependencies,
             subtasks: $subtasks,
             manualMinutes: $this->queries->manualMinutesOf($ids),
             fieldValues: $this->queries->fieldValuesOf($ids),
@@ -323,6 +339,17 @@ final readonly class TaskApiReadOperations
         }
 
         return ['profiles' => $profiles, 'ids' => $ids];
+    }
+
+    private function isChecklistItem(Task $task): bool
+    {
+        foreach ($task->getTags() as $tag) {
+            if (str_starts_with($tag, 'checklist:')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function spaceOf(TaskApiPrincipal $principal, TaskBoard $board): TaskApiSpace

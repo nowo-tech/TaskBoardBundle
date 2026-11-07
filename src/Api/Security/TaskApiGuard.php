@@ -105,6 +105,16 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * Whether the token may open this task, without a word when it may not: for what a page shows of other tasks.
+     */
+    public function canSeeTask(TaskApiPrincipal $principal, Task $task): bool
+    {
+        return $this->reachesBoard($principal, $task->getBoard())
+            && $this->access->canViewTask($principal->user, $task)
+            && ($principal->level !== TaskApiLevel::MyTasks || $this->isOwn($principal->user, $task));
+    }
+
+    /**
      * "My tasks" (spec): assigned to the person or created by them. Watching, reviewing or being a stakeholder does not count.
      */
     public function isOwn(object $user, Task $task): bool

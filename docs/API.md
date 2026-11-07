@@ -20,7 +20,13 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 | `GET /v2/list/{id}/field` | Read | Custom fields a provider sync imported; none otherwise |
 | `GET /v2/team/{team_id}/time_entries` | My tasks | The host's time store answers; `start_date`, `end_date`, `assignee`, `task_id` |
 
-A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignored on reads. Each list answers in the same number of queries whatever the page holds (9 for a list's tasks, measured at 25 and 100 tasks).
+A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignored on reads. Each list answers in the same number of queries whatever the page holds (8 for a list's tasks, measured at 25 and 100 tasks), the tag filter included.
+
+**Cost per board.** A team's lists and tasks ask the host's access decision once per board the team reaches (`BOARD_ACCESS_CHECK`, in Beacon a voter), and the plan gate once per space. The bundle's own queries stay the same with 1 board or 10; the host's checks grow with the boards.
+
+**Time entries.** Without `task_id`, the bundle checks only the team: the host's time hook must keep to what the token's level and where reach, and to the people whose time the person may see. With `task_id`, the task goes through the guard first.
+
+**What a page shows of other tasks.** Subtasks, dependencies and links are shown only when the token may open the other task too. For *My tasks*, the checklist items of its own tasks are shown whoever created them, as it manages those checklists.
 
 ## Differences from ClickUp (so far)
 

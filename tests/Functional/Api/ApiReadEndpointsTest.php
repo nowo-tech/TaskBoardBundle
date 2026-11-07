@@ -360,6 +360,81 @@ final class ApiReadEndpointsTest extends ApiTestCase
         self::assertSame([$loose->getId()], $this->idsOf('lists'));
     }
 
+    public function testMyTasksSeesOnlyItsSubtasksAndTheChecklistItemsOfItsTask(): void
+    {
+        // Audit IA-M2 (the auditor's proof, turned), and the owner's exception for checklist items.
+        $own    = $this->task($this->roadmap, 'Own parent');
+        $hidden = new Task(board: $this->roadmap, title: 'Colleague secret subtask', creator: $this->colleague, parent: $own);
+        $item   = new Task(board: $this->roadmap, title: 'Colleague checklist item', creator: $this->colleague, parent: $own, tags: ['checklist:Steps']);
+        $this->em->persist($hidden);
+        $this->em->persist($item);
+        $this->em->flush();
+        $this->issueToken(TaskApiLevel::MyTasks);
+
+        $this->get('/api/tasks/v2/task/' . $hidden->getId());
+        $this->assertRefused(404, 'ACCESS_001');
+        $this->get('/api/tasks/v2/task/' . $own->getId() . '?include_subtasks=true');
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('Colleague secret subtask', (string) $this->client->getResponse()->getContent());
+        self::assertSame(['Colleague checklist item'], array_column($this->json()['subtasks'], 'name'));
+        self::assertSame(['Colleague checklist item'], array_column($this->json()['checklists'][0]['items'], 'name'));
+
+        $this->issueToken(TaskApiLevel::Read);
+        $this->get('/api/tasks/v2/task/' . $own->getId() . '?include_subtasks=true');
+        self::assertCount(2, $this->json()['subtasks'], 'a Read token sees every subtask');
+    }
+
+    public function testARelationToATaskTheTokenCannotOpenIsLeftOut(): void
+    {
+        // Audit IA-I7.
+        $own    = $this->task($this->roadmap, 'Own');
+        $theirs = new Task(board: $this->roadmap, title: 'Theirs', creator: $this->colleague);
+        $mine   = $this->task($this->roadmap, 'Also mine');
+        $this->em->persist($theirs);
+        $this->em->persist(new TaskDependency($theirs, $own, TaskDependencyType::Blocks));
+        $this->em->persist(new TaskDependency($own, $mine, TaskDependencyType::Related));
+        $this->em->persist(new TaskDependency($own, $theirs, TaskDependencyType::Related));
+        $this->em->flush();
+
+        $this->issueToken(TaskApiLevel::MyTasks);
+        $this->get('/api/tasks/v2/task/' . $own->getId());
+        self::assertSame([], $this->json()['dependencies']);
+        self::assertSame([$mine->getId()], array_column($this->json()['linked_tasks'], 'link_id'));
+        self::assertStringNotContainsString($theirs->getId(), (string) $this->client->getResponse()->getContent());
+
+        $this->issueToken(TaskApiLevel::Read);
+        $this->get('/api/tasks/v2/task/' . $own->getId());
+        self::assertCount(1, $this->json()['dependencies']);
+        self::assertCount(2, $this->json()['linked_tasks']);
+    }
+
+    public function testTheTagFilterMatchesWholeTagsCaseAside(): void
+    {
+        $a = $this->task($this->roadmap, 'A');
+        $a->setTags(['Front-end', '50%_done']);
+        $b = $this->task($this->roadmap, 'B');
+        $b->setTags(['front']);
+        $c = $this->task($this->roadmap, 'C');
+        $c->setTags(['niño', 'ops/infra']);
+        $this->em->flush();
+        $base = '/api/tasks/v2/list/' . $this->roadmap->getId() . '/task?tags[]=';
+
+        $this->get($base . 'FRONT-END');
+        self::assertSame(['A'], array_column($this->listOf('tasks'), 'name'));
+        $this->get($base . 'front');
+        self::assertSame(['B'], array_column($this->listOf('tasks'), 'name'), 'no partial match');
+        $this->get($base . '50%25_done');
+        self::assertSame(['A'], array_column($this->listOf('tasks'), 'name'), 'wildcards are literal');
+        $this->get($base . '50x_done');
+        self::assertSame([], $this->listOf('tasks'));
+        $this->get($base . 'niño');
+        self::assertSame(['C'], array_column($this->listOf('tasks'), 'name'));
+        $this->get($base . 'ops/infra');
+        self::assertSame(['C'], array_column($this->listOf('tasks'), 'name'));
+        $this->get($base . 'front&tags[]=niño');
+        self::assertEqualsCanonicalizing(['B', 'C'], array_column($this->listOf('tasks'), 'name'), 'any of the tags');
+    }
+
     public function testAMyTasksTokenCountsOnlyItsOwn(): void
     {
         $this->task($this->roadmap, 'Mine');

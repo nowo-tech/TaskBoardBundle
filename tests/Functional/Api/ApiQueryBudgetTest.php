@@ -43,6 +43,8 @@ final class ApiQueryBudgetTest extends ApiTestCase
         yield 'lists of a space' => ['/api/tasks/v2/space/space-tenant-a/list'];
         yield 'tags of a space' => ['/api/tasks/v2/space/space-tenant-a/tag'];
         yield 'comments' => ['/api/tasks/v2/task/{first}/comment'];
+        yield 'list tasks by tag' => ['/api/tasks/v2/list/{board}/task?tags[]=tag-1&subtasks=true'];
+        yield 'team tasks by tag' => ['/api/tasks/v2/team/team-1/task?tags[]=tag-2'];
     }
 
     #[DataProvider('endpoints')]
@@ -54,6 +56,48 @@ final class ApiQueryBudgetTest extends ApiTestCase
         self::assertSame($small, $large, 'no query per task');
         self::assertLessThanOrEqual(self::BUDGET, $large);
         fwrite(STDERR, sprintf("\n[budget] %s: %d queries at 25 tasks, %d at 100\n", $endpoint, $small, $large));
+    }
+
+    /**
+     * Audit IA-I8: each board a team request reaches costs its access decision (an event, in the host often a voter), not a
+     * query of the bundle's: the same queries with 1 board as with 10.
+     */
+    public function testTeamTasksCostTheSameQueriesForOneBoardOrTen(): void
+    {
+        $one = $this->teamQueriesFor(1);
+        $ten = $this->teamQueriesFor(10);
+
+        self::assertSame($one, $ten);
+        fwrite(STDERR, sprintf("\n[budget] team tasks: %d queries with 1 board, %d with 10\n", $one, $ten));
+    }
+
+    private function teamQueriesFor(int $boards): int
+    {
+        self::ensureKernelShutdown();
+        $this->setUp();
+        ApiTestHost::$tenants = ['tenant-a'];
+        for ($i = 0; $i < $boards; ++$i) {
+            $this->seed($this->board('Board ' . $i, tenantKey: 'tenant-a'), 3);
+        }
+        $this->issueToken();
+        $this->em->clear();
+
+        return $this->counted('/api/tasks/v2/team/team-1/task?subtasks=true');
+    }
+
+    private function counted(string $path): int
+    {
+        $holder = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $holder);
+        $holder->reset();
+        $this->get($path);
+        self::assertResponseIsSuccessful();
+        $count = 0;
+        foreach ($holder->getData() as $queries) {
+            $count += count($queries);
+        }
+
+        return $count;
     }
 
     private function queriesFor(string $endpoint, int $tasks): int
@@ -83,7 +127,7 @@ final class ApiQueryBudgetTest extends ApiTestCase
 
     private function seed(TaskBoard $board, int $count): string
     {
-        $colleague = $this->user('colleague-' . $count . '@example.com');
+        $colleague = $this->user('colleague-' . $count . '-' . $board->getId() . '@example.com');
         $previous  = null;
         $first     = null;
         for ($i = 0; $i < $count; ++$i) {

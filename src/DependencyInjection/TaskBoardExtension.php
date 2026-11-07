@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
@@ -625,6 +626,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                     ],
                 ],
             ]);
+        }
+
+        // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'api')) {
+            $container->prependExtensionConfig('doctrine', ['orm' => ['dql' => ['string_functions' => [JsonTextFunction::NAME => JsonTextFunction::class]]]]);
         }
 
         // Since 2.1.0 (spec 214): the counter and the ledger are mapped only with task_numbers.enabled.

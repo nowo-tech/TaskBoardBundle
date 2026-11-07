@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Repository;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
+use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -21,10 +23,15 @@ use function array_map;
 use function array_slice;
 use function array_values;
 use function count;
-use function in_array;
+use function implode;
 use function is_array;
 use function is_string;
+use function json_encode;
 use function mb_strtolower;
+use function strtr;
+
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
 
 /**
  * Since 2.2.0 (spec 213): what the read API needs from the database, in a fixed number of queries per page whatever its
@@ -59,27 +66,9 @@ final readonly class TaskApiQueryRepository
         $qb->orderBy(self::ORDER_FIELDS[$filter->orderBy], $direction)->addOrderBy('t.id', $direction);
         $offset = $filter->page * TaskApiTaskFilter::PAGE_SIZE;
 
-        if ($filter->tags === []) {
-            /** @var list<array{id: string}> $rows */
-            $rows = $qb->select('t.id AS id')->setFirstResult($offset)->setMaxResults(TaskApiTaskFilter::PAGE_SIZE + 1)->getQuery()->getArrayResult();
-            $ids  = array_map(static fn (array $row): string => (string) $row['id'], $rows);
-        } else {
-            // Tags live in a JSON column no database compares alike: read id and tags in one light query, filter, then page.
-            /** @var list<array{id: string, tags: mixed}> $rows */
-            $rows = $qb->select('t.id AS id', 't.tags AS tags')->getQuery()->getArrayResult();
-            $ids  = [];
-            foreach ($rows as $row) {
-                $tags = is_array($row['tags']) ? array_map(static fn (mixed $tag): string => mb_strtolower(is_string($tag) ? $tag : ''), $row['tags']) : [];
-                foreach ($filter->tags as $wanted) {
-                    if (in_array($wanted, $tags, true)) {
-                        $ids[] = (string) $row['id'];
-
-                        break;
-                    }
-                }
-            }
-            $ids = array_slice($ids, $offset, TaskApiTaskFilter::PAGE_SIZE + 1);
-        }
+        /** @var list<array{id: string}> $rows */
+        $rows = $qb->select('t.id AS id')->setFirstResult($offset)->setMaxResults(TaskApiTaskFilter::PAGE_SIZE + 1)->getQuery()->getArrayResult();
+        $ids  = array_map(static fn (array $row): string => (string) $row['id'], $rows);
 
         $lastPage = count($ids) <= TaskApiTaskFilter::PAGE_SIZE;
         $ids      = array_slice($ids, 0, TaskApiTaskFilter::PAGE_SIZE);
@@ -165,8 +154,15 @@ final readonly class TaskApiQueryRepository
         }
         /** @var list<TaskDependency> $dependencies */
         $dependencies = $this->entityManager->createQueryBuilder()
-            ->select('d')
+            // Both ends with their members: whether the token may open the other end is asked of each (audit IA-I7).
+            ->select('d', 's', 'sm', 'su', 'e', 'em', 'eu')
             ->from(TaskDependency::class, 'd')
+            ->join('d.sourceTask', 's')
+            ->leftJoin('s.members', 'sm')
+            ->leftJoin('sm.user', 'su')
+            ->join('d.targetTask', 'e')
+            ->leftJoin('e.members', 'em')
+            ->leftJoin('em.user', 'eu')
             ->where('d.sourceTask IN (:tasks) OR d.targetTask IN (:tasks)')
             ->setParameter('tasks', $taskIds)
             ->getQuery()
@@ -332,8 +328,11 @@ final readonly class TaskApiQueryRepository
         }
         /** @var list<Task> $tasks */
         $tasks = $this->entityManager->createQueryBuilder()
-            ->select('t', 'c', 'col', 'm', 'u')
+            // The boards' columns too: each task shows its status among them, one query for all boards (audit IA-I8).
+            ->select('t', 'c', 'col', 'm', 'u', 'b', 'bc')
             ->from(Task::class, 't')
+            ->join('t.board', 'b')
+            ->leftJoin('b.columns', 'bc')
             ->leftJoin('t.creator', 'c')
             ->leftJoin('t.column', 'col')
             ->leftJoin('t.members', 'm')
@@ -373,6 +372,18 @@ final readonly class TaskApiQueryRepository
         }
         if (!$filter->includeClosed) {
             $qb->andWhere('t.completedAt IS NULL');
+        }
+        if ($filter->tags !== []) {
+            // Audit IA-L3: in SQL, so the page and `last_page` cost what any filter costs. Tags are stored as a JSON list of
+            // strings: a quoted name matches one element exactly (case aside for ASCII).
+            $any = [];
+            // MySQL keeps JSON normalised (unicode and slashes unescaped); the others keep Doctrine's encoding.
+            $flags = $this->entityManager->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform ? JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES : 0;
+            foreach (array_values($filter->tags) as $index => $tag) {
+                $any[] = 'LOWER(' . JsonTextFunction::NAME . "(t.tags)) LIKE :tag{$index} ESCAPE '!'";
+                $qb->setParameter('tag' . $index, '%' . strtr(mb_strtolower((string) json_encode($tag, $flags)), ['!' => '!!', '%' => '!%', '_' => '!_']) . '%');
+            }
+            $qb->andWhere(implode(' OR ', $any));
         }
         if ($filter->statuses !== []) {
             $qb->join('t.column', 'statusColumn')->andWhere('LOWER(statusColumn.name) IN (:statuses)')->setParameter('statuses', $filter->statuses);
