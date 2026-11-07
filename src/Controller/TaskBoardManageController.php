@@ -1706,10 +1706,16 @@ final class TaskBoardManageController extends AbstractController
      */
     private function indexPage(array $boards, bool $canCreate): ListPage
     {
-        $newBoard = static fn (string $testid): Action => new Action(
+        // Since 2.0.2: a toolbar action draws its kind's icon only when the host maps the kind, so the plus stays for the
+        // rest, as Tabler for ux_icon: a bare name becomes `bi:plus` there, a 500 on a host that imported Tabler only.
+        $twig        = $this->container->get('twig');
+        $globals     = $twig instanceof Environment ? $twig->getGlobals() : [];
+        $actionIcons = $globals['nowo_ui_kit_action_icons'] ?? null;
+        $plus        = is_array($actionIcons) && isset($actionIcons['create']) ? null : (($globals['nowo_ui_kit_icon_set'] ?? null) === 'ux_icon' ? 'tabler:plus' : 'plus');
+        $newBoard    = static fn (string $testid): Action => new Action(
             kind: 'create',
             label: TaskBoardPages::label('task_board.index.new_board'),
-            icon: 'plus',
+            icon: $plus,
             attributes: ['data-testid' => $testid, 'aria-haspopup' => 'dialog'],
             dialogId: TaskBoardPages::BOARD_CREATE_DIALOG,
         );

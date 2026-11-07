@@ -83,6 +83,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.0.2. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
+
+### Fixed
+
+- The board index and the list page no longer answer 500 on a host with `nowo_ui_kit.icon_set: ux_icon` that imports Tabler only (`Icon "bi:plus" not found`, then `Icon "bi:chevron-up" not found`). The New board action asks for `tabler:plus` and the filter fold for `tabler:chevron-up` and `tabler:chevron-down` there. Output on a webfont host does not change.
+- The all-digit checklist item fix of 2.0.1 survives `rector process`: the parent check reads the id from the item instead of casting the array key, a cast rector removes as useless. An all-digit item that names itself as parent stays on the list.
+- `nowo_ui_kit.action_icons.create` now sets the icon of New board, whatever the icon set; `chevron_up` and `chevron_down` keep setting the filter fold's. The bundle's own `plus` used to win over the host's map.
+
+### Documentation
+
+- The list of Tabler icons to import on `ux_icon` (`docs/USAGE.md`) adds the ones it was missing.
+
 ## [2.0.1] - 2026-11-07
 
 Target: 2.0.1. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`. Both bugs are from audit HY, and neither is a security issue.

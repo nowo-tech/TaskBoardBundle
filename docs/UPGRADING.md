@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 2.0.2](#to-202)
 - [To 2.0.1](#to-201)
 - [To 2.0.0](#to-200)
   - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
@@ -147,6 +148,20 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 2.0.2
+
+From **2.0.1**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target: 2.0.2. No schema or configuration change. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
+
+On `nowo_ui_kit.icon_set: ux_icon`, New board now asks for `tabler:plus` and the list's filter fold for `tabler:chevron-up` and `tabler:chevron-down`: import them (`php bin/console ux:icons:import tabler:plus tabler:chevron-up tabler:chevron-down`), or map `create`, `chevron_up` and `chevron_down` in `nowo_ui_kit.action_icons`. A host that set `action_icons.create` now sees that icon on New board, not the bundle's plus.
+
+A Tabler-only host must also have every icon in `docs/USAGE.md`, including `hourglass` and the icons of `board.column_icons`: a missing one is a 500 on the board and task pages, unless `ux_icons.ignore_not_found` is on.
 
 ## To 2.0.1
 

@@ -236,6 +236,16 @@ final class ClickUpPeopleTimeProviderTest extends TestCase
         $provider->fetchTaskTimeIntervals($this->credential, 'DENY');
     }
 
+    /** Audit HY-B: an all-digit item id is an integer key. An item that names itself as parent is still a top item, not lost. */
+    public function testAnAllDigitChecklistItemWithItselfAsParentStaysOnTheList(): void
+    {
+        $provider = $this->provider(['list/900200/task' => 'list_900200_task_digit_checklist.json']);
+        $items    = $provider->fetchTasks($this->credential, '900200', null, null)->tasks[0]->checklists[0]->items;
+
+        self::assertSame(['5', '6'], array_map(static fn (RemoteChecklistItem $item): string => $item->id, $items));
+        self::assertSame([null, '5'], array_map(static fn (RemoteChecklistItem $item): ?string => $item->parentItemId, $items));
+    }
+
     public function testTaskRowsCarryPeopleChecklistsStatusesAndLists(): void
     {
         $provider       = $this->provider(['list/900200/task' => 'list_900200_task_people.json']);
