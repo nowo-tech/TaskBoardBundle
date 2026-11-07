@@ -55,14 +55,19 @@ final class HostHooksTest extends FunctionalTestCase
     {
         $this->boot(['tenancy' => self::TENANTS + ['open_single_board' => true]]);
         $board = $this->board('Only', tenantKey: 'acme');
-        $this->client->disableReboot();
 
         $this->client->request('GET', '/t/acme');
         self::assertResponseRedirects('/t/acme/board/' . $board->getId());
         $this->client->request('GET', '/t/acme?boards=1');
         self::assertResponseIsSuccessful();
+    }
 
-        $this->board('Second', tenantKey: 'acme');
+    public function testTheIndexListsTwoBoards(): void
+    {
+        $this->boot(['tenancy' => self::TENANTS + ['open_single_board' => true]]);
+        $this->board('One', tenantKey: 'acme');
+        $this->board('Two', tenantKey: 'acme');
+
         $this->client->request('GET', '/t/acme');
         self::assertResponseIsSuccessful();
     }
