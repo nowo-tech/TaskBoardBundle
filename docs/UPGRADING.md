@@ -157,9 +157,11 @@ From **2.0.1**:
 composer update nowo-tech/task-board-bundle
 ```
 
-Target: 2.0.2. No schema or configuration change. Audit: pending short delta.
+Target: 2.0.2. No schema or configuration change. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
 
 On `nowo_ui_kit.icon_set: ux_icon`, New board now asks for `tabler:plus` and the list's filter fold for `tabler:chevron-up` and `tabler:chevron-down`: import them (`php bin/console ux:icons:import tabler:plus tabler:chevron-up tabler:chevron-down`), or map `create`, `chevron_up` and `chevron_down` in `nowo_ui_kit.action_icons`. A host that set `action_icons.create` now sees that icon on New board, not the bundle's plus.
+
+A Tabler-only host must also have every icon in `docs/USAGE.md`, including `hourglass` and the icons of `board.column_icons`: a missing one is a 500 on the board and task pages, unless `ux_icons.ignore_not_found` is on.
 
 ## To 2.0.1
 

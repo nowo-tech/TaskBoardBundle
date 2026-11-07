@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.0.2. Audit: pending short delta.
+Target: 2.0.2. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
 
 ### Fixed
 
