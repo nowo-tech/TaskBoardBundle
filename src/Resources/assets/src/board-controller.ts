@@ -165,12 +165,13 @@ export default class BoardController extends Controller<HTMLElement> {
 
         const response = await fetch(moveUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: body.toString(),
             credentials: 'same-origin',
         });
 
-        if (response.ok) {
+        // 409: the host's limit refused reopening the task; the page shows why.
+        if (response.ok || response.status === 409) {
             window.location.reload();
         }
 

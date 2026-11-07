@@ -893,7 +893,7 @@ final class TaskBoardConnectionController extends AbstractController
             'peopleSummary'      => $this->peopleSummary($board, $connection),
             'pendingReassigns'   => $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository ? count($this->peopleRepository->pendingReassigns($directory)) : 0,
             'firstImportPending' => $this->firstImportPending($connection),
-            'peopleFormerForm'   => $this->peopleBulkFormer && $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository && $this->peopleRepository->unreviewedCount($directory) > 0 ? $this->peopleFormerForm($board)->createView() : null,
+            'peopleFormerForm'   => $this->peopleBulkFormer && $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository && $this->peopleRepository->unmappedCount($directory) > 0 ? $this->peopleFormerForm($board)->createView() : null,
             'dashboardRoute'     => $this->dashboardRoute,
             'templates'          => $this->templates,
         ];

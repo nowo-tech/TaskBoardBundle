@@ -19,7 +19,10 @@ use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_filter;
@@ -41,6 +44,8 @@ final readonly class TaskManager
         private TaskRepositoryInterface $taskRepository,
         private TaskChangeRecorder $changeRecorder,
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 1.29.0 (audit HN-M1): the host's limit, asked when a move reopens a completed task.
+        private ?SyncLimitCheckerInterface $limits = null,
     ) {
     }
 
@@ -140,6 +145,7 @@ final readonly class TaskManager
 
     /**
      * @throws ColumnNotFoundException when $columnId is not a column of the task's board
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
      */
     /**
      * Moves a task to a column at the given index and renumbers the target column (0..n-1) so
@@ -159,6 +165,14 @@ final readonly class TaskManager
 
         if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
             throw ColumnNotFoundException::forBoard($columnId, $task->getBoard()->getId());
+        }
+        // Since 1.29.0 (audit HN-M1): a completed task outside the last column is active again, so the host's limit is asked.
+        $last = $columns === [] ? null : $columns[array_key_last($columns)];
+        if ($task->isCompleted() && !$task->isArchived() && $column instanceof BoardColumn && $last instanceof BoardColumn && $column->getId() !== $last->getId()) {
+            $refusal = $this->limits?->check($task->getBoard(), 1, 0);
+            if ($refusal instanceof LimitRefusal) {
+                throw new TaskReopenRefusedException($refusal);
+            }
         }
 
         $task

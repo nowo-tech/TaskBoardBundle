@@ -245,6 +245,15 @@ class TaskSyncPerson
     /**
      * Sets the mapping. `$user` is the mapped user (auto / manual) or the suggestion (suggested); null otherwise.
      */
+    /** Since 1.29.0: back among those nobody looked at (`mappedBy` is what the summary's count reads). */
+    public function clearReview(): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->mappedBy = null;
+
+        return $this;
+    }
+
     public function map(TaskSyncPersonMapping $mapping, ?object $user, ?object $by, DateTimeImmutable $at): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.

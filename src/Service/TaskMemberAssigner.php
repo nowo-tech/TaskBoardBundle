@@ -76,14 +76,7 @@ final readonly class TaskMemberAssigner
         );
 
         $task->addMember($member);
-        $this->changeRecorder->record(
-            $task,
-            $actor,
-            TaskChangeType::MemberAdded,
-            null,
-            $this->userLabel($data->user),
-            $data->memberRole->value,
-        );
+        $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberAdded, $data->user, $data->memberRole->value, $this->userLabel($data->user));
         $this->taskRepository->save($task);
         $this->eventDispatcher?->dispatch(new TaskMemberAddedEvent($task, $actor, $member), TaskBoardEvents::TASK_MEMBER_ADDED);
 
@@ -97,14 +90,7 @@ final readonly class TaskMemberAssigner
                 continue;
             }
 
-            $this->changeRecorder->record(
-                $task,
-                $actor,
-                TaskChangeType::MemberRemoved,
-                $this->userLabel($member->getUser()),
-                null,
-                $member->getMemberRole()->value,
-            );
+            $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value, $this->userLabel($member->getUser()));
             $task->removeMember($member);
             $this->taskRepository->save($task);
 

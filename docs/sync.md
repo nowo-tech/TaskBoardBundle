@@ -226,7 +226,7 @@ handler that loads the user itself (e.g. `$em->find(User::class, $message->actor
 ## Console command
 
 ```bash
-php bin/console nowo:task-board:sync <boardId> [--full] [--dry-run] [--allow-mass-archive] [--restart] [--format=text|json]
+php bin/console nowo:task-board:sync <boardId> [--full] [--dry-run] [--allow-mass-archive] [--time-entries] [--restart] [--format=text|json]
 ```
 
 It runs to completion. Exit codes: 0 succeeded, 1 failed, 2 invalid (board not found, not linked, no user), 3 paused or

@@ -93,6 +93,29 @@ final readonly class SyncFieldValueEraser
     }
 
     /**
+     * Since 1.29.0: erases one field of one task, without knowing the value. For an erasure log that keeps no value: after
+     * `kernel.secret` changes, or when a value came back from the provider, the host repeats its log with this. The host
+     * authorises the caller.
+     *
+     * @return int the values erased
+     */
+    public function eraseField(Task $task, string $fieldName): int
+    {
+        $query = $this->entityManager->createQueryBuilder()
+            ->select('v.id AS id', 'v.value AS value')
+            ->from(TaskSyncFieldValue::class, 'v')->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
+            ->where('v.task = :task')->andWhere('f.name = :name')->setParameter('task', $task)->setParameter('name', $fieldName);
+        /** @var list<array{id: string, value: mixed}> $rows */
+        $rows   = array_values(array_filter($query->getQuery()->getArrayResult(), static fn (array $row): bool => !is_array($row['value']) || !isset($row['value']['erased'])));
+        $erased = $this->eraseRows($rows);
+        // In `text` mode the document is the only copy; a line a row already took is not counted twice.
+        $lines = $this->eraseDocumentLines($task, static fn (string $line): bool => str_starts_with($line, '- **' . $fieldName . '**: '));
+        $this->entityManager->flush();
+
+        return $erased + $lines;
+    }
+
+    /**
      * The values holding `$value`, for an access request.
      *
      * @param TaskBoard|null $board one board; **null = every board of every tenant**, as in {@see self::eraseByValue()}

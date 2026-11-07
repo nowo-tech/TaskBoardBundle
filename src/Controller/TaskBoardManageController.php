@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
@@ -88,6 +89,7 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -317,7 +319,14 @@ final class TaskBoardManageController extends AbstractController
         $board  = $this->findBoard($boardId, $user, true);
         $column = $this->findColumn($board, $columnId);
 
-        $deleted = $this->columnManager->delete($column);
+        try {
+            $deleted = $this->columnManager->delete($column);
+        } catch (TaskReopenRefusedException) {
+            $this->logRefused('column_delete_limit');
+            $this->addFlash('error', 'task_board.flash.column_delete_refused');
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
         if ($deleted) {
             $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);
         }
@@ -658,7 +667,8 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_restore'));
-        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), 1, 0) instanceof LimitRefusal) {
+        // Since 1.29.0: a completed task is not an active task, so restoring it adds nothing to the limit.
+        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), $task->isCompleted() ? 0 : 1, 0) instanceof LimitRefusal) {
             $this->addFlash('error', 'task_board.flash.task_restore_refused');
         } elseif ($task->isArchived()) {
             $task->restore();
@@ -741,13 +751,19 @@ final class TaskBoardManageController extends AbstractController
         $action   = $request->request->getString('action');
         $columnId = $request->request->getString('columnId');
 
-        $success = match (true) {
-            $action === 'previous' => $this->taskManager->moveToPreviousColumn($task, $user),
-            $action === 'next'     => $this->taskManager->moveToNextColumn($task, $user),
-            $action === 'done'     => $this->taskManager->moveToDone($task, $user),
-            $columnId !== ''       => $this->taskManager->moveToColumn($task, $columnId, $user),
-            default                => false,
-        };
+        try {
+            $success = match (true) {
+                $action === 'previous' => $this->taskManager->moveToPreviousColumn($task, $user),
+                $action === 'next'     => $this->taskManager->moveToNextColumn($task, $user),
+                $action === 'done'     => $this->taskManager->moveToDone($task, $user),
+                $columnId !== ''       => $this->taskManager->moveToColumn($task, $columnId, $user),
+                default                => false,
+            };
+        } catch (TaskReopenRefusedException) {
+            $this->logRefused('task_reopen_limit');
+            $this->addFlash('error', 'task_board.flash.task_reopen_refused');
+            $success = false;
+        }
 
         if ($success) {
             $this->logWrite('task_advance', ['task_id' => $taskId, 'column_id' => $task->getColumn()?->getId()]);
@@ -763,7 +779,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
-    public function moveTask(string $taskId, Request $request): RedirectResponse
+    public function moveTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_task_move');
@@ -776,6 +792,13 @@ final class TaskBoardManageController extends AbstractController
             $this->logWrite('task_move', ['task_id' => $taskId, 'column_id' => $task->getColumn()?->getId(), 'position' => $position]);
         } catch (ColumnNotFoundException $exception) {
             throw new BadRequestHttpException($exception->getMessage(), $exception);
+        } catch (TaskReopenRefusedException $exception) {
+            // Since 1.29.0 (audit HN-M1): the task stays. The board's drag reloads on 409, so the flash shows on that page.
+            $this->logRefused('task_reopen_limit');
+            $this->addFlash('error', 'task_board.flash.task_reopen_refused');
+            if ($this->isPanelRequest($request)) {
+                return new JsonResponse(['refused' => $exception->refusal->code, 'message' => $this->translator->trans('task_board.flash.task_reopen_refused', [], 'NowoTaskBoardBundle')], Response::HTTP_CONFLICT);
+            }
         }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);

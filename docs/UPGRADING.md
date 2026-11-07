@@ -140,6 +140,17 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### 1.29.0 for hosts
+
+No schema change.
+
+- **Limit checker:** `check()` is called with 0 new tasks when a restored task is completed, and with 1 when a task is reopened by a move or by the sync. A refused move stays where it was. Deleting a column that would reopen completed tasks asks for how many, and a refusal keeps the column (`BoardColumnManager::delete()` throws `TaskReopenRefusedException`). File imports that reopen a task (`ImportedTaskUpdater`: the host's import check counts rows) and a provider's checklist item (`SyncChecklistWriter`) can still reopen with no check. A provider's reopen refuses the sync's whole page, as new tasks do, even if the same page completes others; a task completed here that the provider still has open asks nothing, because it stays completed. `TaskManager` moves throw `TaskReopenRefusedException` on a refusal; a host calling them directly must catch it. `POST .../move` answers 409 with `{refused, message}` to an `XMLHttpRequest`, and redirects with a flash otherwise.
+- **`context` of `member_added` and `member_removed`** is now `<role> user:<id>`. The bundle's history section shows the role; a template override should read the part before the space. Older rows keep the role alone.
+- **Summary count:** `unreviewedCount()` leaves out people someone saved as *Not mapped*. `unmappedCount()` gives the earlier number. Saving the page counts every row shown as reviewed, including rows left as they were. A reviewed person whose e-mail changes at the provider counts again.
+- **Labels:** text in the three `former_user` keys changed. A host that overrides them or tests the text should check it.
+- **`--time-entries`:** a scheduled command that should read hours adds the option. With no sink, no directory or a provider without time it reads nothing and prints a warning.
+- **Rotating `kernel.secret`:** run a full sync, then repeat `eraseField()`: before the sync there is no value to erase and it returns 0.
+
 ## To 1.28.0
 
 From **1.27.0**:

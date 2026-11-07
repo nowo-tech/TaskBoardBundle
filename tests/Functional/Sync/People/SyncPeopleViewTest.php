@@ -59,7 +59,7 @@ final class SyncPeopleViewTest extends PeopleFunctionalTestCase
         // History tokens: a person (anonymised: the translated "former" name), a user, anything else unchanged.
         $this->directories()->forget($people['creator'], null);
         $this->em->flush();
-        self::assertSame('Former ClickUp user #1', $views->tokenLabel('person:' . $people['creator']->getId()));
+        self::assertSame('Former ClickUp person #1', $views->tokenLabel('person:' . $people['creator']->getId()));
         self::assertSame('Former clickup user #1', (new SyncPeopleViewProvider($this->em, $this->accessChecker()))->creatorOf($task)?->name);
         self::assertTrue($views->creatorOf($task)?->anonymised);
         self::assertSame('person:unknown', $views->tokenLabel('person:unknown'));
@@ -74,7 +74,7 @@ final class SyncPeopleViewTest extends PeopleFunctionalTestCase
         self::assertNotSame([], $memo->getValue($views));
         $views->reset();
         self::assertSame([], $memo->getValue($views));
-        self::assertSame('Former ClickUp user #1', $views->creatorOf($task)?->name, 'read again after the reset');
+        self::assertSame('Former ClickUp person #1', $views->creatorOf($task)?->name, 'read again after the reset');
     }
 
     public function testTheTaskPageShowsTheRemotePeople(): void

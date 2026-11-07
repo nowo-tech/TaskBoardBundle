@@ -7,7 +7,10 @@ namespace Nowo\TaskBoardBundle\Service;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 
 use function count;
 use function is_string;
@@ -22,6 +25,8 @@ final readonly class BoardColumnManager
 {
     public function __construct(
         private BoardColumnRepositoryInterface $columnRepository,
+        // Since 1.29.0 (audit HNd-L2): the host's limit, asked when a deletion would reopen completed tasks.
+        private ?SyncLimitCheckerInterface $limits = null,
     ) {
     }
 
@@ -97,6 +102,8 @@ final readonly class BoardColumnManager
     /**
      * Deletes a column (since 1.11): its tasks move to the end of the board's first remaining column (completed when
      * that column is the last one, reopened otherwise); the last column of a board is never deleted (false).
+     *
+     * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
      */
     public function delete(BoardColumn $column): bool
     {
@@ -113,8 +120,23 @@ final readonly class BoardColumnManager
         }
 
         usort($remaining, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
-        $target   = $remaining[0];
-        $lastOne  = $remaining[count($remaining) - 1];
+        $target  = $remaining[0];
+        $lastOne = $remaining[count($remaining) - 1];
+
+        // Since 1.29.0 (audit HNd-L2): the completed tasks that move out of the last column are active again.
+        if ($target !== $lastOne) {
+            $reopened = 0;
+            foreach ($board->getTasks() as $task) {
+                if ($task->getColumn() === $column && $task->isCompleted() && !$task->isArchived()) {
+                    ++$reopened;
+                }
+            }
+            $refusal = $reopened > 0 ? $this->limits?->check($board, $reopened, 0) : null;
+            if ($refusal instanceof LimitRefusal) {
+                throw new TaskReopenRefusedException($refusal);
+            }
+        }
+
         $position = 0;
         foreach ($board->getTasks() as $task) {
             if ($task->getColumn() === $target) {

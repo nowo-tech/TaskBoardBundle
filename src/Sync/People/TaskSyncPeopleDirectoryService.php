@@ -142,6 +142,10 @@ final readonly class TaskSyncPeopleDirectoryService
         }
         if ($person->refresh($name, $normalized === null ? null : Text::cut((string) $remote->email, 254), $normalized === null ? null : Text::cut($normalized, 254), $role, $kind, $now)) {
             $session->count('people.changedEmail');
+            // Since 1.29.0 (audit HN-L4): someone saved them as they were; with a new e-mail they are due again.
+            if (!$person->getMapping()->isHumanDecision() && !$person->getMapping()->isMapped()) {
+                $person->clearReview();
+            }
         }
         if ($person->isAnonymised() || $person->getMapping()->isHumanDecision()) {
             return $person;
@@ -237,6 +241,14 @@ final readonly class TaskSyncPeopleDirectoryService
         $directory->markReviewed($this->managed($actor), $this->clock->now());
         $this->entityManager->flush();
         $this->eventDispatcher?->dispatch(new SyncPeopleReviewedEvent($directory->getId(), SyncUser::id($actor), $this->people->mappingCounts($directory)), TaskBoardEvents::SYNC_PEOPLE_REVIEWED);
+    }
+
+    /** Since 1.29.0: nothing moves and no mapping changes; only who looked at the person and when. @internal */
+    public function markPersonReviewed(TaskSyncPerson $person, object $actor): void
+    {
+        if ($person->getMappedBy() === null) {
+            $person->map($person->getMapping(), $person->getSuggestedUser(), $this->managed($actor), $this->clock->now());
+        }
     }
 
     /** "Forget this person": name and e-mail cleared; references and the mapping stay. */

@@ -10,7 +10,6 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
-use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
@@ -61,7 +60,7 @@ final readonly class SyncPeopleWriter
             $task->removeMember($member);
             $this->entityManager->remove($syncMember);
             $this->entityManager->remove($member);
-            $this->changeRecorder->record($task, $actor, TaskChangeType::MemberRemoved, UserLabel::of($member->getUser()), null, $role->value);
+            $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $role->value);
             $changed = true;
         }
         $unmatched = [];
@@ -78,7 +77,7 @@ final readonly class SyncPeopleWriter
             $task->addMember($member);
             $this->entityManager->persist($member);
             $this->entityManager->persist(new TaskSyncMember($item, $member, $person, $role->value));
-            $this->changeRecorder->record($task, $actor, TaskChangeType::MemberAdded, null, UserLabel::of($user), $role->value);
+            $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberAdded, $user, $role->value);
             $changed = true;
         }
         if ($item->unmatchedPeople($role->value) !== $unmatched) {

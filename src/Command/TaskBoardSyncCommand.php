@@ -64,6 +64,7 @@ final class TaskBoardSyncCommand extends Command
             ->addOption('full', null, InputOption::VALUE_NONE, 'Read every remote task, not only those updated since the last successful sync')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Compute everything, write nothing (no files are downloaded)')
             ->addOption('allow-mass-archive', null, InputOption::VALUE_NONE, 'Archive even when the provider no longer lists most linked tasks')
+            ->addOption('time-entries', null, InputOption::VALUE_NONE, 'Also read tracked time and hand it to the host\'s sink (sync.time_entries.sink)')
             ->addOption('restart', null, InputOption::VALUE_NONE, 'Ignore a stored cursor and start a new run')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'text or json', 'text');
     }
@@ -100,11 +101,17 @@ final class TaskBoardSyncCommand extends Command
             full: $input->getOption('full') === true,
             dryRun: $input->getOption('dry-run') === true,
             allowMassArchive: $input->getOption('allow-mass-archive') === true,
+            timeEntries: $input->getOption('time-entries') === true,
         );
         do {
             $report = $this->sync->runLinked($board, $options);
             $board  = $this->boards->findById($report->boardId) ?? $board;
         } while ($report->status === SyncStatus::Paused);
+
+        // Since 1.29.0: said, not silent: the phase needs a sink, a people directory and a provider that serves time.
+        if ($input->getOption('time-entries') === true && $report->time->mode === null && $report->status === SyncStatus::Succeeded) {
+            $io->getErrorStyle()->warning('--time-entries read no time: it needs sync.time_entries.sink, a people directory and a provider that serves tracked time, and a dry run reads none.');
+        }
 
         if ($input->getOption('format') === 'json') {
             $output->writeln((string) json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
