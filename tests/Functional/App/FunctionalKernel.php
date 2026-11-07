@@ -137,6 +137,10 @@ final class FunctionalKernel extends Kernel
         // A test may set UiKit's options under this key (TB-6); it is not a bundle option.
         if (isset($this->taskBoard['__ui_kit'])) {
             $container->extension('nowo_ui_kit', $this->taskBoard['__ui_kit']);
+            // Since 2.0.2: symfony/ux-icons is not a dependency; a host on ux_icon that imported Tabler only.
+            if (($this->taskBoard['__ui_kit']['icon_set'] ?? null) === 'ux_icon') {
+                $container->services()->set('app.ux_icons', TablerOnlyUxIcons::class)->tag('twig.extension');
+            }
         }
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + array_diff_key($this->taskBoard, ['__ui_kit' => true]));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).
