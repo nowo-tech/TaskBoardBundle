@@ -1,6 +1,6 @@
 {#
     Board index (web_ui.templates.index). Since 2.0.0 on the UiKit list scaffold (TB-4). Variable: page (ListPage from
-    TaskBoardManageController::indexPage(): header with New board as the one primary, a row per board, the empty state).
+    TaskBoardManageController::indexPage(): a row per board, or the empty state; New board as the one primary, in the header when there are boards, else in the empty state).
     Also boards, boardForm, dashboardRoute, tenant, canCreateBoard, boardFormFallback (the <noscript> form) and openCreateBoard
     (the dialog opens on load: ?new=1, or an invalid submission answered 422 with its values and errors).
     Blocks: nowo_ui_list_row (one board, `row` and `loop` in context), nowo_ui_list_after, nowo_ui_modals.

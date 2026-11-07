@@ -399,16 +399,20 @@ classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`
 
 ## Board index and default view (since 1.24)
 
-The board index (`templates.index`, `manage/index.html.twig`) is a list page: the header with its actions (*New
-board*, for whoever may create a board here), one panel with the boards or an empty state, and the **New board**
+The board index (`templates.index`, `manage/index.html.twig`) is a list page: the header with its actions, one panel with the boards or an empty state, *New board* for whoever may
+create a board here (since 2.1.1 one button: in the header when there are boards, else in the empty state), and the **New board**
 dialog (`nowo-task-board-dialog`), with a `<noscript>` copy of the form under the list. Blocks for a page extending it:
 
 | Block | Content |
 |-------|---------|
-| `nowo_task_board_toolbar` | The whole header |
-| `index_actions` | The header actions (*New board*, *Back* with `dashboard_route`) |
-| `index_board_item` | One board (`board`, `loop` in context); default `manage/_board_list_item.html.twig` |
-| `index_empty` | No boards (the message and, for creators, *New board*) |
+| `nowo_ui_page_header` | The whole header (UiKit's), from `page.header`: *New board* when there are boards, *Back* with `dashboard_route` |
+| `nowo_ui_list_row` | One board as table cells (`row`, `loop` in context); default `manage/_board_row.html.twig` |
+| `nowo_ui_list_after` | After the list: the `<noscript>` New board form |
+| `nowo_ui_modals` | The New board dialog |
+
+With no boards, the scaffold draws `page.empty` (the message and, for creators, *New board*) through UiKit's `empty` partial.
+Since 2.0.0 `nowo_task_board_toolbar`, `index_actions`, `index_board_item` and `index_empty` are gone from the index
+([UPGRADING](UPGRADING.md#to-200-uikit-page-contract)).
 
 Partials for host pages: `manage/_board_list.html.twig` (`boards`: the same items, e.g. in a board switcher dialog;
 it prints whatever it gets, so pass boards already filtered with `TaskBoardResourceAccessChecker::filterBoards()`),
