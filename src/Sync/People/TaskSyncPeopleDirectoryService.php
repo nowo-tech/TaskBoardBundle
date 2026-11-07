@@ -239,6 +239,14 @@ final readonly class TaskSyncPeopleDirectoryService
         $this->eventDispatcher?->dispatch(new SyncPeopleReviewedEvent($directory->getId(), SyncUser::id($actor), $this->people->mappingCounts($directory)), TaskBoardEvents::SYNC_PEOPLE_REVIEWED);
     }
 
+    /** Since 1.29.0: nothing moves and no mapping changes; only who looked at the person and when. @internal */
+    public function markPersonReviewed(TaskSyncPerson $person, object $actor): void
+    {
+        if ($person->getMappedBy() === null) {
+            $person->map($person->getMapping(), $person->getSuggestedUser(), $this->managed($actor), $this->clock->now());
+        }
+    }
+
     /** "Forget this person": name and e-mail cleared; references and the mapping stay. */
     public function anonymise(TaskSyncPerson $person, object $actor): void
     {

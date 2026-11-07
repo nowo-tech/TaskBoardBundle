@@ -140,6 +140,16 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+### 1.29.0 for hosts
+
+No schema change.
+
+- **Limit checker:** `SyncLimitCheckerInterface::check()` is now called with 0 new tasks when a restored task is completed. A host whose active-task metric counts completed tasks must count them when they are created or reopened, not on restore.
+- **`context` of `member_added` and `member_removed`** is now `<role> user:<id>`. The bundle's history section shows the role; a template override should read the part before the space. Older rows keep the role alone.
+- **Summary count:** `unreviewedCount()` leaves out people someone saved as *Not mapped*. `unmappedCount()` gives the earlier number.
+- **Labels:** text in the three `former_user` keys changed. A host that overrides them or tests the text should check it.
+- **`--time-entries`:** a scheduled command that should read hours adds the option. Without a sink it does nothing.
+
 ## To 1.28.0
 
 From **1.27.0**:

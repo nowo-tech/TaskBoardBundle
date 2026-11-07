@@ -61,7 +61,7 @@ final class TaskTimeEntryUserTest extends FunctionalTestCase
         $this->refreshUsers();
         $this->login($this->owner);
         $crawler = $this->client->request('GET', self::BASE . 'task/' . $taskId);
-        self::assertStringContainsString('Former user', $crawler->filter('.nowo-task-time-entries__user')->text());
+        self::assertStringContainsString('Former person', $crawler->filter('.nowo-task-time-entries__user')->text());
         self::assertSame(45, $this->em->find(TaskTimeEntry::class, $id)?->getMinutes());
     }
 

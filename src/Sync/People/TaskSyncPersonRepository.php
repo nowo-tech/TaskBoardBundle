@@ -111,6 +111,19 @@ final readonly class TaskSyncPersonRepository
         return (int) $this->entityManager->createQueryBuilder()
             ->select('COUNT(p.id)')->from(TaskSyncPerson::class, 'p')
             ->where('p.directory = :directory')->andWhere('p.mapping IN (:mappings)')->andWhere('p.anonymisedAt IS NULL')
+            // Since 1.29.0: somebody saved the row as *Not mapped*: decided, though free to match later.
+            ->andWhere('p.mappedBy IS NULL')
+            ->setParameter('directory', $directory)
+            ->setParameter('mappings', [TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested])
+            ->getQuery()->getSingleScalarResult();
+    }
+
+    /** Since 1.29.0: people with no mapping, reviewed or not (not anonymised): whom the bulk action can reach. */
+    public function unmappedCount(TaskSyncDirectory $directory): int
+    {
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(p.id)')->from(TaskSyncPerson::class, 'p')
+            ->where('p.directory = :directory')->andWhere('p.mapping IN (:mappings)')->andWhere('p.anonymisedAt IS NULL')
             ->setParameter('directory', $directory)
             ->setParameter('mappings', [TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested])
             ->getQuery()->getSingleScalarResult();

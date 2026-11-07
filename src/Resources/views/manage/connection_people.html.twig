@@ -121,7 +121,7 @@
                         {#- Since 1.28.0 (sync.people_bulk_former). -#}
                         {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'mt-3'}}) }}
                             <p class="text-secondary small mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                            <button type="submit" class="btn btn-outline-secondary" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                            <button type="submit" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
                         {{ form_end(peopleFormerForm) }}
                     {% endif %}
 

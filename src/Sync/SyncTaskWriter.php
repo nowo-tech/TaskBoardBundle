@@ -70,6 +70,7 @@ use Throwable;
 
 use function addcslashes;
 use function array_filter;
+use function array_intersect;
 use function array_key_last;
 use function array_keys;
 use function array_map;
@@ -80,7 +81,6 @@ use function count;
 use function explode;
 use function hash;
 use function implode;
-use function in_array;
 use function is_array;
 use function is_scalar;
 use function json_encode;
@@ -88,10 +88,10 @@ use function max;
 use function mb_strtolower;
 use function method_exists;
 use function preg_replace;
+use function preg_split;
 use function rawurldecode;
 use function sha1;
 use function sort;
-use function spl_object_id;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
@@ -101,6 +101,7 @@ use function trim;
 use const JSON_PRESERVE_ZERO_FRACTION;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
+use const PREG_SPLIT_DELIM_CAPTURE;
 
 /**
  * @internal since 1.23: writes remote pages to a board — the per-task rules of the contract (§3): create, adopt,
@@ -245,7 +246,8 @@ final readonly class SyncTaskWriter
                 ++$ctx->unchanged;
                 continue;
             }
-            if ($task->isArchived()) {
+            // Since 1.29.0: a task that stays completed after the restore adds nothing to the limit.
+            if ($task->isArchived() && (!$task->isCompleted() || $remote->status?->type?->isDone() !== true)) {
                 ++$newTasks;
             }
             $plan[] = [$task->isArchived() ? 'restore' : ($remote->archived ? 'archive' : 'update'), $id, $remote, $task, $item];
@@ -378,7 +380,8 @@ final readonly class SyncTaskWriter
             $ctx->warn('mass_archive_guard', ['%count%' => (string) count($missing), '%total%' => (string) count($active)]);
             $missing = [];
         }
-        if ($back !== [] && $this->limitChecker->check($ctx->board, count($back), 0) instanceof LimitRefusal) {
+        // Since 1.29.0: only open tasks become active again; a completed one adds nothing to the limit.
+        if ($back !== [] && $this->limitChecker->check($ctx->board, count(array_filter($back, static fn (array $i): bool => !$i['completed'])), 0) instanceof LimitRefusal) {
             $ctx->warn('restore_refused');
             $back = [];
         }
@@ -724,12 +727,16 @@ final readonly class SyncTaskWriter
 
     /**
      * The text of a Markdown body without its formatting: markers and emphasis go, spacing collapses, an encoded character
-     * reads as itself. Link targets, ordered numbers and word breaks stay, so changing one of them is an edit (audit HId-L1).
+     * reads as itself. Link and image targets stay whole, ordered numbers and word breaks too, so changing one of them is
+     * an edit (audit HId-L1; since 1.29.0 a `*`, `_` or `~` inside a target counts).
      */
     private function plainWords(string $markdown): string
     {
-        $text = (string) preg_replace('/^\s*(?:[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m', '', rawurldecode($markdown));
-        $text = (string) preg_replace('/[*_`~\[\]\\\\]+/', '', $text);
+        $parts = preg_split('/(\]\([^()\s]*(?:\([^()\s]*\)[^()\s]*)*\))/', (string) preg_replace('/^\s*(?:[-*+]\s\[[ x]\]|[-*+]|>|#{1,6}|`{3,}\S*)(?=\s|$)/m', '', $markdown), -1, PREG_SPLIT_DELIM_CAPTURE);
+        $text  = '';
+        foreach ($parts === false ? [$markdown] : $parts as $index => $part) {
+            $text .= $index % 2 === 1 ? rawurldecode(substr($part, 1)) : (string) preg_replace('/[*_`~\[\]\\\\]+/', '', rawurldecode($part));
+        }
 
         return trim((string) preg_replace('/\s+/', ' ', $text));
     }
@@ -744,9 +751,10 @@ final readonly class SyncTaskWriter
         if ($user === null) {
             return null;
         }
-        // One answer per user and slice: a host's check may be costly (audit HId-I2).
-        $key = SyncUser::id($user) ?? (string) spl_object_id($user);
-        if ($ctx->writableUsers[$key] ??= $this->accessChecker->canViewBoard($user, $ctx->board) && $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) !== true) {
+        // One answer per user and slice: a host's check may be costly (audit HId-I2). Without an id there is nothing to key on.
+        $allowed = fn (): bool => $this->accessChecker->canViewBoard($user, $ctx->board) && $this->peopleDirectory?->isAttributionOnly($ctx->board, $user) !== true;
+        $key     = SyncUser::id($user);
+        if ($key === null ? $allowed() : ($ctx->writableUsers[$key] ??= $allowed())) {
             return $user;
         }
         $ctx->count('emailPath.notWritten');
@@ -1093,7 +1101,7 @@ final readonly class SyncTaskWriter
             return $text;
         }
 
-        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => !in_array($suppression->recordLine($line), $erased, true)));
+        return implode("\n", array_filter(explode("\n", $text), static fn (string $line): bool => array_intersect($suppression->lineRecords($line), $erased) === []));
     }
 
     /**

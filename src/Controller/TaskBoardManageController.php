@@ -658,7 +658,8 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_restore'));
-        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), 1, 0) instanceof LimitRefusal) {
+        // Since 1.29.0: a completed task is not an active task, so restoring it adds nothing to the limit.
+        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), $task->isCompleted() ? 0 : 1, 0) instanceof LimitRefusal) {
             $this->addFlash('error', 'task_board.flash.task_restore_refused');
         } elseif ($task->isArchived()) {
             $task->restore();

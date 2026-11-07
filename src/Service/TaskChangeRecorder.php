@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 
 use function is_array;
 use function is_bool;
@@ -21,6 +23,17 @@ use const JSON_THROW_ON_ERROR;
  */
 final readonly class TaskChangeRecorder
 {
+    /**
+     * Since 1.29.0 (audit HId-L4): a member added or removed. The role and the member's id share `context`
+     * ("assignee user:7"), so an erasure finds the member's own rows and not those of someone with the same label.
+     */
+    public function recordMember(Task $task, object $actor, TaskChangeType $changeType, object $member, string $role, ?string $label = null): void
+    {
+        $label ??= UserLabel::of($member);
+        $id = SyncUser::id($member);
+        $this->record($task, $actor, $changeType, $changeType === TaskChangeType::MemberRemoved ? $label : null, $changeType === TaskChangeType::MemberAdded ? $label : null, $id === null ? $role : $role . ' user:' . $id);
+    }
+
     public function record(
         Task $task,
         object $user,

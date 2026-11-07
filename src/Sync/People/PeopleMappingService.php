@@ -155,7 +155,12 @@ final readonly class PeopleMappingService
                 }
                 $value = SyncUser::id($user) ?? '';
             }
-            if ($value === $current || ($value === self::NOT_MAPPED && !$person->getMapping()->isMapped())) {
+            if ($value === self::NOT_MAPPED && !$person->getMapping()->isMapped()) {
+                // Since 1.29.0: saved as it is: a decision for the summary's count; the sync may still match them.
+                $this->directories->markPersonReviewed($person, $actor);
+                continue;
+            }
+            if ($value === $current) {
                 continue;
             }
             $target = $value === self::NOT_MAPPED ? null : ($candidates[$value] ?? $this->resolver->candidateById($board, $value));

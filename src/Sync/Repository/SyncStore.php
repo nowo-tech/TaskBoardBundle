@@ -121,13 +121,13 @@ final readonly class SyncStore
      * The items of the connection that point to a task, as [item id, external id, task archived, archive reason,
      * remote archived] — scalars only, for the deletions phase.
      *
-     * @return list<array{id: string, externalId: string, archived: bool, reason: string|null, remoteArchived: bool}>
+     * @return list<array{id: string, externalId: string, archived: bool, completed: bool, reason: string|null, remoteArchived: bool}>
      */
     public function linkedItems(TaskBoardConnection $connection): array
     {
-        /** @var list<array{id: string, externalId: string, archivedAt: DateTimeImmutable|null, reason: string|null, remoteArchivedAt: DateTimeImmutable|null}> $rows */
+        /** @var list<array{id: string, externalId: string, archivedAt: DateTimeImmutable|null, completedAt: DateTimeImmutable|null, reason: string|null, remoteArchivedAt: DateTimeImmutable|null}> $rows */
         $rows = $this->entityManager->createQueryBuilder()
-            ->select('i.id AS id', 'i.externalId AS externalId', 't.archivedAt AS archivedAt', 't.archiveReason AS reason', 'i.remoteArchivedAt AS remoteArchivedAt')
+            ->select('i.id AS id', 'i.externalId AS externalId', 't.archivedAt AS archivedAt', 't.archiveReason AS reason', 't.completedAt AS completedAt', 'i.remoteArchivedAt AS remoteArchivedAt')
             ->from(TaskSyncItem::class, 'i')
             ->innerJoin('i.task', 't')
             ->where('i.connection = :connection')
@@ -140,6 +140,7 @@ final readonly class SyncStore
                 'id'             => $row['id'],
                 'externalId'     => $row['externalId'],
                 'archived'       => $row['archivedAt'] !== null,
+                'completed'      => $row['completedAt'] !== null,
                 'reason'         => $row['reason'],
                 'remoteArchived' => $row['remoteArchivedAt'] !== null,
             ];

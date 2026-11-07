@@ -202,11 +202,14 @@ final readonly class TaskSyncPeopleReassigner
             $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
                 ->setParameter('user', $user)->execute();
         }
-        // Audit HI-L4: a member row's values are the label at the time; the fact of the change stays.
+        // Audit HId-L4: since 1.29.0 a member row names its member by id in `context`; only older rows go by label.
         if ($forgetName) {
+            $types = [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved];
+            $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.oldValue = NULL, h.newValue = NULL, h.context = NULL WHERE h.changeType IN (:types) AND h.context LIKE :member')
+                ->setParameter('types', $types)->setParameter('member', '% user:' . SyncUser::id($user))->execute();
             foreach (['oldValue', 'newValue'] as $field) {
-                $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label')
-                    ->setParameter('types', [TaskChangeType::MemberAdded, TaskChangeType::MemberRemoved])->setParameter('label', UserLabel::of($user))->execute();
+                $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.' . $field . ' = NULL WHERE h.changeType IN (:types) AND h.' . $field . ' = :label AND (h.context IS NULL OR h.context NOT LIKE :marked)')
+                    ->setParameter('types', $types)->setParameter('label', UserLabel::of($user))->setParameter('marked', '% user:%')->execute();
             }
         }
         // The bulk updates bypass the identity map: loaded tasks and comments follow.

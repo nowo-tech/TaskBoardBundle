@@ -54,7 +54,7 @@ final class TaskChangeHistoryUserTest extends FunctionalTestCase
         $this->login($this->owner);
         $this->client->request('GET', '/tools/task-board/task/' . $taskId);
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('Former user', (string) $this->client->getResponse()->getContent());
+        self::assertStringContainsString('Former person', (string) $this->client->getResponse()->getContent());
         self::assertInstanceOf(TaskChangeHistory::class, $this->em->find(TaskChangeHistory::class, $id));
     }
 

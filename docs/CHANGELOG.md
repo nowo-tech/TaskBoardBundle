@@ -79,6 +79,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`nowo:task-board:sync --time-entries`.** A command run can read tracked time (`SyncOptions::timeEntries`), which only code could ask for. It needs `sync.time_entries.sink`.
+- **`SyncFieldValueEraser::eraseField($task, $fieldName)`.** Erases one field of one task without the value, for an erasure log that keeps none: repeat it after changing `kernel.secret`.
+- **`TaskChangeRecorder::recordMember()`.** A member row names its member by id in `context` (`assignee user:7`).
+
+### Changed
+
+- **"Former person".** The labels of `task_board.time.former_user`, `task_board.history.former_user` and `task_board.sync.people.former_user` use the owner's term in all 7 locales. The keys stay.
+- **The bulk *former* button** uses the `btn_secondary` slot, not a fixed class.
+
+### Fixed
+
+- **Quota on restore.** A completed task adds nothing to active tasks, so restoring it asks the limit for none: by hand, by the sync's scan, and by a page when the provider also says it is done. A task the provider reopens still counts.
+- **Saving *Not mapped*** is a decision: the person leaves the summary's "not mapped yet" count and stays free to match by e-mail later. The bulk action still reaches them (`TaskSyncPersonRepository::unmappedCount()`).
+- **Audit residuals.** The edited mark keeps `*`, `_` and `~` inside a link or image target. A value-alone suppression record ignores case, and records written by 1.28.0 still hold. The e-mail path's memo is skipped for a user with no id. `anonymise: true` clears member rows by the member's id; only rows from before 1.29 go by label (HId-L4).
+- Audit status of these changes: re-verification pending.
+
 ## [1.28.0] - 2026-11-06
 
 ### Fixed

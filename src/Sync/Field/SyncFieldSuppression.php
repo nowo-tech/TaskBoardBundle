@@ -10,6 +10,7 @@ use function hash_hmac;
 use function is_array;
 use function json_encode;
 use function ksort;
+use function mb_strtolower;
 use function mb_substr;
 use function preg_match;
 use function str_contains;
@@ -28,6 +29,8 @@ final readonly class SyncFieldSuppression
 {
     private const KEY_CONTEXT = 'nowo_task_board.sync_field_suppression';
 
+    private const FIELD_LINE = '/^- \*\*.+?\*\*: (.+)$/D';
+
     /** Characters from which a line's value is recorded without its field name. */
     private const MIN_VALUE_ALONE = 8;
 
@@ -44,17 +47,32 @@ final readonly class SyncFieldSuppression
     }
 
     /**
-     * Since 1.28.0: the record of a line of the "Fields" document. A value that identifies something is recorded alone, so
+     * Since 1.28.0: the record of a line of the "Fields" document. A value that identifies something is recorded alone, in lower case, so
      * renaming the field does not bring it back (audit HId-L3). A short one without `@`, such as "yes" or "12", could equal
      * another field's value in the same document, so it is recorded with its line, as is a line that is not a field line.
      */
     public function recordLine(string $line): string
     {
-        if (preg_match('/^- \*\*.+?\*\*: (.+)$/D', $line, $parts) === 1 && (mb_strlen($parts[1]) >= self::MIN_VALUE_ALONE || str_contains($parts[1], '@'))) {
-            return $this->record(null, 'value:' . $parts[1]);
+        if (preg_match(self::FIELD_LINE, $line, $parts) === 1 && (mb_strlen($parts[1]) >= self::MIN_VALUE_ALONE || str_contains($parts[1], '@'))) {
+            return $this->record(null, 'value:' . mb_strtolower($parts[1]));
         }
 
         return $this->record(null, $line);
+    }
+
+    /**
+     * Since 1.29.0: every record that means this line is erased: today's, and the case-sensitive one 1.28.0 wrote.
+     *
+     * @return list<string>
+     */
+    public function lineRecords(string $line): array
+    {
+        $records = [$this->recordLine($line)];
+        if (preg_match(self::FIELD_LINE, $line, $parts) === 1) {
+            $records[] = $this->record(null, 'value:' . $parts[1]);
+        }
+
+        return $records;
     }
 
     /** MySQL's JSON type reorders keys: the order does not change the record. */

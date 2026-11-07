@@ -14,7 +14,6 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Support\Text;
-use Nowo\TaskBoardBundle\Support\UserLabel;
 
 use function array_filter;
 use function array_key_last;
@@ -132,13 +131,13 @@ final readonly class ImportedTaskUpdater
                 continue;
             }
             $task->removeMember($member);
-            $this->changeRecorder->record($task, $actor, TaskChangeType::MemberRemoved, UserLabel::of($member->getUser()), null, TaskMemberRole::Assignee->value);
+            $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), TaskMemberRole::Assignee->value);
             $changed = true;
         }
         foreach ($users as $user) {
             if (!in_array($user, $present, true)) {
                 $task->addMember(new TaskMember($task, $user, TaskMemberRole::Assignee));
-                $this->changeRecorder->record($task, $actor, TaskChangeType::MemberAdded, null, UserLabel::of($user), TaskMemberRole::Assignee->value);
+                $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberAdded, $user, TaskMemberRole::Assignee->value);
                 $changed = true;
             }
         }

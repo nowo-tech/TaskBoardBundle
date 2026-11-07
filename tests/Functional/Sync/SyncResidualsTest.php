@@ -36,6 +36,8 @@ use function sort;
  */
 final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
 {
+    private const BASE = '/tools/task-board/';
+
     public function testExportNamesEveryLinkOfAPerson(): void
     {
         $board = $this->boardWithColumns('To do');
@@ -172,6 +174,39 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
         self::assertStringContainsString('zebulon', $contents['Felder (ClickUp)'][0]);
     }
 
+    /** Audit HId-L4: the id decides, so taking a colleague's label and being erased does not clear the colleague's rows. */
+    public function testMemberHistoryIsClearedByTheMembersIdNotByALabelTheyShare(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $ana   = $this->viewer('ana@example.test')->setDisplayName('Same Name');
+        $eve   = $this->viewer('eve@example.test')->setDisplayName('Same Name');
+        $this->em->flush();
+        $task = new Task(board: $board, title: 'Mine', creator: $this->owner, column: $board->getColumns()->first() ?: null);
+        $this->em->persist($task);
+        $recorder = new TaskChangeRecorder();
+        $recorder->recordMember($task, $this->owner, TaskChangeType::MemberAdded, $ana, 'assignee');
+        $recorder->recordMember($task, $this->owner, TaskChangeType::MemberAdded, $eve, 'assignee');
+        // A row from before 1.29: only the label.
+        $recorder->record($task, $this->owner, TaskChangeType::MemberRemoved, 'Same Name', null, 'assignee');
+        $this->em->flush();
+        $reassigner = self::getContainer()->get(TaskSyncPeopleReassigner::class);
+        self::assertInstanceOf(TaskSyncPeopleReassigner::class, $reassigner);
+
+        $reassigner->detachUser($eve, $this->owner, anonymise: true);
+
+        $db    = $this->em->getConnection();
+        $table = 'task_board_task_change_history';
+        self::assertSame('Same Name', $db->fetchOne('SELECT new_value FROM ' . $table . " WHERE change_type = 'member_added' AND context = ?", ['assignee user:' . $ana->getId()]), 'not the other person');
+        self::assertSame(1, (int) $db->fetchOne('SELECT COUNT(*) FROM ' . $table . " WHERE change_type = 'member_added' AND new_value IS NULL AND context IS NULL"), 'hers: the name and the id go, the fact stays');
+        self::assertSame(1, (int) $db->fetchOne('SELECT COUNT(*) FROM ' . $table . " WHERE change_type = 'member_removed' AND old_value IS NULL"), 'an older row has only the label');
+
+        // The panel shows the role, not the id.
+        $this->login($this->owner);
+        $this->client->request('GET', self::BASE . 'task/' . $task->getId());
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('user:' . $ana->getId(), (string) $this->client->getResponse()->getContent());
+    }
+
     public function testAnonymisingForgetsTheNameInMemberHistoryRows(): void
     {
         $board = $this->boardWithColumns('To do');
@@ -232,6 +267,9 @@ final class SyncResidualsTest extends SyncPeopleFunctionalTestCase
         yield 'image target' => ['![i](https://ok.test/a.png)', '![i](https://evil.test/a.png)'];
         yield 'number at the start of a line' => ['100. approved', '900. approved'];
         yield 'word spacing' => ['no tes', 'notes'];
+        yield 'underscore in a target' => ['[pay](https://ok.test/a_b)', '[pay](https://ok.test/ab)'];
+        yield 'asterisk in a target' => ['[pay](https://ok.test/a*b)', '[pay](https://ok.test/ab)'];
+        yield 'tilde in an image target' => ['![i](https://ok.test/~a.png)', '![i](https://ok.test/a.png)'];
     }
 
     #[DataProvider('realEdits')]
