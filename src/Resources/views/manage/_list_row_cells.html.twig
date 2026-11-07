@@ -4,7 +4,7 @@
 #}
 {% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
 {% set _deviation = nowo_task_board_deviation(task) %}
-<td class="{{ _cell }}">
+{% if nowo_task_board_numbers_enabled() %}<td class="{{ _cell }} nowo-task-list__num"><span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span></td>{% endif %}<td class="{{ _cell }}">
     <span class="nowo-task-list__title">
         <span class="nowo-task-list__status-dot" aria-hidden="true"></span>
         <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id, from: 'list'}) }}">{{ task.title }}</a>

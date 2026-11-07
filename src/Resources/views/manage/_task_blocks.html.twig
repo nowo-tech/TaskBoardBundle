@@ -93,7 +93,7 @@
                         </ol>
                     </nav>
                 {% endif %}
-                <div class="nowo-task-detail__title">
+                {% if nowo_task_board_number(task) %}<p class="nowo-task-number nowo-task-detail__number">{{ nowo_task_board_number(task) }} <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-nowo-ui-clipboard data-nowo-ui-clipboard-text="{{ nowo_task_board_number(task) }}" data-nowo-ui-clipboard-label="{{ 'task_board.number.copy'|trans({}, 'NowoTaskBoardBundle') }}" data-nowo-ui-clipboard-done-label="{{ 'task_board.number.copied'|trans({}, 'NowoTaskBoardBundle') }}" aria-label="{{ 'task_board.number.copy_named'|trans({'%number%': nowo_task_board_number(task)}, 'NowoTaskBoardBundle') }}">{{ 'task_board.number.copy'|trans({}, 'NowoTaskBoardBundle') }}</button></p>{% endif %}<div class="nowo-task-detail__title">
                     {{ form_widget(taskForm.title, {
                         label: false,
                         attr: {

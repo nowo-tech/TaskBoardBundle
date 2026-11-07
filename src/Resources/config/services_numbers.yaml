@@ -1,0 +1,22 @@
+# Since 2.1.0 (spec 214): readable task numbers — loaded only with `task_numbers.enabled: true`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Number\TaskNumberScope:
+        arguments:
+            $scope: '%nowo_task_board.task_numbers.scope%'
+
+    Nowo\TaskBoardBundle\Number\TaskNumberReserver: ~
+
+    Nowo\TaskBoardBundle\Number\TaskNumberLedger: ~
+
+    Nowo\TaskBoardBundle\Number\TaskNumberBackfiller: ~
+
+    Nowo\TaskBoardBundle\Number\Command\TaskBoardNumbersBackfillCommand: ~
+
+    # Tagged in TaskBoardExtension, for `database.entity_manager`. Doctrine listeners are lazy, and this one gets the manager
+    # from the event, so the entity manager never depends on what it is building.
+    Nowo\TaskBoardBundle\Number\TaskNumberListener: ~

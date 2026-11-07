@@ -109,6 +109,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly bool $pageHeader = true,
         private readonly bool $boardToolbar = true,
         private readonly bool $panelToolbar = true,
+        // Since 2.1.0 (spec 214): `task_numbers.enabled` and `calendar.enabled`.
+        private readonly bool $taskNumbersEnabled = false,
+        private readonly bool $calendarEnabled = false,
     ) {
     }
 
@@ -201,6 +204,30 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         return $this->connectionBadges?->forBoard($board);
     }
 
+    /**
+     * Since 2.1.0 (spec 214, FR-009): a task's number as it is shown (`#123`); null with `task_numbers.enabled` off or no number yet.
+     */
+    public function taskNumber(Task|int|null $task): ?string
+    {
+        $number = $task instanceof Task ? $task->getNumber() : $task;
+
+        return $this->taskNumbersEnabled && $number !== null ? '#' . $number : null;
+    }
+
+    /**
+     * Since 2.1.0 (spec 214): the calendar's header tab, for the board, list and Gantt pages; none with `calendar.enabled` off.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function calendarTabs(TaskBoard $board, string $label): array
+    {
+        if (!$this->calendarEnabled || !$this->urls instanceof UrlGeneratorInterface) {
+            return [];
+        }
+
+        return [['href' => $this->urls->generate($this->routeName('calendar'), ['boardId' => $board->getId()]), 'icon' => 'calendar', 'label' => $label]];
+    }
+
     public function getFunctions(): array
     {
         return [
@@ -237,6 +264,11 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_tenant_labels', $this->tenantLabelsOf(...)),
             // Since 2.0.0: `import.help_link`, resolved per render.
             new TwigFunction('nowo_task_board_configured_help_link', $this->importHelpLink->resolve(...)),
+            // Since 2.1.0 (spec 214).
+            new TwigFunction('nowo_task_board_number', $this->taskNumber(...)),
+            new TwigFunction('nowo_task_board_numbers_enabled', fn (): bool => $this->taskNumbersEnabled),
+            new TwigFunction('nowo_task_board_calendar_enabled', fn (): bool => $this->calendarEnabled),
+            new TwigFunction('nowo_task_board_calendar_tabs', $this->calendarTabs(...)),
         ];
     }
 
@@ -316,6 +348,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
 
         return new Table(
             [
+                // Since 2.1.0 (spec 214, FR-009).
+                ...($this->taskNumbersEnabled ? [new Column('number', $label('task_board.number.label'), class: 'nowo-task-list__num')] : []),
                 new Column('title', $label('task_board.form.task.title')),
                 new Column('people', $label('task_board.task.people')),
                 new Column('due', $label('task_board.form.task.due')),
@@ -338,17 +372,18 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
                     'data-title'                              => $task->getTitle(),
                     'data-nowo-task-title'                    => $task->getTitle(),
                     'data-nowo-task-column'                   => $column !== '' ? $column : null,
-                    'data-search-extra'                       => $search[$task->getId()] ?? '',
-                    'data-priority'                           => $task->getPriority()->value,
-                    'data-column'                             => $column,
-                    'data-column-name'                        => $column,
-                    'data-due'                                => $task->getDueAt()?->format('Y-m-d') ?? '',
-                    'data-task-id'                            => $task->getId(),
-                    'data-estimate'                           => $deviation->hasEstimate() ? $deviation->estimatedMinutes : '',
-                    'data-spent'                              => $deviation->spentMinutes,
-                    'data-over'                               => $deviation->isOver() ? '1' : '0',
-                    'data-task-panel-url'                     => $this->urls?->generate($this->routeName('task_panel'), ['taskId' => $task->getId()] + ($panelTargetPath !== null && $panelTargetPath !== '' ? ['_target_path' => $panelTargetPath] : [])),
-                ];
+                    // Since 2.1.0 (spec 214, FR-013): the number too.
+                    'data-search-extra'   => trim(($search[$task->getId()] ?? '') . ' ' . $this->taskNumber($task)),
+                    'data-priority'       => $task->getPriority()->value,
+                    'data-column'         => $column,
+                    'data-column-name'    => $column,
+                    'data-due'            => $task->getDueAt()?->format('Y-m-d') ?? '',
+                    'data-task-id'        => $task->getId(),
+                    'data-estimate'       => $deviation->hasEstimate() ? $deviation->estimatedMinutes : '',
+                    'data-spent'          => $deviation->spentMinutes,
+                    'data-over'           => $deviation->isOver() ? '1' : '0',
+                    'data-task-panel-url' => $this->urls?->generate($this->routeName('task_panel'), ['taskId' => $task->getId()] + ($panelTargetPath !== null && $panelTargetPath !== '' ? ['_target_path' => $panelTargetPath] : [])),
+                ] + ($this->taskNumber($task) !== null ? ['data-number' => $task->getNumber()] : []);
             },
         );
     }

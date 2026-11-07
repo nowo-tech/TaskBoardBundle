@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Controller;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use LogicException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface;
@@ -16,6 +17,7 @@ use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskCalendarFilter;
 use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
@@ -30,12 +32,14 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\CalendarMode;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
@@ -43,6 +47,7 @@ use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
+use Nowo\TaskBoardBundle\Form\TaskCalendarFilterType;
 use Nowo\TaskBoardBundle\Form\TaskCommentFormType;
 use Nowo\TaskBoardBundle\Form\TaskDependencyFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -51,15 +56,19 @@ use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
+use Nowo\TaskBoardBundle\Form\TaskScheduleFormType;
 use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
+use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskCalendarRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -69,6 +78,7 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
+use Nowo\TaskBoardBundle\Service\TaskCalendarBuilder;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
@@ -80,6 +90,7 @@ use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
@@ -120,7 +131,10 @@ use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
+use function array_keys;
+use function array_map;
 use function array_slice;
+use function array_values;
 use function count;
 use function http_build_query;
 use function in_array;
@@ -202,6 +216,11 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?FirstBoardProvisionerInterface $firstBoardProvisioner = null,
         // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
         private readonly TaskBoardPages $pages = new TaskBoardPages(),
+        // Since 2.1.0 (spec 214): `task_numbers.enabled` (null when off), and `calendar.enabled`.
+        private readonly ?TaskNumberLedger $taskNumbers = null,
+        private readonly ?TaskNumberScope $taskNumberScope = null,
+        private readonly TaskCalendarBuilder $calendarBuilder = new TaskCalendarBuilder(),
+        private readonly bool $calendarEnabled = false,
     ) {
     }
 
@@ -552,7 +571,8 @@ final class TaskBoardManageController extends AbstractController
             $this->flashFormErrors($form);
         }
 
-        $target = $inline ? $this->safeTargetPath($request) : null;
+        // Since 2.1.0 (spec 214, FR-030): the calendar's add dialog comes back to the calendar.
+        $target = $inline || $request->query->getBoolean('calendar') ? $this->safeTargetPath($request) : null;
 
         return $target !== null ? $this->redirect($target) : $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
@@ -719,6 +739,7 @@ final class TaskBoardManageController extends AbstractController
             'filterForm'  => $this->formFactory()->createNamed('', TaskListFilterType::class, null, [
                 'priorities'   => $priorityNames,
                 'column_names' => $columnNames,
+                'task_numbers' => $this->taskNumbers instanceof TaskNumberLedger,
             ])->createView(),
             'dashboardRoute'  => $this->dashboardRoute,
             'panelTargetPath' => $this->currentRequestUri(),
@@ -774,6 +795,179 @@ final class TaskBoardManageController extends AbstractController
             'panelTargetPath' => $this->currentRequestUri(),
             'taskWindow'      => $taskWindow,
         ]);
+    }
+
+    /**
+     * Since 2.1.0 (spec 214, FR-018 to FR-022): the board's dated tasks by day (`calendar.enabled`). Everything it shows is in
+     * the URL (`mode`, `date` and the filters), and the query reads only the tasks that overlap the visible days.
+     */
+    public function calendarView(string $boardId, Request $request): Response
+    {
+        $user       = $this->requireUser();
+        $board      = $this->findBoard($boardId, $user);
+        $repository = $this->taskRepository;
+        // A host's own repository without the interface: a setup error the bundle's repository never hits.
+        // @codeCoverageIgnoreStart
+        if (!$repository instanceof TaskCalendarRepositoryInterface) {
+            throw new LogicException('calendar.enabled needs a task repository that implements ' . TaskCalendarRepositoryInterface::class . '.');
+        }
+        // @codeCoverageIgnoreEnd
+
+        // all(): a repeated parameter (`mode[]=`) is ignored here, where `get()` would answer 400.
+        $query     = $request->query->all();
+        $mode      = CalendarMode::fromQuery($query['mode'] ?? null);
+        $date      = $this->calendarBuilder->day($query['date'] ?? null);
+        $weekStart = $this->weekStartResolver?->resolve() ?? WeekStart::Monday;
+        $columns   = $this->buildColumnChoices($board);
+        // Choices are label => id: two people with one name both stay, told apart by id.
+        $assignees = [];
+        foreach ($repository->findCalendarAssignees($board) as $id => $person) {
+            $label                                                                                = UserLabel::of($person);
+            $assignees[array_key_exists($label, $assignees) ? $label . ' (' . $id . ')' : $label] = (string) $id;
+        }
+
+        $filter      = TaskCalendarFilter::fromQuery($query, array_values($assignees), array_values($columns));
+        [$from, $to] = $this->calendarBuilder->range($mode, $date, $weekStart);
+        $tasks       = $repository->findForCalendar($board, $from, $to, $filter, $this->maxTasks);
+        $total       = count($tasks) < $this->maxTasks ? count($tasks) : $repository->countForCalendar($board, $from, $to, $filter);
+
+        $editable = [];
+        foreach ($tasks as $task) {
+            $editable[$task->getId()] = $this->resourceAccessChecker->canEditTask($user, $task);
+        }
+
+        $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
+        $filterForm   = $this->formFactory()->createNamed('', TaskCalendarFilterType::class, [
+            'mode'      => $mode->value,
+            'date'      => $date->format('Y-m-d'),
+            'assignee'  => $filter->assignee,
+            'priority'  => $filter->priority?->value,
+            'column'    => $filter->columnId,
+            'tag'       => $filter->tag,
+            'completed' => $filter->completed,
+            'subtasks'  => $filter->subtasks,
+        ], ['assignees' => $assignees, 'columns' => $columns]);
+
+        return $this->render($this->templates['calendar'], [
+            'board'            => $board,
+            'calendar'         => $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable),
+            'calendarModes'    => CalendarMode::cases(),
+            'calendarQuery'    => $filter->toQuery(),
+            'calendarFiltered' => $filter->isActive(),
+            'filterForm'       => $filterForm->createView(),
+            'undatedCount'     => $repository->countUndated($board, $filter),
+            'dashboardRoute'   => $this->dashboardRoute,
+            'panelTargetPath'  => $this->currentRequestUri(),
+            'taskWindow'       => new TaskWindow(count($tasks), $total, $this->maxTasks),
+            'canEditBoard'     => $canEditBoard,
+            'taskForm'         => $canEditBoard ? $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columns === [] ? null : reset($columns)), ['column_choices' => $columns])->createView() : null,
+            'scheduleForm'     => in_array(true, $editable, true) ? $this->formFactory()->createNamed('', TaskScheduleFormType::class)->createView() : null,
+        ]);
+    }
+
+    /**
+     * Since 2.1.0 (spec 214, FR-026 to FR-028): changes a task's dates, from a drag, the Reschedule dialog or Undo. An empty date
+     * clears it; a missing one is refused, so a partial request never clears a date. Out of reach: 404. Read-only: 403.
+     */
+    public function scheduleTask(string $taskId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, TaskScheduleFormType::CSRF_TOKEN_ID);
+
+        $task = $this->taskRepository->findById($taskId);
+        if (!$task instanceof Task || $this->tenantContext?->owns($task->getBoard(), $user) === false || !$this->resourceAccessChecker->canViewTask($user, $task)) {
+            throw new NotFoundHttpException('Task not found.');
+        }
+        if (!$this->resourceAccessChecker->canEditTask($user, $task)) {
+            throw $this->createAccessDeniedException('Task is read-only.');
+        }
+        if (!$request->request->has('start') || !$request->request->has('due')) {
+            throw new BadRequestHttpException('Both dates are required.');
+        }
+
+        $error = null;
+
+        try {
+            $this->taskManager->reschedule($task, $this->scheduleDay($request->request->getString('start')), $this->scheduleDay($request->request->getString('due')), $user);
+            $this->logWrite('task_schedule', ['task_id' => $taskId]);
+        } catch (InvalidTaskScheduleException) {
+            $error = 'task_board.form.task.start_after_due';
+        } catch (InvalidArgumentException) {
+            $error = 'task_board.calendar.failed';
+        }
+
+        $date    = ($task->getDueAt() ?? $task->getStartAt())?->format('Y-m-d');
+        $message = $error ?? ($date !== null ? 'task_board.calendar.moved' : 'task_board.calendar.dates_cleared');
+        $text    = $this->translator->trans($message, ['%date%' => (string) $date], 'NowoTaskBoardBundle');
+
+        if ($this->isPanelRequest($request)) {
+            return new JsonResponse(
+                $error !== null ? ['message' => $text] : ['message' => $text, 'start' => $task->getStartAt()?->format('Y-m-d'), 'due' => $task->getDueAt()?->format('Y-m-d')],
+                $error !== null ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK,
+            );
+        }
+
+        $this->addFlash($error !== null ? 'error' : 'success', $text);
+        $target = $this->safeTargetPath($request);
+
+        return $target !== null ? $this->redirect($target) : $this->redirectToRoute($this->routes['calendar']['name'], ['boardId' => $task->getBoard()->getId()]);
+    }
+
+    /**
+     * Since 2.1.0 (spec 214, FR-010): a task by its number. A number names a task in a scope: the tenant of the URL, or `?board=`
+     * where there is no tenant to tell (`scope: board`, or no tenancy). Unknown, retired and unreadable answer the same 404. An
+     * alias of a task moved to another tenant goes to that tenant's page, for whoever may read it there.
+     */
+    public function taskByNumber(string $number, Request $request): RedirectResponse
+    {
+        $user  = $this->requireUser();
+        $scope = $this->numberScopeOfRequest($request, $user);
+        $task  = $scope !== null ? $this->taskNumbers?->find($scope, (int) $number) : null;
+        if (!$task instanceof Task || !$this->resourceAccessChecker->canViewTask($user, $task)) {
+            throw new NotFoundHttpException('Task not found.');
+        }
+
+        $parameters = ['taskId' => $task->getId()];
+        if ($this->tenantContext?->owns($task->getBoard(), $user) === false) {
+            $tenant = $this->tenantContext->tenantOfKey((string) $task->getBoard()->getTenantKey(), $user);
+            if (!$tenant instanceof TaskBoardTenant) {
+                throw new NotFoundHttpException('Task not found.');
+            }
+            $parameters['tenantSlug'] = $tenant->slug;
+        }
+
+        return $this->redirectToRoute($this->routes['task']['name'], $parameters);
+    }
+
+    private function numberScopeOfRequest(Request $request, UserInterface $user): ?string
+    {
+        $tenant = $this->tenantContext?->current($user);
+        if ($tenant instanceof TaskBoardTenant && $this->taskNumberScope?->isPerTenant() === true) {
+            return $tenant->key;
+        }
+
+        $boardId = $request->query->all()['board'] ?? null;
+        $board   = is_string($boardId) ? $this->boardRepository->findById($boardId) : null;
+        if (!$board instanceof TaskBoard || $this->tenantContext?->owns($board, $user) === false || !$this->resourceAccessChecker->canViewBoard($user, $board)) {
+            return null;
+        }
+
+        return $this->taskNumberScope?->keyOf($board);
+    }
+
+    /** A day of the schedule route: null when empty. */
+    private function scheduleDay(string $value): ?DateTimeImmutable
+    {
+        if ($value === '') {
+            return null;
+        }
+        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        // Audit HY-L1: only the years the calendar shows. Year 0000 also fails on PostgreSQL.
+        if (!$day instanceof DateTimeImmutable || $day->format('Y-m-d') !== $value || !$this->calendarBuilder->isInRange($day)) {
+            throw new InvalidArgumentException('Not a day.');
+        }
+
+        return $day;
     }
 
     public function task(string $taskId, Request $request): Response
@@ -1830,7 +2024,8 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $view = $this->defaultViewResolver->defaultView($user, $board);
-        if ($view !== TaskBoardDefaultViewResolverInterface::VIEW_LIST && $view !== TaskBoardDefaultViewResolverInterface::VIEW_GANTT) {
+        // Since 2.1.0 (spec 214, FR-024): also the calendar, when it is on.
+        if ($view !== TaskBoardDefaultViewResolverInterface::VIEW_LIST && $view !== TaskBoardDefaultViewResolverInterface::VIEW_GANTT && ($view !== TaskBoardDefaultViewResolverInterface::VIEW_CALENDAR || !$this->calendarEnabled)) {
             return null;
         }
 

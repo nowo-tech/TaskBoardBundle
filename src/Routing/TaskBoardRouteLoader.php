@@ -35,6 +35,9 @@ final class TaskBoardRouteLoader extends Loader
         private readonly array $tenancy = [],
         // Since 1.23: the provider connection routes exist only with `sync.enabled`.
         private readonly bool $syncEnabled = false,
+        // Since 2.1.0 (spec 214): these routes exist only with their option, so a host's route lists stay as they are.
+        private readonly bool $taskNumbersEnabled = false,
+        private readonly bool $calendarEnabled = false,
     ) {
     }
 
@@ -80,6 +83,13 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, 'task_comment_delete', 'deleteComment', ['POST']);
         // Since 1.23.
         $this->addRoute($collection, 'task_restore', 'restoreTask', ['POST']);
+        if ($this->taskNumbersEnabled) {
+            $this->addRoute($collection, 'task_by_number', 'taskByNumber', ['GET'], requirements: ['number' => '[1-9][0-9]{0,8}']);
+        }
+        if ($this->calendarEnabled) {
+            $this->addRoute($collection, 'calendar', 'calendarView', ['GET']);
+            $this->addRoute($collection, 'task_schedule', 'scheduleTask', ['POST']);
+        }
         if ($this->syncEnabled) {
             $this->addRoute($collection, 'board_connection', 'connection', ['GET'], TaskBoardConnectionController::class);
             $this->addRoute($collection, 'board_connection_containers', 'containers', ['POST'], TaskBoardConnectionController::class);
@@ -106,8 +116,9 @@ final class TaskBoardRouteLoader extends Loader
 
     /**
      * @param list<string> $methods
+     * @param array<string, string> $requirements
      */
-    private function addRoute(RouteCollection $collection, string $key, string $action, array $methods, string $controller = TaskBoardManageController::class): void
+    private function addRoute(RouteCollection $collection, string $key, string $action, array $methods, string $controller = TaskBoardManageController::class, array $requirements = []): void
     {
         if (!isset($this->routes[$key])) {
             return;
@@ -118,7 +129,7 @@ final class TaskBoardRouteLoader extends Loader
             new Route(
                 $this->routePrefix . $this->routes[$key]['path'],
                 ['_controller' => $controller . '::' . $action],
-                [],
+                $requirements,
                 [],
                 '',
                 [],

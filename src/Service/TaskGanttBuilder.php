@@ -170,6 +170,7 @@ final readonly class TaskGanttBuilder
             clippedEnd: $clippedEnd,
             startTime: $entry['timed'] ? $entry['start']->format('H:i') : null,
             endTime: $entry['timed'] ? $entry['end']->format('H:i') : null,
+            number: $task->getNumber(),
         );
     }
 

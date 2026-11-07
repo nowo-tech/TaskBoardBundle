@@ -97,6 +97,20 @@ final readonly class TaskBoardTenantContext
     }
 
     /**
+     * Since 2.1.0 (spec 214): the tenant whose key is `$key`, when `$user` may open it. The resolver works by slug, so this
+     * knows a tenant whose slug equals its key; any other answers null.
+     */
+    public function tenantOfKey(string $key, object $user): ?TaskBoardTenant
+    {
+        if (!$this->enabled || $key === '') {
+            return null;
+        }
+        $tenant = $this->resolver->resolve($key, $user);
+
+        return $tenant instanceof TaskBoardTenant && $tenant->key === $key ? $tenant : null;
+    }
+
+    /**
      * Whether `$board` may be served at the current request: always without tenancy, else only the boards of the
      * request's tenant.
      */

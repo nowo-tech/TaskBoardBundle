@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TablerOnlyUxIcons;
 use Throwable;
 
@@ -22,7 +23,8 @@ final class UxIconHostTest extends SyncPeopleFunctionalTestCase
 
     protected static function syncConfig(): array
     {
-        return array_replace_recursive(parent::syncConfig(), ['__ui_kit' => self::$uiKit, 'board' => ['column_icons' => ['tabler:bug']]]);
+        // Since 2.1.0 (spec 214): with the calendar and the task numbers on, whose pages must not ask for a bare icon either.
+        return array_replace_recursive(parent::syncConfig(), ['__ui_kit' => self::$uiKit, 'board' => ['column_icons' => ['tabler:bug']], 'calendar' => ['enabled' => true], 'task_numbers' => ['enabled' => true]]);
     }
 
     protected function tearDown(): void
@@ -44,7 +46,10 @@ final class UxIconHostTest extends SyncPeopleFunctionalTestCase
         $board    = $this->board();
         $board->getColumns()->get(0)?->setIcon('tabler:bug');
         $this->em->flush();
-        $task    = $this->task($board, 'Write the spec');
+        $task = $this->task($board, 'Write the spec');
+        // A bar with its edges and Reschedule on the calendar, and a day with the Add control.
+        $task->setStartAt(new DateTimeImmutable('2026-11-10'))->setDueAt(new DateTimeImmutable('2026-11-12'));
+        $this->em->flush();
         $subtask = $this->task($board, 'Child', parent: $task);
         $linked  = $this->board('Linked');
         $this->workspace([self::member('1', 'owner@example.com')]);
@@ -58,6 +63,10 @@ final class UxIconHostTest extends SyncPeopleFunctionalTestCase
             self::BASE . '/board/' . $board->getId(),
             self::BASE . '/board/' . $board->getId() . '/list',
             self::BASE . '/board/' . $board->getId() . '/gantt',
+            self::BASE . '/board/' . $board->getId() . '/calendar?date=2026-11-11',
+            self::BASE . '/board/' . $board->getId() . '/calendar?date=2026-11-11&mode=week',
+            self::BASE . '/board/' . $board->getId() . '/calendar?date=2026-11-11&mode=list',
+            self::BASE . '/board/' . $linked->getId() . '/calendar',
             self::BASE . '/board/' . $board->getId() . '/import',
             self::BASE . '/task/' . $task->getId(),
             self::BASE . '/task/' . $task->getId() . '/panel',
@@ -77,6 +86,13 @@ final class UxIconHostTest extends SyncPeopleFunctionalTestCase
         }
 
         self::assertSame([], $failures);
+
+        // The number's short link, and the task page it leads to.
+        $this->client->request('GET', self::BASE . '/n/' . $task->getNumber() . '?board=' . $board->getId());
+        self::assertResponseRedirects(self::BASE . '/task/' . $task->getId());
+        $this->client->followRedirect();
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('.nowo-task-detail__number');
     }
 
     public function testTheNewBoardActionDrawsThePlus(): void

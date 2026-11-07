@@ -5,8 +5,11 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+  - [Schema change for every host: `task_board_tasks.number`](#schema-change-for-every-host-task_board_tasksnumber)
+  - [Schema change with `task_numbers.enabled: true` only](#schema-change-with-task_numbersenabled-true-only)
+  - [Task numbers: what a host does](#task-numbers-what-a-host-does)
+  - [Calendar: what a host does](#calendar-what-a-host-does)
 - [To 2.0.2](#to-202)
-- [To 2.0.2](#to-202-1)
 - [To 2.0.1](#to-201)
 - [To 2.0.0](#to-200)
   - [To 2.0.0: UiKit page contract](#to-200-uikit-page-contract)
@@ -150,13 +153,76 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
-## To 2.0.2
+Spec 214, target 2.1.0. Audit HY (2026-11-07): Pass (good) / Low at `3c105a1`.
 
-From **2.0.1**:
+### Schema change for every host: `task_board_tasks.number`
+
+`Task::$number` is mapped whatever the option says, so every host adds one nullable column and its index. Nothing writes to it with `task_numbers.enabled: false`.
+
+```sql
+-- MySQL
+ALTER TABLE task_board_tasks ADD number INT DEFAULT NULL;
+CREATE INDEX task_board_tasks_number_idx ON task_board_tasks (number);
+-- PostgreSQL
+ALTER TABLE task_board_tasks ADD number INT DEFAULT NULL;
+CREATE INDEX task_board_tasks_number_idx ON task_board_tasks (number);
+-- SQLite
+ALTER TABLE task_board_tasks ADD COLUMN number INTEGER DEFAULT NULL;
+CREATE INDEX task_board_tasks_number_idx ON task_board_tasks (number);
+```
+
+Use your `table_prefix` for the tasks table.
+
+### Schema change with `task_numbers.enabled: true` only
+
+The two tables keep these names whatever `table_prefix` says, like the sync tables.
+
+```sql
+-- MySQL
+CREATE TABLE task_board_number_counters (scope_key VARCHAR(191) NOT NULL, last_number INT NOT NULL, PRIMARY KEY(scope_key));
+CREATE TABLE task_board_task_numbers (scope_key VARCHAR(191) NOT NULL, number INT NOT NULL, task_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY(scope_key, number), INDEX idx_task_board_task_numbers_task (task_id), CONSTRAINT fk_task_board_task_numbers_task FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL);
+-- PostgreSQL
+CREATE TABLE task_board_number_counters (scope_key VARCHAR(191) NOT NULL, last_number INT NOT NULL, PRIMARY KEY(scope_key));
+CREATE TABLE task_board_task_numbers (scope_key VARCHAR(191) NOT NULL, number INT NOT NULL, task_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY(scope_key, number), CONSTRAINT fk_task_board_task_numbers_task FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL);
+CREATE INDEX idx_task_board_task_numbers_task ON task_board_task_numbers (task_id);
+-- SQLite
+CREATE TABLE task_board_number_counters (scope_key VARCHAR(191) NOT NULL, last_number INTEGER NOT NULL, PRIMARY KEY(scope_key));
+CREATE TABLE task_board_task_numbers (scope_key VARCHAR(191) NOT NULL, number INTEGER NOT NULL, task_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY(scope_key, number), FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL);
+CREATE INDEX idx_task_board_task_numbers_task ON task_board_task_numbers (task_id);
+```
+
+Then number the existing tasks. The command resumes and is safe on a schedule; once none is left it does nothing.
 
 ```bash
-composer update nowo-tech/task-board-bundle
+bin/console nowo:task-board:numbers-backfill
 ```
+
+### Task numbers: what a host does
+
+- Set `task_numbers.enabled: true`. Default scope `tenant`: the boards of a tenant share a sequence, and a board with no tenant key uses its own id.
+- Allow the new route `task_by_number` wherever your host lists routes (access catalogue, breadcrumbs, one per tenant path). It exists only with the option.
+- Destroying a tenant (FR-005): delete its tasks, then call `TaskNumberLedger::purgeScope($tenantKey)` in the same flow. It throws `TaskNumberScopeInUseException` while a task still carries a number in that scope, and an alias of a task moved away does not count. The bundle never purges by itself: deleting tasks or emptying a board keeps the ledger, so numbers are not handed out again. Purge only a key that is never reused.
+- An alias of a task moved to another tenant redirects there only when the tenant resolver accepts the task's tenant key as a slug. A host whose slugs differ from its keys answers 404 for it.
+- With the reservation inside a caller's transaction the bundle opens a second connection from the same parameters (`Connection::getParams()`) for a moment, with a 2-second lock wait on MySQL and PostgreSQL. Count it in the connection limit of sync workers. If it cannot get the counter (the caller's transaction holds it, as a fixture purge does) the counter joins the caller's transaction, after that wait, once per flush with new tasks: a big fixture load with many flushes after a purge is slower. SQLite always joins the transaction.
+
+### Calendar: what a host does
+
+- Set `calendar.enabled: true`. Being an option, it leaves a host's route lists as they are on upgrade.
+- Allow the routes `calendar` and `task_schedule`. The bundle's own headers get the tab; a host drawing its own tabs adds it.
+- Its page loads `js/nowo-ui-sortable.js`, `js/nowo-ui-toast.js` and `js/task-board.js` itself. A host with a layout of its own script list must let those through (`nowo_ui_scripts` block).
+- A host's own task repository needs `TaskCalendarRepositoryInterface`.
+- A chip carries `data-task-panel-url`, like a card, for a host's drawer.
+- A date changed on a linked board is a local edit: the provider is not written to, and the sync's per-field rule keeps it.
+- A synced task with no start date now keeps none, so it is on the calendar only by its due date, or in the undated count (audit HY-L3). This applies to every sync host, with or without the calendar. The Gantt does not change: `Task::getPlannedStart()` falls back to the creation day. The task form shows an empty start where it showed the creation day.
+- Tasks synced before this version keep the creation day as their start, and show from that day on the calendar. Nothing needs doing unless you turn the calendar on and want them cleared:
+
+  ```sql
+  UPDATE task_board_tasks SET start_at = NULL
+  WHERE start_at = created_at AND id IN (SELECT task_id FROM task_board_sync_items WHERE task_id IS NOT NULL);
+  ```
+
+  A start the provider sets later is applied as usual. The exception is a row whose provider start really was the very moment of creation: this clears it too, the sync sees that as a local edit, and a later change at the provider becomes a conflict note.
+- `TaskImportOrchestrator:464` keeps the source's creation date as start, so imported tasks show from that day; to change later.
 
 ## To 2.0.2
 

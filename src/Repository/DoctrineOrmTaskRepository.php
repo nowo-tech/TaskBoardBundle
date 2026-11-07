@@ -4,24 +4,34 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Repository;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Dto\TaskCalendarFilter;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\Like;
 use SortDirection;
 
 use function array_chunk;
+use function array_map;
 use function array_unique;
 use function array_values;
+use function count;
+use function in_array;
+use function is_array;
 use function max;
+use function mb_strtolower;
 
-final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface, BoundedTaskRepositoryInterface, ArchiveAwareTaskRepositoryInterface
+final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface, BoundedTaskRepositoryInterface, ArchiveAwareTaskRepositoryInterface, TaskCalendarRepositoryInterface
 {
     /** Since 1.23: ids per query of {@see self::findImportedByExternalIds()}. */
     private const ID_CHUNK = 500;
@@ -272,5 +282,139 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
         }
 
         return $found;
+    }
+
+    public function findForCalendar(TaskBoard $board, DateTimeImmutable $from, DateTimeImmutable $to, TaskCalendarFilter $filter, int $limit): array
+    {
+        $qb = $this->inRange($this->calendarQuery($board, $filter), $from, $to)
+            ->select('t', 'col', 'COALESCE(t.startAt, t.dueAt) AS HIDDEN firstDay')
+            ->leftJoin('t.column', 'col')
+            ->orderBy('firstDay', SortDirection::Ascending)
+            ->addOrderBy('t.position', SortDirection::Ascending)
+            ->addOrderBy('t.id', SortDirection::Ascending)
+            ->setMaxResults(max(1, $limit));
+
+        if ($filter->tag !== null) {
+            $ids = $this->idsWithTag($this->inRange($this->calendarQuery($board, $filter), $from, $to), $filter->tag);
+            if ($ids === []) {
+                return [];
+            }
+            // @igor-ignore - A query builder made for this call, not a shared service.
+            $qb->andWhere('t.id IN (:taggedIds)')->setParameter('taggedIds', $ids);
+        }
+
+        /** @var list<Task> $result */
+        $result = $qb->getQuery()->getResult();
+
+        return $result;
+    }
+
+    public function countForCalendar(TaskBoard $board, DateTimeImmutable $from, DateTimeImmutable $to, TaskCalendarFilter $filter): int
+    {
+        return $this->countOf($this->inRange($this->calendarQuery($board, $filter), $from, $to), $filter);
+    }
+
+    public function countUndated(TaskBoard $board, TaskCalendarFilter $filter): int
+    {
+        return $this->countOf($this->calendarQuery($board, $filter)->andWhere('t.startAt IS NULL')->andWhere('t.dueAt IS NULL'), $filter);
+    }
+
+    public function findCalendarAssignees(TaskBoard $board): array
+    {
+        /** @var list<TaskMember> $members */
+        $members = $this->entityManager->createQueryBuilder()
+            ->select('m', 'u')
+            ->from(TaskMember::class, 'm')
+            ->innerJoin('m.task', 't')
+            ->innerJoin('m.user', 'u')
+            ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NULL')
+            ->andWhere('m.memberRole = :role')
+            ->setParameter('board', $board)
+            ->setParameter('role', TaskMemberRole::Assignee)
+            ->getQuery()
+            ->getResult();
+
+        $people = [];
+        foreach ($members as $member) {
+            $user = $member->getUser();
+            $id   = $this->entityManager->getUnitOfWork()->getSingleIdentifierValue($user);
+            if ($id !== null) {
+                $people[(string) $id] = $user;
+            }
+        }
+
+        return $people;
+    }
+
+    private function calendarQuery(TaskBoard $board, TaskCalendarFilter $filter): QueryBuilder
+    {
+        $qb = $this->entityManager->createQueryBuilder()
+            ->from(Task::class, 't')
+            ->where('t.board = :board')
+            ->andWhere('t.archivedAt IS NULL')
+            ->setParameter('board', $board);
+
+        if (!$filter->completed) {
+            $qb->andWhere('t.completedAt IS NULL');
+        }
+        if (!$filter->subtasks) {
+            $qb->andWhere('t.parent IS NULL');
+        }
+        if ($filter->priority instanceof TaskPriority) {
+            $qb->andWhere('t.priority = :priority')->setParameter('priority', $filter->priority);
+        }
+        if ($filter->columnId !== null) {
+            $qb->andWhere('IDENTITY(t.column) = :columnId')->setParameter('columnId', $filter->columnId);
+        }
+        if ($filter->assignee !== null) {
+            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND IDENTITY(am.user) = :assignee)')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('assignee', $filter->assignee);
+        }
+
+        return $qb;
+    }
+
+    /** Tasks with a date overlapping the days from `$from` up to, not including, `$to`. */
+    private function inRange(QueryBuilder $qb, DateTimeImmutable $from, DateTimeImmutable $to): QueryBuilder
+    {
+        return $qb
+            ->andWhere('t.startAt IS NOT NULL OR t.dueAt IS NOT NULL')
+            ->andWhere('COALESCE(t.startAt, t.dueAt) < :calendarTo')
+            ->andWhere('COALESCE(t.dueAt, t.startAt) >= :calendarFrom')
+            ->setParameter('calendarFrom', $from, 'datetime_immutable')
+            ->setParameter('calendarTo', $to, 'datetime_immutable');
+    }
+
+    private function countOf(QueryBuilder $qb, TaskCalendarFilter $filter): int
+    {
+        if ($filter->tag !== null) {
+            return count($this->idsWithTag($qb, $filter->tag));
+        }
+
+        return (int) $qb->select('COUNT(t.id)')->getQuery()->getSingleScalarResult();
+    }
+
+    /**
+     * The ids of the matching tasks with a tag. Tags are a JSON column, which no portable query can search, so they are compared
+     * here; the query reads two columns of tasks the date range already bounds.
+     *
+     * @return list<string>
+     */
+    private function idsWithTag(QueryBuilder $qb, string $tag): array
+    {
+        $wanted = mb_strtolower($tag);
+        $ids    = [];
+        /** @var list<array{id: string, tags: mixed}> $rows */
+        $rows = $qb->select('t.id', 't.tags')->getQuery()->getArrayResult();
+        foreach ($rows as $row) {
+            $tags = is_array($row['tags']) ? array_map(static fn (mixed $value): string => mb_strtolower((string) $value), $row['tags']) : [];
+            if (in_array($wanted, $tags, true)) {
+                $ids[] = $row['id'];
+            }
+        }
+
+        return $ids;
     }
 }

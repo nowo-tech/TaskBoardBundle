@@ -10,6 +10,7 @@
 - [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
+- [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
@@ -138,6 +139,19 @@ The scope and its fields come from the browser. A select refuses a value it did 
 
 Remote text: type and list names are single clean lines, escaped by Twig. A list's description is sanitized Markdown stored on the connection and printed as escaped text. A tag colour reaches the page through `data-nowo-task-vars`, like column colours, and is checked as plain hex (`#` and 3 to 8 hex digits) in the adapter and again when read back from `remote_meta`. A task mention builds its address only from an id matching the adapter's id pattern.
 
+## Task numbers and calendar (since 2.1)
+
+Both opt-in.
+
+| Area | What it does |
+| --- | --- |
+| `task_by_number` | A number names a task only inside the tenant of the URL, or `?board=` after the board's own checks. The task then passes `canViewTask()`. Unknown, retired, unreadable and bad input answer the same 404, so a number's existence does not leak |
+| Alias across tenants | The redirect needs `canViewTask()` and the tenant resolver accepting the task's tenant for this user. Otherwise 404 |
+| `task_schedule` | CSRF (`task_board_task_schedule`), then 404 out of tenant or unreadable, 403 without `canEditTask()`. Both dates are required, so a partial request never clears one; dates are strict `Y-m-d` in years 1970 to 2200, with start not after due |
+| `TaskNumberLedger` | No access check: hosts check what `find()` and `findInScopes()` return. `purgeScope()` deletes a scope's numbers, is the host's to call on a tenant that is gone for good, and refuses while a task still carries a number there |
+| Second connection | A reservation inside a caller's transaction opens a short-lived connection with the same parameters, and writes only the counter. If that fails, it falls back to the caller's transaction: a gap at most, never a duplicate |
+| Calendar page | Reads only tasks of a board the user may view. URL filters are checked against what the board offers. Task titles reach the page through Twig escaping and the client redraws from the server's HTML (`DOMParser`, `importNode`) of its own same-origin page |
+
 ## UiKit migration (2.0.0)
 
 - **Quota event.** `TaskBoardEvents::QUOTA_CHECK` is a host hook, not a permission. The paths that do not ask are listed in [USAGE](USAGE.md#host-hooks-since-200). An import's count is taken before it writes, inside its transaction.
@@ -165,7 +179,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `a510f4f` (Appendix HY, 2026-11-07), for 2.0.2.** 2.0.1: Pass (good) / Low at `f2fa0d4`. 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
+**AI security audit (REQ-SEC-004): Pass (good) / Low at `3c105a1` (Appendix HY, 2026-11-07), for 2.1.0.** 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

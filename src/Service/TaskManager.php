@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Dto\TaskColumnNavigation;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -19,6 +20,7 @@ use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
@@ -130,6 +132,51 @@ final readonly class TaskManager
         if ($oldColumn?->getId() !== $newColumn?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
         }
+    }
+
+    /**
+     * Since 2.1.0 (spec 214, FR-026): changes only the dates, with the history and the event of the task form. The dates are
+     * days: a task imported with a time keeps its time of day, and a date that did not change stays exactly as stored.
+     *
+     * @throws InvalidTaskScheduleException when the start is after the due date
+     */
+    public function reschedule(Task $task, ?DateTimeImmutable $startAt, ?DateTimeImmutable $dueAt, object $user): void
+    {
+        if ($startAt instanceof DateTimeImmutable && $dueAt instanceof DateTimeImmutable && $startAt->format('Y-m-d') > $dueAt->format('Y-m-d')) {
+            throw new InvalidTaskScheduleException('The start date is after the due date.');
+        }
+
+        $oldStartAt = $task->getStartAt();
+        $oldDueAt   = $task->getDueAt();
+        $newStartAt = $this->onDay($oldStartAt, $startAt);
+        $newDueAt   = $this->onDay($oldDueAt, $dueAt);
+
+        $changed = array_keys(array_filter([
+            'startAt' => $oldStartAt?->format(DATE_ATOM) !== $newStartAt?->format(DATE_ATOM),
+            'dueAt'   => $oldDueAt?->format(DATE_ATOM) !== $newDueAt?->format(DATE_ATOM),
+        ]));
+        if ($changed === []) {
+            return;
+        }
+
+        $task->setStartAt($newStartAt)->setDueAt($newDueAt);
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $newStartAt);
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $newDueAt);
+        $this->taskRepository->save($task);
+        $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+    }
+
+    /** `$day` at the time of day of `$current`; midnight when there was no date. */
+    private function onDay(?DateTimeImmutable $current, ?DateTimeImmutable $day): ?DateTimeImmutable
+    {
+        if (!$day instanceof DateTimeImmutable) {
+            return null;
+        }
+        if (!$current instanceof DateTimeImmutable) {
+            return $day->setTime(0, 0);
+        }
+
+        return $current->setDate((int) $day->format('Y'), (int) $day->format('n'), (int) $day->format('j'));
     }
 
     public function updatePriority(Task $task, TaskPriority $priority, object $user): void

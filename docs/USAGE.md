@@ -44,6 +44,7 @@
   - [Collapsible sections](#collapsible-sections)
 - [Provider connections and archived tasks (since 1.23)](#provider-connections-and-archived-tasks-since-123)
 - [Task member pictures (since 1.23)](#task-member-pictures-since-123)
+- [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Translations](#translations)
 
 ## Manage UI
@@ -860,6 +861,31 @@ Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface:
   member's name as `aria-label`; chips next to a printed name are `aria-hidden`.
 - Draw your own chip: override `templates/bundles/NowoTaskBoardBundle/manage/_task_member_avatar.html.twig` (variables
   `user`, `class`, `size`, `labelled`) or call `nowo_task_board_member_avatar_url(user)` in your templates.
+
+## Task numbers and calendar (since 2.1)
+
+Both are opt-in, and neither needs the other.
+
+```yaml
+nowo_task_board:
+    task_numbers:
+        enabled: true
+        scope: tenant   # or board
+    calendar:
+        enabled: true
+```
+
+**Numbers.** Every task gets `#123` when it is persisted, whichever way it was created. Print it with `nowo_task_board_number(task)` (null: option off, or no number yet); read it with `Task::getNumber()`. A provider's custom id and an import's external id stay separate references, and never become the number. To find a task by number in your own search:
+
+```php
+$tasks = $taskNumberLedger->findInScopes($scopeKeysTheViewerMayRead, 123); // current numbers and aliases, one query
+```
+
+Check that the viewer may read what it returns: the ledger does not. The route `task_by_number` does: `/projects/<slug>/tasks/n/123` redirects to the task page; with `scope: board`, or a board outside any tenant, add `?board=<board id>`.
+
+**Calendar.** `/board/{boardId}/calendar?mode=month|week|list&date=Y-m-d`, with the filters `assignee`, `priority`, `tag`, `column`, `completed=1` and `subtasks=1`. A link reproduces the view. Completed tasks and subtasks are hidden unless asked for. A task shows as a bar with both dates, on its day with one, and not at all with none.
+
+Editors change dates four ways, all through `task_schedule` (`start`, `due`, `_token`; an empty date clears it, and both are required): drag the body, drag an edge, *Reschedule*, or `TaskManager::reschedule()` from code. The server checks `canEditTask()` on every write: read-only answers 403, out of reach 404.
 
 ## Translations
 

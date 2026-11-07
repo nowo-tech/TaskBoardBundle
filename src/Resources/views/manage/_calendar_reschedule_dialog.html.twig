@@ -1,0 +1,32 @@
+{#
+    Since 2.1.0 (spec 214, FR-031): the start and due date of one task, for keyboards and phones: no change of dates needs a pointer.
+    The controller fills it from the chip and posts it to task_schedule, like a drag. Variables: scheduleForm.
+#}
+{% set _body %}
+    {{ form_start(scheduleForm, {attr: {id: 'nowo-task-cal-schedule-form', class: 'nowo-task-dialog__body', 'data-nowo-task-board-calendar-target': 'form', 'data-action': 'nowo-task-board-calendar#submitSchedule', novalidate: 'novalidate'}}) }}
+        <p class="{{ nowo_ui_class('flash_error', 'NowoTaskBoardBundle') }}" role="alert" data-nowo-task-board-calendar-target="dialogError" hidden></p>
+        <div class="nowo-task-dialog__grid">
+            <div class="nowo-task-field">{{ form_row(scheduleForm.start) }}</div>
+            <div class="nowo-task-field">{{ form_row(scheduleForm.due) }}</div>
+        </div>
+        {% for child in scheduleForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+    {{ form_end(scheduleForm) }}
+{% endset %}
+{% set _footer %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <button type="submit" form="nowo-task-cal-schedule-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-cal-reschedule',
+    title: 'task_board.calendar.reschedule'|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native',
+    attr: {'data-nowo-task-board-calendar-target': 'dialog'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+}, false) }}

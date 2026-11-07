@@ -17,12 +17,14 @@ interface TaskBoardDefaultViewResolverInterface
     public const VIEW_BOARD = 'board';
     public const VIEW_LIST  = 'list';
     public const VIEW_GANTT = 'gantt';
+    /** Since 2.1.0 (spec 214, FR-024): honoured with `calendar.enabled`; otherwise it keeps the board view. */
+    public const VIEW_CALENDAR = 'calendar';
 
     /** The views a resolver may answer. */
-    public const VIEWS = [self::VIEW_BOARD, self::VIEW_LIST, self::VIEW_GANTT];
+    public const VIEWS = [self::VIEW_BOARD, self::VIEW_LIST, self::VIEW_GANTT, self::VIEW_CALENDAR];
 
     /**
-     * `board`, `list` or `gantt`; null (or any other value) keeps the board view. Called after the board access
+     * `board`, `list`, `gantt` or `calendar`; null (or any other value) keeps the board view. Called after the board access
      * checks, so `$board` is one the user may open.
      */
     public function defaultView(object $user, TaskBoard $board): ?string;

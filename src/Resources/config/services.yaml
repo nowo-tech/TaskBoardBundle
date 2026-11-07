@@ -24,6 +24,8 @@ services:
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
+            # Since 2.1.0: loaded only with `task_numbers.enabled` (services_numbers.yaml).
+            - '../../Number/'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'

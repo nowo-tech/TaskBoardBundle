@@ -449,9 +449,10 @@ final readonly class SyncTaskWriter
             // No provider URL is ever stored: the images are copied after the page, then rewritten again.
             $task->setDescription($this->rewriter->rewrite($task, $this->description($row), []));
         }
-        $startAt = $row->startAt ?? $row->createdAt;
-        if ($startAt instanceof DateTimeImmutable) {
-            $task->setStartAt($startAt);
+        // Since 2.1.0 (audit HY-L3): only a start the provider gave. The Gantt falls back to the creation day by itself
+        // (Task::getPlannedStart()), and a calendar must not show a schedule nobody set.
+        if ($row->startAt instanceof DateTimeImmutable) {
+            $task->setStartAt($row->startAt);
         }
         $task->addLink(new TaskLink(
             task: $task,

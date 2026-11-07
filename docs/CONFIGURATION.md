@@ -29,6 +29,7 @@
   - [Custom importers](#custom-importers)
 - [Provider sync (since 1.23)](#provider-sync-since-123)
 - [Assets](#assets)
+- [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [New board (since 1.30)](#new-board-since-130)
 
 ## Required
@@ -710,6 +711,19 @@ Rebuild after changes:
 ```bash
 pnpm install && pnpm run build
 ```
+
+## Task numbers and calendar (since 2.1)
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `task_numbers.enabled` | `false` | A readable `#123` per task: the mapping of the counter and the ledger, the listener, `nowo:task-board:numbers-backfill`, the route `task_by_number` and the numbers on the pages |
+| `task_numbers.scope` | `tenant` | `tenant`: one sequence per `TaskBoard::$tenantKey` (a board without one uses its id). `board`: one per board |
+| `calendar.enabled` | `false` | The route `calendar` and `task_schedule`, and the Calendar tab |
+| `routes.task_by_number` | `/tools/task-board/n/{number}` | With `task_numbers.enabled`. A tenant copy is `<tenant path>/n/{number}` |
+| `routes.calendar` | `/tools/task-board/board/{boardId}/calendar` | With `calendar.enabled` |
+| `routes.task_schedule` | `/tools/task-board/task/{taskId}/schedule` | With `calendar.enabled`. POST |
+| `web_ui.templates.calendar` | `@NowoTaskBoardBundle/manage/calendar.html.twig` | The calendar page |
+| `board.default_view_resolver` | `null` | May answer `calendar`, honoured with `calendar.enabled` |
 
 ## New board (since 1.30)
 

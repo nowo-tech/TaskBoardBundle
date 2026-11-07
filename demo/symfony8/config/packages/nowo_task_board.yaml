@@ -1,6 +1,11 @@
 nowo_task_board:
     user_class: App\Entity\User
     table_prefix: task_board_
+    # Since 2.1.0 (spec 214).
+    task_numbers:
+        enabled: true
+    calendar:
+        enabled: true
     # Since 1.23: provider connections. The demo replaces ClickUp by an in-memory provider (see config/services.yaml).
     sync:
         enabled: true

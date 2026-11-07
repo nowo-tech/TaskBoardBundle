@@ -20,6 +20,9 @@ use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
+use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
+use Nowo\TaskBoardBundle\Number\TaskNumberListener;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
@@ -218,8 +221,41 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
+        $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
+    }
+
+    /**
+     * Since 2.1.0 (spec 214): `task_numbers.*` and `calendar.enabled`. With both off nothing changes for a host.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerTaskNumbersAndCalendar(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $numbers  = (bool) $config['task_numbers']['enabled'];
+        $calendar = (bool) $config['calendar']['enabled'];
+        $container->setParameter('nowo_task_board.task_numbers.enabled', $numbers);
+        $container->setParameter('nowo_task_board.calendar.enabled', $calendar);
+        $container->getDefinition(TaskBoardRouteLoader::class)
+            ->setArgument('$taskNumbersEnabled', $numbers)
+            ->setArgument('$calendarEnabled', $calendar);
+        $container->getDefinition(TaskBoardManageController::class)->setArgument('$calendarEnabled', $calendar);
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$taskNumbersEnabled', $numbers)
+            ->setArgument('$calendarEnabled', $calendar);
+        if (!$numbers) {
+            return;
+        }
+
+        $container->setParameter('nowo_task_board.task_numbers.scope', $config['task_numbers']['scope']);
+        $loader->load('services_numbers.yaml');
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $container->getDefinition(TaskNumberLedger::class)->setArgument('$entityManager', $manager);
+        $container->getDefinition(TaskNumberBackfiller::class)->setArgument('$entityManager', $manager);
+        foreach (['onFlush', 'postPersist', 'postUpdate'] as $event) {
+            $container->getDefinition(TaskNumberListener::class)->addTag('doctrine.event_listener', ['event' => $event, 'entity_manager' => $emName]);
+        }
     }
 
     /**
@@ -475,8 +511,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     private function syncEnabled(ContainerBuilder $container): bool
     {
+        return $this->optionEnabled($container, 'sync');
+    }
+
+    private function optionEnabled(ContainerBuilder $container, string $node): bool
+    {
         foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
-            if (is_array($config['sync'] ?? null) && ($config['sync']['enabled'] ?? false) === true) {
+            if (is_array($config[$node] ?? null) && ($config[$node]['enabled'] ?? false) === true) {
                 return true;
             }
         }
@@ -528,6 +569,23 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                             'dir'       => __DIR__ . '/../Sync/Entity',
                             'prefix'    => 'Nowo\\TaskBoardBundle\\Sync\\Entity',
                             'alias'     => 'TaskBoardSync',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        // Since 2.1.0 (spec 214): the counter and the ledger are mapped only with task_numbers.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_numbers')) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardNumber' => [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Number/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Number\\Entity',
+                            'alias'     => 'TaskBoardNumber',
                         ],
                     ],
                 ],
