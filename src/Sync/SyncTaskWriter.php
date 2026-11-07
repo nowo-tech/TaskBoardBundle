@@ -217,6 +217,8 @@ final readonly class SyncTaskWriter
         $plan     = [];
         $newTasks = 0;
         foreach ($this->parentsFirst($rows) as $id => $remote) {
+            // Since 2.0.1 (audit HY-B): PHP makes an all-digit array key an integer.
+            $id   = (string) $id;
             $item = $items[$id] ?? null;
             if ($item instanceof TaskSyncItem && $item->isTombstone()) {
                 ++$ctx->skipLocallyDeleted;
@@ -880,6 +882,7 @@ final readonly class SyncTaskWriter
             return;
         }
         foreach ($existing as $remoteId => $known) {
+            $remoteId = (string) $remoteId; // Audit HY-B: an all-digit attachment id is an integer key.
             if (!isset($listed[$remoteId]) && !str_starts_with($remoteId, 'img:') && !str_starts_with($remoteId, self::COMMENT_FILE_PREFIX)) {
                 $ctx->fileDeletes[] = [$task, $known->stored()];
                 $link               = $known->getLink();
@@ -1062,6 +1065,7 @@ final readonly class SyncTaskWriter
         }
         // Audit GW-M2: a file the comment no longer has leaves the host's storage.
         foreach ($files as $key => $file) {
+            $key = (string) $key; // Audit HY-B: an all-digit attachment id is an integer key.
             if (str_starts_with($key, $this->commentFilePrefix($remote->id)) && !isset($kept[$key])) {
                 $ctx->fileDeletes[] = [$task, $file->stored()];
                 $this->entityManager->remove($file);
