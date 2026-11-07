@@ -15,6 +15,10 @@ final class TaskBoardFormData
         public ?string $description = null,
         /** Column set whose columns the new board gets instead of `board.default_columns` (since 1.11). */
         public ?string $columnSetId = null,
+        /** Since 1.30.0 (spec 211): one emoji. */
+        public ?string $icon = null,
+        /** Since 1.30.0 (spec 211): the scope step's choice. */
+        public ?string $scope = null,
     ) {
     }
 }

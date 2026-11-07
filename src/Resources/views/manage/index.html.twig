@@ -72,9 +72,10 @@
                 {% endblock %}
             {% else %}
                 <ul class="nowo-task-board-list list-group list-group-flush list-unstyled mb-0" role="list" data-testid="nowo-task-board-list">
+                    {% set tenantLabels = nowo_task_board_tenant_labels(boards) %}
                     {% for board in boards %}
                         {% block index_board_item %}
-                            {{ include('@NowoTaskBoardBundle/manage/_board_list_item.html.twig', {board: board}) }}
+                            {{ include('@NowoTaskBoardBundle/manage/_board_list_item.html.twig', {board: board, tenantLabels: tenantLabels|default({})}) }}
                         {% endblock %}
                     {% endfor %}
                 </ul>
@@ -92,6 +93,9 @@
                 {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true, with_actions: false}) }}
                 {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling body. #}
                 <div class="nowo-task-dialog__footer nowo-task-dialog__actions">
+                    {% if boardForm.scope is defined %}
+                        <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                    {% endif %}
                     <button type="button" class="{{ nowo_task_board_btn_class('btn_secondary') }}" data-action="nowo-task-board-dialog#close">{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
                     <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_task_board_btn_class('btn_primary') }}" data-testid="nowo-task-board-create-submit">
                         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}

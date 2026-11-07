@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Twig;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
+use Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -18,10 +19,13 @@ use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Throwable;
 use Twig\Environment;
 use Twig\Extension\AbstractExtension;
@@ -29,6 +33,8 @@ use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
 
+use function array_keys;
+use function array_map;
 use function array_unshift;
 use function count;
 use function htmlspecialchars;
@@ -91,6 +97,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?LoggerInterface $logger = null,
         // Since 1.27.0 (TB-SYNC-3): typed custom fields of synced tasks (null when `sync.enabled` is false).
         private readonly ?SyncFieldViewProvider $syncFields = null,
+        // Since 1.30.0 (spec 211).
+        private readonly ?BoardTenantLabelProviderInterface $tenantLabels = null,
+        private readonly ?TokenStorageInterface $tokenStorage = null,
     ) {
     }
 
@@ -206,6 +215,10 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_details', $this->syncDetails(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
             new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true]),
+            // Since 1.30.0 (spec 211).
+            new TwigFunction('nowo_task_board_description', $this->boardDescription(...), ['is_safe' => ['html']]),
+            new TwigFunction('nowo_task_board_label', self::boardLabel(...)),
+            new TwigFunction('nowo_task_board_tenant_labels', $this->tenantLabelsOf(...)),
         ];
     }
 
@@ -310,6 +323,46 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     public function renderCommentBody(TaskComment $comment, ?string $viewerId = null): string
     {
         return self::commentBody($comment, $viewerId, $this->textRenderer);
+    }
+
+    /**
+     * Since 1.30.0 (spec 211): a board's description as HTML, by its format. Markdown goes through the host's text renderer,
+     * which must escape what the user typed; plain text is escaped here.
+     */
+    public function boardDescription(TaskBoard $board): string
+    {
+        $text = (string) $board->getDescription();
+
+        return $board->getDescriptionFormat() === TaskBoard::FORMAT_MARKDOWN ? $this->textRenderer->render($text) : htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    /** Since 1.30.0 (spec 211): "🚀 Roadmap" as text, for a host's breadcrumbs and search. Escape it as any text. */
+    public static function boardLabel(TaskBoard $board): string
+    {
+        return ($board->getIcon() !== null ? $board->getIcon() . ' ' : '') . $board->getName();
+    }
+
+    /**
+     * Since 1.30.0 (spec 211): the tenants of a list of boards, one provider call. Empty without `board.tenant_label_provider`.
+     *
+     * @param iterable<TaskBoard> $boards
+     *
+     * @return array<string, TaskBoardTenant>
+     */
+    public function tenantLabelsOf(iterable $boards): array
+    {
+        $user = $this->tokenStorage?->getToken()?->getUser();
+        if (!$this->tenantLabels instanceof BoardTenantLabelProviderInterface || !$user instanceof UserInterface) {
+            return [];
+        }
+        $keys = [];
+        foreach ($boards as $board) {
+            if ($board->getTenantKey() !== null) {
+                $keys[$board->getTenantKey()] = true;
+            }
+        }
+
+        return $keys === [] ? [] : $this->tenantLabels->labelsFor($user, array_map(strval(...), array_keys($keys)));
     }
 
     /**

@@ -1,13 +1,20 @@
 {#
     Since 1.24: one board of a board list — its name (to the board route), its description and the Board / List /
     Gantt views as links with icons, in a group named after the board; each link has an aria-label naming the board.
-    Variables: board. The Board link asks for the board view explicitly (?view=board) so a default view
+    Variables: board; since 1.30.0 tenantLabels (optional). The Board link asks for the board view explicitly (?view=board) so a default view
     (board.default_view_resolver) does not redirect it.
 #}
 <li class="nowo-task-board-list__item" data-testid="nowo-task-board-list-item">
     <div class="nowo-task-board-list__main">
-        <a class="nowo-task-board-list__name text-reset fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{{ board.name }}</a>
-        {% if board.description %}
+        <a class="nowo-task-board-list__name text-reset fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}</a>
+        {#- Since 1.30.0 (spec 211): tenantLabels from nowo_task_board_tenant_labels(). -#}
+        {% set _tenant = board.tenantKey ? (tenantLabels|default({}))[board.tenantKey]|default(null) : null %}
+        {% if _tenant %}
+            <span class="nowo-task-board-list__tenant text-secondary small" data-testid="nowo-task-board-list-tenant">{% if _tenant.icon %}<span aria-hidden="true">{{ _tenant.icon }}</span> {% endif %}{{ _tenant.label }}</span>
+        {% endif %}
+        {% if board.description and board.descriptionFormat == 'markdown' %}
+            {{ include('@NowoTaskBoardBundle/manage/_board_description.html.twig', {board: board, fold: false}) }}
+        {% elseif board.description %}
             <p class="nowo-task-board-list__description text-secondary small mb-0">{{ board.description }}</p>
         {% endif %}
     </div>

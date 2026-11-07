@@ -134,6 +134,8 @@ final class FunctionalKernel extends Kernel
         ]);
         $container->extension('twig', ['strict_variables' => true]);
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + $this->taskBoard);
+        // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).
+        $container->services()->set('app.board_scopes', ScriptedBoardScopes::class)->public();
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // Since 1.23: the host side of the provider sync, with a scriptable provider and no network.
             $services = $container->services();

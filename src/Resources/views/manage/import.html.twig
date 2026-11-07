@@ -21,6 +21,7 @@
         breadcrumbRouteParams: {boardId: board.id},
         breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
+        breadcrumbIcon: board.icon,
         headerActions: [
             {href: path(nowo_task_board_route('board'), {boardId: board.id}), icon: 'arrow-left', label: 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-secondary'},
         ],

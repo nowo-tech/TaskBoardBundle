@@ -21,6 +21,8 @@ final readonly class TaskBoardTenant
         public string $key,
         public string $slug,
         public string $label,
+        // Since 1.30.0 (spec 211): shown beside the label in board lists, escaped.
+        public ?string $icon = null,
     ) {
     }
 }

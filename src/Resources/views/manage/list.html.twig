@@ -22,6 +22,7 @@
         breadcrumbRoute: nowo_task_board_route('board'),
         breadcrumbParams: {boardId: board.id},
         breadcrumbLabel: board.name,
+        breadcrumbIcon: board.icon,
         headerActions: [
             {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},
             {href: path(nowo_task_board_route('gantt'), {boardId: board.id}), icon: 'chart-bar', label: 'task_board.view.gantt'|trans({}, 'NowoTaskBoardBundle'), class: 'btn-outline-primary'},

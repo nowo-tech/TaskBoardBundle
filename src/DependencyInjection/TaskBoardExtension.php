@@ -50,6 +50,7 @@ use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
@@ -166,6 +167,17 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
+        // Since 1.30.0 (spec 211).
+        $container->setParameter('nowo_task_board.board.form_options', [
+            'icon_field'               => $config['board']['icon'],
+            'icon_form_type'           => $config['board']['icon_form_type'],
+            'icon_form_options'        => $config['board']['icon_form_options'],
+            'description_form_type'    => $config['board']['description_form_type'],
+            'description_form_options' => $config['board']['description_form_options'],
+            'advanced_slug'            => $config['board']['advanced_slug'],
+        ]);
+        $container->setParameter('nowo_task_board.board.advanced_slug', $config['board']['advanced_slug']);
+        $container->setParameter('nowo_task_board.board.description_format', $config['board']['description_format'] === 'markdown' ? 'markdown' : null);
         $container->setParameter('nowo_task_board.import.max_rows', $config['import']['max_rows']);
         $container->setParameter('nowo_task_board.import.max_cell_length', $config['import']['max_cell_length']);
         $container->setParameter('nowo_task_board.import.max_columns', $config['import']['max_columns']);
@@ -200,6 +212,26 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->registerForAutoconfiguration(TaskObjectLinkResolverInterface::class)
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
+        $this->registerBoardCreation($container, $config['board']);
+    }
+
+    /**
+     * Since 1.30.0 (spec 211): the host's scope step and tenant labels, and what the New board form asks.
+     *
+     * @param array<string, mixed> $board
+     */
+    private function registerBoardCreation(ContainerBuilder $container, array $board): void
+    {
+        $reference = static fn (mixed $id): ?Reference => is_string($id) && $id !== '' ? new Reference($id) : null;
+        $container->getDefinition(TaskBoardManageController::class)
+            ->setArgument('$scopeProvider', $reference($board['scope_provider']))
+            ->setArgument('$boardFormOptions', '%nowo_task_board.board.form_options%');
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$tenantLabels', $reference($board['tenant_label_provider']))
+            ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE));
+        $container->getDefinition(TaskBoardCreator::class)
+            ->setArgument('$transliterateSlug', '%nowo_task_board.board.advanced_slug%')
+            ->setArgument('$descriptionFormat', '%nowo_task_board.board.description_format%');
     }
 
     /**

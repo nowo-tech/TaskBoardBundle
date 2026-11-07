@@ -1,0 +1,4 @@
+{#
+    Since 1.30.0 (spec 211): a board's icon, decorative, and its name, both escaped. Variables: board.
+#}
+{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}

@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Controller;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
+use Nowo\TaskBoardBundle\Board\BoardScope;
+use Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
@@ -86,6 +88,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
@@ -175,6 +178,10 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?string $createDialogHeader = null,
         // Since 1.27.0 (audit GW-L8): the host's limit of active tasks, asked when a task is restored (with `sync.enabled`).
         private readonly ?SyncLimitCheckerInterface $syncLimits = null,
+        // Since 1.30.0 (spec 211).
+        private readonly ?BoardScopeProviderInterface $scopeProvider = null,
+        /** @var array<string, mixed> */
+        private readonly array $boardFormOptions = [],
     ) {
     }
 
@@ -194,10 +201,11 @@ final class TaskBoardManageController extends AbstractController
             }
         }
 
-        $form = $this->createBoardForm($user, $tenant?->key);
+        $scopes = $this->scopeProvider?->scopes($user, $tenant) ?? [];
+        $form   = $this->createBoardForm($user, $tenant?->key, $scopes);
 
         // Since 1.24: `?new=1` opens the New board dialog on load (e.g. a host's "New board" link).
-        return $this->renderIndex($user, $tenant, $form, $this->createBoardForm($user, $tenant?->key), $this->currentRequest()?->query->has('new') === true);
+        return $this->renderIndex($user, $tenant, $form, $this->createBoardForm($user, $tenant?->key, $scopes), $this->currentRequest()?->query->has('new') === true);
     }
 
     /**
@@ -210,22 +218,28 @@ final class TaskBoardManageController extends AbstractController
     {
         $user   = $this->requireUser();
         $tenant = $this->tenantContext?->require($user);
-        if (!$this->canCreateBoard($user, $tenant?->key)) {
+        // Since 1.30.0 (spec 211): with a scope step the check runs on the tenant it resolves to, not on the URL's.
+        $scopes = $this->scopeProvider?->scopes($user, $tenant) ?? [];
+        if ($scopes === [] && !$this->canCreateBoard($user, $tenant?->key)) {
             throw $this->createAccessDeniedException();
         }
 
-        $form = $this->createBoardForm($user, $tenant?->key);
+        $form = $this->createBoardForm($user, $tenant?->key, $scopes);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskBoardFormData $data */
             $data = $form->getData();
-            // Since 1.11: the columns of a column set the user may apply (another scope's set is ignored).
-            $set   = $data->columnSetId !== null ? $this->columnSetManager?->find($data->columnSetId, $user, null, $tenant?->key) : null;
-            $board = $this->boardCreator->create($data, $user, $tenant?->key, $set);
-            $this->logWrite('board_create', ['board_id' => $board->getId(), 'column_set_id' => $set?->getId()]);
+            // Since 1.30.0 (spec 211): the scope step decides the tenant; a refusal is one form error, whatever the reason.
+            $target = $scopes === [] ? $tenant : $this->scopedTenant($user, $form, $data);
+            if ($scopes === [] || $target instanceof TaskBoardTenant) {
+                // Since 1.11: the columns of a column set the user may apply (another scope's set is ignored).
+                $set   = $data->columnSetId !== null ? $this->columnSetManager?->find($data->columnSetId, $user, null, $target?->key) : null;
+                $board = $this->boardCreator->create($data, $user, $target?->key, $set);
+                $this->logWrite('board_create', ['board_id' => $board->getId(), 'column_set_id' => $set?->getId()]);
 
-            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()]);
+                return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()] + ($scopes !== [] && $target instanceof TaskBoardTenant && $this->tenantContext?->isEnabled() === true ? ['tenantSlug' => $target->slug] : []));
+            }
         }
 
         if (!$form->isSubmitted()) {
@@ -240,7 +254,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         // The <noscript> copy of the form shows the same values and errors.
-        $fallback = $this->createBoardForm($user, $tenant?->key);
+        $fallback = $this->createBoardForm($user, $tenant?->key, $scopes);
         $fallback->handleRequest($request);
         $this->addFlash('error', 'task_board.flash.board_invalid');
 
@@ -1601,7 +1615,8 @@ final class TaskBoardManageController extends AbstractController
                 : $this->boardRepository->findAllActive();
             $boards = $this->resourceAccessChecker->filterBoards($user, $candidates, $tenant?->key);
         }
-        $canCreate = $this->canCreateBoard($user, $tenant?->key);
+        // Since 1.30.0 (spec 211): a scope step offers the button by what the host's scopes allow.
+        $canCreate = $form->has('scope') || $this->canCreateBoard($user, $tenant?->key);
 
         return $this->render($this->templates['index'], [
             'boards'         => $boards,
@@ -1706,13 +1721,47 @@ final class TaskBoardManageController extends AbstractController
      *
      * @return FormInterface<TaskBoardFormData>
      */
-    private function createBoardForm(UserInterface $user, ?string $tenantKey): FormInterface
+    /**
+     * @param list<BoardScope> $scopes
+     *
+     * @return FormInterface<mixed>
+     */
+    private function createBoardForm(UserInterface $user, ?string $tenantKey, array $scopes = []): FormInterface
     {
         $sets = $this->columnSetManager?->available($user, null, $tenantKey) ?? [];
+        // Since 1.30.0 (spec 211): the scope the step opens on.
+        $start = count($scopes) === 1 ? $scopes[0]->id : null;
+        foreach ($scopes as $scope) {
+            $start = $scope->preselected ? $scope->id : $start;
+        }
 
-        return $this->createForm(TaskBoardFormType::class, new TaskBoardFormData(), [
-            'column_set_choices' => $this->columnSetChoices($sets),
-        ]);
+        return $this->createForm(TaskBoardFormType::class, new TaskBoardFormData(scope: $start), [
+            'column_set_choices'     => $this->columnSetChoices($sets),
+            'scopes'                 => $scopes,
+            'icon_too_long_message'  => $this->translator->trans('task_board.form.board.icon_too_long', [], 'NowoTaskBoardBundle'),
+            'icon_invalid_message'   => $this->translator->trans('task_board.form.board.icon_invalid', [], 'NowoTaskBoardBundle'),
+            'scope_required_message' => $this->translator->trans('task_board.form.board.scope_required', [], 'NowoTaskBoardBundle'),
+        ] + $this->boardFormOptions);
+    }
+
+    /**
+     * Since 1.30.0 (spec 211): the host's answer for the chosen scope, and the create check on that tenant. Null, with one form
+     * error for both, so a refusal does not say whether a tenant exists.
+     *
+     * @param FormInterface<mixed> $form
+     */
+    private function scopedTenant(UserInterface $user, FormInterface $form, TaskBoardFormData $data): ?TaskBoardTenant
+    {
+        $scopeId = (string) $data->scope;
+        $values  = $form->get('scopeFields')->get($scopeId)->getData();
+        $target  = $this->scopeProvider?->resolve($user, $scopeId, is_array($values) ? $values : []);
+        if ($target instanceof TaskBoardTenant && $this->canCreateBoard($user, $target->key)) {
+            return $target;
+        }
+        $this->logRefused('board_scope');
+        $form->addError(new FormError($this->translator->trans('task_board.form.board.scope_refused', [], 'NowoTaskBoardBundle')));
+
+        return null;
     }
 
     /**
