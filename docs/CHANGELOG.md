@@ -82,6 +82,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.0.1. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`. Both bugs are from audit HY, and neither is a security issue.
+
+### Fixed
+
+- The board link and buttons on a phone: a long description no longer widens the card, whose label caught taps over them.
+- A sync no longer fails on a remote task whose id is all digits. All-digit attachment ids and checklist item ids are handled the same way.
+
+### Changed
+
+- The sync's error logs add `at`, the file and line of an unexpected failure, beside its class. Never its message.
+
 ## [2.0.0] - 2026-11-07
 
 Target: 2.0.0. Audit HX (2026-11-07): Pass (good) / Low at `08e51a4`. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).

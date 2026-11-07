@@ -33,5 +33,8 @@ export default defineConfig({
     // Since 2.0.0: the screens that moved to UiKit run in every engine: `--project=firefox --project=webkit`.
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    // Since 2.0.1 (audit HY-A): the board index as a card on an iPhone profile and in a narrow Firefox window.
+    { name: 'iphone', testMatch: /board-index-phone/, use: { ...devices['iPhone 13'] } },
+    { name: 'firefox-narrow', testMatch: /board-index-phone/, use: { ...devices['Desktop Firefox'], viewport: { width: 390, height: 844 } } },
   ],
 });

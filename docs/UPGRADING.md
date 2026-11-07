@@ -147,6 +147,8 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## Unreleased
 
+Target: 2.0.1. No schema or configuration change. A sync that failed on an all-digit remote id imports its page on the next run. Audit HY (2026-11-07): Pass (good) / Low at `f2fa0d4`.
+
 ## To 2.0.0
 
 From **1.30.0**:

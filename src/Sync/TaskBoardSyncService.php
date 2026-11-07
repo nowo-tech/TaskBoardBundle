@@ -62,6 +62,7 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
+use function basename;
 use function intdiv;
 
 /**
@@ -329,7 +330,7 @@ final readonly class TaskBoardSyncService
             $report = $this->finish($ctx, $status);
         } catch (Throwable $exception) {
             // Anything before the phases (the provider's container lookup, the database): the run fails cleanly.
-            $this->logger->error('TaskBoard sync failed', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'run_id' => $runId, 'exception' => $exception::class]);
+            $this->logger->error('TaskBoard sync failed', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'run_id' => $runId] + self::failure($exception));
             $report = $this->bare($board, $provider->id(), SyncStatus::Failed, $exception instanceof ProviderException ? $exception->errorCode->value : 'internal', $runId);
             try {
                 $this->store->findRun($runId)?->record($report, $this->clock->now());
@@ -492,7 +493,7 @@ final readonly class TaskBoardSyncService
 
             return SyncStatus::Failed;
         } catch (Throwable $exception) {
-            $this->logger->error('TaskBoard sync error', $this->logContext($ctx) + ['exception' => $exception::class]);
+            $this->logger->error('TaskBoard sync error', $this->logContext($ctx) + self::failure($exception));
             $ctx->errors[] = new SyncError('internal');
 
             return SyncStatus::Failed;
@@ -523,7 +524,7 @@ final readonly class TaskBoardSyncService
             $this->entityManager->flush();
             $this->store->prune($ctx->connection, $this->historyKeep);
         } catch (Throwable $exception) {
-            $this->logger->error('TaskBoard sync history not saved', $this->logContext($ctx) + ['exception' => $exception::class]);
+            $this->logger->error('TaskBoard sync history not saved', $this->logContext($ctx) + self::failure($exception));
         }
 
         if ($status === SyncStatus::Failed) {
@@ -686,6 +687,17 @@ final readonly class TaskBoardSyncService
         $identity = $this->identity($actor);
 
         return $identity === null ? null : ($this->entityManager->getReference($identity[0], $identity[1]) ?? null);
+    }
+
+    /**
+     * Since 2.0.1 (audit HY-B): what a log may say about an unexpected failure: its class and where it was raised. Never its
+     * message, which can hold provider data or tokens.
+     *
+     * @return array{exception: class-string<Throwable>, at: string}
+     */
+    private static function failure(Throwable $exception): array
+    {
+        return ['exception' => $exception::class, 'at' => basename($exception->getFile()) . ':' . $exception->getLine()];
     }
 
     /**
