@@ -617,7 +617,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 'task_board' => [
                     'alias'              => 'task_board',
                     'translation_domain' => 'NowoTaskBoardBundle',
-                    'defaults'           => [
+                    // Since 2.0.0: the import form printed its convention keys (task_import_form.file.help) as text.
+                    'convention_requires_translation' => true,
+                    'defaults'                        => [
                         'attr'     => ['class' => 'nowo-ui-input form-control'],
                         'row_attr' => ['class' => 'mb-2'],
                     ],

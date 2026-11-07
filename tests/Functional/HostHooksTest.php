@@ -278,6 +278,21 @@ final class HostHooksTest extends FunctionalTestCase
         self::assertNotNull($board->getId());
     }
 
+    public function testTheImportPagePrintsNoRawFormKeys(): void
+    {
+        $this->boot([]);
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $this->board()->getId() . '/import');
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('task_import_form.', $crawler->filter('[data-nowo-ui-page="form"]')->text());
+    }
+
+    public function testTheHostsWayBackIsAHeaderActionOfTheIndex(): void
+    {
+        $this->boot(['dashboard_route' => 'nowo_task_board_index']);
+        $crawler = $this->client->request('GET', self::BASE);
+        self::assertStringContainsString('Back', $crawler->filter('[data-nowo-ui-region="header"]')->text());
+    }
+
     private function import(TaskBoard $board): void
     {
         $file = tempnam(sys_get_temp_dir(), 'tb');

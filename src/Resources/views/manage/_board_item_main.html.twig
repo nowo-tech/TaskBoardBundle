@@ -1,5 +1,5 @@
 {# Since 2.0.0: the name, tenant and description of a board, shared by _board_list_item and _board_row. board, tenantLabels. #}
-<a class="nowo-task-board-list__name fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}</a>
+<a class="nowo-task-board-list__name" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}</a>
 {#- Since 1.30.0 (spec 211): tenantLabels from nowo_task_board_tenant_labels(). -#}
 {% set _tenant = board.tenantKey ? (tenantLabels|default({}))[board.tenantKey]|default(null) : null %}
 {% if _tenant %}

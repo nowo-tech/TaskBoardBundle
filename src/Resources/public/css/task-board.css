@@ -3549,6 +3549,8 @@ a.nowo-task-nav__step:focus-visible {
     line-clamp: 3;
 }
 
+.nowo-task-board-list__name { font-weight: 600; }
+
 /* Since 2.0.0: small layout helpers of the bundle's own markup, in place of framework utilities. */
 .nowo-task-flex { display: flex; }
 .nowo-task-wrap { flex-wrap: wrap; }

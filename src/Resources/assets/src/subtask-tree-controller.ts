@@ -10,6 +10,8 @@ export default class SubtaskTreeController extends Controller<HTMLElement> {
 
     declare readonly listTarget: HTMLElement;
 
+    declare readonly hasToggleTarget: boolean;
+
     connect(): void {
         this.syncVisibility();
     }
@@ -21,6 +23,10 @@ export default class SubtaskTreeController extends Controller<HTMLElement> {
     }
 
     private syncVisibility(): void {
+        // A task without subtasks has no toggle: the list stays as it is.
+        if (!this.hasToggleTarget) {
+            return;
+        }
         const expanded = this.toggleTarget.getAttribute('aria-expanded') === 'true';
         this.listTarget.hidden = !expanded;
     }
