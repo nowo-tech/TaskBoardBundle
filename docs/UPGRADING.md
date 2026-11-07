@@ -172,6 +172,8 @@ A layout that renders `{% block body %}` and has no `nowo_ui_page_header` still 
 
 **Access checker.** `TenantAwareTaskBoardAccessCheckerInterface::canListBoards(object $user, ?string $tenantKey = null)`: implementers **must widen the signature**, or PHP refuses the class. With a tenant, a refusal answers 404 on its index and create route. Widening is not enough to narrow a list: return false for a tenant the user may not list.
 
+Beacon: `TasksPlanLimitListener` stays while `issue_task_create` has no other check, because `QUOTA_CHECK` covers the bundle's own routes and imports only. `GeneralBoardOwnerGuard` goes only once the checker compares the tenant. `tasks/index` must go at upgrade. The connection overrides, `TaskConnectionDialogResponse` and `task_connection_controller` stay until TB-5.
+
 **Twig.** `nowo_task_board_btn_class()` is deprecated, use `nowo_ui_class(slot, 'NowoTaskBoardBundle')`.
 
 **Classes and hooks.** All 66 `nowo-task-*` names on Beacon's list were checked one by one against 2.0.0: each is still shipped, as a class in the markup or forms, or as a token in the CSS. That check is by name: it does not prove each class is on the same element or looks the same, so check your own rules on these pages. What goes:
@@ -194,7 +196,7 @@ A layout that renders `{% block body %}` and has no `nowo_ui_page_header` still 
 
 CSS that relied on `.btn`, `.card` or `.page-header` inside task pages must move: on Beacon, `.tasks-views ~ .page-header` and `.page-header:has(~ .nowo-task-sync-people)`. `nowo-task-subtree` is now a `div` with the kit's `ul` inside, so a rule with `.nowo-task-subtree > .nowo-task-subtree__item` stops matching. `nowo-task-dialog__actions` is a `footer` in a dialog. `--tblr-*` no longer reaches these pages: set `--nowo-task-*` or `--nowo-ui-*`, see [THEMING](THEMING.md). `--nowo-task-overlay-blur` now defaults to `0`; it was `2px`.
 
-**Filter fold.** The list's filters fold with the bundle's own controller, on UiKit's markup and its cookie, with no peer to register. A host with the kit's `filters-collapse` peer changes nothing: the peer is only on a host's `templates.filters_collapse`, so the toggle never answers twice. A filter the browser restores on Back or reload is applied and opens the fold, whichever drives it. The count is live; the line is only shown folded. The list's groups still use UiKit's `collapse-panel` peer, as since 1.13: without it they stay open.
+**Filter fold.** The list's filters fold with the bundle's own controller, on UiKit's markup and its cookie, with no peer to register. A host with the kit's `filters-collapse` peer changes nothing: the peer is only on a host's `templates.filters_collapse`, so the toggle never answers twice. A filter the browser restores on Back or reload is applied and opens the fold, whichever drives it. The count is live; the line is only shown folded. A host that sets `templates.filters_collapse` to a partial with the `filters-collapse` controller must register that peer: without it, that toggle does nothing. The list's groups still use UiKit's `collapse-panel` peer, as since 1.13: without it they stay open.
 
 **People stays a declared unique page.** It is one long form with a row per person, its own filter pills and pager, and it saves everything at once. The form scaffold's body-only mode would add only a wrapper, so the page fills the canonical blocks and takes its parts from slots. See [TEMPLATES](TEMPLATES.md#unique-pages).
 

@@ -294,3 +294,40 @@ test('task page: no sideways scroll at 1280 px with a link row', async ({ page }
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(1280);
 });
+
+/** Appendix HXd-L1: a done subtask looks done in the kit's tree. */
+test('task page: a done subtask is grey and struck through', async ({ page }) => {
+  await openBoard(page);
+  const href = await page.locator('.nowo-task-card a[href*="/task/"]').first().getAttribute('href');
+  const parent = href ?? '/';
+  await page.goto(parent);
+  const add = async (title: string): Promise<void> => {
+    await page.locator('input[name="task_form[title]"].nowo-task-inline-add__input').fill(title);
+    await page.locator('.nowo-task-inline-add__input').press('Enter');
+    await expect(page.locator('.nowo-task-subtree [role="treeitem"]', { hasText: title })).toBeVisible();
+  };
+  const stamp = `${test.info().project.name} ${Date.now()}`;
+  await add(`Done ${stamp}`);
+  await add(`Open ${stamp}`);
+
+  await page.locator('.nowo-task-subtree [role="treeitem"]', { hasText: `Done ${stamp}` }).click();
+  await page.locator('button[name="action"][value="done"]').click();
+  await page.waitForLoadState('load');
+  await page.goto(parent);
+
+  const style = (title: string) => page.locator('.nowo-task-subtree__title', { hasText: title }).evaluate((el) => {
+    const css = getComputedStyle(el);
+
+    return { decoration: css.textDecorationLine, color: css.color };
+  });
+  const done = await style(`Done ${stamp}`);
+  const open = await style(`Open ${stamp}`);
+  expect(done.decoration).toContain('line-through');
+  expect(open.decoration).not.toContain('line-through');
+  expect(done.color).not.toBe(open.color);
+
+  // The check of a done subtask is painted with the success colour.
+  const check = (title: string) => page.locator('.nowo-task-subtree__item', { hasText: title }).locator('.nowo-task-subtree__check').first()
+    .evaluate((el) => getComputedStyle(el).color);
+  expect(await check(`Done ${stamp}`)).not.toBe(await check(`Open ${stamp}`));
+});

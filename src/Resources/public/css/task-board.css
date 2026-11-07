@@ -1356,7 +1356,7 @@ details.nowo-task-section[open] > summary,
     color: var(--nowo-task-muted, var(--nowo-ui-muted));
 }
 
-.nowo-task-subtree__item.is-done > a .nowo-task-subtree__check {
+.nowo-task-subtree__item.is-done > .nowo-ui-tree__row .nowo-task-subtree__check {
     color: var(--nowo-task-success, var(--nowo-ui-success-text));
 }
 
@@ -1371,7 +1371,7 @@ details.nowo-task-section[open] > summary,
     text-decoration: underline;
 }
 
-.nowo-task-subtree__item.is-done > .nowo-task-subtree__title {
+.nowo-task-subtree__item.is-done > .nowo-ui-tree__row .nowo-task-subtree__title {
     color: var(--nowo-task-muted, var(--nowo-ui-muted));
     text-decoration: line-through;
 }
