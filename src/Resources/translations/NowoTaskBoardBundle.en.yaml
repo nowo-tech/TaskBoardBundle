@@ -652,3 +652,4 @@ task_board.form.board.scope_refused: "The board cannot be created there."
 task_board.form.board.advanced: "Advanced"
 task_board.board.show_more: "Show more"
 task_board.board.show_less: "Show less"
+task_board.index.views: Views

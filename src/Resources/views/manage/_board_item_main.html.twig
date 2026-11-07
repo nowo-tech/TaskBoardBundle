@@ -1,0 +1,12 @@
+{# Since 2.0.0: the name, tenant and description of a board, shared by _board_list_item and _board_row. board, tenantLabels. #}
+<a class="nowo-task-board-list__name fw-semibold" href="{{ path(nowo_task_board_route('board'), {boardId: board.id}) }}">{% if board.icon %}<span class="nowo-task-board-icon" aria-hidden="true">{{ board.icon }}</span> {% endif %}{{ board.name }}</a>
+{#- Since 1.30.0 (spec 211): tenantLabels from nowo_task_board_tenant_labels(). -#}
+{% set _tenant = board.tenantKey ? (tenantLabels|default({}))[board.tenantKey]|default(null) : null %}
+{% if _tenant %}
+    <span class="nowo-task-board-list__tenant {{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small" data-testid="nowo-task-board-list-tenant">{% if _tenant.icon %}<span aria-hidden="true">{{ _tenant.icon }}</span> {% endif %}{{ _tenant.label }}</span>
+{% endif %}
+{% if board.description and board.descriptionFormat == 'markdown' %}
+    <div class="nowo-task-board-list__description nowo-task-board-list__description--markdown nowo-task-text" data-testid="nowo-task-board-description">{{ nowo_task_board_description(board) }}</div>
+{% elseif board.description %}
+    <p class="nowo-task-board-list__description {{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small nowo-task-mb-0">{{ board.description }}</p>
+{% endif %}

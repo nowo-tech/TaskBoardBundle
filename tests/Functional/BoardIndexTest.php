@@ -31,7 +31,7 @@ final class BoardIndexTest extends FunctionalTestCase
         $crawler = $this->client->request('GET', self::BASE);
         self::assertResponseIsSuccessful();
 
-        $item = $crawler->filter('[data-testid="nowo-task-board-list"] [data-testid="nowo-task-board-list-item"]');
+        $item = $crawler->filter('[data-testid="nowo-task-board-index"] [data-testid="nowo-task-board-list-item"]');
         self::assertCount(1, $item);
         self::assertStringContainsString('Next quarter', $item->text());
         self::assertSame('Views of Roadmap', $item->filter('[role="group"]')->attr('aria-label'));
@@ -47,7 +47,7 @@ final class BoardIndexTest extends FunctionalTestCase
         self::assertCount(1, $dialog);
         self::assertCount(0, $crawler->filter('#nowo-ui-open-modal-on-load'));
         self::assertSame(self::BASE . '/create', $dialog->filter('form')->attr('action'));
-        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-index-empty"]'));
+        self::assertCount(0, $crawler->filter('[data-nowo-ui-region="empty"]'));
 
         // ?new=1 opens it on load (a host's "New board" link).
         $crawler = $this->client->request('GET', self::BASE . '?new=1');
@@ -58,7 +58,7 @@ final class BoardIndexTest extends FunctionalTestCase
     {
         $this->login($this->owner);
         $crawler = $this->client->request('GET', self::BASE);
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-board-index-empty"] [data-testid="nowo-task-board-new-empty"]'));
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="empty"] [data-testid="nowo-task-board-new-empty"]'));
 
         self::$taskBoardConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
         self::ensureKernelShutdown();
@@ -66,7 +66,7 @@ final class BoardIndexTest extends FunctionalTestCase
         $this->login($this->owner);
         $crawler = $this->client->request('GET', self::BASE);
         self::assertResponseIsSuccessful();
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-board-index-empty"]'));
+        self::assertCount(1, $crawler->filter('[data-nowo-ui-region="empty"]'));
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-new"], [data-testid="nowo-task-board-new-empty"], dialog'));
         // ?new=1 does not open a dialog the user cannot use.
         $this->client->request('GET', self::BASE . '?new=1');
@@ -249,7 +249,7 @@ final class BoardIndexTest extends FunctionalTestCase
 
         $this->client->request('GET', '/t/other');
         self::assertResponseIsSuccessful();
-        self::assertSelectorExists('[data-testid="nowo-task-board-index-empty"]');
+        self::assertSelectorExists('[data-nowo-ui-region="empty"]');
         self::assertCount(0, $this->em->getRepository(TaskBoard::class)->findAll());
 
         $this->client->request('GET', '/t/acme');

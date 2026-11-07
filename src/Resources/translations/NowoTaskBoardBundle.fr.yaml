@@ -652,3 +652,4 @@ task_board.form.board.scope_refused: "Le tableau ne peut pas être créé là."
 task_board.form.board.advanced: "Avancé"
 task_board.board.show_more: "Afficher plus"
 task_board.board.show_less: "Afficher moins"
+task_board.index.views: Vues

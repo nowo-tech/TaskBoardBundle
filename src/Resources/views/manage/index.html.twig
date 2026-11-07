@@ -1,15 +1,13 @@
 {#
-    Board index (templates.index). Since 1.24 a list page: the header (title, intro and the actions — New board, which
-    opens the create dialog, for whoever may create a board here), one panel with the board list (name, description,
-    Board / List / Gantt) or an empty state, the New board dialog and its <noscript> copy of the form.
-    Variables: boards, boardForm, dashboardRoute, tenant; since 1.24 canCreateBoard (the create check with the tenant),
-    boardFormFallback (the <noscript> form) and openCreateBoard (the dialog opens on load: ?new=1, or an invalid
-    submission answered 422 with its values and errors).
-    Blocks: nowo_task_board_toolbar (the header), index_actions (the header actions), index_board_item (one board,
-    `board` and `loop` in context), index_empty (no boards).
+    Board index (web_ui.templates.index). Since 2.0.0 on the UiKit list scaffold (TB-4). Variable: page (ListPage from
+    TaskBoardManageController::indexPage(): header with New board as the one primary, a row per board, the empty state).
+    Also boards, boardForm, dashboardRoute, tenant, canCreateBoard, boardFormFallback (the <noscript> form) and openCreateBoard
+    (the dialog opens on load: ?new=1, or an invalid submission answered 422 with its values and errors).
+    Blocks: nowo_ui_list_row (one board, `row` and `loop` in context), nowo_ui_list_after, nowo_ui_modals.
 #}
-{% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
-{% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
+{% extends '@NowoUiKitBundle/page/list.html.twig' %}
+{#- one provider call per list -#}
+{% set _tenant_labels = nowo_task_board_tenant_labels(boards|default([])) %}
 
 {% block nowo_ui_styles %}
     {{ parent() }}
@@ -22,103 +20,53 @@
     <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
-{% block nowo_ui_document_title %}{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
+{% block nowo_ui_list_row %}
+    {{ include('@NowoTaskBoardBundle/manage/_board_row.html.twig', {board: row, tenantLabels: _tenant_labels}) }}
+{% endblock %}
 
-{% block nowo_ui_content %}
-    {# Without canCreateBoard (a page rendered by a 1.23 host controller) the form shows, as before. #}
-    {% set _can_create = canCreateBoard ?? true %}
-    <div class="nowo-task-index" data-testid="nowo-task-board-index">
-        {% block nowo_task_board_toolbar %}
-            <div class="nowo-ui-page-header nowo-task-mb-4">
-                <div class="nowo-task-grid nowo-task-center">
-                    <div class="nowo-task-grow">
-                        <h1 class="nowo-ui-page-title">{{ 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle') }}</h1>
-                        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-mb-0">{{ 'task_board.index.subtitle'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                    </div>
-                    <div class="nowo-task-shrink nowo-task-flex nowo-task-gap nowo-task-wrap nowo-task-index__actions">
-                        {% block index_actions %}
-                            {% if _can_create %}
-                                <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-board-create" aria-haspopup="dialog" data-testid="nowo-task-board-new">
-                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.index.new_board'|trans({}, 'NowoTaskBoardBundle') }}
-                                </button>
-                            {% endif %}
-                            {% if dashboardRoute|default(null) %}
-                                <a href="{{ path(dashboardRoute) }}" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</a>
-                            {% endif %}
-                        {% endblock %}
-                    </div>
+{% block nowo_ui_list_after %}
+    {# Without JavaScript the dialog cannot open: the same form under the list. #}
+    {% if canCreateBoard|default(false) and boardFormFallback is defined and boardFormFallback %}
+        <noscript>
+            <section class="{{ nowo_ui_class('card', page.bundle) }} nowo-task-mt-3" aria-labelledby="nowo-task-board-create-nojs-title">
+                <div class="{{ nowo_ui_class('card_header', page.bundle) }}">
+                    <h2 class="{{ nowo_ui_class('card_title', page.bundle) }}" id="nowo-task-board-create-nojs-title">{{ 'task_board.index.create_board'|trans({}, 'NowoTaskBoardBundle') }}</h2>
                 </div>
-            </div>
-        {% endblock %}
+                <div class="{{ nowo_ui_class('card_body', page.bundle) }}">
+                    {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardFormFallback, id_prefix: 'nojs-'}) }}
+                </div>
+            </section>
+        </noscript>
+    {% endif %}
+{% endblock %}
 
-            <section class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-index__boards" aria-labelledby="nowo-task-index-boards-title" data-testid="nowo-task-board-index-boards">
-            <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
-                <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}" id="nowo-task-index-boards-title">{{ 'task_board.index.your_boards'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-            </div>
-            {% if boards is empty %}
-                {% block index_empty %}
-                    <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }} nowo-task-index__empty" role="status" data-testid="nowo-task-board-index-empty">
-                        <p class="nowo-task-mb-2">{{ 'task_board.index.no_boards'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                        {% if _can_create %}
-                            <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small">{{ 'task_board.index.empty_hint'|trans({}, 'NowoTaskBoardBundle') }}</p>
-                            <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-board-create" aria-haspopup="dialog" data-testid="nowo-task-board-new-empty">
-                                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.index.new_board'|trans({}, 'NowoTaskBoardBundle') }}
-                            </button>
-                        {% endif %}
-                    </div>
-                {% endblock %}
-            {% else %}
-                <ul class="nowo-task-board-list nowo-task-plain-list nowo-task-mb-0" role="list" data-testid="nowo-task-board-list">
-                    {% set tenantLabels = nowo_task_board_tenant_labels(boards) %}
-                    {% for board in boards %}
-                        {% block index_board_item %}
-                            {{ include('@NowoTaskBoardBundle/manage/_board_list_item.html.twig', {board: board, tenantLabels: tenantLabels|default({})}) }}
-                        {% endblock %}
-                    {% endfor %}
-                </ul>
+{% block nowo_ui_modals %}
+    {{ parent() }}
+    {% if canCreateBoard|default(false) %}
+        {% set _body %}
+            {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true, with_actions: false}) }}
+        {% endset %}
+        {% set _footer %}
+            {% if boardForm.scope is defined %}
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', page.bundle) }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
-        </section>
-
-        {% if _can_create %}
-            {% set _body %}
-                {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true, with_actions: false}) }}
-                {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling body. #}
-            {% endset %}
-            {% set _footer %}
-                    {% if boardForm.scope is defined %}
-                        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    {% endif %}
-                    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                    <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-create-submit">
-                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
-                    </button>
-            {% endset %}
-            {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
-                id: 'nowo-task-board-create',
-                title: 'task_board.index.create_board'|trans({}, 'NowoTaskBoardBundle'),
-                bundle: 'NowoTaskBoardBundle',
-                root_class: 'nowo-task-dialog nowo-task-dialog--native',
-                attr: {'data-dialog': 'board-create', 'data-testid': 'nowo-task-board-create-dialog'},
-                body: _body,
-                footer: _footer,
-                footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
-            }, false) }}
-            {% if openCreateBoard|default(false) %}
-                {{ include('@NowoUiKitBundle/partials/_open_modal_on_load.html.twig', {modal: 'nowo-task-board-create', param: false}, with_context: true) }}
-            {% endif %}
-            {# Without JavaScript the dialog cannot open: the same form under the list. #}
-            {% if boardFormFallback is defined and boardFormFallback %}
-                <noscript>
-                    <section class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-mt-3" aria-labelledby="nowo-task-board-create-nojs-title">
-                        <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
-                            <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}" id="nowo-task-board-create-nojs-title">{{ 'task_board.index.create_board'|trans({}, 'NowoTaskBoardBundle') }}</h2>
-                        </div>
-                        <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
-                            {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardFormFallback, id_prefix: 'nojs-'}) }}
-                        </div>
-                    </section>
-                </noscript>
-            {% endif %}
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', page.bundle) }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_ui_class('btn_primary', page.bundle) }}" data-testid="nowo-task-board-create-submit">
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+            </button>
+        {% endset %}
+        {{ include(nowo_ui_partial('dialog', page.bundle), {
+            id: constant('Nowo\\TaskBoardBundle\\Ui\\TaskBoardPages::BOARD_CREATE_DIALOG'),
+            title: 'task_board.index.create_board'|trans({}, 'NowoTaskBoardBundle'),
+            bundle: page.bundle,
+            root_class: 'nowo-task-dialog nowo-task-dialog--native',
+            attr: {'data-testid': 'nowo-task-board-create-dialog'},
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
+        {% if openCreateBoard|default(false) %}
+            {{ include('@NowoUiKitBundle/partials/_open_modal_on_load.html.twig', {modal: constant('Nowo\\TaskBoardBundle\\Ui\\TaskBoardPages::BOARD_CREATE_DIALOG'), param: false}) }}
         {% endif %}
-    </div>
+    {% endif %}
 {% endblock %}

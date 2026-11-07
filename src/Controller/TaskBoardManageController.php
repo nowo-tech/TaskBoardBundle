@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Controller;
 
+use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\UiKitBundle\View\Action;
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\Crumb;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
+use Twig\Environment;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
@@ -190,6 +199,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly TaskBoardQuota $quota = new TaskBoardQuota(),
         private readonly bool $openSingleBoard = false,
         private readonly ?FirstBoardProvisionerInterface $firstBoardProvisioner = null,
+        // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
+        private readonly TaskBoardPages $pages = new TaskBoardPages(),
     ) {
     }
 
@@ -554,7 +565,10 @@ final class TaskBoardManageController extends AbstractController
             throw $this->createAccessDeniedException('Task import denied.');
         }
 
-        $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData());
+        // Since 2.0.0 the form scaffold prints the form, so the form holds its own action.
+        $form = $this->createForm(TaskImportFormType::class, new TaskImportFormData(), [
+            'action' => $this->generateUrl($this->routes['board_import']['name'], ['boardId' => $boardId]),
+        ]);
         $form->handleRequest($request);
 
         /** @var TaskImportFormData $data */
@@ -593,9 +607,27 @@ final class TaskBoardManageController extends AbstractController
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
         }
 
+        $view = $form->createView();
+
         return $this->render($this->templates['import'], [
+            'page' => new FormPage(
+                new PageHeader(
+                    TaskBoardPages::label('task_board.import.title'),
+                    TaskBoardPages::label('task_board.import.subtitle'),
+                    [
+                        Action::route('custom', $this->routes['board']['name'], ['boardId' => $boardId], TaskBoardPages::label('task_board.view.back_board')),
+                        ...($this->dashboardRoute !== null ? [Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'))] : []),
+                    ],
+                    [new Crumb(TaskBoardTwigExtension::boardLabel($board), $this->generateUrl($this->routes['board']['name'], ['boardId' => $boardId]))],
+                    breadcrumbsMode: 'own',
+                ),
+                $view,
+                TaskBoardPages::label('task_board.import.form.submit'),
+                bundle: TaskBoardPages::BUNDLE,
+                layout: $this->pageLayout(),
+            ),
             'board'          => $board,
-            'importForm'     => $form,
+            'importForm'     => $view,
             'dashboardRoute' => $this->dashboardRoute,
         ]);
     }
@@ -1652,6 +1684,7 @@ final class TaskBoardManageController extends AbstractController
         $canCreate = $form->has('scope') || $this->canCreateBoard($user, $tenant?->key);
 
         return $this->render($this->templates['index'], [
+            'page'           => $this->indexPage($boards, $canCreate),
             'boards'         => $boards,
             'boardForm'      => $form,
             'dashboardRoute' => $this->dashboardRoute,
@@ -1661,6 +1694,49 @@ final class TaskBoardManageController extends AbstractController
             'boardFormFallback' => $fallbackForm,
             'openCreateBoard'   => $canCreate && $openCreate,
         ], new Response(status: $status));
+    }
+
+    /**
+     * Since 2.0.0 (TB-4): the view model of the index page.
+     *
+     * @param list<TaskBoard> $boards
+     */
+    private function indexPage(array $boards, bool $canCreate): ListPage
+    {
+        $newBoard = fn (string $testid): Action => new Action(
+            kind: 'create',
+            label: TaskBoardPages::label('task_board.index.new_board'),
+            icon: 'plus',
+            attributes: ['data-testid' => $testid, 'aria-haspopup' => 'dialog'],
+            dialogId: TaskBoardPages::BOARD_CREATE_DIALOG,
+        );
+        $actions = $canCreate ? [$newBoard('nowo-task-board-new')] : [];
+        if ($this->dashboardRoute !== null) {
+            $actions[] = Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'));
+        }
+
+        return new ListPage(
+            new PageHeader(TaskBoardPages::label('task_board.index.title'), TaskBoardPages::label('task_board.index.subtitle'), $actions),
+            [new Column('name', TaskBoardPages::label('task_board.index.your_boards'), required: true), new Column('views', TaskBoardPages::label('task_board.index.views'), align: 'end')],
+            $boards,
+            empty: new EmptyState(
+                TaskBoardPages::label('task_board.index.no_boards'),
+                $canCreate ? TaskBoardPages::label('task_board.index.empty_hint') : null,
+                $canCreate ? $newBoard('nowo-task-board-new-empty') : null,
+            ),
+            bundle: TaskBoardPages::BUNDLE,
+            layout: $this->pageLayout(),
+            attributes: ['data-testid' => 'nowo-task-board-index'],
+            rowAttributes: static fn (): array => ['data-testid' => 'nowo-task-board-list-item'],
+        );
+    }
+
+    /** Since 2.0.0: `page.layout` of the scaffolds. */
+    private function pageLayout(): ?string
+    {
+        $twig = $this->container->get('twig');
+
+        return $twig instanceof Environment ? $this->pages->layout($twig) : null;
     }
 
     /**

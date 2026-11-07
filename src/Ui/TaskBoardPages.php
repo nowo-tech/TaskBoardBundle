@@ -36,6 +36,9 @@ final readonly class TaskBoardPages
     /** The 1.x default of `templates.layout`: the removed bundle layout, read as "no layout override". */
     public const LEGACY_DEFAULT_LAYOUT = '@NowoTaskBoardBundle/layout.html.twig';
 
+    /** Id of the New board dialog of the index page. */
+    public const BOARD_CREATE_DIALOG = 'nowo-task-board-create';
+
     /** A layout that defines this block renders the UiKit canonical blocks. */
     private const CANONICAL_BLOCK = 'nowo_ui_page_header';
 

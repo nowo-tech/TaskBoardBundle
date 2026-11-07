@@ -652,3 +652,4 @@ task_board.form.board.scope_refused: "No se puede crear el tablero ahí."
 task_board.form.board.advanced: "Avanzado"
 task_board.board.show_more: "Mostrar más"
 task_board.board.show_less: "Mostrar menos"
+task_board.index.views: Vistas

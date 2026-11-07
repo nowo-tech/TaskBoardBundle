@@ -1,0 +1,7 @@
+{# Since 2.0.0: one board as the cells of a row of the index page's table. board, tenantLabels. #}
+<td class="{{ nowo_ui_class('table_cell', 'NowoTaskBoardBundle') }} nowo-task-board-list__main" data-label="{{ 'task_board.index.your_boards'|trans({}, 'NowoTaskBoardBundle') }}">
+    {{ include('@NowoTaskBoardBundle/manage/_board_item_main.html.twig') }}
+</td>
+<td class="{{ nowo_ui_class('table_cell', 'NowoTaskBoardBundle') }} nowo-ui-cell--end" data-label="{{ 'task_board.index.views'|trans({}, 'NowoTaskBoardBundle') }}">
+    {{ include('@NowoTaskBoardBundle/manage/_board_item_views.html.twig') }}
+</td>

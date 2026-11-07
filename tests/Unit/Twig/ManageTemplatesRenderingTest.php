@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 
+use Nowo\UiKitBundle\View\Column;
+use Nowo\UiKitBundle\View\EmptyState;
+use Nowo\UiKitBundle\View\FormPage;
+use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
 use DateTimeImmutable;
 use DOMElement;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
@@ -390,6 +395,8 @@ final class ManageTemplatesRenderingTest extends TestCase
     public function testIndexPageRenders(): void
     {
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name'), new Column('views')], [$this->board], bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'canCreateBoard' => true,
             'boards'         => [$this->board],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView(),
             'dashboardRoute' => null,
@@ -1009,6 +1016,8 @@ final class ManageTemplatesRenderingTest extends TestCase
     {
         $set  = new ColumnSet('Kanban');
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name')], [], empty: new EmptyState('task_board.index.no_boards'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'canCreateBoard' => true,
             'boards'         => [],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), ['column_set_choices' => ['Kanban' => $set->getId()]])->createView(),
             'dashboardRoute' => null,
@@ -1042,15 +1051,17 @@ final class ManageTemplatesRenderingTest extends TestCase
 
     public function testImportPageRenders(): void
     {
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
+        $importForm = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData())->createView();
+        $html       = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
+            'page'           => new FormPage(new PageHeader('Roadmap'), $importForm, bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
             'board'          => $this->board,
-            'importForm'     => $this->factory()->create(TaskImportFormType::class, new TaskImportFormData())->createView(),
+            'importForm'     => $importForm,
             'dashboardRoute' => null,
         ]);
 
         self::assertStringContainsString('Roadmap', $html);
         // Since 1.18: the help modal says what each format imports, with the own format's columns and examples.
-        self::assertStringContainsString('data-dialog="import-help"', $html);
+        self::assertStringContainsString('data-nowo-ui-dialog-open="nowo-task-import-help-board-' . $this->board->getId() . '"', $html);
         self::assertStringContainsString('task_board.import.help.intro_board', $html);
         self::assertStringContainsString('task_board.import.help.col_depends_on', $html);
         self::assertStringContainsString('task_board.import.help.source_trello_json', $html);
