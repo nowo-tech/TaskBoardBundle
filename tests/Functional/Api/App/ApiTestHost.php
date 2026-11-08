@@ -44,7 +44,7 @@ use function in_array;
  */
 final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiTimeEntriesInterface, TaskApiAttachmentsInterface
 {
-    /** @var array<string, array{email: string, level: TaskApiLevel, where: TaskApiWhere, id: string}> */
+    /** @var array<string, array{email: string, level: TaskApiLevel, where: TaskApiWhere, id: string, channel?: string}> */
     public static array $tokens = [];
 
     public static bool $apiDisabled = false;
@@ -124,7 +124,7 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
         }
 
         // An opaque id per token, never the secret.
-        return new TaskApiPrincipal($user, $token['level'], $token['where'], hash('sha256', 'token-id|' . $token['email'] . '|' . $token['id']), 'token name');
+        return new TaskApiPrincipal($user, $token['level'], $token['where'], hash('sha256', 'token-id|' . $token['email'] . '|' . $token['id']), 'token name', $token['channel'] ?? TaskApiPrincipal::CHANNEL_API);
     }
 
     public function consume(TaskApiPrincipal $principal): TaskApiRateLimitState

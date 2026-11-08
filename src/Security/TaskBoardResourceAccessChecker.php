@@ -149,6 +149,30 @@ final readonly class TaskBoardResourceAccessChecker
         return $this->canEditTask($user, $task) && ($this->sameUser($user, $entry->getUser()) || $this->canManageBoard($user, $task->getBoard()));
     }
 
+    /**
+     * Since 2.4.0 (spec 213): whether the user may log time on the task through the Task API. The host answers the
+     * {@see TaskAccessCheckEvent::ACTION_TRACK_TIME} decision of TASK_ACCESS_CHECK: grant() allows it without the edit
+     * right, deny() refuses it even to an editor. With no answer (or a grant marked read-only) the edit right decides,
+     * so a host that does not look at the action keeps the behaviour it had before. View access is always required.
+     */
+    public function canTrackTime(object $user, Task $task): bool
+    {
+        if (!$this->canViewTask($user, $task)) {
+            return false;
+        }
+
+        $event = new TaskAccessCheckEvent($user, $task, TaskAccessCheckEvent::ACTION_TRACK_TIME);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ACCESS_CHECK);
+        if ($event->isDenied()) {
+            return false;
+        }
+        if ($event->isGranted() && !$event->isReadOnly()) {
+            return true;
+        }
+
+        return $this->canEditTask($user, $task);
+    }
+
     public function canEditTask(object $user, Task $task): bool
     {
         $event = $this->resolveTaskAccess($user, $task);

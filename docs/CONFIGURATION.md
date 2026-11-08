@@ -219,7 +219,7 @@ Events dispatched by `TaskBoardResourceAccessChecker` (requires the `event_dispa
 |-------|----------|---------|
 | `BoardListQueryEvent` | `TaskBoardEvents::BOARD_LIST_QUERY` | Replace the candidate board list on the index (`overrideList()`); the result is still filtered by board access |
 | `BoardAccessCheckEvent` | `TaskBoardEvents::BOARD_ACCESS_CHECK` | `grant()` / `deny()` board access; `isDefaultGranted()` exposes the built-in decision |
-| `TaskAccessCheckEvent` | `TaskBoardEvents::TASK_ACCESS_CHECK` | `grant()` / `deny()` task access; `markReadOnly()` blocks every mutation on the task (403) while keeping it viewable |
+| `TaskAccessCheckEvent` | `TaskBoardEvents::TASK_ACCESS_CHECK` | `grant()` / `deny()` task access; `markReadOnly()` blocks every mutation on the task (403) while keeping it viewable. Since 2.4.0, `getAction()`: `ACTION_VIEW` (default) or `ACTION_TRACK_TIME` (logging time through the Task API; no answer falls back to the edit right) |
 | `ColumnSetQueryEvent` (1.11) | `TaskBoardEvents::COLUMN_SET_QUERY` | Scope of the column sets listed and saved (`setScopeKey()`; default the board's tenant key, null without tenancy) or `overrideList()`; dispatched by `ColumnSetManager` |
 | `ColumnSetAccessCheckEvent` (1.11) | `TaskBoardEvents::COLUMN_SET_ACCESS_CHECK` | `grant()` / `deny()` deleting a column set; default: its creator or a `security.manage_roles` role |
 

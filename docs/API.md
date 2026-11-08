@@ -44,7 +44,7 @@ The bundle stores no tokens. `api.hooks.authenticator` is required with `enabled
 | `attachments` | `TaskApiAttachmentsInterface` | 403 `FILE_001` |
 | `idempotency_store` | `TaskApiIdempotencyStoreInterface` | The bundle's store, when writes arrive |
 
-A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write.
+A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write. Since 2.4.0 the event's `channel` (from `TaskApiPrincipal::$channel`) says where the call came from: `api` (default) or `mcp`, when the host's authenticator builds the principal for its MCP server with `channel: TaskApiPrincipal::CHANNEL_MCP`, derived from the call path and never from anything the client sends. The channel is a lowercase label (`[a-z][a-z0-9_]{0,31}`, else `InvalidArgumentException`) and changes no access decision.
 
 ## Firewall
 
@@ -82,6 +82,12 @@ Levels are not a chain: *Read* changes nothing, while *My tasks* works on its ow
 **Tenancy.** With `tenancy.enabled`, a board is reached only when the bundle's tenant resolver opens its tenant for the person (the slug being the key), as the UI asks of the tenant in its URL, whatever the workspace hook answers. A board without a tenant is not served then, as in the UI.
 
 **Notes for hosts.** The security-user check compares ids, not classes: a firewall user of another class with the same id would pass, so use one user class for the API's firewall. An `access_control` refusal on the API's path answers 403 `ACCESS_002`, not 401: add none there. A token whose user the access checker refuses answers 401 like a bad token and counts as a failed token.
+
+### Logging time
+
+Since 2.4.0, `POST /v2/team/{team_id}/time_entries` with a `tid` checks `TaskBoardResourceAccessChecker::canTrackTime()` where other task writes check `canEditTask()`. It dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`): `grant()` allows a person who may view the task to log time on it without editing it, `deny()` refuses an editor too (403 `ACCESS_002`) and sticks against a later listener's `grant()`, and with no answer (or a grant marked read-only) the edit right decides, as before 2.4.0. Reach and level are checked first, as for every task: *My tasks* logs time on its own tasks only, *Read* is refused (`TOKEN_001`). Listing time needs only the read level and is unchanged; deleting time is always refused; there is no update route.
+
+A `track_time` grant ignores a read-only board (as any explicit task grant does), so a listener that freezes boards should check that itself. A read-only mark from any listener on the `track_time` event cancels the grant and falls back to the edit right: listeners that mark tasks read-only should return early on `ACTION_TRACK_TIME` when the grant should apply. The task page's *Log time* form still needs the edit right.
 
 ## Read endpoints
 
@@ -126,7 +132,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
 | `POST /v2/checklist/{id}/checklist_item`, `PUT`, `DELETE …/checklist_item/{item}` | My tasks (own) | An item is a subtask tagged `checklist:<name>`, counted against the plan's active tasks. `resolved` moves it to the done column or back to the first. *My tasks* assigns an item only to its own person. Deleting archives it. Items are edited under the parent task's right, whoever created them; any editor who tags a subtask `checklist:<name>` makes it an item, visible to a *My tasks* token of the parent |
 | `POST /v2/task/{id}/attachment` | Tasks | Multipart, field `attachment`. The host stores it through `TaskApiAttachmentsInterface`, with all its upload checks (content sniffing, plan storage, sizes); its refusal is the answer. The file's bytes are part of an idempotency key's request |
-| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
+| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. With `tid`, the person needs the time-tracking decision, not the edit right (since 2.4.0; see [Logging time](#logging-time)). Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
 ## Management endpoints (Full)

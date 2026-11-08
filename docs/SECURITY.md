@@ -75,7 +75,8 @@
 
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
-3. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+3. **Logging time through the Task API** (since 2.4.0) — `canTrackTime()`: view access plus the host's `TaskAccessCheckEvent::ACTION_TRACK_TIME` decision; with no answer (or a grant marked read-only), the edit right, as before. `deny()` refuses even an editor and sticks against a later `grant()`.
+4. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
 
 ## Provider sync: host duties and known limits
 
@@ -227,6 +228,8 @@ Off unless `api.enabled: true`. Audit IA (2026-11-08): Pass-Low at `637494e`: in
 | Writes skipping the UI's rules | The UI's services and the forms' constraints (`TaskConstraints`); the plan limit refused when no `QUOTA_CHECK` listener answers; an unaudited write refused (503) |
 | A retry writing twice, or a replay leaking | Idempotency keys per token, hashed; the request (method, path, query, body, upload bytes, name and type) fingerprinted; refusals not kept; a replay re-checks the token and the reach |
 | Tracked time lost | Deleting tasks and boards keeps time, detached; deleting time is never offered (403) |
+| Telling MCP calls apart in the audit (2.4.0, spec 219) | `TaskApiPrincipal::$channel` (`api` default, `mcp` set by the host's authenticator) reaches `TaskApiWriteEvent::$channel`. It is a label for the audit only, set by the host from the call path (never from client input), limited to `[a-z][a-z0-9_]{0,31}`, and grants nothing. Appendix II |
+| Time logged by someone who may not (2.4.0) | `POST …/time_entries` with a `tid` asks `canTrackTime()`: view access, the token's level (My tasks: own tasks only), then the host's `track_time` decision, else the edit right. A listener blind to the action answers it as it answers viewing, so the old result holds; only a listener that grants `track_time` on purpose widens it, to time logging only. A `track_time` deny sticks against a later grant (II-L1). The grant ignores a read-only board and is cancelled by any read-only mark (II-I1, II-I2). The task page's *Log time* form still uses the edit right, and the TimeTrack bridge its own rule (II-I3). Appendix II |
 | Provider data | Provider connections are never reachable; linked tasks and boards are not deleted; stored files of an erased task are named to the host |
 | Raw task text | Returned as stored: an API reader sees the alt text and id of an embedded host image the UI hides; the file stays behind the host's download check |
 

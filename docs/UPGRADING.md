@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.4.0](#to-240)
 - [To 2.3.1](#to-231)
 - [To 2.3.0](#to-230)
   - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
@@ -159,6 +160,37 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.4.0
+
+No schema or configuration change. **A host that changes nothing keeps today's behaviour exactly**: logging time on a task through the Task API still needs the edit right, and every audit event reports the `api` channel.
+
+Spec 213 (Beacon decision D-20261108-13): `POST /v2/team/{team_id}/time_entries` with a `tid` now asks `TaskBoardResourceAccessChecker::canTrackTime()`, which dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`):
+
+- `grant()`: the person may log time on the task without the edit right (for example a project member who may use the timer);
+- `deny()`: refused (403 `ACCESS_002`) even to an editor. For `track_time` the deny sticks: a `grant()` from a listener that runs later (lower priority) does not clear it;
+- no answer, or `grant()` with `markReadOnly()`: the edit right decides, as before.
+
+The person must still see the task, and the token's level still applies (*My tasks*: its own tasks only; *Read*: refused). Deleting time stays refused.
+
+**MCP channel (spec 219).** `TaskApiPrincipal` takes an optional trailing `channel` argument: `TaskApiPrincipal::CHANNEL_API` (default) or `CHANNEL_MCP`. An authenticator that builds principals as before reports `api`; one serving an in-process MCP caller passes `channel: TaskApiPrincipal::CHANNEL_MCP`, and the `API_WRITE` audit listener reads `$event->channel`. Nothing else changes; access is decided exactly as for `api`. The channel must match `[a-z][a-z0-9_]{0,31}` (else `InvalidArgumentException`). Derive `mcp` from the call path (your in-process MCP server), never from a header, claim or body field the client sends.
+
+**Check your `TASK_ACCESS_CHECK` listeners.** The event is now dispatched a second time for a time log, with `getAction()` returning `track_time`. A listener that ignores the action gives the same answer for both and keeps the old result. A listener that should answer only for viewing must return early when `$event->getAction() !== TaskAccessCheckEvent::ACTION_VIEW`. To let time trackers log time:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::TASK_ACCESS_CHECK)]
+public function onTaskAccess(TaskAccessCheckEvent $event): void
+{
+    if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME && $this->mayTrackTime($event->getSubject(), $event->getTask())) {
+        $event->grant();
+    }
+}
+```
+
+Two things to know when you write that listener:
+
+- **A `track_time` grant ignores a read-only board**, as any explicit task grant does: a `BOARD_ACCESS_CHECK` `markReadOnly()` (a frozen or closed project) does not stop it. If time must not be logged on such boards, check that in `mayTrackTime()`.
+- **A read-only mark from any listener cancels the grant.** `markReadOnly()` cannot be undone, and a `track_time` grant marked read-only falls back to the edit right. A listener that marks tasks read-only (for example "guests are read-only") without looking at the action does so for `track_time` too; make it return early on `TaskAccessCheckEvent::ACTION_TRACK_TIME` if your grant should apply.
 
 ## To 2.3.1
 

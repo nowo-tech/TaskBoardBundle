@@ -80,16 +80,7 @@ final readonly class TaskApiGuard
      */
     public function task(TaskApiPrincipal $principal, string $taskId, TaskApiCapability $capability): Task
     {
-        $task = $this->tasks->findById($taskId);
-        if (
-            !$task instanceof Task
-            || !$this->reachesBoard($principal, $task->getBoard())
-            || !$this->access->canViewTask($principal->user, $task)
-            || ($principal->level === TaskApiLevel::MyTasks && !$this->isOwn($principal->user, $task))
-        ) {
-            throw TaskApiRefusal::notFound();
-        }
-        $this->requirePlanAndLevel($principal, $task->getBoard()->getTenantKey(), $capability);
+        $task = $this->reachableTask($principal, $taskId, $capability);
 
         $allowed = match ($capability) {
             TaskApiCapability::ReadOwn, TaskApiCapability::ReadEverything  => true,
@@ -100,6 +91,44 @@ final readonly class TaskApiGuard
         if (!$allowed) {
             throw TaskApiRefusal::permissionRefused();
         }
+
+        return $task;
+    }
+
+    /**
+     * Since 2.4.0 (D-20261108-13): the task a token logs time on. Reach and level as {@see TaskApiCapability::WorkOnTask}
+     * (My tasks: its own tasks only; Read: refused); the person needs the time-tracking decision
+     * ({@see TaskBoardResourceAccessChecker::canTrackTime()}), which falls back to the edit right when the host does not answer.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function taskToTrackTime(TaskApiPrincipal $principal, string $taskId): Task
+    {
+        $task = $this->reachableTask($principal, $taskId, TaskApiCapability::WorkOnTask);
+        if (!$this->access->canTrackTime($principal->user, $task)) {
+            throw TaskApiRefusal::permissionRefused();
+        }
+
+        return $task;
+    }
+
+    /**
+     * Steps 1 to 3: out of reach is 404, then the plan, then the level.
+     *
+     * @throws TaskApiRefusal
+     */
+    private function reachableTask(TaskApiPrincipal $principal, string $taskId, TaskApiCapability $capability): Task
+    {
+        $task = $this->tasks->findById($taskId);
+        if (
+            !$task instanceof Task
+            || !$this->reachesBoard($principal, $task->getBoard())
+            || !$this->access->canViewTask($principal->user, $task)
+            || ($principal->level === TaskApiLevel::MyTasks && !$this->isOwn($principal->user, $task))
+        ) {
+            throw TaskApiRefusal::notFound();
+        }
+        $this->requirePlanAndLevel($principal, $task->getBoard()->getTenantKey(), $capability);
 
         return $task;
     }
