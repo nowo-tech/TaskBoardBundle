@@ -156,7 +156,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.2.0
 
-Not released yet. Audit IA (2026-11-08): Pass-Low at `<final>`.
+Not released yet. Audit IA (2026-11-08): Pass-Low at `637494e`.
 
 ```bash
 composer update nowo-tech/task-board-bundle

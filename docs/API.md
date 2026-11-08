@@ -1,6 +1,6 @@
 # Task API
 
-A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit IA (2026-11-08): Pass-Low at `<final>`.**
+A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit IA (2026-11-08): Pass-Low at `637494e`.**
 
 ## Table of contents
 

@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `<final>`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
+Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `637494e`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
 
 ### Added
 
