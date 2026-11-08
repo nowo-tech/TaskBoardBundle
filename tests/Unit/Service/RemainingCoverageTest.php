@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -188,8 +189,13 @@ final class RemainingCoverageTest extends TestCase
         self::assertNull($manager->getColumnNavigation($noColumnTask)->currentColumnName);
         self::assertNull($manager->getColumnNavigation($orphanTask)->currentColumnName);
 
-        $manager->update($orphanTask, new TaskFormData(title: 'Orphan', columnId: 'missing-column'), $user);
-        self::assertNull($orphanTask->getColumn());
+        // Since 2.2.1: an unknown column is refused instead of leaving the task without one.
+        try {
+            $manager->update($orphanTask, new TaskFormData(title: 'Orphan', columnId: 'missing-column'), $user);
+            self::fail('An unknown column should be refused.');
+        } catch (ColumnNotFoundException) {
+        }
+        self::assertSame($orphanCol, $orphanTask->getColumn());
 
         $bareBoard = new TaskBoard('Bare', 'bare', $user);
         $bareTask  = new Task($bareBoard, 'Lonely', $user);

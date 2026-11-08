@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.2.1] - 2026-11-08](#221---2026-11-08)
 - [[2.2.0] - 2026-11-08](#220---2026-11-08)
 - [[2.1.1] - 2026-11-07](#211---2026-11-07)
 - [[2.1.0] - 2026-11-07](#210---2026-11-07)
@@ -95,6 +96,17 @@ Spec 217 (move and duplicate tasks between boards). Audit status: re-verificatio
 - **Move to another board** (`Move\TaskMovePlanner`, `Move\TaskMover`): the task and its whole subtree change board in one transaction, exactly as the plan said (columns by the sync's name rule, completed tasks to the last column, members not assignable and dependencies with tasks that stay removed, a subtask moved alone becomes top-level). Tracked time is never deleted: manual entries take the new board as their snapshot. A synced task is detached for good (its sync item becomes a tombstone), and a move waits for a running sync. `QUOTA_CHECK` gets the new action `task_move` for the open tasks that arrive. New event `TASK_BOARD_CHANGED` (`TaskBoardChangedEvent`, with every task id) after the commit; `TASK_MOVED` is not dispatched.
 - **Pages** with `move.enabled`: `task_move_board` and `task_duplicate` (GET choices, POST confirmation with a per-form CSRF token and the preview's fingerprint; a stale preview is shown again with a notice). Both work without JavaScript. The task panel shows *Move to another board* and *Duplicate* only to who may edit the task and its board. `move.targets`: a host's `TaskBoardTargetsInterface` decides the boards offered; any other target answers 404.
 - `TaskChangeType::BoardMoved`, `Duplicated`, `MemberNotCopied`; `Task::changeBoard()` (internal); `TaskMemberAssigner::canBeAssigned()`.
+
+## [2.2.1] - 2026-11-08
+
+Target: 2.2.1. Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`).
+
+### Fixed
+
+- **A column change through the task's edit form is a move.** `TaskManager::update()` changed the column without the completion sync, the reopen limit or the completed / reopened events of `moveToColumn()`: an edit form posting another column (a host template that shows the column field, or a page left open while someone else moved the task) reopened a completed task past the host's limit of active tasks, left a task in the done column open, and fired no `TASK_COMPLETED` / `TASK_REOPENED`. It now asks the limit before anything changes (`TaskReopenRefusedException`: the edit form shows the board's "not moved" flash, logs `task_reopen_limit` and saves nothing of the form), puts the task at the end of its new column, syncs the completion with its history, and fires `TASK_COMPLETED` / `TASK_REOPENED` after `TASK_UPDATED` and `TASK_MOVED`. Callers that move first (the Task API) pass the current column, so nothing fires twice. Import and provider sync do not use this path and keep their rules.
+- **A stale task page no longer moves the task back.** The edit form posts the column it was rendered with (`columnIdShown`, new opt-in `TaskFormType` option `shown_column`, on for the edit form); the column changes only when the posted column differs from it, so a page left open while the task moved keeps the task where it is now. A host template that does not post the field (a `form_end` without `render_rest`) gets the posted column, as before.
+- **An unknown column is refused.** `TaskManager::update()` with a `columnId` that is not the board's left the task without a column; it now throws `ColumnNotFoundException` before anything changes, and the edit form shows the column's validation error next to the status (it is no longer bubbled to the form, where the task page did not show it).
+- **A write of fields never moves a task (audit IB-L1).** `TaskFormData::fromTask()` now sets `keepsColumn`: a null column then keeps the task's own, even none, instead of choosing the first column, so a Task API rename, tag or checklist write of a completed task without a column no longer became a reopening move. Every Task API write that the host's limit refuses after the first check (the limit changed in between) answers 403 `PLAN_002`, not 500. The edit form, which builds its own data, still sends a column-less task to the first column when it posts no column.
 
 ## [2.2.0] - 2026-11-08
 
@@ -1888,7 +1900,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.2.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

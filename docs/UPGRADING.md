@@ -6,6 +6,7 @@
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To the next release (unreleased)](#to-the-next-release-unreleased)
   - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
+- [To 2.2.1](#to-221)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
@@ -170,9 +171,24 @@ Audit status: re-verification pending.
 4. **Strings and icons.** `task_board.copy.*` in the bundle's 7 locales. A host on `ux_icon` imports `tabler:arrows-move` and `tabler:copy`.
 5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` keeps `remote_meta` and `custom_id` as a tombstone (task null). The task panel no longer shows them for that task.
 
+## To 2.2.1
+
+Not released yet. Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`).
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+**Behaviour change: a column change through the task's edit form is a move.** Nothing to configure. `TaskManager::update()` (the edit form's save) now does what `moveToColumn()` does when the column changes:
+
+- With a host limit (`sync.limit_checker`), moving a completed task out of the done column asks it first. A refusal throws `TaskReopenRefusedException` before anything changes: the edit form shows "The task was not moved…", logs `task_reopen_limit`, and saves **none** of the form's fields. Before, the edit passed and the task reopened over the limit.
+- Moving into the done column completes the task (with its history entry) and fires `TASK_COMPLETED`; moving out reopens it and fires `TASK_REOPENED`, after `TASK_UPDATED` and `TASK_MOVED`. The task goes to the end of its new column.
+
+A host that calls `TaskManager::update()` itself with another column catches `TaskReopenRefusedException`, as it does around `move()` and `moveToColumn()`. A host that moves first and then calls `update()` passes the task's current column (as the Task API does): then nothing fires twice. **Stale pages.** The edit form also posts `columnIdShown`, the column the page was rendered with, and the column changes only when the posted column differs from it: a task page left open while someone moved the task no longer moves it back. `_task_blocks.html.twig` renders the field next to the hidden column; a host that overrides that template gets it from `form_end(taskForm)` unless it passes `render_rest: false`. Such a host adds `{% if taskForm.columnIdShown is defined %}{{ form_widget(taskForm.columnIdShown) }}{% endif %}` inside the form; until then its edits keep the posted column, as in 2.2.0 (with the limit and events above). The template also renders `form_errors(taskForm.columnId)`: a column that is not the board's is a validation error on the field (422), and `TaskManager::update()` called with such a column throws `ColumnNotFoundException` instead of leaving the task without a column.
+
 ## To 2.2.0
 
-Not released yet. Audit IA (2026-11-08): Pass-Low at `637494e`.
+Released 2026-11-08 (`9790f25`). Audit IA (2026-11-08): Pass-Low at `637494e`.
 
 ```bash
 composer update nowo-tech/task-board-bundle

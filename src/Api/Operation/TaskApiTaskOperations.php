@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
@@ -158,16 +159,16 @@ final readonly class TaskApiTaskOperations
 
         // Both ask the limit again; it was asked above for both together.
         $changed = [];
-        if ($archived === false && $this->tasks->restore($task, $principal->user)) {
+        if ($archived === false && $this->withinPlan(fn (): bool => $this->tasks->restore($task, $principal->user))) {
             $changed[] = 'archived';
         }
-        if ($status instanceof BoardColumn && $this->tasks->moveToColumn($task, $status->getId(), $principal->user)) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user))) {
             $changed[] = 'status';
         }
         // The column is where the move left it: update() must never move the task (it would skip completion and its events).
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->tasks->update($task, $data, $principal->user);
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user));
             $changed[] = 'fields';
         }
         foreach ([TaskMemberRole::Assignee, TaskMemberRole::Watcher] as $role) {
@@ -270,7 +271,7 @@ final readonly class TaskApiTaskOperations
         $data->tags = $add
             ? $this->tags([...$task->getTags(), $name])
             : array_values(array_filter($task->getTags(), static fn (string $tag): bool => mb_strtolower($tag) !== mb_strtolower($name)));
-        $this->tasks->update($task, $data, $principal->user);
+        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user));
         $this->audit->written($principal, $add ? 'tag.add' : 'tag.remove', $task->getBoard(), $taskId, [], ['tags']);
 
         return $task;
@@ -463,6 +464,27 @@ final readonly class TaskApiTaskOperations
     {
         if ($this->validator->validate($value, $constraints)->count() > 0) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid ' . $field);
+        }
+    }
+
+    /**
+     * Since 2.2.1 (audit IB-L1): the host's limit refusing a write after the checks above (it changed in between) is 403
+     * `PLAN_002`, never a 500.
+     *
+     * @template T
+     *
+     * @param callable(): T $write
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return T
+     */
+    private function withinPlan(callable $write): mixed
+    {
+        try {
+            return $write();
+        } catch (TaskReopenRefusedException) {
+            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
         }
     }
 }

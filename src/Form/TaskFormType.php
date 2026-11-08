@@ -86,11 +86,20 @@ final class TaskFormType extends AbstractType
         if ($compact) {
             $this->addWithDefaults($builder, 'columnId', HiddenType::class, []);
         } elseif ($columnChoices !== []) {
+            $shown = (bool) $options['shown_column'];
             $this->addChoice($builder, 'columnId', [
                 'label'    => 'task_board.form.task.column',
                 'choices'  => $columnChoices,
                 'required' => false,
-            ]);
+            ] + ($shown ? ['error_bubbling' => false] : []));
+            if ($shown) {
+                // Since 2.2.1: the column the page was rendered with, so a stale page does not move the task back.
+                $data = $options['data'] ?? null;
+                $this->addWithDefaults($builder, 'columnIdShown', HiddenType::class, [
+                    'mapped' => false,
+                    'data'   => $data instanceof TaskFormData ? (string) $data->columnId : '',
+                ]);
+            }
         }
 
         if (!$compact) {
@@ -165,11 +174,14 @@ final class TaskFormType extends AbstractType
             'data_class'     => TaskFormData::class,
             'column_choices' => [],
             'compact'        => false,
+            // Since 2.2.1 (the edit form): also posts the column the page showed; a column error shows on the field.
+            'shown_column' => false,
             // Rich widgets only when the optional bundles are installed (avoids "Could not load type").
             'rich_description'   => class_exists(TiptapEditorType::class),
             'tag_input'          => class_exists(TagType::class),
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
         ]);
+        $resolver->setAllowedTypes('shown_column', 'bool');
         $resolver->setAllowedTypes('rich_description', 'bool');
         $resolver->setAllowedTypes('tag_input', 'bool');
     }
