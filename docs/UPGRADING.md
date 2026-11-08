@@ -162,7 +162,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.3.1
 
-No schema or configuration change. A move that hits a lock conflict now always ends as "changed since" (`stale`), never a 500: PostgreSQL's `lock_timeout` (SQLSTATE `55P03`) and a MySQL deadlock raised during the flush are mapped too. A move that fails after it started to change the entities closes the entity manager, so a `flush()` later in the same request (a host listener on the error, for example) throws `EntityManagerClosed` instead of writing part of the move; see "Locks" in [To 2.3.0](#to-230).
+No schema or configuration change. A move that hits a lock conflict now always ends as "changed since" (`stale`), never a 500: PostgreSQL's `lock_timeout` (SQLSTATE `55P03`) and a MySQL deadlock raised during the flush are mapped too. A move that fails after it started to change the entities closes the entity manager, so a `flush()` later in the same request (a host listener on the error, for example) throws `EntityManagerClosed` instead of writing part of the move; see "Locks" in [To 2.3.0](#to-230). A host that calls `TaskMover::move()` inside its own transaction gets the driver's lock error (not `stale`): the move rolls back only its own levels and never closes the connection, and the host decides about its transaction (after a MySQL deadlock the server has already rolled it back, so roll it back and retry the whole unit of work).
 
 ## To 2.3.0
 

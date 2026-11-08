@@ -173,6 +173,102 @@ final class MoveLockFailureTest extends CopyTestCase
         self::assertSame($source->getId(), $connection->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
     }
 
+    public function testInsideACallersTransactionALockConflictReachesTheCaller(): void
+    {
+        // Audit IG-L1 / IG-I3: the caller owns its transaction, so a lock conflict is its driver error, not `stale`. The
+        // move rolled back its own savepoint: the caller's earlier write is still there and the caller can commit it.
+        [$task, $target, $plan, $source] = $this->movable();
+        $connection                      = $this->em->getConnection();
+        $connection->beginTransaction();
+        $this->board('Host write');
+        $this->failDuringFlush(new DeadlockException(self::driverException('Deadlock found when trying to get lock', '40001', 1213), null));
+        try {
+            $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner);
+            self::fail('The lock conflict must reach the caller.');
+        } catch (DeadlockException) {
+        }
+        self::assertSame(1, $connection->getTransactionNestingLevel(), 'the caller\'s transaction is still open');
+        $connection->commit();
+        self::assertSame(1, (int) $connection->fetchOne('SELECT COUNT(*) FROM task_board_boards WHERE name = ?', ['Host write']));
+        self::assertSame($source->getId(), $connection->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
+    }
+
+    public function testInsideACallersTransactionTheConnectionIsNeverClosed(): void
+    {
+        // Audit IG-L1: the server ended the whole transaction during the flush (a MySQL deadlock rolls back the caller's
+        // writes too), so the savepoint rollback fails. The move neither closes the connection nor answers `stale`: the
+        // caller still sees its transaction level and gets the driver error, so none of its later writes autocommit.
+        [$task, $target, $plan] = $this->movable();
+        $connection             = $this->em->getConnection();
+        $connection->beginTransaction();
+        $this->em->getEventManager()->addEventListener(Events::postUpdate, new class($connection) {
+            private bool $done = false;
+
+            public function __construct(private readonly Connection $connection)
+            {
+            }
+
+            public function postUpdate(): void
+            {
+                if ($this->done) {
+                    return;
+                }
+                $this->done = true;
+                $this->connection->executeStatement('ROLLBACK');
+
+                throw new DeadlockException(MoveLockFailureTest::driverException('Deadlock found when trying to get lock', '40001', 1213), null);
+            }
+        });
+        try {
+            $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner);
+            self::fail('The failure must reach the caller.');
+        } catch (TaskCopyRefusedException) {
+            self::fail('Not `stale` inside a caller\'s transaction.');
+        } catch (DbalException) {
+        }
+        self::assertTrue($connection->isConnected(), 'the connection was not closed');
+        self::assertGreaterThan(0, $connection->getTransactionNestingLevel(), 'the caller still has a transaction to end');
+        self::assertFalse($this->em->isOpen());
+        $connection->close();
+    }
+
+    public function testInsideACallersTransactionARealLockTimeoutKeepsTheCallersWork(): void
+    {
+        // Audit IG-I3: PostgreSQL 55P03 and MySQL 1205 (innodb_rollback_on_timeout off) end only the move's savepoint;
+        // the caller's transaction and its earlier write survive and commit.
+        $url = FunctionalKernel::databaseUrl();
+        if (str_starts_with($url, 'sqlite')) {
+            self::markTestSkipped('Row locks need MySQL or PostgreSQL.');
+        }
+        [$task, $target, $plan, $source] = $this->movable();
+
+        $mysql = str_starts_with($url, 'mysql');
+        $other = DriverManager::getConnection((new DsnParser(['mysql' => 'pdo_mysql', 'postgresql' => 'pdo_pgsql']))->parse($url));
+        $other->beginTransaction();
+        $other->fetchOne('SELECT id FROM task_board_tasks WHERE id = ? FOR UPDATE', [$task->getId()]);
+        $connection = $this->em->getConnection();
+        $connection->executeStatement($mysql ? 'SET SESSION innodb_lock_wait_timeout = 1' : "SET lock_timeout = '300ms'");
+        $connection->beginTransaction();
+        $this->board('Host write');
+        try {
+            $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner);
+            self::fail('The lock timeout must reach the caller.');
+        } catch (TaskCopyRefusedException) {
+            self::fail('Not `stale` inside a caller\'s transaction.');
+        } catch (DriverException $failure) {
+            self::assertTrue($mysql ? $failure instanceof LockWaitTimeoutException : $failure->getSQLState() === '55P03', $failure->getMessage());
+        } finally {
+            $other->rollBack();
+            $other->close();
+        }
+        self::assertSame(1, $connection->getTransactionNestingLevel());
+        self::assertTrue($this->em->isOpen());
+        $connection->commit();
+        $connection->executeStatement($mysql ? 'SET SESSION innodb_lock_wait_timeout = DEFAULT' : 'SET lock_timeout = DEFAULT');
+        self::assertSame(1, (int) $connection->fetchOne('SELECT COUNT(*) FROM task_board_boards WHERE name = ?', ['Host write']));
+        self::assertSame($source->getId(), $connection->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
+    }
+
     public static function driverException(string $message, ?string $sqlState = null, int $code = 0): AbstractException
     {
         return new class($message, $sqlState, $code) extends AbstractException {

@@ -91,8 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Move: every lock conflict is "changed since"** (audit IC-I9r a, b). PostgreSQL's `lock_timeout` (SQLSTATE `55P03`, not mapped by Doctrine DBAL) and a MySQL deadlock raised during the flush (whose `ROLLBACK TO SAVEPOINT` fails with 1305 because InnoDB already rolled back) are answered as `stale` instead of a 500; nothing is written. In the second case the connection is closed to reset DBAL's transaction nesting level. Other driver errors still reach the caller.
-- **Move: no half-applied move after a failure** (audit IC-I9r c). Once the move has started to change the entities, any failure closes the entity manager, so a later `flush()` in the same request cannot write part of the move outside the rolled-back transaction. A refusal before that keeps it open. A transaction the caller opened before the move is left to the caller.
+- **Move: every lock conflict is "changed since"** (audit IC-I9r a, b). PostgreSQL's `lock_timeout` (SQLSTATE `55P03`, not mapped by Doctrine DBAL) and a MySQL deadlock raised during the flush (whose `ROLLBACK TO SAVEPOINT` fails with 1305 because InnoDB already rolled back) are answered as `stale` instead of a 500; nothing is written. In the second case the connection is closed to reset DBAL's transaction nesting level. Other driver errors still reach the caller. Only a move that owns the whole transaction maps a lock conflict to `stale`: called inside a transaction the caller opened, the move rolls back its own levels, never closes the connection, and rethrows the driver error, since a MySQL deadlock has also rolled back the caller's earlier writes (audit IG-L1).
+- **Move: no half-applied move after a failure** (audit IC-I9r c). Once the move has started to change the entities, any failure closes the entity manager, so a later `flush()` in the same request cannot write part of the move outside the rolled-back transaction. A refusal before that keeps it open. The audit of this release is Appendix IG.
 
 ### Documentation
 

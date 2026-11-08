@@ -98,8 +98,10 @@ final readonly class TaskMover
                 $this->entityManager->close();
             }
             // Audit IC-I9: a deadlock or a lock wait that timed out against a concurrent write of the same tree is "changed
-            // since", as a stale plan is: nothing was written, and the user sees the new preview.
-            if ($this->isLockConflict($failure)) {
+            // since", as a stale plan is: nothing was written, and the user sees the new preview. Audit IG-L1: only when the
+            // move owns the whole transaction. Inside a caller's transaction a MySQL deadlock has also rolled back the
+            // caller's earlier writes, so the driver error goes to the caller, which owns that transaction.
+            if ($depth === 0 && $this->isLockConflict($failure)) {
                 throw new TaskCopyRefusedException('stale');
             }
 
@@ -118,7 +120,8 @@ final readonly class TaskMover
      *  - PostgreSQL `lock_not_available` (SQLSTATE 55P03, raised by `lock_timeout`), which Doctrine DBAL does not map;
      *  - MySQL 1305 on a savepoint: InnoDB rolls back the whole transaction on a deadlock (and on a lock wait timeout with
      *    `innodb_rollback_on_timeout`), so the flush's `ROLLBACK TO SAVEPOINT` fails and its error replaces the deadlock.
-     *    The savepoint can only be gone because the server ended the transaction: nothing was written.
+     *    The savepoint is gone because the server ended the transaction, normally by rolling it back (audit IG-I1: host
+     *    code that commits implicitly inside the flush, such as DDL, would also end it).
      */
     private function isLockConflict(Throwable $failure): bool
     {
@@ -135,8 +138,10 @@ final readonly class TaskMover
     /**
      * Rolls the move's transaction back. Audit IC-I9r (b): when the server has already ended the transaction (a MySQL
      * deadlock during the flush), rolling back to the flush's savepoint fails and leaves DBAL's nesting level behind;
-     * closing the connection resets it (the server has nothing left to undo) and the next query reconnects. A transaction
-     * the caller opened before the move (`$depth`) is left to the caller.
+     * when the move opened the outermost transaction (`$depth` 0), closing the connection resets it (the server has
+     * nothing left to undo) and the next query reconnects. Audit IG-L1: inside a caller's transaction (`$depth` > 0) the
+     * connection is never closed: the levels the move opened are rolled back, and if that fails the caller's transaction
+     * is in the state the server left it, for the caller to roll back (the move's failure is rethrown, never `stale`).
      */
     private function rollBack(Connection $connection, int $depth): void
     {
@@ -145,7 +150,9 @@ final readonly class TaskMover
                 $connection->rollBack();
             }
         } catch (Throwable) {
-            $connection->close();
+            if ($depth === 0) {
+                $connection->close();
+            }
         }
     }
 
