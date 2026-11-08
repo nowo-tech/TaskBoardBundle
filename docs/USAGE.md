@@ -76,6 +76,46 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Remove dependency | `task_dependency_remove` | Since 1.15 (POST + CSRF) |
 | Log time | `task_time` | Since 1.15: minutes, day and note (POST + CSRF) |
 | Remove time entry | `task_time_remove` | Since 1.15 (POST + CSRF) |
+| Move to another board | `task_move_board` | Since 2.3, with `move.enabled`: GET choices and preview, POST + CSRF to confirm |
+| Duplicate | `task_duplicate` | Since 2.3, with `move.enabled`: GET choices and preview, POST + CSRF to confirm |
+| Repeat | `task_recurrence`, `task_recurrence_action` | Since 2.3, with `recurrence.enabled`: make recurring, edit; pause, resume, stop, skip, undo a skip (POST + CSRF per action) |
+
+### Move and duplicate (since 2.3)
+
+`move.enabled: true` adds *Move to another board* and *Duplicate* to the task panel, for who may edit the task and its board. Each page chooses with a GET form and shows the preview under it, what is lost first; the confirmation posts the preview's fingerprint, so a preview out of date moves nothing and is shown again. The target boards come from `move.targets` (`TaskBoardTargetsInterface`); any other answers 404.
+
+From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $actor)` (and `preview()`), `TaskMovePlanner::plan($task, $target, $columnMap)` then `TaskMover::move($task, $target, $columnMap, $plan->fingerprint, $actor)`. Check access first. Refusals are `TaskCopyRefusedException` with a `reason`, nothing written.
+
+| What | Move | Duplicate |
+| --- | --- | --- |
+| Subtasks | The whole tree, always | Open subtasks, by option (archived ones left out) |
+| Comments, documents, links | Stay on the task | Documents copied; comments and links never |
+| Tracked time | Stays on the task, never deleted; snapshots follow | Never copied (the copy starts at 0) |
+| Members | Kept when assignable on the target, else removed (without an assignee provider, everyone is assignable) | Copied when assignable, by option |
+| Access | `canEditTask()` on every task that moves, else refused | Subtasks the user cannot view are left out |
+| Imported fields | Kept on the task, hidden on the target board (the panel, the list search and the Task API show only the fields of the task's own board); nothing is deleted, and the source board's erasure still reaches them | Never copied |
+| Dependencies | Kept inside the tree; with tasks that stay, removed | Never copied |
+| Column | Same name, or chosen; completed tasks to the last column | The same rule, always open |
+| Provider link | Detached for good | Never copied |
+| Number | Kept in the scope; a new one with the old as alias across scopes | A new one |
+| Events | `TASK_BOARD_CHANGED` after the commit, no `TASK_MOVED` | `TASK_CREATED` per task, `TASK_MEMBER_ADDED` |
+
+### Why a change happens (since 2.3)
+
+```php
+$context->run('rule:' . $rule->getId(), fn () => $taskManager->moveToColumn($task, $columnId, $author));
+```
+
+Every history row written inside keeps the cause (`TaskChangeHistory::getCause()`); the listeners of the events dispatched inside read `TaskChangeContext::current()`. The history shows it only through `history.cause_labeler`, whose text is escaped. `TaskUpdatedEvent::getPreviousValue('priority')`, `getAddedTags()` and `getRemovedTags()` give the values before the write.
+
+### Recurring tasks (since 2.3)
+
+`recurrence.enabled: true` adds the *Repeat* section to the task panel (block `nowo_task_repeat`: text only without `canEditTask()`), the Repeat page and a repeat icon on cards and list rows. The bundle schedules nothing: see [UPGRADING](UPGRADING.md#recurring-tasks-what-a-host-does). Each occurrence is a copy of the latest one (the `TaskCopier` rules), created as the series' author.
+
+| Write path | Asks |
+| --- | --- |
+| `createOccurrence()` | `QUOTA_CHECK` `task_create` with the tasks it creates; the host checks its own plan and the author first |
+| Make recurring, edit, pause, resume, skip, stop | `canEditTask()`; nothing is created by them |
 
 ### Deleting and renaming outside the UI (since 2.2)
 
@@ -261,7 +301,7 @@ nowo_task_board:
 
 **Chrome a host draws itself.** `templates.page_header: false` leaves the header out of the board, list, Gantt and import pages. `board.toolbar: false` leaves the strip above the board out; its dialogs stay, and any element with `data-nowo-task-board-open="column-set-save"` or `"column-set-apply"` opens them. `task_panel.toolbar: false` leaves the trail and actions out of the panel.
 
-**Quota.** `TaskBoardEvents::QUOTA_CHECK` asks before a write. `TaskBoardQuotaCheckEvent` holds `action` (`board_create`, `task_create`, `import`), `tenantKey`, `board`, `count` and `actor`; `deny($reason)` refuses it and shows the reason, which you pass translated.
+**Quota.** `TaskBoardEvents::QUOTA_CHECK` asks before a write. `TaskBoardQuotaCheckEvent` holds `action` (`board_create`, `task_create`, `import`, since 2.3 `task_move`), `tenantKey`, `board`, `count` and `actor`; `deny($reason)` refuses it and shows the reason, which you pass translated.
 
 | Write path | Asks | On refusal |
 | --- | --- | --- |
@@ -270,6 +310,9 @@ nowo_task_board:
 | New task, inline add | `task_create` | Flash and redirect |
 | New subtask | `task_create` | Flash and redirect |
 | Import into a board or a task, web and command | `import`, with the tasks the file would create, before anything is written | The reason as the import's error |
+| Duplicate (page, or `TaskCopier` called by host code), since 2.3 | `task_create`, with every task the copy creates, before anything is written | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
+| Recurring occurrence (`TaskRecurrenceManager::createOccurrence()`), since 2.3 | `task_create`, with every task it creates, before anything is written | `TaskCopyRefusedException` (`quota`); the host calls `block()` |
+| Move to another board (page, or `TaskMover`), since 2.3 | `task_move`, with the open tasks that arrive (none: not asked) | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
 | Provider sync, restoring or reopening a task | No: `SyncLimitCheckerInterface` | See [sync](sync.md) |
 | `TaskManager::create()` called by host code | No: the host asks | |
 
@@ -609,7 +652,7 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, building, calendar,
 calendar-event, chart-bar, check, chevron-down, chevron-up, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play, hourglass,
 columns, device-floppy, download, external-link, flag, folder, git-branch, grip-vertical, history, layout-columns, layout-grid, layout-kanban,
-help, line-dashed, link, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
+help, line-dashed, link, arrows-move, copy, repeat, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
 users, x. Mapping `create`, `chevron_up` or `chevron_down` in `nowo_ui_kit.action_icons` replaces New board's `plus` and the filter fold's chevrons (since 2.0.2).
 
 Each icon of `board.column_icons` is imported too, since every board page draws them in its column dialogs. The default is the 30 in `Configuration::DEFAULT_COLUMN_ICONS`; set `board.column_icons` to a shorter list to import fewer.

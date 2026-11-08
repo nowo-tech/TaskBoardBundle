@@ -38,4 +38,10 @@ enum TaskChangeType: string
     case Restored = 'restored';
     /** Since 1.25: a remote person's authorship or membership was re-associated (values are person: / user: tokens). */
     case SyncPersonReassociated = 'sync_person_reassociated';
+    /** Since 2.3.0 (spec 217): the task changed boards; old and new values are the board names. */
+    case BoardMoved = 'board_moved';
+    /** Since 2.3.0 (spec 217): the task is a copy; the old value is the source's number or title, `context` "task:<id>". */
+    case Duplicated = 'duplicated';
+    /** Since 2.3.0 (specs 215, 217): a member of the source left out of a copy (no longer assignable); new value: the label. */
+    case MemberNotCopied = 'member_not_copied';
 }

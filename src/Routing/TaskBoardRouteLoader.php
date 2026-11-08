@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
@@ -94,6 +96,10 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $calendarEnabled = false,
         // Since 2.2.0 (spec 213): the API's base path with `api.enabled`; null: no API route at all.
         private readonly ?string $apiPrefix = null,
+        // Since 2.3.0 (spec 217): task_move_board and task_duplicate exist only with `move.enabled`.
+        private readonly bool $moveEnabled = false,
+        // Since 2.3.0 (spec 215): task_recurrence and task_recurrence_action exist only with `recurrence.enabled`.
+        private readonly bool $recurrenceEnabled = false,
     ) {
     }
 
@@ -145,6 +151,14 @@ final class TaskBoardRouteLoader extends Loader
         if ($this->calendarEnabled) {
             $this->addRoute($collection, 'calendar', 'calendarView', ['GET']);
             $this->addRoute($collection, 'task_schedule', 'scheduleTask', ['POST']);
+        }
+        if ($this->moveEnabled) {
+            $this->addRoute($collection, 'task_move_board', 'move', ['GET', 'POST'], TaskCopyController::class);
+            $this->addRoute($collection, 'task_duplicate', 'duplicate', ['GET', 'POST'], TaskCopyController::class);
+        }
+        if ($this->recurrenceEnabled) {
+            $this->addRoute($collection, 'task_recurrence', 'edit', ['GET', 'POST'], TaskRecurrenceController::class);
+            $this->addRoute($collection, 'task_recurrence_action', 'action', ['POST'], TaskRecurrenceController::class, ['action' => 'pause|resume|stop|skip|unskip']);
         }
         if ($this->syncEnabled) {
             $this->addRoute($collection, 'board_connection', 'connection', ['GET'], TaskBoardConnectionController::class);

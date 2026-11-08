@@ -1,0 +1,67 @@
+{#
+    Repeat page (web_ui.templates.task_recurrence, since 2.3.0, spec 215). Variables: page (FormPage), task, series
+    (TaskRecurrence or null), upcoming (next dates), recurrenceForm, actionForms (pause, resume, stop: one form each; skip,
+    unskip: one form per date, key '' after completion). What each occurrence copies is folded in a closed <details>.
+#}
+{% extends '@NowoUiKitBundle/page/form.html.twig' %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_page_header %}{% if nowo_task_board_ui.page_header %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block nowo_ui_form_body %}
+    {% for name in ['mode', 'interval', 'unit', 'weekdays', 'monthDay', 'nextOnCompletion', 'end', 'endDate', 'endCount', 'leadDays'] %}
+        {{ form_row(recurrenceForm[name]) }}
+    {% endfor %}
+    <details class="nowo-task-repeat__copies">
+        <summary>{{ 'task_board.recurrence.form.copies'|trans({}, 'NowoTaskBoardBundle') }}</summary>
+        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.recurrence.form.copies_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+        {{ form_row(recurrenceForm.copySubtasks) }}
+        {{ form_row(recurrenceForm.copyMembers) }}
+    </details>
+    {% for child in recurrenceForm %}
+        {% if not child.rendered %}
+            {{ form_row(child) }}
+        {% endif %}
+    {% endfor %}
+{% endblock %}
+
+{% macro action_button(form, label, testId, confirm = null) %}
+    {{ form_start(form, {attr: {class: 'nowo-task-repeat__action', 'data-testid': testId}|merge(confirm ? {'data-confirm': confirm} : {})}) }}
+        {% for child in form %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}">{{ label }}</button>
+    {{ form_end(form) }}
+{% endmacro %}
+
+{% block nowo_ui_form_aside %}
+    {% if series %}
+        <aside class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-repeat__aside" data-testid="nowo-task-repeat-aside">
+            <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
+                <p data-testid="nowo-task-repeat-sentence">{{ include('@NowoTaskBoardBundle/manage/_task_repeat_sentence.html.twig', {series: series}, with_context: false) }}</p>
+                <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-status">{{ ('task_board.recurrence.status.' ~ series.status)|trans({}, 'NowoTaskBoardBundle') }}{% if series.reason %} · {{ ('task_board.recurrence.reason.' ~ series.reason)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}{% if series.authorName %} · {{ 'task_board.recurrence.author'|trans({'%name%': series.authorName}, 'NowoTaskBoardBundle') }}{% endif %}</p>
+                {% if series.active %}
+                    <ul class="nowo-task-repeat__dates" data-testid="nowo-task-repeat-upcoming">
+                        {% for date, form in actionForms.skip %}
+                            {% if date != '' %}<li><time datetime="{{ date }}">{{ date }}</time> {{ _self.action_button(form, 'task_board.recurrence.skip'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-skip') }}</li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                    {% if actionForms.skip[''] is defined %}{{ _self.action_button(actionForms.skip[''], (series.skipNext ? 'task_board.recurrence.skip_next_set' : 'task_board.recurrence.skip_next')|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-skip') }}{% endif %}
+                    {% for date, form in actionForms.unskip %}
+                        {% if date != '' %}<p>{{ 'task_board.recurrence.skipped'|trans({'%date%': date}, 'NowoTaskBoardBundle') }} {{ _self.action_button(form, 'task_board.recurrence.unskip'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-unskip') }}</p>{% elseif series.skipNext %}{{ _self.action_button(form, 'task_board.recurrence.unskip'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-unskip') }}{% endif %}
+                    {% endfor %}
+                    {{ _self.action_button(actionForms.pause, 'task_board.recurrence.pause'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-pause') }}
+                {% elseif series.status == 'paused' %}
+                    {{ _self.action_button(actionForms.resume, 'task_board.recurrence.resume'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-resume') }}
+                {% endif %}
+                {{ _self.action_button(actionForms.stop, 'task_board.recurrence.stop'|trans({}, 'NowoTaskBoardBundle'), 'nowo-task-repeat-stop', 'task_board.recurrence.stop_confirm'|trans({}, 'NowoTaskBoardBundle')) }}
+            </div>
+        </aside>
+    {% endif %}
+{% endblock %}

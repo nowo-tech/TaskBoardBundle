@@ -11,6 +11,8 @@
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
+- [Move and duplicate (2.3)](#move-and-duplicate-23)
+- [Recurring tasks (2.3)](#recurring-tasks-23)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
@@ -156,6 +158,50 @@ Both opt-in.
 | `TaskNumberLedger` | No access check: hosts check what `find()` and `findInScopes()` return. `purgeScope()` deletes a scope's numbers, is the host's to call on a tenant that is gone for good, and refuses while a task still carries a number there |
 | Second connection | A reservation inside a caller's transaction opens a short-lived connection with the same parameters, and writes only the counter. If that fails, it falls back to the caller's transaction: a gap at most, never a duplicate |
 | Calendar page | Reads only tasks of a board the user may view. URL filters are checked against what the board offers. Task titles reach the page through Twig escaping and the client redraws from the server's HTML (`DOMParser`, `importNode`) of its own same-origin page |
+
+## Move and duplicate (2.3)
+
+Off unless `move.enabled: true`. Audit status: re-verification pending.
+
+| Threat | Mitigation |
+|---|---|
+| Moving or copying into a board the user may not edit | The target must be one of `TaskBoardTargetsInterface::targets()` (default: `canEditBoard()` in the task's tenant), any other answers 404; the source needs `canEditTask()` and `canEditBoard()`, else 403; a task the user cannot see answers 404 |
+| A forged confirmation | Per-form CSRF tokens (`task_board_task_move_board`, `task_board_task_duplicate`); the GET choices write nothing |
+| Confirming a preview that no longer holds | The POST carries the preview's fingerprint; when the facts changed, nothing is written and the new preview is shown |
+| Plan limits skipped by a new write path | A duplicate asks `QUOTA_CHECK` `task_create` with every task it creates, a move `task_move` with the open tasks that arrive, before writing. A worker calling `TaskCopier` with no listener must ask its own limits |
+| Tracked time lost | A move never deletes a time entry: manual entries stay on their task with a new board snapshot; TimeTrack's rows point at the task id. A copy never copies time |
+| A partial move | One transaction: a failure changes no board, member or dependency (`TaskMoverTest`) |
+| A subtask moved or copied beyond the user's rights (audit IC-L1) | A move needs `canEditTask()` on every task of the subtree, else it is refused (a hidden task is not named). A duplicate leaves out what the user cannot view, with its subtasks, and the preview counts it |
+| A write between the plan and the move (audit IC-L2) | Inside the transaction every task row of the tree is locked (`SELECT … FOR UPDATE`, a level at a time; audit IC-L2r), so a concurrent dependency, member or subtask on any of them waits for the commit, and the tree's facts (tasks, completion, archive, every dependency and member touching them) are read again from the database; any change refuses the move as `stale`, rolled back with the entity manager still usable |
+| A host's targets offering too much (audit IC-I1) | The answer of `move.targets` is narrowed to active boards passing `canEditBoard()`. Not to the tenant: spec 217 lets a host offer other tenants. The source gate is `canEditTask` + `canEditBoard`, as spec 217 decides, not the board's manage decision |
+| Members on the target (audit IC-I2) | Kept or copied when `canBeAssigned()` allows. Without an assignee provider every user may be assigned, so every member stays, as anywhere in the bundle |
+| Listeners acting on a rolled-back copy (audit IC-I3) | The task events of a copy wait for its commit (`TaskEventDeferral`) and are dropped if it fails |
+| A deadlock or lock wait during a move (audit IC-I9) | The driver's deadlock or lock-wait-timeout exception is answered as `stale`, the same "changed since" refusal: nothing was written. When it happens during the flush, Doctrine has closed the entity manager; the next request has a new one. PostgreSQL has no `lock_timeout` by default, so a move then waits on a concurrent write of its tree until that write ends (its deadlock detection still applies). Doctrine DBAL does not map PostgreSQL's lock timeout (SQLSTATE `55P03`) to a lock-wait exception, so with `lock_timeout` set a timed-out move ends as a server error (500), not `stale`; nothing is written either way. A MySQL deadlock raised during the flush can also surface as a 500 (InnoDB has already rolled back) |
+| The imported values as a document (audit IC-I8) | In the sync's `text` and `both` modes the "Fields" document holds the same values as text. A move records the board they came from on it: the document is hidden on the target, kept, and reached by the source board's `eraseBoard()` / `eraseByValue()` only |
+| Move and plan limits (audit IC-I7) | `QUOTA_CHECK` `task_move` is new: a listener that knows only the older actions lets it through. Safe while `move.targets` stays within one payer (spec 217, FR-011); a host whose targets cross payers handles `task_move`, and a host that limits by route needs no entry for the move route only while that holds |
+| A sync turned back on (audit IC-I5) | Items are tombstoned whenever they exist: through the ORM while the sync tables are mapped, through DBAL when sync is off but the table is there (with `detached_task_id` when that column exists). The preview counts them either way |
+| A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
+| Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
+| Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
+| Provider data of a moved task (audit IC-I4) | Stays on the tombstone item, which keeps the task in `detached_task_id`: the panel shows it read-only and the people directory tools erase it there. Imported field values stay on the task under the source board's fields, hidden on the target board (the panel, the list search and the Task API read only the task's own board's fields), so `eraseBoard(source)` and `eraseByValue(…, source)` still reach them; the *Fields* document moves with the task and is reached through the target board or `null` |
+
+## Recurring tasks (2.3)
+
+Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
+
+| Threat | Mitigation |
+|---|---|
+| Changing a series without the right | The page and every action need `canEditTask()`; an unseen task answers 404, a read-only one 403; each action has its own CSRF token |
+| A task participant as author (audit IC-I6) | Spec 215 lets whoever may edit the task make it recurring, so a participant without `canEditBoard()` can become an author. The host re-checks the author's `canEditBoard()` before each `createOccurrence()` (spec 215, FR-014) and pauses the series otherwise. Keys come from `dueKey()` and `completionKey()` only; a `done:` key whose task is not an occurrence of the series creates nothing |
+| A worker creating tasks nobody may create | No scheduler in the bundle: the host checks its plan and the author's access before `createOccurrence()`; the copier still asks `QUOTA_CHECK` and refuses before writing. An author erased or gone pauses the series (`forgetAuthor()`, or no author at run time) |
+| Duplicate occurrences | One row per series and key, unique, written with the task in one transaction; retries, re-runs and redeliveries create nothing more. A lost race returns null after Doctrine closes the entity manager: the worker resets it |
+| A refusal leaving the worker unusable, listeners acting too early (audit IC-I3) | Every refusal of `createOccurrence()`, the host's quota included, comes before its transaction, so `block()` still works; the new tasks' events wait for the commit and are dropped if it fails |
+| A flood after downtime | Only the latest missed date is created; older ones are recorded as missed |
+| Copying what must not travel | The `TaskCopier` rules: never comments, time, history, dependencies, links, sync rows or the number; members only while assignable |
+| Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |
+| A synced task rewritten by its provider | Refused (`synced_task`) |
+
+**Change causes (spec 216, FR-013).** The cause is the host's text, set only by code around a write, never from a request. It is shown only through the host's labeler, escaped by Twig. It is not personal data by design: a host stores an id (`rule:42`), not a name. `TaskManager::addTag()` applies the task form's tag rules (64 characters, 20 tags) and throws otherwise (audit IC-L3), so a rule cannot write what the form refuses. `TaskChangeContext` is reset between the requests of a worker and popped in `finally`, so a failed write never leaks its cause into the next one.
 
 ## UiKit migration (2.0.0)
 

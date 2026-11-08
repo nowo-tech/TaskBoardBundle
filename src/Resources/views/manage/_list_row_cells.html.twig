@@ -11,7 +11,7 @@
         {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}
         {% if _comments > 0 %}
             <span class="nowo-task-list__comments" title="{{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'message-circle'}) }}{{ _comments }}<span class="nowo-task-sr-only"> {{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}</span></span>
-        {% endif %}
+        {% endif %}{% if nowo_task_board_repeats(task) %}<span class="nowo-task-list__repeat" title="{{ 'task_board.recurrence.repeats'|trans({}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-icon">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'repeat'}) }}<span class="nowo-task-sr-only">{{ 'task_board.recurrence.repeats'|trans({}, 'NowoTaskBoardBundle') }}</span></span>{% endif %}
     </span>
 </td>
 <td class="{{ _cell }}">

@@ -1,0 +1,34 @@
+{#
+    Since 2.3.0 (spec 217): what the Move and Duplicate pages share — the scaffold's assets and header, and the notices.
+    Variables: notice (a translation key or null), refusal (TaskCopyRefusedException or null).
+#}
+{% macro notices(notice, refusal) %}
+    {% if notice %}
+        <div class="{{ nowo_ui_class('flash_warning', 'NowoTaskBoardBundle') }}" role="status" data-testid="nowo-task-copy-notice">{{ notice|trans({}, 'NowoTaskBoardBundle') }}</div>
+    {% endif %}
+    {% if refusal %}
+        <div class="{{ nowo_ui_class('flash_error', 'NowoTaskBoardBundle') }}" role="alert" data-testid="nowo-task-copy-refusal">{{ refusal.hostMessage ?? ('task_board.copy.refusal.' ~ refusal.reason)|trans(refusal.params, 'NowoTaskBoardBundle') }}</div>
+    {% endif %}
+{% endmacro %}
+
+{% macro select(selectForm, submitLabel) %}
+    {{ form_start(selectForm, {attr: {class: 'nowo-task-copy__select', 'data-testid': 'nowo-task-copy-select'}}) }}
+        {% for child in selectForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ submitLabel|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {{ form_end(selectForm) }}
+{% endmacro %}
+
+{% macro confirm(confirmForm, submitLabel, testId) %}
+    {{ form_start(confirmForm, {attr: {class: 'nowo-task-copy__confirm', 'data-testid': testId}}) }}
+        {% for child in confirmForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+        <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ submitLabel|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {{ form_end(confirmForm) }}
+{% endmacro %}

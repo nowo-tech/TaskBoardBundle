@@ -4,6 +4,10 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To the next release (unreleased)](#to-the-next-release-unreleased)
+  - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
+  - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
+  - [Recurring tasks: what a host does](#recurring-tasks-what-a-host-does)
 - [To 2.2.1](#to-221)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
@@ -154,6 +158,69 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To the next release (unreleased)
+
+Audit status: re-verification pending.
+
+**A host that changes nothing** gets no new route, panel action or table, and its pages do not change. `TaskCopier`, `TaskMovePlanner` and `TaskMover` are services it may call; `TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE` (`task_move`) is a new action a quota listener that only knows the others lets through.
+
+### Schema change for every host: the cause of a history row
+
+Spec 216 (FR-013) adds a nullable column; existing rows keep null and the pages do not change.
+
+```sql
+-- PostgreSQL
+ALTER TABLE task_board_task_change_history ADD cause VARCHAR(191) DEFAULT NULL;
+-- MySQL / MariaDB
+ALTER TABLE task_board_task_change_history ADD cause VARCHAR(191) DEFAULT NULL;
+-- SQLite
+ALTER TABLE task_board_task_change_history ADD COLUMN cause VARCHAR(191) DEFAULT NULL;
+```
+
+To use it: wrap a write in `TaskChangeContext::run('rule:42', fn () => …)`; in a listener of an event dispatched inside, `current()` says why. Set `history.cause_labeler` to show it in the task's history. `TaskUpdatedEvent::getPreviousValue()` and `getAddedTags()` give the old values; `TaskManager::addTag()` adds one tag.
+
+### Move and duplicate: what a host does
+
+1. `move.enabled: true`. Optional `move.max_subtasks` (200) and `move.targets` (a `TaskBoardTargetsInterface`; the default offers the active boards of the task's tenant the user may edit). Narrow the targets to what your plans allow, e.g. boards of the same payer.
+2. **Plan limits.** The routes are POST `task_move_board` and `task_duplicate` (and their tenant copies). A duplicate asks `QUOTA_CHECK` `task_create` with the count of tasks it creates; a move asks `task_move` with the count of open tasks that arrive. A host that limits by route adds the duplicate route; a host that calls `TaskCopier` from a worker asks its own limits first, since the event may have no listener there.
+3. **Tracked time.** Listen to `TaskBoardEvents::TASK_BOARD_CHANGED`: `TaskBoardChangedEvent::$taskIds` lists every moved task. Update what you keep per task: TimeTrack's `board_id_snapshot` on `TimeEntry` and `ActiveTimer` (see TimeTrack), files bound to the board, audit rows. The bundle's manual entries are already updated, and no row is ever deleted.
+4. **Strings and icons.** `task_board.copy.*` in the bundle's 7 locales. A host on `ux_icon` imports `tabler:arrows-move` and `tabler:copy`.
+5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` becomes a tombstone (`task` null) that remembers the task in the new column `detached_task_id`, so the panel still shows its provider data (`remote_meta`, `custom_id`) read-only and the people tools still erase it there. Imported field values stay on the task, hidden on the target board: the panel, the list search and the Task API show only the fields of a task's own board (same response shape, fewer values). Nothing is deleted, and the source board's erasure still reaches them (owner, decision 4). With the sync tables mapped (sync on, or mapped by an earlier config), add the column:
+
+   ```sql
+   -- PostgreSQL and MySQL
+   ALTER TABLE task_board_sync_items ADD detached_task_id VARCHAR(36) DEFAULT NULL;
+   CREATE INDEX idx_task_board_sync_items_detached ON task_board_sync_items (detached_task_id);
+   ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5A4F92A733 FOREIGN KEY (detached_task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   -- The foreign key's name is the one Doctrine generates, so schema validation reports no rename.
+   -- SQLite: ALTER TABLE task_board_sync_items ADD COLUMN detached_task_id VARCHAR(36) DEFAULT NULL REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   ```
+
+6. **Locks.** A move locks every task row of the tree (`SELECT … FOR UPDATE`) for its transaction; a deadlock or a lock-wait timeout is answered as "changed since" (`stale`). PostgreSQL has no `lock_timeout` by default; if you set one (for example `SET lock_timeout = '5s'`), a move that times out ends as a server error (500), not `stale`, because Doctrine DBAL does not map SQLSTATE `55P03` to a lock-wait exception. Nothing is written in either case. The sync's "Fields" document of a moved task is hidden on the target board, like its field values, and erased with the source board.
+7. **Access on the subtree (audit IC-L1).** A move needs `canEditTask()` on every task that moves; a refusal names a task the user can see and does not name one they cannot. A duplicate leaves out the subtasks the user cannot view, and its preview counts them. A host's `move.targets` answer is narrowed to active boards passing `canEditBoard()`; the tenant is not checked, since spec 217 lets a host offer boards of other tenants.
+
+### Recurring tasks: what a host does
+
+1. `recurrence.enabled: true` (optional `recurrence.max_subtasks`, 200). A host on `ux_icon` imports `tabler:repeat`.
+2. **Schema**, only with the option: two tables. Generate them with `doctrine:migrations:diff`, or by hand:
+
+   ```sql
+   -- PostgreSQL
+   CREATE TABLE task_board_task_recurrences (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) NOT NULL, latest_task_id VARCHAR(36) DEFAULT NULL, author_id INT DEFAULT NULL, start_column_id VARCHAR(36) DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, status VARCHAR(16) NOT NULL, reason VARCHAR(32) DEFAULT NULL, next_date DATE DEFAULT NULL, skipped_dates JSON NOT NULL, skip_next BOOLEAN DEFAULT false NOT NULL, occurrences INT NOT NULL, author_name VARCHAR(180) DEFAULT NULL, mode VARCHAR(16) NOT NULL, unit VARCHAR(8) NOT NULL, interval_count INT NOT NULL, anchor_date DATE NOT NULL, weekdays JSON NOT NULL, month_day SMALLINT DEFAULT NULL, end_date DATE DEFAULT NULL, end_count INT DEFAULT NULL, next_on_completion BOOLEAN DEFAULT false NOT NULL, lead_days SMALLINT NOT NULL, copy_subtasks BOOLEAN DEFAULT true NOT NULL, copy_members BOOLEAN DEFAULT true NOT NULL, PRIMARY KEY(id));
+   CREATE INDEX idx_task_board_task_recurrences_due ON task_board_task_recurrences (status, next_date);
+   CREATE INDEX idx_task_board_task_recurrences_latest ON task_board_task_recurrences (latest_task_id);
+   CREATE TABLE task_board_task_occurrences (id VARCHAR(36) NOT NULL, recurrence_id VARCHAR(36) NOT NULL, task_id VARCHAR(36) DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, occurrence_key VARCHAR(64) NOT NULL, missed BOOLEAN DEFAULT false NOT NULL, PRIMARY KEY(id));
+   CREATE UNIQUE INDEX uniq_task_board_task_occurrences_key ON task_board_task_occurrences (recurrence_id, occurrence_key);
+   CREATE INDEX idx_task_board_task_occurrences_task ON task_board_task_occurrences (task_id);
+   -- Foreign keys: board_id → boards ON DELETE CASCADE; latest_task_id, task_id → tasks ON DELETE SET NULL; author_id → users ON DELETE SET NULL;
+   -- start_column_id → columns ON DELETE SET NULL; recurrence_id → task_board_task_recurrences ON DELETE CASCADE.
+   ```
+
+   MySQL: the same columns with `DATETIME`, `TINYINT(1)` and `JSON`; SQLite: `DATETIME`, `BOOLEAN` and `CLOB`. `author_id` has the type of your user's id.
+3. **Schedule** (the bundle has none): every few minutes, for each of `TaskRecurrenceManager::dueSeries()`, check the plan and the author's access, then `createOccurrence($series, $manager->dueKey($series))` in a worker; on `TASK_COMPLETED`, `completionKey($task)` gives the series and key of an after-completion occurrence. Both are idempotent. On a plan refusal call `block($series)`; an author without access, `pause($series, TaskRecurrence::REASON_AUTHOR)`. `createOccurrence()` asks `QUOTA_CHECK` `task_create` once, before its transaction, as any new task does, and throws `TaskCopyRefusedException` before writing, with the entity manager still open. The events of the new tasks are dispatched after the commit. Pass only keys from `dueKey()` and `completionKey()`.
+4. **Erasure:** call `forgetAuthor($user)` from your account erasure: their series pause and forget their name.
+5. **History label:** the created row of an occurrence has the context `recurring`.
 
 ## To 2.2.1
 

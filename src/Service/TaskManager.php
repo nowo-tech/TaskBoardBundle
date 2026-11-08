@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\TaskColumnNavigation;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -25,11 +26,18 @@ use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_filter;
+use function array_flip;
+use function array_intersect_key;
 use function array_keys;
 use function count;
+use function in_array;
+use function mb_strlen;
+use function sprintf;
+use function trim;
 
 use const DATE_ATOM;
 
@@ -51,7 +59,11 @@ final readonly class TaskManager
     ) {
     }
 
-    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null): Task
+    /**
+     * @param string|null $context since 2.3.0 (spec 215): why the task is created, kept on its "created" history row (e.g.
+     *                             "recurring"), for a host's history label
+     */
+    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
 
@@ -71,7 +83,7 @@ final readonly class TaskManager
         $task->setColor($data->color);
         $task->setStartAt($data->startAt);
 
-        $this->changeRecorder->recordCreated($task, $creator);
+        $this->changeRecorder->recordCreated($task, $creator, $context);
         $this->taskRepository->save($task);
         $this->dispatch(new TaskCreatedEvent($task, $creator), TaskBoardEvents::TASK_CREATED);
 
@@ -157,7 +169,8 @@ final readonly class TaskManager
             'color'            => $oldColor !== $task->getColor(),
         ]));
         if ($changed !== []) {
-            $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+            $previous = ['title' => $oldTitle, 'description' => $oldDescription, 'priority' => $oldPriority, 'column' => $oldColumn, 'estimatedMinutes' => $oldEstimatedMinutes, 'startAt' => $oldStartAt, 'dueAt' => $oldDueAt, 'tags' => $oldTags, 'color' => $oldColor];
+            $this->dispatch(new TaskUpdatedEvent($task, $user, $changed, array_intersect_key($previous, array_flip($changed))), TaskBoardEvents::TASK_UPDATED);
         }
         if ($moves) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
@@ -194,7 +207,7 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $newStartAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $newDueAt);
         $this->taskRepository->save($task);
-        $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+        $this->dispatch(new TaskUpdatedEvent($task, $user, $changed, array_intersect_key(['startAt' => $oldStartAt, 'dueAt' => $oldDueAt], array_flip($changed))), TaskBoardEvents::TASK_UPDATED);
     }
 
     /** `$day` at the time of day of `$current`; midnight when there was no date. */
@@ -217,8 +230,36 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $priority);
         $this->taskRepository->save($task);
         if ($oldPriority !== $priority) {
-            $this->dispatch(new TaskUpdatedEvent($task, $user, ['priority']), TaskBoardEvents::TASK_UPDATED);
+            $this->dispatch(new TaskUpdatedEvent($task, $user, ['priority'], ['priority' => $oldPriority]), TaskBoardEvents::TASK_UPDATED);
         }
+    }
+
+    /**
+     * Since 2.3.0 (spec 216, FR-013): adds one tag, with the history and the TASK_UPDATED of the task form (its old tags in
+     * the event). False when the tag is empty or already there.
+     *
+     * @throws InvalidArgumentException since audit IC-L3, the task form's rules: a tag over {@see TaskConstraints::TAG_MAX}
+     *                                  characters, or a task that already has {@see TaskConstraints::TAGS_MAX} tags
+     */
+    public function addTag(Task $task, string $tag, object $user): bool
+    {
+        $tag     = trim($tag);
+        $oldTags = $task->getTags();
+        if ($tag === '' || in_array($tag, $oldTags, true)) {
+            return false;
+        }
+        if (mb_strlen($tag) > TaskConstraints::TAG_MAX) {
+            throw new InvalidArgumentException(sprintf('A tag has at most %d characters.', TaskConstraints::TAG_MAX));
+        }
+        if (count($oldTags) >= TaskConstraints::TAGS_MAX) {
+            throw new InvalidArgumentException(sprintf('A task has at most %d tags.', TaskConstraints::TAGS_MAX));
+        }
+        $task->setTags([...$oldTags, $tag]);
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
+        $this->taskRepository->save($task);
+        $this->dispatch(new TaskUpdatedEvent($task, $user, ['tags'], ['tags' => $oldTags]), TaskBoardEvents::TASK_UPDATED);
+
+        return true;
     }
 
     /**

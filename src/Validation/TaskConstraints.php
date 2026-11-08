@@ -48,6 +48,9 @@ final class TaskConstraints
 
     public const TAG_MAX = 64;
 
+    /** Since 2.3.0 (audit IC-L3): the most tags a task has, as the task form's tag field and the API allow. */
+    public const TAGS_MAX = 20;
+
     /** @return list<Constraint> */
     public static function taskTitle(): array
     {

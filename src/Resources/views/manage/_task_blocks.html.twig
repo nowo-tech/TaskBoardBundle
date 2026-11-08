@@ -59,6 +59,15 @@
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
                 </button>
                 {% endif %}
+                {#- Since 2.3.0 (spec 217, move.enabled): nothing at all is rendered without the option or the right. -#}
+                {%- if nowo_task_board_can_copy(task) %}
+                <a href="{{ path(nowo_task_board_route('task_move_board'), {taskId: task.id}) }}" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-move-board">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrows-move'}) }}{{ 'task_board.copy.move'|trans({}, 'NowoTaskBoardBundle') }}
+                </a>
+                <a href="{{ path(nowo_task_board_route('task_duplicate'), {taskId: task.id}) }}" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-duplicate">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'copy'}) }}{{ 'task_board.copy.duplicate'|trans({}, 'NowoTaskBoardBundle') }}
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -340,7 +349,7 @@
     {# Since 2.0.0 (TB-3): a host's part before the Time section, e.g. a timer. #}
     {% if nowo_task_board_task_time_before|default(null) %}{{ include(nowo_task_board_task_time_before) }}{% endif %}
     {{ include('@NowoTaskBoardBundle/manage/_task_time_section.html.twig') }}
-    {% endblock %}
+    {% endblock %}{% block nowo_task_repeat %}{% set _repeat = nowo_task_board_recurrence(task) %}{% if _repeat is not null %}{{ include('@NowoTaskBoardBundle/manage/_task_repeat_section.html.twig', {repeat: _repeat}) }}{% endif %}{% endblock %}
 
     {% block nowo_task_relations %}
     <div
@@ -364,7 +373,7 @@
                 <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'notes'}) }}{{ 'task_board.task.documentation'|trans({}, 'NowoTaskBoardBundle') }}</span>
             </summary>
             <div class="nowo-task-section__body">
-                {% for doc in task.documents %}
+                {% for doc in task.documents|filter(d => d.shownOn(task.board)) %}
                     <article class="nowo-task-detail__doc">
                         <h3 class="nowo-task-detail__doc-title">{{ doc.title }}</h3>
                         <div class="nowo-task-detail__doc-body">{{ doc.content|nl2br }}</div>

@@ -1,0 +1,28 @@
+# Since 2.3.0 (spec 215): loaded only with `recurrence.enabled`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Recurrence\TaskRecurrencePlanner: ~
+
+    Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager:
+        public: true
+        arguments:
+            $maxSubtasks: '%nowo_task_board.recurrence.max_subtasks%'
+            $syncEnabled: '%nowo_task_board.sync.enabled%'
+
+    Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView:
+        arguments:
+            $tokenStorage: '@?security.token_storage'
+
+    Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceBoardListener:
+        tags:
+            - { name: kernel.event_listener, event: nowo_task_board.task_board_changed }
+
+    Nowo\TaskBoardBundle\Controller\TaskRecurrenceController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'

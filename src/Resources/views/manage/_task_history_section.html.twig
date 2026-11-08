@@ -33,7 +33,7 @@
                             <strong>{% if entry.user %}{{ memberUi.member_label(entry.user) }}{% else %}{{ entry.userName ?: 'task_board.history.former_user'|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</strong>
                             <span class="nowo-task-activity__action">
                                 {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
-                            </span>
+                            {# Since 2.3.0 (spec 216): why, through history.cause_labeler; nothing without one. #}{% set _cause = nowo_task_board_change_cause(entry) %}{% if _cause is not null %}<span class="nowo-task-activity__cause" data-testid="nowo-task-history-cause">({{ _cause }})</span>{% endif %}</span>
                         </div>
                         {% if entry.oldValue is not null or entry.newValue is not null %}
                             <div class="nowo-task-detail__history-values nowo-task-activity__values">

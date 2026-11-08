@@ -1,0 +1,46 @@
+{#
+    Duplicate (web_ui.templates.task_duplicate, since 2.3.0, spec 217). Variables: page (FormPage, body only), task,
+    selectForm (GET: target board, subtasks, dates, members), preview (TaskCopyPreview or null), confirmForm (POST, or
+    null), target, notice, refusal. The preview says what does not carry over.
+#}
+{% extends '@NowoUiKitBundle/page/form.html.twig' %}
+{% import '@NowoTaskBoardBundle/manage/_task_copy_page.html.twig' as copyUi %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_page_header %}{% if nowo_task_board_ui.page_header %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block nowo_ui_form_body %}
+    <div class="nowo-task-copy" data-testid="nowo-task-duplicate-page">
+        <section class="nowo-task-copy__step" aria-labelledby="nowo-task-duplicate-step1">
+            <h2 id="nowo-task-duplicate-step1" class="nowo-task-copy__title">{{ 'task_board.copy.step_options'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            {{ copyUi.select(selectForm, 'task_board.copy.preview') }}
+        </section>
+        {{ copyUi.notices(notice, refusal) }}
+        {% if preview %}
+            <section class="nowo-task-copy__step" aria-labelledby="nowo-task-duplicate-step2" data-testid="nowo-task-duplicate-preview">
+                <h2 id="nowo-task-duplicate-step2" class="nowo-task-copy__title">{{ 'task_board.copy.step_preview'|trans({'%board%': preview.targetBoard.name}, 'NowoTaskBoardBundle') }}</h2>
+                <h3 class="nowo-task-copy__subtitle">{{ 'task_board.copy.not_copied'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+                <ul class="nowo-task-copy__list" data-testid="nowo-task-duplicate-not-copied">
+                    {% for label in preview.membersNotCopied %}
+                        <li>{{ 'task_board.copy.member_not_copied'|trans({'%name%': label}, 'NowoTaskBoardBundle') }}</li>
+                    {% endfor %}
+                    <li>{{ 'task_board.copy.never_copied'|trans({'%comments%': preview.comments, '%entries%': preview.timeEntries, '%total%': (preview.trackedSeconds // 60)|nowo_task_board_duration, '%dependencies%': preview.dependencies, '%links%': preview.links}, 'NowoTaskBoardBundle') }}</li>
+                    {% if preview.hidden > 0 %}<li data-testid="nowo-task-duplicate-hidden">{{ 'task_board.copy.hidden'|trans({'%count%': preview.hidden}, 'NowoTaskBoardBundle') }}</li>{% endif %}
+                    {% if preview.synced %}<li>{{ 'task_board.copy.sync_not_copied'|trans({}, 'NowoTaskBoardBundle') }}</li>{% endif %}
+                </ul>
+                <hr class="nowo-task-copy__divider">
+                <h3 class="nowo-task-copy__subtitle">{{ 'task_board.copy.copied'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+                <ul class="nowo-task-copy__list" data-testid="nowo-task-duplicate-copied">
+                    <li>{{ 'task_board.copy.tasks'|trans({'%count%': preview.subtasks}, 'NowoTaskBoardBundle') }}</li>
+                    <li>{{ 'task_board.copy.members_copied'|trans({'%count%': preview.membersCopied}, 'NowoTaskBoardBundle') }}</li>
+                    {% if preview.column %}<li>{{ 'task_board.copy.column_into'|trans({'%column%': preview.column.name}, 'NowoTaskBoardBundle') }}</li>{% endif %}
+                </ul>
+                {% if confirmForm %}{{ copyUi.confirm(confirmForm, 'task_board.copy.duplicate_confirm', 'nowo-task-duplicate-confirm') }}{% endif %}
+            </section>
+        {% endif %}
+    </div>
+{% endblock %}

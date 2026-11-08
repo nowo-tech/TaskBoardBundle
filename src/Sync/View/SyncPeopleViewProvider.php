@@ -192,8 +192,13 @@ final class SyncPeopleViewProvider implements ResetInterface
 
     private function item(Task $task): ?TaskSyncItem
     {
-        $key  = $task->getId();
-        $item = $this->items[$key] ??= $this->entityManager->getRepository(TaskSyncItem::class)->findOneBy(['task' => $task]) ?? false;
+        $key = $task->getId();
+        // Since 2.3.0 (spec 217): a task moved off its board still reads its tombstone, read-only. One query either way.
+        $item = $this->items[$key] ??= $this->entityManager->createQueryBuilder()
+            ->select('i')->from(TaskSyncItem::class, 'i')
+            ->where('i.task = :task OR i.detachedTask = :task')->setParameter('task', $task)
+            ->orderBy('i.remoteUpdatedAt', 'DESC')->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult() ?? false;
 
         return $item instanceof TaskSyncItem ? $item : null;
     }

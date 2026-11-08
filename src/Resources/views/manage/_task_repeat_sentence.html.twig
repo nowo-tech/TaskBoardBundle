@@ -1,0 +1,7 @@
+{#- Since 2.3.0 (spec 215): "Every 2 weeks · next 2026-11-17". Variable: series (TaskRecurrence). -#}
+{%- set _rule = series.rule -%}
+{{- ('task_board.recurrence.sentence.' ~ _rule.mode)|trans({'%count%': _rule.interval, '%unit%': ('task_board.recurrence.unit.' ~ _rule.unit)|trans({'%count%': _rule.interval}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') -}}
+{%- if _rule.unit == 'week' and _rule.weekdays is not empty %} ({{ _rule.weekdays|map(d => ('task_board.recurrence.weekday.' ~ d)|trans({}, 'NowoTaskBoardBundle'))|join(', ') }}){% endif -%}
+{%- if _rule.unit == 'month' and _rule.monthDay is not null %} ({{ _rule.monthDay == -1 ? 'task_board.recurrence.last_day'|trans({}, 'NowoTaskBoardBundle') : 'task_board.recurrence.day_n'|trans({'%day%': _rule.monthDay}, 'NowoTaskBoardBundle') }}){% endif -%}
+{%- if series.nextOnCompletion %} · {{ 'task_board.recurrence.next_on_completion'|trans({}, 'NowoTaskBoardBundle') }}{% endif -%}
+{%- if series.nextDate and series.active %} · {{ 'task_board.recurrence.next'|trans({'%date%': series.nextDate|date('Y-m-d')}, 'NowoTaskBoardBundle') }}{% endif -%}

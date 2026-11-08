@@ -24,6 +24,13 @@ use const JSON_THROW_ON_ERROR;
 final readonly class TaskChangeRecorder
 {
     /**
+     * @param TaskChangeContext|null $cause since 2.3.0 (spec 216): the cause written on every row recorded while it is set
+     */
+    public function __construct(private ?TaskChangeContext $cause = null)
+    {
+    }
+
+    /**
      * Since 1.29.0 (audit HId-L4): a member added or removed. The role and the member's id share `context`
      * ("assignee user:7"), so an erasure finds the member's own rows and not those of someone with the same label.
      */
@@ -53,6 +60,7 @@ final readonly class TaskChangeRecorder
             oldValue: $oldValue,
             newValue: $newValue,
             context: $context,
+            cause: $this->cause?->current(),
         ));
     }
 
@@ -74,9 +82,10 @@ final readonly class TaskChangeRecorder
         );
     }
 
-    public function recordCreated(Task $task, object $user): void
+    /** Since 2.3.0: `$context` says why (spec 215: "recurring"). */
+    public function recordCreated(Task $task, object $user, ?string $context = null): void
     {
-        $this->record($task, $user, TaskChangeType::Created, null, $task->getTitle());
+        $this->record($task, $user, TaskChangeType::Created, null, $task->getTitle(), $context);
     }
 
     private function formatValue(mixed $value): ?string

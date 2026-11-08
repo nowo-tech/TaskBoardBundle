@@ -29,6 +29,15 @@ services:
             - '../../Bridge/TimeTrack/'
             # Since 2.1.0: loaded only with `task_numbers.enabled` (services_numbers.yaml).
             - '../../Number/'
+            # Since 2.3.0 (specs 215, 217): data carriers of the copier and the mover.
+            - '../../Copy/TaskCopyOptions.php'
+            - '../../Copy/TaskCopyPreview.php'
+            - '../../Copy/TaskCopyResult.php'
+            - '../../Copy/TaskColumnRule.php'
+            - '../../Move/TaskMovePlan.php'
+            # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
+            - '../../Recurrence/'
+            - '../../Controller/TaskRecurrenceController.php'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'
@@ -56,8 +65,11 @@ services:
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
-        # Since 1.23: registered by services_sync.yaml (sync.enabled).
-        exclude: '../../Controller/TaskBoardConnectionController.php'
+        # Since 1.23: registered by services_sync.yaml (sync.enabled); since 2.3.0 the Repeat controller by
+        # services_recurrence.yaml (recurrence.enabled).
+        exclude:
+            - '../../Controller/TaskBoardConnectionController.php'
+            - '../../Controller/TaskRecurrenceController.php'
         public: true
 
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:
@@ -81,6 +93,25 @@ services:
             $maxTasks: '%nowo_task_board.board.max_tasks%'
             # Since 1.24: the dialog mode header of an invalid board create (`board.create_dialog_header`).
             $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
+
+    # Since 2.3.0 (audit IC-I3): task events of a copy or an occurrence are dispatched after its commit.
+    Nowo\TaskBoardBundle\Service\TaskEventDeferral:
+        arguments:
+            $dispatcher: '@event_dispatcher'
+
+    Nowo\TaskBoardBundle\Service\TaskManager:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    Nowo\TaskBoardBundle\Service\TaskMemberAssigner:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
+    Nowo\TaskBoardBundle\Controller\TaskCopyController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver

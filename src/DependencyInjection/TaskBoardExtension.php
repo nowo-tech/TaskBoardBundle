@@ -31,6 +31,8 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -38,9 +40,16 @@ use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
+use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
+use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
+use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceBoardListener;
+use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
+use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
@@ -240,6 +249,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
+        $this->registerMoveAndCopy($container, $config, $emName);
+        $this->registerRecurrence($container, $loader, $config, $emName);
+        // Since 2.3.0 (spec 216): the host's label of a history row's cause.
+        if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
+            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', new Reference($config['history']['cause_labeler']));
+        }
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
@@ -289,6 +304,61 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+    }
+
+    /**
+     * Since 2.3.0 (spec 215): `recurrence.*`. With `enabled: false` nothing is registered: no route, service, mapping or
+     * output change.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerRecurrence(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $enabled = (bool) $config['recurrence']['enabled'];
+        $container->setParameter('nowo_task_board.recurrence.enabled', $enabled);
+        if (!$enabled) {
+            return;
+        }
+        $container->setParameter('nowo_task_board.recurrence.max_subtasks', $config['recurrence']['max_subtasks']);
+        $loader->load('services_recurrence.yaml');
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $container->getDefinition(TaskRecurrenceManager::class)->setArgument('$entityManager', $manager);
+        $container->getDefinition(TaskRecurrenceBoardListener::class)->setArgument('$entityManager', $manager);
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$recurrenceEnabled', true);
+        $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$recurrence', new Reference(TaskRecurrenceView::class));
+    }
+
+    /**
+     * Since 2.3.0 (spec 217): `move.*`. The copier, the planner and the mover are services either way (a host or a worker may
+     * call them); with `enabled: false` there is no route and no panel action, so nothing changes for a host.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerMoveAndCopy(ContainerBuilder $container, array $config, string $emName): void
+    {
+        $move    = $config['move'];
+        $enabled = (bool) $move['enabled'];
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $sync    = (bool) $config['sync']['enabled'];
+        $container->setParameter('nowo_task_board.move.enabled', $enabled);
+        $container->setParameter('nowo_task_board.move.max_subtasks', $move['max_subtasks']);
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$moveEnabled', $enabled);
+        $container->getDefinition(TaskCopyController::class)->setArgument('$templates', '%nowo_task_board.templates%');
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$moveEnabled', $enabled)
+            ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class));
+        $container->getDefinition(TaskCopier::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$maxSubtasks', $move['max_subtasks'])
+            ->setArgument('$syncEnabled', $sync);
+        $container->getDefinition(TaskMovePlanner::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$maxSubtasks', $move['max_subtasks'])
+            ->setArgument('$syncEnabled', $sync);
+        $container->getDefinition(TaskMover::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$syncEnabled', $sync);
+        $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
     }
 
     /**
@@ -688,6 +758,23 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                             'dir'       => __DIR__ . '/../Api/Entity',
                             'prefix'    => 'Nowo\\TaskBoardBundle\\Api\\Entity',
                             'alias'     => 'TaskBoardApi',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        // Since 2.3.0 (spec 215): the series and occurrence tables, only with recurrence.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'recurrence')) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardRecurrence' => [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Recurrence/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Recurrence\\Entity',
+                            'alias'     => 'TaskBoardRecurrence',
                         ],
                     ],
                 ],

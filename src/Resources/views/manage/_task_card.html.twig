@@ -38,7 +38,7 @@
         {% endif %}
         {% if task.estimatedMinutes %}
             <span class="nowo-task-card__estimate">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'clock'}) }}{{ task.estimatedMinutes|nowo_task_board_duration }}</span>
-        {% endif %}
+        {% endif %}{% if nowo_task_board_repeats(task) %}<span class="nowo-task-card__repeat" title="{{ 'task_board.recurrence.repeats'|trans({}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-icon">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'repeat'}) }}<span class="nowo-task-sr-only">{{ 'task_board.recurrence.repeats'|trans({}, 'NowoTaskBoardBundle') }}</span></span>{% endif %}
         {% if progress and progress.total > 0 %}
             <span class="nowo-task-card__subtasks" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}{{ progress.done }}/{{ progress.total }}
