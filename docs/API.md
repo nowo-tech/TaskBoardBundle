@@ -44,7 +44,7 @@ The bundle stores no tokens. `api.hooks.authenticator` is required with `enabled
 | `attachments` | `TaskApiAttachmentsInterface` | 403 `FILE_001` |
 | `idempotency_store` | `TaskApiIdempotencyStoreInterface` | The bundle's store, when writes arrive |
 
-A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write.
+A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write. Since 2.4.0 the event's `channel` (from `TaskApiPrincipal::$channel`) says where the call came from: `api` (default) or `mcp`, when the host's authenticator builds the principal for its MCP server with `channel: TaskApiPrincipal::CHANNEL_MCP`. The channel changes no access decision.
 
 ## Firewall
 

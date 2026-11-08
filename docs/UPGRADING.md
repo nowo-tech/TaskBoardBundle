@@ -163,7 +163,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.4.0
 
-No schema or configuration change. **A host that changes nothing keeps today's behaviour exactly**: logging time on a task through the Task API still needs the edit right.
+No schema or configuration change. **A host that changes nothing keeps today's behaviour exactly**: logging time on a task through the Task API still needs the edit right, and every audit event reports the `api` channel.
 
 Spec 213 (Beacon decision D-20261108-13): `POST /v2/team/{team_id}/time_entries` with a `tid` now asks `TaskBoardResourceAccessChecker::canTrackTime()`, which dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`):
 
@@ -172,6 +172,8 @@ Spec 213 (Beacon decision D-20261108-13): `POST /v2/team/{team_id}/time_entries`
 - no answer, or `grant()` with `markReadOnly()`: the edit right decides, as before.
 
 The person must still see the task, and the token's level still applies (*My tasks*: its own tasks only; *Read*: refused). Deleting time stays refused.
+
+**MCP channel (spec 219).** `TaskApiPrincipal` takes an optional trailing `channel` argument: `TaskApiPrincipal::CHANNEL_API` (default) or `CHANNEL_MCP`. An authenticator that builds principals as before reports `api`; one serving an in-process MCP caller passes `channel: TaskApiPrincipal::CHANNEL_MCP`, and the `API_WRITE` audit listener reads `$event->channel`. Nothing else changes; access is decided exactly as for `api`.
 
 **Check your `TASK_ACCESS_CHECK` listeners.** The event is now dispatched a second time for a time log, with `getAction()` returning `track_time`. A listener that ignores the action gives the same answer for both and keeps the old result. A listener that should answer only for viewing must return early when `$event->getAction() !== TaskAccessCheckEvent::ACTION_VIEW`. To let time trackers log time:
 

@@ -14,6 +14,12 @@ use Symfony\Contracts\EventDispatcher\Event;
 final class TaskApiWriteEvent extends Event
 {
     /**
+     * Since 2.4.0 (spec 219): the principal's channel, {@see TaskApiPrincipal::CHANNEL_API} or
+     * {@see TaskApiPrincipal::CHANNEL_MCP}, so the audit tells MCP calls apart.
+     */
+    public readonly string $channel;
+
+    /**
      * @param string $operation e.g. `task.update`, `board.delete`
      * @param array<string, string> $targetIds other ids touched
      * @param list<string> $changedFields field names only
@@ -27,5 +33,7 @@ final class TaskApiWriteEvent extends Event
         public readonly array $targetIds = [],
         public readonly array $changedFields = [],
     ) {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
+        $this->channel = $principal->channel;
     }
 }
