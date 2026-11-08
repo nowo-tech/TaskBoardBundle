@@ -180,7 +180,7 @@ Off unless `move.enabled: true`. Audit status: re-verification pending.
 | A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
 | Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
 | Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
-| Provider data of a moved task (audit IC-I4) | Stays on the tombstone item, which keeps the task in `detached_task_id`: the panel shows it read-only and the people directory tools erase it there. Imported field values stay on the task under the source board's fields, so `eraseBoard(source)` and `eraseByValue(…, source)` still reach them; the *Fields* document moves with the task and is reached through the target board or `null` |
+| Provider data of a moved task (audit IC-I4) | Stays on the tombstone item, which keeps the task in `detached_task_id`: the panel shows it read-only and the people directory tools erase it there. Imported field values stay on the task under the source board's fields, hidden on the target board (the panel and the list search read only the task's own board's fields), so `eraseBoard(source)` and `eraseByValue(…, source)` still reach them; the *Fields* document moves with the task and is reached through the target board or `null` |
 
 ## Recurring tasks (2.3)
 
