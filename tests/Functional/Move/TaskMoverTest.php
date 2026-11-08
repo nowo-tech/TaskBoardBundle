@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Move;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Driver\AbstractException;
+use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\ORM\Events;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -207,6 +210,35 @@ final class TaskMoverTest extends CopyTestCase
 
         $refusal = $this->assertRefused('subtree_too_large', fn (): TaskMovePlan => $this->planner()->plan($this->reload($task), $this->em->find(TaskBoard::class, $target->getId()) ?? $source));
         self::assertSame(['%count%' => 1, '%max%' => 0], $refusal->params);
+    }
+
+    public function testADeadlockOrALockTimeoutIsChangedSince(): void
+    {
+        // Audit IC-I9: the driver's deadlock or lock-wait timeout is the same refusal as a stale plan, not a 500.
+        foreach ([DeadlockException::class, LockWaitTimeoutException::class] as $class) {
+            $source = $this->board('Source ' . $class);
+            $target = $this->board('Target ' . $class);
+            $task   = $this->task($source, 'Moves');
+            $plan   = $this->planner()->plan($task, $target);
+            $this->em->getEventManager()->addEventListener(Events::onFlush, $listener = new class($class) {
+                public function __construct(private readonly string $class)
+                {
+                }
+
+                public function onFlush(): void
+                {
+                    $driver = new class('lock') extends AbstractException {
+                    };
+
+                    throw new ($this->class)($driver, null);
+                }
+            });
+            $this->assertRefused('stale', fn () => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
+            $this->em->getEventManager()->removeEventListener(Events::onFlush, $listener);
+            self::assertSame($source->getId(), $this->em->getConnection()->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
+            self::ensureKernelShutdown();
+            $this->setUp();
+        }
     }
 
     public function testAFailureInsideTheMoveChangesNothing(): void

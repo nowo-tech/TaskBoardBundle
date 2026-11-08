@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
@@ -201,11 +202,12 @@ final readonly class SyncFieldValueEraser
      *
      * @param callable(string): bool $matches
      */
-    private function eraseDocumentLines(Task $task, callable $matches): int
+    private function eraseDocumentLines(Task $task, callable $matches, ?TaskBoard $board = null): int
     {
         $erased = 0;
         foreach ($task->getDocuments() as $document) {
-            if (!$this->isFieldsDocument($document)) {
+            // Since 2.3.0 (audit IC-I8): a board's erasure reaches the documents of its own values only.
+            if (!$this->isFieldsDocument($document) || ($board instanceof TaskBoard && !$document->isShownOn($board))) {
                 continue;
             }
             $lines   = explode("\n", $document->getContent());
@@ -230,7 +232,7 @@ final readonly class SyncFieldValueEraser
     {
         $erased = 0;
         foreach ($this->tasksWithDocuments($board) as $task) {
-            $erased += $this->eraseDocumentLines($task, $matches);
+            $erased += $this->eraseDocumentLines($task, $matches, $board);
         }
         $this->entityManager->flush();
 
@@ -248,14 +250,14 @@ final readonly class SyncFieldValueEraser
     {
         foreach ($this->tasksWithDocuments($board) as $task) {
             foreach ($task->getDocuments() as $document) {
-                if (!$this->isFieldsDocument($document)) {
+                if (!$this->isFieldsDocument($document) || ($board instanceof TaskBoard && !$document->isShownOn($board))) {
                     continue;
                 }
                 foreach (explode("\n", $document->getContent()) as $line) {
                     if (preg_match(self::FIELD_LINE_PARTS, $line, $parts) !== 1 || isset($seen[$task->getId() . '|' . $parts[1]]) || ($value !== null && mb_stripos($line, $value) === false)) {
                         continue;
                     }
-                    yield ['boardId' => $task->getBoard()->getId(), 'taskId' => $task->getId(), 'field' => $parts[1], 'type' => SyncFieldType::Text->value, 'text' => $parts[2], 'value' => $parts[2]];
+                    yield ['boardId' => $board?->getId() ?? $task->getBoard()->getId(), 'taskId' => $task->getId(), 'field' => $parts[1], 'type' => SyncFieldType::Text->value, 'text' => $parts[2], 'value' => $parts[2]];
                 }
             }
         }
@@ -274,7 +276,10 @@ final readonly class SyncFieldValueEraser
                 ->where('t.id > :after')->andWhere('d.syncFields IS NOT NULL OR d.content LIKE :shape')->setParameter('after', $after)->setParameter('shape', '- **%')
                 ->groupBy('t.id')->orderBy('t.id', 'ASC')->setMaxResults(self::PAGE);
             if ($board instanceof TaskBoard) {
-                $query->andWhere('t.board = :board')->setParameter('board', $board);
+                // Since 2.3.0 (spec 217, audit IC-I8): with the tasks moved off this board, whose "Fields" document came from it.
+                $moved = $this->entityManager->createQueryBuilder()->select('IDENTITY(i.detachedTask)')->from(TaskSyncItem::class, 'i')
+                    ->where('i.boardId = :boardId')->andWhere('i.detachedTask IS NOT NULL')->getDQL();
+                $query->andWhere('t.board = :board OR t.id IN (' . $moved . ')')->setParameter('board', $board)->setParameter('boardId', $board->getId());
             }
             /** @var list<Task> $tasks */
             $tasks = $query->getQuery()->getResult();

@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
@@ -21,6 +22,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldValueEraser;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
@@ -177,6 +179,44 @@ final class TaskMoveSyncTest extends SyncFunctionalTestCase
         $item = $this->em->getRepository(TaskSyncItem::class)->findOneBy(['externalId' => 'a1']);
         self::assertInstanceOf(TaskSyncItem::class, $item);
         self::assertNull($item->getTask());
+    }
+
+    public function testTheFieldsDocumentIsHiddenOnTheTargetAndErasedByTheSource(): void
+    {
+        // Audit IC-I8 (owner decision 4): in `text` / `both` mode the same values are a document's lines.
+        $board  = $this->board('Linked', ['To do', 'Done']);
+        $target = $this->board('Local', ['To do', 'Done']);
+        $this->put($this->remote('a1', 'Design', fields: "- **Points**: 5\n- **Owner**: zeb"));
+        $this->sync($board);
+        $task   = $this->taskTitled('Design');
+        $target = $this->em->find(TaskBoard::class, $target->getId());
+        self::assertInstanceOf(TaskBoard::class, $target);
+        $this->mover()->move($task, $target, [], $this->planner()->plan($task, $target)->fingerprint, $this->owner);
+        $this->em->clear();
+        $this->refreshOwner();
+
+        $document = $this->em->getRepository(TaskDocument::class)->findOneBy(['task' => $task->getId()]);
+        self::assertInstanceOf(TaskDocument::class, $document);
+        self::assertTrue($document->isSyncFields());
+        self::assertFalse($document->isShownOn($target), 'hidden on the target');
+        self::assertTrue($document->isShownOn($this->em->find(TaskBoard::class, $board->getId()) ?? $target));
+        $this->login($this->owner);
+        $this->client->request('GET', '/tools/task-board/task/' . $task->getId());
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('**Points**', (string) $this->client->getResponse()->getContent());
+
+        $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
+        self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
+        $source = $this->em->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $source);
+        self::assertSame(0, $eraser->eraseByValue('zeb', $this->em->find(TaskBoard::class, $target->getId())), 'not the target\'s values');
+        self::assertSame(1, $eraser->eraseByValue('zeb', $source), 'the source board\'s erasure reaches them');
+        $this->em->clear();
+        $document = $this->em->getRepository(TaskDocument::class)->findOneBy(['task' => $task->getId()]);
+        self::assertInstanceOf(TaskDocument::class, $document);
+        self::assertStringNotContainsString('zeb', $document->getContent());
+        self::assertFalse($document->isShownOn($target), 'the origin survives the erasure record');
+        self::assertSame(1, $eraser->eraseBoard($this->em->find(TaskBoard::class, $board->getId()) ?? $target));
     }
 
     public function testTheDetachedTaskForeignKeyHasTheNameDoctrineGenerates(): void
