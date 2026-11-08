@@ -91,7 +91,9 @@ From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $
 | Subtasks | The whole tree, always | Open subtasks, by option (archived ones left out) |
 | Comments, documents, links | Stay on the task | Documents copied; comments and links never |
 | Tracked time | Stays on the task, never deleted; snapshots follow | Never copied (the copy starts at 0) |
-| Members | Kept when assignable on the target, else removed | Copied when assignable, by option |
+| Members | Kept when assignable on the target, else removed (without an assignee provider, everyone is assignable) | Copied when assignable, by option |
+| Access | `canEditTask()` on every task that moves, else refused | Subtasks the user cannot view are left out |
+| Imported fields | Stay on the task, read-only | Never copied |
 | Dependencies | Kept inside the tree; with tasks that stay, removed | Never copied |
 | Column | Same name, or chosen; completed tasks to the last column | The same rule, always open |
 | Provider link | Detached for good | Never copied |

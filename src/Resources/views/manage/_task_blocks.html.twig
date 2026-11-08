@@ -86,7 +86,10 @@
                     {{ include('@NowoTaskBoardBundle/manage/_task_status_field.html.twig') }}
                     {% if taskForm.columnId is defined %}
                         <div hidden>{{ form_widget(taskForm.columnId, {label: false}) }}</div>
+                        {{ form_errors(taskForm.columnId) }}
                     {% endif %}
+                    {# Since 2.2.1: the column this page shows; a stale page then does not move the task back. #}
+                    {% if taskForm.columnIdShown is defined %}{{ form_widget(taskForm.columnIdShown) }}{% endif %}
                     {{ priorityUi.priority_tag(task.priority, true) }}
                     <div hidden>{{ form_widget(taskForm.priority, {label: false}) }}</div>
                 </div>

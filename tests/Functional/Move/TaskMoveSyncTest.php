@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Move;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -11,8 +12,15 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
+use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
 
 /**
@@ -97,6 +105,67 @@ final class TaskMoveSyncTest extends SyncFunctionalTestCase
         self::assertNull($this->em->getRepository(TaskSyncItem::class)->findOneBy(['task' => $copy->task]));
         self::assertCount(0, $copy->task->getLinks());
         self::assertInstanceOf(Task::class, $copy->task);
+    }
+
+    public function testAMovedTaskKeepsItsProviderDataAndImportedFieldsReadOnly(): void
+    {
+        $board  = $this->board('Linked', ['To do', 'Done']);
+        $target = $this->board('Local', ['To do', 'Done']);
+        $this->put($this->remote('a1', 'Design'));
+        $this->sync($board);
+        $task = $this->taskTitled('Design');
+        $item = $this->em->getRepository(TaskSyncItem::class)->findOneBy(['task' => $task]);
+        self::assertInstanceOf(TaskSyncItem::class, $item);
+        $item->setCustomId('DEV-7');
+        $field = new TaskSyncField($task->getBoard(), 'clickup', 'f1', new DateTimeImmutable());
+        $field->define('Points', SyncFieldType::Number, 'number', [], [], 0, new DateTimeImmutable());
+        $this->em->persist($field);
+        $this->em->persist(new TaskSyncFieldValue($field, $task, 3, '3', new DateTimeImmutable()));
+        $this->em->flush();
+        $target = $this->em->find(TaskBoard::class, $target->getId());
+        self::assertInstanceOf(TaskBoard::class, $target);
+
+        $plan = $this->planner()->plan($task, $target);
+        self::assertSame(['Points'], $plan->importedFields);
+        $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner);
+        $this->em->clear();
+        $item = $this->em->getRepository(TaskSyncItem::class)->findOneBy(['externalId' => 'a1']);
+        self::assertInstanceOf(TaskSyncItem::class, $item);
+        self::assertNull($item->getTask());
+        self::assertSame($task->getId(), $item->getDetachedTask()?->getId());
+
+        $moved = $this->em->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $moved);
+        $views = self::getContainer()->get(SyncPeopleViewProvider::class);
+        self::assertInstanceOf(SyncPeopleViewProvider::class, $views);
+        self::assertSame('DEV-7', $views->detailsOf($moved)['customId'] ?? null, 'the panel still shows it, read-only');
+    }
+
+    public function testItemsAreTombstonedWheneverTheTablesExistEvenWithSyncOffNow(): void
+    {
+        $board  = $this->board('Linked', ['To do', 'Done']);
+        $target = $this->board('Local', ['To do', 'Done']);
+        $this->put($this->remote('a1', 'Design'));
+        $this->sync($board);
+        $task   = $this->taskTitled('Design');
+        $target = $this->em->find(TaskBoard::class, $target->getId());
+        self::assertInstanceOf(TaskBoard::class, $target);
+        $members = self::getContainer()->get(TaskMemberAssigner::class);
+        self::assertInstanceOf(TaskMemberAssigner::class, $members);
+        $recorder = self::getContainer()->get(TaskChangeRecorder::class);
+        self::assertInstanceOf(TaskChangeRecorder::class, $recorder);
+        $repository = self::getContainer()->get(TaskRepositoryInterface::class);
+        self::assertInstanceOf(TaskRepositoryInterface::class, $repository);
+
+        $planner = new TaskMovePlanner($this->em, $members, syncEnabled: false);
+        self::assertTrue($planner->syncMapped());
+        $mover = new TaskMover($planner, $this->em, $repository, $recorder, syncEnabled: false);
+        $mover->move($task, $target, [], $planner->plan($task, $target)->fingerprint, $this->owner);
+
+        $this->em->clear();
+        $item = $this->em->getRepository(TaskSyncItem::class)->findOneBy(['externalId' => 'a1']);
+        self::assertInstanceOf(TaskSyncItem::class, $item);
+        self::assertNull($item->getTask());
     }
 
     private function planner(): TaskMovePlanner

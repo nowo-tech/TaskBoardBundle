@@ -117,7 +117,7 @@ final readonly class TaskApiChecklistOperations
         foreach ($this->items($task, $name) as $item) {
             $data       = TaskFormData::fromTask($item);
             $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
-            $this->tasks->update($item, $data, $principal->user);
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
         }
         $this->audit->written($principal, 'checklist.update', $task->getBoard(), $task->getId(), [], ['name']);
 
@@ -161,21 +161,17 @@ final readonly class TaskApiChecklistOperations
         $resolved = $input->bool('resolved');
         $assignee = $input->has('assignee') ? $this->assignee($principal, $task, $input) : null;
 
-        try {
-            if ($resolved === true && !$item->isCompleted()) {
-                $this->tasks->moveToDone($item, $principal->user);
-            } elseif ($resolved === false && $item->isCompleted()) {
-                $first = $item->getBoard()->getColumns()->first();
-                if ($first instanceof BoardColumn) {
-                    $this->tasks->moveToColumn($item, $first->getId(), $principal->user);
-                }
+        if ($resolved === true && !$item->isCompleted()) {
+            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user));
+        } elseif ($resolved === false && $item->isCompleted()) {
+            $first = $item->getBoard()->getColumns()->first();
+            if ($first instanceof BoardColumn) {
+                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user));
             }
-        } catch (TaskReopenRefusedException) {
-            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
         }
         $data->columnId = $item->getColumn()?->getId();
         if ($data->title !== $item->getTitle()) {
-            $this->tasks->update($item, $data, $principal->user);
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
         }
         if ($assignee !== null) {
             $this->members->assign($item, new TaskMemberFormData($assignee, TaskMemberRole::Assignee), $principal->user);
@@ -289,6 +285,26 @@ final readonly class TaskApiChecklistOperations
     {
         if ($this->validator->validate($value, $constraints)->count() > 0) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid ' . $field);
+        }
+    }
+
+    /**
+     * Since 2.2.1 (audit IB-L1): every write here that the host's limit refuses is 403 `PLAN_002`, never a 500.
+     *
+     * @template T
+     *
+     * @param callable(): T $write
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return T
+     */
+    private function withinPlan(callable $write): mixed
+    {
+        try {
+            return $write();
+        } catch (TaskReopenRefusedException) {
+            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
         }
     }
 }

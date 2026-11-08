@@ -13,6 +13,12 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
  */
 final class TaskFormData
 {
+    /**
+     * Since 2.2.1 (audit IB-L1): set by {@see fromTask()}. A null `columnId` then keeps the task's column (or none), so a
+     * write of some fields never moves the task; otherwise null chooses the board's first column, as a form does.
+     */
+    public bool $keepsColumn = false;
+
     public function __construct(
         public string $title = '',
         public ?string $description = null,
@@ -34,7 +40,7 @@ final class TaskFormData
      */
     public static function fromTask(Task $task): self
     {
-        return new self(
+        $data = new self(
             title: $task->getTitle(),
             description: $task->getDescription(),
             priority: $task->getPriority(),
@@ -45,5 +51,8 @@ final class TaskFormData
             color: $task->getColor(),
             startAt: $task->getStartAt(),
         );
+        $data->keepsColumn = true;
+
+        return $data;
     }
 }

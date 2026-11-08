@@ -17,13 +17,16 @@ final class TestSyncLimitChecker implements SyncLimitCheckerInterface
 
     public static bool $refuseBytes = false;
 
+    /** Since 2.2.1: with $refuseTasks, the first calls this allows before refusing (the limit changing between two asks). */
+    public static int $allowedTaskCalls = 0;
+
     /** @var list<array{0: int, 1: int}> */
     public static array $calls = [];
 
     public function check(TaskBoard $board, int $newTasks, int $newBytes): ?LimitRefusal
     {
         self::$calls[] = [$newTasks, $newBytes];
-        if ($newTasks > 0 && self::$refuseTasks) {
+        if ($newTasks > 0 && self::$refuseTasks && self::$allowedTaskCalls-- <= 0) {
             return new LimitRefusal('active_tasks', overTasks: $newTasks);
         }
         if ($newBytes > 0 && self::$refuseBytes) {
@@ -35,8 +38,9 @@ final class TestSyncLimitChecker implements SyncLimitCheckerInterface
 
     public static function reset(): void
     {
-        self::$refuseTasks = false;
-        self::$refuseBytes = false;
-        self::$calls       = [];
+        self::$refuseTasks      = false;
+        self::$refuseBytes      = false;
+        self::$allowedTaskCalls = 0;
+        self::$calls            = [];
     }
 }

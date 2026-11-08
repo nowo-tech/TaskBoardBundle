@@ -830,3 +830,9 @@ task_board.recurrence.flash.unskip: "Skip undone."
 task_board.recurrence.flash.not_done: "Nothing changed: that is not possible now."
 task_board.copy.refusal.synced_task: "A task that follows a provider cannot repeat."
 task_board.copy.refusal.already_recurring: "This task already repeats."
+
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "You may not change “%task%”, which would move with it."
+task_board.copy.refusal.subtask_hidden: "A subtask you cannot see would move with it."
+task_board.copy.hidden: "%count% subtask(s) you cannot see are left out."
+task_board.copy.imported_fields: "Imported fields stay on the task, read-only: %fields%."

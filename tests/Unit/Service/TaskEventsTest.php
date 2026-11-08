@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -21,6 +22,8 @@ use Nowo\TaskBoardBundle\Event\TaskMemberAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -28,6 +31,8 @@ use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -108,6 +113,105 @@ final class TaskEventsTest extends TestCase
         self::assertInstanceOf(TaskMovedEvent::class, $moved);
         self::assertSame($this->todo, $moved->getFromColumn());
         self::assertSame($this->doing, $moved->getToColumn());
+    }
+
+    /** Since 2.2.1: a column change through update() completes and reopens as moveToColumn() does, with its events once. */
+    public function testUpdateIntoTheLastColumnCompletesAndOutOfItReopens(): void
+    {
+        $task    = new Task($this->board, 'Task', $this->user, column: $this->doing);
+        $manager = $this->manager();
+
+        $manager->update($task, new TaskFormData(title: 'Task', columnId: $this->done->getId()), $this->user);
+
+        self::assertTrue($task->isCompleted());
+        self::assertNotNull($task->getCompletedAt());
+        self::assertSame([TaskBoardEvents::TASK_UPDATED, TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_COMPLETED], $this->names());
+        self::assertSame(1, $this->historyCount($task, TaskChangeType::Completed));
+
+        $this->events = [];
+        $manager->update($task, new TaskFormData(title: 'Task', columnId: $this->todo->getId()), $this->user);
+
+        self::assertFalse($task->isCompleted());
+        self::assertSame([TaskBoardEvents::TASK_UPDATED, TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_REOPENED], $this->names());
+        self::assertSame(2, $this->historyCount($task, TaskChangeType::Completed));
+    }
+
+    /** Since 2.2.1: the host's limit refuses a reopening through update() before anything changes or is saved. */
+    public function testUpdateThatReopensOverTheLimitChangesNothing(): void
+    {
+        $task       = (new Task($this->board, 'Done', $this->user, column: $this->done))->markCompleted();
+        $repository = $this->createMock(TaskRepositoryInterface::class);
+        $repository->method('findByBoard')->willReturn([]);
+        $repository->expects(self::never())->method('save');
+        $limits = $this->createMock(SyncLimitCheckerInterface::class);
+        $limits->expects(self::once())->method('check')->with($this->board, 1, 0)->willReturn(new LimitRefusal('active_tasks', overTasks: 1));
+        $manager = new TaskManager($repository, new TaskChangeRecorder(), $this->dispatcher, $limits);
+
+        try {
+            $manager->update($task, new TaskFormData(title: 'Renamed', columnId: $this->todo->getId()), $this->user);
+            self::fail('The reopening should be refused.');
+        } catch (TaskReopenRefusedException $exception) {
+            self::assertSame('active_tasks', $exception->refusal->code);
+        }
+
+        self::assertSame('Done', $task->getTitle());
+        self::assertSame($this->done, $task->getColumn());
+        self::assertTrue($task->isCompleted());
+        self::assertCount(0, $task->getChangeHistory());
+        self::assertSame([], $this->names());
+    }
+
+    /** A caller that already moved the task (the Task API) passes its current column: the move and completion fire once. */
+    public function testUpdateAfterAMoveDoesNotDispatchTheMoveAgain(): void
+    {
+        $task    = new Task($this->board, 'Task', $this->user, column: $this->doing);
+        $manager = $this->manager();
+
+        self::assertTrue($manager->moveToColumn($task, $this->done->getId(), $this->user));
+        $manager->update($task, new TaskFormData(title: 'Renamed', columnId: $task->getColumn()?->getId()), $this->user);
+
+        self::assertSame([TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_COMPLETED, TaskBoardEvents::TASK_UPDATED], $this->names());
+        self::assertTrue($task->isCompleted());
+        self::assertSame(1, $this->historyCount($task, TaskChangeType::Completed));
+    }
+
+    /** Since 2.2.1: a column that is not the board's is refused; the task keeps its column and nothing changes. */
+    public function testUpdateToAnUnknownColumnIsRefused(): void
+    {
+        $task       = new Task($this->board, 'Task', $this->user, column: $this->doing);
+        $repository = $this->createMock(TaskRepositoryInterface::class);
+        $repository->expects(self::never())->method('save');
+
+        try {
+            $this->manager($repository)->update($task, new TaskFormData(title: 'Renamed', columnId: 'not-a-column'), $this->user);
+            self::fail('An unknown column should be refused.');
+        } catch (ColumnNotFoundException $exception) {
+            self::assertStringContainsString('not-a-column', $exception->getMessage());
+        }
+
+        self::assertSame($this->doing, $task->getColumn());
+        self::assertSame('Task', $task->getTitle());
+        self::assertCount(0, $task->getChangeHistory());
+        self::assertSame([], $this->names());
+    }
+
+    /** Audit IB-L1: data from fromTask() keeps a task without a column where it is; a form's empty column still picks the first. */
+    public function testFieldsFromTheTaskNeverMoveATaskWithoutAColumn(): void
+    {
+        $task       = (new Task($this->board, 'Loose', $this->user))->markCompleted();
+        $data       = TaskFormData::fromTask($task);
+        $data->tags = ['x'];
+
+        $this->manager()->update($task, $data, $this->user);
+
+        self::assertTrue($data->keepsColumn);
+        self::assertSame([null, true, ['x']], [$task->getColumn(), $task->isCompleted(), $task->getTags()]);
+        self::assertSame([TaskBoardEvents::TASK_UPDATED], $this->names());
+
+        $this->events = [];
+        $this->manager()->update($task, new TaskFormData(title: 'Loose', tags: ['x']), $this->user);
+        self::assertSame($this->todo, $task->getColumn(), 'a form without a column chooses the first one (note 2)');
+        self::assertSame([TaskBoardEvents::TASK_UPDATED, TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_REOPENED], $this->names());
     }
 
     public function testUpdateWithoutChangesDispatchesNothing(): void
@@ -228,5 +332,17 @@ final class TaskEventsTest extends TestCase
     private function names(): array
     {
         return array_map(static fn (array $entry): string => $entry[0], $this->events);
+    }
+
+    private function historyCount(Task $task, TaskChangeType $type): int
+    {
+        $count = 0;
+        foreach ($task->getChangeHistory() as $entry) {
+            if ($entry->getChangeType() === $type) {
+                ++$count;
+            }
+        }
+
+        return $count;
     }
 }

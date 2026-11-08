@@ -830,3 +830,9 @@ task_board.recurrence.flash.unskip: "Überspringen rückgängig gemacht."
 task_board.recurrence.flash.not_done: "Nichts geändert: das ist jetzt nicht möglich."
 task_board.copy.refusal.synced_task: "Eine Aufgabe, die einem Anbieter folgt, kann sich nicht wiederholen."
 task_board.copy.refusal.already_recurring: "Diese Aufgabe wiederholt sich bereits."
+
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Sie dürfen „%task%“ nicht ändern, die mitverschoben würde."
+task_board.copy.refusal.subtask_hidden: "Eine Unteraufgabe, die Sie nicht sehen, würde mitverschoben."
+task_board.copy.hidden: "%count% Unteraufgabe(n), die Sie nicht sehen, bleiben außen vor."
+task_board.copy.imported_fields: "Importierte Felder bleiben an der Aufgabe, schreibgeschützt: %fields%."

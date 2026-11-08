@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Move;
 
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -19,6 +20,7 @@ use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+use Throwable;
 
 use function in_array;
 use function max;
@@ -54,7 +56,7 @@ final readonly class TaskMover
      */
     public function move(Task $task, TaskBoard $target, array $columnMap, string $fingerprint, object $actor): TaskMovePlan
     {
-        $plan = $this->planner->plan($task, $target, $columnMap);
+        $plan = $this->planner->plan($task, $target, $columnMap, $actor);
         if ($plan->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
@@ -66,44 +68,71 @@ final readonly class TaskMover
             throw new TaskCopyRefusedException('quota', [], $refusal);
         }
 
-        $this->entityManager->wrapInTransaction(function () use ($plan, $task, $target, $columnMap, $actor): void {
-            $source    = $plan->sourceBoard;
-            $positions = $this->nextPositions($target);
-            $tree      = TaskMovePlanner::subtree($task);
-            $task->setParent(null);
-            foreach ($tree as $node) {
-                foreach ($node->getMembers() as $member) {
-                    if (in_array($member->getId(), $plan->memberIds, true)) {
-                        $this->changeRecorder->recordMember($node, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value);
-                        $node->removeMember($member);
-                    }
-                }
-                foreach ([...$node->getOutgoingDependencies(), ...$node->getIncomingDependencies()] as $dependency) {
-                    if (in_array($dependency->getId(), $plan->dependencyIds, true)) {
-                        $outgoing = $dependency->getSourceTask() === $node;
-                        $other    = $outgoing ? $dependency->getTargetTask() : $dependency->getSourceTask();
-                        $node->removeDependency($dependency);
-                        $this->changeRecorder->record($node, $actor, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $dependency->getDependencyType()->relation(!$outgoing));
-                        $this->changeRecorder->record($other, $actor, TaskChangeType::DependencyRemoved, $node->getTitle(), null, $dependency->getDependencyType()->relation($outgoing));
-                    }
-                }
-                $column = TaskMovePlanner::targetColumn($node, $target, $columnMap);
-                $key    = $column?->getId() ?? '';
-                $node->changeBoard($target, $column, $positions[$key] ?? 0);
-                $positions[$key] = ($positions[$key] ?? 0) + 1;
-                $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $source->getName(), $target->getName());
+        // Audit IC-L2: not wrapInTransaction(), which closes the entity manager on any exception: a refusal found inside
+        // rolls back and leaves it usable, so the page can show the new preview.
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $this->entityManager->lock($task, LockMode::PESSIMISTIC_WRITE);
+            if ($this->planner->snapshot($task) !== $plan->snapshot) {
+                throw new TaskCopyRefusedException('stale');
             }
-            if ($this->syncEnabled) {
-                foreach ($this->entityManager->getRepository(TaskSyncItem::class)->findBy(['task' => $plan->taskIds]) as $item) {
-                    $item->setTask(null);
-                }
+            $this->apply($plan, $task, $target, $columnMap, $actor);
+            $connection->commit();
+        } catch (Throwable $failure) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
             }
-            $this->taskRepository->save($task);
-        });
+
+            throw $failure;
+        }
 
         $this->eventDispatcher?->dispatch(new TaskBoardChangedEvent($task, $actor, $plan->sourceBoard->getId(), $target->getId(), $plan->taskIds), TaskBoardEvents::TASK_BOARD_CHANGED);
 
         return $plan;
+    }
+
+    /**
+     * The writes of a move, inside its transaction, exactly as the plan said.
+     *
+     * @param array<string, string> $columnMap
+     */
+    private function apply(TaskMovePlan $plan, Task $task, TaskBoard $target, array $columnMap, object $actor): void
+    {
+        $source    = $plan->sourceBoard;
+        $positions = $this->nextPositions($target);
+        $tree      = TaskMovePlanner::subtree($task);
+        $task->setParent(null);
+        foreach ($tree as $node) {
+            foreach ($node->getMembers() as $member) {
+                if (in_array($member->getId(), $plan->memberIds, true)) {
+                    $this->changeRecorder->recordMember($node, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value);
+                    $node->removeMember($member);
+                }
+            }
+            foreach ([...$node->getOutgoingDependencies(), ...$node->getIncomingDependencies()] as $dependency) {
+                if (in_array($dependency->getId(), $plan->dependencyIds, true)) {
+                    $outgoing = $dependency->getSourceTask() === $node;
+                    $other    = $outgoing ? $dependency->getTargetTask() : $dependency->getSourceTask();
+                    $node->removeDependency($dependency);
+                    $this->changeRecorder->record($node, $actor, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $dependency->getDependencyType()->relation(!$outgoing));
+                    $this->changeRecorder->record($other, $actor, TaskChangeType::DependencyRemoved, $node->getTitle(), null, $dependency->getDependencyType()->relation($outgoing));
+                }
+            }
+            $column = TaskMovePlanner::targetColumn($node, $target, $columnMap);
+            $key    = $column?->getId() ?? '';
+            $node->changeBoard($target, $column, $positions[$key] ?? 0);
+            $positions[$key] = ($positions[$key] ?? 0) + 1;
+            $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $source->getName(), $target->getName());
+        }
+        // Audit IC-I5: whenever the sync tables exist, sync on or off now. IC-I4: the tombstone keeps the task as
+        // detached, so the panel still shows its provider data, read-only, and the people tools still erase it.
+        if ($this->planner->syncMapped()) {
+            foreach ($this->entityManager->getRepository(TaskSyncItem::class)->findBy(['task' => $plan->taskIds]) as $item) {
+                $item->detach();
+            }
+        }
+        $this->taskRepository->save($task);
     }
 
     /**

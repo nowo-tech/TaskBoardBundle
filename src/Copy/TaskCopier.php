@@ -18,7 +18,9 @@ use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
+use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
@@ -68,18 +70,21 @@ final readonly class TaskCopier
         private TaskBoardQuota $quota = new TaskBoardQuota(),
         private int $maxSubtasks = self::DEFAULT_MAX_SUBTASKS,
         private bool $syncEnabled = false,
+        // Since audit IC-L1: subtasks the actor cannot view are left out of a copy (none wired: every subtask is copied).
+        private ?TaskBoardResourceAccessChecker $access = null,
     ) {
     }
 
     /**
-     * What {@see self::copy()} would write with these options. Read-only.
+     * What {@see self::copy()} would write with these options for `$actor` (subtasks they cannot view are left out and
+     * counted in `hidden`). Read-only.
      *
      * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`
      */
-    public function preview(Task $source, TaskCopyOptions $options = new TaskCopyOptions()): TaskCopyPreview
+    public function preview(Task $source, TaskCopyOptions $options = new TaskCopyOptions(), ?object $actor = null): TaskCopyPreview
     {
-        $target = $options->targetBoard ?? $source->getBoard();
-        $tree   = $this->tree($source, $options);
+        $target          = $options->targetBoard ?? $source->getBoard();
+        [$tree, $hidden] = $this->visibleTree($source, $options, $actor);
         $this->refuseUnsupported($target, $tree, $options);
 
         $copied  = 0;
@@ -114,7 +119,7 @@ final readonly class TaskCopier
         $synced   = $this->synced($ids);
         $column   = TaskColumnRule::target($target, $source->getColumn(), false, $options->columnId);
 
-        $facts = [$source->getId(), $target->getId(), $column?->getId(), $ids, $copied, $dropped, $comments, $timeEntries, $tracked, $dependencies, $links, $synced, $options->subtasks, $options->dates, $options->members];
+        $facts = [$source->getId(), $target->getId(), $column?->getId(), $ids, $copied, $dropped, $comments, $timeEntries, $tracked, $dependencies, $links, $synced, $options->subtasks, $options->dates, $options->members, $hidden];
 
         return new TaskCopyPreview(
             targetBoard: $target,
@@ -129,6 +134,7 @@ final readonly class TaskCopier
             links: $links,
             synced: $synced,
             fingerprint: hash('sha256', json_encode($facts, JSON_THROW_ON_ERROR)),
+            hidden: $hidden,
         );
     }
 
@@ -141,7 +147,7 @@ final readonly class TaskCopier
     public function copy(Task $source, TaskCopyOptions $options, object $actor, ?string $fingerprint = null): TaskCopyResult
     {
         $target = $options->targetBoard ?? $source->getBoard();
-        if ($fingerprint !== null && $this->preview($source, $options)->fingerprint !== $fingerprint) {
+        if ($fingerprint !== null && $this->preview($source, $options, $actor)->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
         $tree = $this->check($source, $options, $actor);
@@ -182,7 +188,7 @@ final readonly class TaskCopier
 
     /**
      * Since 2.3.0: everything {@see self::copy()} refuses before writing, for a caller that writes first (spec 215's
-     * occurrence row): the target, the subtree cap and the host's quota.
+     * occurrence row): the target, the subtree cap and the host's quota. Subtasks `$actor` cannot view are left out.
      *
      * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`, `quota`
      *
@@ -191,7 +197,7 @@ final readonly class TaskCopier
     public function check(Task $source, TaskCopyOptions $options, object $actor): array
     {
         $target = $options->targetBoard ?? $source->getBoard();
-        $tree   = $this->tree($source, $options);
+        [$tree] = $this->visibleTree($source, $options, $actor);
         $this->refuseUnsupported($target, $tree, $options);
         $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $target->getTenantKey(), $target, count($tree), $actor);
         if ($refusal !== null) {
@@ -202,25 +208,32 @@ final readonly class TaskCopier
     }
 
     /**
-     * The source and, with `subtasks`, its descendants that are not archived, in pre-order (siblings by position).
+     * Audit IC-L1: the tree as `$actor` may see it. A subtask they cannot view is left out with its own subtasks (counted);
+     * without an actor or an access checker, every subtask that is not archived.
      *
-     * @return list<Task>
+     * @return array{0: list<Task>, 1: int}
      */
-    private function tree(Task $source, TaskCopyOptions $options): array
+    private function visibleTree(Task $source, TaskCopyOptions $options, ?object $actor): array
     {
-        $order = [];
-        $stack = [$source];
+        $order  = [];
+        $hidden = 0;
+        $stack  = [$source];
         while ($stack !== []) {
             $task    = array_pop($stack);
             $order[] = $task;
             $kids    = $options->subtasks ? array_filter($task->getSubtasks()->toArray(), static fn (Task $child): bool => !$child->isArchived()) : [];
             usort($kids, static fn (Task $a, Task $b): int => $b->getPosition() <=> $a->getPosition());
             foreach ($kids as $child) {
+                if ($actor !== null && $this->access instanceof TaskBoardResourceAccessChecker && !$this->access->canViewTask($actor, $child)) {
+                    $hidden += count(TaskMovePlanner::subtree($child));
+
+                    continue;
+                }
                 $stack[] = $child;
             }
         }
 
-        return $order;
+        return [$order, $hidden];
     }
 
     /**
