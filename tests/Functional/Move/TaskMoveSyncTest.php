@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Move;
 
 use DateTimeImmutable;
+use Doctrine\ORM\Tools\SchemaTool;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -176,6 +177,19 @@ final class TaskMoveSyncTest extends SyncFunctionalTestCase
         $item = $this->em->getRepository(TaskSyncItem::class)->findOneBy(['externalId' => 'a1']);
         self::assertInstanceOf(TaskSyncItem::class, $item);
         self::assertNull($item->getTask());
+    }
+
+    public function testTheDetachedTaskForeignKeyHasTheNameDoctrineGenerates(): void
+    {
+        // Audit IC-I4: the name in UPGRADING and the demo migration, so schema validation reports no rename.
+        $schema = (new SchemaTool($this->em))->getSchemaFromMetadata([$this->em->getClassMetadata(TaskSyncItem::class), $this->em->getClassMetadata(Task::class), $this->em->getClassMetadata(TaskBoard::class)]);
+        $names  = [];
+        foreach ($schema->getTable('task_board_sync_items')->getForeignKeys() as $key) {
+            if ($key->getLocalColumns() === ['detached_task_id']) {
+                $names[] = $key->getName();
+            }
+        }
+        self::assertSame(['FK_3BD8DF5A4F92A733'], $names);
     }
 
     private function planner(): TaskMovePlanner

@@ -73,7 +73,9 @@ final readonly class TaskMover
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
         try {
-            $this->entityManager->lock($task, LockMode::PESSIMISTIC_WRITE);
+            // Audit IC-L2r: every task row of the tree, level by level, before the re-read. A concurrent write that refers to
+            // any of them (a dependency, a member, a subtask) then waits for this commit instead of slipping in after the check.
+            $this->lockTree($task);
             if ($this->planner->snapshot($task) !== $plan->snapshot) {
                 throw new TaskCopyRefusedException('stale');
             }
@@ -131,8 +133,26 @@ final readonly class TaskMover
             foreach ($this->entityManager->getRepository(TaskSyncItem::class)->findBy(['task' => $plan->taskIds]) as $item) {
                 $item->detach();
             }
+        } else {
+            // Audit IC-I5 (delta): sync off, so not mapped, but the rows of an earlier sync may be there.
+            $this->planner->detachUnmappedItems($plan->taskIds);
         }
         $this->taskRepository->save($task);
+    }
+
+    /**
+     * Audit IC-L2r: `SELECT … FOR UPDATE` on the task and every descendant, a level at a time (no-op on SQLite).
+     */
+    private function lockTree(Task $task): void
+    {
+        $level = [$task->getId()];
+        $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
+            ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+        while ($level !== []) {
+            /** @var list<string> $level */
+            $level = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
+                ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+        }
     }
 
     /**
