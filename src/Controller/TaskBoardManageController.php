@@ -987,9 +987,15 @@ final class TaskBoardManageController extends AbstractController
         if ($taskForm->isSubmitted() && $taskForm->isValid()) {
             /** @var TaskFormData $data */
             $data = $taskForm->getData();
-            $this->taskManager->update($task, $data, $user);
-            $this->logWrite('task_update', ['task_id' => $taskId]);
-            $this->addFlash('success', 'task_board.flash.task_updated');
+            try {
+                $this->taskManager->update($task, $data, $user);
+                $this->logWrite('task_update', ['task_id' => $taskId]);
+                $this->addFlash('success', 'task_board.flash.task_updated');
+            } catch (TaskReopenRefusedException) {
+                // Since 2.2.1: a column change in the form is a move, so the host's limit refuses it as on the board; nothing is saved.
+                $this->logRefused('task_reopen_limit');
+                $this->addFlash('error', 'task_board.flash.task_reopen_refused');
+            }
 
             return $this->afterTaskWrite($request, $task, $user);
         }

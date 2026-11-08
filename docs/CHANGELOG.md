@@ -87,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.2.1. Audit status: re-verification pending.
+
+### Fixed
+
+- **A column change through the task's edit form is a move.** `TaskManager::update()` changed the column without the completion sync, the reopen limit or the completed / reopened events of `moveToColumn()`: an edit form posting another column (a host template that shows the column field, or a page left open while someone else moved the task) reopened a completed task past the host's limit of active tasks, left a task in the done column open, and fired no `TASK_COMPLETED` / `TASK_REOPENED`. It now asks the limit before anything changes (`TaskReopenRefusedException`: the edit form shows the board's "not moved" flash, logs `task_reopen_limit` and saves nothing of the form), puts the task at the end of its new column, syncs the completion with its history, and fires `TASK_COMPLETED` / `TASK_REOPENED` after `TASK_UPDATED` and `TASK_MOVED`. Callers that move first (the Task API) pass the current column, so nothing fires twice. Import and provider sync do not use this path and keep their rules.
+
 ## [2.2.0] - 2026-11-08
 
 Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `637494e`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).

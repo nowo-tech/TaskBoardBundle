@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.2.1](#to-221)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
@@ -153,6 +154,21 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.2.1
+
+Not released yet. Audit status: re-verification pending.
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+**Behaviour change: a column change through the task's edit form is a move.** Nothing to configure. `TaskManager::update()` (the edit form's save) now does what `moveToColumn()` does when the column changes:
+
+- With a host limit (`sync.limit_checker`), moving a completed task out of the done column asks it first. A refusal throws `TaskReopenRefusedException` before anything changes: the edit form shows "The task was not moved…", logs `task_reopen_limit`, and saves **none** of the form's fields. Before, the edit passed and the task reopened over the limit.
+- Moving into the done column completes the task (with its history entry) and fires `TASK_COMPLETED`; moving out reopens it and fires `TASK_REOPENED`, after `TASK_UPDATED` and `TASK_MOVED`. The task goes to the end of its new column.
+
+A host that calls `TaskManager::update()` itself with another column catches `TaskReopenRefusedException`, as it does around `move()` and `moveToColumn()`. A host that moves first and then calls `update()` passes the task's current column (as the Task API does): then nothing fires twice. The default task page sends the task's current column, so an edit there only moves when the task moved meanwhile.
 
 ## To 2.2.0
 
