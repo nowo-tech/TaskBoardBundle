@@ -31,6 +31,7 @@
 - [Provider sync (since 1.23)](#provider-sync-since-123)
 - [Assets](#assets)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
+- [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [New board (since 1.30)](#new-board-since-130)
 
 ## Required
@@ -716,6 +717,17 @@ Rebuild after changes:
 ```bash
 pnpm install && pnpm run build
 ```
+
+## Move and duplicate (since 2.3)
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `move.enabled` | `false` | The routes `task_move_board` and `task_duplicate`, and the panel's two actions |
+| `move.max_subtasks` | `200` | The most subtasks a move or a duplicate carries; more is refused with the count |
+| `move.targets` | `null` | Service id of a `Move\TaskBoardTargetsInterface`. null: the active boards of the task's tenant the user may edit |
+| `routes.task_move_board` | `/tools/task-board/task/{taskId}/move-board` | With `move.enabled`. GET, POST |
+| `routes.task_duplicate` | `/tools/task-board/task/{taskId}/duplicate` | With `move.enabled`. GET, POST |
+| `web_ui.templates.task_move` / `task_duplicate` | `@NowoTaskBoardBundle/manage/task_move.html.twig` / `task_duplicate.html.twig` | The two pages |
 
 ## Task numbers and calendar (since 2.1)
 

@@ -11,6 +11,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
@@ -182,6 +183,27 @@ class Task
     public function getBoard(): TaskBoard
     {
         return $this->board;
+    }
+
+    /**
+     * Since 2.3.0 (spec 217): puts the task on another board, in `$column` of that board. Only this task: the mover walks
+     * the subtree. The time entries keep their rows and take the new board as their snapshot.
+     *
+     * @internal used by {@see TaskMover} only
+     */
+    public function changeBoard(TaskBoard $board, ?BoardColumn $column, int $position): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->board = $board;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->column = $column;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->position = $position;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
+        $this->refreshTimeEntrySnapshots();
+
+        return $this;
     }
 
     public function getNumber(): ?int

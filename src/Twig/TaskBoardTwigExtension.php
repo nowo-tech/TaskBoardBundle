@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskTree;
@@ -112,7 +113,26 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         // Since 2.1.0 (spec 214): `task_numbers.enabled` and `calendar.enabled`.
         private readonly bool $taskNumbersEnabled = false,
         private readonly bool $calendarEnabled = false,
+        // Since 2.3.0 (spec 217): `move.enabled`, and who may edit a task and its board.
+        private readonly bool $moveEnabled = false,
+        private readonly ?TaskBoardResourceAccessChecker $resourceAccess = null,
     ) {
+    }
+
+    /**
+     * Since 2.3.0 (spec 217, FR-005): whether the task panel offers *Move to another board* and *Duplicate*. False with
+     * `move.enabled: false`, without a signed-in user, or when the user may not edit the task and its board, so nothing is
+     * rendered.
+     */
+    public function canCopy(Task $task): bool
+    {
+        if (!$this->moveEnabled) {
+            return false;
+        }
+        $user = $this->tokenStorage?->getToken()?->getUser();
+
+        return $user instanceof UserInterface && $this->resourceAccess instanceof TaskBoardResourceAccessChecker
+            && $this->resourceAccess->canEditTask($user, $task) && $this->resourceAccess->canEditBoard($user, $task->getBoard());
     }
 
     /**
@@ -269,6 +289,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_numbers_enabled', fn (): bool => $this->taskNumbersEnabled),
             new TwigFunction('nowo_task_board_calendar_enabled', fn (): bool => $this->calendarEnabled),
             new TwigFunction('nowo_task_board_calendar_tabs', $this->calendarTabs(...)),
+            new TwigFunction('nowo_task_board_can_copy', $this->canCopy(...)),
         ];
     }
 

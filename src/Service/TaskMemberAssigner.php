@@ -51,6 +51,14 @@ final readonly class TaskMemberAssigner
     }
 
     /**
+     * Since 2.3.0 (specs 215, 217): whether `$user` may be a member of a task of `$board`; true without an assignee provider.
+     */
+    public function canBeAssigned(TaskBoard $board, object $user): bool
+    {
+        return !$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($board, $user);
+    }
+
+    /**
      * @throws UnassignableUserException When the assignee provider refuses the user
      */
     public function assign(Task $task, TaskMemberFormData $data, object $actor): TaskMember

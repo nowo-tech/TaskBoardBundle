@@ -29,6 +29,7 @@ These extend `nowo_task_board_page_layout() ?? nowo_ui_layout.admin` and fill th
 | `list` | `manage/list.html.twig` | One `table` per column, with client filters and totals, so no single list scaffold fits |
 | `gantt` | `manage/gantt.html.twig` | The chart |
 | `calendar` | `manage/calendar.html.twig` | A grid of days with bars across them, or days as a list. Since 2.1, with `calendar.enabled` |
+| `task_move`, `task_duplicate` | `manage/task_move.html.twig`, `manage/task_duplicate.html.twig` | Choices, preview and confirmation of a move or a duplicate. Since 2.3, with `move.enabled` |
 | `connection_people` | `manage/connection_people.html.twig` | A long form of one row per person, with pills and a pager. Every part uses slots |
 
 ## Fragments

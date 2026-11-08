@@ -23,6 +23,12 @@ final class TaskBoardQuotaCheckEvent extends Event
 
     public const ACTION_IMPORT = 'import';
 
+    /**
+     * Since 2.3.0 (spec 217): open tasks moving into `$board` from another board (`$count` = how many). A listener that only
+     * knows the actions above lets it through.
+     */
+    public const ACTION_TASK_MOVE = 'task_move';
+
     private ?string $reason = null;
 
     public function __construct(

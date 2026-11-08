@@ -29,6 +29,12 @@ services:
             - '../../Bridge/TimeTrack/'
             # Since 2.1.0: loaded only with `task_numbers.enabled` (services_numbers.yaml).
             - '../../Number/'
+            # Since 2.3.0 (specs 215, 217): data carriers of the copier and the mover.
+            - '../../Copy/TaskCopyOptions.php'
+            - '../../Copy/TaskCopyPreview.php'
+            - '../../Copy/TaskCopyResult.php'
+            - '../../Copy/TaskColumnRule.php'
+            - '../../Move/TaskMovePlan.php'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'
@@ -81,6 +87,12 @@ services:
             $maxTasks: '%nowo_task_board.board.max_tasks%'
             # Since 1.24: the dialog mode header of an invalid board create (`board.create_dialog_header`).
             $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
+
+    # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
+    Nowo\TaskBoardBundle\Controller\TaskCopyController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
 
     Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver:
         class: Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver

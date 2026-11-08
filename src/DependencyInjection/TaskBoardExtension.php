@@ -31,6 +31,8 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -38,6 +40,10 @@ use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
+use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
+use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
@@ -240,6 +246,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->addTag('nowo_task_board.object_link_resolver');
         $this->registerSync($container, $loader, $config['sync']);
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
+        $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
@@ -289,6 +296,39 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+    }
+
+    /**
+     * Since 2.3.0 (spec 217): `move.*`. The copier, the planner and the mover are services either way (a host or a worker may
+     * call them); with `enabled: false` there is no route and no panel action, so nothing changes for a host.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerMoveAndCopy(ContainerBuilder $container, array $config, string $emName): void
+    {
+        $move    = $config['move'];
+        $enabled = (bool) $move['enabled'];
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $sync    = (bool) $config['sync']['enabled'];
+        $container->setParameter('nowo_task_board.move.enabled', $enabled);
+        $container->setParameter('nowo_task_board.move.max_subtasks', $move['max_subtasks']);
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$moveEnabled', $enabled);
+        $container->getDefinition(TaskCopyController::class)->setArgument('$templates', '%nowo_task_board.templates%');
+        $container->getDefinition(TaskBoardTwigExtension::class)
+            ->setArgument('$moveEnabled', $enabled)
+            ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class));
+        $container->getDefinition(TaskCopier::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$maxSubtasks', $move['max_subtasks'])
+            ->setArgument('$syncEnabled', $sync);
+        $container->getDefinition(TaskMovePlanner::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$maxSubtasks', $move['max_subtasks'])
+            ->setArgument('$syncEnabled', $sync);
+        $container->getDefinition(TaskMover::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$syncEnabled', $sync);
+        $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
     }
 
     /**

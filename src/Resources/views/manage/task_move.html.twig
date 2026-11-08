@@ -1,0 +1,64 @@
+{#
+    Move to another board (web_ui.templates.task_move, since 2.3.0, spec 217). Variables: page (FormPage, body only), task,
+    selectForm (GET: target board and column map), plan (TaskMovePlan or null), confirmForm (POST, or null), target, notice,
+    refusal. Step 1 chooses; step 2 is the preview, what is lost first, then the confirmation.
+#}
+{% extends '@NowoUiKitBundle/page/form.html.twig' %}
+{% import '@NowoTaskBoardBundle/manage/_task_copy_page.html.twig' as copyUi %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_page_header %}{% if nowo_task_board_ui.page_header %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block nowo_ui_form_body %}
+    <div class="nowo-task-copy" data-testid="nowo-task-move">
+        <section class="nowo-task-copy__step" aria-labelledby="nowo-task-move-step1">
+            <h2 id="nowo-task-move-step1" class="nowo-task-copy__title">{{ 'task_board.copy.step_target'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+            {% if selectForm.target.vars.choices is empty %}
+                <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-move-no-target">{{ 'task_board.copy.no_target'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {% else %}
+                {{ copyUi.select(selectForm, 'task_board.copy.preview') }}
+            {% endif %}
+        </section>
+        {{ copyUi.notices(notice, refusal) }}
+        {% if plan %}
+            <section class="nowo-task-copy__step" aria-labelledby="nowo-task-move-step2" data-testid="nowo-task-move-preview">
+                <h2 id="nowo-task-move-step2" class="nowo-task-copy__title">{{ 'task_board.copy.step_preview'|trans({'%board%': plan.targetBoard.name}, 'NowoTaskBoardBundle') }}</h2>
+                <h3 class="nowo-task-copy__subtitle">{{ 'task_board.copy.lost'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+                <ul class="nowo-task-copy__list" data-testid="nowo-task-move-lost">
+                    {% for label in plan.membersRemoved %}
+                        <li data-testid="nowo-task-move-member-removed">{{ 'task_board.copy.member_removed'|trans({'%name%': label}, 'NowoTaskBoardBundle') }}</li>
+                    {% endfor %}
+                    {% for title in plan.dependenciesRemoved %}
+                        <li data-testid="nowo-task-move-dependency-removed">{{ 'task_board.copy.dependency_removed'|trans({'%task%': title}, 'NowoTaskBoardBundle') }}</li>
+                    {% endfor %}
+                    {% if plan.syncDetached > 0 %}
+                        <li data-testid="nowo-task-move-sync">{{ 'task_board.copy.sync_detached'|trans({'%count%': plan.syncDetached}, 'NowoTaskBoardBundle') }}</li>
+                    {% endif %}
+                    {% if plan.reimportKeys > 0 %}
+                        <li data-testid="nowo-task-move-reimport">{{ 'task_board.copy.reimport'|trans({'%count%': plan.reimportKeys}, 'NowoTaskBoardBundle') }}</li>
+                    {% endif %}
+                    {% if plan.membersRemoved is empty and plan.dependenciesRemoved is empty and plan.syncDetached == 0 and plan.reimportKeys == 0 %}
+                        <li>{{ 'task_board.copy.nothing_lost'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                    {% endif %}
+                </ul>
+                <hr class="nowo-task-copy__divider">
+                <h3 class="nowo-task-copy__subtitle">{{ 'task_board.copy.kept'|trans({}, 'NowoTaskBoardBundle') }}</h3>
+                <ul class="nowo-task-copy__list" data-testid="nowo-task-move-kept">
+                    <li>{{ 'task_board.copy.tasks'|trans({'%count%': plan.subtasks}, 'NowoTaskBoardBundle') }}</li>
+                    {% if plan.becomesTopLevel %}<li data-testid="nowo-task-move-top-level">{{ 'task_board.copy.top_level'|trans({}, 'NowoTaskBoardBundle') }}</li>{% endif %}
+                    {% for row in plan.columns %}
+                        <li data-testid="nowo-task-move-column">{{ 'task_board.copy.column_row'|trans({'%from%': row.source ?: '—', '%to%': row.target ?? '—', '%count%': row.tasks}, 'NowoTaskBoardBundle') }}</li>
+                    {% endfor %}
+                    <li data-testid="nowo-task-move-time">{{ 'task_board.copy.time_moves'|trans({'%entries%': plan.timeEntries, '%people%': plan.timePeople, '%total%': (plan.trackedSeconds // 60)|nowo_task_board_duration}, 'NowoTaskBoardBundle') }}</li>
+                    <li>{{ 'task_board.copy.content_kept'|trans({'%comments%': plan.comments, '%documents%': plan.documents, '%links%': plan.links}, 'NowoTaskBoardBundle') }}</li>
+                    {% if plan.numberChanges %}<li data-testid="nowo-task-move-number">{{ 'task_board.copy.number_changes'|trans({}, 'NowoTaskBoardBundle') }}</li>{% endif %}
+                </ul>
+                {% if confirmForm %}{{ copyUi.confirm(confirmForm, 'task_board.copy.move_confirm', 'nowo-task-move-confirm') }}{% endif %}
+            </section>
+        {% endif %}
+    </div>
+{% endblock %}

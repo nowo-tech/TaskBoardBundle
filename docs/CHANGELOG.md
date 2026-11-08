@@ -87,6 +87,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Spec 217 (move and duplicate tasks between boards). Audit status: re-verification pending. Opt-in: with `move.enabled: false` (the default) there is no new route, panel action or table, and the pages' output does not change.
+
+### Added
+
+- **`Copy\TaskCopier`** (specs 215 and 217): copies a task with no `Request`, for the duplicate and for a host's worker. Copies title, description, priority, tags, colour, estimate and documents; by option dates, members still assignable and the subtask tree (open, at their depth). Never comments, tracked time, history, dependencies, links, sync rows, completion, archive state or number: one test per item. Asks `QUOTA_CHECK` (`task_create`, every task it creates) before writing, writes in one transaction through `TaskManager::create()` and `TaskMemberAssigner::assign()`, and refuses with `TaskCopyRefusedException`. `preview()` returns what does not carry over and a fingerprint.
+- **Move to another board** (`Move\TaskMovePlanner`, `Move\TaskMover`): the task and its whole subtree change board in one transaction, exactly as the plan said (columns by the sync's name rule, completed tasks to the last column, members not assignable and dependencies with tasks that stay removed, a subtask moved alone becomes top-level). Tracked time is never deleted: manual entries take the new board as their snapshot. A synced task is detached for good (its sync item becomes a tombstone), and a move waits for a running sync. `QUOTA_CHECK` gets the new action `task_move` for the open tasks that arrive. New event `TASK_BOARD_CHANGED` (`TaskBoardChangedEvent`, with every task id) after the commit; `TASK_MOVED` is not dispatched.
+- **Pages** with `move.enabled`: `task_move_board` and `task_duplicate` (GET choices, POST confirmation with a per-form CSRF token and the preview's fingerprint; a stale preview is shown again with a notice). Both work without JavaScript. The task panel shows *Move to another board* and *Duplicate* only to who may edit the task and its board. `move.targets`: a host's `TaskBoardTargetsInterface` decides the boards offered; any other target answers 404.
+- `TaskChangeType::BoardMoved`, `Duplicated`, `MemberNotCopied`; `Task::changeBoard()` (internal); `TaskMemberAssigner::canBeAssigned()`.
+
 ## [2.2.0] - 2026-11-08
 
 Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `637494e`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).

@@ -3896,3 +3896,37 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
         display: block;
     }
 }
+
+/* Since 2.3.0 (spec 217): Move to another board and Duplicate pages. */
+.nowo-task-copy {
+    display: grid;
+    gap: var(--nowo-task-space-4, 1rem);
+}
+
+.nowo-task-copy__title {
+    font-size: 1rem;
+    margin: 0 0 var(--nowo-task-space-2, 0.5rem);
+}
+
+.nowo-task-copy__subtitle {
+    font-size: 0.875rem;
+    margin: var(--nowo-task-space-2, 0.5rem) 0;
+}
+
+.nowo-task-copy__list {
+    margin: 0;
+    padding-inline-start: 1.25rem;
+}
+
+.nowo-task-copy__divider {
+    border: 0;
+    border-top: 1px solid var(--nowo-task-border, currentcolor);
+    margin: var(--nowo-task-space-3, 0.75rem) 0;
+}
+
+.nowo-task-copy__select,
+.nowo-task-copy__confirm {
+    display: grid;
+    gap: var(--nowo-task-space-2, 0.5rem);
+    justify-items: start;
+}

@@ -11,6 +11,7 @@
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
+- [Move and duplicate (2.3)](#move-and-duplicate-23)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
@@ -156,6 +157,22 @@ Both opt-in.
 | `TaskNumberLedger` | No access check: hosts check what `find()` and `findInScopes()` return. `purgeScope()` deletes a scope's numbers, is the host's to call on a tenant that is gone for good, and refuses while a task still carries a number there |
 | Second connection | A reservation inside a caller's transaction opens a short-lived connection with the same parameters, and writes only the counter. If that fails, it falls back to the caller's transaction: a gap at most, never a duplicate |
 | Calendar page | Reads only tasks of a board the user may view. URL filters are checked against what the board offers. Task titles reach the page through Twig escaping and the client redraws from the server's HTML (`DOMParser`, `importNode`) of its own same-origin page |
+
+## Move and duplicate (2.3)
+
+Off unless `move.enabled: true`. Audit status: re-verification pending.
+
+| Threat | Mitigation |
+|---|---|
+| Moving or copying into a board the user may not edit | The target must be one of `TaskBoardTargetsInterface::targets()` (default: `canEditBoard()` in the task's tenant), any other answers 404; the source needs `canEditTask()` and `canEditBoard()`, else 403; a task the user cannot see answers 404 |
+| A forged confirmation | Per-form CSRF tokens (`task_board_task_move_board`, `task_board_task_duplicate`); the GET choices write nothing |
+| Confirming a preview that no longer holds | The POST carries the preview's fingerprint; when the facts changed, nothing is written and the new preview is shown |
+| Plan limits skipped by a new write path | A duplicate asks `QUOTA_CHECK` `task_create` with every task it creates, a move `task_move` with the open tasks that arrive, before writing. A worker calling `TaskCopier` with no listener must ask its own limits |
+| Tracked time lost | A move never deletes a time entry: manual entries stay on their task with a new board snapshot; TimeTrack's rows point at the task id. A copy never copies time |
+| A partial move | One transaction: a failure changes no board, member or dependency (`TaskMoverTest`) |
+| A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
+| Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
+| Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
 
 ## UiKit migration (2.0.0)
 

@@ -64,6 +64,9 @@ final class TaskBoardEvents
     /** {@see TaskMentionEvent}: a comment mentions people (new mentions only on an edit), after flush (since 1.16). */
     public const TASK_MENTION = 'nowo_task_board.task_mention';
 
+    /** Since 2.3.0 (spec 217): {@see TaskBoardChangedEvent}, after the commit of a move. TASK_MOVED is not dispatched. */
+    public const TASK_BOARD_CHANGED = 'nowo_task_board.task_board_changed';
+
     /** {@see ColumnSetQueryEvent}: scope / list of the column sets (since 1.11). */
     public const COLUMN_SET_QUERY = 'nowo_task_board.column_set_query';
 

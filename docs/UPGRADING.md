@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To the next release (unreleased)](#to-the-next-release-unreleased)
+  - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
@@ -153,6 +155,20 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To the next release (unreleased)
+
+Audit status: re-verification pending.
+
+**A host that changes nothing** gets no new route, panel action or table, and its pages do not change. `TaskCopier`, `TaskMovePlanner` and `TaskMover` are services it may call; `TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE` (`task_move`) is a new action a quota listener that only knows the others lets through.
+
+### Move and duplicate: what a host does
+
+1. `move.enabled: true`. Optional `move.max_subtasks` (200) and `move.targets` (a `TaskBoardTargetsInterface`; the default offers the active boards of the task's tenant the user may edit). Narrow the targets to what your plans allow, e.g. boards of the same payer.
+2. **Plan limits.** The routes are POST `task_move_board` and `task_duplicate` (and their tenant copies). A duplicate asks `QUOTA_CHECK` `task_create` with the count of tasks it creates; a move asks `task_move` with the count of open tasks that arrive. A host that limits by route adds the duplicate route; a host that calls `TaskCopier` from a worker asks its own limits first, since the event may have no listener there.
+3. **Tracked time.** Listen to `TaskBoardEvents::TASK_BOARD_CHANGED`: `TaskBoardChangedEvent::$taskIds` lists every moved task. Update what you keep per task: TimeTrack's `board_id_snapshot` on `TimeEntry` and `ActiveTimer` (see TimeTrack), files bound to the board, audit rows. The bundle's manual entries are already updated, and no row is ever deleted.
+4. **Strings and icons.** `task_board.copy.*` in the bundle's 7 locales. A host on `ux_icon` imports `tabler:arrows-move` and `tabler:copy`.
+5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` keeps `remote_meta` and `custom_id` as a tombstone (task null). The task panel no longer shows them for that task.
 
 ## To 2.2.0
 
