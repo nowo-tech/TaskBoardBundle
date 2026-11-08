@@ -574,14 +574,15 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     /** Since 2.2.0: whether a host set `api.hooks.idempotency_store` (then the bundle's table is not mapped). */
     private function apiStoreReplaced(ContainerBuilder $container): bool
     {
+        // The last config that sets it wins, as in the merge (audit IA-L8).
+        $store = null;
         foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
-            $store = is_array($config['api'] ?? null) && is_array($config['api']['hooks'] ?? null) ? ($config['api']['hooks']['idempotency_store'] ?? null) : null;
-            if (is_string($store) && $store !== '') {
-                return true;
+            if (is_array($config['api'] ?? null) && is_array($config['api']['hooks'] ?? null) && array_key_exists('idempotency_store', $config['api']['hooks'])) {
+                $store = $config['api']['hooks']['idempotency_store'];
             }
         }
 
-        return false;
+        return is_string($store) && $store !== '';
     }
 
     private function syncEnabled(ContainerBuilder $container): bool
@@ -589,15 +590,20 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         return $this->optionEnabled($container, 'sync');
     }
 
+    /**
+     * Whether `<node>.enabled` ends up true, as the merged configuration will say: the last config that sets it wins, so
+     * `enabled: true` in a base file and `false` in a `when@prod` override is off (audit IA-L8; 2.1 took any true).
+     */
     private function optionEnabled(ContainerBuilder $container, string $node): bool
     {
+        $enabled = false;
         foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
-            if (is_array($config[$node] ?? null) && ($config[$node]['enabled'] ?? false) === true) {
-                return true;
+            if (is_array($config[$node] ?? null) && array_key_exists('enabled', $config[$node])) {
+                $enabled = $config[$node]['enabled'] === true;
             }
         }
 
-        return false;
+        return $enabled;
     }
 
     public function getAlias(): string

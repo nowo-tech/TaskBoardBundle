@@ -1,6 +1,6 @@
 # Task API
 
-A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit status: re-verification pending.**
+A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit IA (2026-11-08): Pass-Low at `<final>`.**
 
 ## Table of contents
 
@@ -74,6 +74,8 @@ Each request: level ∩ the person's access ∩ where. In this order, and the fi
 | The person may not | 403 `ACCESS_002` |
 
 Levels are not a chain: *Read* changes nothing, while *My tasks* works on its own tasks. See `TaskApiCapability`.
+
+**Where only narrows.** `TaskApiWhere::everything()` grants the person's whole reach: map a token's explicit "everything I can reach" to it, and **never an empty, missing or unreadable scope**, which must be `TaskApiWhere::limitedTo([], [])` (nothing). Access itself always comes from the checkers.
 
 **Where.** `TaskApiWhere::limitedTo($tenantKeys, $boardIds)`: each entry grants on its own. A named tenant reaches all its boards; a named board is reached even when its tenant is not listed. Nothing else widens: the person's access, the workspace hook and the tenant check apply to it too.
 

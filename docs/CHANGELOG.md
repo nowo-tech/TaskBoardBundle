@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
+Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `<final>`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
 
 ### Added
 
@@ -102,6 +102,10 @@ Target: 2.2.0, spec 213 (Task API). Audit status: re-verification pending. Opt-i
 - `Service\TaskCommentPolicy`: who may write, edit and delete a comment.
 - `Validation\TaskConstraints`: the rules of the fields a write takes.
 - `Service\TaskDependencyManager::findBetween()`, `Dto\TaskFormData::fromTask()`.
+
+### Fixed
+
+- A `sync`, `task_numbers` or `api` option enabled in one config file and disabled in a later one (a `when@prod` override) no longer maps its tables for Doctrine: `prepend()` now follows the last value set, as the merged configuration does. Since 2.1 any `enabled: true` mapped them (audit IA-L8).
 
 ### Changed
 

@@ -29,6 +29,10 @@ final readonly class TaskApiWhere
     }
 
     /**
+     * Everything the person can reach, minus the tenants the host removes. It grants the person's whole reach: a host maps a
+     * token's explicit "everything I can reach" to it, and never an empty, missing or unreadable scope, which must be
+     * {@see self::limitedTo()}`([], [])`. Where only narrows; access still comes from the checkers.
+     *
      * @param list<string> $exceptTenantKeys tenants the host removes
      */
     public static function everything(array $exceptTenantKeys = []): self
