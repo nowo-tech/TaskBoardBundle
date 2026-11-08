@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Move;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -26,6 +28,7 @@ use Throwable;
 
 use function in_array;
 use function max;
+use function str_contains;
 
 /**
  * Since 2.3.0 (spec 217, FR-006): moves a task and its subtasks to another board, in one transaction, exactly as its
@@ -73,7 +76,9 @@ final readonly class TaskMover
         // Audit IC-L2: not wrapInTransaction(), which closes the entity manager on any exception: a refusal found inside
         // rolls back and leaves it usable, so the page can show the new preview.
         $connection = $this->entityManager->getConnection();
+        $depth      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
+        $applying = false;
         try {
             // Audit IC-L2r: every task row of the tree, level by level, before the re-read. A concurrent write that refers to
             // any of them (a dependency, a member, a subtask) then waits for this commit instead of slipping in after the check.
@@ -81,15 +86,20 @@ final readonly class TaskMover
             if ($this->planner->snapshot($task) !== $plan->snapshot) {
                 throw new TaskCopyRefusedException('stale');
             }
+            $applying = true;
             $this->apply($plan, $task, $target, $columnMap, $actor);
             $connection->commit();
         } catch (Throwable $failure) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
+            $this->rollBack($connection, $depth);
+            // Audit IC-I9r (c): once apply() has started, the managed entities hold part of the move in memory. The
+            // database has rolled back, so close the entity manager (as Doctrine does when the flush itself fails): a later
+            // flush in the same request then throws instead of writing a half-applied move outside the transaction.
+            if ($applying) {
+                $this->entityManager->close();
             }
             // Audit IC-I9: a deadlock or a lock wait that timed out against a concurrent write of the same tree is "changed
             // since", as a stale plan is: nothing was written, and the user sees the new preview.
-            if ($failure instanceof DeadlockException || $failure instanceof LockWaitTimeoutException) {
+            if ($this->isLockConflict($failure)) {
                 throw new TaskCopyRefusedException('stale');
             }
 
@@ -99,6 +109,44 @@ final readonly class TaskMover
         $this->eventDispatcher?->dispatch(new TaskBoardChangedEvent($task, $actor, $plan->sourceBoard->getId(), $target->getId(), $plan->taskIds), TaskBoardEvents::TASK_BOARD_CHANGED);
 
         return $plan;
+    }
+
+    /**
+     * Audit IC-I9 / IC-I9r (a, b): whether a failure is a lock conflict with a concurrent write, so the database wrote
+     * nothing and the move can be offered again:
+     *  - Doctrine's deadlock and lock-wait-timeout exceptions (MySQL 1213 / 1205, PostgreSQL 40001 / 40P01, SQLite "locked");
+     *  - PostgreSQL `lock_not_available` (SQLSTATE 55P03, raised by `lock_timeout`), which Doctrine DBAL does not map;
+     *  - MySQL 1305 on a savepoint: InnoDB rolls back the whole transaction on a deadlock (and on a lock wait timeout with
+     *    `innodb_rollback_on_timeout`), so the flush's `ROLLBACK TO SAVEPOINT` fails and its error replaces the deadlock.
+     *    The savepoint can only be gone because the server ended the transaction: nothing was written.
+     */
+    private function isLockConflict(Throwable $failure): bool
+    {
+        if ($failure instanceof DeadlockException || $failure instanceof LockWaitTimeoutException) {
+            return true;
+        }
+        if (!$failure instanceof DriverException) {
+            return false;
+        }
+
+        return $failure->getSQLState() === '55P03' || ($failure->getCode() === 1305 && str_contains($failure->getMessage(), 'SAVEPOINT'));
+    }
+
+    /**
+     * Rolls the move's transaction back. Audit IC-I9r (b): when the server has already ended the transaction (a MySQL
+     * deadlock during the flush), rolling back to the flush's savepoint fails and leaves DBAL's nesting level behind;
+     * closing the connection resets it (the server has nothing left to undo) and the next query reconnects. A transaction
+     * the caller opened before the move (`$depth`) is left to the caller.
+     */
+    private function rollBack(Connection $connection, int $depth): void
+    {
+        try {
+            while ($connection->getTransactionNestingLevel() > $depth) {
+                $connection->rollBack();
+            }
+        } catch (Throwable) {
+            $connection->close();
+        }
     }
 
     /**

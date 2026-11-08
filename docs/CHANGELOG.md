@@ -89,6 +89,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Move: every lock conflict is "changed since"** (audit IC-I9r a, b). PostgreSQL's `lock_timeout` (SQLSTATE `55P03`, not mapped by Doctrine DBAL) and a MySQL deadlock raised during the flush (whose `ROLLBACK TO SAVEPOINT` fails with 1305 because InnoDB already rolled back) are answered as `stale` instead of a 500; nothing is written. In the second case the connection is closed to reset DBAL's transaction nesting level. Other driver errors still reach the caller.
+- **Move: no half-applied move after a failure** (audit IC-I9r c). Once the move has started to change the entities, any failure closes the entity manager, so a later `flush()` in the same request cannot write part of the move outside the rolled-back transaction. A refusal before that keeps it open. A transaction the caller opened before the move is left to the caller.
+
+### Documentation
+
+- SECURITY and UPGRADING ("To 2.3.1", "Locks"): the lock conflicts above, and the residuals of audit IC-I8r (a *Fields* document from before 1.28 never synced since stays visible on the target; with sync off and no `detached_task_id` column the source board's erasure does not find a moved task's document).
+
 ## [2.3.0] - 2026-11-08
 
 Specs 217 (move and duplicate tasks between boards), 215 (recurring tasks) and 216 FR-013 (why a change happens). **Schema change for every host:** the nullable column `task_board_task_change_history.cause` (see UPGRADING). Opt-in: with `move.enabled: false` and `recurrence.enabled: false` (the defaults) there is no new route, panel section or action, mapping or table, and the pages' output does not change.

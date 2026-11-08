@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.3.1](#to-231)
 - [To 2.3.0](#to-230)
   - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
   - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
@@ -159,6 +160,10 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
+## To 2.3.1
+
+No schema or configuration change. A move that hits a lock conflict now always ends as "changed since" (`stale`), never a 500: PostgreSQL's `lock_timeout` (SQLSTATE `55P03`) and a MySQL deadlock raised during the flush are mapped too. A move that fails after it started to change the entities closes the entity manager, so a `flush()` later in the same request (a host listener on the error, for example) throws `EntityManagerClosed` instead of writing part of the move; see "Locks" in [To 2.3.0](#to-230).
+
 ## To 2.3.0
 
 **A host that changes nothing** gets no new route, panel action or table, and its pages do not change. `TaskCopier`, `TaskMovePlanner` and `TaskMover` are services it may call; `TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE` (`task_move`) is a new action a quota listener that only knows the others lets through.
@@ -195,7 +200,7 @@ To use it: wrap a write in `TaskChangeContext::run('rule:42', fn () => …)`; in
    -- SQLite: ALTER TABLE task_board_sync_items ADD COLUMN detached_task_id VARCHAR(36) DEFAULT NULL REFERENCES task_board_tasks (id) ON DELETE SET NULL;
    ```
 
-6. **Locks.** A move locks every task row of the tree (`SELECT … FOR UPDATE`) for its transaction; a deadlock or a lock-wait timeout is answered as "changed since" (`stale`). PostgreSQL has no `lock_timeout` by default; if you set one (for example `SET lock_timeout = '5s'`), a move that times out ends as a server error (500), not `stale`, because Doctrine DBAL does not map SQLSTATE `55P03` to a lock-wait exception. Nothing is written in either case. The sync's "Fields" document of a moved task is hidden on the target board, like its field values, and erased with the source board.
+6. **Locks.** A move locks every task row of the tree (`SELECT … FOR UPDATE`) for its transaction; a lock conflict is answered as "changed since" (`stale`) and nothing is written: a deadlock, a lock-wait timeout (MySQL `innodb_lock_wait_timeout`), PostgreSQL's `lock_timeout` (SQLSTATE `55P03`, since 2.3.1; before, a 500) and a MySQL deadlock raised during the flush (since 2.3.1; before, a 500). PostgreSQL has no `lock_timeout` by default, so a move waits for a concurrent write of its tree to end; you may set one (for example `SET lock_timeout = '5s'`). A failure before the move changes anything in memory leaves the entity manager open (the page shows the new preview); a failure after it started (since 2.3.1, any failure) closes it, as Doctrine does when a flush fails: do not `flush()` the same entity manager after a refused or failed move in that request (Symfony gives the next request a new one). The sync's "Fields" document of a moved task is hidden on the target board, like its field values, and erased with the source board, except a document written before 1.28 and never synced since, which is not marked as the sync's and stays visible (audit IC-I8r). With sync off and a sync table without `detached_task_id`, add the column (item 5) so the source board's erasure still finds a moved task's document.
 7. **Access on the subtree (audit IC-L1).** A move needs `canEditTask()` on every task that moves; a refusal names a task the user can see and does not name one they cannot. A duplicate leaves out the subtasks the user cannot view, and its preview counts them. A host's `move.targets` answer is narrowed to active boards passing `canEditBoard()`; the tenant is not checked, since spec 217 lets a host offer boards of other tenants.
 
 ### Recurring tasks: what a host does
