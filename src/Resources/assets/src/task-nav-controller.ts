@@ -22,7 +22,7 @@ export default class TaskNavController extends Controller<HTMLElement> {
     private dirty = false;
 
     private readonly onInput = (event: Event): void => {
-        if (event.target instanceof Element && null !== event.target.closest('#nowo-task-edit-form, [form="nowo-task-edit-form"]')) {
+        if (event.target instanceof Element && null !== event.target.closest('[data-nowo-task-edit-form], #nowo-task-edit-form, [form="nowo-task-edit-form"]')) {
             this.dirty = true;
         }
     };

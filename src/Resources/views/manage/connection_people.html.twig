@@ -7,6 +7,8 @@
     the save starts the first import. Remote names and e-mails are untrusted text (escaped) and shown only to managers.
     board, connection, provider, directory, rows, peopleForm, filter, page, hasNext, peopleSummary, pendingReassigns,
     firstImportPending. Override with templates.connection_people.
+    Since 2.5.0 (TB-12): UiKit only — the filter is the kit's `tabs` partial (level secondary), the person's initials the
+    kit's `avatar` partial; no framework (Bootstrap) classes.
 #}
 
 {% block nowo_ui_styles %}
@@ -54,11 +56,12 @@
                 {% if directory is null %}
                     <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-none">{{ 'task_board.sync.people.none_yet'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</p>
                 {% else %}
-                    <nav class="nav nav-pills nowo-task-mb-3" aria-label="{{ 'task_board.sync.people.filter'|trans({}, 'NowoTaskBoardBundle') }}">
-                        {% for _f in ['all', 'unmapped'] %}
-                            <a class="nav-link{{ filter == _f ? ' active' : '' }}" href="{{ path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: _f}) }}"{% if filter == _f %} aria-current="page"{% endif %}>{{ ('task_board.sync.people.filter.' ~ _f)|trans({}, 'NowoTaskBoardBundle') }}</a>
-                        {% endfor %}
-                    </nav>
+                    {#- Since 2.5.0 (TB-12): the filter as UiKit's secondary tabs (pills / sub-nav), no framework classes. -#}
+                    {% set _filter_items = [] %}
+                    {% for _f in ['all', 'unmapped'] %}
+                        {% set _filter_items = _filter_items|merge([{label: ('task_board.sync.people.filter.' ~ _f)|trans({}, 'NowoTaskBoardBundle'), href: path(nowo_task_board_route('board_connection_people'), {boardId: board.id, filter: _f}), current: filter == _f}]) %}
+                    {% endfor %}
+                    {{ include(nowo_ui_partial('tabs', 'NowoTaskBoardBundle'), {items: _filter_items, aria_label: 'task_board.sync.people.filter'|trans({}, 'NowoTaskBoardBundle'), level: 'secondary', bundle: 'NowoTaskBoardBundle', attr: {'data-testid': 'nowo-task-sync-people-filter'}}, with_context: false) }}
 
                     {% if rows is empty %}
                         <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-empty">{{ 'task_board.sync.people.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
@@ -69,7 +72,7 @@
                             {#- A scrolling region is reachable with the keyboard (WCAG 2.1.1). -#}
                             <div class="{{ nowo_ui_class('table_wrap', 'NowoTaskBoardBundle') }}" tabindex="0" role="region" aria-labelledby="nowo-task-sync-people-title">
                                 <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }}">
-                                    <caption class="visually-hidden">{{ 'task_board.sync.people.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                                    <caption class="nowo-task-sr-only">{{ 'task_board.sync.people.caption'|trans({}, 'NowoTaskBoardBundle') }}</caption>
                                     <thead>
                                         <tr>
                                             <th scope="col">{{ 'task_board.sync.people.col_person'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</th>
@@ -82,7 +85,7 @@
                                             <tr data-testid="nowo-task-sync-person-row">
                                                 <td>
                                                     <div class="nowo-task-flex nowo-task-center nowo-task-gap">
-                                                        <span class="avatar avatar-sm nowo-task-member-avatar" aria-hidden="true">{{ _person.name|slice(0, 1)|upper }}</span>
+                                                        {{ include('@NowoUiKitBundle/partials/_avatar.html.twig', {name: _person.name, initials: _person.name|slice(0, 1)|upper, decorative: true, size: 'sm'}, with_context: false) }}
                                                         <div>
                                                             <div id="nowo-task-sync-person-{{ _person.id }}">{{ _person.name }}</div>
                                                             {% if _person.email %}<div class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small">{{ _person.email }}</div>{% endif %}
@@ -124,7 +127,7 @@
 
                     {% if peopleFormerForm|default(null) %}
                         {#- Since 1.28.0 (sync.people_bulk_former). -#}
-                        {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'mt-3'}}) }}
+                        {{ form_start(peopleFormerForm, {method: 'POST', attr: {class: 'nowo-task-mt-3'}}) }}
                             <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small nowo-task-mb-2">{{ 'task_board.sync.people.former_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
                             <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-people-former">{{ 'task_board.sync.people.former_all'|trans({}, 'NowoTaskBoardBundle') }}</button>
                         {{ form_end(peopleFormerForm) }}

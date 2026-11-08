@@ -19,7 +19,7 @@ use const PHP_URL_HOST;
  * Since 2.0.0: the help link of the import forms from `import.help_link`, resolved per render: the visibility check and
  * the off-site test depend on the request, so it is not a Twig global.
  *
- * @phpstan-type HelpLinkConfig array{url: string|null, route: string|null, route_params: array<string, mixed>, label: string|null, translation_domain: string, anchor_from: string|null, access_attribute: string|null, external: bool|string}
+ * @phpstan-type HelpLinkConfig array{url: string|null, url_resolver?: string|null, route: string|null, route_params: array<string, mixed>, label: string|null, translation_domain: string, anchor_from: string|null, access_attribute: string|null, external: bool|string}
  */
 final readonly class ImportHelpLinkResolver
 {
@@ -32,6 +32,8 @@ final readonly class ImportHelpLinkResolver
         private ?TranslatorInterface $translator = null,
         private ?AuthorizationCheckerInterface $authorization = null,
         private ?RequestStack $requests = null,
+        // Since 2.5.0 (TB-17): `import.help_link.url_resolver`.
+        private ?ImportHelpLinkUrlResolverInterface $urlResolver = null,
     ) {
     }
 
@@ -43,7 +45,7 @@ final readonly class ImportHelpLinkResolver
     public function resolve(): ?array
     {
         $config = $this->config;
-        if ($config === null || ($config['url'] === null && $config['route'] === null) || $config['label'] === null) {
+        if ($config === null || ($config['url'] === null && $config['route'] === null && !$this->urlResolver instanceof ImportHelpLinkUrlResolverInterface) || $config['label'] === null) {
             return null;
         }
         $attribute = $config['access_attribute'];
@@ -51,7 +53,10 @@ final readonly class ImportHelpLinkResolver
             return null;
         }
         $url = $config['route'] !== null ? $this->urls?->generate($config['route'], $config['route_params']) : $config['url'];
-        if (!is_string($url)) {
+        if ($this->urlResolver instanceof ImportHelpLinkUrlResolverInterface) {
+            $url = $this->urlResolver->resolveHelpLinkUrl(is_string($url) ? $url : null);
+        }
+        if (!is_string($url) || $url === '') {
             return null;
         }
 

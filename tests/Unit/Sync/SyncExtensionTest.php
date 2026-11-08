@@ -55,6 +55,8 @@ final class SyncExtensionTest extends TestCase
 
         self::assertFalse($container->getParameter('nowo_task_board.sync.badge.connect_link'));
         self::assertSame('%nowo_task_board.sync.badge.connect_link%', $container->getDefinition(TaskBoardTwigExtension::class)->getArgument('$syncBadgeConnectLink'));
+        self::assertSame('badge', $container->getParameter('nowo_task_board.sync.badge.style'), 'since 2.5.0: the badge stays the default');
+        self::assertSame('%nowo_task_board.sync.badge.style%', $container->getDefinition(TaskBoardTwigExtension::class)->getArgument('$syncBadgeStyle'));
     }
 
     /**

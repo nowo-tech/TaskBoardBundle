@@ -139,6 +139,15 @@ final class PeopleMappingPageTest extends SyncPeopleFunctionalTestCase
         $crawler = $this->client->request('GET', self::BASE . $board->getId() . '/connection/people?filter=unmapped');
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-sync-person-row"]'));
         self::assertSelectorNotExists('[data-testid="nowo-task-sync-people-step"]');
+        // Since 2.5.0 (TB-12): UiKit only — the kit's tabs and avatar, no framework classes on the page's own markup.
+        $people = $crawler->filter('[data-testid="nowo-task-sync-people"]');
+        self::assertSame('page', $people->filter('nav[data-testid="nowo-task-sync-people-filter"] a.nowo-ui-tabs__item--active')->attr('aria-current'));
+        self::assertStringContainsString('filter=unmapped', (string) $people->filter('nav[data-testid="nowo-task-sync-people-filter"] a[aria-current="page"]')->attr('href'));
+        self::assertCount(1, $people->filter('[data-testid="nowo-task-sync-person-row"] .nowo-ui-avatar.nowo-ui-avatar--sm[aria-hidden="true"]'));
+        self::assertCount(1, $people->filter('caption.nowo-task-sr-only'));
+        foreach (['.avatar', '.avatar-sm', '.visually-hidden', '.row', '.mt-3'] as $bootstrap) {
+            self::assertCount(0, $people->filter($bootstrap), $bootstrap);
+        }
     }
 
     public function testChangingAMappingReappliesItToTheImportedTasks(): void

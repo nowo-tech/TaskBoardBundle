@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.5.0](#to-250)
 - [To 2.4.0](#to-240)
 - [To 2.3.1](#to-231)
 - [To 2.3.0](#to-230)
@@ -160,6 +161,16 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.5.0
+
+No schema change. **A host that changes nothing keeps today's output**, except the People page of a linked board (`connection_people.html.twig`): its filter is UiKit's secondary `tabs` partial and the initials UiKit's `avatar` partial, without Bootstrap classes. A host that restyled `.nav-pills` / `.avatar` there can drop that CSS.
+
+- **A moved task's old address redirects.** `GET` of the task page whose task now belongs to another tenant answers 302 to its page there when `canViewTask()` holds (as the `#number` alias). A host listener that turned that 404 into a redirect (Beacon's `MovedTaskUrlRedirect`) can be deleted.
+- **New board form outside a tenant.** Include `@NowoTaskBoardBundle/manage/_board_create_form.html.twig` with `action`, `form_id`, `testid` and `with_actions: false`, and `@NowoTaskBoardBundle/manage/_board_create_actions.html.twig` with the same `form` / `form_id` in the dialog footer (`close_attribute` names your dialog's close attribute; `no_cancel: true` when the dialog has its own close). Host copies of the form can be deleted.
+- **Connection strip.** `sync.badge.style: strip` replaces a host `templates.connection_badge` that drew a notice with a progress bar. Remove the template override (the strip is drawn by the bundle's default partial).
+- **Navigation hooks.** Prefer `[data-nowo-task-nav="subtasks"]`, `[data-nowo-task-nav-position]`, `[data-nowo-task-nav-context="panel"]` and `[data-nowo-task-edit-form]` over the classes and the id; both keep working.
+- **Help link URL from the host.** `import.help_link.url_resolver: <service id>` (an `ImportHelpLinkUrlResolverInterface`).
 
 ## To 2.4.0
 

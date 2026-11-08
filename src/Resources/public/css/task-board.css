@@ -3389,6 +3389,40 @@ a.nowo-task-nav__step:focus-visible {
     color: var(--nowo-task-sync-badge-color, #1c5d99) !important;
 }
 
+/* Since 2.5.0 (TB-16): sync.badge.style strip — one UiKit notice (flash_info) with the text on the left and the actions on the right. */
+.nowo-task-sync-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.nowo-task-sync-strip__text {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.nowo-task-sync-strip__title,
+.nowo-task-sync-strip__text p {
+    margin: 0;
+}
+
+.nowo-task-sync-strip__title {
+    font-weight: 600;
+}
+
+.nowo-task-sync-strip__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.nowo-task-sync-strip__form {
+    display: contents;
+}
+
 /* Since 1.24: the board index — the board list (name, description, Board / List / Gantt) and its empty state. */
 .nowo-task-board-list {
     margin: 0;

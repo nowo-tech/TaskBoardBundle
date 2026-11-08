@@ -584,7 +584,9 @@ The task page shows where the task sits and steps to its neighbours (`manage/_ta
 - **Keyboard**: Alt+← / Alt+→ (not inside a multi-line text, where they move by word) and K / J (outside any field);
   leaving unsaved edits of the task form asks first. The ends are disabled steps (`aria-disabled`).
 
-In the task panel only the subtask steps render (`.nowo-task-nav--panel`), with `data-task-panel-url` on their links:
+In the task panel only the subtask steps render (`[data-nowo-task-nav-context="panel"]`, also `.nowo-task-nav--panel`), with `data-task-panel-url` on their links.
+Since 2.5.0 (TB-11b) the public hooks are `data-nowo-task-nav="view|subtasks"` on each group, `data-nowo-task-nav-position`
+on its position text and `data-nowo-task-edit-form` on the task form (the id `nowo-task-edit-form` stays):
 a drawer opens them in place, and can use them for its own ‹ › when the open task is not one of its view's. Cards, list
 rows and Gantt bars carry `data-title` and `data-column-name` for a drawer's heading and position.
 

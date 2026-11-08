@@ -613,6 +613,7 @@ nowo_task_board:
         badge:
             connect_link: true        # since 1.25.2: false = an unlinked board shows no badge (no "Connect provider" link)
             progress: false           # since 1.26.3: true = the bundle's badge shows a determinate bar of the running run
+            style: badge              # since 2.5.0: badge | strip (one UiKit notice with the status, a progress bar while a run goes, Refresh and Connection)
         custom_fields:
             mode: typed               # since 1.27.0: typed (field definitions + typed values) | text (1.23 "Fields" document) | both
             exclude_types: []         # since 1.27.0: field types never imported, e.g. [email, phone, text]. Default: none (everything is imported); see SECURITY.md
@@ -679,6 +680,12 @@ Since 1.25.2, `sync.badge.connect_link: false` hides the board / list / Gantt he
 `board_connection`); a linked board keeps its badge. Default `true` renders exactly as 1.25.1. No template override is
 needed; the bundle partial reads the Twig global `nowo_task_board_sync_badge_connect_link`, which a host's own
 `templates.connection_badge` partial may read too.
+
+Since 2.5.0 (TB-16), `sync.badge.style: strip` draws the connection as one UiKit notice strip
+(`manage/_connection_strip.html.twig`, through the default `templates.connection_badge`): provider · list and the status on
+the left, UiKit's `progress` partial while a run is going (determinate and polled for whoever manages the connection,
+indeterminate for readers, whatever `sync.badge.progress` says), *Refresh* and *Connection* on the right. The Twig global
+is `nowo_task_board_sync_badge_style`.
 
 Since 1.26.3 (TB-SYNC-1) the badge data (`nowo_task_board_connection(board)`) also carries the running run:
 

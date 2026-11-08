@@ -14,6 +14,7 @@
 - [Move and duplicate (2.3)](#move-and-duplicate-23)
 - [Recurring tasks (2.3)](#recurring-tasks-23)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
+- [Beacon override reduction (2.5)](#beacon-override-reduction-25)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
 - [Logging and personal data](#logging-and-personal-data)
@@ -203,6 +204,16 @@ Off unless `recurrence.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info
 | A synced task rewritten by its provider | Refused (`synced_task`) |
 
 **Change causes (spec 216, FR-013).** The cause is the host's text, set only by code around a write, never from a request. It is shown only through the host's labeler, escaped by Twig. It is not personal data by design: a host stores an id (`rule:42`), not a name. `TaskManager::addTag()` applies the task form's tag rules (64 characters, 20 tags) and throws otherwise (audit IC-L3), so a rule cannot write what the form refuses. `TaskChangeContext` is reset between the requests of a worker and popped in `finally`, so a failed write never leaks its cause into the next one.
+
+## Beacon override reduction (2.5)
+
+| Threat | Mitigation |
+|---|---|
+| The redirect of a moved task's old address telling that a task exists (TB-14) | Only a `GET` of a full page whose task is in another tenant, for a user who passes `canViewTask()` and may open that tenant (`tenantOfKey()`), answers 302. Everyone else, a task outside any tenant, a panel fetch and a `POST` keep the same 404 as an unknown id |
+| A host action of the New board form (TB-15) | `action` is the host's template value, not request input; the CSRF token, the create check and the quota still run on the route that receives it |
+| A host close attribute printed into the dialog footer (TB-15) | `close_attribute` must match `data-[a-z0-9-]+`, else the kit's `data-nowo-ui-dialog-close` is used (no `on*` handler) |
+| The progress URL of the strip (TB-16) | Given only to whoever manages the connection (`progressUrl` as before); readers get an indeterminate bar. The meter's attributes pass UiKit's `nowo_ui_safe_attrs()` |
+| A help link URL from a host service (TB-17) | The `url_resolver` result goes through the same template guard as `url` (http(s) or a path on this site, no white space, control characters or backslashes; anything else renders `#`), after the `access_attribute` check |
 
 ## UiKit migration (2.0.0)
 

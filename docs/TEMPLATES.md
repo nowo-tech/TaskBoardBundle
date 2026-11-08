@@ -35,7 +35,7 @@ These extend `nowo_task_board_page_layout() ?? nowo_ui_layout.admin` and fill th
 
 ## Fragments
 
-No layout: `task_panel`, `_board_create_form` (dialog answer), `_connection_containers`, `_connection_badge`, `_connection_progress`, `_connection_history`, `_connection_people_summary`.
+No layout: `task_panel`, `_board_create_form` (dialog answer; since 2.5.0 `action`, `form_id`, `testid` for a page outside a tenant) and `_board_create_actions` (its dialog footer, since 2.5.0), `_connection_strip` (since 2.5.0, `sync.badge.style: strip`), `_connection_containers`, `_connection_badge`, `_connection_progress`, `_connection_history`, `_connection_people_summary`.
 
 ## Layout
 
@@ -43,4 +43,4 @@ No layout: `task_panel`, `_board_create_form` (dialog answer), `_connection_cont
 
 ## Public hooks
 
-Stable across minors: `data-nowo-task-title`, `data-nowo-task-column` (cards, list rows, Gantt bars, subtasks, calendar chips and rows), `data-nowo-task-panel` (panel fragment), `data-task-id`, `data-task-panel-url`, the classes in [UPGRADING](UPGRADING.md#to-200-uikit-page-contract), and the page roots `nowo-task-page`, `nowo-task-panel-fragment`.
+Stable across minors: `data-nowo-task-title`, `data-nowo-task-column` (cards, list rows, Gantt bars, subtasks, calendar chips and rows), `data-nowo-task-panel` (panel fragment), since 2.5.0 `data-nowo-task-nav` (`view` / `subtasks`), `data-nowo-task-nav-position`, `data-nowo-task-nav-context` (`panel` / `page`) and `data-nowo-task-edit-form`, `data-task-id`, `data-task-panel-url`, the classes in [UPGRADING](UPGRADING.md#to-200-uikit-page-contract), and the page roots `nowo-task-page`, `nowo-task-panel-fragment`.

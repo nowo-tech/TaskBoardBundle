@@ -5,8 +5,11 @@
     Since 1.26.3: sync.activeRunId, sync.progressUrl (managers only), sync.total, sync.processed, sync.pollInterval;
     with sync.badge.progress (sync.progress) the running run shows a <progress> driven by the
     nowo-task-board-sync-progress controller (polite live region, at most one update every 5 s, *Show result* at the end).
+    Since 2.5.0 (TB-16): sync.badge.style strip draws `_connection_strip.html.twig` instead (a UiKit notice strip).
 #}
-{% if sync and (sync.linked or (nowo_task_board_sync_badge_connect_link ?? true)) %}
+{% if sync and (sync.linked or (nowo_task_board_sync_badge_connect_link ?? true)) and (nowo_task_board_sync_badge_style ?? 'badge') == 'strip' %}
+    {{ include('@NowoTaskBoardBundle/manage/_connection_strip.html.twig', {sync: sync, board: board}, with_context: false) }}
+{% elseif sync and (sync.linked or (nowo_task_board_sync_badge_connect_link ?? true)) %}
     <div class="nowo-task-sync-badge nowo-task-flex nowo-task-wrap nowo-task-center nowo-task-gap nowo-task-mb-3" data-testid="nowo-task-sync-badge">
         {% if sync.linked %}
             <span class="{{ nowo_ui_class('badge_info', 'NowoTaskBoardBundle') }} nowo-task-sync-badge__label">

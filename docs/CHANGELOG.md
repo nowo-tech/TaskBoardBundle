@@ -91,6 +91,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon override reduction (TB-11b, TB-12, TB-14 to TB-17). A host that changes nothing keeps today's output, except the People page, which now draws UiKit's tabs and avatar instead of Bootstrap classes.
+
+### Added
+
+- **TB-14 — a moved task on its old address.** The task page of a task whose board is now in another tenant redirects (302) to the task's page in that tenant, as the `#number` alias already did, for whoever may read the task there (`canViewTask()`). Anyone else, a task now outside any tenant, a panel fetch and a POST keep the 404, so the task's existence is not told.
+- **TB-15 — the New board form on a page without a tenant.** `manage/_board_create_form.html.twig` takes `action` (default: the current tenant's `board_create` route), `form_id` and `testid`. New `manage/_board_create_actions.html.twig` draws the dialog footer (Back on the scope step, Cancel, Create bound to `form_id`; `no_cancel`, `close_attribute`, `testid`); the index dialog uses it.
+- **TB-16 — `sync.badge.style: badge|strip`** (default `badge`, today's output). `strip` draws the connection as one UiKit notice (`flash_info`) with provider · list and the status on the left, UiKit's `progress` partial while a run is going (determinate and polled for managers, indeterminate for readers), and *Refresh* / *Connection* on the right (`manage/_connection_strip.html.twig`).
+- **TB-11b — public navigation hooks.** Each group of the previous / next navigation carries `data-nowo-task-nav="view|subtasks"`, its position text `data-nowo-task-nav-position`, the `<nav>` `data-nowo-task-nav-context="panel|page"`, and the task edit form `data-nowo-task-edit-form`. The classes `nowo-task-nav--panel`, `nowo-task-nav__position` and the id `nowo-task-edit-form` stay.
+- **TB-17 — `import.help_link.url_resolver`**: the service id of an `ImportHelpLinkUrlResolverInterface` that gets the `url` / `route` URL (or null) and returns the URL to link, or null for no link (e.g. a manual in the app or on a public site). With it, `url` and `route` are optional.
+
+### Changed
+
+- **TB-12 — People page on UiKit.** `manage/connection_people.html.twig` draws the filter with UiKit's `tabs` partial (`level: secondary`), the initials with UiKit's `avatar` partial, the table caption with `nowo-task-sr-only`, and no Bootstrap classes (`nav nav-pills`, `nav-link`, `avatar avatar-sm`, `visually-hidden`, `mt-3`).
+
 ## [2.4.0] - 2026-11-08
 
 Task API time logs ask a host time-tracking decision (`TaskAccessCheckEvent::ACTION_TRACK_TIME`, `canTrackTime()`) instead of the edit right, and the API principal carries a `channel` (`api` / `mcp`) for the audit. Audited in Appendix II (Pass / Info).

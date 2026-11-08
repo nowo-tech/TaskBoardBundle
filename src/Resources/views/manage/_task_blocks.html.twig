@@ -79,7 +79,7 @@
         {% endblock %}
 
         <div class="nowo-task-detail__body">
-            {{ form_start(taskForm, {action: path(nowo_task_board_route('task'), {taskId: task.id}|merge(taskRouteExtra|default({}))), attr: {id: 'nowo-task-edit-form', class: 'nowo-task-detail__form'}}) }}
+            {{ form_start(taskForm, {action: path(nowo_task_board_route('task'), {taskId: task.id}|merge(taskRouteExtra|default({}))), attr: {id: 'nowo-task-edit-form', class: 'nowo-task-detail__form', 'data-nowo-task-edit-form': true}}) }}
 
             <div class="nowo-task-detail__head">
                 <div class="nowo-task-detail__head-meta">

@@ -124,6 +124,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskRecurrenceView $recurrence = null,
         // Since 2.3.0 (spec 216): `history.cause_labeler`.
         private readonly ?TaskChangeCauseLabelerInterface $causeLabeler = null,
+        // Since 2.5.0 (TB-16): `sync.badge.style` (badge | strip).
+        private readonly string $syncBadgeStyle = 'badge',
     ) {
     }
 
@@ -646,6 +648,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             'nowo_task_board_connection_badge_template' => $this->connectionBadgeTemplate,
             // Since 1.25.2: sync.badge.connect_link.
             'nowo_task_board_sync_badge_connect_link' => $this->syncBadgeConnectLink,
+            // Since 2.5.0 (TB-16): sync.badge.style.
+            'nowo_task_board_sync_badge_style' => $this->syncBadgeStyle,
             // Since 2.0.0 (TB-3): templates.task_time_before.
             'nowo_task_board_task_time_before' => $this->taskTimeBefore,
             // Since 2.0.0 (TB-10): the switches of the chrome a host draws itself.
