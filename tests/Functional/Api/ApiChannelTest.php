@@ -33,4 +33,21 @@ final class ApiChannelTest extends ApiTestCase
         self::assertSame(['api', 'mcp'], array_map(static fn (TaskApiWriteEvent $event): string => $event->channel, $audit->events));
         self::assertSame(['api', 'mcp'], array_map(static fn (TaskApiWriteEvent $event): string => $event->principal->channel, $audit->events));
     }
+
+    public function testAChannelSentByTheClientIsIgnored(): void
+    {
+        // Audit II-I5 (d): only the host's authenticator sets the channel.
+        ApiTestHost::$tenants = ['tenant-a'];
+        $task                 = $this->task($this->board('Roadmap', tenantKey: 'tenant-a'), 'Own');
+        $this->issueToken();
+
+        $this->send('PUT', '/api/tasks/v2/task/' . $task->getId() . '?channel=mcp', ['name' => 'Renamed', 'channel' => 'mcp'], ['HTTP_X_CHANNEL' => 'mcp']);
+        self::assertResponseIsSuccessful();
+        $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['tid' => $task->getId(), 'start' => 1790000000000, 'duration' => 60000, 'channel' => 'mcp']);
+        self::assertResponseIsSuccessful();
+
+        $audit = self::getContainer()->get('app.api_audit');
+        self::assertInstanceOf(ApiAuditRecorder::class, $audit);
+        self::assertSame(['api', 'api'], array_map(static fn (TaskApiWriteEvent $event): string => $event->channel, $audit->events));
+    }
 }

@@ -122,6 +122,72 @@ final class TaskTrackTimeAccessTest extends TestCase
         self::assertTrue($checker->canTrackTime($this->stranger, $this->task));
     }
 
+    public function testATrackTimeDenySticksAgainstALowerPriorityGrant(): void
+    {
+        // Audit II-L1: an action-aware deny at priority 10, then an action-blind grant at priority 0.
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME) {
+                $event->deny();
+            }
+        }, 10);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            $event->grant();
+        }, 0);
+        $checker = $this->checker($dispatcher);
+
+        self::assertTrue($checker->canEditTask($this->owner, $this->task));
+        self::assertFalse($checker->canTrackTime($this->owner, $this->task));
+    }
+
+    public function testOnlyTheTrackTimeDenySticks(): void
+    {
+        $track = new TaskAccessCheckEvent($this->owner, $this->task, TaskAccessCheckEvent::ACTION_TRACK_TIME);
+        $track->deny();
+        $track->grant();
+        self::assertTrue($track->isDenied());
+        self::assertFalse($track->isGranted());
+
+        // Viewing keeps "the last call wins", as before 2.4.0.
+        $view = new TaskAccessCheckEvent($this->owner, $this->task);
+        $view->deny();
+        $view->grant();
+        self::assertTrue($view->isGranted());
+        self::assertFalse($view->isDenied());
+    }
+
+    public function testAGrantMarkedReadOnlyFallsBackToTheEditRight(): void
+    {
+        $dispatcher = $this->readOnlyReader();
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME) {
+                $event->grant();
+                $event->markReadOnly();
+            }
+        });
+        $checker = $this->checker($dispatcher);
+
+        self::assertFalse($checker->canTrackTime($this->reader, $this->task));
+        self::assertTrue($checker->canTrackTime($this->owner, $this->task), 'the editor keeps the edit right');
+    }
+
+    public function testAReadOnlyMarkFromAnotherListenerCancelsTheGrant(): void
+    {
+        // Audit II-I2: the host grants track_time at priority 10; an action-blind listener marks every task read-only later.
+        $dispatcher = $this->readOnlyReader();
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME) {
+                $event->grant();
+            }
+        }, 10);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            $event->markReadOnly();
+        }, 0);
+        $checker = $this->checker($dispatcher);
+
+        self::assertFalse($checker->canTrackTime($this->reader, $this->task));
+    }
+
     /** The reader sees the board read-only: view access without the edit right. */
     private function readOnlyReader(): EventDispatcher
     {

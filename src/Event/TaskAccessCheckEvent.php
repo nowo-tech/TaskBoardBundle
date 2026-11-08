@@ -23,7 +23,8 @@ final class TaskAccessCheckEvent extends Event
     /**
      * Since 2.4.0 (spec 213): logging time on the task through the Task API (`POST /v2/team/{team_id}/time_entries` with a
      * `tid`). grant() allows it without the edit right (a project member who may track time); deny() refuses it even to an
-     * editor. With no answer, or grant() together with markReadOnly(), the edit right decides, as before 2.4.0.
+     * editor, and sticks: a later grant() (a lower-priority listener) does not clear it (audit II-L1). With no answer,
+     * or grant() together with markReadOnly(), the edit right decides, as before 2.4.0.
      */
     public const ACTION_TRACK_TIME = 'track_time';
 
@@ -57,8 +58,15 @@ final class TaskAccessCheckEvent extends Event
         return $this->task;
     }
 
+    /**
+     * For {@see self::ACTION_TRACK_TIME}, a grant after a deny() is ignored: the deny sticks (since 2.4.0, audit II-L1).
+     * For {@see self::ACTION_VIEW}, the last call wins, as before.
+     */
     public function grant(): void
     {
+        if ($this->denied && $this->action === self::ACTION_TRACK_TIME) {
+            return;
+        }
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->granted = true;
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.

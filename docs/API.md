@@ -44,7 +44,7 @@ The bundle stores no tokens. `api.hooks.authenticator` is required with `enabled
 | `attachments` | `TaskApiAttachmentsInterface` | 403 `FILE_001` |
 | `idempotency_store` | `TaskApiIdempotencyStoreInterface` | The bundle's store, when writes arrive |
 
-A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write. Since 2.4.0 the event's `channel` (from `TaskApiPrincipal::$channel`) says where the call came from: `api` (default) or `mcp`, when the host's authenticator builds the principal for its MCP server with `channel: TaskApiPrincipal::CHANNEL_MCP`. The channel changes no access decision.
+A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write. Since 2.4.0 the event's `channel` (from `TaskApiPrincipal::$channel`) says where the call came from: `api` (default) or `mcp`, when the host's authenticator builds the principal for its MCP server with `channel: TaskApiPrincipal::CHANNEL_MCP`, derived from the call path and never from anything the client sends. The channel is a lowercase label (`[a-z][a-z0-9_]{0,31}`, else `InvalidArgumentException`) and changes no access decision.
 
 ## Firewall
 
@@ -85,7 +85,9 @@ Levels are not a chain: *Read* changes nothing, while *My tasks* works on its ow
 
 ### Logging time
 
-Since 2.4.0, `POST /v2/team/{team_id}/time_entries` with a `tid` checks `TaskBoardResourceAccessChecker::canTrackTime()` where other task writes check `canEditTask()`. It dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`): `grant()` allows a person who may view the task to log time on it without editing it, `deny()` refuses an editor too (403 `ACCESS_002`), and with no answer (or a grant marked read-only) the edit right decides, as before 2.4.0. Reach and level are checked first, as for every task: *My tasks* logs time on its own tasks only, *Read* is refused (`TOKEN_001`). Listing time needs only the read level and is unchanged; deleting time is always refused; there is no update route.
+Since 2.4.0, `POST /v2/team/{team_id}/time_entries` with a `tid` checks `TaskBoardResourceAccessChecker::canTrackTime()` where other task writes check `canEditTask()`. It dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`): `grant()` allows a person who may view the task to log time on it without editing it, `deny()` refuses an editor too (403 `ACCESS_002`) and sticks against a later listener's `grant()`, and with no answer (or a grant marked read-only) the edit right decides, as before 2.4.0. Reach and level are checked first, as for every task: *My tasks* logs time on its own tasks only, *Read* is refused (`TOKEN_001`). Listing time needs only the read level and is unchanged; deleting time is always refused; there is no update route.
+
+A `track_time` grant ignores a read-only board (as any explicit task grant does), so a listener that freezes boards should check that itself. A read-only mark from any listener on the `track_time` event cancels the grant and falls back to the edit right: listeners that mark tasks read-only should return early on `ACTION_TRACK_TIME` when the grant should apply. The task page's *Log time* form still needs the edit right.
 
 ## Read endpoints
 

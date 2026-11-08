@@ -94,8 +94,8 @@ Spec 219 (Beacon's MCP): the API principal names its channel, for the audit. Spe
 
 ### Added
 
-- **`TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`) and `TaskBoardResourceAccessChecker::canTrackTime()`.** `TASK_ACCESS_CHECK` now carries an action (`getAction()`, `ACTION_VIEW` by default, as before). For `track_time`, `grant()` lets a person who may view the task log time on it without the edit right, and `deny()` refuses it even to an editor. With no answer, or a grant marked read-only, the edit right decides (`canEditTask()`), so a listener that ignores the action answers as before. Viewing the task is always required.
-- **`TaskApiPrincipal::$channel` (spec 219, MCP).** An optional trailing constructor argument, `TaskApiPrincipal::CHANNEL_API` (`api`, the default) or `CHANNEL_MCP` (`mcp`), so a host marks calls from its MCP server; `TaskApiWriteEvent::$channel` carries it to the audit (`API_WRITE`). It changes no access decision. An authenticator built for 2.2 keeps working and reports `api`. Modelled on WikiBundle 1.24's `WikiApiPrincipal`.
+- **`TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`) and `TaskBoardResourceAccessChecker::canTrackTime()`.** `TASK_ACCESS_CHECK` now carries an action (`getAction()`, `ACTION_VIEW` by default, as before). For `track_time`, `grant()` lets a person who may view the task log time on it without the edit right, and `deny()` refuses it even to an editor; a `track_time` deny sticks against a later listener's `grant()` (for `view` the last call still wins). With no answer, or a grant marked read-only, the edit right decides (`canEditTask()`), so a listener that ignores the action answers as before. Viewing the task is always required.
+- **`TaskApiPrincipal::$channel` (spec 219, MCP).** An optional trailing constructor argument, `TaskApiPrincipal::CHANNEL_API` (`api`, the default) or `CHANNEL_MCP` (`mcp`), so a host marks calls from its MCP server; `TaskApiWriteEvent::$channel` carries it to the audit (`API_WRITE`). It must match `[a-z][a-z0-9_]{0,31}` (else `InvalidArgumentException`) and changes no access decision. An authenticator built for 2.2 keeps working and reports `api`. Modelled on WikiBundle 1.24's `WikiApiPrincipal`.
 - **`TaskApiGuard::taskToTrackTime()`.** Reach and level as before (*My tasks*: its own tasks only; *Read*: 403 `TOKEN_001`), then `canTrackTime()`.
 
 ### Changed
@@ -104,7 +104,7 @@ Spec 219 (Beacon's MCP): the API principal names its channel, for the audit. Spe
 
 ### Security
 
-- Audit status: re-verification pending.
+- Audit status: Appendix II (Pass / Low at `d4c61ee`). Fixed since: II-L1 (a `track_time` deny sticks), II-I4 (channel format); documented: II-I1, II-I2, II-I3; tests added: II-I5.
 
 ## [2.3.1] - 2026-11-08
 

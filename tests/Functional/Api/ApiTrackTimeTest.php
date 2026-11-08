@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
+use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
@@ -98,6 +99,65 @@ final class ApiTrackTimeTest extends ApiTestCase
             self::assertResponseIsSuccessful($level->value . ' logs time on any task within reach');
         }
         self::assertCount(3, ApiTestHost::$logged);
+    }
+
+    public function testAGrantNeverBringsATaskIntoReach(): void
+    {
+        // Audit II-I5 (a): another tenant, outside where, a board the person cannot view: 404 before the decision.
+        $foreign       = $this->task($this->board('Elsewhere', tenantKey: 'tenant-b'), 'Foreign');
+        $hidden        = $this->task($this->board('Hidden', tenantKey: 'tenant-a'), 'Hidden');
+        $hiddenBoardId = $hidden->getBoard()->getId();
+        $this->answerTrackTime(true);
+        $this->logOn($foreign);
+        $this->assertRefused(404, 'ACCESS_001');
+
+        $this->issueToken(where: TaskApiWhere::limitedTo([], [$foreign->getBoard()->getId()]));
+        $this->logOn($this->own);
+        $this->assertRefused(404, 'ACCESS_001');
+
+        $this->issueToken();
+        $this->dispatcher()->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($hiddenBoardId): void {
+            if ($event->getBoard()->getId() === $hiddenBoardId) {
+                $event->deny();
+            }
+        });
+        $this->logOn($hidden);
+        $this->assertRefused(404, 'ACCESS_001');
+        self::assertSame([], ApiTestHost::$logged);
+    }
+
+    public function testAGrantMarkedReadOnlyFallsBack(): void
+    {
+        // Audit II-I5 (b): the host grants and marks read-only: the edit right decides, and the board is read-only.
+        $this->readOnlyBoard();
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME) {
+                $event->grant();
+                $event->markReadOnly();
+            }
+        });
+
+        $this->logOn($this->own);
+        $this->assertRefused(403, 'ACCESS_002');
+    }
+
+    public function testADenyWinsOverALaterGrant(): void
+    {
+        // Audit II-I5 (c), II-L1: the host denies at priority 10, an action-blind listener grants at priority -10.
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME) {
+                $event->deny();
+            }
+        }, 10);
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            $event->grant();
+        }, -10);
+
+        $this->logOn($this->own);
+        $this->assertRefused(403, 'ACCESS_002');
+        $this->send('PUT', '/api/tasks/v2/task/' . $this->own->getId(), ['name' => 'Still editable']);
+        self::assertResponseIsSuccessful('editing follows the view action, where the last call still wins');
+        self::assertSame([], ApiTestHost::$logged);
     }
 
     public function testDeletingTimeStaysRefused(): void
