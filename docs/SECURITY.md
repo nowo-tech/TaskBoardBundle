@@ -219,7 +219,7 @@ Off unless `recurrence.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info
 
 ## Beacon override reduction (2.6)
 
-Audit status: **re-verification pending** (independent audit after the change).
+Audit status: Appendix IT (batch, 2026-11-08) **Pass**; IT-I1..I6 Info (IT-I1/I2 documented in UPGRADING).
 
 | Threat | Mitigation |
 |---|---|
