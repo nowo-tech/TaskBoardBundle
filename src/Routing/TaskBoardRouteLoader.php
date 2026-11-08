@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Routing;
 
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
@@ -63,6 +64,15 @@ final class TaskBoardRouteLoader extends Loader
         'attachment_create' => ['/v2/task/{taskId}/attachment', TaskApiWriteController::class, 'addAttachment', 'POST'],
         'time_log'          => ['/v2/team/{teamId}/time_entries', TaskApiWriteController::class, 'logTime', 'POST'],
         'time_delete'       => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'deleteTime', 'DELETE'],
+        // Since 2.2.0 (spec 213): management. Columns are statuses, on paths of this API's own (owner, Q-O2).
+        'board_create'  => ['/v2/space/{spaceId}/list', TaskApiManagementController::class, 'createBoard', 'POST'],
+        'board_update'  => ['/v2/list/{listId}', TaskApiManagementController::class, 'updateBoard', 'PUT'],
+        'board_delete'  => ['/v2/list/{listId}', TaskApiManagementController::class, 'deleteBoard', 'DELETE'],
+        'status_create' => ['/v2/list/{listId}/status', TaskApiManagementController::class, 'createColumn', 'POST'],
+        // Before status_update: "order" is not a column id.
+        'status_order'  => ['/v2/list/{listId}/status/order', TaskApiManagementController::class, 'reorderColumns', 'PUT'],
+        'status_update' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'updateColumn', 'PUT'],
+        'status_delete' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'deleteColumn', 'DELETE'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -200,7 +210,7 @@ final class TaskBoardRouteLoader extends Loader
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+'],
                 [],
                 '',
                 [],

@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 
@@ -257,6 +258,24 @@ final readonly class TaskApiQueryRepository
         $comments = $qb->getQuery()->getResult();
 
         return $comments;
+    }
+
+    /**
+     * Whether the board follows a provider (never without `sync.enabled`).
+     */
+    public function hasConnection(string $boardId): bool
+    {
+        if (!$this->syncEnabled) {
+            return false;
+        }
+
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(c.id)')
+            ->from(TaskBoardConnection::class, 'c')
+            ->where('c.board = :board')
+            ->setParameter('board', $boardId)
+            ->getQuery()
+            ->getSingleScalarResult() > 0;
     }
 
     /**

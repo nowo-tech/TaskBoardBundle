@@ -97,6 +97,7 @@ final class ApiKernel extends Kernel
         $services->set('app.api_host', ApiTestHost::class)->autowire()->public();
         $services->set('app.api_firewall', ApiFirewallAuthenticator::class);
         $services->set('app.tenant_resolver', ScriptedTenantResolver::class);
+        $services->set('app.plain_checker', PlainCreateChecker::class);
         // The host's plan limits and its audit of API writes.
         $services->set('app.quota_listener', RecordingQuotaListener::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);
@@ -121,7 +122,7 @@ final class ApiKernel extends Kernel
         ]);
         $container->extension('twig', ['strict_variables' => true]);
         // Like Beacon: no resource scoping, the host's listeners decide (one configuration, so one container, for most tests).
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false], 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
+        $container->extension('nowo_task_board', ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false] + ($this->taskBoard['security'] ?? []), 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
             'authenticator' => 'app.api_host',
             'rate_limiter'  => 'app.api_host',
             'plan_gate'     => 'app.api_host',
@@ -129,7 +130,7 @@ final class ApiKernel extends Kernel
             'users'         => 'app.api_host',
             'time_entries'  => 'app.api_host',
             'attachments'   => 'app.api_host',
-        ]]] + $this->taskBoard);
+        ]]] + array_diff_key($this->taskBoard, ['security' => true]));
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // The host side of a provider sync, for the imported custom fields.
             $services->set('app.sync_credentials', TestCredentialResolver::class)->public();

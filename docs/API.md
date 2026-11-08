@@ -49,6 +49,22 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
+### Management (Full)
+
+Every management write needs a *Full* token and the board's manage decision (`BoardAccessCheckEvent::ACTION_MANAGE`; in Beacon `project.tasks.manage`, `organization.tasks.manage`, or a personal board's owner); a new board needs the host's create check for the space's tenant and the board plan limit.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /v2/space/{id}/list` | `name`, `content` / `markdown_content`. The token must reach the whole tenant (naming one board of it is not enough). The board gets the default columns, as from the UI |
+| `PUT /v2/list/{id}` | `name`, `content`; the slug stays. `status`, `priority`, `assignee`, `due_date` are warned about |
+| `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002` |
+| `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex) |
+| `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames or recolours a column; what is not given stays |
+| `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
+| `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`) |
+
+Tags exist on tasks only: there is no space tag to create, rename or delete. Board members are not managed through the API.
+
 **Time store.** `api.hooks.time_entries` lists and logs time; it has no delete. A host without its own may use `Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries`: the bundle's manual entries, logged through `TaskTimeLogger` as the task page logs them, and listed for the token's own person on tasks the token may open (at most 500).
 
 **Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.

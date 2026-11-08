@@ -123,7 +123,8 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
         [$scope, $keyHash] = $claim;
         $response          = $event->getResponse();
         try {
-            if ($response->isSuccessful()) {
+            // A 202 (a board deleted in slices) is not an answer to keep: the next call carries on.
+            if ($response->isSuccessful() && $response->getStatusCode() !== Response::HTTP_ACCEPTED) {
                 $target                = $request->attributes->get(self::TARGET);
                 [$tenantKey, $boardId] = is_array($target) ? $target : [null, null];
                 $this->store->complete($scope, $keyHash, $response->getStatusCode(), (string) $response->getContent(), $tenantKey, $boardId);

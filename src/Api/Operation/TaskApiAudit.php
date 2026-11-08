@@ -50,10 +50,20 @@ final readonly class TaskApiAudit
      */
     public function requireTaskQuota(TaskBoard $board, int $count, object $actor): void
     {
+        $this->requireQuota(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $board->getTenantKey(), $board, $actor, $count);
+    }
+
+    /**
+     * The host's plan limit on one more board of the tenant, as the UI's New board asks it.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function requireQuota(string $action, ?string $tenantKey, ?TaskBoard $board, object $actor, int $count = 1): void
+    {
         if ($this->quotaListenerRequired && !$this->dispatcher->hasListeners(TaskBoardEvents::QUOTA_CHECK)) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'No plan limit answers for this board');
         }
-        $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $board->getTenantKey(), $board, $count, $actor);
+        $refusal = $this->quota->refusal($action, $tenantKey, $board, $count, $actor);
         if ($refusal !== null) {
             throw new TaskApiRefusal(403, 'PLAN_002', $refusal);
         }

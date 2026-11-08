@@ -28,6 +28,7 @@ use function rtrim;
 use function str_starts_with;
 use function strtr;
 use function substr;
+use function usort;
 
 /**
  * Since 2.2.0 (spec 213): what the read API answers, in ClickUp API v2's field names. Dates are Unix milliseconds as strings,
@@ -102,7 +103,7 @@ final class TaskApiReadSerializer
      */
     public function statuses(TaskBoard $board): array
     {
-        $columns = array_values($board->getColumns()->toArray());
+        $columns = $this->ordered($board);
 
         return array_map(fn (BoardColumn $column): array => $this->status($column, $columns), $columns);
     }
@@ -114,7 +115,7 @@ final class TaskApiReadSerializer
     {
         $board       = $task->getBoard();
         $space       = $page->spaces[$board->getId()];
-        $columns     = array_values($board->getColumns()->toArray());
+        $columns     = $this->ordered($board);
         $column      = $task->getColumn();
         $spent       = $task->getTotalTimeSeconds() * 1000 + ($page->manualMinutes[$task->getId()] ?? 0) * 60000;
         $description = (string) $task->getDescription();
@@ -390,6 +391,19 @@ final class TaskApiReadSerializer
         }
 
         return $answer;
+    }
+
+    /**
+     * The board's columns by position: a reorder within the same request leaves the loaded collection in its old order.
+     *
+     * @return list<BoardColumn>
+     */
+    private function ordered(TaskBoard $board): array
+    {
+        $columns = array_values($board->getColumns()->toArray());
+        usort($columns, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
+
+        return $columns;
     }
 
     private function ms(?DateTimeInterface $date): ?string

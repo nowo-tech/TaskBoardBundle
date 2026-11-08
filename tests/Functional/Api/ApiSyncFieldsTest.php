@@ -6,7 +6,9 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
@@ -110,6 +112,44 @@ final class ApiSyncFieldsTest extends ApiTestCase
         $audit = self::getContainer()->get('app.api_audit');
         self::assertInstanceOf(ApiAuditRecorder::class, $audit);
         self::assertSame([], $audit->events, 'nothing written, nothing audited');
+    }
+
+    public function testDeletingTheDoneColumnAsksTheLimitForTheTasksItReopens(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = $board->getColumns()->last();
+        self::assertInstanceOf(BoardColumn::class, $done);
+        $this->em->persist((new Task(board: $board, title: 'Finished', creator: $this->owner, column: $done))->markCompleted());
+        $this->em->flush();
+        $this->issueToken();
+        $this->em->clear();
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        try {
+            $this->send('DELETE', '/api/tasks/v2/list/' . $board->getId() . '/status/' . $done->getId());
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+
+        $this->assertRefused(403, 'PLAN_002');
+        $this->em->clear();
+        self::assertCount(3, $this->em->find(TaskBoard::class, $board->getId())?->getColumns() ?? []);
+    }
+
+    public function testABoardThatFollowsAProviderIsNotDeletedThroughTheApi(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $this->em->persist(new TaskBoardConnection($board, 'clickup', 'list', 'conn-1', 'L1', 'Backlog'));
+        $this->em->flush();
+        $this->issueToken();
+
+        $this->send('DELETE', '/api/tasks/v2/list/' . $board->getId());
+
+        $this->assertRefused(409, 'LIST_002');
+        $this->em->clear();
+        self::assertNotNull($this->em->find(TaskBoard::class, $board->getId()));
     }
 
     public function testATaskThatFollowsAProviderIsNotDeletedThroughTheApi(): void
