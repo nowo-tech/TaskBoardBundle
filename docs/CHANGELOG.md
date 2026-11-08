@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.4.0] - 2026-11-08](#240---2026-11-08)
 - [[2.3.1] - 2026-11-08](#231---2026-11-08)
 - [[2.3.0] - 2026-11-08](#230---2026-11-08)
 - [[2.2.1] - 2026-11-08](#221---2026-11-08)
@@ -89,6 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [2.4.0] - 2026-11-08
+
+Task API time logs ask a host time-tracking decision (`TaskAccessCheckEvent::ACTION_TRACK_TIME`, `canTrackTime()`) instead of the edit right, and the API principal carries a `channel` (`api` / `mcp`) for the audit. Audited in Appendix II (Pass / Info).
 
 Spec 219 (Beacon's MCP): the API principal names its channel, for the audit. Spec 213, owner decision D-20261108-13 (Beacon): logging time through the Task API follows the time-tracking right, not the task's edit right. A host that does not answer the new decision keeps today's behaviour.
 
@@ -1938,7 +1943,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.4.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
