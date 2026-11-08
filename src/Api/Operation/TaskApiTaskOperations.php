@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -37,6 +38,7 @@ use function array_values;
 use function in_array;
 use function intdiv;
 use function mb_strtolower;
+use function str_contains;
 use function trim;
 
 /**
@@ -68,6 +70,7 @@ final readonly class TaskApiTaskOperations
         private TaskDependencyManager $dependencies,
         private ValidatorInterface $validator,
         private TaskCommentManager $comments,
+        private TaskMentionCandidatesResolverInterface $mentionCandidates,
     ) {
     }
 
@@ -194,7 +197,8 @@ final readonly class TaskApiTaskOperations
     }
 
     /**
-     * `POST /v2/task/{id}/comment`. Mentions are not read from the API in v1.
+     * `POST /v2/task/{id}/comment`. Mentions work as in the UI's box: each candidate written "@Label" in the text is mentioned,
+     * so `TASK_MENTION` and the host's notifications follow. ClickUp's structured mention fields are not read.
      *
      * @throws TaskApiRefusal
      */
@@ -204,7 +208,13 @@ final readonly class TaskApiTaskOperations
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::Comment);
         $body = (string) $input->string('comment_text', true);
         $this->validate($body, TaskConstraints::commentBody(), 'comment_text');
-        $comment = $this->comments->add($task, $principal->user, $body);
+        $mentioned = [];
+        foreach ($this->mentionCandidates->candidates($task) as $candidate) {
+            if (str_contains($body, '@' . $candidate->label)) {
+                $mentioned[] = $candidate->id;
+            }
+        }
+        $comment = $this->comments->add($task, $principal->user, $body, $mentioned);
         $this->audit->written($principal, 'comment.create', $task->getBoard(), $taskId, ['comment' => $comment->getId()]);
 
         return $comment;

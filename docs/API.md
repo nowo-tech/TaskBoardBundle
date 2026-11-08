@@ -37,7 +37,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/list/{id}/task` | Tasks | `name`, `description` / `markdown_content`, `status` (a column's name), `priority` (1 urgent to 4 low), `due_date`, `start_date`, `time_estimate`, `tags`, `assignees`, `parent` (same board). Asks the host's plan limit |
 | `PUT /v2/task/{id}` | My tasks (own: `status`, dates, `description` only) | `name`, `priority`, `time_estimate`, `assignees` and `watchers` (`add`, `rem`), `archived` need Tasks. A status change moves the task as the board does: the done column completes it, leaving it reopens it within the host's limit |
 | `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
-| `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`; mentions are not read |
+| `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`. Mentions work as in the UI's comment box: each candidate written `@Label` in the text is mentioned, so `TASK_COMMENT`, `TASK_MENTION` and the host's notifications follow |
 | `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | |
 | `POST /v2/task/{id}/field/{field_id}` | Tasks | Always 409 `FIELD_001`: custom fields are a provider's, read-only |
 | `POST /v2/task/{id}/dependency`, `DELETE` with `?depends_on=` or `?dependency_of=` | Tasks | Within a board (`LINK_002`); no cycle or duplicate (`LINK_001`) |
@@ -47,7 +47,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 
 **Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.
 
-**Several changes in one request** are saved one service at a time, as the UI's separate forms are. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one.
+**Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept.
 
 ### Idempotency
 
@@ -73,7 +73,8 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 - Task order defaults to `created` ascending; `reverse=true` flips it.
 - `priority: null` reads as normal: every task has a priority.
 - Deleting a checklist or an item archives it.
-- A comment's mentions, `notify_all` and assignee are not read.
+- ClickUp's structured comment fields (`notify_all`, `assignee`, `group_assignee`) are not read; mentions come from the text, as in the UI.
+- A task without a column, on a board that has columns, goes to the first column on any update (the task form does the same). Tasks get a column when created, so this concerns only rows made outside the bundle.
 
 ## Off by default
 

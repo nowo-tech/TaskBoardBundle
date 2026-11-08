@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
@@ -263,6 +264,15 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         $comment = $this->em->getRepository(TaskComment::class)->findOneBy(['task' => $task]);
         self::assertSame(['id' => $comment?->getId(), 'hist_id' => $comment?->getId(), 'date' => $comment?->getCreatedAt()->format('Uv'), 'warnings' => [['field' => 'notify_all', 'reason' => 'not_supported']]], $this->json());
         self::assertContains(TaskBoardEvents::TASK_COMMENT, $this->events);
+        // Mentions as in the UI's box: "@Label" of a candidate (here a member of a task of the board).
+        $task->addMember(new TaskMember(task: $task, user: $this->colleague, memberRole: TaskMemberRole::Watcher));
+        $this->em->flush();
+        $mentioned = [];
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_MENTION, static function (TaskMentionEvent $event) use (&$mentioned): void {
+            $mentioned = [...$mentioned, ...$event->getMentionedUsers()];
+        });
+        $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/comment', ['comment_text' => 'Ping @colleague@example.com']);
+        self::assertSame(['colleague@example.com'], array_map(static fn (object $user): string => $user instanceof AppUser ? $user->getEmail() : '', $mentioned));
         $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/comment', ['comment_text' => '']);
         $this->assertRefused(400, 'INPUT_002');
 
