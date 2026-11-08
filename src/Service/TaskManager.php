@@ -469,6 +469,15 @@ final readonly class TaskManager
     }
 
     /**
+     * Since 2.2.0 (spec 213, audit IA-L6): the host's answer on `$newTasks` more active tasks on the board, asked before a write
+     * that saves in several steps, so that no step is saved before a later one is refused. Null: allowed, or no limit.
+     */
+    public function activeTaskRefusal(TaskBoard $board, int $newTasks): ?LimitRefusal
+    {
+        return $newTasks > 0 ? $this->limits?->check($board, $newTasks, 0) : null;
+    }
+
+    /**
      * Since 2.2.0 (spec 213): archives a task by hand, with its history. False when it already is.
      */
     public function archive(Task $task, object $user): bool

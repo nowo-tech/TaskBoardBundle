@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
@@ -79,6 +80,36 @@ final class ApiSyncFieldsTest extends ApiTestCase
         $this->em->clear();
         self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
         self::assertTrue($this->em->find(Task::class, $item->getId())?->isCompleted());
+    }
+
+    public function testEveryLimitIsAskedBeforeTheFirstSave(): void
+    {
+        // Audit IA-L6: restoring an archived done task and moving it out of the done column; the limit refuses, nothing is saved.
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $task                 = new Task(board: $board, title: 'Shelved', creator: $this->owner, column: $board->getColumns()->last() ?: null);
+        $open                 = new Task(board: $board, title: 'Shelved open', creator: $this->owner);
+        $this->em->persist($task->markCompleted()->archive());
+        $this->em->persist($open->archive());
+        $this->em->flush();
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        try {
+            $this->send('PUT', '/api/tasks/v2/task/' . $task->getId(), ['archived' => false, 'status' => 'To do']);
+            $this->assertRefused(403, 'PLAN_002');
+            $this->send('PUT', '/api/tasks/v2/task/' . $open->getId(), ['archived' => false, 'name' => 'Renamed']);
+            $this->assertRefused(403, 'PLAN_002');
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        self::assertTrue($this->em->find(Task::class, $task->getId())?->isArchived(), 'still archived');
+        self::assertTrue($this->em->find(Task::class, $task->getId())?->isCompleted());
+        self::assertSame('Shelved open', $this->em->find(Task::class, $open->getId())?->getTitle());
+        $audit = self::getContainer()->get('app.api_audit');
+        self::assertInstanceOf(ApiAuditRecorder::class, $audit);
+        self::assertSame([], $audit->events, 'nothing written, nothing audited');
     }
 
     public function testATaskThatFollowsAProviderIsNotDeletedThroughTheApi(): void

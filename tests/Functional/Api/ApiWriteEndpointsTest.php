@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -110,6 +111,9 @@ final class ApiWriteEndpointsTest extends ApiTestCase
             [['name' => 'x', 'tags' => [['nested']]], 400, 'INPUT_002'],
             [['name' => ['x']], 400, 'INPUT_002'],
             [['name' => 'x', 'due_date' => 'tomorrow'], 400, 'INPUT_002'],
+            [['name' => 'x', 'tags' => [str_repeat('t', 65)]], 400, 'INPUT_002'],
+            [['name' => 'x', 'tags' => array_map(static fn (int $i): string => 't' . $i, range(1, 21))], 400, 'INPUT_002'],
+            [['name' => 'x', 'tags' => ['']], 400, 'INPUT_002'],
             ['{oops', 400, 'INPUT_001'],
             ['[1, 2]', 400, 'INPUT_001'],
             ['"text"', 400, 'INPUT_001'],
@@ -190,6 +194,9 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         self::assertContains(TaskBoardEvents::TASK_COMPLETED, $this->events);
         self::assertContains(TaskBoardEvents::TASK_MOVED, $this->events);
         self::assertSame(['status', 'fields', 'assignees', 'watchers'], end($this->audit()->events)->changedFields);
+        $this->send('PUT', '/api/tasks/v2/task/' . $task->getId(), ['tags' => ['ignored']]);
+        self::assertSame([['field' => 'tags', 'reason' => 'not_supported']], $this->json()['warnings'], 'tags go through the tag endpoints');
+        self::assertSame([], $this->json()['tags']);
 
         $this->events = [];
         $this->send('PUT', '/api/tasks/v2/task/' . $task->getId(), ['status' => 'To do']);
@@ -225,7 +232,7 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertSame(['Doing', 'Mine'], [$this->json()['status']['status'], $this->json()['description']]);
 
-        foreach ([['name' => 'x'], ['priority' => 1], ['time_estimate' => 1], ['assignees' => ['add' => ['uuid-' . $this->colleague->getId()]]], ['watchers' => ['add' => []]], ['archived' => true], ['tags' => ['x']]] as $body) {
+        foreach ([['name' => 'x'], ['priority' => 1], ['time_estimate' => 1], ['assignees' => ['add' => ['uuid-' . $this->colleague->getId()]]], ['watchers' => ['add' => []]], ['archived' => true]] as $body) {
             $this->send('PUT', '/api/tasks/v2/task/' . $own->getId(), $body);
             $this->assertRefused(403, 'TOKEN_001');
         }
@@ -244,9 +251,9 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         $this->em->persist($entry);
         $this->em->flush();
 
-        $this->send('DELETE', '/api/tasks/v2/task/' . $task->getId());
+        $this->send('DELETE', '/api/tasks/v2/task/' . $task->getId(), ['force' => true]);
 
-        self::assertSame([], $this->json());
+        self::assertSame(['warnings' => [['field' => 'force', 'reason' => 'unknown']]], $this->json());
         $this->em->clear();
         self::assertSame([], $this->em->getRepository(Task::class)->findAll());
         $kept = $this->em->find(TaskTimeEntry::class, $entry->getId());
@@ -283,6 +290,16 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         $this->em->clear();
         self::assertSame(['api'], $this->em->find(Task::class, $task->getId())?->getTags());
         $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/tag/' . str_repeat('t', 65));
+        $this->assertRefused(400, 'INPUT_002');
+        // A body these endpoints do not read is warned about, never silently dropped.
+        $this->send('DELETE', '/api/tasks/v2/task/' . $task->getId() . '/tag/api', ['color' => 'red']);
+        self::assertSame(['warnings' => [['field' => 'color', 'reason' => 'unknown']]], $this->json());
+        // The task form's limit: at most 20 tags.
+        $many       = TaskFormData::fromTask($task);
+        $many->tags = array_map(static fn (int $i): string => 't' . $i, range(1, 20));
+        $this->em->find(Task::class, $task->getId())?->setTags($many->tags);
+        $this->em->flush();
+        $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/tag/one-more');
         $this->assertRefused(400, 'INPUT_002');
 
         $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/field/any', ['value' => 1]);
