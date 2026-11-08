@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Support\UserLabel;
@@ -72,6 +73,8 @@ final readonly class TaskCopier
         private bool $syncEnabled = false,
         // Since audit IC-L1: subtasks the actor cannot view are left out of a copy (none wired: every subtask is copied).
         private ?TaskBoardResourceAccessChecker $access = null,
+        // Since audit IC-I3: the copy's TASK_CREATED / TASK_MEMBER_ADDED wait for its commit (none wired: at once).
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -157,7 +160,7 @@ final readonly class TaskCopier
             throw new TaskCopyRefusedException('quota', [], $refusal);
         }
 
-        return $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
+        $write = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
             $shift   = $this->shiftDays($source, $options);
             $copies  = [];
             $dropped = [];
@@ -189,6 +192,8 @@ final readonly class TaskCopier
 
             return new TaskCopyResult($copies[$source->getId()], array_values($copies), array_values(array_unique($dropped)));
         });
+
+        return $this->events instanceof TaskEventDeferral ? $this->events->defer($write) : $write();
     }
 
     /**
