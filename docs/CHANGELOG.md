@@ -87,6 +87,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.2.1. Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`).
+
+### Fixed
+
+- **A column change through the task's edit form is a move.** `TaskManager::update()` changed the column without the completion sync, the reopen limit or the completed / reopened events of `moveToColumn()`: an edit form posting another column (a host template that shows the column field, or a page left open while someone else moved the task) reopened a completed task past the host's limit of active tasks, left a task in the done column open, and fired no `TASK_COMPLETED` / `TASK_REOPENED`. It now asks the limit before anything changes (`TaskReopenRefusedException`: the edit form shows the board's "not moved" flash, logs `task_reopen_limit` and saves nothing of the form), puts the task at the end of its new column, syncs the completion with its history, and fires `TASK_COMPLETED` / `TASK_REOPENED` after `TASK_UPDATED` and `TASK_MOVED`. Callers that move first (the Task API) pass the current column, so nothing fires twice. Import and provider sync do not use this path and keep their rules.
+- **A stale task page no longer moves the task back.** The edit form posts the column it was rendered with (`columnIdShown`, new opt-in `TaskFormType` option `shown_column`, on for the edit form); the column changes only when the posted column differs from it, so a page left open while the task moved keeps the task where it is now. A host template that does not post the field (a `form_end` without `render_rest`) gets the posted column, as before.
+- **An unknown column is refused.** `TaskManager::update()` with a `columnId` that is not the board's left the task without a column; it now throws `ColumnNotFoundException` before anything changes, and the edit form shows the column's validation error next to the status (it is no longer bubbled to the form, where the task page did not show it).
+- **A write of fields never moves a task (audit IB-L1).** `TaskFormData::fromTask()` now sets `keepsColumn`: a null column then keeps the task's own, even none, instead of choosing the first column, so a Task API rename, tag or checklist write of a completed task without a column no longer became a reopening move. Every Task API write that the host's limit refuses after the first check (the limit changed in between) answers 403 `PLAN_002`, not 500. The edit form, which builds its own data, still sends a column-less task to the first column when it posts no column.
+
 ## [2.2.0] - 2026-11-08
 
 Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `637494e`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
