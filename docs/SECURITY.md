@@ -211,8 +211,8 @@ Off unless `recurrence.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info
 |---|---|
 | The redirect of a moved task's old address telling that a task exists (TB-14) | Only a `GET` of a full page whose task is in another tenant, for a user who passes `canViewTask()` and may open that tenant (`tenantOfKey()`), answers 302. Everyone else, a task outside any tenant, a panel fetch and a `POST` keep the same 404 as an unknown id |
 | A host action of the New board form (TB-15) | `action` is the host's template value, not request input; the CSRF token, the create check and the quota still run on the route that receives it |
-| A host close attribute printed into the dialog footer (TB-15) | `close_attribute` must match `data-[a-z0-9-]+`, else the kit's `data-nowo-ui-dialog-close` is used (no `on*` handler) |
-| The progress URL of the strip (TB-16) | Given only to whoever manages the connection (`progressUrl` as before); readers get an indeterminate bar. The meter's attributes pass UiKit's `nowo_ui_safe_attrs()` |
+| A host close attribute printed into the dialog footer (TB-15) | `close_attribute` must match `data-[a-z0-9-]+` to the end of the string (no trailing line break), else the kit's `data-nowo-ui-dialog-close` is used (no `on*` handler) |
+| The progress URL of the strip (TB-16) | Given only to whoever manages the connection (`progressUrl` as before), and polled only with `sync.badge.progress` (audit IM-I11); readers get an indeterminate bar. The meter's attributes pass UiKit's `nowo_ui_safe_attrs()` |
 | A help link URL from a host service (TB-17) | The `url_resolver` result goes through the same template guard as `url` (http(s) or a path on this site, no white space, control characters or backslashes; anything else renders `#`), after the `access_attribute` check |
 
 ## UiKit migration (2.0.0)

@@ -683,8 +683,9 @@ needed; the bundle partial reads the Twig global `nowo_task_board_sync_badge_con
 
 Since 2.5.0 (TB-16), `sync.badge.style: strip` draws the connection as one UiKit notice strip
 (`manage/_connection_strip.html.twig`, through the default `templates.connection_badge`): provider · list and the status on
-the left, UiKit's `progress` partial while a run is going (determinate and polled for whoever manages the connection,
-indeterminate for readers, whatever `sync.badge.progress` says), *Refresh* and *Connection* on the right. The Twig global
+the left, UiKit's `progress` partial while a run is going (with `sync.badge.progress: true`, determinate and polled for whoever
+manages the connection; otherwise, and for readers, indeterminate and never polled), *Refresh* and *Connection* on the
+right. The Twig global
 is `nowo_task_board_sync_badge_style`.
 
 Since 1.26.3 (TB-SYNC-1) the badge data (`nowo_task_board_connection(board)`) also carries the running run:

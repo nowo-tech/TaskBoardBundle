@@ -24,6 +24,10 @@ final class MovedTaskOldAddressTest extends TaskNumberTestCase
         $this->client->request('GET', '/t/acme/tasks/task/' . $task->getId());
 
         self::assertResponseRedirects('/t/other/tasks/task/' . $task->getId());
+
+        // Audit IM-I12: HEAD answers as GET.
+        $this->client->request('HEAD', '/t/acme/tasks/task/' . $task->getId());
+        self::assertResponseRedirects('/t/other/tasks/task/' . $task->getId());
     }
 
     public function testAReaderWhoMayNotSeeTheTaskGetsThe404(): void

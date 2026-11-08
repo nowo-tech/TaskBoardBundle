@@ -453,6 +453,12 @@ final class ManageTemplatesRenderingTest extends TestCase
         $defaults = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'close_attribute' => 'onclick']) . '</div>');
         self::assertCount(1, $defaults->filter('button[data-nowo-ui-dialog-close]'), 'an attribute that is not data-* falls back to the kit\'s close');
         self::assertStringNotContainsString('onclick', $defaults->html());
+
+        // Audit IM-I9: a trailing line break is not a data-* name.
+        $form    = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $newline = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'close_attribute' => "data-x\n"]) . '</div>');
+        self::assertCount(1, $newline->filter('button[data-nowo-ui-dialog-close]'));
+        self::assertCount(0, $newline->filter('button[data-x]'));
     }
 
     /** Since 1.19: a plain-text description is shown rendered, with "Edit description" for editors only. */

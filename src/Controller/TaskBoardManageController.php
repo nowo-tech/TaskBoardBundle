@@ -1000,7 +1000,8 @@ final class TaskBoardManageController extends AbstractController
             $task = $this->findTask($taskId, $user, detail: true);
         } catch (NotFoundHttpException $notFound) {
             // Since 2.5.0 (TB-14): a task moved to another tenant, opened at its old address (a page, not a panel fetch).
-            $moved = $request->isMethod(Request::METHOD_GET) && !$this->isPanelRequest($request) ? $this->movedTaskRedirect($taskId, $user) : null;
+            // Audit IM-I12: HEAD answers as GET.
+            $moved = in_array($request->getMethod(), [Request::METHOD_GET, Request::METHOD_HEAD], true) && !$this->isPanelRequest($request) ? $this->movedTaskRedirect($taskId, $user) : null;
 
             return $moved ?? throw $notFound;
         }

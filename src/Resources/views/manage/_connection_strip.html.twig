@@ -1,8 +1,8 @@
 {#
     Since 2.5.0 (TB-16): the provider connection as one UiKit notice strip (`sync.badge.style: strip`), drawn by
     `_connection_badge.html.twig`. Left: provider · list and the status — while a run is going, UiKit's `progress` partial:
-    a determinate bar polled by the nowo-task-board-sync-progress controller for whoever manages the connection
-    (sync.progressUrl), an indeterminate bar for readers. Right: *Refresh from <provider>* and *Connection* (managers).
+    with sync.badge.progress, a determinate bar polled by the nowo-task-board-sync-progress controller for whoever
+    manages the connection (sync.progressUrl); otherwise (and for readers) an indeterminate bar, never polled. Right: *Refresh from <provider>* and *Connection* (managers).
     An unlinked board shows the Connect link to a manager unless sync.badge.connect_link is false.
     Variables: sync (nowo_task_board_connection(board)), board.
 #}
@@ -14,7 +14,8 @@
         <span class="nowo-task-sync-strip__icon" aria-hidden="true">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: sync.running ? 'refresh' : 'plug-connected'}) }}</span>
         <div class="nowo-task-sync-strip__text">
             <p class="nowo-task-sync-strip__title">{{ _provider }} · {{ sync.containerLabel }}</p>
-            {% if sync.running and (sync.progressUrl ?? null) %}
+            {#- Audit IM-I11: the polled bar only with sync.badge.progress, as the badge; otherwise an indeterminate bar. -#}
+            {% if sync.running and (sync.progress ?? false) and (sync.progressUrl ?? null) %}
                 <div class="nowo-task-sync-strip__progress"
                     data-controller="nowo-task-board-sync-progress"
                     data-nowo-task-board-sync-progress-url-value="{{ sync.progressUrl }}"

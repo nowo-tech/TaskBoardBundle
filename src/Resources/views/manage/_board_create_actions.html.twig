@@ -9,7 +9,7 @@
 #}
 {% set _form_id = form_id|default(null) ?: 'nowo-task-board-create-form' %}
 {% set _bundle = bundle|default(null) ?: 'NowoTaskBoardBundle' %}
-{% set _close = close_attribute|default('') matches '/^data-[a-z0-9][a-z0-9-]*$/' ? close_attribute : 'data-nowo-ui-dialog-close' %}
+{% set _close = close_attribute|default('') matches '/^data-[a-z0-9][a-z0-9-]*$/D' ? close_attribute : 'data-nowo-ui-dialog-close' %}
 {% if form.scope is defined %}
     <button type="button" class="{{ nowo_ui_class('btn_secondary', _bundle) }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _form_id }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
 {% endif %}

@@ -26,7 +26,7 @@ final class ConnectionStripTest extends SyncFunctionalTestCase
 
     protected static function syncConfig(): array
     {
-        return array_replace_recursive(parent::syncConfig(), ['sync' => ['badge' => ['style' => 'strip']]]);
+        return array_replace_recursive(parent::syncConfig(), ['sync' => ['badge' => ['style' => 'strip', 'progress' => true]]]);
     }
 
     public function testManagersSeeTheRunningRunInTheStrip(): void
