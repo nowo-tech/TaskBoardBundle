@@ -157,7 +157,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.2.1
 
-Not released yet. Audit status: re-verification pending.
+Not released yet. Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`).
 
 ```bash
 composer update nowo-tech/task-board-bundle
@@ -172,7 +172,7 @@ A host that calls `TaskManager::update()` itself with another column catches `Ta
 
 ## To 2.2.0
 
-Not released yet. Audit IA (2026-11-08): Pass-Low at `637494e`.
+Released 2026-11-08 (`9790f25`). Audit IA (2026-11-08): Pass-Low at `637494e`.
 
 ```bash
 composer update nowo-tech/task-board-bundle
