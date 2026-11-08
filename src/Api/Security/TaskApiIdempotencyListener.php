@@ -158,9 +158,9 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
             // Not JSON: compared as sent.
         }
 
-        // An upload is part of the request: its bytes count too.
+        // An upload is part of the request: its bytes, its name and its type (audit IA-L7) count too.
         foreach ($this->files($request->files->all()) as $name => $file) {
-            $content .= "\n" . $name . ':' . (string) hash_file('sha256', $file->getPathname());
+            $content .= "\n" . $name . ':' . (string) hash_file('sha256', $file->getPathname()) . ':' . hash('sha256', $file->getClientOriginalName() . "\0" . (string) $file->getClientMimeType());
         }
         // Audit IA-L5: the query too, sorted, so `?depends_on=B` and `?dependency_of=C` are two requests.
         $query = $this->sorted($request->query->all());
