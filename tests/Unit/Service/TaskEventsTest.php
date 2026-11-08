@@ -195,6 +195,25 @@ final class TaskEventsTest extends TestCase
         self::assertSame([], $this->names());
     }
 
+    /** Audit IB-L1: data from fromTask() keeps a task without a column where it is; a form's empty column still picks the first. */
+    public function testFieldsFromTheTaskNeverMoveATaskWithoutAColumn(): void
+    {
+        $task       = (new Task($this->board, 'Loose', $this->user))->markCompleted();
+        $data       = TaskFormData::fromTask($task);
+        $data->tags = ['x'];
+
+        $this->manager()->update($task, $data, $this->user);
+
+        self::assertTrue($data->keepsColumn);
+        self::assertSame([null, true, ['x']], [$task->getColumn(), $task->isCompleted(), $task->getTags()]);
+        self::assertSame([TaskBoardEvents::TASK_UPDATED], $this->names());
+
+        $this->events = [];
+        $this->manager()->update($task, new TaskFormData(title: 'Loose', tags: ['x']), $this->user);
+        self::assertSame($this->todo, $task->getColumn(), 'a form without a column chooses the first one (note 2)');
+        self::assertSame([TaskBoardEvents::TASK_UPDATED, TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_REOPENED], $this->names());
+    }
+
     public function testUpdateWithoutChangesDispatchesNothing(): void
     {
         $task = new Task($this->board, 'Same', $this->user, column: $this->todo);

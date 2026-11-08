@@ -99,7 +99,10 @@ final readonly class TaskManager
         $oldStartAt          = $task->getStartAt();
         $wasCompleted        = $task->isCompleted();
 
-        $newColumn = $this->resolveColumn($task->getBoard(), $data->columnId);
+        // Since 2.2.1 (audit IB-L1): data from fromTask() without a column keeps the task's own, even none: never a move.
+        $newColumn = $data->keepsColumn && ($data->columnId === null || $data->columnId === '')
+            ? $oldColumn
+            : $this->resolveColumn($task->getBoard(), $data->columnId);
         // Since 2.2.1: a column that is not the board's is refused, as by move(), instead of leaving the task without one.
         if ($data->columnId !== null && $data->columnId !== '' && !$newColumn instanceof BoardColumn) {
             throw ColumnNotFoundException::forBoard($data->columnId, $task->getBoard()->getId());

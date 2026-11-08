@@ -84,6 +84,65 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertTrue($this->em->find(Task::class, $item->getId())?->isCompleted());
     }
 
+    /** Audit IB-L1: a write of fields never moves a task, even a done one without a column, so it asks no limit. */
+    public function testFieldWritesNeverMoveATaskWithoutAColumn(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = new Task(board: $board, title: 'Loose', creator: $this->owner);
+        $item                 = new Task(board: $board, title: 'Item', creator: $this->owner, parent: $done, tags: ['checklist:Steps']);
+        $this->em->persist($done->markCompleted());
+        $this->em->persist($item->markCompleted());
+        $this->em->flush();
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+        $checklist                         = '/api/tasks/v2/checklist/' . TaskApiReadSerializer::checklistId($done->getId(), 'Steps');
+
+        try {
+            $this->send('PUT', '/api/tasks/v2/task/' . $done->getId(), ['name' => 'Renamed']);
+            self::assertResponseIsSuccessful();
+            $this->send('POST', '/api/tasks/v2/task/' . $done->getId() . '/tag/Urgent');
+            self::assertResponseIsSuccessful();
+            $this->send('PUT', $checklist . '/checklist_item/' . $item->getId(), ['name' => 'Item renamed']);
+            self::assertResponseIsSuccessful();
+            $this->send('PUT', $checklist, ['name' => 'Stages']);
+            self::assertResponseIsSuccessful();
+            self::assertSame([], TestSyncLimitChecker::$calls, 'nothing became active');
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        foreach ([[$done, 'Renamed', ['urgent']], [$item, 'Item renamed', ['checklist:stages']]] as [$task, $title, $tags]) {
+            $kept = $this->em->find(Task::class, $task->getId());
+            self::assertInstanceOf(Task::class, $kept);
+            self::assertSame([$title, null, true], [$kept->getTitle(), $kept->getColumn(), $kept->isCompleted()]);
+            self::assertSame($tags, array_map('mb_strtolower', $kept->getTags()));
+        }
+    }
+
+    /** Audit IB-L1: the limit refusing a move after the first check (it changed in between) is 403 PLAN_002, not a 500. */
+    public function testALimitThatChangesAfterTheCheckIsStillPlan002(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = new Task(board: $board, title: 'Done', creator: $this->owner, column: $board->getColumns()->last() ?: null);
+        $this->em->persist($done->markCompleted());
+        $this->em->flush();
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks      = true;
+        TestSyncLimitChecker::$allowedTaskCalls = 1;
+
+        try {
+            $this->send('PUT', '/api/tasks/v2/task/' . $done->getId(), ['status' => 'To do']);
+            $this->assertRefused(403, 'PLAN_002');
+            self::assertSame([[1, 0], [1, 0]], TestSyncLimitChecker::$calls, 'asked once before any save, then again by the move');
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
+    }
+
     public function testEveryLimitIsAskedBeforeTheFirstSave(): void
     {
         // Audit IA-L6: restoring an archived done task and moving it out of the done column; the limit refuses, nothing is saved.
