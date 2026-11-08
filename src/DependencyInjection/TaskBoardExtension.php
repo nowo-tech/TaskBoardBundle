@@ -396,15 +396,24 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Since 2.0.0: `tenancy.open_single_board`, `tenancy.first_board_provisioner` and `import.help_link`.
+     * Since 2.0.0: `tenancy.open_single_board`, `tenancy.first_board_provisioner` and `import.help_link`; since 2.6.0
+     * `tenancy.tenant_paths[].open_single_board`.
      *
      * @param array<string, mixed> $config
      */
     private function registerHostHooks(ContainerBuilder $container, array $config): void
     {
         $provisioner = $config['tenancy']['first_board_provisioner'];
+        // Since 2.6.0 (TB-18): the tenant paths that set their own open_single_board, by route name prefix.
+        $openSingleBoardPaths = [];
+        foreach ($config['tenancy']['tenant_paths'] as $tenantPath) {
+            if (isset($tenantPath['open_single_board'])) {
+                $openSingleBoardPaths[(string) $tenantPath['name_prefix']] = (bool) $tenantPath['open_single_board'];
+            }
+        }
         $container->getDefinition(TaskBoardManageController::class)
             ->setArgument('$openSingleBoard', $config['tenancy']['open_single_board'])
+            ->setArgument('$openSingleBoardPaths', $openSingleBoardPaths)
             ->setArgument('$firstBoardProvisioner', is_string($provisioner) && $provisioner !== '' ? new Reference($provisioner) : null);
         $helpLink    = $config['import']['help_link'];
         $urlResolver = $helpLink['url_resolver'] ?? null;

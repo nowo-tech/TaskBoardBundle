@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Tests\Functional;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ManualHelpLinkUrls;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
@@ -13,6 +15,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingBoardProvisioner;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TenantCreateChecker;
 use Nowo\UiKitBundle\Form\EmojiPickerType;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -81,6 +84,43 @@ final class HostHooksTest extends FunctionalTestCase
 
         $this->client->request('GET', '/t/acme');
         self::assertResponseIsSuccessful();
+    }
+
+    /** TB-18: open_single_board per tenant path (e.g. projects open their board, personal / organization indexes list it). */
+    private const KINDS = ['enabled' => true, 'tenant_paths' => [
+        ['path' => '/u/{tenantSlug}', 'name_prefix' => 'u_', 'slug_prefix' => 'user-', 'open_single_board' => false],
+        ['path' => '/o/{tenantSlug}', 'name_prefix' => 'o_', 'slug_prefix' => 'org-'],
+        ['path' => '/p/{tenantSlug}', 'name_prefix' => 'p_', 'open_single_board' => true],
+    ]];
+
+    public function testATenantPathSetsItsOwnOpenSingleBoard(): void
+    {
+        $this->boot(['tenancy' => self::KINDS]);
+        $project = $this->board('Project', tenantKey: 'acme');
+        $this->board('Mine', tenantKey: 'user-1');
+        $this->board('Org', tenantKey: 'org-1');
+
+        $this->client->request('GET', '/p/acme');
+        self::assertResponseRedirects('/p/acme/board/' . $project->getId());
+        $this->client->request('GET', '/p/acme?boards=1');
+        self::assertResponseIsSuccessful();
+        $this->client->request('GET', '/u/user-1');
+        self::assertResponseIsSuccessful();
+        // Not set on the path: the global switch (default false).
+        $this->client->request('GET', '/o/org-1');
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testATenantPathFalseWinsOverTheGlobalSwitch(): void
+    {
+        $this->boot(['tenancy' => self::KINDS + ['open_single_board' => true]]);
+        $this->board('Mine', tenantKey: 'user-1');
+        $org = $this->board('Org', tenantKey: 'org-1');
+
+        $this->client->request('GET', '/u/user-1');
+        self::assertResponseIsSuccessful();
+        $this->client->request('GET', '/o/org-1');
+        self::assertResponseRedirects('/o/org-1/board/' . $org->getId());
     }
 
     public function testTheProvisionerCreatesTheFirstBoardAndOpensIt(): void
@@ -325,6 +365,50 @@ final class HostHooksTest extends FunctionalTestCase
         self::assertCount(0, $crawler->filter('.nowo-task-detail__toolbar'));
         $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId());
         self::assertCount(1, $crawler->filter('.nowo-task-detail__toolbar'), 'the page keeps it');
+    }
+
+    /** TB-19: without the strips, the panel still says whether the user may edit and the board keeps its drag hint. */
+    public function testWithoutTheToolbarsThePanelSaysWhetherItMayEditAndTheBoardKeepsTheDragHint(): void
+    {
+        $this->boot(['board' => ['toolbar' => false], 'task_panel' => ['toolbar' => false]]);
+        $board = $this->board();
+        $task  = $this->task($board, 'A task');
+
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . '/panel');
+        self::assertSame('true', $crawler->filter('[data-nowo-task-panel]')->attr('data-nowo-task-can-edit'));
+        self::assertCount(0, $crawler->filter('button[form="nowo-task-edit-form"]'));
+
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId());
+        $hint    = $crawler->filter('[data-testid="nowo-task-board-reorder-hint"]');
+        self::assertCount(1, $hint);
+        self::assertSame('nowo-task-sr-only', $hint->attr('class'));
+        self::assertSame('nowo-task-board-reorder-hint', $crawler->filter('.nowo-task-board')->attr('aria-describedby'));
+
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            $event->markReadOnly();
+        });
+        $this->client->disableReboot();
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . '/panel');
+        self::assertResponseIsSuccessful();
+        self::assertSame('false', $crawler->filter('[data-nowo-task-panel]')->attr('data-nowo-task-can-edit'), 'never claims an edit the server refuses');
+    }
+
+    public function testWithTheToolbarsTheCanEditHookIsThereAndTheHintStaysInTheStrip(): void
+    {
+        $this->boot([]);
+        $board = $this->board();
+        $task  = $this->task($board, 'A task');
+
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . '/panel');
+        self::assertSame('true', $crawler->filter('[data-nowo-task-panel]')->attr('data-nowo-task-can-edit'));
+        self::assertCount(1, $crawler->filter('.nowo-task-detail__toolbar button[form="nowo-task-edit-form"]'));
+
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId());
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-board-reorder-hint"]'));
+        self::assertCount(1, $crawler->filter('.nowo-task-board__toolbar .nowo-task-board__hint'));
+        self::assertNull($crawler->filter('.nowo-task-board')->attr('aria-describedby'));
     }
 
     public function testByDefaultTheChromeIsThereAndTheViewsAreTabs(): void

@@ -92,6 +92,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon override reduction (TB-18, TB-19). A host that changes nothing keeps today's behaviour; the task panel root gains one attribute.
+
+### Added
+
+- **TB-18 — `open_single_board` per tenant path.** `tenancy.tenant_paths[].open_single_board` (`true` / `false`, not set by default) wins over the global `tenancy.open_single_board` for the indexes of that path, chosen by the route the index was reached by (`<name_prefix><routes.index.name>`). An entry without it follows the global switch, so `open_single_board: true|false` keeps working. E.g. project indexes open their only board while personal (`user-…`) and organization indexes keep the list. `?boards=1` and `tenancy.first_board_provisioner` are unchanged.
+- **TB-19 — edit hook and drag hint without the toolbars.** The task panel root (`[data-nowo-task-panel]`) carries `data-nowo-task-can-edit="true|false"`: the server's `canEditTask()` for this user and task, printed whatever `task_panel.toolbar` says, and `"false"` when a host template renders the panel without `canEditTask`. With `board.toolbar: false` the board keeps the reorder hint for screen readers (`<p class="nowo-task-sr-only" id="nowo-task-board-reorder-hint">`, referenced by `aria-describedby` on `.nowo-task-board`), for whoever may manage columns. With the toolbar on, the board markup is unchanged.
+
 ## [2.5.0] - 2026-11-08
 
 Beacon override reduction (TB-11b, TB-12, TB-13 column management decision, TB-14 to TB-17), audited in Appendix IM (Pass; IM-L1, IM-I2, IM-I3, IM-I9, IM-I11, IM-I12 addressed). A host that changes nothing keeps today's output, except the People page, which now draws UiKit's tabs and avatar instead of Bootstrap classes.

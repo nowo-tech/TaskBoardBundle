@@ -70,13 +70,20 @@
             {% endif %}
             {% endif %}
         </div>
-        {% elseif _manageColumns and columnSetForm is defined and columnSetApplyForm is defined %}
+        {% else %}
+        {#- Since 2.6.0 (TB-19): without the strip, screen readers still get the drag hint. -#}
+        {% if (canEditBoard ?? true) and _manageColumns %}
+        <p class="nowo-task-sr-only" id="nowo-task-board-reorder-hint" data-testid="nowo-task-board-reorder-hint">{{ 'task_board.board.reorder_hint'|trans({}, 'NowoTaskBoardBundle') }}</p>
+        {% endif %}
+        {% if _manageColumns and columnSetForm is defined and columnSetApplyForm is defined %}
             {{ include('@NowoTaskBoardBundle/manage/_column_sets_dialogs.html.twig') }}
+        {% endif %}
         {% endif %}
 
         <div
             class="nowo-task-board"
             data-controller="nowo-task-board"
+            {%- if not nowo_task_board_ui.board_toolbar and (canEditBoard ?? true) and _manageColumns %} aria-describedby="nowo-task-board-reorder-hint"{% endif %}
             {#- Audit IM-I3: no reorder URL and token on a board whose columns the user may not manage. -#}
             {% if not ((canEditBoard ?? true) and not (canManageColumns ?? true)) %}
             data-nowo-task-board-reorder-url-value="{{ path(nowo_task_board_route('column_reorder'), {boardId: board.id}) }}"

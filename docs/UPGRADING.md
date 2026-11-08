@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.6.0](#to-260)
 - [To 2.5.0](#to-250)
 - [To 2.4.0](#to-240)
 - [To 2.3.1](#to-231)
@@ -161,6 +162,13 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.6.0
+
+No schema change. **A host that changes nothing keeps today's behaviour.** The task panel root gains `data-nowo-task-can-edit`; the board markup changes only with `board.toolbar: false`.
+
+- **Single board per tenant kind (TB-18).** Set `open_single_board` on a `tenancy.tenant_paths` entry to open the only board of that path's tenants (or not), whatever the global `tenancy.open_single_board` says. A host listener that redirected one kind of tenant index to its only board (Beacon's `ProjectBoardIndex`) can be replaced by `open_single_board: true` on that path plus `tenancy.first_board_provisioner` for the first board, and deleted.
+- **May the viewer edit? (TB-19).** Read `[data-nowo-task-panel]`'s `data-nowo-task-can-edit` (`"true"` / `"false"`) instead of looking for `button[form="nowo-task-edit-form"]` in the toolbar; it is there with `task_panel.toolbar: false` too. It reflects the server's decision for display only; every write is still checked on its route. A host CSS rule that hid `.nowo-task-detail__toolbar` can then become `task_panel.toolbar: false`.
 
 ## To 2.5.0
 

@@ -5,11 +5,14 @@
     routes with _target_path = panelTargetPath, so without fetch they come back to the board, list or Gantt page.
     The page around it must load task-board.css / task-board.js (the board, list and Gantt pages do), and js/nowo-ui-tree.js
     for the subtask tree's keyboard (without it the links still work). Since 2.0.0 `data-nowo-task-panel` is the public hook.
+    Since 2.6.0 (TB-19) `data-nowo-task-can-edit` ("true" / "false") is the server's edit decision for this user and task,
+    whatever task_panel.toolbar says; without canEditTask it says "false".
 #}
 {% use '@NowoTaskBoardBundle/manage/_task_blocks.html.twig' %}
 <div
     class="nowo-task-panel-fragment"
     data-nowo-task-panel
+    data-nowo-task-can-edit="{{ canEditTask is defined and canEditTask is same as(true) ? 'true' : 'false' }}"
     data-task-id="{{ task.id }}"
     data-task-url="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}"
     data-panel-target-path="{{ panelTargetPath|default('') }}"

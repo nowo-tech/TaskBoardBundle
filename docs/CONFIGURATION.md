@@ -268,7 +268,7 @@ nowo_task_board:
 | `templates.layout` | `null` | Deprecated since 2.0.0: use `web_ui.layout_template`. |
 | `templates.page_header` | `true` | Since 2.0.0: `false` leaves the header out of the board, list, Gantt and import pages. |
 | `board.toolbar` | `true` | Since 2.0.0: `false` leaves the strip above the board out. |
-| `task_panel.toolbar` | `true` | Since 2.0.0: `false` leaves the trail and actions out of the panel. |
+| `task_panel.toolbar` | `true` | Since 2.0.0: `false` leaves the trail and actions out of the panel. The panel root keeps `data-nowo-task-can-edit` (since 2.6.0). |
 | `templates.css_framework` | `null` | Deprecated since 2.0.0 and ignored: set `nowo_ui_kit.css_framework`. |
 | `templates.index` | `@NowoTaskBoardBundle/manage/index.html.twig` | Boards index page. |
 | `templates.board` | `@NowoTaskBoardBundle/manage/board.html.twig` | Kanban board page. |
@@ -363,6 +363,8 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `tenancy.tenant_paths[].name_prefix` | — (required) | Prefix of the copied route names (`app_project_` → `app_project_nowo_task_board_board`) |
 | `tenancy.tenant_paths[].slug_prefix` | `''` | Slugs this entry serves (prefix match, first entry wins); `''` = every slug |
 | `tenancy.tenant_paths[].slug_requirement` | `null` | Route requirement of `{tenantSlug}`; `null` = the slug prefix then `[A-Za-z0-9_-]+` |
+| `tenancy.tenant_paths[].open_single_board` | not set | Since 2.6.0: `tenancy.open_single_board` for the indexes of this path only (`true` / `false`); not set = the global value |
+| `tenancy.open_single_board` | `false` | Since 2.0.0: a tenant index opens the only board the user sees (`?boards=1` keeps the list). A `tenant_paths` entry may override it |
 | `tenancy.single_board` | `false` | One board per tenant: the tenant index opens it (created with `board.default_columns` and the tenant label as name on the first visit) |
 | `tenancy.resolver` | `null` | Service id of a `TaskBoardTenantResolverInterface` (slug → tenant, or null = 404). `null` = the slug is the tenant |
 | `assignee_provider` | `null` | Service id of a `TaskAssigneeProviderInterface`: who may be a member of a task on a board. `null` = every `user_class` user |
