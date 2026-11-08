@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
 
@@ -139,6 +140,15 @@ final class TaskMoveSyncTest extends SyncFunctionalTestCase
         $views = self::getContainer()->get(SyncPeopleViewProvider::class);
         self::assertInstanceOf(SyncPeopleViewProvider::class, $views);
         self::assertSame('DEV-7', $views->detailsOf($moved)['customId'] ?? null, 'the panel still shows it, read-only');
+
+        // Owner (decision 4): imported field values stay, hidden on the target board, reached by the source's erasure.
+        $fields = self::getContainer()->get(SyncFieldViewProvider::class);
+        self::assertInstanceOf(SyncFieldViewProvider::class, $fields);
+        self::assertSame([], $fields->fieldsOf($moved));
+        self::assertSame([], $fields->searchTextsOf([$moved]));
+        $value = $this->em->getRepository(TaskSyncFieldValue::class)->findOneBy(['task' => $moved]);
+        self::assertInstanceOf(TaskSyncFieldValue::class, $value, 'kept');
+        self::assertSame($board->getId(), $value->getField()->getBoard()->getId(), 'under the source board\'s field');
     }
 
     public function testItemsAreTombstonedWheneverTheTablesExistEvenWithSyncOffNow(): void

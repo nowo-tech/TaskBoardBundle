@@ -757,4 +757,4 @@ task_board.history.type.member_not_copied: "a laissé un membre hors de la copie
 task_board.copy.refusal.subtask_not_editable: "Vous ne pouvez pas modifier « %task% », qui serait déplacée avec elle."
 task_board.copy.refusal.subtask_hidden: "Une sous-tâche que vous ne voyez pas serait déplacée avec elle."
 task_board.copy.hidden: "%count% sous-tâche(s) que vous ne voyez pas sont laissées de côté."
-task_board.copy.imported_fields: "Les champs importés restent sur la tâche, en lecture seule : %fields%."
+task_board.copy.imported_fields: "Les champs importés restent sur la tâche, masqués dans ce tableau ; rien n'est supprimé : %fields%."
