@@ -8,6 +8,7 @@ use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Override;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -15,9 +16,6 @@ use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotNull;
-use Symfony\Component\Validator\Constraints\Range;
 
 /**
  * Since 1.15: the "Log time" dialog of the task detail — minutes spent, the day and an optional note.
@@ -30,7 +28,7 @@ final class TaskTimeEntryFormType extends AbstractType
     use FormOptionsTrait;
 
     /** At most a week of work in one entry. */
-    public const MAX_MINUTES = 10080;
+    public const MAX_MINUTES = TaskConstraints::MAX_MINUTES;
 
     /**
      * @param FormBuilderInterface<mixed> $builder
@@ -43,21 +41,21 @@ final class TaskTimeEntryFormType extends AbstractType
             ->add('minutes', IntegerType::class, [
                 'label'       => 'task_board.time.form.minutes',
                 'help'        => 'task_board.time.form.minutes_help',
-                'constraints' => [new NotNull(), new Range(min: 1, max: self::MAX_MINUTES)],
+                'constraints' => TaskConstraints::timeMinutes(),
                 'attr'        => ['class' => 'form-control', 'min' => 1, 'max' => self::MAX_MINUTES, 'inputmode' => 'numeric'],
             ])
             ->add('loggedAt', DateType::class, [
                 'label'           => 'task_board.time.form.date',
                 'widget'          => 'single_text',
                 'input'           => 'datetime_immutable',
-                'constraints'     => [new NotNull()],
+                'constraints'     => TaskConstraints::timeLoggedAt(),
                 'invalid_message' => 'task_board.form.task.due_invalid',
                 'attr'            => ['class' => 'form-control'],
             ])
             ->add('note', TextType::class, [
                 'label'       => 'task_board.time.form.note',
                 'required'    => false,
-                'constraints' => [new Length(max: 512)],
+                'constraints' => TaskConstraints::timeNote(),
                 'attr'        => ['class' => 'form-control', 'maxlength' => 512],
             ]);
     }

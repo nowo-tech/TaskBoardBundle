@@ -1,0 +1,74 @@
+# Since 2.2.0 (spec 213): the Task API, loaded only with `api.enabled: true`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries: ~
+    Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace: ~
+    Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers: ~
+    Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments: ~
+
+    Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener:
+        arguments:
+            $prefix: '%nowo_task_board.api.prefix%'
+
+    Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer: ~
+    Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer: ~
+
+    Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository:
+        arguments:
+            $syncEnabled: '%nowo_task_board.sync.enabled%'
+
+    # Public: any in-process caller reaches the operations and the guard without HTTP.
+    Nowo\TaskBoardBundle\Api\Security\TaskApiGuard:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController:
+        public: true
+        tags: ['controller.service_arguments']
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
+        public: true
+        tags: ['controller.service_arguments']
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController:
+        public: true
+        tags: ['controller.service_arguments']
+        arguments:
+            $maxBodyBytes: '%nowo_task_board.api.max_body_bytes%'
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiAudit:
+        arguments:
+            $quotaListenerRequired: '%nowo_task_board.api.quota_listener_required%'
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiTimeOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiBoardOperations:
+        public: true
+
+    Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController:
+        public: true
+        tags: ['controller.service_arguments']
+        arguments:
+            $maxBodyBytes: '%nowo_task_board.api.max_body_bytes%'
+
+    # Since 2.2.0: selectable as `api.hooks.time_entries` by a host without its own time store.
+    Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries: ~
+
+    Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener: ~
+
+    Nowo\TaskBoardBundle\Api\Command\TaskApiPurgeIdempotencyCommand: ~

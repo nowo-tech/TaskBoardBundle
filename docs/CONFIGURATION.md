@@ -6,6 +6,7 @@
 - [Database](#database)
 - [Routes](#routes)
   - [Why a route loader instead of `#[Route]` attributes (REQ-SF-004)](#why-a-route-loader-instead-of-route-attributes-req-sf-004)
+- [Task API (since 2.2)](#task-api-since-22)
 - [Security](#security)
   - [Firewall](#firewall)
   - [Access checker](#access-checker)
@@ -142,6 +143,10 @@ from this configuration, not declared with `#[Route]` attributes on `TaskBoardMa
   each route key to its controller action and HTTP methods in one place (`TaskBoardRouteLoader::load()`).
 
 Route names, paths, methods and the prefix are unchanged by 1.21.
+
+## Task API (since 2.2)
+
+Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes` and `api.hooks.*`: see [API](API.md).
 
 ## Security
 

@@ -12,6 +12,8 @@
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
+- [Task API (2.2)](#task-api-22)
+- [Shared write rules (2.2)](#shared-write-rules-22)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -27,6 +29,7 @@
 | **Task forms** | Symfony forms for board/task creation and updates (title, description, links, members). |
 | **Configuration** | `nowo_task_board` YAML (routes, table prefix, access checker, team resolver). |
 | **Provider sync (since 1.23, opt-in)** | Server-side calls to a task provider's API with the host's token, file downloads from the provider's attachment hosts, remote text stored as Markdown. |
+| **Task API (since 2.2, opt-in)** | Stateless routes under `api.prefix`, off by default. Token authentication is the host's; `Api\Security\TaskApiRequestListener` and `TaskApiGuard` fail closed. Audit IA: a token whose user the access checker refuses counts as a failed token (L1); with tenancy the guard asks the bundle's tenant resolver too (L2); the security-user check compares ids, not classes, and an `access_control` refusal reads as 403 (I2, I3, documented in [API](API.md)). `TaskManager::archive()` dispatches no domain event, as no UI archive exists; the API's write audit is `API_WRITE` (I5). Writes (2.2, S4): the guard's capability table per write, `API_WRITE` required, the plan limit refused when no `QUOTA_CHECK` listener answers, idempotency keys scoped to the token with hashes only and a replay checked again; the kept answers hold task text for 24 hours (`forget()` on revocation or erasure). Audit IA (2026-11-08): Pass-Low at `637494e`. |
 | **TimeTrack bridge** | Optional. When TimeTrack is installed, task provider exposes trackable tasks; access gated by `TaskAccessGuard`. |
 
 ## Threats and mitigations
@@ -163,6 +166,29 @@ Both opt-in.
 - **Runtime confirm.** `window.confirm` stays only when UiKit's confirm script is missing, so a destructive action never goes unasked.
 - **Avatars.** Pictures now pass UiKit's `AvatarUrlPolicy`: https without userinfo, or a same-origin path.
 - **Subtask nodes.** Titles reach `tree` as text, escaped by the partial, and in `data-*` attributes through `nowo_ui_safe_attrs`.
+
+## Task API (2.2)
+
+Off unless `api.enabled: true`. Audit IA (2026-11-08): Pass-Low at `637494e`: independent audit IA (2026-11-07 and 08) covered the skeleton, reads, writes, files, time, management, the contract test and the docs; every finding was fixed or documented.
+
+| Threat | Mitigation |
+|---|---|
+| A host widening a token by mistake | `TaskApiWhere::everything()` grants the person's whole reach: a host maps only a token's explicit "everything I can reach" to it, never an empty, missing or unreadable scope (`limitedTo([], [])`). Where only narrows; access comes from the checkers |
+| A token reaching more than its person | Level ∩ the person's access ∩ where, per request, in `TaskApiGuard`; the access checkers judge the security user, which must be the token's user (else 500). Out of reach is always the same 404 |
+| A token reaching another tenant | With tenancy, the bundle's tenant resolver is asked for each board's tenant, whatever the workspace hook answers |
+| Brute-forcing tokens | Failed tokens per IP (`registerFailedToken`), including a valid token whose user is refused; the token's own rate limit |
+| A credential in logs | Read from `Authorization` only; never logged or echoed; errors log the exception class only |
+| Writes skipping the UI's rules | The UI's services and the forms' constraints (`TaskConstraints`); the plan limit refused when no `QUOTA_CHECK` listener answers; an unaudited write refused (503) |
+| A retry writing twice, or a replay leaking | Idempotency keys per token, hashed; the request (method, path, query, body, upload bytes, name and type) fingerprinted; refusals not kept; a replay re-checks the token and the reach |
+| Tracked time lost | Deleting tasks and boards keeps time, detached; deleting time is never offered (403) |
+| Provider data | Provider connections are never reachable; linked tasks and boards are not deleted; stored files of an erased task are named to the host |
+| Raw task text | Returned as stored: an API reader sees the alt text and id of an embedded host image the UI hides; the file stays behind the host's download check |
+
+Known and documented: a multi-field update is not one transaction (refusals are checked first); a narrow race between a restore and a move can answer 500 after the restore; concurrent board deletes may dispatch `TASK_ERASED` and `BOARD_DELETED` twice; `forget()` clears one token's kept answers.
+
+## Shared write rules (2.2)
+
+Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. After an unlink, the files a sync stored for the subtree are named in `TaskErasedEvent::$attachmentRefs` and their rows removed, on every database (audit IA-M1): the host deletes them, as for `deleteBoard()`. `tests/Functional/Characterization` pins the UI's output.
 
 ## Logging and personal data
 

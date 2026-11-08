@@ -86,6 +86,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `637494e`. Opt-in: with `api.enabled: false` (the default) no route, service, listener, parameter or table changes, and the UI's output stays as it was. See [API](API.md).
+
+### Added
+
+- **Task API, contract and docs.** `ApiClickUpContractTest` compares every endpoint's answer with the shape of ClickUp's published response examples (`tests/Fixtures/clickup/shapes.json`: names and types, not live recordings) and pins 40 documented differences. `docs/openapi.yaml` (OpenAPI 3.1), kept in step with the routes by `ApiOpenApiTest`. `docs/API.md` rewritten: turning it on, hooks, access, endpoints, idempotency, errors, differences from ClickUp, material for a host's manual.
+- **Task API, management (Full).** Create, rename and delete boards (deleting erases the tasks with time kept, in slices answered 202; a provider-linked board is 409 `LIST_002`), and columns as statuses on four paths of this API's own (`/v2/list/{id}/status…`). Needs the board's manage decision, or the create check and the board plan limit.
+- **Task API, files and time.** `POST /v2/task/{id}/attachment` through the host's `TaskApiAttachmentsInterface`; `POST /v2/team/{id}/time_entries` through `TaskApiTimeEntriesInterface`, for the token's own person; `DELETE` of a time entry always 403 `TIME_002`. `Api\Hook\ManualTaskApiTimeEntries` as a time store over the bundle's manual entries.
+- **Task API, write endpoints.** Tasks (create, update, delete with time kept), comments, tags, dependencies, links and checklists, through the UI's services. Read writes nothing; My tasks works only on its own tasks and their checklists; custom fields answer 409 `FIELD_001`; a task that follows a provider is not deleted (409 `TASK_002`). Writes need an `API_WRITE` listener (503 `AUDIT_001`) and, for creates, a `QUOTA_CHECK` listener (403 `PLAN_002`). `Idempotency-Key` on every write, 24 hours per token, in `task_board_api_idempotency` or the host's store; `nowo:task-board:api:purge-idempotency`.
+- **Task API, read endpoints.** Spaces, folders (none), lists, tasks with ClickUp's filters and 100 per page, a task, comments, members, tags, imported custom fields and time entries (through the host's time hook). Lists hold and count only what the token may read; each list answers in a fixed number of queries. See [API](API.md).
+- **Task API, skeleton (`api.*`).** `GET /v2/user`, `GET /v2/team` under `api.prefix`; the request pipeline (failed-token limit, authenticator, security user, rate limit), `Api\Security\TaskApiGuard` (level ∩ access ∩ where), `Api\TaskApiCapability`, one `{err, ECODE}` shape. Hooks in `Api\Hook`, where every default denies; event `TaskBoardEvents::API_WRITE`. The build refuses `security.allow_unauthenticated` and, without `api.host_decides_access`, `security.resource_scoping: false`.
+- `Service\TaskManager::restore()` and `archive()`, with their history; `restore()` asks the host's limit and throws `TaskReopenRefusedException` when it refuses.
+- `Service\TaskBoardEraser::eraseTask()`: one task and its subtasks, leaf-first through Doctrine, tracked time kept and detached. Needs the board's manage decision; a task that follows a provider, or has a subtask that does, is refused with `TaskLinkedToProviderException`. The files a sync stored for the subtree, kept after an unlink, are named in each `TaskErasedEvent` and their rows removed, so the host can delete them (audit IA-M1).
+- `Service\TaskBoardEditor::update()`: name and description of a board, the slug unchanged, `TaskBoardEvents::BOARD_UPDATED` (`BoardUpdatedEvent`).
+- `Service\TaskCommentPolicy`: who may write, edit and delete a comment.
+- `Validation\TaskConstraints`: the rules of the fields a write takes.
+- `Service\TaskDependencyManager::findBetween()`, `Dto\TaskFormData::fromTask()`.
+
+### Fixed
+
+- `api.enabled: true` in one config file and `false` in a later one (a `when@prod` override) no longer maps the idempotency table or registers `NOWO_TB_JSON_TEXT`: `prepend()` follows the last value set, as the merged configuration does, and so does `api.hooks.idempotency_store` (audit IA-L8).
+
+### Deprecated
+
+- `sync` and `task_numbers` still map their tables when any config file enables them, even if a later override disables them (2.1 behaviour, kept so a layered config never drops tables holding data). Deprecated: 3.0 follows the merged value.
+
+### Changed
+
+- `TaskBoardManageController` asks `TaskCommentPolicy` and `TaskManager::restore()`, and the write forms take their rules from `TaskConstraints`. Their output does not change: `tests/Functional/Characterization` pins it. Its `$syncLimits` argument stays in place but is deprecated and ignored: `TaskManager` holds the same limit (audit IA-I1).
+
 ## [2.1.1] - 2026-11-07
 
 Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permission change. Audit HZ (2026-11-07): Pass (good) / Low. See [UPGRADING](UPGRADING.md#to-211).

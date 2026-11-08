@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Dto;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 
 /**
@@ -26,5 +27,23 @@ final class TaskFormData
         // Since 1.15: the day work starts (the Gantt bar's start; null = the creation day).
         public ?DateTimeImmutable $startAt = null,
     ) {
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): the task as it stands, for a write that changes only some fields.
+     */
+    public static function fromTask(Task $task): self
+    {
+        return new self(
+            title: $task->getTitle(),
+            description: $task->getDescription(),
+            priority: $task->getPriority(),
+            columnId: $task->getColumn()?->getId(),
+            estimatedMinutes: $task->getEstimatedMinutes(),
+            dueAt: $task->getDueAt(),
+            tags: $task->getTags(),
+            color: $task->getColor(),
+            startAt: $task->getStartAt(),
+        );
     }
 }

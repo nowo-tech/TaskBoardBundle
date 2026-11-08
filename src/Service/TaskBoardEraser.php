@@ -14,9 +14,11 @@ use Nowo\TaskBoardBundle\Event\BoardErasedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskErasedEvent;
 use Nowo\TaskBoardBundle\Exception\InvalidEraseCursorException;
+use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
 use Nowo\TaskBoardBundle\Security\EraseCursorSigner;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -31,6 +33,7 @@ use function array_flip;
 use function array_intersect_key;
 use function array_keys;
 use function array_map;
+use function array_merge;
 use function bin2hex;
 use function count;
 use function is_scalar;
@@ -109,6 +112,124 @@ final readonly class TaskBoardEraser
     public function deleteBoard(TaskBoard $board, object $actor, int $batchSize = 200, ?EraseCursor $cursor = null): EraseProgress
     {
         return $this->erase($board, $actor, $batchSize, $cursor, true);
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): deletes one task and its subtasks, leaf-first through Doctrine (a database cascade on the
+     * parent would skip the `PreRemove` that keeps their time). Time is kept, detached. Returns how many were deleted.
+     *
+     * @throws AccessDeniedException when the actor may not manage the board
+     * @throws TaskLinkedToProviderException when the task or a subtask follows a provider: nothing is deleted
+     */
+    public function eraseTask(Task $task, object $actor): int
+    {
+        $board = $task->getBoard();
+        if (!$this->accessChecker->canManageBoard($actor, $board)) {
+            throw new AccessDeniedException('The task may not be erased.');
+        }
+        $levels = [[$task]];
+        while (($next = $this->subtasksOf($levels[array_key_last($levels)])) !== []) {
+            $levels[] = $next;
+        }
+        foreach ($levels as $level) {
+            $this->refuseLinked($level);
+        }
+        // Audit IA-M1: the files a sync stored outlive an unlink (GWd-M1), so the host learns of them here, or never.
+        $refs = $this->storedRefsOf(array_merge(...$levels));
+
+        $boardId = $board->getId();
+        $deleted = 0;
+        foreach (array_reverse($levels) as $level) {
+            foreach ($level as $erased) {
+                $this->eventDispatcher?->dispatch(new TaskErasedEvent($erased->getId(), $boardId, $erased->getTitle(), $refs[$erased->getId()] ?? [], count($erased->getTimeEntries())), TaskBoardEvents::TASK_ERASED);
+                $board->getTasks()->removeElement($erased);
+                $erased->getParent()?->getSubtasks()->removeElement($erased);
+                $this->entityManager->remove($erased);
+                ++$deleted;
+            }
+            $this->entityManager->flush();
+        }
+        $this->logger->info('TaskBoard task erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $deleted]);
+
+        return $deleted;
+    }
+
+    /**
+     * @param list<Task> $tasks
+     *
+     * @return list<Task>
+     */
+    private function subtasksOf(array $tasks): array
+    {
+        /** @var list<Task> $subtasks */
+        $subtasks = $this->entityManager->createQueryBuilder()
+            ->select('t')
+            ->from(Task::class, 't')
+            ->where('t.parent IN (:parents)')
+            ->setParameter('parents', $tasks)
+            ->getQuery()
+            ->getResult();
+
+        return $subtasks;
+    }
+
+    /**
+     * The storage refs of the files a sync stored for the tasks, per task id, read and their rows removed (a database that
+     * does not enforce the foreign key would keep them, with nothing left to name them).
+     *
+     * @param list<Task> $tasks
+     *
+     * @return array<string, list<string>>
+     */
+    private function storedRefsOf(array $tasks): array
+    {
+        if (!$this->syncService instanceof TaskBoardSyncService) {
+            return [];
+        }
+        /** @var list<array{taskId: string, ref: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(a.task) AS taskId', 'a.storedRef AS ref')
+            ->from(TaskSyncAttachment::class, 'a')
+            ->where('a.task IN (:tasks)')
+            ->setParameter('tasks', $tasks)
+            ->getQuery()
+            ->getArrayResult();
+        $refs = [];
+        foreach ($rows as $row) {
+            $refs[(string) $row['taskId']][] = (string) $row['ref'];
+        }
+        if ($refs !== []) {
+            $this->entityManager->createQueryBuilder()
+                ->delete(TaskSyncAttachment::class, 'a')
+                ->where('a.task IN (:tasks)')
+                ->setParameter('tasks', $tasks)
+                ->getQuery()
+                ->execute();
+        }
+
+        return $refs;
+    }
+
+    /**
+     * @param list<Task> $tasks
+     */
+    private function refuseLinked(array $tasks): void
+    {
+        if (!$this->syncService instanceof TaskBoardSyncService) {
+            return;
+        }
+        /** @var list<array{id: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(i.task) AS id')
+            ->from(TaskSyncItem::class, 'i')
+            ->where('i.task IN (:tasks)')
+            ->setParameter('tasks', $tasks)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getArrayResult();
+        if (isset($rows[0])) {
+            throw TaskLinkedToProviderException::forTask((string) $rows[0]['id']);
+        }
     }
 
     private function erase(TaskBoard $board, object $actor, int $batchSize, ?EraseCursor $cursor, bool $deleteBoard): EraseProgress

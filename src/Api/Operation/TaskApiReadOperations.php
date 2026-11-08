@@ -1,0 +1,402 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Api\Operation;
+
+use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
+use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
+use Nowo\TaskBoardBundle\Api\TaskApiCapability;
+use Nowo\TaskBoardBundle\Api\TaskApiLevel;
+use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
+use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiBoardList;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiCommentPage;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskPage;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTeam;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTimePage;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+
+use function array_filter;
+use function array_map;
+use function array_values;
+use function in_array;
+use function spl_object_id;
+use function str_starts_with;
+
+/**
+ * Since 2.2.0 (spec 213): what the API reads, without HTTP: each method takes the principal and applies every check, so
+ * an in-process caller gets exactly what a request would.
+ */
+final readonly class TaskApiReadOperations
+{
+    /** Comments per page, as ClickUp. */
+    public const COMMENTS_PER_PAGE = 25;
+
+    public function __construct(
+        private TaskApiPlanGateInterface $planGate,
+        private TaskApiWorkspaceInterface $workspace,
+        private TaskApiUsersInterface $users,
+        private TaskApiGuard $guard,
+        private TaskApiQueryRepository $queries,
+        private TaskApiTimeEntriesInterface $timeEntries,
+    ) {
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function me(TaskApiPrincipal $principal): TaskApiUser
+    {
+        $this->requireIdentity($principal);
+
+        return $this->users->profiles([$principal->user], $principal)[$this->users->apiId($principal->user)] ?? throw TaskApiRefusal::notFound();
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiTeam>
+     */
+    public function teams(TaskApiPrincipal $principal): array
+    {
+        $this->requireIdentity($principal);
+
+        return $this->workspace->teams($principal);
+    }
+
+    /**
+     * The spaces of one of the token's teams that where reaches and whose plan holds the module.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiSpace>
+     */
+    public function spaces(TaskApiPrincipal $principal, string $teamId): array
+    {
+        $this->requireTeam($principal, $teamId);
+
+        return array_values(array_filter($this->workspace->spaces($principal, $teamId), fn (TaskApiSpace $space): bool => $this->guard->lists($principal, $space)));
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function space(TaskApiPrincipal $principal, string $spaceId): TaskApiSpace
+    {
+        return $this->guard->space($principal, $spaceId, TaskApiCapability::ReadOwn);
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function boards(TaskApiPrincipal $principal, string $spaceId): TaskApiBoardList
+    {
+        $space  = $this->guard->space($principal, $spaceId, TaskApiCapability::ReadOwn);
+        $boards = $this->guard->visibleBoards($principal, $space->tenantKey);
+
+        return new TaskApiBoardList($space, $boards, $this->queries->countByBoard($this->ids($boards), $this->owner($principal)));
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function board(TaskApiPrincipal $principal, string $boardId): TaskApiBoardList
+    {
+        $board = $this->guard->board($principal, $boardId, TaskApiCapability::ReadOwn);
+
+        return new TaskApiBoardList($this->spaceOf($principal, $board), [$board], $this->queries->countByBoard([$board->getId()], $this->owner($principal)));
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function tasks(TaskApiPrincipal $principal, string $boardId, TaskApiTaskFilter $filter): TaskApiTaskPage
+    {
+        $board = $this->guard->board($principal, $boardId, TaskApiCapability::ReadOwn);
+
+        return $this->page($principal, [$board], $filter);
+    }
+
+    /**
+     * Tasks across the boards of a team the token reaches; `space_ids[]` and `list_ids[]` narrow them.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function teamTasks(TaskApiPrincipal $principal, string $teamId, TaskApiTaskFilter $filter): TaskApiTaskPage
+    {
+        $boards = [];
+        foreach ($this->spaces($principal, $teamId) as $space) {
+            if ($filter->spaceIds !== [] && !in_array($space->id, $filter->spaceIds, true)) {
+                continue;
+            }
+            foreach ($this->guard->visibleBoards($principal, $space->tenantKey) as $board) {
+                if ($filter->listIds === [] || in_array($board->getId(), $filter->listIds, true)) {
+                    $boards[] = $board;
+                }
+            }
+        }
+
+        return $this->page($principal, $boards, $filter);
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    public function task(TaskApiPrincipal $principal, string $taskId, bool $markdown = false): TaskApiTaskPage
+    {
+        $task = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
+
+        return $this->context($principal, $this->queries->load([$task->getId()]), true, $markdown);
+    }
+
+    /**
+     * Newest first, 25 per page; `$start` and `$startId` name the oldest comment of the previous page.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function comments(TaskApiPrincipal $principal, string $taskId, ?DateTimeImmutable $start, ?string $startId): TaskApiCommentPage
+    {
+        $task     = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
+        $comments = $this->queries->comments($task, $start, $startId, self::COMMENTS_PER_PAGE);
+        $authors  = [];
+        $profiles = $this->profiles($principal, array_values(array_filter(array_map(static fn (TaskComment $comment): ?object => $comment->getAuthor(), $comments))));
+        foreach ($comments as $comment) {
+            $author = $comment->getAuthor();
+            $id     = $author === null ? null : $profiles['ids'][spl_object_id($author)] ?? null;
+            if ($id !== null && isset($profiles['profiles'][$id])) {
+                $authors[$comment->getId()] = $profiles['profiles'][$id];
+            }
+        }
+
+        return new TaskApiCommentPage($comments, $authors);
+    }
+
+    /**
+     * Everyone attached to the task, once, as the viewer may see them.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiUser>
+     */
+    public function members(TaskApiPrincipal $principal, string $taskId): array
+    {
+        $task  = $this->guard->task($principal, $taskId, TaskApiCapability::ReadEverything);
+        $users = [];
+        foreach ($task->getMembers() as $member) {
+            $users[spl_object_id($member->getUser())] = $member->getUser();
+        }
+
+        return array_values($this->profiles($principal, array_values($users))['profiles']);
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     *
+     * @return list<string>
+     */
+    public function spaceTags(TaskApiPrincipal $principal, string $spaceId): array
+    {
+        $space = $this->guard->space($principal, $spaceId, TaskApiCapability::ReadEverything);
+
+        return $this->queries->tagsOf($this->ids($this->guard->visibleBoards($principal, $space->tenantKey)));
+    }
+
+    /**
+     * The fields a provider sync imported for the board; none without one.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskSyncField>
+     */
+    public function boardFields(TaskApiPrincipal $principal, string $boardId): array
+    {
+        return $this->queries->fieldsOf($this->guard->board($principal, $boardId, TaskApiCapability::ReadEverything)->getId());
+    }
+
+    /**
+     * The host's time store decides whose time the token sees; a named task must be within reach first.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function timeEntries(TaskApiPrincipal $principal, TaskApiTimeQuery $query): TaskApiTimePage
+    {
+        $this->requireTeam($principal, $query->teamId);
+        if ($query->taskId !== null) {
+            $this->guard->task($principal, $query->taskId, TaskApiCapability::ReadOwn);
+        }
+
+        return $this->timeEntries->list($principal, $query);
+    }
+
+    /**
+     * @param list<TaskBoard> $boards already checked
+     *
+     * @throws TaskApiRefusal
+     */
+    private function page(TaskApiPrincipal $principal, array $boards, TaskApiTaskFilter $filter): TaskApiTaskPage
+    {
+        $assignees = [];
+        foreach ($filter->assigneeIds as $apiId) {
+            $user = $this->users->find($apiId);
+            if ($user !== null) {
+                $assignees[] = $user;
+            }
+        }
+        $result = $this->queries->taskPage($this->ids($boards), $filter, $assignees, $this->owner($principal));
+
+        return $this->context($principal, $result['tasks'], $result['lastPage'], $filter->markdown);
+    }
+
+    /**
+     * Everything the tasks are shown with, in a fixed number of queries and one call to each hook.
+     *
+     * @param list<Task> $tasks
+     */
+    private function context(TaskApiPrincipal $principal, array $tasks, bool $lastPage, bool $markdown): TaskApiTaskPage
+    {
+        $ids      = array_map(static fn (Task $task): string => $task->getId(), $tasks);
+        $subtasks = [];
+        foreach ($this->queries->subtasksOf($ids) as $subtask) {
+            // Audit IA-M2: only the subtasks the token may open; a checklist item of a task it reaches is part of that task
+            // (owner: My tasks manages the checklists of its own tasks).
+            if ($this->isChecklistItem($subtask) || $this->guard->canSeeTask($principal, $subtask)) {
+                $subtasks[(string) $subtask->getParent()?->getId()][] = $subtask;
+            }
+        }
+        // Audit IA-I7: a relation is shown only when the token may open the other task too.
+        $dependencies = array_values(array_filter($this->queries->dependenciesOf($ids), function (TaskDependency $dependency) use ($principal, $ids): bool {
+            foreach ([$dependency->getSourceTask(), $dependency->getTargetTask()] as $end) {
+                if (!in_array($end->getId(), $ids, true) && !$this->guard->canSeeTask($principal, $end)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+        $spaces = [];
+        $users  = [];
+        foreach ($tasks as $task) {
+            $board = $task->getBoard();
+            $spaces[$board->getId()] ??= $this->spaceOf($principal, $board);
+            $creator = $task->getCreator();
+            if ($creator !== null) {
+                $users[spl_object_id($creator)] = $creator;
+            }
+            foreach ([$task, ...$subtasks[$task->getId()] ?? []] as $shown) {
+                foreach ($shown->getMembers() as $member) {
+                    $users[spl_object_id($member->getUser())] = $member->getUser();
+                }
+            }
+        }
+        $profiles = $this->profiles($principal, array_values($users));
+
+        return new TaskApiTaskPage(
+            tasks: $tasks,
+            lastPage: $lastPage,
+            spaces: $spaces,
+            profiles: $profiles['profiles'],
+            userIds: $profiles['ids'],
+            dependencies: $dependencies,
+            subtasks: $subtasks,
+            manualMinutes: $this->queries->manualMinutesOf($ids),
+            fieldValues: $this->queries->fieldValuesOf($ids),
+            markdown: $markdown,
+        );
+    }
+
+    /**
+     * @param list<object> $users
+     *
+     * @return array{profiles: array<string, TaskApiUser>, ids: array<int, string>}
+     */
+    private function profiles(TaskApiPrincipal $principal, array $users): array
+    {
+        if ($users === []) {
+            return ['profiles' => [], 'ids' => []];
+        }
+        $profiles = $this->users->profiles($users, $principal);
+        $ids      = [];
+        foreach ($users as $user) {
+            try {
+                $ids[spl_object_id($user)] = $this->users->apiId($user);
+            } catch (TaskApiRefusal) {
+                // A person the host does not know is not shown.
+            }
+        }
+
+        return ['profiles' => $profiles, 'ids' => $ids];
+    }
+
+    private function isChecklistItem(Task $task): bool
+    {
+        foreach ($task->getTags() as $tag) {
+            if (str_starts_with($tag, 'checklist:')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function spaceOf(TaskApiPrincipal $principal, TaskBoard $board): TaskApiSpace
+    {
+        // The guard already asked the host for this tenant: a board without a space is out of reach.
+        return $this->workspace->spaceOfTenant($principal, $board->getTenantKey()) ?? throw TaskApiRefusal::notFound();
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    private function requireTeam(TaskApiPrincipal $principal, string $teamId): void
+    {
+        $this->requireIdentity($principal);
+        foreach ($this->workspace->teams($principal) as $team) {
+            if ($team->id === $teamId) {
+                return;
+            }
+        }
+
+        throw TaskApiRefusal::notFound();
+    }
+
+    /**
+     * Every level may read who it is, so only the plan is asked.
+     *
+     * @throws TaskApiRefusal
+     */
+    private function requireIdentity(TaskApiPrincipal $principal): void
+    {
+        if (!$this->planGate->allowsTasks($principal->user, null)) {
+            throw TaskApiRefusal::planRefused();
+        }
+    }
+
+    private function owner(TaskApiPrincipal $principal): ?object
+    {
+        return $principal->level === TaskApiLevel::MyTasks ? $principal->user : null;
+    }
+
+    /**
+     * @param list<TaskBoard> $boards
+     *
+     * @return list<string>
+     */
+    private function ids(array $boards): array
+    {
+        return array_map(static fn (TaskBoard $board): string => $board->getId(), $boards);
+    }
+}

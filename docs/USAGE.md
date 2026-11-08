@@ -30,6 +30,7 @@
   - [No inline styles](#no-inline-styles)
 - [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
   - [Theming with design tokens](#theming-with-design-tokens)
+- [Task API (since 2.2)](#task-api-since-22)
 - [Host hooks (since 2.0.0)](#host-hooks-since-200)
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
@@ -75,6 +76,10 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Remove dependency | `task_dependency_remove` | Since 1.15 (POST + CSRF) |
 | Log time | `task_time` | Since 1.15: minutes, day and note (POST + CSRF) |
 | Remove time entry | `task_time_remove` | Since 1.15 (POST + CSRF) |
+
+### Deleting and renaming outside the UI (since 2.2)
+
+The UI has no delete task or rename board. A host calling the services can: `TaskBoardEraser::eraseTask($task, $actor)` deletes a task and its subtasks and keeps tracked time, detached (a task that follows a provider is refused); `TaskBoardEditor::update($board, $name, $description, $actor)` keeps the slug and dispatches `BOARD_UPDATED`. Check access first with `TaskBoardResourceAccessChecker`, and validate with `Validation\TaskConstraints`, the rules the forms use.
 
 ## TimeTrack integration (optional)
 
@@ -231,6 +236,10 @@ Overrides and demos must not reintroduce raw `<form>` / `<input>` / `<select>` /
     {% endfor %}
 {{ form_end(advanceForm) }}
 ```
+
+## Task API (since 2.2)
+
+A REST API shaped like ClickUp's, off by default: see [API](API.md).
 
 ## Host hooks (since 2.0.0)
 

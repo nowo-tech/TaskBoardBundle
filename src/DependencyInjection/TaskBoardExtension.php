@@ -6,6 +6,24 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
+use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
+use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
+use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
+use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
@@ -224,6 +242,53 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
+        $this->registerApi($container, $loader, $config, $emName);
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): `api.*`. With `enabled: false` nothing is registered: no route, service, listener or parameter.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerApi(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $api = $config['api'];
+        if (!$api['enabled']) {
+            return;
+        }
+        if (!is_string($api['hooks']['authenticator']) || $api['hooks']['authenticator'] === '') {
+            throw new LogicException('nowo_task_board.api.enabled needs api.hooks.authenticator: the service id of a Nowo\\TaskBoardBundle\\Api\\Hook\\TaskApiAuthenticatorInterface (the host keeps the tokens).');
+        }
+        if ($config['security']['allow_unauthenticated']) {
+            throw new LogicException('nowo_task_board.api.enabled cannot be used with security.allow_unauthenticated: every board would be open to every token.');
+        }
+        if (!$config['security']['resource_scoping'] && !$api['host_decides_access']) {
+            throw new LogicException('nowo_task_board.api.enabled with security.resource_scoping: false opens every board to every token unless listeners deny it. Set api.host_decides_access: true if yours do.');
+        }
+
+        $container->setParameter('nowo_task_board.api.prefix', $api['prefix']);
+        $container->setParameter('nowo_task_board.api.quota_listener_required', $api['quota_listener_required']);
+        $container->setParameter('nowo_task_board.api.max_body_bytes', $api['max_body_bytes']);
+        $loader->load('services_api.yaml');
+        $container->setAlias(TaskApiAuthenticatorInterface::class, $api['hooks']['authenticator']);
+        $container->setAlias(TaskApiRateLimiterInterface::class, $this->serviceOr($api['hooks']['rate_limiter'], DenyingTaskApiRateLimiter::class));
+        $container->setAlias(TaskApiPlanGateInterface::class, $this->serviceOr($api['hooks']['plan_gate'], DenyingTaskApiPlanGate::class));
+        $container->setAlias(TaskApiWorkspaceInterface::class, $this->serviceOr($api['hooks']['workspace'], EmptyTaskApiWorkspace::class));
+        $container->setAlias(TaskApiUsersInterface::class, $this->serviceOr($api['hooks']['users'], EmptyTaskApiUsers::class));
+        $container->setAlias(TaskApiTimeEntriesInterface::class, $this->serviceOr($api['hooks']['time_entries'], DenyingTaskApiTimeEntries::class));
+        $container->setAlias(TaskApiAttachmentsInterface::class, $this->serviceOr($api['hooks']['attachments'], DenyingTaskApiAttachments::class));
+        if (is_string($api['hooks']['idempotency_store']) && $api['hooks']['idempotency_store'] !== '') {
+            $container->setAlias(TaskApiIdempotencyStoreInterface::class, $api['hooks']['idempotency_store']);
+        } else {
+            // Since 2.2.0: the bundle's own store, on the bundle's entity manager; its table is mapped in prepend().
+            $container->setDefinition(DoctrineTaskApiIdempotencyStore::class, (new Definition(DoctrineTaskApiIdempotencyStore::class))
+                ->setAutowired(true)
+                ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName))));
+            $container->setAlias(TaskApiIdempotencyStoreInterface::class, DoctrineTaskApiIdempotencyStore::class);
+        }
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
+        $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
     }
 
     /**
@@ -417,9 +482,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$fullSyncRereadsDetails', (bool) $sync['full_sync_rereads_details']);
         $container->getDefinition(SyncCustomFieldWriter::class)
             ->setArgument('$excludeTypes', $sync['custom_fields']['exclude_types']);
-        // Audit GW-L8: restoring a task by hand asks the host's limit too.
-        $container->getDefinition(TaskBoardManageController::class)
-            ->setArgument('$syncLimits', new Reference(SyncLimitCheckerInterface::class));
         $container->getDefinition(SyncTaskDetailsWriter::class)
             ->setArgument('$maxStatusCalls', (int) $sync['status_history']['max_calls_per_run']);
         $container->getDefinition(TaskBoardTwigExtension::class)
@@ -509,11 +571,30 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
     }
 
+    /** Since 2.2.0: whether a host set `api.hooks.idempotency_store` (then the bundle's table is not mapped). */
+    private function apiStoreReplaced(ContainerBuilder $container): bool
+    {
+        // The last config that sets it wins, as in the merge (audit IA-L8).
+        $store = null;
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config['api'] ?? null) && is_array($config['api']['hooks'] ?? null) && array_key_exists('idempotency_store', $config['api']['hooks'])) {
+                $store = $config['api']['hooks']['idempotency_store'];
+            }
+        }
+
+        return is_string($store) && $store !== '';
+    }
+
     private function syncEnabled(ContainerBuilder $container): bool
     {
         return $this->optionEnabled($container, 'sync');
     }
 
+    /**
+     * Whether any config file sets `<node>.enabled: true`, even if a later one sets it false. This keeps the 2.1 behaviour
+     * for `sync` and `task_numbers`, so a layered config that ends at false never drops tables holding data. Deprecated:
+     * 3.0 follows the merged value, as {@see self::apiEnabled()} already does.
+     */
     private function optionEnabled(ContainerBuilder $container, string $node): bool
     {
         foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
@@ -523,6 +604,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         return false;
+    }
+
+    /**
+     * Whether `api.enabled` ends up true, as the merged configuration will say: the last config that sets it wins, so
+     * `enabled: true` in a base file and `false` in a `when@prod` override is off (audit IA-L8).
+     */
+    private function apiEnabled(ContainerBuilder $container): bool
+    {
+        $enabled = false;
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config['api'] ?? null) && array_key_exists('enabled', $config['api'])) {
+                $enabled = $config['api']['enabled'] === true;
+            }
+        }
+
+        return $enabled;
     }
 
     public function getAlias(): string
@@ -569,6 +666,28 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                             'dir'       => __DIR__ . '/../Sync/Entity',
                             'prefix'    => 'Nowo\\TaskBoardBundle\\Sync\\Entity',
                             'alias'     => 'TaskBoardSync',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.
+        if ($container->hasExtension('doctrine') && $this->apiEnabled($container)) {
+            $container->prependExtensionConfig('doctrine', ['orm' => ['dql' => ['string_functions' => [JsonTextFunction::NAME => JsonTextFunction::class]]]]);
+        }
+
+        // Since 2.2.0 (spec 213): the idempotency table, only with api.enabled and the bundle's own store.
+        if ($container->hasExtension('doctrine') && $this->apiEnabled($container) && !$this->apiStoreReplaced($container)) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardApi' => [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Api/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Api\\Entity',
+                            'alias'     => 'TaskBoardApi',
                         ],
                     ],
                 ],

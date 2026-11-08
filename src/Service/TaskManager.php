@@ -447,6 +447,53 @@ final readonly class TaskManager
     }
 
     /**
+     * Since 2.2.0 (spec 213): makes an archived task active again, asking the host's limit when it adds an active task (a
+     * completed one adds nothing). False when the task is not archived.
+     *
+     * @throws TaskReopenRefusedException when the host's limit refuses it: nothing changes
+     */
+    public function restore(Task $task, object $user): bool
+    {
+        if (!$task->isArchived()) {
+            return false;
+        }
+        $refusal = $this->limits?->check($task->getBoard(), $task->isCompleted() ? 0 : 1, 0);
+        if ($refusal instanceof LimitRefusal) {
+            throw new TaskReopenRefusedException($refusal);
+        }
+
+        $task->restore();
+        $this->recordRestored($task, $user);
+
+        return true;
+    }
+
+    /**
+     * Since 2.2.0 (spec 213, audit IA-L6): the host's answer on `$newTasks` more active tasks on the board, asked before a write
+     * that saves in several steps, so that no step is saved before a later one is refused. Null: allowed, or no limit.
+     */
+    public function activeTaskRefusal(TaskBoard $board, int $newTasks): ?LimitRefusal
+    {
+        return $newTasks > 0 ? $this->limits?->check($board, $newTasks, 0) : null;
+    }
+
+    /**
+     * Since 2.2.0 (spec 213): archives a task by hand, with its history. False when it already is.
+     */
+    public function archive(Task $task, object $user): bool
+    {
+        if ($task->isArchived()) {
+            return false;
+        }
+
+        $task->archive();
+        $this->changeRecorder->record($task, $user, TaskChangeType::Archived, null, 'manual');
+        $this->taskRepository->save($task);
+
+        return true;
+    }
+
+    /**
      * Since 1.23: records and saves a restored task.
      */
     public function recordRestored(Task $task, object $user): void

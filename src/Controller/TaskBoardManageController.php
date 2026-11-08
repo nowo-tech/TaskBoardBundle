@@ -80,6 +80,7 @@ use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskCalendarBuilder;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
+use Nowo\TaskBoardBundle\Service\TaskCommentPolicy;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
@@ -91,7 +92,6 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
-use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -164,6 +164,7 @@ final class TaskBoardManageController extends AbstractController
      * @param list<string> $columnIcons `board.column_icons` (since 1.11)
      * @param int $maxTasks `board.max_tasks` (since 1.21): the most tasks a board, list, Gantt or task page loads
      */
+    // @phpstan-ignore constructor.unusedParameter ($syncLimits: deprecated, kept for positional callers, audit IA-I1)
     public function __construct(
         private readonly TaskBoardAccessCheckerInterface $accessChecker,
         private readonly TaskBoardRepositoryInterface $boardRepository,
@@ -204,8 +205,9 @@ final class TaskBoardManageController extends AbstractController
         // invalid board create (`board.create_dialog_header`).
         private readonly ?TaskBoardDefaultViewResolverInterface $defaultViewResolver = null,
         private readonly ?string $createDialogHeader = null,
-        // Since 1.27.0 (audit GW-L8): the host's limit of active tasks, asked when a task is restored (with `sync.enabled`).
-        private readonly ?SyncLimitCheckerInterface $syncLimits = null,
+        // Since 1.27.0, deprecated since 2.2.0 and ignored (audit IA-I1): kept in its place so positional arguments do not
+        // move. A restore asks `TaskManager`'s limit, which the container wires from the same `sync.limit_checker`.
+        ?SyncLimitCheckerInterface $syncLimits = null,
         // Since 1.30.0 (spec 211).
         private readonly ?BoardScopeProviderInterface $scopeProvider = null,
         /** @var array<string, mixed> */
@@ -764,13 +766,13 @@ final class TaskBoardManageController extends AbstractController
         $task = $this->findTask($taskId, $user, true);
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_restore'));
         // Since 1.29.0: a completed task is not an active task, so restoring it adds nothing to the limit.
-        if ($task->isArchived() && $this->syncLimits?->check($task->getBoard(), $task->isCompleted() ? 0 : 1, 0) instanceof LimitRefusal) {
+        try {
+            if ($this->taskManager->restore($task, $user)) {
+                $this->logWrite('task_restore', ['task_id' => $taskId]);
+                $this->addFlash('success', 'task_board.flash.task_restored');
+            }
+        } catch (TaskReopenRefusedException) {
             $this->addFlash('error', 'task_board.flash.task_restore_refused');
-        } elseif ($task->isArchived()) {
-            $task->restore();
-            $this->taskManager->recordRestored($task, $user);
-            $this->logWrite('task_restore', ['task_id' => $taskId]);
-            $this->addFlash('success', 'task_board.flash.task_restored');
         }
 
         return $this->redirectToRoute($this->routes['list']['name'], ['boardId' => $task->getBoard()->getId()]);
@@ -1367,7 +1369,7 @@ final class TaskBoardManageController extends AbstractController
         $task    = $this->findTask($taskId, $user);
         $manager = $this->commentManager ?? throw new NotFoundHttpException('Comments are not available.');
         $comment = $this->findComment($task, $commentId);
-        if (!TaskCommentManager::isAuthor($comment, $user) || !$this->canComment($user, $task)) {
+        if (!$this->commentPolicy()->mayEdit($user, $task, $comment)) {
             throw $this->createAccessDeniedException('Only the author edits a comment.');
         }
 
@@ -1438,15 +1440,19 @@ final class TaskBoardManageController extends AbstractController
         return $comment;
     }
 
+    private function commentPolicy(): TaskCommentPolicy
+    {
+        return new TaskCommentPolicy($this->resourceAccessChecker, $this->readersCanComment);
+    }
+
     private function canComment(UserInterface $user, Task $task): bool
     {
-        return $this->commentManager instanceof TaskCommentManager
-            && ($this->readersCanComment || $this->resourceAccessChecker->canEditTask($user, $task));
+        return $this->commentManager instanceof TaskCommentManager && $this->commentPolicy()->mayComment($user, $task);
     }
 
     private function canDeleteComment(UserInterface $user, Task $task, TaskComment $comment): bool
     {
-        return TaskCommentManager::isAuthor($comment, $user) || $this->resourceAccessChecker->canEditTask($user, $task);
+        return $this->commentPolicy()->mayDelete($user, $task, $comment);
     }
 
     /**
