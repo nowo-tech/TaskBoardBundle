@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Symfony\Contracts\EventDispatcher\Event;
 
@@ -39,6 +40,13 @@ final class BoardAccessCheckEvent extends Event
      */
     public const ACTION_MANAGE = 'manage';
 
+    /**
+     * Since 2.5.0 (TB-13): managing the board's columns — add, edit, reorder and delete a column, and save, apply or delete
+     * a column set ({@see TaskBoardResourceAccessChecker::canManageColumns()}). Default: the edit decision, as before; a
+     * host denies it to narrow column management to a dedicated permission. A deny sticks: a later grant() is ignored.
+     */
+    public const ACTION_MANAGE_COLUMNS = 'manage_columns';
+
     private bool $granted = false;
 
     private bool $denied = false;
@@ -54,7 +62,7 @@ final class BoardAccessCheckEvent extends Event
     ) {
     }
 
-    /** Since 1.23: what is being decided ({@see self::ACTION_VIEW}, {@see self::ACTION_MANAGE_CONNECTION} or {@see self::ACTION_MANAGE}). */
+    /** Since 1.23: what is being decided ({@see self::ACTION_VIEW}, {@see self::ACTION_MANAGE_CONNECTION}, {@see self::ACTION_IMPORT_TASKS}, {@see self::ACTION_MANAGE} or, since 2.5.0, {@see self::ACTION_MANAGE_COLUMNS}). */
     public function getAction(): string
     {
         return $this->action;
@@ -75,8 +83,15 @@ final class BoardAccessCheckEvent extends Event
         return $this->defaultGranted;
     }
 
+    /**
+     * For {@see self::ACTION_MANAGE_COLUMNS}, a grant after a deny() is ignored: the deny sticks (since 2.5.0, as
+     * TaskAccessCheckEvent::ACTION_TRACK_TIME). For the other actions the last call wins, as before.
+     */
     public function grant(): void
     {
+        if ($this->denied && $this->action === self::ACTION_MANAGE_COLUMNS) {
+            return;
+        }
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->granted = true;
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.

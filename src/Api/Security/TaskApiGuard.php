@@ -76,6 +76,22 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * Since 2.5.0 (TB-13): a board whose columns the principal may manage — {@see self::board()} with ManageBoards, then
+     * {@see TaskBoardResourceAccessChecker::canManageColumns()} (the host's `manage_columns` decision), else refused.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function boardColumns(TaskApiPrincipal $principal, string $boardId): TaskBoard
+    {
+        $board = $this->board($principal, $boardId, TaskApiCapability::ManageBoards);
+        if (!$this->access->canManageColumns($principal->user, $board)) {
+            throw TaskApiRefusal::permissionRefused();
+        }
+
+        return $board;
+    }
+
+    /**
      * @throws TaskApiRefusal
      */
     public function task(TaskApiPrincipal $principal, string $taskId, TaskApiCapability $capability): Task

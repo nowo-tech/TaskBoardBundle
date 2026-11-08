@@ -75,8 +75,9 @@
 
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
-3. **Logging time through the Task API** (since 2.4.0) — `canTrackTime()`: view access plus the host's `TaskAccessCheckEvent::ACTION_TRACK_TIME` decision; with no answer (or a grant marked read-only), the edit right, as before. `deny()` refuses even an editor and sticks against a later `grant()`.
-4. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+3. **Managing columns** (since 2.5.0) — `canManageColumns()`: `canEditBoard()` plus the host's `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` decision (granted by default). Every path that changes a board's columns asks it: the seven column and column-set routes, the Task API status paths, a file import that would add columns, a provider sync (its actor) and `updateStatusColumnMap()` (no actor: no column). `deny()` sticks against a later `grant()`; `markReadOnly()` on the event refuses it too. Controls, the reorder URL and its token are not rendered when it is refused. Not column management, by design (audit IM-I5): creating a board (its default columns or a column set: `canCreateBoard()` and the quota) and emptying or deleting a board (`ACTION_MANAGE`). A listener that denies unknown actions denies this one too (see UPGRADING, To 2.5.0).
+4. **Logging time through the Task API** (since 2.4.0) — `canTrackTime()`: view access plus the host's `TaskAccessCheckEvent::ACTION_TRACK_TIME` decision; with no answer (or a grant marked read-only), the edit right, as before. `deny()` refuses even an editor and sticks against a later `grant()`.
+5. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
 
 ## Provider sync: host duties and known limits
 

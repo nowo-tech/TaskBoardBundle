@@ -268,6 +268,26 @@ final class ApiManagementTest extends ApiTestCase
         self::assertSame([], $this->audit()->events);
     }
 
+    /** Since 2.5.0 (TB-13): a host that denies `manage_columns` refuses the four status paths, not the board ones. */
+    public function testTheColumnDecisionGuardsTheStatusPaths(): void
+    {
+        $endpoints = $this->endpoints();
+        $this->dispatcher()->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS) {
+                $event->deny();
+            }
+        });
+        foreach (['create column', 'update column', 'reorder', 'delete column'] as $name) {
+            $endpoints[$name]();
+            $this->assertRefused(403, 'ACCESS_002');
+        }
+        self::assertSame([], $this->audit()->events);
+        self::assertCount(3, $this->roadmap->getColumns());
+
+        $endpoints['update board']();
+        self::assertResponseIsSuccessful('the board itself is not a column');
+    }
+
     /**
      * @return array<string, callable(string=): void>
      */

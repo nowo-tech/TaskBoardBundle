@@ -128,7 +128,7 @@ final readonly class TaskApiBoardOperations
     public function createColumn(TaskApiPrincipal $principal, string $boardId, TaskApiInput $input): TaskBoard
     {
         $this->audit->requireListener();
-        $board  = $this->guard->board($principal, $boardId, TaskApiCapability::ManageBoards);
+        $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()));
         $this->audit->written($principal, 'column.create', $board, null, ['column' => $column->getId()]);
 
@@ -143,7 +143,7 @@ final readonly class TaskApiBoardOperations
     public function updateColumn(TaskApiPrincipal $principal, string $boardId, string $columnId, TaskApiInput $input): TaskBoard
     {
         $this->audit->requireListener();
-        $board  = $this->guard->board($principal, $boardId, TaskApiCapability::ManageBoards);
+        $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
         $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())));
         $this->audit->written($principal, 'column.update', $board, null, ['column' => $columnId]);
@@ -159,7 +159,7 @@ final readonly class TaskApiBoardOperations
     public function deleteColumn(TaskApiPrincipal $principal, string $boardId, string $columnId): TaskBoard
     {
         $this->audit->requireListener();
-        $board  = $this->guard->board($principal, $boardId, TaskApiCapability::ManageBoards);
+        $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
         try {
             if (!$this->columns->delete($column)) {
@@ -181,7 +181,7 @@ final readonly class TaskApiBoardOperations
     public function reorderColumns(TaskApiPrincipal $principal, string $boardId, TaskApiInput $input): TaskBoard
     {
         $this->audit->requireListener();
-        $board = $this->guard->board($principal, $boardId, TaskApiCapability::ManageBoards);
+        $board = $this->guard->boardColumns($principal, $boardId);
         $order = $input->strings('order');
         $given = array_unique($order);
         $known = array_map(static fn (BoardColumn $column): string => $column->getId(), $board->getColumns()->toArray());

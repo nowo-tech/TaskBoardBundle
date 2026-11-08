@@ -108,6 +108,22 @@ final class StatusColumns
     }
 
     /**
+     * Since 2.5.0: whether the map asks for a column to be created.
+     *
+     * @param list<array{status: string, column: string, type?: string}> $map
+     */
+    public static function hasCreate(array $map): bool
+    {
+        foreach ($map as $entry) {
+            if ($entry['column'] === self::CREATE) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Validates a posted map against the board: known columns, `__create` or `__skip`; empty statuses dropped, each
      * status once (the first wins). At most 200 entries.
      *

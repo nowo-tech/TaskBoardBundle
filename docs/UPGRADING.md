@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.5.0](#to-250)
 - [To 2.4.0](#to-240)
 - [To 2.3.1](#to-231)
 - [To 2.3.0](#to-230)
@@ -160,6 +161,35 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.5.0
+
+No schema or configuration change. **A host whose `BOARD_ACCESS_CHECK` listeners ignore the action keeps today's behaviour**: whoever may edit a board manages its columns, as before.
+
+**Before upgrading, check listeners that deny actions they do not know** (audit IM-I1). A listener such as `match ($event->getAction()) { …known actions…, default => deny }` (Beacon's `ProjectTaskBoardAccess` on organisation boards) now denies `manage_columns` to everyone, and the deny sticks: columns lock for every user, board managers included. Map `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` to your column permission in that listener before you deploy 2.5.0, and only then remove any guard of your own.
+
+**Column management decision (TB-13).** `BOARD_ACCESS_CHECK` is now also dispatched with `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` (`manage_columns`), after the edit decision holds. `deny()` refuses column management even to an editor; the deny sticks (a later `grant()` from a lower-priority listener does not lift it). `markReadOnly()` on that event refuses it too (audit IM-I2). It applies to:
+
+- the routes `column_create`, `column_update`, `column_reorder`, `column_delete`, `column_set_create`, `column_set_apply`, `column_set_delete` (403);
+- the Task API's `POST|PUT|DELETE /v2/list/{id}/status…` paths (403 `ACCESS_002`);
+- a file import with *Create missing columns* (the status is reported as a warning; its tasks go where a status without a column goes);
+- a provider sync acting for its actor (`__create` entries of the status map, missing status columns, `unmatchedColumns: delete`). `TaskBoardSyncService::updateStatusColumnMap()` takes an optional `$actor`: **without one it no longer creates `__create` columns** (fail closed, audit IM-L1; a warning is logged and the status stays unresolved). Pass the person who changes the map.
+
+The board page receives `canManageColumns`; with it false the column controls are not rendered (*Add column*, the pencil, the grip and drag handle, the reorder hint, the column-set buttons and dialogs). A host template overriding `manage/board.html.twig` or `_board_column.html.twig` should test `canManageColumns ?? true` the same way.
+
+**Check your `BOARD_ACCESS_CHECK` listeners.** A listener that ignores the action answers `manage_columns` as it answers the view: a `deny()` for the view now also denies columns (no change: the board was not editable anyway), and a blanket `grant()` changes nothing (the default is already granted). To narrow column management to a permission:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::BOARD_ACCESS_CHECK)]
+public function onBoardAccess(BoardAccessCheckEvent $event): void
+{
+    if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS && !$this->mayManageColumns($event->getSubject(), $event->getBoard())) {
+        $event->deny();
+    }
+}
+```
+
+A host guard that refused the column routes itself and a CSS class that hid the controls (Beacon's `OrganizationColumnGuard` and `.tasks-columns-locked`) can be deleted.
 
 ## To 2.4.0
 

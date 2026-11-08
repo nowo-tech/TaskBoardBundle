@@ -91,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **TB-13 — column management decision.** `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` (`manage_columns`) and `TaskBoardResourceAccessChecker::canManageColumns()`: the edit decision plus the host's answer, granted by default (as before). It guards the seven column write routes (`column_create`, `column_update`, `column_reorder`, `column_delete`, `column_set_create`, `column_set_apply`, `column_set_delete`: 403), the Task API's status paths (create, update, reorder, delete: 403 `ACCESS_002`), a file import that would add missing columns (the status is reported instead), and a provider sync (`__create` columns of the link or of a new map, missing status columns: `status_without_column`; `unmatchedColumns: delete`: `unmatched_columns_denied`). The board page gets `canManageColumns`; when it is false, *Add column*, the column pencil, the grip and drag handle, the reorder hint and the column-set controls and dialogs are not rendered. A `deny()` sticks against a later `grant()`, as `ACTION_TRACK_TIME`, and `markReadOnly()` on that event refuses it too. A denied board page carries no reorder URL or token. `TaskBoardSyncService::updateStatusColumnMap()` without an actor creates no `__create` column (warning logged). Reads stay on the view decision. Audited in Appendix IM (#84 Pass-Low; IM-L1, IM-I1 to IM-I3 addressed).
+
 ## [2.4.0] - 2026-11-08
 
 Task API time logs ask a host time-tracking decision (`TaskAccessCheckEvent::ACTION_TRACK_TIME`, `canTrackTime()`) instead of the edit right, and the API principal carries a `channel` (`api` / `mcp`) for the audit. Audited in Appendix II (Pass / Info).
