@@ -117,7 +117,23 @@ final class TaskChangeCauseTest extends FunctionalTestCase
         self::assertSame(['b', 'c', 'd'], $task->getTags());
         self::assertFalse($this->tasks()->addTag($task, 'd', $this->owner));
         self::assertFalse($this->tasks()->addTag($task, '  ', $this->owner));
-        self::assertCount(4, $events);
+
+        // Audit IC-L3: the task form's rules.
+        foreach ([str_repeat('x', 65) => 'at most 64 characters', 'ok' => 'at most 20 tags'] as $tag => $message) {
+            if ($message === 'at most 20 tags') {
+                $task->setTags(array_map(static fn (int $i): string => 't' . $i, range(1, 20)));
+            } else {
+                self::assertTrue($this->tasks()->addTag($task, str_repeat('x', 64), $this->owner), '64 is allowed');
+            }
+            try {
+                $this->tasks()->addTag($task, $tag, $this->owner);
+                self::fail('Refused: ' . $message);
+            } catch (InvalidArgumentException $exception) {
+                self::assertStringContainsString($message, $exception->getMessage());
+            }
+        }
+        self::assertCount(20, $task->getTags());
+        self::assertCount(5, $events);
         self::assertContains(TaskChangeType::Tags, array_map(static fn (TaskChangeHistory $entry): TaskChangeType => $entry->getChangeType(), $task->getChangeHistory()->toArray()));
         self::assertInstanceOf(BoardColumn::class, $task->getColumn());
     }

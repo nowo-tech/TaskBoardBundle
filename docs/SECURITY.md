@@ -198,7 +198,7 @@ Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
 | Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |
 | A synced task rewritten by its provider | Refused (`synced_task`) |
 
-**Change causes (spec 216, FR-013).** The cause is the host's text, set only by code around a write, never from a request. It is shown only through the host's labeler, escaped by Twig. It is not personal data by design: a host stores an id (`rule:42`), not a name. `TaskChangeContext` is reset between the requests of a worker and popped in `finally`, so a failed write never leaks its cause into the next one.
+**Change causes (spec 216, FR-013).** The cause is the host's text, set only by code around a write, never from a request. It is shown only through the host's labeler, escaped by Twig. It is not personal data by design: a host stores an id (`rule:42`), not a name. `TaskManager::addTag()` applies the task form's tag rules (64 characters, 20 tags) and throws otherwise (audit IC-L3), so a rule cannot write what the form refuses. `TaskChangeContext` is reset between the requests of a worker and popped in `finally`, so a failed write never leaks its cause into the next one.
 
 ## UiKit migration (2.0.0)
 
