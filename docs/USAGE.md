@@ -287,6 +287,9 @@ A REST API shaped like ClickUp's, off by default: see [API](API.md).
 nowo_task_board:
     tenancy:
         open_single_board: true            # a tenant index opens the only board the user sees; ?boards=1 keeps the list
+        tenant_paths:                      # since 2.6.0 an entry may set its own open_single_board (wins over the global one)
+            - { path: '/tasks/{tenantSlug}', name_prefix: 'general_', slug_prefix: 'user-', open_single_board: false }
+            - { path: '/projects/{tenantSlug}/tasks', name_prefix: 'app_project_', open_single_board: true }
         first_board_provisioner: App\Tasks\FirstBoard   # FirstBoardProvisionerInterface, called on an empty tenant index
     import:
         help_link:
@@ -299,7 +302,7 @@ nowo_task_board:
         task_time_before: tasks/_timer.html.twig   # before the Time section of the task page and panel
 ```
 
-**Chrome a host draws itself.** `templates.page_header: false` leaves the header out of the board, list, Gantt and import pages. `board.toolbar: false` leaves the strip above the board out; its dialogs stay, and any element with `data-nowo-task-board-open="column-set-save"` or `"column-set-apply"` opens them. `task_panel.toolbar: false` leaves the trail and actions out of the panel.
+**Chrome a host draws itself.** `templates.page_header: false` leaves the header out of the board, list, Gantt and import pages. `board.toolbar: false` leaves the strip above the board out; its dialogs stay, and any element with `data-nowo-task-board-open="column-set-save"` or `"column-set-apply"` opens them. `task_panel.toolbar: false` leaves the trail and actions out of the panel. Since 2.6.0 the panel root says whether the viewer may edit the task in `data-nowo-task-can-edit="true|false"` (toolbar or not), and with `board.toolbar: false` the board keeps its reorder hint for screen readers.
 
 **Quota.** `TaskBoardEvents::QUOTA_CHECK` asks before a write. `TaskBoardQuotaCheckEvent` holds `action` (`board_create`, `task_create`, `import`, since 2.3 `task_move`), `tenantKey`, `board`, `count` and `actor`; `deny($reason)` refuses it and shows the reason, which you pass translated.
 

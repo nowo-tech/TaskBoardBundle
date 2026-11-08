@@ -10,6 +10,7 @@ use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
+use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -498,6 +499,29 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame('app.assignees', (string) $container->getAlias(TaskAssigneeProviderInterface::class));
         self::assertArrayHasKey(TaskObjectLinkResolverInterface::class, $container->getAutoconfiguredInstanceof());
         self::assertTrue($container->getAutoconfiguredInstanceof()[TaskObjectLinkResolverInterface::class]->hasTag('nowo_task_board.object_link_resolver'));
+    }
+
+    public function testATenantPathOpenSingleBoardReachesTheControllerByNamePrefix(): void
+    {
+        $container = $this->securedContainer();
+
+        (new TaskBoardExtension())->load([[
+            'user_class' => User::class,
+            'tenancy'    => [
+                'enabled'           => true,
+                'open_single_board' => true,
+                'tenant_paths'      => [
+                    ['path' => '/tasks/{tenantSlug}', 'name_prefix' => 'general_', 'slug_prefix' => 'user-', 'open_single_board' => false],
+                    ['path' => '/organizations/{tenantSlug}/tasks', 'name_prefix' => 'org_', 'slug_prefix' => 'org-'],
+                    ['path' => '/projects/{tenantSlug}/tasks', 'name_prefix' => 'app_project_', 'open_single_board' => true],
+                ],
+            ],
+        ]], $container);
+
+        $controller = $container->getDefinition(TaskBoardManageController::class);
+        self::assertTrue($controller->getArgument('$openSingleBoard'));
+        self::assertSame(['general_' => false, 'app_project_' => true], $controller->getArgument('$openSingleBoardPaths'));
+        self::assertArrayNotHasKey('open_single_board', $container->getParameter('nowo_task_board.tenancy.tenant_paths')[1], 'not set: no key');
     }
 
     public function testWithoutTenancyTheRouterIsNotDecorated(): void

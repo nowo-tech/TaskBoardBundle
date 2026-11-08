@@ -223,6 +223,9 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?TaskNumberScope $taskNumberScope = null,
         private readonly TaskCalendarBuilder $calendarBuilder = new TaskCalendarBuilder(),
         private readonly bool $calendarEnabled = false,
+        // Since 2.6.0 (TB-18): `tenancy.tenant_paths[].open_single_board`, by the path's route name prefix.
+        /** @var array<string, bool> */
+        private readonly array $openSingleBoardPaths = [],
     ) {
     }
 
@@ -2014,17 +2017,34 @@ final class TaskBoardManageController extends AbstractController
      */
     private function openedBoard(UserInterface $user, ?TaskBoardTenant $tenant): ?TaskBoard
     {
-        if (!$tenant instanceof TaskBoardTenant || (!$this->openSingleBoard && !$this->firstBoardProvisioner instanceof FirstBoardProvisionerInterface) || $this->currentRequest()?->query->has('boards') === true) {
+        $openSingle = $this->opensSingleBoard();
+        if (!$tenant instanceof TaskBoardTenant || (!$openSingle && !$this->firstBoardProvisioner instanceof FirstBoardProvisionerInterface) || $this->currentRequest()?->query->has('boards') === true) {
             return null;
         }
         $boards = $this->resourceAccessChecker->filterBoards($user, $this->boardRepository->findActiveByTenant($tenant->key), $tenant->key);
         if ($boards !== []) {
-            return $this->openSingleBoard && count($boards) === 1 ? reset($boards) : null;
+            return $openSingle && count($boards) === 1 ? reset($boards) : null;
         }
 
         return $this->firstBoardProvisioner instanceof FirstBoardProvisionerInterface && $this->mayProvisionBoard($user, $tenant)
             ? $this->firstBoardProvisioner->provision($tenant, $user)
             : null;
+    }
+
+    /**
+     * Since 2.6.0 (TB-18): `open_single_board` of the tenant path the index was reached by (its route is
+     * `<name_prefix><routes.index.name>`), else the global `tenancy.open_single_board`.
+     */
+    private function opensSingleBoard(): bool
+    {
+        $route = $this->currentRequest()?->attributes->get('_route');
+        foreach ($this->openSingleBoardPaths as $namePrefix => $open) {
+            if ($route === $namePrefix . $this->routes['index']['name']) {
+                return $open;
+            }
+        }
+
+        return $this->openSingleBoard;
     }
 
     /** A first board created on a visit asks what a create asks: the create check and the quota. */

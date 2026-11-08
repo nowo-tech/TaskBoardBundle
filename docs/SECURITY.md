@@ -15,6 +15,7 @@
 - [Recurring tasks (2.3)](#recurring-tasks-23)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Beacon override reduction (2.5)](#beacon-override-reduction-25)
+- [Beacon override reduction (2.6)](#beacon-override-reduction-26)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
 - [Logging and personal data](#logging-and-personal-data)
@@ -215,6 +216,16 @@ Off unless `recurrence.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info
 | A host close attribute printed into the dialog footer (TB-15) | `close_attribute` must match `data-[a-z0-9-]+` to the end of the string (no trailing line break), else the kit's `data-nowo-ui-dialog-close` is used (no `on*` handler) |
 | The progress URL of the strip (TB-16) | Given only to whoever manages the connection (`progressUrl` as before), and polled only with `sync.badge.progress` (audit IM-I11); readers get an indeterminate bar. The meter's attributes pass UiKit's `nowo_ui_safe_attrs()` |
 | A help link URL from a host service (TB-17) | The `url_resolver` result goes through the same template guard as `url` (http(s) or a path on this site, no white space, control characters or backslashes; anything else renders `#`), after the `access_attribute` check |
+
+## Beacon override reduction (2.6)
+
+Audit status: **re-verification pending** (independent audit after the change).
+
+| Threat | Mitigation |
+|---|---|
+| `data-nowo-task-can-edit` claiming an edit the user may not make (TB-19) | Printed from `canEditTask()`, the same decision the edit route checks (403 otherwise); `"true"` only when that value is exactly `true`, so a host template without it prints `"false"`. It drives display only: no write trusts it |
+| A tenant index opening a board the user may not see (TB-18) | The per-path switch only chooses whether the index redirects; the board is one of `filterBoards()` for that user and tenant, exactly as the global switch, and the first board still needs the create check and the quota |
+| A path setting picked from request input (TB-18) | The setting is chosen by the matched route name (`<name_prefix><routes.index.name>`), set by the router from configuration, not by the slug or the query |
 
 ## UiKit migration (2.0.0)
 
