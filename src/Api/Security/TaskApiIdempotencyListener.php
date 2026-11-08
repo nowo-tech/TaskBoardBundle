@@ -25,6 +25,7 @@ use Throwable;
 use function array_is_list;
 use function hash;
 use function hash_file;
+use function http_build_query;
 use function in_array;
 use function is_array;
 use function json_decode;
@@ -146,7 +147,7 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
         $event->setController(static fn (): Response => new Response($body, $status, ['Content-Type' => 'application/json', 'Idempotency-Replayed' => 'true']));
     }
 
-    /** Method, path and the body with its keys sorted, so that the same JSON written another way is the same request. */
+    /** Method, path, query and the body with its keys sorted, so that the same JSON written another way is the same request. */
     private function fingerprint(Request $request): string
     {
         $content = (string) $request->getContent();
@@ -161,8 +162,10 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
         foreach ($this->files($request->files->all()) as $name => $file) {
             $content .= "\n" . $name . ':' . (string) hash_file('sha256', $file->getPathname());
         }
+        // Audit IA-L5: the query too, sorted, so `?depends_on=B` and `?dependency_of=C` are two requests.
+        $query = $this->sorted($request->query->all());
 
-        return hash('sha256', $request->getMethod() . "\n" . $request->getPathInfo() . "\n" . $content);
+        return hash('sha256', $request->getMethod() . "\n" . $request->getPathInfo() . "\n" . http_build_query(is_array($query) ? $query : []) . "\n" . $content);
     }
 
     /**

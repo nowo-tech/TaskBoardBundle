@@ -62,9 +62,11 @@ final readonly class TaskApiWriteController
 
     public function deleteTask(Request $request, string $taskId): JsonResponse
     {
+        // A body is read for its warnings only: nothing in it is saved.
+        $input = $this->input($request);
         TaskApiIdempotencyListener::target($request, $this->tasks->deleteTask($this->principal($request), $taskId));
 
-        return new JsonResponse((object) []);
+        return $this->answer([], $input);
     }
 
     public function addComment(Request $request, string $taskId): JsonResponse
@@ -110,12 +112,16 @@ final readonly class TaskApiWriteController
 
     public function addTag(Request $request, string $taskId, string $tagName): JsonResponse
     {
-        return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, true));
+        $input = $this->input($request);
+
+        return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, true), $input);
     }
 
     public function removeTag(Request $request, string $taskId, string $tagName): JsonResponse
     {
-        return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, false));
+        $input = $this->input($request);
+
+        return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, false), $input);
     }
 
     public function setField(Request $request, string $taskId): JsonResponse
@@ -136,7 +142,9 @@ final readonly class TaskApiWriteController
         $query          = new TaskApiInput($request->query->all());
         [$other, $type] = $this->dependencyOf($query->string('depends_on'), $query->string('dependency_of'));
 
-        return $this->empty($request, $this->tasks->unrelate($this->principal($request), $taskId, $other, [TaskDependencyType::Blocks, TaskDependencyType::BlockedBy], $type === TaskDependencyType::BlockedBy));
+        $input = $this->input($request);
+
+        return $this->empty($request, $this->tasks->unrelate($this->principal($request), $taskId, $other, [TaskDependencyType::Blocks, TaskDependencyType::BlockedBy], $type === TaskDependencyType::BlockedBy), $input);
     }
 
     public function addLink(Request $request, string $taskId, string $linksTo): JsonResponse
@@ -171,7 +179,9 @@ final readonly class TaskApiWriteController
 
     public function deleteChecklist(Request $request, string $checklistId): JsonResponse
     {
-        return $this->empty($request, $this->checklists->deleteChecklist($this->principal($request), $checklistId));
+        $input = $this->input($request);
+
+        return $this->empty($request, $this->checklists->deleteChecklist($this->principal($request), $checklistId), $input);
     }
 
     public function createItem(Request $request, string $checklistId): JsonResponse
@@ -192,7 +202,9 @@ final readonly class TaskApiWriteController
 
     public function deleteItem(Request $request, string $checklistId, string $itemId): JsonResponse
     {
-        return $this->empty($request, $this->checklists->deleteItem($this->principal($request), $checklistId, $itemId));
+        $input = $this->input($request);
+
+        return $this->empty($request, $this->checklists->deleteItem($this->principal($request), $checklistId, $itemId), $input);
     }
 
     /**

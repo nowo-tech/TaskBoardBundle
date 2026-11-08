@@ -24,20 +24,23 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
-use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
+use function array_key_last;
+use function array_map;
 use function array_unique;
 use function array_values;
+use function count;
 use function in_array;
 use function intdiv;
 use function mb_strtolower;
@@ -59,7 +62,10 @@ final readonly class TaskApiTaskOperations
     public const OWN_TASK_FIELDS = ['status', 'description', 'markdown_content', 'due_date', 'due_date_time', 'start_date', 'start_date_time'];
 
     /** ClickUp's task fields Beacon has no equivalent for: warned, never saved. */
-    public const NOT_SUPPORTED = ['points', 'group_assignees', 'custom_item_id', 'custom_fields', 'notify_all', 'links_to', 'check_required_custom_fields', 'parent', 'due_date_time', 'start_date_time', 'custom_task_ids', 'team_id'];
+    public const NOT_SUPPORTED = ['tags', 'points', 'group_assignees', 'custom_item_id', 'custom_fields', 'notify_all', 'links_to', 'check_required_custom_fields', 'parent', 'due_date_time', 'start_date_time', 'custom_task_ids', 'team_id'];
+
+    /** The task form's tag field takes at most 20. */
+    public const MAX_TAGS = 20;
 
     private const PRIORITIES = [1 => TaskPriority::Urgent, 2 => TaskPriority::High, 3 => TaskPriority::Normal, 4 => TaskPriority::Low];
 
@@ -99,7 +105,7 @@ final readonly class TaskApiTaskOperations
         $data           = new TaskFormData(title: $this->title($input->string('name', true)));
         $data->columnId = $this->columnOf($board, $input->string('status'))?->getId();
         $this->applyFields($data, $input);
-        $data->tags = $input->strings('tags');
+        $data->tags = $this->tags($input->strings('tags'));
         $assignees  = $this->assignable($board, $input->strings('assignees'));
         $this->audit->requireTaskQuota($board, 1, $principal->user);
 
@@ -120,7 +126,7 @@ final readonly class TaskApiTaskOperations
     public function updateTask(TaskApiPrincipal $principal, string $taskId, TaskApiInput $input): Task
     {
         $this->audit->requireListener();
-        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived', 'tags');
+        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived');
         $task          = $this->guard->task($principal, $taskId, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
         $board         = $task->getBoard();
 
@@ -140,17 +146,23 @@ final readonly class TaskApiTaskOperations
             TaskMemberRole::Watcher->value  => $this->assignable($board, $watchers['add']),
         ];
         $archived = $input->bool('archived');
-
-        $changed = [];
-        try {
-            if ($archived === false && $this->tasks->restore($task, $principal->user)) {
-                $changed[] = 'archived';
-            }
-            if ($status instanceof BoardColumn && $this->tasks->moveToColumn($task, $status->getId(), $principal->user)) {
-                $changed[] = 'status';
-            }
-        } catch (TaskReopenRefusedException) {
+        // Audit IA-L6: every limit before the first save. A restored task that was open, and a done one leaving the done
+        // column, each add an active task.
+        $columns  = $board->getColumns()->toArray();
+        $last     = $columns === [] ? null : $columns[array_key_last($columns)];
+        $reopens  = $status instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $status->getId() !== $last->getId();
+        $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
+        if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        }
+
+        // Both ask the limit again; it was asked above for both together.
+        $changed = [];
+        if ($archived === false && $this->tasks->restore($task, $principal->user)) {
+            $changed[] = 'archived';
+        }
+        if ($status instanceof BoardColumn && $this->tasks->moveToColumn($task, $status->getId(), $principal->user)) {
+            $changed[] = 'status';
         }
         // The column is where the move left it: update() must never move the task (it would skip completion and its events).
         $data->columnId = $task->getColumn()?->getId();
@@ -250,12 +262,11 @@ final readonly class TaskApiTaskOperations
     public function tag(TaskApiPrincipal $principal, string $taskId, string $name, bool $add): Task
     {
         $this->audit->requireListener();
-        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
-        $name = trim($name);
-        $this->validate($name, TaskConstraints::tagName(), 'tag_name');
+        $task       = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        $name       = trim($name);
         $data       = TaskFormData::fromTask($task);
         $data->tags = $add
-            ? [...$task->getTags(), $name]
+            ? $this->tags([...$task->getTags(), $name])
             : array_values(array_filter($task->getTags(), static fn (string $tag): bool => mb_strtolower($tag) !== mb_strtolower($name)));
         $this->tasks->update($task, $data, $principal->user);
         $this->audit->written($principal, $add ? 'tag.add' : 'tag.remove', $task->getBoard(), $taskId, [], ['tags']);
@@ -406,6 +417,28 @@ final readonly class TaskApiTaskOperations
         }
 
         return $users;
+    }
+
+    /**
+     * The task form's rules for tags: each a valid name, at most {@see self::MAX_TAGS}.
+     *
+     * @param list<string> $tags
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<string>
+     */
+    private function tags(array $tags): array
+    {
+        $tags = array_values(array_unique(array_map('trim', $tags)));
+        foreach ($tags as $tag) {
+            $this->validate($tag, TaskConstraints::tagName(), 'tags');
+        }
+        if (count($tags) > self::MAX_TAGS) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid tags: at most ' . self::MAX_TAGS);
+        }
+
+        return $tags;
     }
 
     /**

@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiIdempotencyOutcome;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -150,6 +151,25 @@ final class ApiIdempotencyTest extends ApiTestCase
         $this->assertRefused(404, 'ACCESS_001');
     }
 
+    public function testTheQueryIsPartOfTheRequest(): void
+    {
+        // Audit IA-L5 (the auditor's proof, turned): one key on two queries is a conflict, not a replay.
+        $a    = $this->task($this->roadmap, 'A');
+        $b    = $this->task($this->roadmap, 'B');
+        $c    = $this->task($this->roadmap, 'C');
+        $base = '/api/tasks/v2/task/' . $a->getId();
+        $this->send('POST', $base . '/dependency', ['depends_on' => $b->getId()]);
+        $this->send('POST', $base . '/dependency', ['dependency_of' => $c->getId()]);
+
+        $this->send('DELETE', $base . '/dependency?depends_on=' . $b->getId(), null, ['HTTP_IDEMPOTENCY_KEY' => 'k-q']);
+        self::assertResponseIsSuccessful();
+        $this->send('DELETE', $base . '/dependency?dependency_of=' . $c->getId(), null, ['HTTP_IDEMPOTENCY_KEY' => 'k-q']);
+
+        $this->assertRefused(409, 'IDEMP_002');
+        $this->em->clear();
+        self::assertCount(1, $this->em->getRepository(TaskDependency::class)->findAll());
+    }
+
     public function testTheStoreClaimsOnceAndForgetsAToken(): void
     {
         $store = $this->store();
@@ -183,7 +203,7 @@ final class ApiIdempotencyTest extends ApiTestCase
 
     private function fingerprint(string $method, string $path, string $json): string
     {
-        return hash('sha256', $method . "\n" . $path . "\n" . $json);
+        return hash('sha256', $method . "\n" . $path . "\n\n" . $json);
     }
 
     /**
