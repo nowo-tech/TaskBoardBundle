@@ -49,6 +49,10 @@ final readonly class TaskMovePlan
         public int $reimportKeys,
         public bool $numberChanges,
         public string $fingerprint,
+        /** @var list<string> Since audit IC-I4: imported field names with values on the tree; they stay, read-only. */
+        public array $importedFields = [],
+        /** Since audit IC-L2: {@see TaskMovePlanner::snapshot()} when the plan was made. */
+        public string $snapshot = '',
     ) {
     }
 

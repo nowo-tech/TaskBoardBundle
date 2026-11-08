@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Copy;
 
 use DateTimeImmutable;
+use Doctrine\ORM\Events;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
 use Nowo\TaskBoardBundle\Copy\TaskCopyPreview;
 use Nowo\TaskBoardBundle\Copy\TaskCopyResult;
@@ -20,6 +21,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
+use RuntimeException;
 
 use function array_filter;
 use function array_map;
@@ -93,6 +95,30 @@ final class TaskCopierTest extends CopyTestCase
         // The UI's events: one TASK_CREATED per task, TASK_MEMBER_ADDED for the member.
         self::assertSame(3, count(array_filter($this->eventNames(), static fn (string $name): bool => $name === 'task_created')));
         self::assertContains('task_member_added', $this->eventNames());
+    }
+
+    public function testAFailedCopyDispatchesNoEvent(): void
+    {
+        $board = $this->board();
+        $task  = $this->task($board, 'Parent');
+        $this->em->getEventManager()->addEventListener(Events::onFlush, new class {
+            public int $calls = 0;
+
+            public function onFlush(): void
+            {
+                if (++$this->calls === 2) {
+                    throw new RuntimeException('database down');
+                }
+            }
+        });
+
+        try {
+            $this->copier()->copy($task, new TaskCopyOptions(), $this->owner);
+            self::fail('The failure reaches the caller.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('database down', $exception->getMessage());
+        }
+        self::assertNotContains('task_created', $this->eventNames(), 'audit IC-I3: no listener acts on a rolled-back copy');
     }
 
     public function testOptionsLeaveOutSubtasksDatesAndMembers(): void

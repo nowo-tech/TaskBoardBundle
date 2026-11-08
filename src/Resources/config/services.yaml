@@ -94,6 +94,19 @@ services:
             # Since 1.24: the dialog mode header of an invalid board create (`board.create_dialog_header`).
             $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
 
+    # Since 2.3.0 (audit IC-I3): task events of a copy or an occurrence are dispatched after its commit.
+    Nowo\TaskBoardBundle\Service\TaskEventDeferral:
+        arguments:
+            $dispatcher: '@event_dispatcher'
+
+    Nowo\TaskBoardBundle\Service\TaskManager:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    Nowo\TaskBoardBundle\Service\TaskMemberAssigner:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:
         public: true

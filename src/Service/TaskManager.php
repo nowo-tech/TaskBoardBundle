@@ -86,6 +86,14 @@ final readonly class TaskManager
         return $task;
     }
 
+    /**
+     * Since 2.2.1: a column change here is a move, as {@see moveToColumn()}: the host's limit is asked before anything changes,
+     * the task goes to the end of its new column, the completion follows the column and TASK_COMPLETED / TASK_REOPENED fire
+     * once. A caller that already moved the task passes its current column, so nothing moves twice.
+     *
+     * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
+     * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
+     */
     public function update(Task $task, TaskFormData $data, object $user): void
     {
         $oldTitle            = $task->getTitle();
@@ -97,8 +105,24 @@ final readonly class TaskManager
         $oldTags             = $task->getTags();
         $oldColor            = $task->getColor();
         $oldStartAt          = $task->getStartAt();
+        $wasCompleted        = $task->isCompleted();
 
-        $newColumn = $this->resolveColumn($task->getBoard(), $data->columnId);
+        // Since 2.2.1 (audit IB-L1): data from fromTask() without a column keeps the task's own, even none: never a move.
+        $newColumn = $data->keepsColumn && ($data->columnId === null || $data->columnId === '')
+            ? $oldColumn
+            : $this->resolveColumn($task->getBoard(), $data->columnId);
+        // Since 2.2.1: a column that is not the board's is refused, as by move(), instead of leaving the task without one.
+        if ($data->columnId !== null && $data->columnId !== '' && !$newColumn instanceof BoardColumn) {
+            throw ColumnNotFoundException::forBoard($data->columnId, $task->getBoard()->getId());
+        }
+        $moves   = $oldColumn?->getId() !== $newColumn?->getId();
+        $columns = $this->orderedColumns($task->getBoard());
+        if ($moves) {
+            $this->assertReopenAllowed($task, $newColumn, $columns);
+            if ($newColumn instanceof BoardColumn) {
+                $task->setPosition($this->nextPosition($task->getBoard(), $newColumn));
+            }
+        }
 
         $task
             ->setTitle($data->title)
@@ -110,6 +134,9 @@ final readonly class TaskManager
             ->setTags($data->tags)
             ->setColor($data->color)
             ->setStartAt($data->startAt);
+        if ($moves) {
+            $this->syncCompletionForColumn($task, $newColumn, $columns);
+        }
 
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Title, $oldTitle, $data->title);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Description, $oldDescription, $data->description);
@@ -120,6 +147,9 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $data->dueAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Color, $oldColor, $task->getColor());
+        if ($wasCompleted !== $task->isCompleted()) {
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
+        }
 
         $this->taskRepository->save($task);
 
@@ -138,9 +168,10 @@ final readonly class TaskManager
             $previous = ['title' => $oldTitle, 'description' => $oldDescription, 'priority' => $oldPriority, 'column' => $oldColumn, 'estimatedMinutes' => $oldEstimatedMinutes, 'startAt' => $oldStartAt, 'dueAt' => $oldDueAt, 'tags' => $oldTags, 'color' => $oldColor];
             $this->dispatch(new TaskUpdatedEvent($task, $user, $changed, array_intersect_key($previous, array_flip($changed))), TaskBoardEvents::TASK_UPDATED);
         }
-        if ($oldColumn?->getId() !== $newColumn?->getId()) {
+        if ($moves) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
         }
+        $this->dispatchCompletion($task, $user, $wasCompleted);
     }
 
     /**
@@ -241,14 +272,7 @@ final readonly class TaskManager
         if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
             throw ColumnNotFoundException::forBoard($columnId, $task->getBoard()->getId());
         }
-        // Since 1.29.0 (audit HN-M1): a completed task outside the last column is active again, so the host's limit is asked.
-        $last = $columns === [] ? null : $columns[array_key_last($columns)];
-        if ($task->isCompleted() && !$task->isArchived() && $column instanceof BoardColumn && $last instanceof BoardColumn && $column->getId() !== $last->getId()) {
-            $refusal = $this->limits?->check($task->getBoard(), 1, 0);
-            if ($refusal instanceof LimitRefusal) {
-                throw new TaskReopenRefusedException($refusal);
-            }
-        }
+        $this->assertReopenAllowed($task, $column, $columns);
 
         $task
             ->setColumn($column)
@@ -270,6 +294,29 @@ final readonly class TaskManager
         if ($oldColumn?->getId() !== $column?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
         }
+        $this->dispatchCompletion($task, $user, $wasCompleted);
+    }
+
+    /**
+     * Since 1.29.0 (audit HN-M1): a completed task outside the last column is active again, so the host's limit is asked.
+     *
+     * @param list<BoardColumn> $columns
+     *
+     * @throws TaskReopenRefusedException
+     */
+    private function assertReopenAllowed(Task $task, ?BoardColumn $column, array $columns): void
+    {
+        $last = $columns === [] ? null : $columns[array_key_last($columns)];
+        if ($task->isCompleted() && !$task->isArchived() && $column instanceof BoardColumn && $last instanceof BoardColumn && $column->getId() !== $last->getId()) {
+            $refusal = $this->limits?->check($task->getBoard(), 1, 0);
+            if ($refusal instanceof LimitRefusal) {
+                throw new TaskReopenRefusedException($refusal);
+            }
+        }
+    }
+
+    private function dispatchCompletion(Task $task, object $user, bool $wasCompleted): void
+    {
         if (!$wasCompleted && $task->isCompleted()) {
             $this->dispatch(new TaskCompletedEvent($task, $user), TaskBoardEvents::TASK_COMPLETED);
         } elseif ($wasCompleted && !$task->isCompleted()) {

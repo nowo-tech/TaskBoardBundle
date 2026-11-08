@@ -171,9 +171,16 @@ Off unless `move.enabled: true`. Audit status: re-verification pending.
 | Plan limits skipped by a new write path | A duplicate asks `QUOTA_CHECK` `task_create` with every task it creates, a move `task_move` with the open tasks that arrive, before writing. A worker calling `TaskCopier` with no listener must ask its own limits |
 | Tracked time lost | A move never deletes a time entry: manual entries stay on their task with a new board snapshot; TimeTrack's rows point at the task id. A copy never copies time |
 | A partial move | One transaction: a failure changes no board, member or dependency (`TaskMoverTest`) |
+| A subtask moved or copied beyond the user's rights (audit IC-L1) | A move needs `canEditTask()` on every task of the subtree, else it is refused (a hidden task is not named). A duplicate leaves out what the user cannot view, with its subtasks, and the preview counts it |
+| A write between the plan and the move (audit IC-L2) | Inside the transaction the task row is locked and the tree's facts (tasks, completion, archive, every dependency and member touching them) are read again from the database; any change refuses the move as `stale`, rolled back with the entity manager still usable |
+| A host's targets offering too much (audit IC-I1) | The answer of `move.targets` is narrowed to active boards passing `canEditBoard()`. Not to the tenant: spec 217 lets a host offer other tenants. The source gate is `canEditTask` + `canEditBoard`, as spec 217 decides, not the board's manage decision |
+| Members on the target (audit IC-I2) | Kept or copied when `canBeAssigned()` allows. Without an assignee provider every user may be assigned, so every member stays, as anywhere in the bundle |
+| Listeners acting on a rolled-back copy (audit IC-I3) | The task events of a copy wait for its commit (`TaskEventDeferral`) and are dropped if it fails |
+| A sync turned back on (audit IC-I5) | Items are tombstoned whenever the sync tables are mapped, whatever `sync.enabled` says at move time |
 | A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
 | Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
 | Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
+| Provider data of a moved task (audit IC-I4) | Stays on the tombstone item, which keeps the task in `detached_task_id`: the panel shows it read-only and the people directory tools erase it there. Imported field values stay on the task under the source board's fields, so `eraseBoard(source)` and `eraseByValue(…, source)` still reach them; the *Fields* document moves with the task and is reached through the target board or `null` |
 
 ## Recurring tasks (2.3)
 
@@ -182,8 +189,10 @@ Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
 | Threat | Mitigation |
 |---|---|
 | Changing a series without the right | The page and every action need `canEditTask()`; an unseen task answers 404, a read-only one 403; each action has its own CSRF token |
+| A task participant as author (audit IC-I6) | Spec 215 lets whoever may edit the task make it recurring, so a participant without `canEditBoard()` can become an author. The host re-checks the author's `canEditBoard()` before each `createOccurrence()` (spec 215, FR-014) and pauses the series otherwise. Keys come from `dueKey()` and `completionKey()` only; a `done:` key whose task is not an occurrence of the series creates nothing |
 | A worker creating tasks nobody may create | No scheduler in the bundle: the host checks its plan and the author's access before `createOccurrence()`; the copier still asks `QUOTA_CHECK` and refuses before writing. An author erased or gone pauses the series (`forgetAuthor()`, or no author at run time) |
 | Duplicate occurrences | One row per series and key, unique, written with the task in one transaction; retries, re-runs and redeliveries create nothing more. A lost race returns null after Doctrine closes the entity manager: the worker resets it |
+| A refusal leaving the worker unusable, listeners acting too early (audit IC-I3) | Every refusal of `createOccurrence()`, the host's quota included, comes before its transaction, so `block()` still works; the new tasks' events wait for the commit and are dropped if it fails |
 | A flood after downtime | Only the latest missed date is created; older ones are recorded as missed |
 | Copying what must not travel | The `TaskCopier` rules: never comments, time, history, dependencies, links, sync rows or the number; members only while assignable |
 | Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |
@@ -224,6 +233,8 @@ Known and documented: a multi-field update is not one transaction (refusals are 
 
 Spec 213 gives the comment rules, the restore limit and the field constraints one home (`TaskCommentPolicy`, `TaskManager::restore()`, `TaskConstraints`), so a write path other than the forms cannot apply different ones. `TaskBoardEraser::eraseTask()` asks the board's manage decision itself, erases leaf-first so the `PreRemove` that keeps time runs for every subtask (`parent_id` is `ON DELETE CASCADE`, which would skip it), and refuses a task that follows a provider. After an unlink, the files a sync stored for the subtree are named in `TaskErasedEvent::$attachmentRefs` and their rows removed, on every database (audit IA-M1): the host deletes them, as for `deleteBoard()`. `tests/Functional/Characterization` pins the UI's output.
 
+**Edit form column change (2.2.1; Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`)).** `TaskManager::update()` moved a task to the column the edit form posted without the reopen limit, the completion sync or the completed / reopened events of `moveToColumn()`, so a posted column reopened a completed task past the host's plan limit (bug class: a limit hook skipped by another write path). It now shares `moveToColumn()`'s limit check, before any field changes, and its completion and events (`TaskEditFormColumnTest`, `TaskEventsTest`). The form posts the column its page showed (`columnIdShown`), so a stale page cannot move a task back, and an unknown column is refused rather than clearing the column. A write of fields from `TaskFormData::fromTask()` never moves the task, even one without a column, and the Task API maps every limit refusal to 403 `PLAN_002` (audit IB-L1). Write paths of a task's column: board drag and the column buttons (`move()`, `moveTo*()`), the edit form and the Task API's field update (`update()`, the API passing the column its `moveToColumn()` left), the Task API's status and checklist items (`moveToColumn()`, `moveToDone()`), column delete (`BoardColumnManager::delete()`, own limit check), import (`ImportedTaskUpdater`, no limit by design) and provider sync (`SyncTaskWriter` / `SyncChecklistWriter`, own limit checks and provider completion).
+
 ## Logging and personal data
 
 REQ-OBS-001 (since 1.21): every successful board / task write logs one `info` line, an invalid CSRF token one `warning`,
@@ -241,7 +252,7 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
+**AI security audit (REQ-SEC-004): 2.2.1 (unreleased): Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`). Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it

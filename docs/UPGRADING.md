@@ -8,6 +8,7 @@
   - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
   - [Recurring tasks: what a host does](#recurring-tasks-what-a-host-does)
   - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
+- [To 2.2.1](#to-221)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
@@ -185,7 +186,17 @@ To use it: wrap a write in `TaskChangeContext::run('rule:42', fn () => …)`; in
 2. **Plan limits.** The routes are POST `task_move_board` and `task_duplicate` (and their tenant copies). A duplicate asks `QUOTA_CHECK` `task_create` with the count of tasks it creates; a move asks `task_move` with the count of open tasks that arrive. A host that limits by route adds the duplicate route; a host that calls `TaskCopier` from a worker asks its own limits first, since the event may have no listener there.
 3. **Tracked time.** Listen to `TaskBoardEvents::TASK_BOARD_CHANGED`: `TaskBoardChangedEvent::$taskIds` lists every moved task. Update what you keep per task: TimeTrack's `board_id_snapshot` on `TimeEntry` and `ActiveTimer` (see TimeTrack), files bound to the board, audit rows. The bundle's manual entries are already updated, and no row is ever deleted.
 4. **Strings and icons.** `task_board.copy.*` in the bundle's 7 locales. A host on `ux_icon` imports `tabler:arrows-move` and `tabler:copy`.
-5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` keeps `remote_meta` and `custom_id` as a tombstone (task null). The task panel no longer shows them for that task.
+5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` becomes a tombstone (`task` null) that remembers the task in the new column `detached_task_id`, so the panel still shows its provider data (`remote_meta`, `custom_id`) read-only and the people tools still erase it there. Imported field values stay on the task, read-only. With the sync tables mapped (sync on, or mapped by an earlier config), add the column:
+
+   ```sql
+   -- PostgreSQL and MySQL
+   ALTER TABLE task_board_sync_items ADD detached_task_id VARCHAR(36) DEFAULT NULL;
+   CREATE INDEX idx_task_board_sync_items_detached ON task_board_sync_items (detached_task_id);
+   ALTER TABLE task_board_sync_items ADD CONSTRAINT fk_task_board_sync_items_detached FOREIGN KEY (detached_task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   -- SQLite: ALTER TABLE task_board_sync_items ADD COLUMN detached_task_id VARCHAR(36) DEFAULT NULL REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   ```
+
+6. **Access on the subtree (audit IC-L1).** A move needs `canEditTask()` on every task that moves; a refusal names a task the user can see and does not name one they cannot. A duplicate leaves out the subtasks the user cannot view, and its preview counts them. A host's `move.targets` answer is narrowed to active boards passing `canEditBoard()`; the tenant is not checked, since spec 217 lets a host offer boards of other tenants.
 
 ### Recurring tasks: what a host does
 
@@ -205,13 +216,28 @@ To use it: wrap a write in `TaskChangeContext::run('rule:42', fn () => …)`; in
    ```
 
    MySQL: the same columns with `DATETIME`, `TINYINT(1)` and `JSON`; SQLite: `DATETIME`, `BOOLEAN` and `CLOB`. `author_id` has the type of your user's id.
-3. **Schedule** (the bundle has none): every few minutes, for each of `TaskRecurrenceManager::dueSeries()`, check the plan and the author's access, then `createOccurrence($series, $manager->dueKey($series))` in a worker; on `TASK_COMPLETED`, `completionKey($task)` gives the series and key of an after-completion occurrence. Both are idempotent. On a plan refusal call `block($series)`; an author without access, `pause($series, TaskRecurrence::REASON_AUTHOR)`. `createOccurrence()` asks `QUOTA_CHECK` `task_create` as any new task does, and throws `TaskCopyRefusedException` before writing.
+3. **Schedule** (the bundle has none): every few minutes, for each of `TaskRecurrenceManager::dueSeries()`, check the plan and the author's access, then `createOccurrence($series, $manager->dueKey($series))` in a worker; on `TASK_COMPLETED`, `completionKey($task)` gives the series and key of an after-completion occurrence. Both are idempotent. On a plan refusal call `block($series)`; an author without access, `pause($series, TaskRecurrence::REASON_AUTHOR)`. `createOccurrence()` asks `QUOTA_CHECK` `task_create` once, before its transaction, as any new task does, and throws `TaskCopyRefusedException` before writing, with the entity manager still open. The events of the new tasks are dispatched after the commit. Pass only keys from `dueKey()` and `completionKey()`.
 4. **Erasure:** call `forgetAuthor($user)` from your account erasure: their series pause and forget their name.
 5. **History label:** the created row of an occurrence has the context `recurring`.
 
+## To 2.2.1
+
+Not released yet. Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`).
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+**Behaviour change: a column change through the task's edit form is a move.** Nothing to configure. `TaskManager::update()` (the edit form's save) now does what `moveToColumn()` does when the column changes:
+
+- With a host limit (`sync.limit_checker`), moving a completed task out of the done column asks it first. A refusal throws `TaskReopenRefusedException` before anything changes: the edit form shows "The task was not moved…", logs `task_reopen_limit`, and saves **none** of the form's fields. Before, the edit passed and the task reopened over the limit.
+- Moving into the done column completes the task (with its history entry) and fires `TASK_COMPLETED`; moving out reopens it and fires `TASK_REOPENED`, after `TASK_UPDATED` and `TASK_MOVED`. The task goes to the end of its new column.
+
+A host that calls `TaskManager::update()` itself with another column catches `TaskReopenRefusedException`, as it does around `move()` and `moveToColumn()`. A host that moves first and then calls `update()` passes the task's current column (as the Task API does): then nothing fires twice. **Stale pages.** The edit form also posts `columnIdShown`, the column the page was rendered with, and the column changes only when the posted column differs from it: a task page left open while someone moved the task no longer moves it back. `_task_blocks.html.twig` renders the field next to the hidden column; a host that overrides that template gets it from `form_end(taskForm)` unless it passes `render_rest: false`. Such a host adds `{% if taskForm.columnIdShown is defined %}{{ form_widget(taskForm.columnIdShown) }}{% endif %}` inside the form; until then its edits keep the posted column, as in 2.2.0 (with the limit and events above). The template also renders `form_errors(taskForm.columnId)`: a column that is not the board's is a validation error on the field (422), and `TaskManager::update()` called with such a column throws `ColumnNotFoundException` instead of leaving the task without a column.
+
 ## To 2.2.0
 
-Not released yet. Audit IA (2026-11-08): Pass-Low at `637494e`.
+Released 2026-11-08 (`9790f25`). Audit IA (2026-11-08): Pass-Low at `637494e`.
 
 ```bash
 composer update nowo-tech/task-board-bundle

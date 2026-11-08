@@ -55,6 +55,7 @@
                     {% endfor %}
                     <li data-testid="nowo-task-move-time">{{ 'task_board.copy.time_moves'|trans({'%entries%': plan.timeEntries, '%people%': plan.timePeople, '%total%': (plan.trackedSeconds // 60)|nowo_task_board_duration}, 'NowoTaskBoardBundle') }}</li>
                     <li>{{ 'task_board.copy.content_kept'|trans({'%comments%': plan.comments, '%documents%': plan.documents, '%links%': plan.links}, 'NowoTaskBoardBundle') }}</li>
+                    {% if plan.importedFields is not empty %}<li data-testid="nowo-task-move-fields">{{ 'task_board.copy.imported_fields'|trans({'%fields%': plan.importedFields|join(', ')}, 'NowoTaskBoardBundle') }}</li>{% endif %}
                     {% if plan.numberChanges %}<li data-testid="nowo-task-move-number">{{ 'task_board.copy.number_changes'|trans({}, 'NowoTaskBoardBundle') }}</li>{% endif %}
                 </ul>
                 {% if confirmForm %}{{ copyUi.confirm(confirmForm, 'task_board.copy.move_confirm', 'nowo-task-move-confirm') }}{% endif %}

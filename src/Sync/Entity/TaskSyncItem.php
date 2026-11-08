@@ -20,6 +20,7 @@ use function is_string;
 #[ORM\Table(name: 'task_board_sync_items')]
 #[ORM\UniqueConstraint(name: 'uniq_task_board_sync_items_board_ext', columns: ['board_id', 'external_id'])]
 #[ORM\Index(name: 'idx_task_board_sync_items_task', columns: ['task_id'])]
+#[ORM\Index(name: 'idx_task_board_sync_items_detached', columns: ['detached_task_id'])]
 class TaskSyncItem
 {
     /** Since 1.27.0: the files could not be read (request budget, or the detail does not say). */
@@ -92,6 +93,14 @@ class TaskSyncItem
     #[ORM\Column(name: 'item_kind', type: 'string', length: 16, options: ['default' => 'task'])]
     private string $itemKind = self::KIND_TASK;
 
+    /**
+     * Since 2.3.0 (spec 217, audit IC-I4): the task this item stood for before it was moved to another board. The item is a
+     * tombstone (`task` null: never updated or recreated), and the moved task still shows its provider data, read-only.
+     */
+    #[ORM\ManyToOne(targetEntity: Task::class)]
+    #[ORM\JoinColumn(name: 'detached_task_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Task $detachedTask = null;
+
     public const KIND_TASK = 'task';
 
     public const KIND_CHECKLIST_ITEM = 'checklist_item';
@@ -131,6 +140,23 @@ class TaskSyncItem
     public function getTask(): ?Task
     {
         return $this->task;
+    }
+
+    /** Since 2.3.0 (spec 217): the task moved off its board; the item becomes a tombstone that remembers it. */
+    public function detach(): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->detachedTask = $this->task;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->task = null;
+
+        return $this;
+    }
+
+    /** Since 2.3.0 (spec 217): the task this tombstone stood for before a move; null otherwise. */
+    public function getDetachedTask(): ?Task
+    {
+        return $this->detachedTask;
     }
 
     public function setTask(?Task $task): self

@@ -830,3 +830,9 @@ task_board.recurrence.flash.unskip: "Salto anulado."
 task_board.recurrence.flash.not_done: "Nada mudou: agora não é possível."
 task_board.copy.refusal.synced_task: "Uma tarefa que segue um fornecedor não se pode repetir."
 task_board.copy.refusal.already_recurring: "Esta tarefa já se repete."
+
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Não pode alterar «%task%», que seria movida com ela."
+task_board.copy.refusal.subtask_hidden: "Seria movida com ela uma subtarefa que não pode ver."
+task_board.copy.hidden: "%count% subtarefa(s) que não pode ver ficam de fora."
+task_board.copy.imported_fields: "Os campos importados ficam na tarefa, só de leitura: %fields%."

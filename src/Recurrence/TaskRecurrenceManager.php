@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskOccurrence;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Psr\Clock\ClockInterface;
@@ -53,6 +54,8 @@ final readonly class TaskRecurrenceManager
         private ClockInterface $clock = new NativeClock(),
         private int $maxSubtasks = self::DEFAULT_MAX_SUBTASKS,
         private bool $syncEnabled = false,
+        // Since audit IC-I3.
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -309,10 +312,12 @@ final readonly class TaskRecurrenceManager
             return null;
         }
         $options = $this->options($series, $source, $date);
-        $this->copier->check($source, $options, $actor);
+        // Audit IC-I3: every refusal before the transaction, which therefore never closes the entity manager on one, so a
+        // host's block() still works; the events of the new tasks wait for the commit.
+        $tree = $this->copier->check($source, $options, $actor);
 
         try {
-            return $this->entityManager->wrapInTransaction(function () use ($series, $key, $source, $options, $actor, $date, $missed): Task {
+            $write = fn (): Task => $this->entityManager->wrapInTransaction(function () use ($series, $key, $source, $options, $actor, $date, $missed, $tree): Task {
                 $occurrence = new TaskOccurrence($series, $key);
                 $this->entityManager->persist($occurrence);
                 foreach ($missed as $day) {
@@ -320,7 +325,7 @@ final readonly class TaskRecurrenceManager
                 }
                 $this->entityManager->flush();
 
-                $copy = $this->copier->copy($source, $options, $actor)->task;
+                $copy = $this->copier->copyChecked($source, $options, $actor, $tree)->task;
                 $occurrence->setTask($copy);
                 $series->advance($copy);
                 if ($series->getReason() === TaskRecurrence::REASON_PLAN) {
@@ -331,6 +336,8 @@ final readonly class TaskRecurrenceManager
 
                 return $copy;
             });
+
+            return $this->events instanceof TaskEventDeferral ? $this->events->defer($write) : $write();
             // @codeCoverageIgnoreStart
         } catch (UniqueConstraintViolationException) {
             // A concurrent run wrote the same key between the check above and this insert: it created the occurrence.
@@ -418,7 +425,9 @@ final readonly class TaskRecurrenceManager
     {
         if (str_starts_with($key, 'done:')) {
             $completed = $this->entityManager->find(Task::class, substr($key, 5));
-            $at        = $completed instanceof Task ? $completed->getCompletedAt() : null;
+            // Audit IC-I6: only an occurrence of this series counts.
+            $ours = $completed instanceof Task && ($series->getLatestTask() === $completed || $this->entityManager->getRepository(TaskOccurrence::class)->count(['recurrence' => $series, 'task' => $completed]) > 0);
+            $at   = $ours ? $completed->getCompletedAt() : null;
             if ($series->getMode() !== TaskRecurrenceRule::MODE_AFTER_COMPLETION || !$at instanceof DateTimeImmutable) {
                 return [null, []];
             }

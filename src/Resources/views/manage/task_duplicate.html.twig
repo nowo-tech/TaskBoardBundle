@@ -29,6 +29,7 @@
                         <li>{{ 'task_board.copy.member_not_copied'|trans({'%name%': label}, 'NowoTaskBoardBundle') }}</li>
                     {% endfor %}
                     <li>{{ 'task_board.copy.never_copied'|trans({'%comments%': preview.comments, '%entries%': preview.timeEntries, '%total%': (preview.trackedSeconds // 60)|nowo_task_board_duration, '%dependencies%': preview.dependencies, '%links%': preview.links}, 'NowoTaskBoardBundle') }}</li>
+                    {% if preview.hidden > 0 %}<li data-testid="nowo-task-duplicate-hidden">{{ 'task_board.copy.hidden'|trans({'%count%': preview.hidden}, 'NowoTaskBoardBundle') }}</li>{% endif %}
                     {% if preview.synced %}<li>{{ 'task_board.copy.sync_not_copied'|trans({}, 'NowoTaskBoardBundle') }}</li>{% endif %}
                 </ul>
                 <hr class="nowo-task-copy__divider">

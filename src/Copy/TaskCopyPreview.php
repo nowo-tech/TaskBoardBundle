@@ -29,6 +29,8 @@ final readonly class TaskCopyPreview
         public int $links,
         public bool $synced,
         public string $fingerprint,
+        // Since audit IC-L1: subtasks left out because the actor cannot view them.
+        public int $hidden = 0,
     ) {
     }
 
