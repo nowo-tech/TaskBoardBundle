@@ -77,8 +77,11 @@
         <div
             class="nowo-task-board"
             data-controller="nowo-task-board"
+            {#- Audit IM-I3: no reorder URL and token on a board whose columns the user may not manage. -#}
+            {% if not ((canEditBoard ?? true) and not (canManageColumns ?? true)) %}
             data-nowo-task-board-reorder-url-value="{{ path(nowo_task_board_route('column_reorder'), {boardId: board.id}) }}"
             data-nowo-task-board-reorder-csrf-token-value="{{ csrf_token('task_board_column_reorder') }}"
+            {% endif %}
             data-nowo-task-board-move-csrf-token-value="{{ csrf_token('task_board_task_move') }}"
         >
             {% block nowo_task_board_columns %}

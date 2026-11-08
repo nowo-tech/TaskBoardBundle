@@ -73,11 +73,29 @@ final class ColumnManagementDecisionTest extends FunctionalTestCase
         $this->denyColumns();
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '?view=board');
         self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('[data-nowo-task-board-reorder-url-value], [data-nowo-task-board-reorder-csrf-token-value]'), 'audit IM-I3');
         foreach (['.nowo-task-board__add-column', '.nowo-task-column__edit', '[data-column-handle]', '.nowo-task-board__column-grip', '.nowo-task-column-sets__save', '.nowo-task-column-sets__apply', '[data-nowo-ui-dialog-open="nowo-task-column-set-save"]', 'form[action*="/columns"]', '.nowo-task-board__hint'] as $control) {
             self::assertCount(0, $crawler->filter($control), $control);
         }
         self::assertCount(3, $crawler->filter('.nowo-task-board__column'), 'the columns themselves stay');
         self::assertGreaterThan(0, $crawler->filter('.nowo-task-inline-add, [data-action*="add-task-modal#open"]')->count(), 'the task controls stay');
+    }
+
+    /** Audit IM-I7 (a): a lower-priority listener that grants every action does not lift the deny over HTTP. */
+    public function testALaterBlindGrantDoesNotLiftTheDeny(): void
+    {
+        $board = $this->board();
+        $this->login($this->owner);
+        $this->denyColumns(10);
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            $event->grant();
+        }, -10);
+
+        $this->client->request('POST', $this->url('column_create', ['boardId' => $board->getId()]), ['board_column_form' => ['name' => 'Review']]);
+
+        self::assertResponseStatusCodeSame(403);
     }
 
     public function testAnImportDoesNotAddColumnsWithoutTheDecision(): void
@@ -97,7 +115,7 @@ final class ColumnManagementDecisionTest extends FunctionalTestCase
         self::assertSame(['To do'], array_map(static fn (BoardColumn $c): string => $c->getName(), $fresh->getColumns()->toArray()));
     }
 
-    private function denyColumns(): void
+    private function denyColumns(int $priority = 0): void
     {
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
@@ -105,7 +123,7 @@ final class ColumnManagementDecisionTest extends FunctionalTestCase
             if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS) {
                 $event->deny();
             }
-        });
+        }, $priority);
     }
 
     /**

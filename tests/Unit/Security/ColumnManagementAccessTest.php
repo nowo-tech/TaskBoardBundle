@@ -80,6 +80,22 @@ final class ColumnManagementAccessTest extends TestCase
         self::assertTrue($checker->canEditBoard($this->owner, $this->board), 'the tasks stay editable');
     }
 
+    /** Audit IM-I2: read-only on the column decision refuses it. */
+    public function testAReadOnlyMarkOnTheColumnDecisionRefusesIt(): void
+    {
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS) {
+                $event->grant();
+                $event->markReadOnly();
+            }
+        });
+        $checker = $this->checker($dispatcher);
+
+        self::assertFalse($checker->canManageColumns($this->owner, $this->board));
+        self::assertTrue($checker->canEditBoard($this->owner, $this->board));
+    }
+
     public function testOnlyTheColumnDecisionKeepsItsDeny(): void
     {
         $columns = new BoardAccessCheckEvent($this->owner, $this->board, true, BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS);

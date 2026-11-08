@@ -26,6 +26,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusType;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 
+use function array_column;
 use function array_map;
 use function array_sum;
 use function array_values;
@@ -103,12 +104,17 @@ final class SyncStatusTest extends SyncPeopleFunctionalTestCase
         $board = $this->boardWithColumns('To do', 'Done');
         self::assertNull($this->service()->updateStatusColumnMap($board, [['status' => 'Blocked', 'column' => StatusColumns::CREATE]]), 'not linked');
         $this->link($board, []);
+        // Audit IM-L1: without an actor no column is created (fail closed).
+        $this->service()->updateStatusColumnMap($board, [['status' => 'Blocked', 'column' => StatusColumns::CREATE]]);
+        self::assertSame(['To do', 'Done'], $this->columnNames($board));
+        self::assertContains('TaskBoard status map: no column created without an actor', array_column($this->logger()->records, 'message'));
+        $board      = $this->freshBoard($board);
         $connection = $this->service()->updateStatusColumnMap($board, [
             ['status' => 'Blocked', 'column' => StatusColumns::CREATE],
             ['status' => 'done', 'column' => StatusColumns::CREATE, 'type' => 'done'],
             ['status' => 'bad', 'column' => 'no-such-column'],
             'not an entry',
-        ]);
+        ], $this->owner);
         self::assertInstanceOf(TaskBoardConnection::class, $connection);
         self::assertSame([
             ['status' => 'Blocked', 'column' => StatusColumns::CREATE],

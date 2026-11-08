@@ -136,7 +136,8 @@ final readonly class TaskBoardResourceAccessChecker
      * Since 2.5.0 (TB-13): whether the user may manage the board's columns (add, edit, reorder, delete; save, apply and
      * delete column sets) — in the UI, the Task API, a file import that would create columns and a provider sync. Needs
      * {@see self::canEditBoard()} and the {@see BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS} decision of
-     * BOARD_ACCESS_CHECK, granted by default (the edit decision, as before 2.5.0); a deny sticks.
+     * BOARD_ACCESS_CHECK, granted by default (the edit decision, as before 2.5.0); a deny sticks, and markReadOnly() on
+     * that event refuses it as well.
      */
     public function canManageColumns(object $user, TaskBoard $board): bool
     {
@@ -147,7 +148,8 @@ final readonly class TaskBoardResourceAccessChecker
         $event = new BoardAccessCheckEvent($user, $board, true, BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
-        return $this->isBoardViewable($event);
+        // Audit IM-I2: markReadOnly() on this decision refuses it too.
+        return $this->isBoardViewable($event) && !$event->isReadOnly();
     }
 
     public function canViewTask(object $user, Task $task): bool
