@@ -105,7 +105,11 @@ Target: 2.2.0, spec 213 (Task API). Audit IA (2026-11-08): Pass-Low at `<final>`
 
 ### Fixed
 
-- A `sync`, `task_numbers` or `api` option enabled in one config file and disabled in a later one (a `when@prod` override) no longer maps its tables for Doctrine: `prepend()` now follows the last value set, as the merged configuration does. Since 2.1 any `enabled: true` mapped them (audit IA-L8).
+- `api.enabled: true` in one config file and `false` in a later one (a `when@prod` override) no longer maps the idempotency table or registers `NOWO_TB_JSON_TEXT`: `prepend()` follows the last value set, as the merged configuration does, and so does `api.hooks.idempotency_store` (audit IA-L8).
+
+### Deprecated
+
+- `sync` and `task_numbers` still map their tables when any config file enables them, even if a later override disables them (2.1 behaviour, kept so a layered config never drops tables holding data). Deprecated: 3.0 follows the merged value.
 
 ### Changed
 

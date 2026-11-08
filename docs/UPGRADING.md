@@ -164,7 +164,7 @@ composer update nowo-tech/task-board-bundle
 
 **A host that changes nothing** gets no new route, service, listener, parameter or table: the Task API is off (`api.enabled: false`) and the UI's output stays as it was (`tests/Functional/Characterization` pins it).
 
-**Config overrides now work for mapped tables.** A `sync`, `task_numbers` or `api` option enabled in a base file and disabled in a later override no longer maps its tables (audit IA-L8). A host that relied on the old behaviour (the tables mapped although the option ended off) sees `doctrine:schema:validate` or `migrations:diff` drop them: check before migrating.
+**API config overrides.** `api.enabled: true` in a base file and `false` in a later override no longer maps the API idempotency table or registers `NOWO_TB_JSON_TEXT` (audit IA-L8); `api.hooks.idempotency_store` also follows the last value set. `sync` and `task_numbers` keep the 2.1 behaviour: they still map their tables when any config file enables them. That is deprecated and changes in 3.0, so a host that layers them off should plan its migration before then.
 
 **Deprecated.** `TaskBoardManageController`'s `$syncLimits` argument is ignored, kept in its place so positional arguments do not move: a restore asks the limit given to `TaskManager` (`$limits`), which the container wires from the same `sync.limit_checker`. A host that builds either by hand passes the limit to `TaskManager`.
 

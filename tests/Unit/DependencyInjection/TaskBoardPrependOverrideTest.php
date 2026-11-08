@@ -15,8 +15,9 @@ use function array_reverse;
 use function json_encode;
 
 /**
- * Audit IA-L8: what prepend() maps for Doctrine follows the merged configuration, where the last file that sets an option
+ * Audit IA-L8: what prepend() maps for the API follows the merged configuration, where the last file that sets an option
  * wins: `enabled: true` in a base file and `false` in a `when@prod` override is off, and the other way round is on.
+ * `sync` and `task_numbers` keep the 2.1 behaviour until 3.0.
  */
 final class TaskBoardPrependOverrideTest extends TestCase
 {
@@ -25,8 +26,6 @@ final class TaskBoardPrependOverrideTest extends TestCase
      */
     public static function options(): iterable
     {
-        yield 'sync tables' => ['sync', ['credential_resolver' => 'app.credentials'], 'TaskBoardSync'];
-        yield 'task numbers' => ['task_numbers', [], 'TaskBoardNumber'];
         yield 'API table' => ['api', ['hooks' => ['authenticator' => 'app.auth']], 'TaskBoardApi'];
         yield 'API query function' => ['api', ['hooks' => ['authenticator' => 'app.auth']], 'NOWO_TB_JSON_TEXT'];
     }
@@ -43,6 +42,33 @@ final class TaskBoardPrependOverrideTest extends TestCase
         self::assertStringNotContainsString($mapped, $this->doctrine([$on, $off]), 'on, then off in an override');
         self::assertStringContainsString($mapped, $this->doctrine([$off, $on]), 'off, then on in an override');
         self::assertStringContainsString($mapped, $this->doctrine([$on, [$option => $extra]]), 'an override that does not say keeps it on');
+        self::assertStringNotContainsString($mapped, $this->doctrine([[]]), 'off by default');
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: array<string, mixed>, 2: string}>
+     */
+    public static function keptOptions(): iterable
+    {
+        yield 'sync tables' => ['sync', ['credential_resolver' => 'app.credentials'], 'TaskBoardSync'];
+        yield 'task numbers' => ['task_numbers', [], 'TaskBoardNumber'];
+    }
+
+    /**
+     * 2.1 behaviour, kept in 2.x (deprecated): any file that enables the option maps its tables, so a layered config that
+     * ends at false never makes migrations drop tables holding data.
+     *
+     * @param array<string, mixed> $extra
+     */
+    #[DataProvider('keptOptions')]
+    public function testAnyFileThatEnablesSyncOrNumbersStillMapsTheirTables(string $option, array $extra, string $mapped): void
+    {
+        $on  = [$option => ['enabled' => true] + $extra];
+        $off = [$option => ['enabled' => false]];
+
+        self::assertStringContainsString($mapped, $this->doctrine([$on, $off]), 'on, then off in an override');
+        self::assertStringContainsString($mapped, $this->doctrine([$off, $on]), 'off, then on in an override');
+        self::assertStringNotContainsString($mapped, $this->doctrine([$off]), 'off everywhere');
         self::assertStringNotContainsString($mapped, $this->doctrine([[]]), 'off by default');
     }
 

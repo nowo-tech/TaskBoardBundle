@@ -591,15 +591,31 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Whether `<node>.enabled` ends up true, as the merged configuration will say: the last config that sets it wins, so
-     * `enabled: true` in a base file and `false` in a `when@prod` override is off (audit IA-L8; 2.1 took any true).
+     * Whether any config file sets `<node>.enabled: true`, even if a later one sets it false. This keeps the 2.1 behaviour
+     * for `sync` and `task_numbers`, so a layered config that ends at false never drops tables holding data. Deprecated:
+     * 3.0 follows the merged value, as {@see self::apiEnabled()} already does.
      */
     private function optionEnabled(ContainerBuilder $container, string $node): bool
     {
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config[$node] ?? null) && ($config[$node]['enabled'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether `api.enabled` ends up true, as the merged configuration will say: the last config that sets it wins, so
+     * `enabled: true` in a base file and `false` in a `when@prod` override is off (audit IA-L8).
+     */
+    private function apiEnabled(ContainerBuilder $container): bool
+    {
         $enabled = false;
         foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
-            if (is_array($config[$node] ?? null) && array_key_exists('enabled', $config[$node])) {
-                $enabled = $config[$node]['enabled'] === true;
+            if (is_array($config['api'] ?? null) && array_key_exists('enabled', $config['api'])) {
+                $enabled = $config['api']['enabled'] === true;
             }
         }
 
@@ -657,12 +673,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.
-        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'api')) {
+        if ($container->hasExtension('doctrine') && $this->apiEnabled($container)) {
             $container->prependExtensionConfig('doctrine', ['orm' => ['dql' => ['string_functions' => [JsonTextFunction::NAME => JsonTextFunction::class]]]]);
         }
 
         // Since 2.2.0 (spec 213): the idempotency table, only with api.enabled and the bundle's own store.
-        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'api') && !$this->apiStoreReplaced($container)) {
+        if ($container->hasExtension('doctrine') && $this->apiEnabled($container) && !$this->apiStoreReplaced($container)) {
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
