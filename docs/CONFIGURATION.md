@@ -32,6 +32,7 @@
 - [Assets](#assets)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
+- [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
 - [New board (since 1.30)](#new-board-since-130)
 
 ## Required
@@ -728,6 +729,16 @@ pnpm install && pnpm run build
 | `routes.task_move_board` | `/tools/task-board/task/{taskId}/move-board` | With `move.enabled`. GET, POST |
 | `routes.task_duplicate` | `/tools/task-board/task/{taskId}/duplicate` | With `move.enabled`. GET, POST |
 | `web_ui.templates.task_move` / `task_duplicate` | `@NowoTaskBoardBundle/manage/task_move.html.twig` / `task_duplicate.html.twig` | The two pages |
+
+## Recurring tasks (since 2.3)
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `recurrence.enabled` | `false` | The two tables, `TaskRecurrenceManager`, the Repeat section, page and icon, and the routes below |
+| `recurrence.max_subtasks` | `200` | The most subtasks an occurrence copies; a series over it is refused |
+| `routes.task_recurrence` | `/tools/task-board/task/{taskId}/recurrence` | GET, POST |
+| `routes.task_recurrence_action` | `/tools/task-board/task/{taskId}/recurrence/{action}` | POST; `pause`, `resume`, `stop`, `skip`, `unskip` |
+| `web_ui.templates.task_recurrence` | `@NowoTaskBoardBundle/manage/task_recurrence.html.twig` | The Repeat page |
 
 ## Task numbers and calendar (since 2.1)
 

@@ -78,6 +78,7 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 | Remove time entry | `task_time_remove` | Since 1.15 (POST + CSRF) |
 | Move to another board | `task_move_board` | Since 2.3, with `move.enabled`: GET choices and preview, POST + CSRF to confirm |
 | Duplicate | `task_duplicate` | Since 2.3, with `move.enabled`: GET choices and preview, POST + CSRF to confirm |
+| Repeat | `task_recurrence`, `task_recurrence_action` | Since 2.3, with `recurrence.enabled`: make recurring, edit; pause, resume, stop, skip, undo a skip (POST + CSRF per action) |
 
 ### Move and duplicate (since 2.3)
 
@@ -96,6 +97,15 @@ From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $
 | Provider link | Detached for good | Never copied |
 | Number | Kept in the scope; a new one with the old as alias across scopes | A new one |
 | Events | `TASK_BOARD_CHANGED` after the commit, no `TASK_MOVED` | `TASK_CREATED` per task, `TASK_MEMBER_ADDED` |
+
+### Recurring tasks (since 2.3)
+
+`recurrence.enabled: true` adds the *Repeat* section to the task panel (block `nowo_task_repeat`: text only without `canEditTask()`), the Repeat page and a repeat icon on cards and list rows. The bundle schedules nothing: see [UPGRADING](UPGRADING.md#recurring-tasks-what-a-host-does). Each occurrence is a copy of the latest one (the `TaskCopier` rules), created as the series' author.
+
+| Write path | Asks |
+| --- | --- |
+| `createOccurrence()` | `QUOTA_CHECK` `task_create` with the tasks it creates; the host checks its own plan and the author first |
+| Make recurring, edit, pause, resume, skip, stop | `canEditTask()`; nothing is created by them |
 
 ### Deleting and renaming outside the UI (since 2.2)
 
@@ -291,6 +301,7 @@ nowo_task_board:
 | New subtask | `task_create` | Flash and redirect |
 | Import into a board or a task, web and command | `import`, with the tasks the file would create, before anything is written | The reason as the import's error |
 | Duplicate (page, or `TaskCopier` called by host code), since 2.3 | `task_create`, with every task the copy creates, before anything is written | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
+| Recurring occurrence (`TaskRecurrenceManager::createOccurrence()`), since 2.3 | `task_create`, with every task it creates, before anything is written | `TaskCopyRefusedException` (`quota`); the host calls `block()` |
 | Move to another board (page, or `TaskMover`), since 2.3 | `task_move`, with the open tasks that arrive (none: not asked) | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
 | Provider sync, restoring or reopening a task | No: `SyncLimitCheckerInterface` | See [sync](sync.md) |
 | `TaskManager::create()` called by host code | No: the host asks | |
@@ -631,7 +642,7 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, building, calendar,
 calendar-event, chart-bar, check, chevron-down, chevron-up, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play, hourglass,
 columns, device-floppy, download, external-link, flag, folder, git-branch, grip-vertical, history, layout-columns, layout-grid, layout-kanban,
-help, line-dashed, link, arrows-move, copy, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
+help, line-dashed, link, arrows-move, copy, repeat, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
 users, x. Mapping `create`, `chevron_up` or `chevron_down` in `nowo_ui_kit.action_icons` replaces New board's `plus` and the filter fold's chevrons (since 2.0.2).
 
 Each icon of `board.column_icons` is imported too, since every board page draws them in its column dialogs. The default is the 30 in `Configuration::DEFAULT_COLUMN_ICONS`; set `board.column_icons` to a shorter list to import fewer.

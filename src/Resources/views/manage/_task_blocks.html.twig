@@ -346,7 +346,7 @@
     {# Since 2.0.0 (TB-3): a host's part before the Time section, e.g. a timer. #}
     {% if nowo_task_board_task_time_before|default(null) %}{{ include(nowo_task_board_task_time_before) }}{% endif %}
     {{ include('@NowoTaskBoardBundle/manage/_task_time_section.html.twig') }}
-    {% endblock %}
+    {% endblock %}{% block nowo_task_repeat %}{% set _repeat = nowo_task_board_recurrence(task) %}{% if _repeat is not null %}{{ include('@NowoTaskBoardBundle/manage/_task_repeat_section.html.twig', {repeat: _repeat}) }}{% endif %}{% endblock %}
 
     {% block nowo_task_relations %}
     <div

@@ -35,6 +35,9 @@ services:
             - '../../Copy/TaskCopyResult.php'
             - '../../Copy/TaskColumnRule.php'
             - '../../Move/TaskMovePlan.php'
+            # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
+            - '../../Recurrence/'
+            - '../../Controller/TaskRecurrenceController.php'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'
@@ -62,8 +65,11 @@ services:
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
-        # Since 1.23: registered by services_sync.yaml (sync.enabled).
-        exclude: '../../Controller/TaskBoardConnectionController.php'
+        # Since 1.23: registered by services_sync.yaml (sync.enabled); since 2.3.0 the Repeat controller by
+        # services_recurrence.yaml (recurrence.enabled).
+        exclude:
+            - '../../Controller/TaskBoardConnectionController.php'
+            - '../../Controller/TaskRecurrenceController.php'
         public: true
 
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:

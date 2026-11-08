@@ -74,9 +74,10 @@ final readonly class TaskChangeRecorder
         );
     }
 
-    public function recordCreated(Task $task, object $user): void
+    /** Since 2.3.0: `$context` says why (spec 215: "recurring"). */
+    public function recordCreated(Task $task, object $user, ?string $context = null): void
     {
-        $this->record($task, $user, TaskChangeType::Created, null, $task->getTitle());
+        $this->record($task, $user, TaskChangeType::Created, null, $task->getTitle(), $context);
     }
 
     private function formatValue(mixed $value): ?string

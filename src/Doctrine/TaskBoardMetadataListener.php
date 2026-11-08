@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
+use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
@@ -65,6 +66,8 @@ final readonly class TaskBoardMetadataListener
             // Since 1.25: the people directory.
             TaskSyncDirectory::class => ['reviewedBy'],
             TaskSyncPerson::class    => ['mappedUser', 'suggestedUser', 'mappedBy', 'reassignToUser'],
+            // Since 2.3.0 (spec 215, mapped with recurrence.enabled).
+            TaskRecurrence::class => ['author'],
         ];
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {

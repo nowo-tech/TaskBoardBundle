@@ -51,7 +51,11 @@ final readonly class TaskManager
     ) {
     }
 
-    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null): Task
+    /**
+     * @param string|null $context since 2.3.0 (spec 215): why the task is created, kept on its "created" history row (e.g.
+     *                             "recurring"), for a host's history label
+     */
+    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
 
@@ -71,7 +75,7 @@ final readonly class TaskManager
         $task->setColor($data->color);
         $task->setStartAt($data->startAt);
 
-        $this->changeRecorder->recordCreated($task, $creator);
+        $this->changeRecorder->recordCreated($task, $creator, $context);
         $this->taskRepository->save($task);
         $this->dispatch(new TaskCreatedEvent($task, $creator), TaskBoardEvents::TASK_CREATED);
 

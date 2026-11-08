@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
+use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
@@ -116,7 +118,25 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         // Since 2.3.0 (spec 217): `move.enabled`, and who may edit a task and its board.
         private readonly bool $moveEnabled = false,
         private readonly ?TaskBoardResourceAccessChecker $resourceAccess = null,
+        // Since 2.3.0 (spec 215): set with `recurrence.enabled` only.
+        private readonly ?TaskRecurrenceView $recurrence = null,
     ) {
+    }
+
+    /**
+     * Since 2.3.0 (spec 215): the *Repeat* section of a task, or null with `recurrence.enabled: false` (nothing rendered).
+     *
+     * @return array{series: TaskRecurrence|null, upcoming: list<DateTimeImmutable>, canEdit: bool, synced: bool}|null
+     */
+    public function recurrence(Task $task): ?array
+    {
+        return $this->recurrence?->of($task);
+    }
+
+    /** Since 2.3.0 (spec 215): whether the card or row of a task shows the repeat icon. */
+    public function repeats(Task $task): bool
+    {
+        return $this->recurrence instanceof TaskRecurrenceView && $this->recurrence->repeats($task);
     }
 
     /**
@@ -290,6 +310,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_calendar_enabled', fn (): bool => $this->calendarEnabled),
             new TwigFunction('nowo_task_board_calendar_tabs', $this->calendarTabs(...)),
             new TwigFunction('nowo_task_board_can_copy', $this->canCopy(...)),
+            new TwigFunction('nowo_task_board_recurrence', $this->recurrence(...)),
+            new TwigFunction('nowo_task_board_repeats', $this->repeats(...)),
         ];
     }
 

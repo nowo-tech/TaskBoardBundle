@@ -1,0 +1,30 @@
+{#
+    Since 2.3.0 (spec 215, recurrence.enabled): the task's Repeat section. Variables: task, repeat ({series, upcoming,
+    canEdit, synced}). Without canEdit it is text only; the changes are made on the task_recurrence page.
+#}
+{% set _series = repeat.series %}
+<section class="nowo-task-section nowo-task-detail nowo-task-repeat" data-testid="nowo-task-repeat">
+    <header class="nowo-task-section__header nowo-task-detail__section-header">
+        <h2 class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'repeat'}) }}{{ 'task_board.recurrence.section'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+        {% if repeat.canEdit and (_series or not repeat.synced) %}
+            <a class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" href="{{ path(nowo_task_board_route('task_recurrence'), {taskId: task.id}) }}" data-testid="nowo-task-repeat-edit">{{ (_series ? 'task_board.recurrence.manage' : 'task_board.recurrence.make')|trans({}, 'NowoTaskBoardBundle') }}</a>
+        {% endif %}
+    </header>
+    {% if _series %}
+        <p class="nowo-task-repeat__sentence" data-testid="nowo-task-repeat-sentence">{{ include('@NowoTaskBoardBundle/manage/_task_repeat_sentence.html.twig', {series: _series}, with_context: false) }}</p>
+        {% if not _series.active %}
+            <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-status">{{ ('task_board.recurrence.status.' ~ _series.status)|trans({}, 'NowoTaskBoardBundle') }}{% if _series.reason %} · {{ ('task_board.recurrence.reason.' ~ _series.reason)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</p>
+        {% elseif _series.reason %}
+            <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-status">{{ ('task_board.recurrence.reason.' ~ _series.reason)|trans({}, 'NowoTaskBoardBundle') }}</p>
+        {% endif %}
+        {% if repeat.upcoming is not empty %}
+            <ul class="nowo-task-repeat__dates" aria-label="{{ 'task_board.recurrence.upcoming'|trans({}, 'NowoTaskBoardBundle') }}">
+                {% for date in repeat.upcoming %}<li><time datetime="{{ date|date('Y-m-d') }}">{{ date|date('Y-m-d') }}</time></li>{% endfor %}
+            </ul>
+        {% endif %}
+    {% elseif repeat.synced %}
+        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-repeat-synced">{{ 'task_board.recurrence.synced'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {% else %}
+        <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">{{ 'task_board.recurrence.off'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {% endif %}
+</section>

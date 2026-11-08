@@ -3930,3 +3930,23 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
     gap: var(--nowo-task-space-2, 0.5rem);
     justify-items: start;
 }
+
+/* Since 2.3.0 (spec 215): the Repeat section, page and icon. */
+.nowo-task-repeat__dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nowo-task-space-2, 0.5rem);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nowo-task-repeat__action {
+    display: inline-block;
+}
+
+.nowo-task-card__repeat,
+.nowo-task-list__repeat {
+    display: inline-flex;
+    align-items: center;
+}

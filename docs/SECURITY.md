@@ -12,6 +12,7 @@
 - [Task types, tag colours and descriptions (since 1.28.0)](#task-types-tag-colours-and-descriptions-since-1280)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Move and duplicate (2.3)](#move-and-duplicate-23)
+- [Recurring tasks (2.3)](#recurring-tasks-23)
 - [UiKit migration (2.0.0)](#uikit-migration-200)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
@@ -173,6 +174,20 @@ Off unless `move.enabled: true`. Audit status: re-verification pending.
 | A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
 | Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
 | Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
+
+## Recurring tasks (2.3)
+
+Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
+
+| Threat | Mitigation |
+|---|---|
+| Changing a series without the right | The page and every action need `canEditTask()`; an unseen task answers 404, a read-only one 403; each action has its own CSRF token |
+| A worker creating tasks nobody may create | No scheduler in the bundle: the host checks its plan and the author's access before `createOccurrence()`; the copier still asks `QUOTA_CHECK` and refuses before writing. An author erased or gone pauses the series (`forgetAuthor()`, or no author at run time) |
+| Duplicate occurrences | One row per series and key, unique, written with the task in one transaction; retries, re-runs and redeliveries create nothing more. A lost race returns null after Doctrine closes the entity manager: the worker resets it |
+| A flood after downtime | Only the latest missed date is created; older ones are recorded as missed |
+| Copying what must not travel | The `TaskCopier` rules: never comments, time, history, dependencies, links, sync rows or the number; members only while assignable |
+| Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |
+| A synced task rewritten by its provider | Refused (`synced_task`) |
 
 ## UiKit migration (2.0.0)
 

@@ -80,7 +80,7 @@ final readonly class TaskCopier
     {
         $target = $options->targetBoard ?? $source->getBoard();
         $tree   = $this->tree($source, $options);
-        $this->refuseUnsupported($target, $tree);
+        $this->refuseUnsupported($target, $tree, $options);
 
         $copied  = 0;
         $dropped = [];
@@ -141,15 +141,10 @@ final readonly class TaskCopier
     public function copy(Task $source, TaskCopyOptions $options, object $actor, ?string $fingerprint = null): TaskCopyResult
     {
         $target = $options->targetBoard ?? $source->getBoard();
-        $tree   = $this->tree($source, $options);
-        $this->refuseUnsupported($target, $tree);
         if ($fingerprint !== null && $this->preview($source, $options)->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
-        $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $target->getTenantKey(), $target, count($tree), $actor);
-        if ($refusal !== null) {
-            throw new TaskCopyRefusedException('quota', [], $refusal);
-        }
+        $tree = $this->check($source, $options, $actor);
 
         return $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
             $shift   = $this->shiftDays($source, $options);
@@ -158,7 +153,7 @@ final readonly class TaskCopier
             $parent  = $target->getId() === $source->getBoard()->getId() ? $source->getParent() : null;
             foreach ($tree as $task) {
                 $isTop                  = $task === $source;
-                $copy                   = $this->tasks->create($target, $this->formData($task, $target, $options, $isTop, $shift), $actor, $isTop ? $parent : $copies[(string) $task->getParent()?->getId()]);
+                $copy                   = $this->tasks->create($target, $this->formData($task, $target, $options, $isTop, $shift), $actor, $isTop ? $parent : $copies[(string) $task->getParent()?->getId()], $isTop ? $options->historyContext : null);
                 $copies[$task->getId()] = $copy;
                 foreach ($task->getDocuments() as $document) {
                     if (!$document->isSyncFields()) {
@@ -183,6 +178,27 @@ final readonly class TaskCopier
 
             return new TaskCopyResult($copies[$source->getId()], array_values($copies), array_values(array_unique($dropped)));
         });
+    }
+
+    /**
+     * Since 2.3.0: everything {@see self::copy()} refuses before writing, for a caller that writes first (spec 215's
+     * occurrence row): the target, the subtree cap and the host's quota.
+     *
+     * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`, `quota`
+     *
+     * @return list<Task> the tasks the copy would create from
+     */
+    public function check(Task $source, TaskCopyOptions $options, object $actor): array
+    {
+        $target = $options->targetBoard ?? $source->getBoard();
+        $tree   = $this->tree($source, $options);
+        $this->refuseUnsupported($target, $tree, $options);
+        $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $target->getTenantKey(), $target, count($tree), $actor);
+        if ($refusal !== null) {
+            throw new TaskCopyRefusedException('quota', [], $refusal);
+        }
+
+        return $tree;
     }
 
     /**
@@ -212,13 +228,14 @@ final readonly class TaskCopier
      *
      * @throws TaskCopyRefusedException
      */
-    private function refuseUnsupported(TaskBoard $target, array $tree): void
+    private function refuseUnsupported(TaskBoard $target, array $tree, TaskCopyOptions $options): void
     {
         if ($target->isArchived()) {
             throw new TaskCopyRefusedException('board_archived');
         }
-        if (count($tree) - 1 > $this->maxSubtasks) {
-            throw new TaskCopyRefusedException('subtree_too_large', ['%count%' => count($tree) - 1, '%max%' => $this->maxSubtasks]);
+        $max = $options->maxSubtasks ?? $this->maxSubtasks;
+        if (count($tree) - 1 > $max) {
+            throw new TaskCopyRefusedException('subtree_too_large', ['%count%' => count($tree) - 1, '%max%' => $max]);
         }
     }
 

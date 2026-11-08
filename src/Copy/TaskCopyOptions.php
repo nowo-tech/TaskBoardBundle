@@ -19,7 +19,8 @@ final readonly class TaskCopyOptions
      * @param string|null $title null: the source's title
      * @param bool $reschedule true: the copy takes `$startAt` / `$dueAt` (subtasks shift by as many days as the due date, else
      *                         the start); false: the dates follow `$dates`
-     * @param string|null $historyContext written on the copy's "Duplicated" history row after "task:<source id>" (e.g. "recurring")
+     * @param string|null $historyContext written on the copy's "created" history row, and on its "Duplicated" row after
+     *                                    "task:<source id>" (e.g. "recurring", "duplicate")
      */
     public function __construct(
         public ?TaskBoard $targetBoard = null,
@@ -32,6 +33,8 @@ final readonly class TaskCopyOptions
         public ?DateTimeImmutable $startAt = null,
         public ?DateTimeImmutable $dueAt = null,
         public ?string $historyContext = null,
+        // Since 2.3.0 (spec 215): `recurrence.max_subtasks`; null: the copier's own (`move.max_subtasks`).
+        public ?int $maxSubtasks = null,
     ) {
     }
 }
