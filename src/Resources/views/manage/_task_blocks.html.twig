@@ -373,7 +373,7 @@
                 <span class="nowo-task-section__title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'notes'}) }}{{ 'task_board.task.documentation'|trans({}, 'NowoTaskBoardBundle') }}</span>
             </summary>
             <div class="nowo-task-section__body">
-                {% for doc in task.documents %}
+                {% for doc in task.documents|filter(d => d.shownOn(task.board)) %}
                     <article class="nowo-task-detail__doc">
                         <h3 class="nowo-task-detail__doc-title">{{ doc.title }}</h3>
                         <div class="nowo-task-detail__doc-body">{{ doc.content|nl2br }}</div>

@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
+use function array_intersect_key;
 use function array_slice;
 use function array_unique;
 use function array_values;
@@ -40,7 +41,7 @@ class TaskDocument
      * Since 1.28.0 (audit HI-L2): not null = the sync's "Fields" document, with the suppression records of the lines the
      * eraser removed.
      *
-     * @var array{erased?: list<string>}|null
+     * @var array{erased?: list<string>, board?: string}|null
      */
     #[ORM\Column(name: 'sync_fields', type: 'json', nullable: true)]
     private ?array $syncFields = null;
@@ -81,6 +82,31 @@ class TaskDocument
     }
 
     /**
+     * Since 2.3.0 (spec 217, audit IC-I8): the sync's "Fields" document of a task moved to another board remembers the board
+     * its values came from, once. A host-written document is not touched.
+     *
+     * @internal used by the mover only
+     */
+    public function rememberOrigin(string $boardId): self
+    {
+        if ($this->syncFields !== null && !isset($this->syncFields['board'])) {
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+            $this->syncFields['board'] = $boardId;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Since 2.3.0 (owner decision 4): whether the document is shown on `$board`. The "Fields" document of a task moved off
+     * its board is hidden there, like the imported field values, and kept.
+     */
+    public function isShownOn(TaskBoard $board): bool
+    {
+        return !isset($this->syncFields['board']) || $this->syncFields['board'] === $board->getId();
+    }
+
+    /**
      * @return list<string>
      */
     public function erasedLines(): array
@@ -94,7 +120,7 @@ class TaskDocument
     public function addErasedLines(array $records): self
     {
         // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
-        $this->syncFields = ['erased' => array_slice(array_values(array_unique([...$this->erasedLines(), ...$records])), -self::MAX_ERASED_LINES)];
+        $this->syncFields = ['erased' => array_slice(array_values(array_unique([...$this->erasedLines(), ...$records])), -self::MAX_ERASED_LINES)] + array_intersect_key($this->syncFields ?? [], ['board' => true]);
 
         return $this;
     }
