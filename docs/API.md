@@ -57,7 +57,7 @@ Every management write needs a *Full* token and the board's manage decision (`Bo
 |---|---|
 | `POST /v2/space/{id}/list` | `name`, `content` / `markdown_content`. The token must reach the whole tenant (naming one board of it is not enough). The board gets the default columns, as from the UI |
 | `PUT /v2/list/{id}` | `name`, `content`; the slug stays. `status`, `priority`, `assignee`, `due_date` are warned about |
-| `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002` |
+| `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002`. Two deletes of one board at the same time may both pick the same tasks, so `TASK_ERASED` (with its file refs) and `BOARD_DELETED` can come twice: a host's listeners must delete files idempotently |
 | `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex) |
 | `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames or recolours a column; what is not given stays |
 | `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
@@ -69,7 +69,7 @@ Tags exist on tasks only: there is no space tag to create, rename or delete. Boa
 
 **Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.
 
-**Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept.
+**Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept. **Known narrow race:** the limit is asked once before the first save, and the restore and the move ask it again as they save; if another write fills the limit in between, the restore is saved and the move then answers 500. Retrying the same request completes it.
 
 ### Idempotency
 

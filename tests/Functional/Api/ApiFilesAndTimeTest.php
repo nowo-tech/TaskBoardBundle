@@ -87,6 +87,15 @@ final class ApiFilesAndTimeTest extends ApiTestCase
         $this->assertRefused(409, 'IDEMP_002');
         self::assertCount(1, ApiTestHost::$stored);
 
+        // The same bytes under another name or type are another request (audit IA-L7, the auditor's proof turned).
+        $this->upload($this->own, 'b.txt', 'first', 'up-1');
+        $this->assertRefused(409, 'IDEMP_002');
+        $path = (string) tempnam(sys_get_temp_dir(), 'tb-api');
+        file_put_contents($path, 'first');
+        $this->client->request('POST', '/api/tasks/v2/task/' . $this->own->getId() . '/attachment', [], ['attachment' => new UploadedFile($path, 'a.txt', 'text/plain', null, true)], ['HTTP_AUTHORIZATION' => self::TOKEN, 'HTTP_IDEMPOTENCY_KEY' => 'up-1']);
+        $this->assertRefused(409, 'IDEMP_002');
+        self::assertCount(1, ApiTestHost::$stored);
+
         // A nested file counts too.
         foreach (['one', 'two'] as $index => $bytes) {
             $path = (string) tempnam(sys_get_temp_dir(), 'tb-api');
