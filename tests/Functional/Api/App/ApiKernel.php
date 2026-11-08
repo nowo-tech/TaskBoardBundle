@@ -128,6 +128,7 @@ final class ApiKernel extends Kernel
             'workspace'     => 'app.api_host',
             'users'         => 'app.api_host',
             'time_entries'  => 'app.api_host',
+            'attachments'   => 'app.api_host',
         ]]] + $this->taskBoard);
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // The host side of a provider sync, for the imported custom fields.

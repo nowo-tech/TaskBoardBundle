@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Api\Controller;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiTimeOperations;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
@@ -15,10 +16,16 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 use function is_string;
+use function pathinfo;
+
+use const PATHINFO_EXTENSION;
 
 /**
  * Since 2.2.0 (spec 213): the write endpoints. Thin: parse the body, call one operation, answer as ClickUp does, with
@@ -31,7 +38,9 @@ final readonly class TaskApiWriteController
         private TaskApiChecklistOperations $checklists,
         private TaskApiReadOperations $reads,
         private TaskApiReadSerializer $serializer,
+        private TaskApiTimeOperations $time,
         private int $maxBodyBytes,
+        private ClockInterface $clock = new NativeClock(),
     ) {
     }
 
@@ -65,6 +74,38 @@ final readonly class TaskApiWriteController
         TaskApiIdempotencyListener::target($request, $comment->getTask()->getBoard());
 
         return $this->answer(['id' => $comment->getId(), 'hist_id' => $comment->getId(), 'date' => $comment->getCreatedAt()->format('Uv')], $input);
+    }
+
+    public function addAttachment(Request $request, string $taskId): JsonResponse
+    {
+        $file       = $request->files->get('attachment');
+        $attachment = $this->tasks->addAttachment($this->principal($request), $taskId, $file instanceof UploadedFile ? $file : null);
+        $extension  = pathinfo($attachment->title, PATHINFO_EXTENSION);
+
+        return new JsonResponse([
+            'id'              => $attachment->id,
+            'version'         => '0',
+            'date'            => (string) $this->clock->now()->format('Uv'),
+            'title'           => $attachment->title,
+            'extension'       => $extension,
+            'thumbnail_small' => null,
+            'thumbnail_large' => null,
+            'url'             => $attachment->url,
+        ]);
+    }
+
+    public function logTime(Request $request, string $teamId): JsonResponse
+    {
+        $input = $this->input($request, TaskApiTimeOperations::NOT_SUPPORTED);
+        $entry = $this->time->logTime($this->principal($request), $teamId, $input);
+
+        return $this->answer(['data' => $this->serializer->timeEntry($entry, $teamId)], $input);
+    }
+
+    /** Tracked time is never deleted through the API (owner, Q-O7). */
+    public function deleteTime(): JsonResponse
+    {
+        throw new TaskApiRefusal(403, 'TIME_002', 'Time entries are not deleted through the API');
     }
 
     public function addTag(Request $request, string $taskId, string $tagName): JsonResponse

@@ -14,6 +14,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
@@ -23,6 +24,7 @@ use Throwable;
 
 use function array_is_list;
 use function hash;
+use function hash_file;
 use function in_array;
 use function is_array;
 use function json_decode;
@@ -155,7 +157,31 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
             // Not JSON: compared as sent.
         }
 
+        // An upload is part of the request: its bytes count too.
+        foreach ($this->files($request->files->all()) as $name => $file) {
+            $content .= "\n" . $name . ':' . (string) hash_file('sha256', $file->getPathname());
+        }
+
         return hash('sha256', $request->getMethod() . "\n" . $request->getPathInfo() . "\n" . $content);
+    }
+
+    /**
+     * @param array<array-key, mixed> $files
+     *
+     * @return array<string, UploadedFile>
+     */
+    private function files(array $files, string $prefix = ''): array
+    {
+        $flat = [];
+        foreach ($files as $name => $file) {
+            if ($file instanceof UploadedFile) {
+                $flat[$prefix . $name] = $file;
+            } elseif (is_array($file)) {
+                $flat += $this->files($file, $prefix . $name . '.');
+            }
+        }
+
+        return $flat;
     }
 
     private function sorted(mixed $value): mixed

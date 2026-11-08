@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
+use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
@@ -287,6 +288,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
     }
 
     /**

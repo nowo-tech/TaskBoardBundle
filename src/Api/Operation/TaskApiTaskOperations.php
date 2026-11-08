@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
@@ -29,6 +31,7 @@ use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -71,6 +74,7 @@ final readonly class TaskApiTaskOperations
         private ValidatorInterface $validator,
         private TaskCommentManager $comments,
         private TaskMentionCandidatesResolverInterface $mentionCandidates,
+        private TaskApiAttachmentsInterface $attachments,
     ) {
     }
 
@@ -218,6 +222,24 @@ final readonly class TaskApiTaskOperations
         $this->audit->written($principal, 'comment.create', $task->getBoard(), $taskId, ['comment' => $comment->getId()]);
 
         return $comment;
+    }
+
+    /**
+     * `POST /v2/task/{id}/attachment` (multipart, field `attachment`): stored by the host, with all its upload checks (FR-014).
+     *
+     * @throws TaskApiRefusal
+     */
+    public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file): TaskApiAttachment
+    {
+        $this->audit->requireListener();
+        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        if (!$file instanceof UploadedFile || !$file->isValid()) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid attachment');
+        }
+        $attachment = $this->attachments->store($principal, $task, $file);
+        $this->audit->written($principal, 'attachment.create', $task->getBoard(), $taskId, ['attachment' => $attachment->id]);
+
+        return $attachment;
     }
 
     /**

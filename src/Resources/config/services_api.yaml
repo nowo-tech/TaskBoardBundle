@@ -54,6 +54,12 @@ services:
     Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations:
         public: true
 
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiTimeOperations:
+        public: true
+
+    # Since 2.2.0: selectable as `api.hooks.time_entries` by a host without its own time store.
+    Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries: ~
+
     Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener: ~
 
     Nowo\TaskBoardBundle\Api\Command\TaskApiPurgeIdempotencyCommand: ~

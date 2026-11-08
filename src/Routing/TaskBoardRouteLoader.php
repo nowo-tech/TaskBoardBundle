@@ -60,6 +60,9 @@ final class TaskBoardRouteLoader extends Loader
         'item_create'       => ['/v2/checklist/{checklistId}/checklist_item', TaskApiWriteController::class, 'createItem', 'POST'],
         'item_update'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'updateItem', 'PUT'],
         'item_delete'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'deleteItem', 'DELETE'],
+        'attachment_create' => ['/v2/task/{taskId}/attachment', TaskApiWriteController::class, 'addAttachment', 'POST'],
+        'time_log'          => ['/v2/team/{teamId}/time_entries', TaskApiWriteController::class, 'logTime', 'POST'],
+        'time_delete'       => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'deleteTime', 'DELETE'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -197,7 +200,7 @@ final class TaskBoardRouteLoader extends Loader
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+'],
                 [],
                 '',
                 [],

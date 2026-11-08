@@ -6,7 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Api\App;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use LogicException;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
@@ -29,16 +30,19 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 
 use function array_map;
+use function count;
+use function file_get_contents;
 use function in_array;
 
 /**
  * The host side of the API in the tests: one scriptable object behind every hook. Its state is static, as a test sets it
  * before the kernel handles the request.
  */
-final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiTimeEntriesInterface
+final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiTimeEntriesInterface, TaskApiAttachmentsInterface
 {
     /** @var array<string, array{email: string, level: TaskApiLevel, where: TaskApiWhere, id: string}> */
     public static array $tokens = [];
@@ -70,6 +74,14 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
     /** @var list<TaskApiTimeQuery> */
     public static array $timeQueries = [];
 
+    /** @var list<array{0: ?string, 1: TaskApiNewTimeEntry}> */
+    public static array $logged = [];
+
+    /** @var list<array{0: string, 1: string, 2: string}> */
+    public static array $stored = [];
+
+    public static bool $refuseUploads = false;
+
     /** A principal the firewall does not stand behind. */
     public static ?object $forcedUser = null;
 
@@ -92,6 +104,9 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
         self::$profilesEmpty      = false;
         self::$timeQueries        = [];
         self::$unknownEmails      = [];
+        self::$logged             = [];
+        self::$stored             = [];
+        self::$refuseUploads      = false;
     }
 
     public function authenticate(Request $request): TaskApiPrincipal|TaskApiAuthFailure
@@ -175,7 +190,19 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
 
     public function log(TaskApiPrincipal $principal, ?Task $task, TaskApiNewTimeEntry $entry): TaskApiTimeEntry
     {
-        throw new LogicException('Not in the read tests.');
+        self::$logged[] = [$task?->getId(), $entry];
+
+        return new TaskApiTimeEntry('entry-' . count(self::$logged), $this->apiId($principal->user), $entry->start, $entry->durationSeconds, $task?->getId(), $entry->description);
+    }
+
+    public function store(TaskApiPrincipal $principal, Task $task, UploadedFile $file): TaskApiAttachment
+    {
+        if (self::$refuseUploads) {
+            throw new TaskApiRefusal(403, 'FILE_002', 'Over the plan storage');
+        }
+        self::$stored[] = [$task->getId(), $file->getClientOriginalName(), (string) file_get_contents($file->getPathname())];
+
+        return new TaskApiAttachment('file-' . count(self::$stored), $file->getClientOriginalName(), '/files/file-' . count(self::$stored), (int) $file->getSize());
     }
 
     public function apiId(object $user): string
