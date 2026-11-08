@@ -189,8 +189,10 @@ Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
 | Threat | Mitigation |
 |---|---|
 | Changing a series without the right | The page and every action need `canEditTask()`; an unseen task answers 404, a read-only one 403; each action has its own CSRF token |
+| A task participant as author (audit IC-I6) | Spec 215 lets whoever may edit the task make it recurring, so a participant without `canEditBoard()` can become an author. The host re-checks the author's `canEditBoard()` before each `createOccurrence()` (spec 215, FR-014) and pauses the series otherwise. Keys come from `dueKey()` and `completionKey()` only; a `done:` key whose task is not an occurrence of the series creates nothing |
 | A worker creating tasks nobody may create | No scheduler in the bundle: the host checks its plan and the author's access before `createOccurrence()`; the copier still asks `QUOTA_CHECK` and refuses before writing. An author erased or gone pauses the series (`forgetAuthor()`, or no author at run time) |
 | Duplicate occurrences | One row per series and key, unique, written with the task in one transaction; retries, re-runs and redeliveries create nothing more. A lost race returns null after Doctrine closes the entity manager: the worker resets it |
+| A refusal leaving the worker unusable, listeners acting too early (audit IC-I3) | Every refusal of `createOccurrence()`, the host's quota included, comes before its transaction, so `block()` still works; the new tasks' events wait for the commit and are dropped if it fails |
 | A flood after downtime | Only the latest missed date is created; older ones are recorded as missed |
 | Copying what must not travel | The `TaskCopier` rules: never comments, time, history, dependencies, links, sync rows or the number; members only while assignable |
 | Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |

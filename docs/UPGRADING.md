@@ -200,7 +200,7 @@ Audit status: re-verification pending.
    ```
 
    MySQL: the same columns with `DATETIME`, `TINYINT(1)` and `JSON`; SQLite: `DATETIME`, `BOOLEAN` and `CLOB`. `author_id` has the type of your user's id.
-3. **Schedule** (the bundle has none): every few minutes, for each of `TaskRecurrenceManager::dueSeries()`, check the plan and the author's access, then `createOccurrence($series, $manager->dueKey($series))` in a worker; on `TASK_COMPLETED`, `completionKey($task)` gives the series and key of an after-completion occurrence. Both are idempotent. On a plan refusal call `block($series)`; an author without access, `pause($series, TaskRecurrence::REASON_AUTHOR)`. `createOccurrence()` asks `QUOTA_CHECK` `task_create` as any new task does, and throws `TaskCopyRefusedException` before writing.
+3. **Schedule** (the bundle has none): every few minutes, for each of `TaskRecurrenceManager::dueSeries()`, check the plan and the author's access, then `createOccurrence($series, $manager->dueKey($series))` in a worker; on `TASK_COMPLETED`, `completionKey($task)` gives the series and key of an after-completion occurrence. Both are idempotent. On a plan refusal call `block($series)`; an author without access, `pause($series, TaskRecurrence::REASON_AUTHOR)`. `createOccurrence()` asks `QUOTA_CHECK` `task_create` once, before its transaction, as any new task does, and throws `TaskCopyRefusedException` before writing, with the entity manager still open. The events of the new tasks are dispatched after the commit. Pass only keys from `dueKey()` and `completionKey()`.
 4. **Erasure:** call `forgetAuthor($user)` from your account erasure: their series pause and forget their name.
 5. **History label:** the created row of an occurrence has the context `recurring`.
 

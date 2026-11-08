@@ -153,9 +153,20 @@ final readonly class TaskCopier
         if ($fingerprint !== null && $this->preview($source, $options, $actor)->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
-        $tree = $this->check($source, $options, $actor);
 
-        $write = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
+        return $this->copyChecked($source, $options, $actor, $this->check($source, $options, $actor));
+    }
+
+    /**
+     * Since 2.3.0 (audit IC-I3): the writes of {@see self::copy()} for a caller that ran {@see self::check()} before its own
+     * transaction, so that no refusal (the host's quota) is asked inside it. `$tree` is what `check()` returned.
+     *
+     * @param list<Task> $tree
+     */
+    public function copyChecked(Task $source, TaskCopyOptions $options, object $actor, array $tree): TaskCopyResult
+    {
+        $target = $options->targetBoard ?? $source->getBoard();
+        $write  = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
             $shift   = $this->shiftDays($source, $options);
             $copies  = [];
             $dropped = [];

@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceRule;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
 use stdClass;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function array_map;
 
@@ -230,6 +231,42 @@ final class TaskRecurrenceManagerTest extends CopyTestCase
         $this->quota()->deny = [];
         self::assertInstanceOf(Task::class, $this->manager()->createOccurrence($series, 'date:2026-12-01'));
         self::assertNull($series->getReason());
+    }
+
+    public function testAQuotaRefusalLeavesTheEntityManagerOpenAndEventsWaitForTheCommit(): void
+    {
+        $task                = $this->dated('Invoices', '2026-11-01');
+        $series              = $this->manager()->create($task, $this->monthly(), $this->owner);
+        $this->quota()->deny = [TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE];
+
+        $this->assertRefused('quota', fn () => $this->manager()->createOccurrence($series, 'date:2026-12-01'));
+        self::assertTrue($this->em->isOpen(), 'audit IC-I3: the refusal comes before the transaction');
+        self::assertCount(1, $this->quota()->asked, 'asked once');
+        $this->manager()->block($series);
+        self::assertSame(TaskRecurrence::REASON_PLAN, $series->getReason());
+
+        $this->quota()->deny = [];
+        $inTransaction       = [];
+        $dispatcher          = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener('nowo_task_board.task_created', function () use (&$inTransaction): void {
+            $inTransaction[] = $this->em->getConnection()->isTransactionActive();
+        });
+        self::assertInstanceOf(Task::class, $this->manager()->createOccurrence($series, 'date:2026-12-01'));
+        self::assertSame([false], $inTransaction, 'TASK_CREATED after the commit');
+        self::assertCount(2, $this->quota()->asked, 'still asked once per occurrence');
+    }
+
+    public function testACompletionKeyOfAnotherSeriesCreatesNothing(): void
+    {
+        $mine   = $this->dated('Water', '2026-11-03');
+        $series = $this->manager()->create($mine, new TaskRecurrenceRule(TaskRecurrenceRule::MODE_AFTER_COMPLETION, 'day', 3, new DateTimeImmutable()), $this->owner);
+        $other  = $this->dated('Unrelated', '2026-11-03');
+        $other->markCompleted();
+        $this->em->flush();
+
+        self::assertNull($this->manager()->createOccurrence($series, 'done:' . $other->getId()), 'audit IC-I6');
+        self::assertSame(TaskRecurrence::STATUS_ACTIVE, $series->getStatus());
     }
 
     public function testAuthorErasureLatestDeletedAndTheEnd(): void
