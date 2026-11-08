@@ -80,11 +80,16 @@ final readonly class TaskApiWriteController
 
     public function addAttachment(Request $request, string $taskId): JsonResponse
     {
-        $file       = $request->files->get('attachment');
-        $attachment = $this->tasks->addAttachment($this->principal($request), $taskId, $file instanceof UploadedFile ? $file : null);
-        $extension  = pathinfo($attachment->title, PATHINFO_EXTENSION);
+        // The form fields besides the file are read for their warnings only.
+        /** @var array<string, mixed> $fields */
+        $fields              = $request->request->all();
+        $input               = new TaskApiInput($fields, ['filename', 'custom_task_ids', 'team_id']);
+        $file                = $request->files->get('attachment');
+        [$task, $attachment] = $this->tasks->addAttachment($this->principal($request), $taskId, $file instanceof UploadedFile ? $file : null);
+        $extension           = pathinfo($attachment->title, PATHINFO_EXTENSION);
+        TaskApiIdempotencyListener::target($request, $task->getBoard());
 
-        return new JsonResponse([
+        return $this->answer([
             'id'              => $attachment->id,
             'version'         => '0',
             'date'            => (string) $this->clock->now()->format('Uv'),
@@ -93,18 +98,19 @@ final readonly class TaskApiWriteController
             'thumbnail_small' => null,
             'thumbnail_large' => null,
             'url'             => $attachment->url,
-        ]);
+        ], $input);
     }
 
     public function logTime(Request $request, string $teamId): JsonResponse
     {
-        $input = $this->input($request, TaskApiTimeOperations::NOT_SUPPORTED);
-        $entry = $this->time->logTime($this->principal($request), $teamId, $input);
+        $input          = $this->input($request, TaskApiTimeOperations::NOT_SUPPORTED);
+        [$task, $entry] = $this->time->logTime($this->principal($request), $teamId, $input);
+        TaskApiIdempotencyListener::target($request, $task?->getBoard());
 
         return $this->answer(['data' => $this->serializer->timeEntry($entry, $teamId)], $input);
     }
 
-    /** Tracked time is never deleted through the API (owner, Q-O7). */
+    /** Tracked time is never deleted through the API (owner, Q-O7): refused before anything is read or looked up. */
     public function deleteTime(): JsonResponse
     {
         throw new TaskApiRefusal(403, 'TIME_002', 'Time entries are not deleted through the API');

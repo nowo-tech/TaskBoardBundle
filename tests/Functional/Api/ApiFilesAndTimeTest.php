@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
+use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
@@ -48,6 +49,15 @@ final class ApiFilesAndTimeTest extends ApiTestCase
         self::assertSame([[$this->own->getId(), 'notes.txt', 'hello']], ApiTestHost::$stored);
     }
 
+    public function testExtraFormFieldsAreWarnedAbout(): void
+    {
+        $path = (string) tempnam(sys_get_temp_dir(), 'tb-api');
+        file_put_contents($path, 'x');
+        $this->client->request('POST', '/api/tasks/v2/task/' . $this->own->getId() . '/attachment', ['filename' => 'renamed.txt', 'other' => '1'], ['attachment' => new UploadedFile($path, 'x.txt', null, null, true)], ['HTTP_AUTHORIZATION' => self::TOKEN]);
+
+        self::assertSame([['field' => 'filename', 'reason' => 'not_supported'], ['field' => 'other', 'reason' => 'unknown']], $this->json()['warnings']);
+    }
+
     public function testAFileRefusedByTheHostOrMissingIsRefused(): void
     {
         ApiTestHost::$refuseUploads = true;
@@ -76,6 +86,19 @@ final class ApiFilesAndTimeTest extends ApiTestCase
         $this->upload($this->own, 'a.txt', 'other bytes', 'up-1');
         $this->assertRefused(409, 'IDEMP_002');
         self::assertCount(1, ApiTestHost::$stored);
+
+        // A nested file counts too.
+        foreach (['one', 'two'] as $index => $bytes) {
+            $path = (string) tempnam(sys_get_temp_dir(), 'tb-api');
+            file_put_contents($path, $bytes);
+            $main = (string) tempnam(sys_get_temp_dir(), 'tb-api');
+            file_put_contents($main, 'same');
+            $this->client->request('POST', '/api/tasks/v2/task/' . $this->own->getId() . '/attachment', [], [
+                'attachment' => new UploadedFile($main, 'm.txt', null, null, true),
+                'extra'      => ['nested' => new UploadedFile($path, 'n.txt', null, null, true)],
+            ], ['HTTP_AUTHORIZATION' => self::TOKEN, 'HTTP_IDEMPOTENCY_KEY' => 'up-2']);
+            $index === 0 ? self::assertResponseIsSuccessful() : $this->assertRefused(409, 'IDEMP_002');
+        }
     }
 
     public function testTimeIsLoggedForTheTokensOwnPerson(): void
@@ -91,6 +114,16 @@ final class ApiFilesAndTimeTest extends ApiTestCase
         $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['start' => 1790000000000, 'duration' => 60000]);
         self::assertResponseIsSuccessful('without a task, the host decides');
         self::assertNull(ApiTestHost::$logged[1][0]);
+    }
+
+    public function testTimeWithoutATaskIsReplayedForAnyWhere(): void
+    {
+        $this->issueToken(where: TaskApiWhere::limitedTo([], [$this->roadmap->getId()]));
+        $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['start' => 1790000000000, 'duration' => 60000], ['HTTP_IDEMPOTENCY_KEY' => 'time-1']);
+        $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['start' => 1790000000000, 'duration' => 60000], ['HTTP_IDEMPOTENCY_KEY' => 'time-1']);
+
+        self::assertSame('true', $this->client->getResponse()->headers->get('Idempotency-Replayed'));
+        self::assertCount(1, ApiTestHost::$logged);
     }
 
     public function testTimeRefusals(): void

@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 
 use function intdiv;
@@ -43,8 +44,10 @@ final readonly class TaskApiTimeOperations
      * `POST /v2/team/{team_id}/time_entries`: `start` and `duration` in milliseconds, `tid` (a task), `description`.
      *
      * @throws TaskApiRefusal
+     *
+     * @return array{0: ?Task, 1: TaskApiTimeEntry}
      */
-    public function logTime(TaskApiPrincipal $principal, string $teamId, TaskApiInput $input): TaskApiTimeEntry
+    public function logTime(TaskApiPrincipal $principal, string $teamId, TaskApiInput $input): array
     {
         $this->audit->requireListener();
         if (!$this->planGate->allowsTasks($principal->user, null)) {
@@ -74,7 +77,7 @@ final readonly class TaskApiTimeOperations
         $entry = $this->timeEntries->log($principal, $task, new TaskApiNewTimeEntry($teamId, $start, intdiv($duration, 1000), $description));
         $this->audit->written($principal, 'time.log', $task?->getBoard(), $task?->getId(), ['entry' => $entry->id]);
 
-        return $entry;
+        return [$task, $entry];
     }
 
     /**

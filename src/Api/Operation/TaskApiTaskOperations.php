@@ -240,8 +240,10 @@ final readonly class TaskApiTaskOperations
      * `POST /v2/task/{id}/attachment` (multipart, field `attachment`): stored by the host, with all its upload checks (FR-014).
      *
      * @throws TaskApiRefusal
+     *
+     * @return array{0: Task, 1: TaskApiAttachment}
      */
-    public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file): TaskApiAttachment
+    public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file): array
     {
         $this->audit->requireListener();
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
@@ -251,7 +253,7 @@ final readonly class TaskApiTaskOperations
         $attachment = $this->attachments->store($principal, $task, $file);
         $this->audit->written($principal, 'attachment.create', $task->getBoard(), $taskId, ['attachment' => $attachment->id]);
 
-        return $attachment;
+        return [$task, $attachment];
     }
 
     /**

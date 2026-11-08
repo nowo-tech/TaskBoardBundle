@@ -183,10 +183,13 @@ final readonly class TaskApiGuard
 
     /**
      * Whether an answer kept for this token may be given again: what the write touched is still within reach. A board that
-     * is gone leaves its tenant, which where and the tenant check must still reach.
+     * is gone leaves its tenant, which where and the tenant check must still reach. A write that touched no board needs nothing more.
      */
     public function mayReplay(TaskApiPrincipal $principal, ?string $tenantKey, ?string $boardId): bool
     {
+        if ($tenantKey === null && $boardId === null) {
+            return true; // the write touched no board (time logged without a task): the token is all there is to check
+        }
         $board = $boardId === null ? null : $this->boards->findById($boardId);
         if ($board instanceof TaskBoard) {
             return $this->reachesBoard($principal, $board);
