@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Move;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Copy\TaskColumnRule;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -46,6 +47,9 @@ final readonly class TaskMovePlanner
 {
     /** `move.max_subtasks`. */
     public const DEFAULT_MAX_SUBTASKS = 200;
+
+    /** The sync items' table ({@see TaskSyncItem}), read through DBAL when the sync entities are not mapped. */
+    private const SYNC_ITEMS = 'task_board_sync_items';
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -131,7 +135,7 @@ final readonly class TaskMovePlanner
         $labels = array_values(array_unique($labels));
         sort($labels);
         $comments = $this->entityManager->getRepository(TaskComment::class)->count(['task' => $ids]);
-        $synced   = $this->syncMapped() ? $this->entityManager->getRepository(TaskSyncItem::class)->count(['task' => $ids]) : 0;
+        $synced   = $this->syncMapped() ? $this->entityManager->getRepository(TaskSyncItem::class)->count(['task' => $ids]) : $this->unmappedItems($ids);
         $fields   = $this->syncMapped() ? $this->importedFields($ids) : [];
         $number   = $this->numberScope instanceof TaskNumberScope && $this->numberScope->keyOf($source) !== $this->numberScope->keyOf($target);
         $columns  = array_values($columns);
@@ -231,6 +235,40 @@ final readonly class TaskMovePlanner
     public function syncMapped(): bool
     {
         return $this->syncEnabled || !$this->entityManager->getMetadataFactory()->isTransient(TaskSyncItem::class);
+    }
+
+    /**
+     * Audit IC-I5: with sync off the sync tables are not mapped, but a host that used sync still has them. How many live
+     * items point at these tasks, read with DBAL; 0 without the table.
+     *
+     * @param list<string> $ids
+     */
+    public function unmappedItems(array $ids): int
+    {
+        $connection = $this->entityManager->getConnection();
+        if ($ids === [] || !$connection->createSchemaManager()->tablesExist([self::SYNC_ITEMS])) {
+            return 0;
+        }
+
+        return (int) $connection->fetchOne('SELECT COUNT(*) FROM ' . self::SYNC_ITEMS . ' WHERE task_id IN (?)', [$ids], [ArrayParameterType::STRING]);
+    }
+
+    /**
+     * Audit IC-I5: the tombstone of {@see TaskSyncItem::detach()} through DBAL, for items whose table exists but is not mapped
+     * (sync turned off). Without the `detached_task_id` column (not migrated yet) the items still become tombstones.
+     *
+     * @param list<string> $ids
+     */
+    public function detachUnmappedItems(array $ids): int
+    {
+        if ($this->unmappedItems($ids) === 0) {
+            return 0;
+        }
+        $connection = $this->entityManager->getConnection();
+        $columns    = $connection->createSchemaManager()->listTableColumns(self::SYNC_ITEMS);
+        $detached   = isset($columns['detached_task_id']) ? 'detached_task_id = task_id, ' : '';
+
+        return (int) $connection->executeStatement('UPDATE ' . self::SYNC_ITEMS . ' SET ' . $detached . 'task_id = NULL WHERE task_id IN (?)', [$ids], [ArrayParameterType::STRING]);
     }
 
     /**

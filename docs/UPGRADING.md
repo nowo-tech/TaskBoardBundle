@@ -170,13 +170,14 @@ Audit status: re-verification pending.
 2. **Plan limits.** The routes are POST `task_move_board` and `task_duplicate` (and their tenant copies). A duplicate asks `QUOTA_CHECK` `task_create` with the count of tasks it creates; a move asks `task_move` with the count of open tasks that arrive. A host that limits by route adds the duplicate route; a host that calls `TaskCopier` from a worker asks its own limits first, since the event may have no listener there.
 3. **Tracked time.** Listen to `TaskBoardEvents::TASK_BOARD_CHANGED`: `TaskBoardChangedEvent::$taskIds` lists every moved task. Update what you keep per task: TimeTrack's `board_id_snapshot` on `TimeEntry` and `ActiveTimer` (see TimeTrack), files bound to the board, audit rows. The bundle's manual entries are already updated, and no row is ever deleted.
 4. **Strings and icons.** `task_board.copy.*` in the bundle's 7 locales. A host on `ux_icon` imports `tabler:arrows-move` and `tabler:copy`.
-5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` becomes a tombstone (`task` null) that remembers the task in the new column `detached_task_id`, so the panel still shows its provider data (`remote_meta`, `custom_id`) read-only and the people tools still erase it there. Imported field values stay on the task, hidden on the target board: the panel and the list search show only the fields of a task's own board. Nothing is deleted, and the source board's erasure still reaches them (owner, decision 4). With the sync tables mapped (sync on, or mapped by an earlier config), add the column:
+5. **Synced tasks.** A moved synced task is detached for good: its `TaskSyncItem` becomes a tombstone (`task` null) that remembers the task in the new column `detached_task_id`, so the panel still shows its provider data (`remote_meta`, `custom_id`) read-only and the people tools still erase it there. Imported field values stay on the task, hidden on the target board: the panel, the list search and the Task API show only the fields of a task's own board (same response shape, fewer values). Nothing is deleted, and the source board's erasure still reaches them (owner, decision 4). With the sync tables mapped (sync on, or mapped by an earlier config), add the column:
 
    ```sql
    -- PostgreSQL and MySQL
    ALTER TABLE task_board_sync_items ADD detached_task_id VARCHAR(36) DEFAULT NULL;
    CREATE INDEX idx_task_board_sync_items_detached ON task_board_sync_items (detached_task_id);
-   ALTER TABLE task_board_sync_items ADD CONSTRAINT fk_task_board_sync_items_detached FOREIGN KEY (detached_task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   ALTER TABLE task_board_sync_items ADD CONSTRAINT FK_3BD8DF5A4F92A733 FOREIGN KEY (detached_task_id) REFERENCES task_board_tasks (id) ON DELETE SET NULL;
+   -- The foreign key's name is the one Doctrine generates, so schema validation reports no rename.
    -- SQLite: ALTER TABLE task_board_sync_items ADD COLUMN detached_task_id VARCHAR(36) DEFAULT NULL REFERENCES task_board_tasks (id) ON DELETE SET NULL;
    ```
 

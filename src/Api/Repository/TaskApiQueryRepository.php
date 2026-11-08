@@ -318,7 +318,10 @@ final readonly class TaskApiQueryRepository
             ->select('v', 'f')
             ->from(TaskSyncFieldValue::class, 'v')
             ->join('v.field', 'f')
+            ->join('v.task', 't')
             ->where('v.task IN (:tasks)')
+            // Since 2.3.0 (spec 217, owner decision 4): only the fields of the task's own board, as the panel shows them.
+            ->andWhere('f.board = t.board')
             ->setParameter('tasks', $taskIds)
             ->orderBy('f.position', 'ASC')
             ->getQuery()
