@@ -90,6 +90,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Spec 213, owner decision D-20261108-13 (Beacon): logging time through the Task API follows the time-tracking right, not the task's edit right. A host that does not answer the new decision keeps today's behaviour.
+
+### Added
+
+- **`TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`) and `TaskBoardResourceAccessChecker::canTrackTime()`.** `TASK_ACCESS_CHECK` now carries an action (`getAction()`, `ACTION_VIEW` by default, as before). For `track_time`, `grant()` lets a person who may view the task log time on it without the edit right, and `deny()` refuses it even to an editor. With no answer, or a grant marked read-only, the edit right decides (`canEditTask()`), so a listener that ignores the action answers as before. Viewing the task is always required.
+- **`TaskApiGuard::taskToTrackTime()`.** Reach and level as before (*My tasks*: its own tasks only; *Read*: 403 `TOKEN_001`), then `canTrackTime()`.
+
+### Changed
+
+- **`POST /v2/team/{team_id}/time_entries` with a `tid`** asks `canTrackTime()` instead of `canEditTask()`: a project member who may track time but not edit the task is no longer refused 403 `ACCESS_002` before the host's time hook runs, when the host grants `track_time`. Listing time (`GET …/time_entries`, read level) and deleting time (always 403 `TIME_002`) are unchanged; the API has no time update route. The task page's *Log time* form (the bundle's manual entries) still needs the edit right.
+
+### Security
+
+- Audit status: re-verification pending.
+
 ## [2.3.1] - 2026-11-08
 
 Every lock conflict of a board move ends as "changed since" (`stale`) when the move owns the transaction, and the entity manager is closed after a failed apply (audit IC-I9r, IG).

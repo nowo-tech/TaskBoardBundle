@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.4.0](#to-240)
 - [To 2.3.1](#to-231)
 - [To 2.3.0](#to-230)
   - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
@@ -159,6 +160,30 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.4.0
+
+No schema or configuration change. **A host that changes nothing keeps today's behaviour exactly**: logging time on a task through the Task API still needs the edit right.
+
+Spec 213 (Beacon decision D-20261108-13): `POST /v2/team/{team_id}/time_entries` with a `tid` now asks `TaskBoardResourceAccessChecker::canTrackTime()`, which dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`):
+
+- `grant()`: the person may log time on the task without the edit right (for example a project member who may use the timer);
+- `deny()`: refused (403 `ACCESS_002`) even to an editor;
+- no answer, or `grant()` with `markReadOnly()`: the edit right decides, as before.
+
+The person must still see the task, and the token's level still applies (*My tasks*: its own tasks only; *Read*: refused). Deleting time stays refused.
+
+**Check your `TASK_ACCESS_CHECK` listeners.** The event is now dispatched a second time for a time log, with `getAction()` returning `track_time`. A listener that ignores the action gives the same answer for both and keeps the old result. A listener that should answer only for viewing must return early when `$event->getAction() !== TaskAccessCheckEvent::ACTION_VIEW`. To let time trackers log time:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::TASK_ACCESS_CHECK)]
+public function onTaskAccess(TaskAccessCheckEvent $event): void
+{
+    if ($event->getAction() === TaskAccessCheckEvent::ACTION_TRACK_TIME && $this->mayTrackTime($event->getSubject(), $event->getTask())) {
+        $event->grant();
+    }
+}
+```
 
 ## To 2.3.1
 

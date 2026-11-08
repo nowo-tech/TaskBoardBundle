@@ -23,7 +23,8 @@ use function mb_strlen;
 
 /**
  * Since 2.2.0 (spec 213): time through the host's time store. A token logs its own person's time only. Deleting time is
- * never offered (owner, Q-O7): `DELETE …/time_entries/{id}` is refused before anything is looked up.
+ * never offered (owner, Q-O7): `DELETE …/time_entries/{id}` is refused before anything is looked up. Since 2.4.0 a time
+ * log on a task asks the time-tracking decision ({@see TaskApiGuard::taskToTrackTime()}) instead of the edit right.
  */
 final readonly class TaskApiTimeOperations
 {
@@ -55,7 +56,8 @@ final readonly class TaskApiTimeOperations
         }
         $this->requireTeam($principal, $teamId);
         $taskId = $input->string('tid');
-        $task   = $taskId === null ? null : $this->guard->task($principal, $taskId, TaskApiCapability::WorkOnTask);
+        // Since 2.4.0 (D-20261108-13): the time-tracking decision, not the edit right (which stays its fallback).
+        $task = $taskId === null ? null : $this->guard->taskToTrackTime($principal, $taskId);
         if ($task === null) {
             $this->guard->requireLevel($principal, TaskApiCapability::WorkOnTask);
         }

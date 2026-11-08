@@ -83,6 +83,10 @@ Levels are not a chain: *Read* changes nothing, while *My tasks* works on its ow
 
 **Notes for hosts.** The security-user check compares ids, not classes: a firewall user of another class with the same id would pass, so use one user class for the API's firewall. An `access_control` refusal on the API's path answers 403 `ACCESS_002`, not 401: add none there. A token whose user the access checker refuses answers 401 like a bad token and counts as a failed token.
 
+### Logging time
+
+Since 2.4.0, `POST /v2/team/{team_id}/time_entries` with a `tid` checks `TaskBoardResourceAccessChecker::canTrackTime()` where other task writes check `canEditTask()`. It dispatches `TASK_ACCESS_CHECK` with `TaskAccessCheckEvent::ACTION_TRACK_TIME` (`track_time`): `grant()` allows a person who may view the task to log time on it without editing it, `deny()` refuses an editor too (403 `ACCESS_002`), and with no answer (or a grant marked read-only) the edit right decides, as before 2.4.0. Reach and level are checked first, as for every task: *My tasks* logs time on its own tasks only, *Read* is refused (`TOKEN_001`). Listing time needs only the read level and is unchanged; deleting time is always refused; there is no update route.
+
 ## Read endpoints
 
 Paths after `api.prefix`. *Level* is the least a token needs; the person's access and where still apply.
@@ -126,7 +130,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
 | `POST /v2/checklist/{id}/checklist_item`, `PUT`, `DELETE …/checklist_item/{item}` | My tasks (own) | An item is a subtask tagged `checklist:<name>`, counted against the plan's active tasks. `resolved` moves it to the done column or back to the first. *My tasks* assigns an item only to its own person. Deleting archives it. Items are edited under the parent task's right, whoever created them; any editor who tags a subtask `checklist:<name>` makes it an item, visible to a *My tasks* token of the parent |
 | `POST /v2/task/{id}/attachment` | Tasks | Multipart, field `attachment`. The host stores it through `TaskApiAttachmentsInterface`, with all its upload checks (content sniffing, plan storage, sizes); its refusal is the answer. The file's bytes are part of an idempotency key's request |
-| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
+| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. With `tid`, the person needs the time-tracking decision, not the edit right (since 2.4.0; see [Logging time](#logging-time)). Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
 ## Management endpoints (Full)
