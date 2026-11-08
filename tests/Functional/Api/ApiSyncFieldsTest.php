@@ -58,6 +58,26 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertSame([['id' => $field->getId(), 'name' => 'Story points', 'type' => 'number', 'value' => 8]], $this->json()['custom_fields']);
     }
 
+    public function testAMovedTasksImportedValuesAreHiddenOnTheTargetBoard(): void
+    {
+        // Spec 217, owner decision 4: a value of another board's field (a task moved off its board) is not returned.
+        ApiTestHost::$tenants = ['tenant-a'];
+        $source               = $this->board(tenantKey: 'tenant-a');
+        $target               = $this->board(tenantKey: 'tenant-a');
+        $task                 = $this->task($target, 'Moved here');
+        $now                  = new DateTimeImmutable('@1790000000');
+        $field                = new TaskSyncField($source, 'clickup', 'cf-1', $now);
+        $field->define('Story points', SyncFieldType::Number, 'number', [], [], 0, $now);
+        $this->em->persist($field);
+        $this->em->persist(new TaskSyncFieldValue($field, $task, 8, '8', $now));
+        $this->em->flush();
+        $this->issueToken();
+
+        $this->get('/api/tasks/v2/task/' . $task->getId());
+        self::assertSame([], $this->json()['custom_fields']);
+        self::assertCount(1, $this->em->getRepository(TaskSyncFieldValue::class)->findAll(), 'kept');
+    }
+
     public function testTheHostsLimitOfActiveTasksRefusesAReopening(): void
     {
         // The limit TaskManager asks when a completed task leaves the done column (sync.limit_checker), as in the UI.

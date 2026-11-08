@@ -93,7 +93,7 @@ From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $
 | Tracked time | Stays on the task, never deleted; snapshots follow | Never copied (the copy starts at 0) |
 | Members | Kept when assignable on the target, else removed (without an assignee provider, everyone is assignable) | Copied when assignable, by option |
 | Access | `canEditTask()` on every task that moves, else refused | Subtasks the user cannot view are left out |
-| Imported fields | Kept on the task, hidden on the target board (the panel and the list search show only the fields of the task's own board); nothing is deleted, and the source board's erasure still reaches them | Never copied |
+| Imported fields | Kept on the task, hidden on the target board (the panel, the list search and the Task API show only the fields of the task's own board); nothing is deleted, and the source board's erasure still reaches them | Never copied |
 | Dependencies | Kept inside the tree; with tasks that stay, removed | Never copied |
 | Column | Same name, or chosen; completed tasks to the last column | The same rule, always open |
 | Provider link | Detached for good | Never copied |
