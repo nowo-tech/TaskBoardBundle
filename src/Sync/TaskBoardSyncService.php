@@ -143,8 +143,11 @@ final readonly class TaskBoardSyncService
             $connection->setLocation($location);
         }
         $map = StatusColumns::clean($statusColumnMap, $board);
+        // Since 2.5.0 (TB-13): "__create" columns only for an actor who may manage the board's columns; otherwise the
+        // status stays unresolved and its tasks go where an unmapped status goes.
+        $mayCreate = $this->columnManager instanceof BoardColumnManager && $this->accessChecker->canManageColumns($actor, $board);
         foreach ($map as $entry) {
-            if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
+            if ($entry['column'] === StatusColumns::CREATE && $mayCreate && !$this->hasColumnNamed($board, $entry['status'])) {
                 $connection->addCreatedColumn($this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)))->getId()); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
@@ -159,19 +162,22 @@ final readonly class TaskBoardSyncService
 
     /**
      * Since 1.25: replaces the status → column map of a linked board (the connection page); "__create" columns are
-     * created now.
+     * created now. Since 2.5.0 a caller acting for a person passes them as `$actor` (TB-13); without one (a host job),
+     * no column decision is asked.
      *
      * @param iterable<mixed> $statusColumnMap
      */
-    public function updateStatusColumnMap(TaskBoard $board, iterable $statusColumnMap): ?TaskBoardConnection
+    public function updateStatusColumnMap(TaskBoard $board, iterable $statusColumnMap, ?object $actor = null): ?TaskBoardConnection
     {
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             return null;
         }
         $map = StatusColumns::clean($statusColumnMap, $board);
+        // Since 2.5.0 (TB-13): with an actor, "__create" columns only when they may manage the board's columns.
+        $mayCreate = $this->columnManager instanceof BoardColumnManager && ($actor === null || $this->accessChecker->canManageColumns($actor, $board));
         foreach ($map as $entry) {
-            if ($entry['column'] === StatusColumns::CREATE && $this->columnManager instanceof BoardColumnManager && !$this->hasColumnNamed($board, $entry['status'])) {
+            if ($entry['column'] === StatusColumns::CREATE && $mayCreate && !$this->hasColumnNamed($board, $entry['status'])) {
                 $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
             }
         }

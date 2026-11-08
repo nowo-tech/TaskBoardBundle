@@ -271,6 +271,23 @@ final class UnmatchedColumnsTest extends SyncPeopleFunctionalTestCase
         self::assertStringContainsString('unmatched_columns_denied', $this->codes($report));
     }
 
+    /** Since 2.5.0 (TB-13): deleting the unmatched columns is column management. */
+    public function testWithoutTheColumnDecisionNothingIsDeleted(): void
+    {
+        $board = $this->boardWithColumns('Spare', 'Doing');
+        $this->statuses(['Doing']);
+        $this->linked($board);
+        $this->put($this->row('t1', 'One', 1, status: 'Doing'));
+        $this->dispatcher()->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS) {
+                $event->deny();
+            }
+        });
+        $report = $this->sync($board);
+        self::assertSame(['Doing', 'Spare'], $this->columnNames($board));
+        self::assertStringContainsString('unmatched_columns_denied', $this->codes($report));
+    }
+
     public function testUnreadableStatusesKeepEverything(): void
     {
         $board = $this->boardWithColumns('Spare', 'Doing');

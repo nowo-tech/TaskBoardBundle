@@ -46,6 +46,8 @@
 
     {{ include('@NowoTaskBoardBundle/manage/_task_window_notice.html.twig') }}
 
+    {#- Since 2.5.0 (TB-13): canManageColumns false hides Add column, the column dialogs and the column sets. -#}
+    {% set _manageColumns = (canEditBoard ?? true) and (canManageColumns ?? true) %}
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
@@ -57,16 +59,18 @@
         {% if nowo_task_board_ui.board_toolbar %}
         <div class="nowo-task-board__toolbar">
             {% if (canEditBoard ?? true) %}
+            {% if _manageColumns %}
             <p class="nowo-task-board__hint">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrows-sort'}) }} {{ 'task_board.board.reorder_hint'|trans({}, 'NowoTaskBoardBundle') }}
             </p>
+            {% endif %}
             {# Since 1.11: column sets (save this board's columns, add the columns of a set). #}
-            {% if columnSetForm is defined and columnSetApplyForm is defined %}
+            {% if _manageColumns and columnSetForm is defined and columnSetApplyForm is defined %}
                 {{ include('@NowoTaskBoardBundle/manage/_column_sets_dialogs.html.twig') }}
             {% endif %}
             {% endif %}
         </div>
-        {% elseif (canEditBoard ?? true) and columnSetForm is defined and columnSetApplyForm is defined %}
+        {% elseif _manageColumns and columnSetForm is defined and columnSetApplyForm is defined %}
             {{ include('@NowoTaskBoardBundle/manage/_column_sets_dialogs.html.twig') }}
         {% endif %}
 
@@ -85,7 +89,7 @@
                 {% endfor %}
             {% endblock %}
 
-            {% if (canEditBoard ?? true) %}
+            {% if _manageColumns %}
             <div class="nowo-task-board__add-column">
                 <button
                     type="button"
@@ -102,8 +106,10 @@
 
         {% if (canEditBoard ?? true) %}
             {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig') }}
-            {{ include('@NowoTaskBoardBundle/manage/_add_column_modal.html.twig') }}
-            {{ include('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig') }}
+            {% if _manageColumns %}
+                {{ include('@NowoTaskBoardBundle/manage/_add_column_modal.html.twig') }}
+                {{ include('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig') }}
+            {% endif %}
         {% endif %}
     </div>
 {% endblock %}

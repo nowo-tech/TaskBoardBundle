@@ -71,7 +71,8 @@ final readonly class UnmatchedColumnsCleaner
 
             return;
         }
-        if (!$this->accessChecker->canEditBoard($ctx->actor, $ctx->board)) {
+        // Since 2.5.0 (TB-13): deleting columns is column management.
+        if (!$this->accessChecker->canManageColumns($ctx->actor, $ctx->board)) {
             $ctx->warn('unmatched_columns_denied');
 
             return;

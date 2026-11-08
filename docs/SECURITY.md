@@ -75,8 +75,9 @@
 
 1. **Route level** — `TaskBoardAccessCheckerInterface` (default: role-based via `ConfigurableTaskBoardAccessChecker`).
 2. **Resource level** — `TaskBoardResourceAccessChecker` (board creator, team members, task members, `security.manage_roles`; toggle with `security.resource_scoping`), overridable by `BOARD_LIST_QUERY`, `BOARD_ACCESS_CHECK` and `TASK_ACCESS_CHECK` listeners.
-3. **Logging time through the Task API** (since 2.4.0) — `canTrackTime()`: view access plus the host's `TaskAccessCheckEvent::ACTION_TRACK_TIME` decision; with no answer (or a grant marked read-only), the edit right, as before. `deny()` refuses even an editor and sticks against a later `grant()`.
-4. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
+3. **Managing columns** (since 2.5.0) — `canManageColumns()`: `canEditBoard()` plus the host's `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` decision (granted by default). Every path that changes a board's columns asks it: the seven column and column-set routes, the Task API status paths, a file import that would add columns and a provider sync (its actor). `deny()` sticks against a later `grant()`. Controls the user may not use are not rendered.
+4. **Logging time through the Task API** (since 2.4.0) — `canTrackTime()`: view access plus the host's `TaskAccessCheckEvent::ACTION_TRACK_TIME` decision; with no answer (or a grant marked read-only), the edit right, as before. `deny()` refuses even an editor and sticks against a later `grant()`.
+5. **Time tracking** — when TimeTrack is installed, `TaskAccessGuard` validates assignee or team membership before exposing tasks to TimeTrack.
 
 ## Provider sync: host duties and known limits
 

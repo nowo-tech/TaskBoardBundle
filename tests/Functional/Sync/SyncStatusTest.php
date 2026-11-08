@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncError;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
@@ -115,6 +117,29 @@ final class SyncStatusTest extends SyncPeopleFunctionalTestCase
         self::assertSame(['To do', 'Done', 'Blocked'], $this->columnNames($board));
         $connection->setStatusColumnMap([]);
         self::assertSame([], $connection->getStatusColumnMap());
+    }
+
+    /** Since 2.5.0 (TB-13): without the column decision, a link, a new map and a sync add no column. */
+    public function testWithoutTheColumnDecisionNoColumnIsAdded(): void
+    {
+        $board = $this->boardWithColumns('To do', 'Done');
+        $this->dispatcher()->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event): void {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS) {
+                $event->deny();
+            }
+        });
+        $this->link($board, [['status' => 'In review', 'column' => StatusColumns::CREATE]]);
+        self::assertSame(['To do', 'Done'], $this->columnNames($board), 'the link keeps the board\'s columns');
+
+        $connection = $this->service()->updateStatusColumnMap($board, [['status' => 'Blocked', 'column' => StatusColumns::CREATE]], $this->owner);
+        self::assertInstanceOf(TaskBoardConnection::class, $connection);
+        self::assertSame(['To do', 'Done'], $this->columnNames($board), 'nor does a new map from a person');
+
+        $this->put($this->row('c1', 'Blocked task', 1, 'Blocked'), $this->row('c2', 'Open task', 2, 'Elsewhere'));
+        $report = $this->sync($board);
+        self::assertSame(['To do', 'Done'], $this->columnNames($board), 'nor does the sync');
+        self::assertContains('status_without_column', array_map(static fn (SyncError $w): string => $w->code, $report->warnings));
+        self::assertSame(0, $report->columnsCreated);
     }
 
     public function testAFolderSourceReadsEveryListTagsTheListAndArchivesDeletions(): void

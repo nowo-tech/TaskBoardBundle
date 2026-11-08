@@ -244,6 +244,8 @@ final readonly class TaskImportOrchestrator
         $columnsByName  = $this->indexColumnsByName($board);
         $columnsCreated = 0;
         $warnings       = [];
+        // Since 2.5.0 (TB-13): a missing column is created only for an actor who may manage the board's columns.
+        $mayCreateColumns = null;
 
         foreach ($this->collectStatuses($rows) as $status) {
             if (isset($columnsByName[mb_strtolower($status)])) {
@@ -252,6 +254,12 @@ final readonly class TaskImportOrchestrator
 
             if (!$options->createMissingColumns) {
                 $warnings[] = sprintf('Status "%s" was not found on the board and missing columns are disabled.', $status);
+                continue;
+            }
+
+            $mayCreateColumns ??= !$this->accessChecker instanceof TaskBoardResourceAccessChecker || $this->accessChecker->canManageColumns($actor, $board);
+            if (!$mayCreateColumns) {
+                $warnings[] = sprintf('Status "%s" was not found on the board and you may not add columns to it.', $status);
                 continue;
             }
 
