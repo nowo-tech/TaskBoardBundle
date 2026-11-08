@@ -4,7 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [To the next release (unreleased)](#to-the-next-release-unreleased)
+- [To 2.3.0](#to-230)
   - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
   - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
   - [Recurring tasks: what a host does](#recurring-tasks-what-a-host-does)
@@ -159,9 +159,7 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## To the next release (unreleased)
-
-Audit status: re-verification pending.
+## To 2.3.0
 
 **A host that changes nothing** gets no new route, panel action or table, and its pages do not change. `TaskCopier`, `TaskMovePlanner` and `TaskMover` are services it may call; `TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE` (`task_move`) is a new action a quota listener that only knows the others lets through.
 
