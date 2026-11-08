@@ -18,6 +18,14 @@ use function array_fill;
  */
 final class StatusColumnsTest extends TestCase
 {
+    /** Since 2.5.0 (audit IM-L1). */
+    public function testHasCreate(): void
+    {
+        self::assertFalse(StatusColumns::hasCreate([]));
+        self::assertFalse(StatusColumns::hasCreate([['status' => 'A', 'column' => StatusColumns::SKIP]]));
+        self::assertTrue(StatusColumns::hasCreate([['status' => 'A', 'column' => 'c1'], ['status' => 'B', 'column' => StatusColumns::CREATE]]));
+    }
+
     public function testStatusesMatchIgnoringCaseAccentsAndSpaces(): void
     {
         self::assertSame('enrevision', StatusColumns::normalize(' En Revisión '));

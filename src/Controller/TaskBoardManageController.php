@@ -343,9 +343,11 @@ final class TaskBoardManageController extends AbstractController
             return $defaultView;
         }
 
-        $canEditBoard  = $this->resourceAccessChecker->canEditBoard($user, $board);
-        $columnForm    = $this->createColumnForm(new BoardColumnFormData());
-        $columnChoices = $this->buildColumnChoices($board);
+        $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
+        // Since 2.5.0 (TB-13): the column controls (Add column, the pencil, the grip, the column sets) follow it.
+        $canManageColumns = $canEditBoard && $this->resourceAccessChecker->canManageColumns($user, $board);
+        $columnForm       = $this->createColumnForm(new BoardColumnFormData());
+        $columnChoices    = $this->buildColumnChoices($board);
 
         $taskForm = $this->createForm(TaskFormType::class, new TaskFormData(
             // Choices are label => id: the default column is the first *value* (id), not the label.
@@ -360,23 +362,24 @@ final class TaskBoardManageController extends AbstractController
         return $this->render($this->templates['board'], [
             'board' => $board,
             // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
-            'tasks'          => $cards,
-            'taskTree'       => $taskTree,
-            'canEditBoard'   => $canEditBoard,
-            'columnForm'     => $columnForm->createView(),
-            'editColumnForm' => $this->createColumnForm(new BoardColumnFormData())->createView(),
-            'taskForm'       => $taskForm->createView(),
-            'dashboardRoute' => $this->dashboardRoute,
+            'tasks'            => $cards,
+            'taskTree'         => $taskTree,
+            'canEditBoard'     => $canEditBoard,
+            'canManageColumns' => $canManageColumns,
+            'columnForm'       => $columnForm->createView(),
+            'editColumnForm'   => $this->createColumnForm(new BoardColumnFormData())->createView(),
+            'taskForm'         => $taskForm->createView(),
+            'dashboardRoute'   => $this->dashboardRoute,
             // Since 1.11: column icons, column delete, column sets and the task panel URL of the cards.
             'columnIcons'      => $this->columnIcons,
-            'columnDeleteForm' => $canEditBoard ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
+            'columnDeleteForm' => $canManageColumns ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
             'panelTargetPath'  => $this->currentRequestUri(),
             'inlineTaskForms'  => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
             // Since 1.16: comments per task (one query) for the card counters.
             'commentCounts' => $this->commentCounts($allTasks),
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
-        ] + ($canEditBoard ? $this->columnSetViewData($board, $user) : []));
+        ] + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
     }
 
     /**
@@ -386,7 +389,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_column_delete'));
-        $board  = $this->findBoard($boardId, $user, true);
+        $board  = $this->findBoardForColumns($boardId, $user);
         $column = $this->findColumn($board, $columnId);
 
         try {
@@ -411,7 +414,7 @@ final class TaskBoardManageController extends AbstractController
     public function createColumnSet(string $boardId, Request $request): RedirectResponse
     {
         $user    = $this->requireUser();
-        $board   = $this->findBoard($boardId, $user, true);
+        $board   = $this->findBoardForColumns($boardId, $user);
         $manager = $this->requireColumnSets();
 
         $form = $this->createForm(ColumnSetFormType::class, new ColumnSetFormData());
@@ -434,7 +437,7 @@ final class TaskBoardManageController extends AbstractController
     public function applyColumnSet(string $boardId, Request $request): RedirectResponse
     {
         $user    = $this->requireUser();
-        $board   = $this->findBoard($boardId, $user, true);
+        $board   = $this->findBoardForColumns($boardId, $user);
         $manager = $this->requireColumnSets();
 
         $form = $this->createForm(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), [
@@ -464,7 +467,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_column_set_delete'));
-        $board   = $this->findBoard($boardId, $user, true);
+        $board   = $this->findBoardForColumns($boardId, $user);
         $manager = $this->requireColumnSets();
         $set     = $manager->find($setId, $user, $board) ?? throw new NotFoundHttpException('Column set not found.');
 
@@ -482,7 +485,7 @@ final class TaskBoardManageController extends AbstractController
     public function createColumn(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
-        $board = $this->findBoard($boardId, $user, true);
+        $board = $this->findBoardForColumns($boardId, $user);
 
         $form = $this->createColumnForm(new BoardColumnFormData());
         $form->handleRequest($request);
@@ -502,7 +505,7 @@ final class TaskBoardManageController extends AbstractController
     public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user   = $this->requireUser();
-        $board  = $this->findBoard($boardId, $user, true);
+        $board  = $this->findBoardForColumns($boardId, $user);
         $column = $this->findColumn($board, $columnId);
 
         $form = $this->createColumnForm(new BoardColumnFormData(
@@ -527,7 +530,7 @@ final class TaskBoardManageController extends AbstractController
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, 'task_board_column_reorder');
-        $board = $this->findBoard($boardId, $user, true);
+        $board = $this->findBoardForColumns($boardId, $user);
 
         $order = $request->request->all('columnOrder');
         foreach ($order as $columnId) {
@@ -2368,6 +2371,20 @@ final class TaskBoardManageController extends AbstractController
 
         if ($forWrite && !$this->resourceAccessChecker->canEditBoard($user, $board)) {
             throw $this->createAccessDeniedException('Board is read-only.');
+        }
+
+        return $board;
+    }
+
+    /**
+     * Since 2.5.0 (TB-13): a board whose columns the user may manage (the column and column-set write routes): the board
+     * for writing, then {@see TaskBoardResourceAccessChecker::canManageColumns()}, else 403.
+     */
+    private function findBoardForColumns(string $boardId, UserInterface $user): TaskBoard
+    {
+        $board = $this->findBoard($boardId, $user, true);
+        if (!$this->resourceAccessChecker->canManageColumns($user, $board)) {
+            throw $this->createAccessDeniedException('Column management denied.');
         }
 
         return $board;

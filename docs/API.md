@@ -137,7 +137,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 
 ## Management endpoints (Full)
 
-Every management write needs a *Full* token and the board's manage decision (`BoardAccessCheckEvent::ACTION_MANAGE`; in Beacon `project.tasks.manage`, `organization.tasks.manage`, or a personal board's owner); a new board needs the host's create check for the space's tenant and the board plan limit.
+Every management write needs a *Full* token and the board's manage decision (`BoardAccessCheckEvent::ACTION_MANAGE`; in Beacon `project.tasks.manage`, `organization.tasks.manage`, or a personal board's owner); since 2.5.0 the status (column) paths also need the column decision (`BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS`, granted by default); a new board needs the host's create check for the space's tenant and the board plan limit.
 
 | Endpoint | Notes |
 |---|---|

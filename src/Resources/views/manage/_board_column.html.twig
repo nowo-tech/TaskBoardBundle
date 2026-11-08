@@ -1,11 +1,14 @@
 {#
     Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree,
     canEditBoard (default true), panelTargetPath (since 1.11, for the cards' data-task-panel-url).
+    Since 2.5.0 (TB-13): canManageColumns (default true). A board the user may edit but whose columns they may not
+    manage (BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS denied) has no grip, no drag handle and no pencil.
     Since 1.11 the colour is a CSS custom property set from data-nowo-task-vars (no inline style) and the header
     shows the column icon.
 #}
 {% set columnTasks = tasks|filter(t => t.column and t.column.id == column.id) %}
 {% set columnColor = column.color|nowo_task_board_safe_color %}
+{% set _columnsLocked = (canEditBoard ?? true) and not (canManageColumns ?? true) %}
 <section
     class="nowo-task-board__column nowo-task-column{{ columnColor ? ' nowo-task-column--colored' : '' }}"
     data-nowo-task-board-target="column"
@@ -13,6 +16,9 @@
     {% if columnColor %}data-nowo-task-vars="{{ {'--nowo-task-column-color': columnColor}|json_encode }}"{% endif %}
     aria-labelledby="nowo-task-column-{{ column.id }}-name"
 >
+    {% if _columnsLocked %}
+    <div class="nowo-task-board__column-header nowo-task-column__header">
+    {% else %}
     <div
         class="nowo-task-board__column-header nowo-task-column__header"
         data-column-handle
@@ -22,6 +28,7 @@
         <span class="nowo-task-board__column-grip" aria-hidden="true">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'grip-vertical'}) }}
         </span>
+    {% endif %}
         <h3 class="nowo-task-board__column-title nowo-task-column__title">
             {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: column.icon}) }}
             <span class="nowo-task-board__column-name nowo-task-column__name" id="nowo-task-column-{{ column.id }}-name">{{ column.name }}</span>
@@ -30,7 +37,7 @@
                 aria-label="{{ 'task_board.board.column_task_count'|trans({'%count%': columnTasks|length}, 'NowoTaskBoardBundle') }}"
             >{{ columnTasks|length }}</span>
         </h3>
-        {% if (canEditBoard ?? true) %}
+        {% if (canEditBoard ?? true) and not _columnsLocked %}
         <button
             type="button"
             class="nowo-task-board__column-edit nowo-task-column__edit"

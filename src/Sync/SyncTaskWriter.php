@@ -1238,12 +1238,15 @@ final readonly class SyncTaskWriter
             }
         }
         $map = $ctx->connection->getStatusColumnMap();
+        // Since 2.5.0 (TB-13): the run's actor must be allowed to manage the board's columns to create one.
+        $mayCreateColumns = null;
         foreach ($plan as [$action, , $remote]) {
             $status = trim((string) $remote->task->status);
             if ($action === 'archive' || $status === '' || isset($byName[mb_strtolower($status)]) || StatusColumns::mapped($map, $status, $ctx->board)) {
                 continue;
             }
-            if (!$ctx->options->createMissingColumns) {
+            $mayCreateColumns ??= $ctx->options->createMissingColumns && $this->accessChecker->canManageColumns($ctx->actor, $ctx->board);
+            if (!$mayCreateColumns) {
                 $ctx->warn('status_without_column');
                 continue;
             }
