@@ -428,6 +428,39 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertCount(1, $plain->filter('button'));
     }
 
+    /** Since 2.5.0 (TB-15): a page outside any tenant posts the form to its own action, with its own ids, and the footer partial. */
+    public function testTheBoardCreateFormAndActionsTakeAHostActionAndIds(): void
+    {
+        $form    = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $html    = $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form, 'in_dialog' => true, 'with_actions' => false, 'action' => '/dashboard/tasks/boards', 'form_id' => 'host-new-board', 'testid' => 'host-new-board-form']);
+        $created = (new Crawler($html))->filter('form#host-new-board');
+        self::assertSame('/dashboard/tasks/boards', $created->attr('action'));
+        self::assertSame('host-new-board-form', $created->attr('data-testid'));
+        self::assertCount(0, $created->filter('.nowo-task-dialog__actions'));
+
+        $form    = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $actions = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'form_id' => 'host-new-board', 'testid' => 'host-create', 'close_attribute' => 'data-confirm-dialog-close']) . '</div>');
+        self::assertSame('host-new-board', $actions->filter('[data-testid="host-create"]')->attr('form'));
+        self::assertCount(1, $actions->filter('button[data-confirm-dialog-close]'));
+        self::assertCount(0, $actions->filter('[data-nowo-ui-dialog-back]'), 'no scope step without a scope provider');
+
+        $form   = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $noBack = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'no_cancel' => true, 'close_attribute' => 'onclick']) . '</div>');
+        self::assertCount(1, $noBack->filter('button'));
+        self::assertSame('nowo-task-board-create-form', $noBack->filter('[data-testid="nowo-task-board-create-submit"]')->attr('form'));
+
+        $form     = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $defaults = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'close_attribute' => 'onclick']) . '</div>');
+        self::assertCount(1, $defaults->filter('button[data-nowo-ui-dialog-close]'), 'an attribute that is not data-* falls back to the kit\'s close');
+        self::assertStringNotContainsString('onclick', $defaults->html());
+
+        // Audit IM-I9: a trailing line break is not a data-* name.
+        $form    = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView();
+        $newline = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'close_attribute' => "data-x\n"]) . '</div>');
+        self::assertCount(1, $newline->filter('button[data-nowo-ui-dialog-close]'));
+        self::assertCount(0, $newline->filter('button[data-x]'));
+    }
+
     /** Since 1.19: a plain-text description is shown rendered, with "Edit description" for editors only. */
     public function testAPlainTextDescriptionIsShownRenderedWithAnEditDisclosure(): void
     {
@@ -946,7 +979,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         ]);
         self::assertStringContainsString('data-controller="nowo-task-board-task-nav"', $html);
         self::assertStringContainsString('data-nowo-task-board-task-nav-keys-value="true"', $html);
-        self::assertStringContainsString('<span class="nowo-task-nav__position" aria-live="polite">task_board.nav.position_column</span>', $html);
+        self::assertStringContainsString('<span class="nowo-task-nav__position" aria-live="polite" data-nowo-task-nav-position>task_board.nav.position_column</span>', $html);
         self::assertMatchesRegularExpression('/<span class="nowo-task-nav__step nowo-task-nav__step--previous is-disabled" aria-disabled="true"/', $html);
         self::assertMatchesRegularExpression('/<a\s+class="nowo-task-nav__step nowo-task-nav__step--next"\s+href="\/tools\/task-board\/task\/' . $next->getId() . '"\s+data-nowo-task-board-task-nav-target="next"/', $html);
         self::assertMatchesRegularExpression('/class="nowo-task-nav__first-subtask"\s+href="\/tools\/task-board\/task\/' . $first->getId() . '"/', $html);
@@ -982,6 +1015,13 @@ final class ManageTemplatesRenderingTest extends TestCase
             'taskRouteExtra'  => ['_target_path' => '/board'],
         ]);
         self::assertStringContainsString('nowo-task-nav nowo-task-nav--panel', $panel);
+        // Since 2.5.0 (TB-11b): the public hooks next to the classes.
+        $panelNav = (new Crawler($panel))->filter('nav[data-nowo-task-nav-context="panel"]');
+        self::assertCount(1, $panelNav->filter('[data-nowo-task-nav="subtasks"]'));
+        self::assertCount(0, $panelNav->filter('[data-nowo-task-nav="view"]'));
+        self::assertCount(1, $panelNav->filter('[data-nowo-task-nav="subtasks"] [data-nowo-task-nav-position]'));
+        self::assertCount(1, (new Crawler($panel))->filter('form#nowo-task-edit-form[data-nowo-task-edit-form]'));
+        self::assertCount(1, (new Crawler($html))->filter('nav[data-nowo-task-nav-context="page"] [data-nowo-task-nav="view"]'));
         self::assertStringContainsString('data-nowo-task-board-task-nav-keys-value="false"', $panel);
         self::assertStringNotContainsString('task_board.nav.position_column', $panel);
         self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $first->getId() . '/panel?_target_path=/board"', $panel);

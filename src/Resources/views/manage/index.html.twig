@@ -47,13 +47,7 @@
             {{ include('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', {form: boardForm, in_dialog: true, with_actions: false}) }}
         {% endset %}
         {% set _footer %}
-            {% if boardForm.scope is defined %}
-                <button type="button" class="{{ nowo_ui_class('btn_secondary', page.bundle) }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="nowo-task-board-create-form" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            {% endif %}
-            <button type="button" class="{{ nowo_ui_class('btn_secondary', page.bundle) }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-            <button type="submit" form="nowo-task-board-create-form" class="{{ nowo_ui_class('btn_primary', page.bundle) }}" data-testid="nowo-task-board-create-submit">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
-            </button>
+            {{ include('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', {form: boardForm, bundle: page.bundle}, with_context: false) }}
         {% endset %}
         {{ include(nowo_ui_partial('dialog', page.bundle), {
             id: constant('Nowo\\TaskBoardBundle\\Ui\\TaskBoardPages::BOARD_CREATE_DIALOG'),

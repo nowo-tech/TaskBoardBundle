@@ -1,0 +1,65 @@
+{#
+    Since 2.5.0 (TB-16): the provider connection as one UiKit notice strip (`sync.badge.style: strip`), drawn by
+    `_connection_badge.html.twig`. Left: provider · list and the status — while a run is going, UiKit's `progress` partial:
+    with sync.badge.progress, a determinate bar polled by the nowo-task-board-sync-progress controller for whoever
+    manages the connection (sync.progressUrl); otherwise (and for readers) an indeterminate bar, never polled. Right: *Refresh from <provider>* and *Connection* (managers).
+    An unlinked board shows the Connect link to a manager unless sync.badge.connect_link is false.
+    Variables: sync (nowo_task_board_connection(board)), board.
+#}
+{% set _bundle = 'NowoTaskBoardBundle' %}
+{% set _provider = sync.providerLabelKey|trans({}, 'NowoTaskBoardBundle') %}
+{% set _running_label = 'task_board.sync.status.running_now'|trans({}, 'NowoTaskBoardBundle') %}
+{% if sync.linked %}
+    <div class="{{ nowo_ui_class('flash_info', _bundle) }} nowo-task-sync-strip{{ sync.running ? ' is-running' : '' }}" role="region" aria-label="{{ 'task_board.sync.page.title'|trans({}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-badge" data-nowo-task-sync-style="strip">
+        <span class="nowo-task-sync-strip__icon" aria-hidden="true">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: sync.running ? 'refresh' : 'plug-connected'}) }}</span>
+        <div class="nowo-task-sync-strip__text">
+            <p class="nowo-task-sync-strip__title">{{ _provider }} · {{ sync.containerLabel }}</p>
+            {#- Audit IM-I11: the polled bar only with sync.badge.progress, as the badge; otherwise an indeterminate bar. -#}
+            {% if sync.running and (sync.progress ?? false) and (sync.progressUrl ?? null) %}
+                <div class="nowo-task-sync-strip__progress"
+                    data-controller="nowo-task-board-sync-progress"
+                    data-nowo-task-board-sync-progress-url-value="{{ sync.progressUrl }}"
+                    data-nowo-task-board-sync-progress-interval-value="{{ sync.pollInterval ?? 2000 }}"
+                    data-testid="nowo-task-sync-badge-progress">
+                    {{ include(nowo_ui_partial('progress', _bundle), {
+                        id: 'nowo-task-sync-strip-bar-' ~ board.id,
+                        label: _running_label,
+                        label_visible: false,
+                        value: sync.total ? min(sync.processed, sync.total) : null,
+                        max: sync.total ?: null,
+                        show_value: false,
+                        bundle: _bundle,
+                        meter_attr: {'data-nowo-task-board-sync-progress-target': 'bar'},
+                    }, with_context: false) }}
+                    <p class="{{ nowo_ui_class('muted', _bundle) }} nowo-task-small" role="status" aria-live="polite" aria-atomic="true" data-nowo-task-board-sync-progress-target="status">{{ _running_label }}</p>
+                    <a class="nowo-task-small" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" hidden data-nowo-task-board-sync-progress-target="done">{{ 'task_board.sync.progress.show_result'|trans({}, 'NowoTaskBoardBundle') }}</a>
+                </div>
+            {% elseif sync.running %}
+                <p class="{{ nowo_ui_class('muted', _bundle) }} nowo-task-small" role="status" aria-live="polite">{{ _running_label }}</p>
+                {{ include(nowo_ui_partial('progress', _bundle), {id: 'nowo-task-sync-strip-bar-' ~ board.id, label: _running_label, label_visible: false, indeterminate: true, bundle: _bundle}, with_context: false) }}
+            {% elseif sync.lastSuccessAt %}
+                <p class="{{ nowo_ui_class('muted', _bundle) }} nowo-task-small">{{ 'task_board.sync.status.last_sync'|trans({'%date%': sync.lastSuccessAt|date('Y-m-d H:i')}, 'NowoTaskBoardBundle') }}</p>
+            {% else %}
+                <p class="{{ nowo_ui_class('muted', _bundle) }} nowo-task-small">{{ 'task_board.sync.status.never'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {% endif %}
+        </div>
+        {% if sync.canManage %}
+            <div class="nowo-task-sync-strip__actions">
+                {{ form_start(sync.refreshForm, {action: path(nowo_task_board_route('board_connection_refresh'), {boardId: board.id}), method: 'POST', attr: {class: 'nowo-task-sync-strip__form'}}) }}
+                    <button type="submit" class="{{ nowo_ui_class('btn_sm', _bundle) }} {{ nowo_ui_class('btn_secondary', _bundle) }}" data-testid="nowo-task-sync-header-refresh"{% if sync.running %} disabled aria-disabled="true"{% endif %}>
+                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'refresh'}) }}{{ 'task_board.sync.refresh.action'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}
+                    </button>
+                {{ form_end(sync.refreshForm) }}
+                <a class="{{ nowo_ui_class('btn_sm', _bundle) }} {{ nowo_ui_class('btn_secondary', _bundle) }}" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" data-testid="nowo-task-sync-connection-link">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plug'}) }}{{ 'task_board.sync.page.link'|trans({}, 'NowoTaskBoardBundle') }}
+                </a>
+            </div>
+        {% endif %}
+    </div>
+{% elseif sync.canManage %}
+    <div class="nowo-task-sync-strip nowo-task-sync-strip--unlinked" data-testid="nowo-task-sync-badge" data-nowo-task-sync-style="strip">
+        <a class="{{ nowo_ui_class('btn_sm', _bundle) }} {{ nowo_ui_class('btn_secondary', _bundle) }}" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id}) }}" data-testid="nowo-task-sync-connect-link">
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plug'}) }}{{ 'task_board.sync.connect.action'|trans({}, 'NowoTaskBoardBundle') }}
+        </a>
+    </div>
+{% endif %}

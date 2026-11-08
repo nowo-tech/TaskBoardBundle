@@ -173,6 +173,7 @@ services:
             $avatars: '@Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
             $connectionBadgeTemplate: '%nowo_task_board.templates.connection_badge%'
             $syncBadgeConnectLink: '%nowo_task_board.sync.badge.connect_link%'
+            $syncBadgeStyle: '%nowo_task_board.sync.badge.style%'
             $taskTimeBefore: '%nowo_task_board.templates.task_time_before%'
             $pageHeader: '%nowo_task_board.templates.page_header%'
             $boardToolbar: '%nowo_task_board.board.toolbar%'

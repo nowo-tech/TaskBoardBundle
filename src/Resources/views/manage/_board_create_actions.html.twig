@@ -1,0 +1,21 @@
+{#
+    Since 2.5.0 (TB-15): the footer of a New board dialog — Back (the scope step only), Cancel and Create — for the form of
+    `_board_create_form.html.twig` rendered with with_actions: false. The index dialog uses it; a host page reuses it
+    next to the form (e.g. a dashboard outside any tenant).
+    Variables: form (the TaskBoardFormType view), form_id (default nowo-task-board-create-form), testid (of Create,
+    default nowo-task-board-create-submit), bundle (UiKit theme bundle, default NowoTaskBoardBundle), no_cancel (default
+    false: the surrounding dialog has its own close), close_attribute (default data-nowo-ui-dialog-close: the attribute
+    that makes Cancel close the host's dialog; a `data-*` name only).
+#}
+{% set _form_id = form_id|default(null) ?: 'nowo-task-board-create-form' %}
+{% set _bundle = bundle|default(null) ?: 'NowoTaskBoardBundle' %}
+{% set _close = close_attribute|default('') matches '/^data-[a-z0-9][a-z0-9-]*$/D' ? close_attribute : 'data-nowo-ui-dialog-close' %}
+{% if form.scope is defined %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', _bundle) }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _form_id }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endif %}
+{% if not no_cancel|default(false) %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', _bundle) }}" {{ _close }}>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endif %}
+<button type="submit" form="{{ _form_id }}" class="{{ nowo_ui_class('btn_primary', _bundle) }}" data-testid="{{ testid|default(null) ?: 'nowo-task-board-create-submit' }}">
+    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+</button>

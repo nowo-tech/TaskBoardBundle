@@ -91,9 +91,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon override reduction (TB-11b, TB-12, TB-13 column management decision, TB-14 to TB-17), audited in Appendix IM (Pass; IM-L1, IM-I2, IM-I3, IM-I9, IM-I11, IM-I12 addressed). A host that changes nothing keeps today's output, except the People page, which now draws UiKit's tabs and avatar instead of Bootstrap classes.
+
 ### Added
 
 - **TB-13 — column management decision.** `BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS` (`manage_columns`) and `TaskBoardResourceAccessChecker::canManageColumns()`: the edit decision plus the host's answer, granted by default (as before). It guards the seven column write routes (`column_create`, `column_update`, `column_reorder`, `column_delete`, `column_set_create`, `column_set_apply`, `column_set_delete`: 403), the Task API's status paths (create, update, reorder, delete: 403 `ACCESS_002`), a file import that would add missing columns (the status is reported instead), and a provider sync (`__create` columns of the link or of a new map, missing status columns: `status_without_column`; `unmatchedColumns: delete`: `unmatched_columns_denied`). The board page gets `canManageColumns`; when it is false, *Add column*, the column pencil, the grip and drag handle, the reorder hint and the column-set controls and dialogs are not rendered. A `deny()` sticks against a later `grant()`, as `ACTION_TRACK_TIME`, and `markReadOnly()` on that event refuses it too. A denied board page carries no reorder URL or token. `TaskBoardSyncService::updateStatusColumnMap()` without an actor creates no `__create` column (warning logged). Reads stay on the view decision. Audited in Appendix IM (#84 Pass-Low; IM-L1, IM-I1 to IM-I3 addressed).
+- **TB-14 — a moved task on its old address.** The task page of a task whose board is now in another tenant redirects (302) to the task's page in that tenant, as the `#number` alias already did, for whoever may read the task there (`canViewTask()`); `HEAD` answers as `GET`. Anyone else, a task now outside any tenant, a panel fetch and a POST keep the 404, so the task's existence is not told.
+- **TB-15 — the New board form on a page without a tenant.** `manage/_board_create_form.html.twig` takes `action` (default: the current tenant's `board_create` route), `form_id` and `testid`. New `manage/_board_create_actions.html.twig` draws the dialog footer (Back on the scope step, Cancel, Create bound to `form_id`; `no_cancel`, `close_attribute` (a `data-*` name, else the kit's close), `testid`); the index dialog uses it.
+- **TB-16 — `sync.badge.style: badge|strip`** (default `badge`, today's output). `strip` draws the connection as one UiKit notice (`flash_info`) with provider · list and the status on the left, UiKit's `progress` partial while a run is going (with `sync.badge.progress`, determinate and polled for managers; otherwise and for readers, indeterminate and never polled), and *Refresh* / *Connection* on the right (`manage/_connection_strip.html.twig`).
+- **TB-11b — public navigation hooks.** Each group of the previous / next navigation carries `data-nowo-task-nav="view|subtasks"`, its position text `data-nowo-task-nav-position`, the `<nav>` `data-nowo-task-nav-context="panel|page"`, and the task edit form `data-nowo-task-edit-form`. The classes `nowo-task-nav--panel`, `nowo-task-nav__position` and the id `nowo-task-edit-form` stay.
+- **TB-17 — `import.help_link.url_resolver`**: the service id of an `ImportHelpLinkUrlResolverInterface` that gets the `url` / `route` URL (or null) and returns the URL to link, or null for no link (e.g. a manual in the app or on a public site). With it, `url` and `route` are optional.
+
+### Changed
+
+- **TB-12 — People page on UiKit.** `manage/connection_people.html.twig` draws the filter with UiKit's `tabs` partial (`level: secondary`), the initials with UiKit's `avatar` partial, the table caption with `nowo-task-sr-only`, and no Bootstrap classes (`nav nav-pills`, `nav-link`, `avatar avatar-sm`, `visually-hidden`, `mt-3`).
 
 ## [2.4.0] - 2026-11-08
 

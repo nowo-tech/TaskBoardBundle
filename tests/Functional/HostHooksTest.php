@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
+use Nowo\TaskBoardBundle\Tests\Functional\App\ManualHelpLinkUrls;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingBoardProvisioner;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
@@ -235,6 +236,26 @@ final class HostHooksTest extends FunctionalTestCase
         $board   = $this->board('Other');
         $crawler = $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/import');
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-import-help-link"]'));
+    }
+
+    /** Since 2.5.0 (TB-17): the host's url_resolver has the last word on the URL; with it, url and route are optional. */
+    public function testTheHelpLinkUrlComesFromTheHostResolver(): void
+    {
+        ManualHelpLinkUrls::$inApp = false;
+        $this->boot(['import' => ['help_link' => ['url_resolver' => 'app.help_link_urls', 'label' => 'Format']]]);
+        $board = $this->board();
+        $found = $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/import')->filter('[data-testid="nowo-task-import-help-link"]');
+        self::assertSame('https://manual.example.test/import', $found->attr('href'));
+        self::assertSame('_blank', $found->attr('target'));
+
+        ManualHelpLinkUrls::$inApp = true;
+        $board                     = $this->board('In app');
+        self::assertCount(0, $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/import')->filter('[data-testid="nowo-task-import-help-link"]'), 'no configured URL and the resolver keeps it: no link');
+
+        $this->boot(['import' => ['help_link' => ['url' => '/manual/import', 'url_resolver' => 'app.help_link_urls', 'label' => 'Format']]]);
+        $board = $this->board('Third');
+        $found = $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/import')->filter('[data-testid="nowo-task-import-help-link"]');
+        self::assertSame('/manual/import', $found->attr('href'));
     }
 
     public function testTheTaskTimeSlotRendersOnThePageAndThePanel(): void

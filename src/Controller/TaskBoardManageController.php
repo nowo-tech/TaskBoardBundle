@@ -934,14 +934,35 @@ final class TaskBoardManageController extends AbstractController
 
         $parameters = ['taskId' => $task->getId()];
         if ($this->tenantContext?->owns($task->getBoard(), $user) === false) {
-            $tenant = $this->tenantContext->tenantOfKey((string) $task->getBoard()->getTenantKey(), $user);
-            if (!$tenant instanceof TaskBoardTenant) {
-                throw new NotFoundHttpException('Task not found.');
-            }
-            $parameters['tenantSlug'] = $tenant->slug;
+            return $this->taskPageInItsTenant($task, $user) ?? throw new NotFoundHttpException('Task not found.');
         }
 
         return $this->redirectToRoute($this->routes['task']['name'], $parameters);
+    }
+
+    /**
+     * Since 2.5.0 (TB-14): the old address of a task moved to another tenant. The task page of a task whose board is not
+     * the URL's tenant goes to the task's page in its tenant now, for whoever may read it there; anyone else gets the
+     * 404 they got before, so nothing tells them the task exists. Null: not such a task (the caller keeps its 404).
+     */
+    private function movedTaskRedirect(string $taskId, UserInterface $user): ?RedirectResponse
+    {
+        $task = $this->taskRepository->findById($taskId);
+        if (!$task instanceof Task || $this->tenantContext?->owns($task->getBoard(), $user) !== false || !$this->resourceAccessChecker->canViewTask($user, $task)) {
+            return null;
+        }
+
+        return $this->taskPageInItsTenant($task, $user);
+    }
+
+    /** The task page in the task's own tenant; null when the user has no tenant of that key. */
+    private function taskPageInItsTenant(Task $task, UserInterface $user): ?RedirectResponse
+    {
+        $tenant = $this->tenantContext?->tenantOfKey((string) $task->getBoard()->getTenantKey(), $user);
+
+        return $tenant instanceof TaskBoardTenant
+            ? $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $task->getId(), 'tenantSlug' => $tenant->slug])
+            : null;
     }
 
     private function numberScopeOfRequest(Request $request, UserInterface $user): ?string
@@ -978,7 +999,15 @@ final class TaskBoardManageController extends AbstractController
     public function task(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
-        $task = $this->findTask($taskId, $user, detail: true);
+        try {
+            $task = $this->findTask($taskId, $user, detail: true);
+        } catch (NotFoundHttpException $notFound) {
+            // Since 2.5.0 (TB-14): a task moved to another tenant, opened at its old address (a page, not a panel fetch).
+            // Audit IM-I12: HEAD answers as GET.
+            $moved = in_array($request->getMethod(), [Request::METHOD_GET, Request::METHOD_HEAD], true) && !$this->isPanelRequest($request) ? $this->movedTaskRedirect($taskId, $user) : null;
+
+            return $moved ?? throw $notFound;
+        }
 
         $taskForm = $this->createTaskEditForm($task);
         $taskForm->handleRequest($request);

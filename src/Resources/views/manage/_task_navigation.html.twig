@@ -8,6 +8,8 @@
     - In the panel only the subtask steps show (the host's drawer walks its own view): their links carry
       data-task-panel-url, so a drawer opens them in place.
     The ends render as disabled steps (aria-disabled), never as links.
+    Since 2.5.0 (TB-11b), public hooks: each group carries data-nowo-task-nav="view|subtasks" and its position text
+    data-nowo-task-nav-position, and the <nav> data-nowo-task-nav-context="panel|page" (the classes nowo-task-nav--panel and nowo-task-nav__position stay for compatibility).
 #}
 {% set _nav = taskNavigation|default(null) %}
 {% set _panel = panel|default(false) %}
@@ -35,13 +37,14 @@
     {% endif %}
     <nav
         class="nowo-task-nav{{ _panel ? ' nowo-task-nav--panel' : '' }}"
+        data-nowo-task-nav-context="{{ _panel ? 'panel' : 'page' }}"
         aria-label="{{ 'task_board.nav.label'|trans({}, 'NowoTaskBoardBundle') }}"
         data-controller="nowo-task-board-task-nav"
         data-nowo-task-board-task-nav-unsaved-value="{{ 'task_board.nav.unsaved'|trans({}, 'NowoTaskBoardBundle') }}"
         data-nowo-task-board-task-nav-keys-value="{{ _panel ? 'false' : 'true' }}"
     >
         {% for step in _steps %}
-            <div class="nowo-task-nav__group nowo-task-nav__group--{{ step.kind }}" data-nav="{{ step.kind }}">
+            <div class="nowo-task-nav__group nowo-task-nav__group--{{ step.kind }}" data-nav="{{ step.kind }}" data-nowo-task-nav="{{ step.kind }}">
                 {% if step.kind == 'subtasks' and _nav.parent %}
                     <a
                         class="nowo-task-nav__parent"
@@ -56,7 +59,7 @@
                     {% set _target = direction == 'previous' ? step.position.previous : step.position.next %}
                     {% set _label = ('task_board.nav.' ~ (step.kind == 'subtasks' ? 'subtask_' : '') ~ direction)|trans({}, 'NowoTaskBoardBundle') %}
                     {% if direction == 'next' %}
-                        <span class="nowo-task-nav__position" aria-live="polite">{{ step.label }}</span>
+                        <span class="nowo-task-nav__position" aria-live="polite" data-nowo-task-nav-position>{{ step.label }}</span>
                     {% endif %}
                     {% if _target %}
                         <a
