@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Move;
 
+use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -85,6 +87,11 @@ final readonly class TaskMover
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
+            // Audit IC-I9: a deadlock or a lock wait that timed out against a concurrent write of the same tree is "changed
+            // since", as a stale plan is: nothing was written, and the user sees the new preview.
+            if ($failure instanceof DeadlockException || $failure instanceof LockWaitTimeoutException) {
+                throw new TaskCopyRefusedException('stale');
+            }
 
             throw $failure;
         }
@@ -123,6 +130,10 @@ final readonly class TaskMover
             }
             $column = TaskMovePlanner::targetColumn($node, $target, $columnMap);
             $key    = $column?->getId() ?? '';
+            // Audit IC-I8: the sync's "Fields" document holds the imported values as text: hidden on the target too.
+            foreach ($node->getDocuments() as $document) {
+                $document->rememberOrigin($source->getId());
+            }
             $node->changeBoard($target, $column, $positions[$key] ?? 0);
             $positions[$key] = ($positions[$key] ?? 0) + 1;
             $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $source->getName(), $target->getName());

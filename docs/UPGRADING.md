@@ -181,7 +181,8 @@ Audit status: re-verification pending.
    -- SQLite: ALTER TABLE task_board_sync_items ADD COLUMN detached_task_id VARCHAR(36) DEFAULT NULL REFERENCES task_board_tasks (id) ON DELETE SET NULL;
    ```
 
-6. **Access on the subtree (audit IC-L1).** A move needs `canEditTask()` on every task that moves; a refusal names a task the user can see and does not name one they cannot. A duplicate leaves out the subtasks the user cannot view, and its preview counts them. A host's `move.targets` answer is narrowed to active boards passing `canEditBoard()`; the tenant is not checked, since spec 217 lets a host offer boards of other tenants.
+6. **Locks.** A move locks every task row of the tree (`SELECT … FOR UPDATE`) for its transaction; a deadlock or a lock-wait timeout is answered as "changed since" (`stale`). PostgreSQL has no `lock_timeout` by default: set one on the connection (for example `SET lock_timeout = '5s'`) if a move should not wait for a long write. The sync's "Fields" document of a moved task is hidden on the target board, like its field values, and erased with the source board.
+7. **Access on the subtree (audit IC-L1).** A move needs `canEditTask()` on every task that moves; a refusal names a task the user can see and does not name one they cannot. A duplicate leaves out the subtasks the user cannot view, and its preview counts them. A host's `move.targets` answer is narrowed to active boards passing `canEditBoard()`; the tenant is not checked, since spec 217 lets a host offer boards of other tenants.
 
 ### Recurring tasks: what a host does
 
