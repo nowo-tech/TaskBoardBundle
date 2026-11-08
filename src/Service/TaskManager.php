@@ -28,8 +28,12 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_filter;
+use function array_flip;
+use function array_intersect_key;
 use function array_keys;
 use function count;
+use function in_array;
+use function trim;
 
 use const DATE_ATOM;
 
@@ -131,7 +135,8 @@ final readonly class TaskManager
             'color'            => $oldColor !== $task->getColor(),
         ]));
         if ($changed !== []) {
-            $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+            $previous = ['title' => $oldTitle, 'description' => $oldDescription, 'priority' => $oldPriority, 'column' => $oldColumn, 'estimatedMinutes' => $oldEstimatedMinutes, 'startAt' => $oldStartAt, 'dueAt' => $oldDueAt, 'tags' => $oldTags, 'color' => $oldColor];
+            $this->dispatch(new TaskUpdatedEvent($task, $user, $changed, array_intersect_key($previous, array_flip($changed))), TaskBoardEvents::TASK_UPDATED);
         }
         if ($oldColumn?->getId() !== $newColumn?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
@@ -167,7 +172,7 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $newStartAt);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $newDueAt);
         $this->taskRepository->save($task);
-        $this->dispatch(new TaskUpdatedEvent($task, $user, $changed), TaskBoardEvents::TASK_UPDATED);
+        $this->dispatch(new TaskUpdatedEvent($task, $user, $changed, array_intersect_key(['startAt' => $oldStartAt, 'dueAt' => $oldDueAt], array_flip($changed))), TaskBoardEvents::TASK_UPDATED);
     }
 
     /** `$day` at the time of day of `$current`; midnight when there was no date. */
@@ -190,8 +195,27 @@ final readonly class TaskManager
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $priority);
         $this->taskRepository->save($task);
         if ($oldPriority !== $priority) {
-            $this->dispatch(new TaskUpdatedEvent($task, $user, ['priority']), TaskBoardEvents::TASK_UPDATED);
+            $this->dispatch(new TaskUpdatedEvent($task, $user, ['priority'], ['priority' => $oldPriority]), TaskBoardEvents::TASK_UPDATED);
         }
+    }
+
+    /**
+     * Since 2.3.0 (spec 216, FR-013): adds one tag, with the history and the TASK_UPDATED of the task form (its old tags in
+     * the event). False when the tag is empty or already there.
+     */
+    public function addTag(Task $task, string $tag, object $user): bool
+    {
+        $tag     = trim($tag);
+        $oldTags = $task->getTags();
+        if ($tag === '' || in_array($tag, $oldTags, true)) {
+            return false;
+        }
+        $task->setTags([...$oldTags, $tag]);
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
+        $this->taskRepository->save($task);
+        $this->dispatch(new TaskUpdatedEvent($task, $user, ['tags'], ['tags' => $oldTags]), TaskBoardEvents::TASK_UPDATED);
+
+        return true;
     }
 
     /**

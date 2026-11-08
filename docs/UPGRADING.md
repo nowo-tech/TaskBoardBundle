@@ -7,6 +7,7 @@
 - [To the next release (unreleased)](#to-the-next-release-unreleased)
   - [Move and duplicate: what a host does](#move-and-duplicate-what-a-host-does)
   - [Recurring tasks: what a host does](#recurring-tasks-what-a-host-does)
+  - [Schema change for every host: the cause of a history row](#schema-change-for-every-host-the-cause-of-a-history-row)
 - [To 2.2.0](#to-220)
   - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
@@ -162,6 +163,21 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 Audit status: re-verification pending.
 
 **A host that changes nothing** gets no new route, panel action or table, and its pages do not change. `TaskCopier`, `TaskMovePlanner` and `TaskMover` are services it may call; `TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE` (`task_move`) is a new action a quota listener that only knows the others lets through.
+
+### Schema change for every host: the cause of a history row
+
+Spec 216 (FR-013) adds a nullable column; existing rows keep null and the pages do not change.
+
+```sql
+-- PostgreSQL
+ALTER TABLE task_board_task_change_history ADD cause VARCHAR(191) DEFAULT NULL;
+-- MySQL / MariaDB
+ALTER TABLE task_board_task_change_history ADD cause VARCHAR(191) DEFAULT NULL;
+-- SQLite
+ALTER TABLE task_board_task_change_history ADD COLUMN cause VARCHAR(191) DEFAULT NULL;
+```
+
+To use it: wrap a write in `TaskChangeContext::run('rule:42', fn () => …)`; in a listener of an event dispatched inside, `current()` says why. Set `history.cause_labeler` to show it in the task's history. `TaskUpdatedEvent::getPreviousValue()` and `getAddedTags()` give the old values; `TaskManager::addTag()` adds one tag.
 
 ### Move and duplicate: what a host does
 

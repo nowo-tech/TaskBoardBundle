@@ -251,6 +251,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerRecurrence($container, $loader, $config, $emName);
+        // Since 2.3.0 (spec 216): the host's label of a history row's cause.
+        if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
+            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', new Reference($config['history']['cause_labeler']));
+        }
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);

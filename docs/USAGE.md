@@ -98,6 +98,14 @@ From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $
 | Number | Kept in the scope; a new one with the old as alias across scopes | A new one |
 | Events | `TASK_BOARD_CHANGED` after the commit, no `TASK_MOVED` | `TASK_CREATED` per task, `TASK_MEMBER_ADDED` |
 
+### Why a change happens (since 2.3)
+
+```php
+$context->run('rule:' . $rule->getId(), fn () => $taskManager->moveToColumn($task, $columnId, $author));
+```
+
+Every history row written inside keeps the cause (`TaskChangeHistory::getCause()`); the listeners of the events dispatched inside read `TaskChangeContext::current()`. The history shows it only through `history.cause_labeler`, whose text is escaped. `TaskUpdatedEvent::getPreviousValue('priority')`, `getAddedTags()` and `getRemovedTags()` give the values before the write.
+
 ### Recurring tasks (since 2.3)
 
 `recurrence.enabled: true` adds the *Repeat* section to the task panel (block `nowo_task_repeat`: text only without `canEditTask()`), the Repeat page and a repeat icon on cards and list rows. The bundle schedules nothing: see [UPGRADING](UPGRADING.md#recurring-tasks-what-a-host-does). Each occurrence is a copy of the latest one (the `TaskCopier` rules), created as the series' author.

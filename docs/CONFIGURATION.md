@@ -734,6 +734,7 @@ pnpm install && pnpm run build
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `history.cause_labeler` | `null` | Since 2.3 (spec 216): service id of a `History\TaskChangeCauseLabelerInterface`; null = the history shows no cause |
 | `recurrence.enabled` | `false` | The two tables, `TaskRecurrenceManager`, the Repeat section, page and icon, and the routes below |
 | `recurrence.max_subtasks` | `200` | The most subtasks an occurrence copies; a series over it is refused |
 | `routes.task_recurrence` | `/tools/task-board/task/{taskId}/recurrence` | GET, POST |

@@ -189,6 +189,8 @@ Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
 | Personal data | The author's name is a snapshot; `forgetAuthor()` clears it and the author; the user's deletion sets `author_id` to null |
 | A synced task rewritten by its provider | Refused (`synced_task`) |
 
+**Change causes (spec 216, FR-013).** The cause is the host's text, set only by code around a write, never from a request. It is shown only through the host's labeler, escaped by Twig. It is not personal data by design: a host stores an id (`rule:42`), not a name. `TaskChangeContext` is reset between the requests of a worker and popped in `finally`, so a failed write never leaks its cause into the next one.
+
 ## UiKit migration (2.0.0)
 
 - **Quota event.** `TaskBoardEvents::QUOTA_CHECK` is a host hook, not a permission. The paths that do not ask are listed in [USAGE](USAGE.md#host-hooks-since-200). An import's count is taken before it writes, inside its transaction.

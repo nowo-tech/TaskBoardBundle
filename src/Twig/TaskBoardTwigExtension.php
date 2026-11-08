@@ -9,8 +9,10 @@ use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
@@ -120,7 +122,17 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskBoardResourceAccessChecker $resourceAccess = null,
         // Since 2.3.0 (spec 215): set with `recurrence.enabled` only.
         private readonly ?TaskRecurrenceView $recurrence = null,
+        // Since 2.3.0 (spec 216): `history.cause_labeler`.
+        private readonly ?TaskChangeCauseLabelerInterface $causeLabeler = null,
     ) {
+    }
+
+    /** Since 2.3.0 (spec 216, FR-013): the host's label of why a history row happened; null without a cause or a labeler. */
+    public function changeCause(TaskChangeHistory $entry): ?string
+    {
+        $cause = $entry->getCause();
+
+        return $cause !== null && $this->causeLabeler instanceof TaskChangeCauseLabelerInterface ? $this->causeLabeler->label($cause, $entry) : null;
     }
 
     /**
@@ -312,6 +324,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_can_copy', $this->canCopy(...)),
             new TwigFunction('nowo_task_board_recurrence', $this->recurrence(...)),
             new TwigFunction('nowo_task_board_repeats', $this->repeats(...)),
+            new TwigFunction('nowo_task_board_change_cause', $this->changeCause(...)),
         ];
     }
 

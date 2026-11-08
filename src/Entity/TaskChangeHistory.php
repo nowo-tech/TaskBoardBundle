@@ -43,6 +43,10 @@ class TaskChangeHistory
         private ?string $newValue = null,
         #[ORM\Column(type: 'string', length: 255, nullable: true)]
         private ?string $context = null,
+        // Since 2.3.0 (spec 216, FR-013): why the change happened, set by the host around a write (e.g. "rule:42"); null:
+        // a person's own change. See TaskChangeContext.
+        #[ORM\Column(type: 'string', length: 191, nullable: true)]
+        private ?string $cause = null,
     ) {
         $this->id        = Uuid::generate()->toString();
         $this->createdAt = new DateTimeImmutable();
@@ -113,6 +117,12 @@ class TaskChangeHistory
     public function getContext(): ?string
     {
         return $this->context;
+    }
+
+    /** Since 2.3.0 (spec 216): why the change happened (null: a person's own change). */
+    public function getCause(): ?string
+    {
+        return $this->cause;
     }
 
     public function getCreatedAt(): DateTimeImmutable

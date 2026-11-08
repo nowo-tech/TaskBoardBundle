@@ -149,6 +149,8 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.quota_listener', RecordingQuotaListener::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);
         $container->services()->set('app.first_board', RecordingBoardProvisioner::class)->autowire()->public();
+        // Since 2.3.0 (spec 216): the host's history label of a change's cause (used when a test sets history.cause_labeler).
+        $container->services()->set('app.cause_labeler', RuleCauseLabeler::class)->public();
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // Since 1.23: the host side of the provider sync, with a scriptable provider and no network.
             $services = $container->services();
