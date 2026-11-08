@@ -753,3 +753,8 @@ task_board.copy.refusal.quota: "I limiti del piano non lo consentono."
 task_board.history.type.board_moved: "ha spostato l'attività in un'altra bacheca"
 task_board.history.type.duplicated: "ha duplicato l'attività da"
 task_board.history.type.member_not_copied: "ha escluso un membro dalla copia"
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Non puoi modificare «%task%», che verrebbe spostata con essa."
+task_board.copy.refusal.subtask_hidden: "Verrebbe spostata con essa una sottoattività che non puoi vedere."
+task_board.copy.hidden: "%count% sottoattività che non puoi vedere restano escluse."
+task_board.copy.imported_fields: "I campi importati restano sull'attività, in sola lettura: %fields%."

@@ -753,3 +753,8 @@ task_board.copy.refusal.quota: "The plan limits refuse it."
 task_board.history.type.board_moved: "moved the task to another board"
 task_board.history.type.duplicated: "duplicated the task from"
 task_board.history.type.member_not_copied: "left a member out of the copy"
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "You may not change “%task%”, which would move with it."
+task_board.copy.refusal.subtask_hidden: "A subtask you cannot see would move with it."
+task_board.copy.hidden: "%count% subtask(s) you cannot see are left out."
+task_board.copy.imported_fields: "Imported fields stay on the task, read-only: %fields%."

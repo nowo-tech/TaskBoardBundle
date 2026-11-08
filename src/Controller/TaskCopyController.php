@@ -83,7 +83,7 @@ final class TaskCopyController extends AbstractController
     public function move(string $taskId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
-        $boards        = array_values(array_filter($this->targets->targets($task, $user), static fn (TaskBoard $board): bool => $board->getId() !== $task->getBoard()->getId()));
+        $boards        = array_values(array_filter($this->targets($task, $user), static fn (TaskBoard $board): bool => $board->getId() !== $task->getBoard()->getId()));
         $target        = $this->chosenTarget($request, $boards);
         $columns       = $target instanceof TaskBoard ? $this->columnFields($task, $target) : [];
         $select        = $this->selectForm($request, $boards, $target, $columns, false);
@@ -100,7 +100,7 @@ final class TaskCopyController extends AbstractController
         $notice  = null;
         if ($target instanceof TaskBoard) {
             try {
-                $plan = $this->planner->plan($task, $target, $map);
+                $plan = $this->planner->plan($task, $target, $map, $user);
             } catch (TaskCopyRefusedException $exception) {
                 $refusal = $exception;
             }
@@ -137,7 +137,7 @@ final class TaskCopyController extends AbstractController
     {
         [$user, $task] = $this->source($taskId);
         // The task's own board first, always offered: a duplicate there needs nothing the source does not.
-        $boards = [$task->getBoard(), ...array_filter($this->targets->targets($task, $user), static fn (TaskBoard $board): bool => $board->getId() !== $task->getBoard()->getId())];
+        $boards = [$task->getBoard(), ...array_filter($this->targets($task, $user), static fn (TaskBoard $board): bool => $board->getId() !== $task->getBoard()->getId())];
         $target = $this->chosenTarget($request, $boards) ?? $task->getBoard();
         $select = $this->selectForm($request, $boards, $target, [], true);
         $flags  = [];
@@ -157,7 +157,7 @@ final class TaskCopyController extends AbstractController
         $refusal = null;
         $notice  = null;
         try {
-            $preview = $this->copier->preview($task, $options);
+            $preview = $this->copier->preview($task, $options, $user);
         } catch (TaskCopyRefusedException $exception) {
             $refusal = $exception;
         }
@@ -187,6 +187,17 @@ final class TaskCopyController extends AbstractController
             'notice'      => $notice,
             'target'      => $target,
         ]);
+    }
+
+    /**
+     * Audit IC-I1: the host's targets, each checked again for `canEditBoard()`, so a hook that offers too much cannot open a
+     * board the user may not edit. The tenant is not checked: a host may offer boards of other tenants (spec 217, FR-015).
+     *
+     * @return list<TaskBoard>
+     */
+    private function targets(Task $task, object $user): array
+    {
+        return array_values(array_filter($this->targets->targets($task, $user), fn (TaskBoard $board): bool => !$board->isArchived() && $this->resourceAccessChecker->canEditBoard($user, $board)));
     }
 
     /**

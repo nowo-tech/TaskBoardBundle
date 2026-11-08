@@ -170,9 +170,15 @@ Off unless `move.enabled: true`. Audit status: re-verification pending.
 | Plan limits skipped by a new write path | A duplicate asks `QUOTA_CHECK` `task_create` with every task it creates, a move `task_move` with the open tasks that arrive, before writing. A worker calling `TaskCopier` with no listener must ask its own limits |
 | Tracked time lost | A move never deletes a time entry: manual entries stay on their task with a new board snapshot; TimeTrack's rows point at the task id. A copy never copies time |
 | A partial move | One transaction: a failure changes no board, member or dependency (`TaskMoverTest`) |
+| A subtask moved or copied beyond the user's rights (audit IC-L1) | A move needs `canEditTask()` on every task of the subtree, else it is refused (a hidden task is not named). A duplicate leaves out what the user cannot view, with its subtasks, and the preview counts it |
+| A write between the plan and the move (audit IC-L2) | Inside the transaction the task row is locked and the tree's facts (tasks, completion, archive, every dependency and member touching them) are read again from the database; any change refuses the move as `stale`, rolled back with the entity manager still usable |
+| A host's targets offering too much (audit IC-I1) | The answer of `move.targets` is narrowed to active boards passing `canEditBoard()`. Not to the tenant: spec 217 lets a host offer other tenants. The source gate is `canEditTask` + `canEditBoard`, as spec 217 decides, not the board's manage decision |
+| Members on the target (audit IC-I2) | Kept or copied when `canBeAssigned()` allows. Without an assignee provider every user may be assigned, so every member stays, as anywhere in the bundle |
+| A sync turned back on (audit IC-I5) | Items are tombstoned whenever the sync tables are mapped, whatever `sync.enabled` says at move time |
 | A sync rewriting a moved task | The sync item becomes a tombstone, so a later run neither updates nor recreates it; a move is refused while a run holds either board |
 | Personal data in copies | A copy is an ordinary task of its creator, with members added through the assigner: the account erasure that reaches the source reaches it. Member names left out are history rows like any member change |
 | Information about other boards | The preview lists only titles of tasks on the source board (which the user may edit) and the names of members being removed |
+| Provider data of a moved task (audit IC-I4) | Stays on the tombstone item, which keeps the task in `detached_task_id`: the panel shows it read-only and the people directory tools erase it there. Imported field values stay on the task under the source board's fields, so `eraseBoard(source)` and `eraseByValue(…, source)` still reach them; the *Fields* document moves with the task and is reached through the target board or `null` |
 
 ## UiKit migration (2.0.0)
 

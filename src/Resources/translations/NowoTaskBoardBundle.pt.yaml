@@ -753,3 +753,8 @@ task_board.copy.refusal.quota: "Os limites do plano não o permitem."
 task_board.history.type.board_moved: "moveu a tarefa para outro quadro"
 task_board.history.type.duplicated: "duplicou a tarefa a partir de"
 task_board.history.type.member_not_copied: "deixou um membro fora da cópia"
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Não pode alterar «%task%», que seria movida com ela."
+task_board.copy.refusal.subtask_hidden: "Seria movida com ela uma subtarefa que não pode ver."
+task_board.copy.hidden: "%count% subtarefa(s) que não pode ver ficam de fora."
+task_board.copy.imported_fields: "Os campos importados ficam na tarefa, só de leitura: %fields%."

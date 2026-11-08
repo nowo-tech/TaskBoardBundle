@@ -753,3 +753,8 @@ task_board.copy.refusal.quota: "Les limites du forfait le refusent."
 task_board.history.type.board_moved: "a déplacé la tâche vers un autre tableau"
 task_board.history.type.duplicated: "a dupliqué la tâche depuis"
 task_board.history.type.member_not_copied: "a laissé un membre hors de la copie"
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Vous ne pouvez pas modifier « %task% », qui serait déplacée avec elle."
+task_board.copy.refusal.subtask_hidden: "Une sous-tâche que vous ne voyez pas serait déplacée avec elle."
+task_board.copy.hidden: "%count% sous-tâche(s) que vous ne voyez pas sont laissées de côté."
+task_board.copy.imported_fields: "Les champs importés restent sur la tâche, en lecture seule : %fields%."

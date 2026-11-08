@@ -753,3 +753,8 @@ task_board.copy.refusal.quota: "De limieten van het abonnement staan het niet to
 task_board.history.type.board_moved: "heeft de taak naar een ander bord verplaatst"
 task_board.history.type.duplicated: "heeft de taak gedupliceerd van"
 task_board.history.type.member_not_copied: "heeft een lid niet meegekopieerd"
+# Since 2.3.0 (audit IC): move and duplicate access per subtask, imported fields.
+task_board.copy.refusal.subtask_not_editable: "Je mag ‘%task%’ niet wijzigen, die mee zou gaan."
+task_board.copy.refusal.subtask_hidden: "Een subtaak die je niet kunt zien, zou meegaan."
+task_board.copy.hidden: "%count% subtaak/subtaken die je niet kunt zien, worden weggelaten."
+task_board.copy.imported_fields: "Geïmporteerde velden blijven op de taak, alleen-lezen: %fields%."
