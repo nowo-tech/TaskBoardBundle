@@ -161,7 +161,7 @@ Both opt-in.
 
 ## Move and duplicate (2.3)
 
-Off unless `move.enabled: true`. Audit status: re-verification pending.
+Off unless `move.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info).
 
 | Threat | Mitigation |
 |---|---|
@@ -187,7 +187,7 @@ Off unless `move.enabled: true`. Audit status: re-verification pending.
 
 ## Recurring tasks (2.3)
 
-Off unless `recurrence.enabled: true`. Audit status: re-verification pending.
+Off unless `recurrence.enabled: true`. Audited for 2.3.0 (Appendix IC, Pass/Info).
 
 | Threat | Mitigation |
 |---|---|
