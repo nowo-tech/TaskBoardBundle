@@ -1,0 +1,938 @@
+# Task API (spec 213), shaped like ClickUp API v2. Generated from the bundle's routes; kept in step by TaskApiOpenApiTest.
+openapi: 3.1.0
+info:
+  title: TaskBoardBundle Task API
+  version: 2.2.0
+  description: 'A REST API shaped like ClickUp API v2, off unless api.enabled. Paths are relative to api.prefix (default /api/tasks). See docs/API.md for levels, where, the differences from ClickUp and the host''s hooks.'
+servers:
+  - url: /api/tasks
+security:
+  - token: []
+paths:
+  '/v2/checklist/{checklist_id}':
+    parameters:
+      - {name: checklist_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: checklist_delete
+      summary: 'Archive a checklist''s items'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: checklist_update
+      summary: 'Rename a checklist'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/NameBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/checklist/{checklist_id}/checklist_item':
+    parameters:
+      - {name: checklist_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: item_create
+      summary: 'A checklist item (a subtask), counted against active tasks'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ItemCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ChecklistWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/checklist/{checklist_id}/checklist_item/{checklist_item_id}':
+    parameters:
+      - {name: checklist_id, in: path, required: true, schema: {type: string}}
+      - {name: checklist_item_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: item_delete
+      summary: 'Archive an item'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: item_update
+      summary: 'Rename, resolve or assign an item'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ItemUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ChecklistWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: board_delete
+      summary: 'Erase a board, tracked time kept; 202 until done'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '202': {description: 'Tasks remain: call again after Retry-After', content: {application/json: {schema: {type: object, properties: {status: {const: in_progress}}}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    get:
+      operationId: list
+      summary: 'A board, its statuses (columns) and its task count'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: board_update
+      summary: 'Rename a board or change its description'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ListBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/field':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: list_fields
+      summary: 'Custom fields a provider sync imported'
+      description: 'Least level: Read. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Fields'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/status':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: status_create
+      summary: 'Add a column (not in ClickUp''s API)'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/StatusBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/status/order':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    put:
+      operationId: status_order
+      summary: 'Reorder the columns (not in ClickUp''s API)'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/StatusOrder'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/status/{status_id}':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+      - {name: status_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: status_delete
+      summary: 'Delete a column (not in ClickUp''s API)'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: status_update
+      summary: 'Rename or recolour a column (not in ClickUp''s API)'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/StatusBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/task':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: list_tasks
+      summary: 'Tasks of a board, 100 per page'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {name: 'page', in: query, schema: {type: string}}
+        - {name: 'order_by', in: query, schema: {type: string}}
+        - {name: 'reverse', in: query, schema: {type: string}}
+        - {name: 'subtasks', in: query, schema: {type: string}}
+        - {name: 'include_closed', in: query, schema: {type: string}}
+        - {name: 'archived', in: query, schema: {type: string}}
+        - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'due_date_gt', in: query, schema: {type: string}}
+        - {name: 'due_date_lt', in: query, schema: {type: string}}
+        - {name: 'date_created_gt', in: query, schema: {type: string}}
+        - {name: 'date_created_lt', in: query, schema: {type: string}}
+        - {name: 'date_updated_gt', in: query, schema: {type: string}}
+        - {name: 'date_updated_lt', in: query, schema: {type: string}}
+        - {name: 'date_done_gt', in: query, schema: {type: string}}
+        - {name: 'date_done_lt', in: query, schema: {type: string}}
+        - {name: 'include_markdown_description', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskPage'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: task_create
+      summary: 'Create a task (or a subtask with parent)'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/TaskCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Task'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/space/{space_id}':
+    parameters:
+      - {name: space_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: space
+      summary: 'A space'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Space'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/space/{space_id}/folder':
+    parameters:
+      - {name: space_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: folders
+      summary: 'Always empty: every board is a folderless list'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folders'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/space/{space_id}/list':
+    parameters:
+      - {name: space_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: lists
+      summary: 'The boards of a space the token reaches'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: board_create
+      summary: 'Create a board in a space'
+      description: 'Least level: Full. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ListBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/space/{space_id}/tag':
+    parameters:
+      - {name: space_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: space_tags
+      summary: 'Tags of the open tasks the token reaches'
+      description: 'Least level: Read. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Tags'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: task_delete
+      summary: 'Erase a task and its subtasks, tracked time kept'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    get:
+      operationId: task
+      summary: 'A task'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {name: 'include_subtasks', in: query, schema: {type: string}}
+        - {name: 'include_markdown_description', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Task'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: task_update
+      summary: 'Update a task; My tasks: status, dates and description of its own'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/TaskUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Task'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/attachment':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: attachment_create
+      summary: 'Upload a file through the host''s store'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, properties: {attachment: {type: string, format: binary}}, required: [attachment]}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Attachment'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/checklist':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: checklist_create
+      summary: 'A checklist (stored once it has an item)'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/NameBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ChecklistWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/comment':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: task_comments
+      summary: 'Comments, 25 per page, newest first'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {name: 'start', in: query, schema: {type: string}}
+        - {name: 'start_id', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Comments'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: comment_create
+      summary: 'Comment; mentions are read from the text'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/CommentCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/CommentCreated'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/dependency':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: dependency_remove
+      summary: 'Remove the dependencies between two tasks'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {name: 'depends_on', in: query, schema: {type: string}}
+        - {name: 'dependency_of', in: query, schema: {type: string}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: dependency_add
+      summary: 'Add a dependency within the board'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/DependencyCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/field/{field_id}':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+      - {name: field_id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: field_set
+      summary: 'Always 409 FIELD_001: custom fields are read-only'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/link/{links_to}':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+      - {name: links_to, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: link_remove
+      summary: 'Remove the link between two tasks'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: link_add
+      summary: 'Link two tasks of a board (Related)'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/member':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: task_members
+      summary: 'Everyone attached to the task'
+      description: 'Least level: Read. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Members'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/{task_id}/tag/{tag_name}':
+    parameters:
+      - {name: task_id, in: path, required: true, schema: {type: string}}
+      - {name: tag_name, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: tag_remove
+      summary: 'Remove a tag'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: tag_add
+      summary: 'Add a tag (at most 20, 64 characters each)'
+      description: 'Least level: Tasks. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/team':
+    get:
+      operationId: team
+      summary: 'The token''s teams (accounts)'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Teams'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/space':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: spaces
+      summary: 'Spaces of a team the token reaches'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Spaces'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/task':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: team_tasks
+      summary: 'Tasks across the team''s boards, filtered'
+      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      parameters:
+        - {name: 'page', in: query, schema: {type: string}}
+        - {name: 'order_by', in: query, schema: {type: string}}
+        - {name: 'reverse', in: query, schema: {type: string}}
+        - {name: 'subtasks', in: query, schema: {type: string}}
+        - {name: 'include_closed', in: query, schema: {type: string}}
+        - {name: 'archived', in: query, schema: {type: string}}
+        - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'due_date_gt', in: query, schema: {type: string}}
+        - {name: 'due_date_lt', in: query, schema: {type: string}}
+        - {name: 'date_created_gt', in: query, schema: {type: string}}
+        - {name: 'date_created_lt', in: query, schema: {type: string}}
+        - {name: 'date_updated_gt', in: query, schema: {type: string}}
+        - {name: 'date_updated_lt', in: query, schema: {type: string}}
+        - {name: 'date_done_gt', in: query, schema: {type: string}}
+        - {name: 'date_done_lt', in: query, schema: {type: string}}
+        - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'space_ids[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'list_ids[]', in: query, schema: {type: array, items: {type: string}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskPage'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/time_entries':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: time_entries
+      summary: 'Time entries, from the host''s time store'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      parameters:
+        - {name: 'start_date', in: query, schema: {type: string}}
+        - {name: 'end_date', in: query, schema: {type: string}}
+        - {name: 'assignee', in: query, schema: {type: string}}
+        - {name: 'task_id', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TimeEntries'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: time_log
+      summary: 'Log the token''s own person''s time'
+      description: 'Least level: My tasks (own task). The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/TimeEntryCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TimeEntryWrapper'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/time_entries/{timer_id}':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+      - {name: timer_id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: time_delete
+      summary: 'Always 403 TIME_002: tracked time is never deleted'
+      description: 'Least level: —. The person''s access and where still apply.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/user':
+    get:
+      operationId: user
+      summary: 'Who the token is'
+      description: 'Least level: My tasks. The person''s access and where still apply.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    token:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'The personal token, bare or as "Bearer <token>". Never in the query string.'
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: '1 to 255 characters. Per token, 24 hours: a retry of the same request gets the first answer (Idempotency-Replayed: true); another request with the key is 409 IDEMP_002.'
+      schema: {type: string, maxLength: 255}
+  responses:
+    Error:
+      description: 'Every refusal: {"err", "ECODE"}. 404 ACCESS_001 for anything out of reach.'
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [err, ECODE]
+      properties:
+        err: {type: string}
+        ECODE:
+          type: string
+          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, TASK_002, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+    Warnings:
+      type: array
+      description: 'Fields nothing read: unknown, or a ClickUp field with no equivalent here (not_supported). Never saved.'
+      items: {type: object, properties: {field: {type: string}, reason: {enum: [unknown, not_supported]}}}
+    Empty:
+      type: object
+      properties: {warnings: {$ref: '#/components/schemas/Warnings'}}
+    User:
+      type: object
+      properties: {user: {$ref: '#/components/schemas/Person'}}
+    Person:
+      type: object
+      properties: {id: {type: string}, username: {type: string}, email: {type: [string, 'null']}, color: {type: [string, 'null']}, initials: {type: string}, profilePicture: {type: [string, 'null']}}
+    Teams:
+      type: object
+      properties: {teams: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, color: {type: [string, 'null']}, avatar: {type: [string, 'null']}, members: {type: array}}}}}
+    Space:
+      type: object
+      properties: {id: {type: string}, name: {type: string}, private: {type: boolean}, archived: {type: boolean}, statuses: {type: array}, multiple_assignees: {type: boolean}, features: {type: object}}
+    Spaces:
+      type: object
+      properties: {spaces: {type: array, items: {$ref: '#/components/schemas/Space'}}}
+    Folders:
+      type: object
+      properties: {folders: {type: array, maxItems: 0}}
+    Status:
+      type: object
+      properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, closed]}}
+    List:
+      type: object
+      properties: {id: {type: string}, name: {type: string}, content: {type: string}, task_count: {type: integer}, archived: {type: boolean}, space: {type: object}, folder: {type: object}, statuses: {type: array, items: {$ref: '#/components/schemas/Status'}}, warnings: {$ref: '#/components/schemas/Warnings'}}
+    Lists:
+      type: object
+      properties: {lists: {type: array, items: {$ref: '#/components/schemas/List'}}}
+    Task:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: string}
+        text_content: {type: string}
+        markdown_description: {type: string}
+        status: {$ref: '#/components/schemas/Status'}
+        priority: {type: [object, 'null'], properties: {id: {type: string}, priority: {enum: [urgent, high, normal, low]}, color: {type: string}}}
+        date_created: {type: string, description: Unix milliseconds}
+        date_updated: {type: string}
+        date_done: {type: [string, 'null']}
+        due_date: {type: [string, 'null']}
+        start_date: {type: [string, 'null']}
+        time_estimate: {type: [string, 'null'], description: milliseconds}
+        time_spent: {type: integer, description: milliseconds}
+        archived: {type: boolean}
+        creator: {$ref: '#/components/schemas/Person'}
+        assignees: {type: array, items: {$ref: '#/components/schemas/Person'}}
+        watchers: {type: array, items: {$ref: '#/components/schemas/Person'}}
+        tags: {type: array, items: {type: object, properties: {name: {type: string}}}}
+        checklists: {type: array, items: {$ref: '#/components/schemas/Checklist'}}
+        dependencies: {type: array}
+        linked_tasks: {type: array}
+        custom_fields: {type: array}
+        parent: {type: [string, 'null']}
+        list: {type: object}
+        space: {type: object}
+        team_id: {type: string}
+        warnings: {$ref: '#/components/schemas/Warnings'}
+    TaskWrapper:
+      type: object
+      properties: {task: {$ref: '#/components/schemas/Task'}}
+    TaskPage:
+      type: object
+      properties: {tasks: {type: array, items: {$ref: '#/components/schemas/Task'}}, last_page: {type: boolean}}
+    Checklist:
+      type: object
+      properties: {id: {type: string}, task_id: {type: string}, name: {type: string}, orderindex: {type: integer}, resolved: {type: integer}, unresolved: {type: integer}, items: {type: array}}
+    ChecklistWrapper:
+      type: object
+      properties: {checklist: {$ref: '#/components/schemas/Checklist'}, warnings: {$ref: '#/components/schemas/Warnings'}}
+    Comments:
+      type: object
+      properties: {comments: {type: array, items: {type: object, properties: {id: {type: string}, comment_text: {type: string}, user: {$ref: '#/components/schemas/Person'}, date: {type: string}}}}}
+    CommentCreated:
+      type: object
+      properties: {id: {type: string}, hist_id: {type: string}, date: {type: integer}}
+    Members:
+      type: object
+      properties: {members: {type: array, items: {$ref: '#/components/schemas/Person'}}}
+    Tags:
+      type: object
+      properties: {tags: {type: array, items: {type: object, properties: {name: {type: string}}}}}
+    Fields:
+      type: object
+      properties: {fields: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, type: {type: string}, type_config: {type: object}}}}}
+    TimeEntry:
+      type: object
+      properties: {id: {type: string}, task: {type: [object, 'null']}, wid: {type: string}, user: {type: object, properties: {id: {type: string}}}, start: {type: string}, end: {type: string}, duration: {type: string}, description: {type: string}}
+    TimeEntries:
+      type: object
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/TimeEntry'}}}
+    TimeEntryWrapper:
+      type: object
+      properties: {data: {$ref: '#/components/schemas/TimeEntry'}, warnings: {$ref: '#/components/schemas/Warnings'}}
+    Attachment:
+      type: object
+      properties: {id: {type: string}, title: {type: string}, extension: {type: string}, url: {type: string}, date: {type: integer}}
+    TaskCreate:
+      type: object
+      required: [name]
+      properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}}
+    TaskUpdate:
+      type: object
+      properties: {name: {type: string}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null']}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, archived: {type: boolean}, assignees: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, watchers: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}}
+    CommentCreate:
+      type: object
+      required: [comment_text]
+      properties: {comment_text: {type: string, maxLength: 5000}}
+    DependencyCreate:
+      type: object
+      properties: {depends_on: {type: string}, dependency_of: {type: string}}
+    NameBody:
+      type: object
+      required: [name]
+      properties: {name: {type: string, maxLength: 64}}
+    ItemCreate:
+      type: object
+      required: [name]
+      properties: {name: {type: string, maxLength: 255}, assignee: {type: string}}
+    ItemUpdate:
+      type: object
+      properties: {name: {type: string}, resolved: {type: boolean}, assignee: {type: string}}
+    TimeEntryCreate:
+      type: object
+      required: [start, duration]
+      properties: {start: {type: integer}, duration: {type: integer, minimum: 60000, maximum: 604800000}, tid: {type: string}, description: {type: string, maxLength: 512}, assignee: {type: string}}
+    ListBody:
+      type: object
+      properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}}
+    StatusBody:
+      type: object
+      properties: {status: {type: string, maxLength: 128}, color: {type: [string, 'null'], pattern: '^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$'}}
+    StatusOrder:
+      type: object
+      required: [order]
+      properties: {order: {type: array, items: {type: string}}}

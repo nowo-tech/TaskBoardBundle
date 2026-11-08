@@ -4,7 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [Unreleased](#unreleased)
+- [To 2.2.0](#to-220)
+  - [Turning the Task API on](#turning-the-task-api-on)
 - [To 2.1.1](#to-211)
 - [To 2.1.0](#to-210)
   - [Schema change for every host: `task_board_tasks.number`](#schema-change-for-every-host-task_board_tasksnumber)
@@ -153,15 +154,32 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## Unreleased
+## To 2.2.0
 
-Target: 2.2.0, spec 213. Audit status: re-verification pending. No schema or configuration change is needed, and the UI's output stays as it was. The Task API is off unless you set `api.enabled: true`: see [API](API.md).
+Not released yet. Audit status: re-verification pending.
 
-**Board deletes through the API.** `DELETE /v2/list/{id}` erases in slices (202 until done). Two deletes of one board at the same time may both erase the same tasks' rows, so `TASK_ERASED`, with its stored-file refs, and `BOARD_DELETED` can be dispatched twice: make the listeners that delete files or write audit rows idempotent.
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
-**Schema change with `api.enabled: true` only** (and no `api.hooks.idempotency_store`): the table `task_board_api_idempotency`. Generate it with `doctrine:migrations:diff`; it holds keys for 24 hours, so it needs no data migration. A host with the API off changes nothing.
+**A host that changes nothing** gets no new route, service, listener, parameter or table: the Task API is off (`api.enabled: false`) and the UI's output stays as it was (`tests/Functional/Characterization` pins it).
 
-`TaskBoardManageController`'s `$syncLimits` argument is deprecated and ignored, kept in its place so positional arguments do not move: a restore asks the limit given to `TaskManager` (`$limits`), which the container wires from the same `sync.limit_checker`. A host that builds either by hand passes the limit to `TaskManager`.
+**Deprecated.** `TaskBoardManageController`'s `$syncLimits` argument is ignored, kept in its place so positional arguments do not move: a restore asks the limit given to `TaskManager` (`$limits`), which the container wires from the same `sync.limit_checker`. A host that builds either by hand passes the limit to `TaskManager`.
+
+**New services a host may call:** `TaskBoardEraser::eraseTask()` (one task and its subtasks, time kept; it names the files a sync stored in `TaskErasedEvent`), `TaskBoardEditor`, `TaskManager::restore()` / `archive()` / `activeTaskRefusal()`, `TaskCommentPolicy`, `Validation\TaskConstraints`.
+
+### Turning the Task API on
+
+1. **Schema** (with `api.enabled: true` and no `api.hooks.idempotency_store` only): the table `task_board_api_idempotency` (`scope`, `key_hash` as primary key; `fingerprint`, `status`, `body`, `tenant_key`, `board_id`, `created_at`, `expires_at`, indexed). Generate it with `doctrine:migrations:diff`. It holds answers for 24 hours, so it needs no data migration.
+2. **Hooks** under `api.hooks`: `authenticator` (required), `rate_limiter`, `plan_gate`, `workspace`, `users`, `time_entries`, `attachments`, optionally `idempotency_store`. Every default denies. Interfaces in `Nowo\TaskBoardBundle\Api\Hook`; see [API](API.md#what-a-host-provides).
+3. **Firewall:** a stateless firewall on `api.prefix` whose security user is the token's user; no redirecting `access_control` there. Without it every request answers 500.
+4. **Listeners:** `TaskBoardEvents::API_WRITE` (audit; without one, writes answer 503 `AUDIT_001`) and `TaskBoardEvents::QUOTA_CHECK` for task and board creates (without one, 403 `PLAN_002`, unless `api.quota_listener_required: false`).
+5. **Access:** with `security.resource_scoping: false`, set `api.host_decides_access: true` once your `BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK` listeners deny what a person may not reach; the build refuses otherwise. `security.allow_unauthenticated: true` is refused.
+6. **Tenancy:** the guard asks your tenant resolver for each board's tenant by its key; a resolver whose slugs are not the keys opens nothing through the API.
+7. **Idempotency upkeep:** schedule `nowo:task-board:api:purge-idempotency`; call `TaskApiIdempotencyStoreInterface::forget(sha256('nowo-task-board-api|' . $tokenId))` when a token is revoked or its person erased.
+8. **Board deletes:** `DELETE /v2/list/{id}` erases in slices (202 until done). Two deletes of one board at the same time may both erase the same tasks, so `TASK_ERASED`, with its stored-file refs, and `BOARD_DELETED` can be dispatched twice: make the listeners that delete files or write audit rows idempotent.
+9. **Time:** `api.hooks.time_entries` lists and logs only; deleting time is never offered. `Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries` serves the bundle's manual entries for a host without a time store.
+10. **Docs for clients:** `docs/openapi.yaml`, and the manual material at the end of [API](API.md#material-for-a-hosts-manual).
 
 ## To 2.1.1
 

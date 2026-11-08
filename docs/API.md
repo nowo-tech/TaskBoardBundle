@@ -1,6 +1,85 @@
-# Task API (since 2.2, in progress)
+# Task API
 
-A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213). **Audit status: re-verification pending.** The read endpoints are in; writes arrive before 2.2.0 is tagged, along with the OpenAPI document.
+A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit status: re-verification pending.**
+
+## Table of contents
+
+- [Turning it on](#turning-it-on)
+- [What a host provides](#what-a-host-provides)
+- [Firewall](#firewall)
+- [Access](#access)
+- [Read endpoints](#read-endpoints)
+- [Write endpoints](#write-endpoints)
+- [Management endpoints (Full)](#management-endpoints-full)
+- [Idempotency](#idempotency)
+- [Errors](#errors)
+- [Differences from ClickUp](#differences-from-clickup)
+- [Known differences from the UI](#known-differences-from-the-ui)
+- [Material for a host's manual](#material-for-a-hosts-manual)
+
+With `api.enabled: false` a host gets no route, service, listener, parameter or table. Paths below are relative to `api.prefix` (default `/api/tasks`).
+
+## Turning it on
+
+1. Implement the hooks below and set them under `api.hooks`. Only `authenticator` is required to build; every other default denies, so a host sets them all.
+2. Put the prefix behind a stateless firewall that authenticates the token (below).
+3. Listen to `TaskBoardEvents::API_WRITE` (audit) and to `TaskBoardEvents::QUOTA_CHECK` (plan limits for task and board creates).
+4. Create the `task_board_api_idempotency` table (`doctrine:migrations:diff`), unless you set `api.hooks.idempotency_store`; schedule `nowo:task-board:api:purge-idempotency`; call `forget()` when a token is revoked or its person erased.
+5. Make the listeners of `TASK_ERASED` and `BOARD_DELETED` idempotent: a board deleted twice at once can fire them twice.
+
+The full contract is `docs/openapi.yaml` (OpenAPI 3.1), kept in step with the routes by `ApiOpenApiTest`.
+
+## What a host provides
+
+The bundle stores no tokens. `api.hooks.authenticator` is required with `enabled: true`; every other hook has a default, and every default denies.
+
+| `api.hooks.*` | Interface in `Nowo\TaskBoardBundle\Api\Hook` | Without it |
+|---|---|---|
+| `authenticator` | `TaskApiAuthenticatorInterface` | The container does not build |
+| `rate_limiter` | `TaskApiRateLimiterInterface` | Every request 429 |
+| `plan_gate` | `TaskApiPlanGateInterface` | 403 `PLAN_001` |
+| `workspace` | `TaskApiWorkspaceInterface` | No teams or spaces, every board 404 |
+| `users` | `TaskApiUsersInterface` | Nobody is known |
+| `time_entries` | `TaskApiTimeEntriesInterface` (list and log; tracked time is never deleted through the API) | 403 `TIME_001` |
+| `attachments` | `TaskApiAttachmentsInterface` | 403 `FILE_001` |
+| `idempotency_store` | `TaskApiIdempotencyStoreInterface` | The bundle's store, when writes arrive |
+
+A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write.
+
+## Firewall
+
+The API must sit behind a **stateless firewall** whose security user is the token's user, as the access checkers read the security token. `security: false` answers 500 `SERVER_001` on every request. For a bad token the firewall lets the request through with no user, and adds no redirecting `access_control` on the path: the bundle answers, so all refusals share one shape.
+
+```yaml
+nowo_task_board:
+    api:
+        enabled: true
+        prefix: /api/tasks
+        host_decides_access: true   # only with security.resource_scoping: false, when your listeners decide access
+        hooks:
+            authenticator: App\Api\TaskApiAuthenticator
+```
+
+The build refuses `security.allow_unauthenticated: true`, and `security.resource_scoping: false` without `host_decides_access: true`: both would open every board to every token.
+
+## Access
+
+Each request: level ∩ the person's access ∩ where. In this order, and the first failure answers:
+
+| Check | Answer |
+|---|---|
+| Out of reach: missing, outside where, no space for its tenant, no view access, for My tasks not its own | 404 `ACCESS_001`, always the same |
+| The tasks module is not in the plan | 403 `PLAN_001` |
+| The level may not | 403 `TOKEN_001` |
+| The person may not | 403 `ACCESS_002` |
+
+Levels are not a chain: *Read* changes nothing, while *My tasks* works on its own tasks. See `TaskApiCapability`.
+
+**Where.** `TaskApiWhere::limitedTo($tenantKeys, $boardIds)`: each entry grants on its own. A named tenant reaches all its boards; a named board is reached even when its tenant is not listed. Nothing else widens: the person's access, the workspace hook and the tenant check apply to it too.
+
+**Tenancy.** With `tenancy.enabled`, a board is reached only when the bundle's tenant resolver opens its tenant for the person (the slug being the key), as the UI asks of the tenant in its URL, whatever the workspace hook answers. A board without a tenant is not served then, as in the UI.
+
+**Notes for hosts.** The security-user check compares ids, not classes: a firewall user of another class with the same id would pass, so use one user class for the API's firewall. An `access_control` refusal on the API's path answers 403 `ACCESS_002`, not 401: add none there. A token whose user the access checker refuses answers 401 like a bad token and counts as a failed token.
 
 ## Read endpoints
 
@@ -44,12 +123,11 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST`, `DELETE /v2/task/{id}/link/{links_to}` | Tasks | A `Related` relation |
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
 | `POST /v2/checklist/{id}/checklist_item`, `PUT`, `DELETE …/checklist_item/{item}` | My tasks (own) | An item is a subtask tagged `checklist:<name>`, counted against the plan's active tasks. `resolved` moves it to the done column or back to the first. *My tasks* assigns an item only to its own person. Deleting archives it. Items are edited under the parent task's right, whoever created them; any editor who tags a subtask `checklist:<name>` makes it an item, visible to a *My tasks* token of the parent |
-
 | `POST /v2/task/{id}/attachment` | Tasks | Multipart, field `attachment`. The host stores it through `TaskApiAttachmentsInterface`, with all its upload checks (content sniffing, plan storage, sizes); its refusal is the answer. The file's bytes are part of an idempotency key's request |
 | `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
-### Management (Full)
+## Management endpoints (Full)
 
 Every management write needs a *Full* token and the board's manage decision (`BoardAccessCheckEvent::ACTION_MANAGE`; in Beacon `project.tasks.manage`, `organization.tasks.manage`, or a personal board's owner); a new board needs the host's create check for the space's tenant and the board plan limit.
 
@@ -71,7 +149,7 @@ Tags exist on tasks only: there is no space tag to create, rename or delete. Boa
 
 **Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept. **Known narrow race:** the limit is asked once before the first save, and the restore and the move ask it again as they save; if another write fills the limit in between, the restore is saved and the move then answers 500. Retrying the same request completes it.
 
-### Idempotency
+## Idempotency
 
 Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`):
 
@@ -83,6 +161,35 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 - **A replay is checked again:** the pipeline, and whether the token still reaches what the write touched (a board that is gone leaves its tenant), else 404.
 - **What a replay does not do:** it does not ask the level or the plan again (the first request did, and a replay writes nothing); it does ask the pipeline (token, rate limit) and the reach.
 - **Storage:** the bundle's table `task_board_api_idempotency` (hashes of the token id and key, never either; the answer, which can hold task text). Expired rows go on each claim and with `nowo:task-board:api:purge-idempotency`. `forget()` clears one token's answers: text from a task may sit in other tokens' answers for up to 24 hours. On revoking a token or erasing its person, call `TaskApiIdempotencyStoreInterface::forget()` with the scope `sha256('nowo-task-board-api|' . $tokenId)`. A host may replace the store with `api.hooks.idempotency_store`; the table is then not mapped. A store that fails refuses keyed writes with 503 `IDEMP_004`.
+
+## Errors
+
+Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
+
+| ECODE | HTTP | When |
+|---|---|---|
+| `OAUTH_017` | 401 | No `Authorization` header |
+| `OAUTH_019` | 401 | Token not valid: unknown, revoked, expired, disabled or erased account, or a user the access checker refuses. One answer for every reason |
+| `API_001` | 404 | The host's instance switch is off |
+| `ACCESS_001` | 404 | Out of reach, or an unknown path under the prefix |
+| `ACCESS_002` | 403 | The person may not do this write |
+| `TOKEN_001` | 403 | The token's level may not |
+| `PLAN_001` | 403 | The tasks module is not in the plan |
+| `PLAN_002` | 403 | A plan limit (the host's reason in `err`), or no `QUOTA_CHECK` listener |
+| `RATE_001`, `RATE_002` | 429 | The token's limit; failed tokens from this IP |
+| `INPUT_001` | 400 | Malformed JSON, not an object, or too large (`api.max_body_bytes`) |
+| `INPUT_002` | 400 | A field or filter that is not valid; `err` names it |
+| `LIST_001` | 409 | The last column of a board |
+| `LIST_002` | 409 | Deleting a board that follows a provider |
+| `TASK_002` | 409 | Deleting a task that follows a provider |
+| `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
+| `FIELD_001` | 409 | Setting a custom field |
+| `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
+| `TIME_001` | 403 | No time store; the host's store may answer its own `TIME_*` |
+| `TIME_002` | 403 | Deleting a time entry |
+| `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
+| `AUDIT_001` | 503 | No `API_WRITE` listener |
+| `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp
 
@@ -147,67 +254,39 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 - Deleting a checklist or an item archives it.
 - ClickUp's structured comment fields (`notify_all`, `assignee`, `group_assignee`) are not read; mentions come from the text, as in the UI.
 - A task without a column, on a board that has columns, goes to the first column on any update (the task form does the same). Tasks get a column when created, so this concerns only rows made outside the bundle.
-
-## Off by default
-
-With `api.enabled: false` a host gets no route, service, listener, parameter or table.
-
-## What a host provides
-
-The bundle stores no tokens. `api.hooks.authenticator` is required with `enabled: true`; every other hook has a default, and every default denies.
-
-| `api.hooks.*` | Interface in `Nowo\TaskBoardBundle\Api\Hook` | Without it |
-|---|---|---|
-| `authenticator` | `TaskApiAuthenticatorInterface` | The container does not build |
-| `rate_limiter` | `TaskApiRateLimiterInterface` | Every request 429 |
-| `plan_gate` | `TaskApiPlanGateInterface` | 403 `PLAN_001` |
-| `workspace` | `TaskApiWorkspaceInterface` | No teams or spaces, every board 404 |
-| `users` | `TaskApiUsersInterface` | Nobody is known |
-| `time_entries` | `TaskApiTimeEntriesInterface` (list and log; tracked time is never deleted through the API) | 403 `TIME_001` |
-| `attachments` | `TaskApiAttachmentsInterface` | 403 `FILE_001` |
-| `idempotency_store` | `TaskApiIdempotencyStoreInterface` | The bundle's store, when writes arrive |
-
-A listener on `TaskBoardEvents::API_WRITE` (`TaskApiWriteEvent`) audits each write.
-
-## Firewall
-
-The API must sit behind a **stateless firewall** whose security user is the token's user, as the access checkers read the security token. `security: false` answers 500 `SERVER_001` on every request. For a bad token the firewall lets the request through with no user, and adds no redirecting `access_control` on the path: the bundle answers, so all refusals share one shape.
-
-```yaml
-nowo_task_board:
-    api:
-        enabled: true
-        prefix: /api/tasks
-        host_decides_access: true   # only with security.resource_scoping: false, when your listeners decide access
-        hooks:
-            authenticator: App\Api\TaskApiAuthenticator
-```
-
-The build refuses `security.allow_unauthenticated: true`, and `security.resource_scoping: false` without `host_decides_access: true`: both would open every board to every token.
-
-## Access
-
-Each request: level ∩ the person's access ∩ where. In this order, and the first failure answers:
-
-| Check | Answer |
-|---|---|
-| Out of reach: missing, outside where, no space for its tenant, no view access, for My tasks not its own | 404 `ACCESS_001`, always the same |
-| The tasks module is not in the plan | 403 `PLAN_001` |
-| The level may not | 403 `TOKEN_001` |
-| The person may not | 403 `ACCESS_002` |
-
-Levels are not a chain: *Read* changes nothing, while *My tasks* works on its own tasks. See `TaskApiCapability`.
-
-**Where.** `TaskApiWhere::limitedTo($tenantKeys, $boardIds)`: each entry grants on its own. A named tenant reaches all its boards; a named board is reached even when its tenant is not listed. Nothing else widens: the person's access, the workspace hook and the tenant check apply to it too.
-
-**Tenancy.** With `tenancy.enabled`, a board is reached only when the bundle's tenant resolver opens its tenant for the person (the slug being the key), as the UI asks of the tenant in its URL, whatever the workspace hook answers. A board without a tenant is not served then, as in the UI.
-
-**Notes for hosts.** The security-user check compares ids, not classes: a firewall user of another class with the same id would pass, so use one user class for the API's firewall. An `access_control` refusal on the API's path answers 403 `ACCESS_002`, not 401: add none there. A token whose user the access checker refuses answers 401 like a bad token and counts as a failed token.
-
-## Errors
-
-`{"err": "...", "ECODE": "..."}`, with `OAUTH_017` (401, no header), `OAUTH_019` (401, token not valid, one answer for every reason), `API_001` (404, the instance switch), `RATE_001` and `RATE_002` (429), and `SERVER_001` (500, no detail). Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
+- **Deleting a board takes several calls** when it holds many tasks: `DELETE /v2/list/{id}` answers 202 with `Retry-After` until it is done, then 200. A ClickUp client expects one call; it must repeat while it gets 202.
+- **Time logged without a task** (`POST /v2/team/{id}/time_entries` with no `tid`) means what the host's time store makes of it; the bundle checks only the team and the level.
+- Personal tokens expire (the host's rule; Beacon: 90 days by default, 1 year at most); ClickUp's never do.
+- Columns are managed on this API's own `/v2/list/{id}/status…` paths, which ClickUp has not.
 
 ## Known differences from the UI
 
 Task text is returned raw. A description or comment that embeds a host file (in Beacon, a `beacon-file:` image) shows an API reader the image's alt text and its UUID, which the UI hides from a viewer who may not open the file. The file's bytes stay behind the host's download check. Wiki and document references are not resolved in task text, so they show nothing more.
+
+## Material for a host's manual
+
+What a person using tokens needs to know, for a host to put in its own words (Beacon's manual, English and Spanish):
+
+- **What a token is.** A personal secret for scripts and agents. It acts as the person, never with more than the person may do, and only where the token says. Losing access to a project or organization takes effect on the next request.
+- **Levels.**
+
+| Level | May | May not |
+|---|---|---|
+| *My tasks* | Read the tasks it created or is assigned; change their status, dates and description; comment; manage their checklists; log its own time | Create tasks, reassign, see anyone else's tasks |
+| *Read* | Read every task, board, comment, member, tag, field and time entry the person can see | Change anything, even its own tasks |
+| *Tasks* | Everything above, plus create, edit, assign, tag, link, attach files to and delete tasks, where the person may | Manage boards or columns |
+| *Full management* | Everything above, plus create, rename and delete boards, and manage their columns, where the person may manage the board | Reach provider connections, tokens, billing or roles |
+
+- **Where.** Everything the person reaches, or a list of projects, organizations or boards. Naming a board reaches that board only; creating a board needs its whole project or organization.
+- **What is never possible.** Deleting tracked time; reaching provider connections or their tokens; anything the person cannot do in the app.
+- **Examples** (the token is a placeholder):
+
+```bash
+curl -H "Authorization: bt_placeholder" https://beacon.example/api/tasks/v2/team
+curl -H "Authorization: bt_placeholder" "https://beacon.example/api/tasks/v2/list/LIST_ID/task?statuses[]=doing"
+curl -X PUT -H "Authorization: bt_placeholder" -H "Content-Type: application/json" -H "Idempotency-Key: move-1" \
+     -d '{"status": "Done"}' https://beacon.example/api/tasks/v2/task/TASK_ID
+```
+
+- **When something is refused.** 404 means "not there, or not yours to see"; 403 names what is missing (`TOKEN_001` the level, `ACCESS_002` the person's right, `PLAN_001` the plan); 429 means slow down. A retry with the same `Idempotency-Key` never does a write twice.
+- **Coming from ClickUp.** Change the base URL and the token. Ids are strings, folders do not exist, columns are statuses, and the rest is in *Differences from ClickUp*.
