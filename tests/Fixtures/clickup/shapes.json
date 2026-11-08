@@ -1,0 +1,1551 @@
+{
+ "_note": "Shapes (field names and JSON types, never values) derived on 2026-11-08 from the response examples, or the response schema where a page has no example, published in ClickUp API v2 reference pages at https://developer.clickup.com/reference/<page>. Not live recordings: no ClickUp account was called.",
+ "adddependency": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/dependency",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/adddependency"
+ },
+ "addtagtotask": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/tag/{tag_name}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/addtagtotask"
+ },
+ "addtasklink": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/link/{links_to}",
+  "shape": {
+   "task": {
+    "assignees": [],
+    "checklists": [],
+    "creator": {
+     "color": "string",
+     "id": "number",
+     "profilePicture": "string",
+     "username": "string"
+    },
+    "date_closed": "null",
+    "date_created": "string",
+    "date_updated": "string",
+    "due_date": "null",
+    "folder": {
+     "id": "string"
+    },
+    "id": "string",
+    "linked_tasks": [
+     {
+      "date_created": "string",
+      "link_id": "string",
+      "task_id": "string",
+      "userid": "string"
+     }
+    ],
+    "list": {
+     "id": "string"
+    },
+    "name": "string",
+    "orderindex": "string",
+    "parent": "null",
+    "priority": "null",
+    "space": {
+     "id": "string"
+    },
+    "start_date": "null",
+    "status": {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    },
+    "tags": [],
+    "time_estimate": "null",
+    "time_spent": "null",
+    "url": "string"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/addtasklink"
+ },
+ "createatimeentry": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/team/{team_Id}/time_entries",
+  "shape": {
+   "assignee": "number",
+   "billable": "boolean",
+   "description": "string",
+   "duration": "number",
+   "start": "number",
+   "tags": [
+    {
+     "name": "string",
+     "tag_bg": "string",
+     "tag_fg": "string"
+    }
+   ],
+   "tid": "string"
+  },
+  "source": "https://developer.clickup.com/reference/createatimeentry"
+ },
+ "createchecklist": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/checklist",
+  "shape": {
+   "checklist": {
+    "id": "string",
+    "items": [],
+    "name": "string",
+    "orderindex": "number",
+    "resolved": "number",
+    "task_id": "string",
+    "unresolved": "number"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/createchecklist"
+ },
+ "createchecklistitem": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/checklist/{checklist_id}/checklist_item",
+  "shape": {
+   "checklist": {
+    "date_created": "string",
+    "id": "string",
+    "items": [
+     {
+      "assignee": {
+       "color": "string",
+       "email": "string",
+       "id": "number",
+       "initials": "string",
+       "profilePicture": "string",
+       "username": "string"
+      },
+      "children": [],
+      "date_created": "string",
+      "id": "string",
+      "name": "string",
+      "orderindex": "number",
+      "parent": "null",
+      "resolved": "boolean"
+     }
+    ],
+    "name": "string",
+    "orderindex": "number",
+    "resolved": "number",
+    "task_id": "string",
+    "unresolved": "number"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/createchecklistitem"
+ },
+ "createfolderlesslist": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/space/{space_id}/list",
+  "shape": {
+   "assignee": {
+    "color": "string",
+    "id": "number",
+    "initials": "string",
+    "profilePicture": "string",
+    "username": "string"
+   },
+   "content": "string",
+   "due_date": "string",
+   "due_date_time": "boolean",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "id": "string",
+   "inbound_address": "string",
+   "name": "string",
+   "orderindex": "number",
+   "priority": {
+    "color": "string",
+    "priority": "string"
+   },
+   "space": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "start_date": "null",
+   "start_date_time": "null",
+   "status": {
+    "color": "string",
+    "hide_label": "boolean",
+    "status": "string"
+   },
+   "statuses": [
+    {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    }
+   ],
+   "task_count": "null"
+  },
+  "source": "https://developer.clickup.com/reference/createfolderlesslist"
+ },
+ "createtask": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/list/{list_id}/task",
+  "shape": {
+   "archived": "boolean",
+   "assignees": [],
+   "checklists": [],
+   "creator": {
+    "color": "string",
+    "id": "number",
+    "profilePicture": "string",
+    "username": "string"
+   },
+   "custom_fields": [
+    {
+     "date_created": "string",
+     "hide_from_guests": "boolean",
+     "id": "string",
+     "name": "string",
+     "required": "boolean",
+     "type": "string",
+     "type_config": {},
+     "value": "string",
+     "value_richtext": "string"
+    }
+   ],
+   "custom_id": "null",
+   "custom_item_id": "number",
+   "date_closed": "null",
+   "date_created": "string",
+   "date_done": "null",
+   "date_updated": "string",
+   "dependencies": [],
+   "description": "string",
+   "due_date": "string",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "group_assignees": [],
+   "id": "string",
+   "linked_tasks": [],
+   "list": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "locations": [],
+   "markdown_description": "string",
+   "name": "string",
+   "orderindex": "string",
+   "parent": "null",
+   "permission_level": "string",
+   "points": "number",
+   "priority": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "string",
+    "priority": "string"
+   },
+   "project": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "sharing": {
+    "public": "boolean",
+    "public_fields": [
+     "string"
+    ],
+    "public_share_expires_on": "null",
+    "seo_optimized": "boolean",
+    "token": "null"
+   },
+   "space": {
+    "id": "string"
+   },
+   "start_date": "null",
+   "status": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "number",
+    "status": "string",
+    "type": "string"
+   },
+   "tags": [],
+   "team_id": "string",
+   "text_content": "string",
+   "time_estimate": "string",
+   "time_spent": "number",
+   "top_level_parent": "null",
+   "url": "string",
+   "watchers": []
+  },
+  "source": "https://developer.clickup.com/reference/createtask"
+ },
+ "createtaskattachment": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/attachment",
+  "shape": {
+   "date": "number",
+   "extension": "string",
+   "id": "string",
+   "thumbnail_large": "string",
+   "thumbnail_small": "string",
+   "title": "string",
+   "url": "string",
+   "version": "string"
+  },
+  "source": "https://developer.clickup.com/reference/createtaskattachment"
+ },
+ "createtaskcomment": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/comment",
+  "shape": {
+   "date": "number",
+   "hist_id": "string",
+   "id": "string"
+  },
+  "source": "https://developer.clickup.com/reference/createtaskcomment"
+ },
+ "deleteatimeentry": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/team/{team_id}/time_entries/{timer_id}",
+  "shape": {
+   "data": {
+    "at": "number",
+    "billable": "boolean",
+    "description": "string",
+    "duration": "number",
+    "end": "number",
+    "id": "string",
+    "source": "string",
+    "start": "string",
+    "tags": [],
+    "task": {
+     "custom_type": "null",
+     "id": "string",
+     "name": "string",
+     "status": {
+      "color": "string",
+      "orderindex": "number",
+      "status": "string",
+      "type": "string"
+     }
+    },
+    "user": {
+     "color": "string",
+     "email": "string",
+     "id": "number",
+     "initials": "string",
+     "profilePicture": "string",
+     "username": "string"
+    },
+    "wid": "string"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/deleteatimeentry"
+ },
+ "deletechecklist": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/checklist/{checklist_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/deletechecklist"
+ },
+ "deletechecklistitem": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/checklist/{checklist_id}/checklist_item/{checklist_item_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/deletechecklistitem"
+ },
+ "deletedependency": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/task/{task_id}/dependency",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/deletedependency"
+ },
+ "deletelist": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/list/{list_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/deletelist"
+ },
+ "deletetask": {
+  "from": "none",
+  "method": "DELETE",
+  "path": "/v2/task/{task_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/deletetask"
+ },
+ "deletetasklink": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/task/{task_id}/link/{links_to}",
+  "shape": {
+   "task": {
+    "assignees": [],
+    "checklists": [],
+    "creator": {
+     "color": "string",
+     "id": "number",
+     "profilePicture": "string",
+     "username": "string"
+    },
+    "date_closed": "null",
+    "date_created": "string",
+    "date_updated": "string",
+    "due_date": "null",
+    "folder": {
+     "id": "string"
+    },
+    "id": "string",
+    "linked_tasks": [],
+    "list": {
+     "id": "string"
+    },
+    "name": "string",
+    "orderindex": "string",
+    "parent": "null",
+    "priority": "null",
+    "space": {
+     "id": "string"
+    },
+    "start_date": "null",
+    "status": {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    },
+    "tags": [],
+    "time_estimate": "null",
+    "time_spent": "null",
+    "url": "string"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/deletetasklink"
+ },
+ "editchecklist": {
+  "from": "schema",
+  "method": "PUT",
+  "path": "/v2/checklist/{checklist_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/editchecklist"
+ },
+ "editchecklistitem": {
+  "from": "example",
+  "method": "PUT",
+  "path": "/v2/checklist/{checklist_id}/checklist_item/{checklist_item_id}",
+  "shape": {
+   "checklist": {
+    "date_created": "string",
+    "id": "string",
+    "items": [
+     {
+      "assignee": "null",
+      "children": [],
+      "date_created": "string",
+      "id": "string",
+      "name": "string",
+      "orderindex": "number",
+      "parent": "null",
+      "resolved": "boolean"
+     }
+    ],
+    "name": "string",
+    "orderindex": "number",
+    "resolved": "number",
+    "task_id": "string",
+    "unresolved": "number"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/editchecklistitem"
+ },
+ "getaccessiblecustomfields": {
+  "from": "schema",
+  "method": "GET",
+  "path": "/v2/list/{list_id}/field",
+  "shape": {
+   "fields": [
+    {
+     "applied_objects": [
+      {
+       "object_id": "number",
+       "object_type": "number"
+      }
+     ],
+     "date_created": "string",
+     "hide_from_guests": "boolean",
+     "id": "string",
+     "name": "string",
+     "type": "string",
+     "type_config": {
+      "code_point": "string",
+      "complete_on": "number",
+      "count": "number",
+      "currency_type": "string",
+      "default": "string",
+      "end": "number",
+      "options": [
+       {
+        "color": "string",
+        "id": "string",
+        "label": "string",
+        "name": "string",
+        "orderindex": "number",
+        "type": "string",
+        "value": "number"
+       }
+      ],
+      "placeholder": "string",
+      "precision": "number",
+      "start": "number",
+      "tracking": {
+       "assigned_comments": "boolean",
+       "checklists": "boolean",
+       "subtasks": "boolean"
+      }
+     }
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getaccessiblecustomfields"
+ },
+ "getauthorizedteams": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/team",
+  "shape": {
+   "teams": [
+    {
+     "avatar": "string",
+     "color": "string",
+     "id": "string",
+     "members": [
+      {
+       "user": {
+        "color": "string",
+        "id": "number",
+        "profilePicture": "string",
+        "username": "string"
+       }
+      }
+     ],
+     "name": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getauthorizedteams"
+ },
+ "getauthorizeduser": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/user",
+  "shape": {
+   "user": {
+    "color": "string",
+    "email": "string",
+    "global_font_support": "boolean",
+    "id": "number",
+    "initials": "string",
+    "profilePicture": "string",
+    "timezone": "string",
+    "username": "string",
+    "week_start_day": "number"
+   }
+  },
+  "source": "https://developer.clickup.com/reference/getauthorizeduser"
+ },
+ "getfilteredteamtasks": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/team/{team_Id}/task",
+  "shape": {
+   "tasks": [
+    {
+     "assignees": [
+      {
+       "color": "string",
+       "email": "string",
+       "id": "number",
+       "profilePicture": "string",
+       "username": "string"
+      }
+     ],
+     "checklists": [
+      {
+       "creator": "number",
+       "date_created": "string",
+       "id": "string",
+       "items": [
+        {
+         "assignee": "null",
+         "children": [],
+         "date_created": "string",
+         "id": "string",
+         "name": "string",
+         "orderindex": "number",
+         "parent": "null",
+         "resolved": "boolean"
+        }
+       ],
+       "name": "string",
+       "orderindex": "number",
+       "resolved": "number",
+       "task_id": "string",
+       "unresolved": "number"
+      }
+     ],
+     "creator": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "custom_fields": [
+      {
+       "date_created": "string",
+       "hide_from_guests": "boolean",
+       "id": "string",
+       "name": "string",
+       "required": "boolean",
+       "type": "string",
+       "type_config": {}
+      }
+     ],
+     "custom_id": "null",
+     "date_closed": "string",
+     "date_created": "string",
+     "date_done": "string",
+     "date_updated": "string",
+     "dependencies": [],
+     "description": "string",
+     "due_date": "string",
+     "folder": {
+      "access": "boolean",
+      "hidden": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "id": "string",
+     "linked_tasks": [],
+     "list": {
+      "access": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "locations": [
+      {
+       "id": "string",
+       "name": "string"
+      }
+     ],
+     "markdown_description": "string",
+     "name": "string",
+     "orderindex": "string",
+     "parent": "string",
+     "permission_level": "string",
+     "points": "number",
+     "priority": "number",
+     "project": {
+      "access": "boolean",
+      "hidden": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "space": {
+      "id": "string"
+     },
+     "start_date": "string",
+     "status": {
+      "color": "string",
+      "orderindex": "number",
+      "status": "string",
+      "type": "string"
+     },
+     "tags": [
+      {
+       "name": "string",
+       "tag_bg": "string",
+       "tag_fg": "string"
+      }
+     ],
+     "team_id": "string",
+     "text_content": "string",
+     "time_estimate": "number",
+     "url": "string",
+     "watchers": [
+      {
+       "color": "string",
+       "email": "string",
+       "id": "number",
+       "profilePicture": "string",
+       "username": "string"
+      }
+     ]
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getfilteredteamtasks"
+ },
+ "getfolderlesslists": {
+  "from": "schema",
+  "method": "GET",
+  "path": "/v2/space/{space_id}/list",
+  "shape": {
+   "lists": [
+    {
+     "archived": "boolean",
+     "assignee": "string",
+     "content": "string",
+     "due_date": "string",
+     "folder": "null",
+     "id": "string",
+     "name": "string",
+     "orderindex": "number",
+     "override_statuses": "boolean",
+     "permission_level": "string",
+     "priority": {
+      "color": "string",
+      "priority": "string"
+     },
+     "space": "null",
+     "start_date": "string",
+     "status": {
+      "color": "string",
+      "hide_label": "boolean",
+      "status": "string"
+     },
+     "task_count": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getfolderlesslists"
+ },
+ "getfolders": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/space/{space_id}/folder",
+  "shape": {
+   "folders": [
+    {
+     "hidden": "boolean",
+     "id": "string",
+     "lists": [],
+     "name": "string",
+     "orderindex": "number",
+     "override_statuses": "boolean",
+     "space": {
+      "access": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "statuses": [],
+     "task_count": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getfolders"
+ },
+ "getlist": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/list/{list_id}",
+  "shape": {
+   "archived": "boolean",
+   "assignee": "null",
+   "content": "string",
+   "due_date": "string",
+   "due_date_time": "boolean",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "id": "string",
+   "inbound_address": "string",
+   "name": "string",
+   "orderindex": "number",
+   "override_statuses": "boolean",
+   "permission_level": "string",
+   "priority": {
+    "color": "string",
+    "priority": "string"
+   },
+   "space": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "start_date": "null",
+   "start_date_time": "null",
+   "status": {
+    "color": "string",
+    "hide_label": "boolean",
+    "status": "string"
+   },
+   "statuses": [
+    {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    }
+   ],
+   "task_count": "number"
+  },
+  "source": "https://developer.clickup.com/reference/getlist"
+ },
+ "getspace": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/space/{space_id}",
+  "shape": {
+   "features": {
+    "checklists": {
+     "enabled": "boolean"
+    },
+    "custom_fields": {
+     "enabled": "boolean"
+    },
+    "dependency_warning": {
+     "enabled": "boolean"
+    },
+    "due_dates": {
+     "enabled": "boolean",
+     "remap_closed_due_date": "boolean",
+     "remap_due_dates": "boolean",
+     "start_date": "boolean"
+    },
+    "portfolios": {
+     "enabled": "boolean"
+    },
+    "remap_dependencies": {
+     "enabled": "boolean"
+    },
+    "tags": {
+     "enabled": "boolean"
+    },
+    "time_estimates": {
+     "enabled": "boolean"
+    },
+    "time_tracking": {
+     "enabled": "boolean"
+    }
+   },
+   "id": "string",
+   "multiple_assignees": "boolean",
+   "name": "string",
+   "private": "boolean",
+   "statuses": [
+    {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getspace"
+ },
+ "getspaces": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/team/{team_id}/space",
+  "shape": {
+   "spaces": [
+    {
+     "admin_can_manage": "boolean",
+     "archived": "boolean",
+     "avatar": "string",
+     "color": "null",
+     "features": {
+      "checklists": {
+       "enabled": "boolean"
+      },
+      "custom_fields": {
+       "enabled": "boolean"
+      },
+      "dependency_warning": {
+       "enabled": "boolean"
+      },
+      "due_dates": {
+       "enabled": "boolean",
+       "remap_closed_due_date": "boolean",
+       "remap_due_dates": "boolean",
+       "start_date": "boolean"
+      },
+      "portfolios": {
+       "enabled": "boolean"
+      },
+      "remap_dependencies": {
+       "enabled": "boolean"
+      },
+      "tags": {
+       "enabled": "boolean"
+      },
+      "time_estimates": {
+       "enabled": "boolean"
+      },
+      "time_tracking": {
+       "enabled": "boolean"
+      }
+     },
+     "id": "string",
+     "members": [
+      {
+       "user": {
+        "color": "null",
+        "id": "string",
+        "initials": "string",
+        "profilePicture": "string",
+        "username": "string"
+       }
+      }
+     ],
+     "multiple_assignees": "boolean",
+     "name": "string",
+     "private": "boolean",
+     "statuses": [
+      {
+       "color": "string",
+       "orderindex": "number",
+       "status": "string",
+       "type": "string"
+      }
+     ]
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getspaces"
+ },
+ "getspacetags": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/space/{space_id}/tag",
+  "shape": {
+   "tags": [
+    {
+     "name": "string",
+     "tag_bg": "string",
+     "tag_fg": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/getspacetags"
+ },
+ "gettask": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/task/{task_id}",
+  "shape": {
+   "archived": "boolean",
+   "assignees": [
+    {
+     "color": "string",
+     "email": "string",
+     "id": "number",
+     "initials": "string",
+     "profilePicture": "null",
+     "username": "string"
+    }
+   ],
+   "attachments": [
+    {
+     "date": "number",
+     "deleted": "boolean",
+     "email_data": "null",
+     "extension": "string",
+     "hidden": "boolean",
+     "id": "string",
+     "is_folder": "null",
+     "mimetype": "string",
+     "orientation": "null",
+     "parent_id": "string",
+     "resolved_comments": "number",
+     "size": "number",
+     "source": "number",
+     "thumbnail_large": "null",
+     "thumbnail_medium": "null",
+     "thumbnail_small": "null",
+     "title": "string",
+     "total_comments": "number",
+     "type": "number",
+     "url": "string",
+     "url_w_host": "string",
+     "url_w_query": "string",
+     "user": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "initials": "string",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "version": "number"
+    }
+   ],
+   "checklists": [],
+   "creator": {
+    "color": "string",
+    "email": "string",
+    "id": "number",
+    "profilePicture": "string",
+    "username": "string"
+   },
+   "custom_fields": [
+    {
+     "date_created": "string",
+     "hide_from_guests": "boolean",
+     "id": "string",
+     "name": "string",
+     "required": "boolean",
+     "type": "string",
+     "type_config": {},
+     "value": "string",
+     "value_richtext": "string"
+    }
+   ],
+   "custom_id": "null",
+   "custom_item_id": "number",
+   "date_closed": "null",
+   "date_created": "string",
+   "date_done": "null",
+   "date_updated": "string",
+   "dependencies": [
+    {
+     "chain_id": "null",
+     "date_created": "string",
+     "depends_on": "string",
+     "task_id": "string",
+     "type": "number",
+     "userid": "string",
+     "workspace_id": "string"
+    }
+   ],
+   "description": "string",
+   "due_date": "string",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "group_assignees": [],
+   "id": "string",
+   "linked_tasks": [],
+   "list": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "locations": [],
+   "name": "string",
+   "orderindex": "string",
+   "parent": "null",
+   "permission_level": "string",
+   "points": "number",
+   "priority": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "string",
+    "priority": "string"
+   },
+   "project": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "sharing": {
+    "public": "boolean",
+    "public_fields": [
+     "string"
+    ],
+    "public_share_expires_on": "null",
+    "seo_optimized": "boolean",
+    "token": "null"
+   },
+   "space": {
+    "id": "string"
+   },
+   "start_date": "null",
+   "status": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "number",
+    "status": "string",
+    "type": "string"
+   },
+   "tags": [
+    {
+     "creator": "number",
+     "name": "string",
+     "tag_bg": "string",
+     "tag_fg": "string"
+    }
+   ],
+   "team_id": "string",
+   "text_content": "string",
+   "time_estimate": "string",
+   "time_spent": "number",
+   "top_level_parent": "null",
+   "url": "string",
+   "watchers": [
+    {
+     "color": "string",
+     "email": "string",
+     "id": "number",
+     "initials": "string",
+     "profilePicture": "null",
+     "username": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/gettask"
+ },
+ "gettaskcomments": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/task/{task_id}/comment",
+  "shape": {
+   "comments": [
+    {
+     "assigned_by": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "initials": "string",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "assignee": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "initials": "string",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "comment": [
+      {
+       "text": "string"
+      }
+     ],
+     "comment_text": "string",
+     "date": "string",
+     "id": "string",
+     "reactions": [],
+     "reply_count": "string",
+     "resolved": "boolean",
+     "user": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "initials": "string",
+      "profilePicture": "string",
+      "username": "string"
+     }
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/gettaskcomments"
+ },
+ "gettaskmembers": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/task/{task_id}/member",
+  "shape": {
+   "members": [
+    {
+     "color": "string",
+     "email": "string",
+     "id": "number",
+     "initials": "string",
+     "profileInfo": {
+      "display_profile": "null",
+      "top_tier_user": "null",
+      "verified_ambassador": "null",
+      "verified_consultant": "null",
+      "viewed_top_tier_user": "null",
+      "viewed_verified_ambassador": "null",
+      "viewed_verified_consultant": "null"
+     },
+     "profilePicture": "string",
+     "username": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/gettaskmembers"
+ },
+ "gettasks": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/list/{list_id}/task",
+  "shape": {
+   "last_page": "boolean",
+   "tasks": [
+    {
+     "archived": "boolean",
+     "assignees": [],
+     "checklists": [
+      {
+       "creator": "number",
+       "date_created": "string",
+       "id": "string",
+       "items": [],
+       "name": "string",
+       "orderindex": "string",
+       "resolved": "number",
+       "task_id": "string",
+       "unresolved": "number"
+      }
+     ],
+     "creator": {
+      "color": "string",
+      "id": "number",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "custom_fields": [
+      {
+       "date_created": "string",
+       "hide_from_guests": "boolean",
+       "id": "string",
+       "name": "string",
+       "required": "boolean",
+       "type": "string",
+       "type_config": {},
+       "value": "string",
+       "value_richtext": "string"
+      }
+     ],
+     "custom_id": "null",
+     "custom_item_id": "number",
+     "date_closed": "null",
+     "date_created": "string",
+     "date_done": "null",
+     "date_updated": "string",
+     "dependencies": [],
+     "description": "string",
+     "due_date": "string",
+     "folder": {
+      "access": "boolean",
+      "hidden": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "group_assignees": [],
+     "id": "string",
+     "linked_tasks": [],
+     "list": {
+      "access": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "locations": [
+      {
+       "id": "string",
+       "name": "string"
+      }
+     ],
+     "name": "string",
+     "orderindex": "string",
+     "parent": "null",
+     "permission_level": "string",
+     "points": "number",
+     "priority": {
+      "color": "string",
+      "id": "string",
+      "orderindex": "string",
+      "priority": "string"
+     },
+     "project": {
+      "access": "boolean",
+      "hidden": "boolean",
+      "id": "string",
+      "name": "string"
+     },
+     "sharing": {
+      "public": "boolean",
+      "public_fields": [
+       "string"
+      ],
+      "public_share_expires_on": "null",
+      "seo_optimized": "boolean",
+      "token": "null"
+     },
+     "space": {
+      "id": "string"
+     },
+     "start_date": "null",
+     "status": {
+      "color": "string",
+      "id": "string",
+      "orderindex": "number",
+      "status": "string",
+      "type": "string"
+     },
+     "tags": [],
+     "team_id": "string",
+     "text_content": "string",
+     "time_estimate": "string",
+     "time_spent": "number",
+     "top_level_parent": "null",
+     "url": "string",
+     "watchers": []
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/gettasks"
+ },
+ "gettimeentrieswithinadaterange": {
+  "from": "example",
+  "method": "GET",
+  "path": "/v2/team/{team_Id}/time_entries",
+  "shape": {
+   "data": [
+    {
+     "at": "string",
+     "billable": "boolean",
+     "description": "string",
+     "duration": "string",
+     "end": "number",
+     "id": "string",
+     "source": "string",
+     "start": "number",
+     "tags": [],
+     "task": {
+      "custom_id": "string",
+      "custom_type": "null",
+      "id": "string",
+      "name": "string",
+      "status": {
+       "color": "string",
+       "orderindex": "number",
+       "status": "string",
+       "type": "string"
+      }
+     },
+     "task_location": {
+      "folder_id": "number",
+      "folder_name": "string",
+      "list_id": "number",
+      "list_name": "string",
+      "space_id": "number",
+      "space_name": "string"
+     },
+     "task_tags": [
+      {
+       "creator": "number",
+       "name": "string",
+       "tag_bg": "string",
+       "tag_fg": "string"
+      }
+     ],
+     "task_url": "string",
+     "user": {
+      "color": "string",
+      "email": "string",
+      "id": "number",
+      "initials": "string",
+      "profilePicture": "string",
+      "username": "string"
+     },
+     "wid": "string"
+    }
+   ]
+  },
+  "source": "https://developer.clickup.com/reference/gettimeentrieswithinadaterange"
+ },
+ "removetagfromtask": {
+  "from": "example",
+  "method": "DELETE",
+  "path": "/v2/task/{task_id}/tag/{tag_name}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/removetagfromtask"
+ },
+ "setcustomfieldvalue": {
+  "from": "example",
+  "method": "POST",
+  "path": "/v2/task/{task_id}/field/{field_id}",
+  "shape": {},
+  "source": "https://developer.clickup.com/reference/setcustomfieldvalue"
+ },
+ "updatelist": {
+  "from": "example",
+  "method": "PUT",
+  "path": "/v2/list/{list_id}",
+  "shape": {
+   "assignee": "null",
+   "content": "string",
+   "due_date": "string",
+   "due_date_time": "boolean",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "id": "string",
+   "inbound_address": "string",
+   "name": "string",
+   "orderindex": "number",
+   "priority": {
+    "color": "string",
+    "priority": "string"
+   },
+   "space": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "start_date": "null",
+   "start_date_time": "null",
+   "status": {
+    "color": "string",
+    "hide_label": "boolean",
+    "status": "string"
+   },
+   "statuses": [
+    {
+     "color": "string",
+     "orderindex": "number",
+     "status": "string",
+     "type": "string"
+    }
+   ],
+   "task_count": "null"
+  },
+  "source": "https://developer.clickup.com/reference/updatelist"
+ },
+ "updatetask": {
+  "from": "example",
+  "method": "PUT",
+  "path": "/v2/task/{task_id}",
+  "shape": {
+   "archived": "boolean",
+   "assignees": [],
+   "attachments": [],
+   "checklists": [],
+   "creator": {
+    "color": "string",
+    "id": "number",
+    "profilePicture": "string",
+    "username": "string"
+   },
+   "custom_fields": [
+    {
+     "date_created": "string",
+     "hide_from_guests": "boolean",
+     "id": "string",
+     "name": "string",
+     "required": "boolean",
+     "type": "string",
+     "type_config": {},
+     "value": "string",
+     "value_richtext": "string"
+    }
+   ],
+   "custom_id": "null",
+   "custom_item_id": "number",
+   "date_closed": "null",
+   "date_created": "string",
+   "date_done": "null",
+   "date_updated": "string",
+   "dependencies": [],
+   "description": "string",
+   "due_date": "string",
+   "folder": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "group_assignees": [],
+   "id": "string",
+   "linked_tasks": [],
+   "list": {
+    "access": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "locations": [
+    {
+     "id": "string",
+     "name": "string"
+    }
+   ],
+   "markdown_description": "string",
+   "name": "string",
+   "orderindex": "string",
+   "parent": "string",
+   "permission_level": "string",
+   "points": "number",
+   "priority": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "string",
+    "priority": "string"
+   },
+   "project": {
+    "access": "boolean",
+    "hidden": "boolean",
+    "id": "string",
+    "name": "string"
+   },
+   "sharing": {
+    "public": "boolean",
+    "public_fields": [
+     "string"
+    ],
+    "public_share_expires_on": "null",
+    "seo_optimized": "boolean",
+    "token": "null"
+   },
+   "space": {
+    "id": "string"
+   },
+   "start_date": "null",
+   "status": {
+    "color": "string",
+    "id": "string",
+    "orderindex": "number",
+    "status": "string",
+    "type": "string"
+   },
+   "subtasks": [],
+   "tags": [],
+   "team_id": "string",
+   "text_content": "string",
+   "time_estimate": "string",
+   "time_spent": "number",
+   "top_level_parent": "null",
+   "url": "string",
+   "watchers": []
+  },
+  "source": "https://developer.clickup.com/reference/updatetask"
+ }
+}

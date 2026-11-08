@@ -20,15 +20,22 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 
 use function array_key_last;
 use function array_map;
+use function array_slice;
 use function array_values;
 use function base64_encode;
 use function count;
 use function in_array;
+use function mb_strtoupper;
+use function mb_substr;
+use function preg_split;
 use function rtrim;
 use function str_starts_with;
 use function strtr;
 use function substr;
+use function trim;
 use function usort;
+
+use const PREG_SPLIT_NO_EMPTY;
 
 /**
  * Since 2.2.0 (spec 213): what the read API answers, in ClickUp API v2's field names. Dates are Unix milliseconds as strings,
@@ -58,16 +65,23 @@ final class TaskApiReadSerializer
             'id'                 => $space->id,
             'name'               => $space->name,
             'private'            => false,
+            'color'              => null,
+            'avatar'             => null,
+            'admin_can_manage'   => false,
             'archived'           => false,
+            'members'            => [],
             'statuses'           => [],
             'multiple_assignees' => true,
             'features'           => [
-                'due_dates'          => ['enabled' => true],
+                'due_dates'          => ['enabled' => true, 'start_date' => true, 'remap_due_dates' => false, 'remap_closed_due_date' => false],
                 'time_tracking'      => ['enabled' => true],
                 'tags'               => ['enabled' => true],
                 'time_estimates'     => ['enabled' => true],
                 'checklists'         => ['enabled' => true],
+                'custom_fields'      => ['enabled' => true],
+                'remap_dependencies' => ['enabled' => false],
                 'dependency_warning' => ['enabled' => true],
+                'portfolios'         => ['enabled' => false],
             ],
         ];
     }
@@ -237,8 +251,20 @@ final class TaskApiReadSerializer
             'username'       => $user->username,
             'email'          => $user->email,
             'color'          => $user->color,
+            'initials'       => self::initials($user->username),
             'profilePicture' => $user->profilePicture,
         ];
+    }
+
+    /** ClickUp's initials: the first letter of the first two words, upper case. */
+    public static function initials(string $name): string
+    {
+        $initials = '';
+        foreach (array_slice(preg_split('/[\s._@-]+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 2) as $word) {
+            $initials .= mb_strtoupper(mb_substr($word, 0, 1));
+        }
+
+        return $initials;
     }
 
     /**
@@ -311,7 +337,7 @@ final class TaskApiReadSerializer
                 'id'         => self::checklistId($task->getId(), (string) $name),
                 'task_id'    => $task->getId(),
                 'name'       => (string) $name,
-                'orderindex' => (string) count($answer),
+                'orderindex' => count($answer),
                 'resolved'   => $resolved,
                 'unresolved' => count($items) - $resolved,
                 'items'      => array_map(fn (Task $item): array => [
@@ -342,7 +368,7 @@ final class TaskApiReadSerializer
             }
         }
 
-        return ['id' => self::checklistId($task->getId(), $name), 'task_id' => $task->getId(), 'name' => $name, 'orderindex' => '0', 'resolved' => 0, 'unresolved' => 0, 'items' => []];
+        return ['id' => self::checklistId($task->getId(), $name), 'task_id' => $task->getId(), 'name' => $name, 'orderindex' => 0, 'resolved' => 0, 'unresolved' => 0, 'items' => []];
     }
 
     /** A checklist has no row of its own: its id names the task and the checklist's name. */

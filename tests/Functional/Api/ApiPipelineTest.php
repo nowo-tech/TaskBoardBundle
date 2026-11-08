@@ -39,6 +39,7 @@ final class ApiPipelineTest extends ApiTestCase
             'username'       => 'owner@example.com',
             'email'          => 'owner@example.com',
             'color'          => null,
+            'initials'       => 'OE',
             'profilePicture' => null,
         ]], $this->json());
         $headers = $this->client->getResponse()->headers;

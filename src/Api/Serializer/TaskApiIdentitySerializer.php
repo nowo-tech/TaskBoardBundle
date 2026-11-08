@@ -22,6 +22,7 @@ final class TaskApiIdentitySerializer
             'username'       => $user->username,
             'email'          => $user->email,
             'color'          => $user->color,
+            'initials'       => TaskApiReadSerializer::initials($user->username),
             'profilePicture' => $user->profilePicture,
         ];
     }

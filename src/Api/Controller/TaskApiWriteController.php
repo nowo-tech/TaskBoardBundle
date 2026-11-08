@@ -75,7 +75,7 @@ final readonly class TaskApiWriteController
         $comment = $this->tasks->addComment($this->principal($request), $taskId, $input);
         TaskApiIdempotencyListener::target($request, $comment->getTask()->getBoard());
 
-        return $this->answer(['id' => $comment->getId(), 'hist_id' => $comment->getId(), 'date' => $comment->getCreatedAt()->format('Uv')], $input);
+        return $this->answer(['id' => $comment->getId(), 'hist_id' => $comment->getId(), 'date' => (int) $comment->getCreatedAt()->format('Uv')], $input);
     }
 
     public function addAttachment(Request $request, string $taskId): JsonResponse
@@ -92,7 +92,7 @@ final readonly class TaskApiWriteController
         return $this->answer([
             'id'              => $attachment->id,
             'version'         => '0',
-            'date'            => (string) $this->clock->now()->format('Uv'),
+            'date'            => (int) $this->clock->now()->format('Uv'),
             'title'           => $attachment->title,
             'extension'       => $extension,
             'thumbnail_small' => null,
@@ -157,14 +157,14 @@ final readonly class TaskApiWriteController
     {
         $task = $this->tasks->relate($this->principal($request), $taskId, $linksTo, TaskDependencyType::Related);
 
-        return $this->taskAnswer($request, $task, $this->input($request));
+        return $this->taskAnswer($request, $task, $this->input($request), true);
     }
 
     public function removeLink(Request $request, string $taskId, string $linksTo): JsonResponse
     {
         $task = $this->tasks->unrelate($this->principal($request), $taskId, $linksTo, [TaskDependencyType::Related, TaskDependencyType::Duplicates], null);
 
-        return $this->taskAnswer($request, $task, $this->input($request));
+        return $this->taskAnswer($request, $task, $this->input($request), true);
     }
 
     public function createChecklist(Request $request, string $taskId): JsonResponse
@@ -227,12 +227,16 @@ final readonly class TaskApiWriteController
         };
     }
 
-    private function taskAnswer(Request $request, Task $task, TaskApiInput $input): JsonResponse
+    /**
+     * @param bool $wrapped ClickUp's link endpoints answer `{"task": …}`
+     */
+    private function taskAnswer(Request $request, Task $task, TaskApiInput $input, bool $wrapped = false): JsonResponse
     {
         TaskApiIdempotencyListener::target($request, $task->getBoard());
         $page = $this->reads->task($this->principal($request), $task->getId());
+        $data = $this->serializer->task($page->tasks[0], $page);
 
-        return $this->answer($this->serializer->task($page->tasks[0], $page), $input);
+        return $this->answer($wrapped ? ['task' => $data] : $data, $input);
     }
 
     private function checklistAnswer(Request $request, Task $task, string $name, TaskApiInput $input): JsonResponse

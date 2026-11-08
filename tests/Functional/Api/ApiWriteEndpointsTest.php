@@ -269,7 +269,7 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/comment', ['comment_text' => 'Looks good', 'notify_all' => true]);
         self::assertResponseIsSuccessful();
         $comment = $this->em->getRepository(TaskComment::class)->findOneBy(['task' => $task]);
-        self::assertSame(['id' => $comment?->getId(), 'hist_id' => $comment?->getId(), 'date' => $comment?->getCreatedAt()->format('Uv'), 'warnings' => [['field' => 'notify_all', 'reason' => 'not_supported']]], $this->json());
+        self::assertSame(['id' => $comment?->getId(), 'hist_id' => $comment?->getId(), 'date' => (int) $comment?->getCreatedAt()->format('Uv'), 'warnings' => [['field' => 'notify_all', 'reason' => 'not_supported']]], $this->json());
         self::assertContains(TaskBoardEvents::TASK_COMMENT, $this->events);
         // Mentions as in the UI's box: "@Label" of a candidate (here a member of a task of the board).
         $task->addMember(new TaskMember(task: $task, user: $this->colleague, memberRole: TaskMemberRole::Watcher));
@@ -339,9 +339,9 @@ final class ApiWriteEndpointsTest extends ApiTestCase
         self::assertResponseIsSuccessful();
 
         $this->send('POST', $base . '/link/' . $blocker->getId());
-        self::assertSame([$blocker->getId()], array_column($this->json()['linked_tasks'], 'link_id'));
+        self::assertSame([$blocker->getId()], array_column($this->json()['task']['linked_tasks'], 'link_id'));
         $this->send('DELETE', $base . '/link/' . $blocker->getId());
-        self::assertSame([], $this->json()['linked_tasks']);
+        self::assertSame([], $this->json()['task']['linked_tasks']);
         $this->send('DELETE', $base . '/link/' . $blocker->getId());
         $this->assertRefused(404, 'ACCESS_001');
         self::assertSame(0, $this->em->getRepository(TaskDependency::class)->count([]));
