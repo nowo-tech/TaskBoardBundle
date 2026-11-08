@@ -84,6 +84,7 @@ final readonly class TaskManager
      * once. A caller that already moved the task passes its current column, so nothing moves twice.
      *
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
+     * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
      */
     public function update(Task $task, TaskFormData $data, object $user): void
     {
@@ -99,8 +100,12 @@ final readonly class TaskManager
         $wasCompleted        = $task->isCompleted();
 
         $newColumn = $this->resolveColumn($task->getBoard(), $data->columnId);
-        $moves     = $oldColumn?->getId() !== $newColumn?->getId();
-        $columns   = $this->orderedColumns($task->getBoard());
+        // Since 2.2.1: a column that is not the board's is refused, as by move(), instead of leaving the task without one.
+        if ($data->columnId !== null && $data->columnId !== '' && !$newColumn instanceof BoardColumn) {
+            throw ColumnNotFoundException::forBoard($data->columnId, $task->getBoard()->getId());
+        }
+        $moves   = $oldColumn?->getId() !== $newColumn?->getId();
+        $columns = $this->orderedColumns($task->getBoard());
         if ($moves) {
             $this->assertReopenAllowed($task, $newColumn, $columns);
             if ($newColumn instanceof BoardColumn) {

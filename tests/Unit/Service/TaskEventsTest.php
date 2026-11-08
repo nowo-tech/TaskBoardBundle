@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Event\TaskMemberAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
+use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
@@ -172,6 +173,26 @@ final class TaskEventsTest extends TestCase
         self::assertSame([TaskBoardEvents::TASK_MOVED, TaskBoardEvents::TASK_COMPLETED, TaskBoardEvents::TASK_UPDATED], $this->names());
         self::assertTrue($task->isCompleted());
         self::assertSame(1, $this->historyCount($task, TaskChangeType::Completed));
+    }
+
+    /** Since 2.2.1: a column that is not the board's is refused; the task keeps its column and nothing changes. */
+    public function testUpdateToAnUnknownColumnIsRefused(): void
+    {
+        $task       = new Task($this->board, 'Task', $this->user, column: $this->doing);
+        $repository = $this->createMock(TaskRepositoryInterface::class);
+        $repository->expects(self::never())->method('save');
+
+        try {
+            $this->manager($repository)->update($task, new TaskFormData(title: 'Renamed', columnId: 'not-a-column'), $this->user);
+            self::fail('An unknown column should be refused.');
+        } catch (ColumnNotFoundException $exception) {
+            self::assertStringContainsString('not-a-column', $exception->getMessage());
+        }
+
+        self::assertSame($this->doing, $task->getColumn());
+        self::assertSame('Task', $task->getTitle());
+        self::assertCount(0, $task->getChangeHistory());
+        self::assertSame([], $this->names());
     }
 
     public function testUpdateWithoutChangesDispatchesNothing(): void

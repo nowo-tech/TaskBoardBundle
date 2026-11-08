@@ -987,6 +987,7 @@ final class TaskBoardManageController extends AbstractController
         if ($taskForm->isSubmitted() && $taskForm->isValid()) {
             /** @var TaskFormData $data */
             $data = $taskForm->getData();
+            $this->keepTheColumnUnlessChanged($taskForm, $request, $data, $task);
             try {
                 $this->taskManager->update($task, $data, $user);
                 $this->logWrite('task_update', ['task_id' => $taskId]);
@@ -1763,7 +1764,25 @@ final class TaskBoardManageController extends AbstractController
             startAt: $task->getStartAt(),
         ), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
+            'shown_column'   => true,
         ]);
+    }
+
+    /**
+     * Since 2.2.1: the edit form changes the column only when the posted column differs from the one its page showed, so a
+     * page left open while the task moved keeps it where it is now. A host template that does not post `columnIdShown`
+     * (a form_end without render_rest) gets the posted column, as before.
+     *
+     * @param FormInterface<TaskFormData> $form
+     */
+    private function keepTheColumnUnlessChanged(FormInterface $form, Request $request, TaskFormData $data, Task $task): void
+    {
+        if (!$form->has('columnIdShown') || !array_key_exists('columnIdShown', $request->request->all($form->getName()))) {
+            return;
+        }
+        if ((string) $form->get('columnIdShown')->getData() === (string) $data->columnId) {
+            $data->columnId = $task->getColumn()?->getId();
+        }
     }
 
     /**

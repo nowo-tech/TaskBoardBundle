@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\TaskBoardBundle\Tests\Functional\Characterization\CapturesUiOutput;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
@@ -98,6 +99,69 @@ final class TaskEditFormColumnTest extends SyncFunctionalTestCase
         $this->events = [];
         $this->edit($done, 'Open', $this->column($done->getBoard(), 'Finished'));
         self::assertSame([], $this->events);
+    }
+
+    /** A page left open while the task moved posts the column it showed: the task stays where it is now. */
+    public function testAStalePageDoesNotMoveTheTaskBack(): void
+    {
+        $board = $this->board();
+        $task  = $this->task($board, 'Open');
+        $this->login($this->owner);
+        $crawler = $this->client->request('GET', self::BASE . 'task/' . $task->getId());
+        self::assertSame($this->column($board, 'To do')->getId(), $crawler->filter('input[name="task_form[columnIdShown]"]')->attr('value'));
+
+        $task->setColumn($this->column($board, 'Doing'));
+        $this->em->flush();
+        $form                     = $crawler->filter('form[name="task_form"]')->form();
+        $form['task_form[title]'] = 'Renamed';
+        $this->client->submit($form);
+
+        self::assertResponseRedirects();
+        self::assertSame([TaskBoardEvents::TASK_UPDATED], $this->events);
+        $this->em->clear();
+        $kept = $this->em->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $kept);
+        self::assertSame(['Renamed', 'Doing'], [$kept->getTitle(), $kept->getColumn()?->getName()]);
+    }
+
+    /** A host template that does not post the shown column gets the posted column, as before 2.2.1. */
+    public function testWithoutTheShownColumnThePostedColumnIsUsed(): void
+    {
+        $board = $this->board();
+        $task  = $this->task($board, 'Open');
+        $this->login($this->owner);
+
+        $this->client->request('POST', self::BASE . 'task/' . $task->getId(), ['task_form' => [
+            'title'    => 'Open',
+            'columnId' => $this->column($board, 'Doing')->getId(),
+            '_token'   => PredictableCsrfTokenManager::value('task_form'),
+        ]]);
+
+        self::assertResponseRedirects();
+        $this->em->clear();
+        self::assertSame('Doing', $this->em->find(Task::class, $task->getId())?->getColumn()?->getName());
+    }
+
+    /** A column that is not the board's is a validation error on the column, and nothing is saved. */
+    public function testAnUnknownColumnIsAValidationError(): void
+    {
+        $board = $this->board();
+        $task  = $this->task($board, 'Open');
+        $this->login($this->owner);
+
+        $crawler = $this->client->request('POST', self::BASE . 'task/' . $task->getId(), ['task_form' => [
+            'title'         => 'Renamed',
+            'columnId'      => 'not-a-column',
+            'columnIdShown' => $this->column($board, 'To do')->getId(),
+            '_token'        => PredictableCsrfTokenManager::value('task_form'),
+        ]]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('The selected choice is invalid.', $crawler->filter('.nowo-task-detail__head-meta')->text());
+        self::assertSame([], $this->events);
+        $this->em->clear();
+        $kept = $this->em->find(Task::class, $task->getId());
+        self::assertSame(['Open', 'To do'], [$kept?->getTitle(), $kept?->getColumn()?->getName()]);
     }
 
     private function column(TaskBoard $board, string $name): BoardColumn
