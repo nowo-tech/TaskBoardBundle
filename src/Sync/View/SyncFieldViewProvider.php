@@ -51,6 +51,9 @@ final readonly class SyncFieldViewProvider
         $values = $this->entityManager->createQueryBuilder()
             ->select('v', 'f')->from(TaskSyncFieldValue::class, 'v')->join('v.field', 'f')
             ->where('v.task = :task')->setParameter('task', $task)
+            // Since 2.3.0 (spec 217): only the fields of the task's own board. A task moved off its board keeps its values
+            // (the source board's erasure still reaches them) but does not show them on the target.
+            ->andWhere('f.board = :board')->setParameter('board', $task->getBoard())
             ->orderBy('f.position', 'ASC')->addOrderBy('f.name', 'ASC')
             ->getQuery()->getResult();
         $fields = [];
@@ -99,7 +102,8 @@ final readonly class SyncFieldViewProvider
             /** @var list<array{taskId: string, text: string}> $rows */
             $rows = $this->entityManager->createQueryBuilder()
                 ->select('IDENTITY(v.task) AS taskId', 'v.text AS text')->from(TaskSyncFieldValue::class, 'v')
-                ->where('v.task IN (:tasks)')->andWhere("v.text <> ''")->setParameter('tasks', $chunk)
+                ->join('v.field', 'f')->join('v.task', 't')
+                ->where('v.task IN (:tasks)')->andWhere("v.text <> ''")->andWhere('f.board = t.board')->setParameter('tasks', $chunk)
                 ->getQuery()->getArrayResult();
             foreach ($rows as $row) {
                 $texts[(string) $row['taskId']][] = $row['text'];
@@ -108,8 +112,8 @@ final readonly class SyncFieldViewProvider
             /** @var list<array{taskId: string, value: mixed}> $people */
             $people = $this->entityManager->createQueryBuilder()
                 ->select('IDENTITY(v.task) AS taskId', 'v.value AS value')->from(TaskSyncFieldValue::class, 'v')
-                ->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
-                ->where('v.task IN (:tasks)')->andWhere('f.type = :people')
+                ->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')->join('v.task', 't')
+                ->where('v.task IN (:tasks)')->andWhere('f.type = :people')->andWhere('f.board = t.board')
                 ->setParameter('tasks', $chunk)->setParameter('people', SyncFieldType::People->value)
                 ->getQuery()->getArrayResult();
             foreach ($people as $row) {
