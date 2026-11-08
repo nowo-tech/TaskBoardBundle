@@ -84,7 +84,56 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 - **What a replay does not do:** it does not ask the level or the plan again (the first request did, and a replay writes nothing); it does ask the pipeline (token, rate limit) and the reach.
 - **Storage:** the bundle's table `task_board_api_idempotency` (hashes of the token id and key, never either; the answer, which can hold task text). Expired rows go on each claim and with `nowo:task-board:api:purge-idempotency`. `forget()` clears one token's answers: text from a task may sit in other tokens' answers for up to 24 hours. On revoking a token or erasing its person, call `TaskApiIdempotencyStoreInterface::forget()` with the scope `sha256('nowo-task-board-api|' . $tokenId)`. A host may replace the store with `api.hooks.idempotency_store`; the table is then not mapped. A store that fails refuses keyed writes with 503 `IDEMP_004`.
 
-## Differences from ClickUp (so far)
+## Differences from ClickUp
+
+### What the contract test pins
+
+`tests/Functional/Api/ApiClickUpContractTest` sends this API the request each ClickUp reference page describes and compares the answer's shape (field names and JSON types, never values) with the shape of the response example published on that page. **The ClickUp side comes from published examples, not live recordings**: `tests/Fixtures/clickup/shapes.json` was derived on 2026-11-08 from developer.clickup.com, without calling ClickUp. Where ClickUp's own examples disagree with each other, that is said below. A field present on both sides but empty (`null`) is not compared. Any difference not in this table fails the test, and so does a row that no longer applies. `*` stands for any text.
+
+| Difference (`page: path: kind`) | Why |
+|---|---|
+| `*: *id: string, not number` | Ids are strings: the bundle's UUIDs, the host's ids for people. |
+| `*: *.creator.initials: extra` | A creator has initials, as other people do. |
+| `*: *.creator.email: extra` | A creator has an email field (null unless the host shows it). |
+| `*: *.profileInfo: missing` | No profile details beyond name, email, colour and picture. |
+| `getauthorizeduser: .user.*: missing` | No timezone, week start or font settings. |
+| `*: *custom_item_id: missing` | No task types. |
+| `*: *.locations: missing` | A task is on one board. |
+| `*: *permission_level: missing` | Permissions are the host's; not reported per object. |
+| `*: *.sharing: missing` | No public sharing. |
+| `*: *.attachments: missing` | Files are the host's: not listed on the task. |
+| `*: *.markdown_description: missing` | Given only with include_markdown_description. |
+| `*: *.subtasks: missing` | Subtasks are given with include_subtasks=true only. |
+| `*: *.tags[].creator: missing` | Tags have no creator. |
+| `*: *.dependencies[].*: missing` | Dependencies have no chain, user or workspace id. |
+| `*: *.linked_tasks[].userid: missing` | Links have no user id. |
+| `*: *.custom_fields[].*: missing` | A task's custom field values carry id, name, type and value only. |
+| `getaccessiblecustomfields: .fields[].*: missing` | Imported fields carry the options the provider gave; no per-type config. |
+| `getaccessiblecustomfields: .fields[].required: extra` | Imported fields say they are not required. |
+| `*: *inbound_address: missing` | No email-in address for boards. |
+| `*: .due_date_time: missing` | Boards have no dates. |
+| `*: .start_date_time: missing` | Boards have no dates. |
+| `*: *.date_created: missing` | Checklists and their items carry no creation date of their own. |
+| `*: *statuses[].id: extra` | Statuses are columns and have ids (used by the status paths). |
+| `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
+| `*: .archived: extra` | Boards say whether they are archived. |
+| `*: .override_statuses: extra` | Every board has its own statuses. |
+| `*tasklink: .task.*: extra` | A link answers the whole task, not ClickUp's short form. |
+| `getfolderlesslists: .lists[].task_count: number, not string` | ClickUp's schema says string; its list example and this API use a number. |
+| `getfilteredteamtasks: .last_page: extra` | ClickUp's example of this page omits last_page, which its list page has. |
+| `getfilteredteamtasks: .tasks[].*: extra` | ClickUp's example of this page is shorter than its list page's. |
+| `getfilteredteamtasks: .tasks[].priority: object, not number` | ClickUp's example of this page shows a number; its list page an object, as here. |
+| `gettaskcomments: .comments[].reply_count: number, not string` | A count is a number here. |
+| `createatimeentry: *` | ClickUp's published example for this page is the request; this API answers {"data": entry} as the list does. |
+| `gettimeentrieswithinadaterange: .data[].*: missing` | Entries carry the host's fields: no tags, source, location or task URL; the person is {id}. |
+| `gettimeentrieswithinadaterange: .data[].*: string, not number` | Start and end are millisecond strings, as every other date here. |
+| `getspace: .*: extra` | ClickUp's example of one space is shorter than its list of spaces; both are answered alike here. |
+| `*: *.checklists[].creator: missing` | A checklist has no row of its own, so no creator. |
+| `*: *.checklists[].orderindex: number, not string` | ClickUp's task examples show a string, its checklist examples a number, as here. |
+| `getfilteredteamtasks: .tasks[].time_estimate: string, not number` | ClickUp's example of this page shows a number; its task examples a string, as here. |
+| `setcustomfieldvalue: .: object, not list` | Custom fields are read-only: 409 FIELD_001 (owner). |
+
+### Other differences
 
 - Ids are strings: the bundle's UUIDs, and the host's ids for people.
 - Dates are Unix milliseconds as strings, at the precision the database keeps (seconds).

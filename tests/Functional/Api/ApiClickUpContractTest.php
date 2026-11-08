@@ -26,6 +26,7 @@ use function array_diff;
 use function array_is_list;
 use function array_key_exists;
 use function array_keys;
+use function array_map;
 use function array_values;
 use function file_get_contents;
 use function file_put_contents;
@@ -259,10 +260,37 @@ final class ApiClickUpContractTest extends ApiTestCase
             is_int($value), is_float($value)          => 'number',
             is_string($value)                         => 'string',
             $value === null                           => 'null',
-            is_array($value) && array_is_list($value) => $value === [] ? [] : [$this->shape($value[0])],
+            is_array($value) && array_is_list($value) => $value === [] ? [] : [$this->merged(array_map($this->shape(...), $value))],
             is_array($value)                          => $this->shapeOfObject($value),
             default                                   => 'null',
         };
+    }
+
+    /**
+     * One shape for every item of a list: their fields together, a type wherever one item has a value. So the order of the
+     * items (tasks made in the same second) cannot change the result.
+     *
+     * @param list<mixed> $shapes
+     */
+    private function merged(array $shapes): mixed
+    {
+        $merged = 'null';
+        foreach ($shapes as $shape) {
+            if ($merged === 'null') {
+                $merged = $shape;
+            } elseif (is_array($merged) && is_array($shape) && !array_is_list($merged) && !array_is_list($shape)) {
+                foreach ($shape as $key => $inner) {
+                    $merged[$key] = array_key_exists($key, $merged) ? $this->merged([$merged[$key], $inner]) : $inner;
+                }
+                ksort($merged);
+            } elseif (is_array($merged) && is_array($shape) && $merged === [] && $shape !== []) {
+                $merged = $shape;
+            } elseif (is_array($merged) && is_array($shape) && array_is_list($merged) && array_is_list($shape) && $shape !== []) {
+                $merged = [$this->merged([$merged[0], $shape[0]])];
+            }
+        }
+
+        return $merged;
     }
 
     /**
