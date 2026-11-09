@@ -104,6 +104,10 @@ Target 2.9.1 (patch). See [UPGRADING](UPGRADING.md#unreleased).
 - **A column with a legacy icon can be renamed again (audit JM-I7).** A column whose stored icon is no longer storable (written straight to the database, a pre-2.9.0 `default_columns` value such as `fa fa-bug`, or an icon with tag text stored before JM-I3) refused a plain rename with the icon flash ("The column was not saved…"), because the dialog posted that value back and the grid did not accept it. The grid now accepts the edited column's own current icon whatever it is (`BoardColumnManager::update()` still drops a value that is not storable), and the edit button carries `data-column-icon-storable="0"` for such an icon so the dialog opens it as "No icon", with the grid and with a host widget (`board.column_icon_form_type`) alike. Saving the dialog drops the icon, as UPGRADING already said. New Twig function `nowo_task_board_column_icon_storable(icon)`; new exported helper `dialogIcon()` in `edit-column-modal-controller.ts`.
 - **A legacy bare current icon no longer shadows an offered icon (audit JM-I8).** The grid's choices are keyed by label; the edited column's own icon now has its own label key (`BoardColumnFormType::CURRENT_ICON_LABEL_PREFIX`, `current: <icon>`), so a bare name such as `bug` next to an offered `tabler:bug` (label `bug`) no longer replaces that choice: both stay valid for that column.
 
+### Documentation
+
+- USAGE: new section "Using it from a DDD / hexagonal application" (where the bundle sits in a hexagonal host, the ports, events and DTOs to build an anti-corruption layer on, and the known limitations).
+
 ## [2.9.0] - 2026-11-09
 
 Target 2.9.0. Emoji column icons (host Symfony Beacon, owner 2026-11-09: default columns with emojis).
