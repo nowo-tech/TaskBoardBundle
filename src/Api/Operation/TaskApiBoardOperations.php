@@ -54,6 +54,8 @@ final readonly class TaskApiBoardOperations
         private ValidatorInterface $validator,
         /** The tasks one `DELETE` erases per batch; the eraser stops at its time budget either way. */
         private int $eraseBatchSize = 200,
+        /** @var list<string> Since 2.9.0: the icon ids a column `icon` may name besides an emoji (`board.column_icons`, `board.default_columns`). */
+        private array $columnIconIds = [],
     ) {
     }
 
@@ -121,7 +123,8 @@ final readonly class TaskApiBoardOperations
     }
 
     /**
-     * `POST /v2/list/{id}/status`: a column at the end. `status` is its name, `color` a hex colour.
+     * `POST /v2/list/{id}/status`: a column at the end. `status` is its name, `color` a hex colour, `icon` (since 2.9.0) one
+     * emoji or an offered icon id.
      *
      * @throws TaskApiRefusal
      */
@@ -224,6 +227,15 @@ final readonly class TaskApiBoardOperations
                 throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid color');
             }
             $data->color = $color;
+        }
+        // Since 2.9.0: one emoji or an offered icon id; null or "" removes the icon.
+        if ($input->has('icon')) {
+            $icon = $input->string('icon');
+            $icon = $icon !== null ? trim($icon) : null;
+            if ($icon !== null && $icon !== '' && $this->validator->validate($icon, TaskConstraints::columnIcon($this->columnIconIds))->count() > 0) {
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid icon');
+            }
+            $data->icon = $icon;
         }
 
         return $data;

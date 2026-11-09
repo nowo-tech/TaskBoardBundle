@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Event\ColumnSetQueryEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function max;
@@ -81,7 +82,7 @@ final readonly class ColumnSetManager
 
         $added = [];
         foreach ($set->getItems() as $item) {
-            $column = new BoardColumn($board, $item['name'], ++$position, $item['color'], $item['icon']);
+            $column = new BoardColumn($board, $item['name'], ++$position, $item['color'], ColumnIcon::normalize($item['icon']));
             $board->addColumn($column);
             $added[] = $column;
         }

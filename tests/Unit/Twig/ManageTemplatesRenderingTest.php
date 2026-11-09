@@ -85,6 +85,7 @@ use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Validator\ValidatorExtension;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
@@ -693,6 +694,71 @@ final class ManageTemplatesRenderingTest extends TestCase
         $none->addGlobal('nowo_ui_kit_icon_set', 'none');
         self::assertSame('', trim($none->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'tabler:inbox'])));
         self::assertSame('', trim($this->twig()->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => null])));
+    }
+
+    /** Since 2.9.0 (audit JI-L3): the dependency key is a CSS swatch; Bootstrap Icons get their own names, the Tabler font as before. */
+    public function testTheGanttLegendNeedsNoIconAndBootstrapIconsGetTheirNames(): void
+    {
+        $context = ['board' => $this->board, 'dashboardRoute' => null, 'timeline' => (new TaskGanttBuilder())->build([$this->task])];
+        $legend  = (new Crawler($this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', $context)))->filter('.nowo-task-gantt__legend li');
+        self::assertCount(4, $legend);
+        self::assertCount(1, $legend->eq(0)->filter('span.nowo-task-gantt__legend-dependency[aria-hidden="true"]'));
+        self::assertCount(0, $legend->filter('.nowo-task-icon'), 'no item depends on the icon set');
+
+        $bootstrap = $this->twig();
+        $bootstrap->addGlobal('nowo_ui_kit_icon_set', 'bootstrap-icons');
+        self::assertStringContainsString('bi bi-floppy', $bootstrap->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'device-floppy']));
+        self::assertStringContainsString('bi bi-pencil', $bootstrap->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'pencil']));
+        self::assertStringContainsString('bi bi-check-circle', $bootstrap->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'tabler:circle-check']));
+        self::assertStringContainsString('bi bi-circle-check', $bootstrap->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'lucide:circle-check']), 'a host id is left alone');
+        $views = $bootstrap->render('@NowoTaskBoardBundle/manage/_board_item_views.html.twig', ['board' => $this->board]);
+        self::assertStringContainsString('bi bi-kanban', $views);
+        self::assertStringContainsString('bi bi-bar-chart', $views);
+        self::assertStringContainsString('ti ti-device-floppy', $this->twig()->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'device-floppy']), 'the Tabler font as before');
+    }
+
+    /** Since 2.9.0: an id renders byte for byte as before; any other value is aria-hidden, escaped text, whatever the icon set. */
+    public function testAColumnIconThatIsNoIconIdIsPrintedAsHiddenText(): void
+    {
+        $partial = '@NowoTaskBoardBundle/manage/_column_icon.html.twig';
+        self::assertSame(
+            "    <span class=\"nowo-task-column__icon\" aria-hidden=\"true\">        <i class=\"ti ti-inbox\" aria-hidden=\"true\"></i>\n</span>\n",
+            $this->twig()->render($partial, ['icon' => 'tabler:inbox']),
+            'the output of 2.8.0',
+        );
+        self::assertSame(
+            "    <span class=\"nowo-task-column__icon\" aria-hidden=\"true\">        <i class=\"ti ti-bug\" aria-hidden=\"true\"></i>\n</span>\n",
+            $this->twig()->render($partial, ['icon' => 'bug']),
+            'a bare name stored before 2.9.0 stays an icon',
+        );
+        self::assertSame("    <span class=\"nowo-task-column__icon nowo-task-column__icon--emoji\" aria-hidden=\"true\">🚧</span>\n", $this->twig()->render($partial, ['icon' => '🚧']));
+        self::assertStringContainsString('&lt;b&gt;x&lt;/b&gt;', $this->twig()->render($partial, ['icon' => '<b>x</b>']), 'escaped, should one ever be stored');
+        self::assertSame('', $this->twig()->render($partial, ['icon' => '']));
+
+        $none = $this->twig();
+        $none->addGlobal('nowo_ui_kit_icon_set', 'none');
+        self::assertStringContainsString('aria-hidden="true">✅</span>', $none->render($partial, ['icon' => '✅']), 'an emoji needs no icon font');
+
+        // The board: the emoji in the header next to the name, which stays the accessible text, and in the edit trigger.
+        $this->todo->setIcon('📝');
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', [
+            'board'          => $this->board,
+            'tasks'          => [$this->task],
+            'taskTree'       => TaskTree::fromTasks([$this->task]),
+            'columnForm'     => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_form_type' => TextType::class])->createView(),
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_form_type' => TextType::class])->createView(),
+            'taskForm'       => $this->factory()->create(TaskFormType::class, new TaskFormData(columnId: $this->todo->getId()), [
+                'column_choices'   => ['Todo' => $this->todo->getId()],
+                'rich_description' => false,
+                'tag_input'        => false,
+            ])->createView(),
+            'dashboardRoute' => null,
+        ]);
+        self::assertStringContainsString('<span class="nowo-task-column__icon nowo-task-column__icon--emoji" aria-hidden="true">📝</span>', $html);
+        self::assertStringContainsString('data-column-icon="📝"', $html);
+        self::assertStringNotContainsString('nowo-task-picker__icons', $html, 'a host widget replaces the grid');
+        self::assertStringContainsString('nowo-task-field--column-icon', $html);
+        self::assertStringContainsString('task_board.form.column.icon_help', $html);
     }
 
     public function testTaskPanelIsAFragmentWhoseFormsComeBackToTheBoard(): void

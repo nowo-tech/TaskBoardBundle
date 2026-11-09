@@ -7,13 +7,18 @@ namespace Nowo\TaskBoardBundle\Validation;
 use DateTimeInterface;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Support\BoardIcon;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Range;
 use Symfony\Component\Validator\Constraints\Regex;
 use Symfony\Component\Validator\Constraints\Url;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
+
+use function is_string;
 
 /**
  * Since 2.2.0 (spec 213): the rules of the fields a write takes, in one place, so that a write that does not go through
@@ -101,6 +106,26 @@ final class TaskConstraints
     public static function columnColor(): array
     {
         return [new Regex(pattern: self::COLOR_PATTERN)];
+    }
+
+    /**
+     * Since 2.9.0: a column icon is empty, one emoji ({@see BoardIcon}) or one of `$knownIds` (`<set>:<name>`), whatever widget
+     * the host gives the field: no free text or markup is stored.
+     *
+     * @param list<string> $knownIds
+     *
+     * @return list<Constraint>
+     */
+    public static function columnIcon(array $knownIds, string $message = 'A column icon is one emoji or one of the offered icons.'): array
+    {
+        return [new Callback(static function (mixed $value, ExecutionContextInterface $context) use ($knownIds, $message): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+            if (!is_string($value) || !ColumnIcon::isValid($value, $knownIds)) {
+                $context->buildViolation($message)->addViolation();
+            }
+        })];
     }
 
     /** @return list<Constraint> */

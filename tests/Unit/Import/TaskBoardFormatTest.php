@@ -25,6 +25,7 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /** Since 1.18: the bundle's own CSV / JSON — hierarchy, start dates, Gantt relations — and importing into a task. */
@@ -92,9 +93,7 @@ final class TaskBoardFormatTest extends TestCase
         yield 'json subtasks without id' => ['[{"title": "A", "subtasks": [{"title": "B"}]}]', true, 'has subtasks but no "id"'];
     }
 
-    /**
-     * @dataProvider badFiles
-     */
+    #[DataProvider('badFiles')]
     public function testBadFilesAreRefusedWithTheRow(string $content, bool $json, string $message): void
     {
         $this->expectException(InvalidArgumentException::class);

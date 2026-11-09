@@ -222,6 +222,35 @@ final class ApiManagementTest extends ApiTestCase
         self::assertInstanceOf(BoardColumn::class, $this->em->find(Task::class, $task->getId())?->getColumn(), 'its tasks move to a remaining column');
     }
 
+    public function testAColumnIconIsOneEmojiOrAnOfferedIconId(): void
+    {
+        $base = '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status';
+        $this->send('POST', $base, ['status' => 'Review', 'icon' => '👀']);
+        $statuses = $this->json()['statuses'];
+        self::assertSame('👀', $statuses[3]['icon']);
+        self::assertNull($statuses[0]['icon']);
+        $review = $statuses[3]['id'];
+
+        $this->send('PUT', $base . '/' . $review, ['status' => 'Code review']);
+        self::assertSame('👀', $this->json()['statuses'][3]['icon'], 'what is not given stays');
+        $this->send('PUT', $base . '/' . $review, ['icon' => ' tabler:bug ']);
+        self::assertSame('tabler:bug', $this->json()['statuses'][3]['icon'], 'an id of board.column_icons');
+        $this->send('PUT', $base . '/' . $review, ['icon' => '']);
+        self::assertNull($this->json()['statuses'][3]['icon']);
+        $this->send('PUT', $base . '/' . $review, ['icon' => '✅']);
+        $this->send('PUT', $base . '/' . $review, ['icon' => null]);
+        self::assertNull($this->json()['statuses'][3]['icon']);
+
+        foreach (['<b>x</b>', 'Done', '👀👀', 'tabler:not-offered', str_repeat('a', 70), 'x:y" onload="1'] as $icon) {
+            $this->send('PUT', $base . '/' . $review, ['icon' => $icon]);
+            $this->assertRefused(400, 'INPUT_002');
+        }
+        $this->send('POST', $base, ['status' => 'X', 'icon' => ['👀']]);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->em->clear();
+        self::assertNull($this->em->find(BoardColumn::class, $review)?->getIcon(), 'a refused icon is not stored');
+    }
+
     public function testManagementNeedsFullAndTheBoardsManageDecision(): void
     {
         $endpoints = $this->endpoints();

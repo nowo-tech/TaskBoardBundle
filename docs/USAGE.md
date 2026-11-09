@@ -517,6 +517,43 @@ through `manage/_column_icon.html.twig` → UiKit `components/_icon.html.twig`: 
 full name goes to `ux_icon()` (import the icons you offer in the host, e.g. `bin/console ux:icons:import tabler:bug`),
 with the webfont sets the bare name (`ti ti-bug`); `icon_set: none` shows no icon.
 
+Since 2.9.0 a column icon may also be **one emoji**, printed as text (`aria-hidden="true"`, the column name stays the
+accessible text, with any icon set). `board.column_icon_form_type` gives the dialogs the host's widget instead of the
+grid; the bundle validates the value on every write path (form, API, config, column sets): one emoji of at most 16 bytes
+or an id of `board.column_icons` / `board.default_columns`. The Beacon setup:
+
+```yaml
+nowo_task_board:
+    board:
+        column_icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType
+        column_icon_form_options: { max_bytes: 16 }
+        default_columns:
+            - { name: 'To do', color: '#94a3b8', icon: '📝' }
+            - { name: 'In progress', color: '#3b82f6', icon: '🚧' }
+            - { name: 'Review', color: '#f59e0b', icon: '👀' }
+            - { name: 'Done', color: '#22c55e', icon: '✅' }
+```
+
+New boards get these icons. For boards that already exist:
+
+```bash
+bin/console nowo:task-board:apply-default-column-icons --dry-run          # every active board: what would change
+bin/console nowo:task-board:apply-default-column-icons --tenant=project-42 # one tenant's boards
+bin/console nowo:task-board:apply-default-column-icons --board=BOARD_ID    # one board (add --tenant to require its tenant)
+bin/console nowo:task-board:apply-default-column-icons --board=BOARD_ID --include-archived  # an archived board
+```
+
+Runs over every board and per tenant cover active boards only; `--board` skips an archived board (and says so) unless
+`--include-archived` is given. An empty `--tenant` (e.g. an unset shell variable) is an error, not "every tenant".
+
+With the default grid, a column whose icon the grid does not offer (such an emoji) shows it as the selected choice in the
+edit dialog and keeps it on save; *No icon* removes it.
+
+The command only fills columns with **no** icon, so it is safe to run again and never replaces an icon a user picked.
+A column keeps no key of the `default_columns` entry it was created from, so it is matched by its **exact name** (case
+and spaces included): a renamed column is left alone. Each change is logged as a `column_update` write (no event, as a
+column edit in the dialog).
+
 ### Column sets
 
 A column set (`Nowo\TaskBoardBundle\Entity\ColumnSet`, table `task_board_column_sets`) is a named, ordered list of
@@ -661,8 +698,11 @@ with `ux_icon` the bundle asks for `tabler:<name>`; with the Tabler webfont `ti 
 the icons once (`php bin/console ux:icons:import tabler:<name> …`): arrow-left, arrow-right, arrows-sort, building, calendar,
 calendar-event, chart-bar, check, chevron-down, chevron-up, corner-left-up, chevron-left, chevron-right, circle, circle-check, circle-dot, clock, clock-play, hourglass,
 columns, device-floppy, download, external-link, flag, folder, git-branch, grip-vertical, history, layout-columns, layout-grid, layout-kanban,
-help, line-dashed, link, arrows-move, copy, repeat, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
-users, x. Mapping `create`, `chevron_up` or `chevron_down` in `nowo_ui_kit.action_icons` replaces New board's `plus` and the filter fold's chevrons (since 2.0.2).
+help, link, arrows-move, copy, repeat, list, list-tree, message-circle, notes, palette, pencil, plug, plug-connected, plus, refresh, subtask, tags, trash, unlink, upload, user-minus, user-plus,
+users, x. With `icon_set: bootstrap-icons` (since 2.9.0) the bundle prints the Bootstrap Icons 1.13 name of each of these
+(and of the default `board.column_icons`) where Tabler's name does not exist there, e.g. `device-floppy` → `floppy`,
+`circle-check` → `check-circle`, `layout-kanban` → `kanban` (`Support\IconNames::BOOTSTRAP`); a host page still loads
+the Bootstrap Icons stylesheet itself. Mapping `create`, `chevron_up` or `chevron_down` in `nowo_ui_kit.action_icons` replaces New board's `plus` and the filter fold's chevrons (since 2.0.2).
 
 Each icon of `board.column_icons` is imported too, since every board page draws them in its column dialogs. The default is the 30 in `Configuration::DEFAULT_COLUMN_ICONS`; set `board.column_icons` to a shorter list to import fewer.
 

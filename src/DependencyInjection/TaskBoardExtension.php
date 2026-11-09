@@ -82,6 +82,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
@@ -128,6 +129,7 @@ use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 
+use function array_column;
 use function array_key_exists;
 use function class_exists;
 use function defined;
@@ -203,6 +205,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.board.default_columns', $config['board']['default_columns']);
         $container->setParameter('nowo_task_board.board.top_level_only', $config['board']['top_level_only']);
         $container->setParameter('nowo_task_board.board.column_icons', $config['board']['column_icons']);
+        // Since 2.9.0: the icon ids a column may name besides an emoji (column_icons and the default columns' ids), and the
+        // column icon widget.
+        $container->setParameter('nowo_task_board.board.column_icon_ids', $this->columnIconIds($config['board']));
+        $container->setParameter('nowo_task_board.board.column_icon_form', [
+            'icon_form_type'    => $config['board']['column_icon_form_type'],
+            'icon_form_options' => $config['board']['column_icon_form_options'],
+            'icon_known_ids'    => $this->columnIconIds($config['board']),
+        ]);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
         // Since 1.30.0 (spec 211).
@@ -424,6 +434,25 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
+     * Since 2.9.0: the `<set>:<name>` ids a column icon may name: `board.column_icons` and the ids of `board.default_columns`.
+     *
+     * @param array<string, mixed> $board
+     *
+     * @return list<string>
+     */
+    private function columnIconIds(array $board): array
+    {
+        $ids = [];
+        foreach ([...(array) ($board['column_icons'] ?? []), ...array_column((array) ($board['default_columns'] ?? []), 'icon')] as $icon) {
+            if (is_string($icon) && ColumnIcon::isId($icon) && !in_array($icon, $ids, true)) {
+                $ids[] = $icon;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Since 1.30.0 (spec 211): the host's scope step and tenant labels, and what the New board form asks.
      *
      * @param array<string, mixed> $board
@@ -433,7 +462,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $reference = static fn (mixed $id): ?Reference => is_string($id) && $id !== '' ? new Reference($id) : null;
         $container->getDefinition(TaskBoardManageController::class)
             ->setArgument('$scopeProvider', $reference($board['scope_provider']))
-            ->setArgument('$boardFormOptions', '%nowo_task_board.board.form_options%');
+            ->setArgument('$boardFormOptions', '%nowo_task_board.board.form_options%')
+            ->setArgument('$columnIconForm', '%nowo_task_board.board.column_icon_form%');
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$tenantLabels', $reference($board['tenant_label_provider']))
             ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE));

@@ -96,6 +96,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.9.0. Emoji column icons (host Symfony Beacon, owner 2026-11-09: default columns with emojis).
+
+### Added
+
+- **A column icon may be one emoji.** `board.column_icon_form_type` / `board.column_icon_form_options` (new, default `null` / `{}` = the Tabler grid of `board.column_icons`, as before) set the widget of the column icon in the add / edit column dialogs, e.g. `Nowo\UiKitBundle\Form\EmojiPickerType` as for `board.icon_form_type`. `manage/_column_icon.html.twig` prints a value that is not an icon id as escaped text in `<span class="nowo-task-column__icon nowo-task-column__icon--emoji" aria-hidden="true">`, with any icon set (`none` included); the column name stays the accessible text. Icon ids render byte for byte as in 2.8.0.
+- **`board.default_columns[].icon` takes an emoji** (📝 To do, 🚧 In progress, 👀 Review, ✅ Done) for new boards; the name stays the name.
+- **`nowo:task-board:apply-default-column-icons [--board=ID] [--tenant=KEY] [--dry-run]`.** Gives the columns of existing boards that have *no* icon the icon of their `board.default_columns` entry. Columns keep no key of the entry they were made from, so they are matched by exact name (case and spaces included); a renamed column, or one with an icon, is left alone. Fill only and idempotent; prints a table of what it changed (or would change) and logs a `column_update` write per column, as the dialog does. Every active board by default, one tenant with `--tenant` (an empty `--tenant` is refused, JM-I1), one board with `--board` (refused when it is not of `--tenant`; an archived board is skipped unless `--include-archived` is given, JM-I2).
+- **Task API.** A status (column) carries `icon` (one emoji, an icon id, or null) in every answer; `POST /v2/list/{id}/status` and `PUT /v2/list/{id}/status/{status_id}` take `icon` (`null` or `""` removes it). OpenAPI and *Differences from ClickUp* list it.
+
+### Fixed
+
+- **JI-L3 — icons under `icon_set: bootstrap-icons`.** The Gantt legend's *Dependency* key is a CSS swatch (`span.nowo-task-gantt__legend-dependency`, a dashed line in the dependency colour) like the other three keys, so it no longer depends on any icon set (it printed `bi bi-line-dashed`, which Bootstrap Icons lacks). With `bootstrap-icons`, the bundle's Tabler names that Bootstrap Icons does not have are printed as their Bootstrap Icons 1.13 names (`Support\IconNames::BOOTSTRAP`, e.g. `device-floppy` → `floppy`, `circle-check` → `check-circle`, `layout-kanban` → `kanban`) in `manage/_icon.html.twig`, the column icons of `tabler:` ids and the page header actions and tabs. Only names Bootstrap Icons does not have are mapped, so a host's Bootstrap name is never changed; `tabler-icons`, `ux_icon` and the other sets get the same names as before. The demo's admin layout loads the Bootstrap Icons stylesheet of the set it configures.
+- **JM-L1 — the default grid keeps an emoji it does not offer.** Editing a column whose icon is not in `board.column_icons` (an emoji from `board.default_columns`, the fill command or the API) no longer removes it: the edit dialog adds the current icon to the grid's `<select>` and shows it in the grid as the selected choice (as text), the server accepts that value for that column, and an edit that posts no `icon` at all keeps the stored one. *No icon* still removes it.
+- **JM-I3 — no hidden tag text in icons.** Board and column icons refuse Unicode tag characters (U+E0020–E007F) except in a subdivision flag (🏴 + 1–6 tag letters or digits + U+E007F); `✅` followed by tag characters is no longer accepted.
+- **JI-I1.** `TaskBoardFormatTest` uses `#[DataProvider]` instead of the deprecated `@dataProvider` doc-comment.
+
+### Security
+
+- **Column icons are validated on every write path.** One emoji (as the board icon: at most 16 bytes, one emoji, a ZWJ sequence, flag or keycap) or an id of `board.column_icons` / `board.default_columns` (`<set>:<name>`), whatever the form type (`TaskConstraints::columnIcon()`, form and API: 400 `INPUT_002`); `board.default_columns[].icon` is checked when the container is built. `BoardColumnManager`, `ColumnSetManager::applyToBoard()` and `TaskBoardCreator` store no other value (`ColumnIcon::normalize()`: anything else becomes no icon). No free text and no markup is stored; every place that prints an icon escapes it (Twig autoescape in the header, the list groups and `data-column-icon`; JSON in the API).
+
 ## [2.8.1] - 2026-11-09
 
 Target 2.8.1. Phone Gantt legend (audit JD-L4): CSS inside the `@media (max-width: 640px)` block of `task-board.css` only, wider windows unchanged. The Gantt and Calendar tab navs get their own accessible name and a single class attribute (requires `nowo-tech/ui-kit-bundle` `^2.42.1`).

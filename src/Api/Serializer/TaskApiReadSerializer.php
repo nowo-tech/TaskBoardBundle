@@ -286,7 +286,7 @@ final class TaskApiReadSerializer
             default                             => 'custom',
         };
 
-        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type];
+        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon()];
     }
 
     /**

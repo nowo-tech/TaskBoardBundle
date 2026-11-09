@@ -226,6 +226,9 @@ final class TaskBoardManageController extends AbstractController
         // Since 2.6.0 (TB-18): `tenancy.tenant_paths[].open_single_board`, by the path's route name prefix.
         /** @var array<string, bool> */
         private readonly array $openSingleBoardPaths = [],
+        // Since 2.9.0: `board.column_icon_form_type` / `_options` and the ids a column icon may name (BoardColumnFormType options).
+        /** @var array{icon_form_type?: ?string, icon_form_options?: array<string, mixed>, icon_known_ids?: list<string>} */
+        private readonly array $columnIconForm = [],
     ) {
     }
 
@@ -500,6 +503,8 @@ final class TaskBoardManageController extends AbstractController
             $column = $this->columnManager->add($board, $data);
             $this->logWrite('column_create', ['board_id' => $boardId, 'column_id' => $column->getId()]);
             $this->addFlash('success', 'task_board.flash.column_added');
+        } else {
+            $this->flashColumnIconError($form);
         }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
@@ -515,15 +520,21 @@ final class TaskBoardManageController extends AbstractController
             name: $column->getName(),
             color: $column->getColor(),
             icon: $column->getIcon(),
-        ));
+        ), $column->getIcon());
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
+            // Since 2.9.0 (audit JM-L1): an edit that does not post the icon (the grid's <select> had no option for it) keeps it.
+            if ($form->has('icon') && !array_key_exists('icon', $request->request->all($form->getName()))) {
+                $data->icon = $column->getIcon();
+            }
             $this->columnManager->update($column, $data);
             $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
+        } else {
+            $this->flashColumnIconError($form);
         }
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
@@ -1752,6 +1763,18 @@ final class TaskBoardManageController extends AbstractController
     }
 
     /**
+     * Since 2.9.0: a refused column icon (not one emoji, nor an offered icon) says so; other refusals stay silent as before.
+     *
+     * @param FormInterface<BoardColumnFormData> $form
+     */
+    private function flashColumnIconError(FormInterface $form): void
+    {
+        if ($form->isSubmitted() && $form->has('icon') && $form->get('icon')->getErrors()->count() > 0) {
+            $this->addFlash('error', 'task_board.flash.column_icon_invalid');
+        }
+    }
+
+    /**
      * Since 1.15: an error flash naming the first error of a refused form (field errors included).
      *
      * @param FormInterface<mixed> $form
@@ -1922,9 +1945,13 @@ final class TaskBoardManageController extends AbstractController
      *
      * @return FormInterface<BoardColumnFormData>
      */
-    private function createColumnForm(BoardColumnFormData $data): FormInterface
+    private function createColumnForm(BoardColumnFormData $data, ?string $currentIcon = null): FormInterface
     {
-        return $this->createForm(BoardColumnFormType::class, $data, ['icon_choices' => $this->columnIcons]);
+        return $this->createForm(BoardColumnFormType::class, $data, [
+            'icon_choices'         => $this->columnIcons,
+            'icon_current'         => $currentIcon,
+            'icon_invalid_message' => $this->translator->trans('task_board.form.column.icon_invalid', [], 'NowoTaskBoardBundle'),
+        ] + $this->columnIconForm);
     }
 
     /**

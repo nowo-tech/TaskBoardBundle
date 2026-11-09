@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 
@@ -42,7 +43,8 @@ final readonly class BoardColumnManager
             name: trim($data->name),
             position: $position + 1,
             color: $this->normalize($data->color),
-            icon: $this->normalize($data->icon),
+            // Since 2.9.0: one emoji or an icon id; anything else is not stored (the form and the API refuse it first).
+            icon: ColumnIcon::normalize($data->icon),
         );
 
         $board->addColumn($column);
@@ -94,7 +96,7 @@ final readonly class BoardColumnManager
         $column
             ->setName(trim($data->name))
             ->setColor($this->normalize($data->color))
-            ->setIcon($this->normalize($data->icon));
+            ->setIcon(ColumnIcon::normalize($data->icon));
 
         $this->columnRepository->save($column);
     }

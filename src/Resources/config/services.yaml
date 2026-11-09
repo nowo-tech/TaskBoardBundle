@@ -163,6 +163,14 @@ services:
 
     Nowo\TaskBoardBundle\Command\TaskBoardImportCommand: ~
 
+    # Since 2.9.0: fill-only icons of existing boards' default columns (nowo:task-board:apply-default-column-icons).
+    Nowo\TaskBoardBundle\Service\DefaultColumnIconFiller:
+        arguments:
+            $defaultColumns: '%nowo_task_board.board.default_columns%'
+            $logger: '@?logger'
+
+    Nowo\TaskBoardBundle\Command\TaskBoardApplyDefaultColumnIconsCommand: ~
+
     # REQ-UI-001: Twig globals from templates.layout / templates.css_framework.
     Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension:
         arguments:

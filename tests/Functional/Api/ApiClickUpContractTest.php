@@ -84,6 +84,8 @@ final class ApiClickUpContractTest extends ApiTestCase
         '*: *.date_created: missing'                           => 'Checklists and their items carry no creation date of their own.',
         // What this API adds.
         '*: *statuses[].id: extra'                     => 'Statuses are columns and have ids (used by the status paths).',
+        '*: *statuses[].icon: extra'                   => 'Since 2.9.0: a status carries its column\'s icon (one emoji or an icon id), or null.',
+        '*: *.status.icon: extra'                      => 'Since 2.9.0: a task\'s status carries its column\'s icon too.',
         'getfolderlesslists: .lists[].statuses: extra' => 'Each list carries its statuses (columns).',
         '*: .archived: extra'                          => 'Boards say whether they are archived.',
         '*: .override_statuses: extra'                 => 'Every board has its own statuses.',

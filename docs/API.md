@@ -144,8 +144,8 @@ Every management write needs a *Full* token and the board's manage decision (`Bo
 | `POST /v2/space/{id}/list` | `name`, `content` / `markdown_content`. The token must reach the whole tenant (naming one board of it is not enough). The board gets the default columns, as from the UI |
 | `PUT /v2/list/{id}` | `name`, `content`; the slug stays. `status`, `priority`, `assignee`, `due_date` are warned about |
 | `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002`. Two deletes of one board at the same time may both pick the same tasks, so `TASK_ERASED` (with its file refs) and `BOARD_DELETED` can come twice: a host's listeners must delete files idempotently |
-| `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex) |
-| `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames or recolours a column; what is not given stays |
+| `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex), since 2.9.0 `icon` (one emoji of at most 16 bytes, or one of `board.column_icons` / `board.default_columns` icon ids such as `tabler:bug`; anything else is 400 `INPUT_002`) |
+| `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames, recolours or (since 2.9.0) sets the `icon` of a column (`null` or `""` removes it); what is not given stays |
 | `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
 | `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`) |
 
@@ -230,6 +230,8 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `*: .start_date_time: missing` | Boards have no dates. |
 | `*: *.date_created: missing` | Checklists and their items carry no creation date of their own. |
 | `*: *statuses[].id: extra` | Statuses are columns and have ids (used by the status paths). |
+| `*: *statuses[].icon: extra` | Since 2.9.0: a status carries its column's icon (one emoji or an icon id), or null. |
+| `*: *.status.icon: extra` | Since 2.9.0: a task's status carries its column's icon too. |
 | `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
 | `*: .archived: extra` | Boards say whether they are archived. |
 | `*: .override_statuses: extra` | Every board has its own statuses. |

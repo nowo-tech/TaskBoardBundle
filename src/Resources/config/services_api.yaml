@@ -59,6 +59,8 @@ services:
 
     Nowo\TaskBoardBundle\Api\Operation\TaskApiBoardOperations:
         public: true
+        arguments:
+            $columnIconIds: '%nowo_task_board.board.column_icon_ids%'
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController:
         public: true
