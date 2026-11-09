@@ -168,7 +168,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.8.1
 
-No schema change, no configuration change and no markup change. **Phones only (≤ 640px):** the Gantt legend (`.nowo-task-gantt__legend`) wraps to at most two compact rows instead of scrolling one row behind a hidden scrollbar (audit JD-L4); its `overflow-x: auto`, `scrollbar-width: none` and `::-webkit-scrollbar { display: none }` rules are removed. A host that added its own fade, scrollbar or `tabindex`/`role="region"` to the 2.8.0 scroller can drop that. A host that wants the single scrolling row back restores those rules in its own `@media (max-width: 640px)` rule, loaded after the bundle's stylesheet, and then also makes the list keyboard-reachable and labelled.
+No schema change and no configuration change. **Default markup:** the Gantt scale `<nav>` and the Calendar mode `<nav>` are named `aria-label="Scale"` and `aria-label="Calendar mode"` (translated) instead of UiKit's default "Sections"; a host test that found them by "Sections" uses the new names. **Phones only (≤ 640px):** the Gantt legend (`.nowo-task-gantt__legend`) wraps to at most two compact rows instead of scrolling one row behind a hidden scrollbar (audit JD-L4); its `overflow-x: auto`, `scrollbar-width: none` and `::-webkit-scrollbar { display: none }` rules are removed. A host that added its own fade, scrollbar or `tabindex`/`role="region"` to the 2.8.0 scroller can drop that. A host that wants the single scrolling row back restores those rules in its own `@media (max-width: 640px)` rule, loaded after the bundle's stylesheet, and then also makes the list keyboard-reachable and labelled.
 
 ## To 2.8.0
 
