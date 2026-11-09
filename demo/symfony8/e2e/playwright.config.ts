@@ -36,5 +36,8 @@ export default defineConfig({
     // Since 2.0.1 (audit HY-A): the board index as a card on an iPhone profile and in a narrow Firefox window.
     { name: 'iphone', testMatch: /board-index-phone/, use: { ...devices['iPhone 13'] } },
     { name: 'firefox-narrow', testMatch: /board-index-phone/, use: { ...devices['Desktop Firefox'], viewport: { width: 390, height: 844 } } },
+    // Since 2.8.0 (host mobile UX audit MUX-70, MUX-73, MUX-74): the phone layout at 390 × 844 in Chromium and WebKit.
+    { name: 'phone-chromium', testMatch: /phone-layout/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
+    { name: 'phone-webkit', testMatch: /phone-layout/, use: { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } } },
   ],
 });

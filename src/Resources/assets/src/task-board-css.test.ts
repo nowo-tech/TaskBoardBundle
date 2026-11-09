@@ -74,7 +74,8 @@ describe('task-board.css', () => {
   });
 
   it('gives phone tap targets at least 32px', () => {
-    const phone = css.slice(css.lastIndexOf('@media (max-width: 640px)'));
+    // The tap-target phone block (since 2.8.0 the MUX phone block comes after it, at the end of the file).
+    const phone = css.slice(css.lastIndexOf('@media (max-width: 640px)', css.indexOf('    .nowo-task-board__column-edit {')));
     for (const selector of ['.nowo-task-board__column-edit', '.nowo-ui-dialog__close']) {
       expect(phone).toMatch(new RegExp(`\\${selector}\\s*\\{\\s*min-width:\\s*2rem;\\s*min-height:\\s*2rem;`));
     }
