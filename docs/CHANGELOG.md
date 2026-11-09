@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.9.1] - 2026-11-09](#291---2026-11-09)
 - [[2.9.0] - 2026-11-09](#290---2026-11-09)
 - [[2.8.1] - 2026-11-09](#281---2026-11-09)
 - [[2.8.0] - 2026-11-09](#280---2026-11-09)
@@ -119,6 +120,15 @@ Target 2.10.0 (minor). For Symfony Beacon 1.144: spec 214 (calendar) and spec 21
 ### Deprecated
 
 - `TaskBoardEvents::BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` (DDD audit G5): never dispatched; removed in 3.0.
+
+## [2.9.1] - 2026-11-09
+
+Target 2.9.1 (patch). See [UPGRADING](UPGRADING.md#to-291).
+
+### Fixed
+
+- **A column with a legacy icon can be renamed again (audit JM-I7).** A column whose stored icon is no longer storable (written straight to the database, a pre-2.9.0 `default_columns` value such as `fa fa-bug`, or an icon with tag text stored before JM-I3) refused a plain rename with the icon flash ("The column was not saved…"), because the dialog posted that value back and the grid did not accept it. The grid now accepts the edited column's own current icon whatever it is (`BoardColumnManager::update()` still drops a value that is not storable), and the edit button carries `data-column-icon-storable="0"` for such an icon so the dialog opens it as "No icon", with the grid and with a host widget (`board.column_icon_form_type`) alike. Saving the dialog drops the icon, as UPGRADING already said. New Twig function `nowo_task_board_column_icon_storable(icon)`; new exported helper `dialogIcon()` in `edit-column-modal-controller.ts`.
+- **A legacy bare current icon no longer shadows an offered icon (audit JM-I8).** The grid's choices are keyed by label; the edited column's own icon now has its own label key (`BoardColumnFormType::CURRENT_ICON_LABEL_PREFIX`, `current: <icon>`), so a bare name such as `bug` next to an offered `tabler:bug` (label `bug`) no longer replaces that choice: both stay valid for that column.
 
 ### Documentation
 
@@ -2056,7 +2066,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.9.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

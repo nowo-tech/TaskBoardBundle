@@ -8,6 +8,7 @@
   - [Schema change for every host: a comment's cause](#schema-change-for-every-host-a-comments-cause)
   - [Schema change with the sync tables mapped: custom id index](#schema-change-with-the-sync-tables-mapped-custom-id-index)
   - [Beacon hooks: what a host does](#beacon-hooks-what-a-host-does)
+- [To 2.9.1](#to-291)
 - [To 2.9.0](#to-290)
 - [To 2.8.1](#to-281)
 - [To 2.8.0](#to-280)
@@ -225,6 +226,19 @@ On a big MySQL table, `ALTER TABLE task_board_sync_items ADD INDEX idx_task_boar
 4. **Task API numbers.** Strict clients must accept `number` in task bodies. To look a task up by number: `GET /v2/task/123?custom_task_ids=true&space_id=…` (with `task_numbers.scope: tenant`) or `&list_id=…` (any scope). Without either it answers 400 `INPUT_002`; a space whose numbers are per list (scope `board`, or a space without a tenant) answers 400 too.
 5. **DDD hosts.** Every task and board event has scalar getters (`getTaskId()`, `getBoardId()`, `getTenantKey()`, `getActorId()`, …) beside the entity getters, and the command services have ports (`Service\TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`, `TaskTimeLoggerInterface`, `BoardColumnManagerInterface`). Nothing to change; type-hint the interfaces where you want a seam. A class of yours that implements one must follow it when a later minor adds a method (as with any port). `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are deprecated: they were never dispatched, so a listener on them can go.
 6. **Calendar tests.** Use the new `data-testid`s instead of classes: `nowo-task-cal-chip`, `nowo-task-cal-reschedule`, `nowo-task-cal-reschedule-dialog`, `nowo-task-cal-add`, `nowo-task-cal-add-dialog`.
+
+## To 2.9.1
+
+From **2.9.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.9.1 (patch), from 2.9.0: `composer update nowo-tech/task-board-bundle`, then rebuild or re-copy the bundle's assets (`assets:install`) so `task-board.js` is current. No schema change and no configuration change.
+
+- **Legacy column icons (JM-I7).** A column whose stored icon is no longer storable (neither one emoji nor an icon id: a direct database write, a pre-2.9.0 `board.default_columns` value such as `fa fa-bug`, an icon with tag text stored before 2.9.0) is now really **dropped on the next edit** of that column: the edit dialog opens it as "No icon" (grid and host widget), and a rename that posts the old value back (a page loaded before the upgrade) is accepted and stores no icon. 2.9.0 refused such a rename with the icon flash. The edit button of such a column only gains `data-column-icon-storable="0"`; every other column's markup is unchanged.
+- **Bare names next to offered icons (JM-I8).** A column whose icon is a bare name (`bug`, from a config written before 2.9.0) while `board.column_icons` offers an icon with the same label (`tabler:bug`) can now pick that offered icon. A host that read the edit form's choice labels gets `current: <icon>` for the column's own icon.
 
 ## To 2.9.0
 

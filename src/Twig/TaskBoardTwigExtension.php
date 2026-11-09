@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Support\IconNames;
 use Nowo\TaskBoardBundle\Support\SubtaskProgress;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
@@ -343,6 +344,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             // Since 2.9.0 (audit JI-L3): a Tabler name as the icon set spells it (Bootstrap Icons names differ).
             new TwigFunction('nowo_task_board_icon_name', IconNames::forSet(...)),
             new TwigFunction('nowo_task_board_column_icon_name', IconNames::columnIcon(...)),
+            // Since 2.9.1 (audit JM-I7): whether an update would keep the column's stored icon (false: it is dropped).
+            new TwigFunction('nowo_task_board_column_icon_storable', static fn (string $icon): bool => ColumnIcon::normalize($icon) !== null),
         ];
     }
 

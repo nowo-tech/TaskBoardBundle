@@ -50,7 +50,7 @@
             data-column-id="{{ column.id }}"
             data-column-name="{{ column.name|e('html_attr') }}"
             data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"
-            data-column-icon="{{ column.icon|default('') }}"
+            data-column-icon="{{ column.icon|default('') }}"{{ column.icon is not empty and not nowo_task_board_column_icon_storable(column.icon) ? ' data-column-icon-storable="0"' : '' }}
         >
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}
         </button>

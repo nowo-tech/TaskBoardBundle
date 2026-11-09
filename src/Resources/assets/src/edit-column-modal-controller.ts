@@ -69,6 +69,15 @@ export function showDeleteWarning(form: HTMLFormElement, note: HTMLElement | nul
     }
 }
 
+/**
+ * Since 2.9.1 (audit JM-I7): the icon the dialog opens with. A stored icon the server would no longer store
+ * (`data-column-icon-storable="0"`: a direct database write, a legacy `fa fa-bug`) opens as "No icon", so a rename is not
+ * refused and saving drops that icon, with the grid and with a host widget alike.
+ */
+export function dialogIcon(trigger: HTMLElement): string {
+    return trigger.dataset.columnIconStorable === '0' ? '' : (trigger.dataset.columnIcon ?? '');
+}
+
 export default class EditColumnModalController extends Controller<HTMLElement> {
     static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'deleteWarning', 'title'];
 
@@ -127,7 +136,7 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
         }
 
         if (this.hasIconInputTarget) {
-            const icon = trigger.dataset.columnIcon ?? '';
+            const icon = dialogIcon(trigger);
             // Since 2.9.0: a host widget (board.column_icon_form_type, e.g. an emoji picker) is a text field that would
             // refuse an icon id such as tabler:bug: it opens empty for such a column, so the dialog can still be saved.
             this.iconInputTarget.value = this.iconInputTarget instanceof HTMLSelectElement || !ICON_ID.test(icon) ? icon : '';

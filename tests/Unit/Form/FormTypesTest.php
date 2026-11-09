@@ -155,9 +155,34 @@ final class FormTypesTest extends TestCase
         self::assertContains('📝', array_map(static fn ($choice): string => (string) $choice->value, $grid->createView()['icon']->vars['choices']));
         $grid->submit(['name' => 'Doing', 'icon' => '📝']);
         self::assertTrue($grid->isValid());
-        foreach (['tabler:bug', '<b>x</b>', ''] as $current) {
+        foreach (['tabler:bug', ''] as $current) {
             $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => $current]);
             self::assertCount(1, $form->createView()['icon']->vars['choices'], $current);
+        }
+
+        // Audit JM-I7: a stored icon that is no longer storable is still posted back by a rename (the update drops it).
+        foreach (['fa fa-bug', '<b>x</b>'] as $current) {
+            $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => $current]);
+            $form->submit(['name' => 'Renamed', 'icon' => $current]);
+            self::assertTrue($form->isValid(), $current);
+            self::assertSame($current, $form->getData()->icon);
+        }
+        $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => 'fa fa-bug']);
+        $form->submit(['name' => 'Renamed', 'icon' => 'fa fa-star']);
+        self::assertFalse($form->isValid(), 'only the column\'s own value');
+
+        // Audit JM-I8: a legacy bare current icon whose name is an offered icon's label does not replace that choice.
+        $form    = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => 'bug']);
+        $choices = [];
+        foreach ($form->createView()['icon']->vars['choices'] as $choice) {
+            $choices[(string) $choice->label] = (string) $choice->value;
+        }
+        self::assertSame(['bug' => 'tabler:bug', BoardColumnFormType::CURRENT_ICON_LABEL_PREFIX . 'bug' => 'bug'], $choices);
+        foreach (['tabler:bug', 'bug'] as $icon) {
+            $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => 'bug']);
+            $form->submit(['name' => 'Renamed', 'icon' => $icon]);
+            self::assertTrue($form->isValid(), $icon);
+            self::assertSame($icon, $form->getData()->icon);
         }
 
         // Without icon_known_ids the offered icons are board.column_icons.
