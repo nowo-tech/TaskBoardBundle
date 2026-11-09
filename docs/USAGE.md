@@ -109,6 +109,10 @@ $context->run('rule:' . $rule->getId(), fn () => $taskManager->moveToColumn($tas
 
 Every history row written inside keeps the cause (`TaskChangeHistory::getCause()`); the listeners of the events dispatched inside read `TaskChangeContext::current()`. The history shows it only through `history.cause_labeler`, whose text is escaped. `TaskUpdatedEvent::getPreviousValue('priority')`, `getAddedTags()` and `getRemovedTags()` give the values before the write.
 
+Since 2.10, a comment added inside keeps the cause too (`TaskComment::getCause()`), shown next to its author through `comments.cause_labeler` (a `TaskCommentCauseLabelerInterface`; one class may label both). The id-only events below carry it as `cause`.
+
+**Cause format.** A free string of 1 to 191 characters the bundle never parses. Use `<kind>:<id>`, as Beacon does (`rule:42` for an automation rule); the bundle's own writes use none, and `recurring` is the context of a recurring task's *created* history row, not a cause.
+
 ### Recurring tasks (since 2.3)
 
 `recurrence.enabled: true` adds the *Repeat* section to the task panel (block `nowo_task_repeat`: text only without `canEditTask()`), the Repeat page and a repeat icon on cards and list rows. The bundle schedules nothing: see [UPGRADING](UPGRADING.md#recurring-tasks-what-a-host-does). Each occurrence is a copy of the latest one (the `TaskCopier` rules), created as the series' author.
@@ -434,6 +438,20 @@ Dispatched after the change is flushed (listen with `#[AsEventListener(event: Ta
 | `TASK_REOPENED` | `TaskReopenedEvent` | — (left the last column) |
 | `TASK_MEMBER_ADDED` | `TaskMemberAddedEvent` | `getMember()`, `getUser()` |
 
+Since 2.10 (spec 216, DDD audit G2/G3), id-only events: public readonly scalars, no entity and no user object, so a host translates them into its own messages without touching the bundle's entities. `actorId` is the acting user's `getId()` as a string (null without one, e.g. a sync worker or a caller that passes none); `cause` is `TaskChangeContext::current()` at the write. They are dispatched after the write is saved, through `TaskEventDeferral`: inside `defer()`, a sync page or an import, after the commit, and not at all on a rollback or a dry run.
+
+| Constant | Event | Payload |
+|---|---|---|
+| `TASK_ARCHIVED` | `TaskArchivedEvent` | `taskId`, `boardId`, `tenantKey`, `number`, `actorId`, `cause` — archived by hand (board, API; a provider's archive is `TASK_REMOTE_ARCHIVED`) |
+| `TASK_RESTORED` | `TaskRestoredEvent` | the same — restored by hand (`TaskManager::restore()` / `recordRestored()`) |
+| `TASK_COMMENT_DELETED` | `TaskCommentDeletedEvent` | `commentId`, `taskId`, `boardId`, `tenantKey`, `actorId`, `cause` (`TASK_COMMENT` stays created / edited) |
+| `COLUMN_CREATED` | `ColumnCreatedEvent` | `boardId`, `tenantKey`, `columnId`, `name`, `position`, `actorId`, `cause` (board, API, sync or import) |
+| `COLUMN_UPDATED` | `ColumnUpdatedEvent` | `columnId`, `name`, `previousName`, `changedFields` (`name`, `color`, `icon`), `isRenamed()`; not dispatched when nothing changed |
+| `COLUMN_DELETED` | `ColumnDeletedEvent` | `columnId`, `name`, `targetColumnId` (where its tasks went), `movedTaskIds` |
+| `COLUMNS_REORDERED` | `ColumnsReorderedEvent` | `columnIds` in the new order; not dispatched when the order is the same |
+
+A decision event, `COLUMN_DELETE_CHECK` (`ColumnDeleteCheckEvent`: `boardId`, `tenantKey`, `columnIds`, `user`), lets the host warn before a column is deleted: `addWarning($columnId, $text)` adds plain-text lines that the edit-column dialog shows above *Delete column* and repeats in its confirmation. It is dispatched once per board page, for a person who may manage the columns of a board with more than one column; it never refuses the deletion (who may delete stays the access checker's `canManageColumns()`).
+
 ### Template blocks and partials
 
 Restyle a page by extending it and overriding a block instead of copying it:
@@ -486,7 +504,15 @@ Policy decisions can also be answered by listening to `TaskBoardEvents::BOARD_AC
 **Events you translate** (after flush; listen in your infrastructure layer and map to your own messages):
 `TASK_CREATED`, `TASK_UPDATED`, `TASK_MOVED`, `TASK_COMPLETED`, `TASK_REOPENED`, `TASK_MEMBER_ADDED`,
 `TASK_COMMENT`, `TASK_MENTION`, `TASK_BOARD_CHANGED`, `TASK_ERASED`, `BOARD_CREATED`, `BOARD_UPDATED`,
-`BOARD_EMPTIED`, `BOARD_DELETED`, `API_WRITE`, and the `SYNC_*` events.
+`BOARD_EMPTIED`, `BOARD_DELETED`, `API_WRITE`, and the `SYNC_*` events. Since 2.10 also `TASK_ARCHIVED`,
+`TASK_RESTORED`, `TASK_COMMENT_DELETED`, `COLUMN_CREATED`, `COLUMN_UPDATED`, `COLUMN_DELETED` and `COLUMNS_REORDERED`,
+which carry scalars only (see [Events after writes](#events-after-writes)).
+
+Since 2.10 every task event also has scalar getters, taken when the event is made: `getTaskId()`, `getBoardId()`,
+`getTenantKey()`, `getTaskNumber()`, `getActorId()` (the actor's `getId()` as a string), plus
+`TaskMovedEvent::getFromColumnId()` / `getToColumnId()`, `TaskCommentEvent::getCommentId()`,
+`TaskMentionEvent::getMentionedUserIds()`, `TaskMemberAddedEvent::getMemberId()` / `getUserId()` / `getRole()`; the
+board events have `getBoardId()`, `getTenantKey()`, `getActorId()`. A translator then never touches an entity:
 
 ```php
 #[AsEventListener(event: TaskBoardEvents::TASK_COMPLETED)]
@@ -496,31 +522,33 @@ final class TaskCompletedTranslator
 
     public function __invoke(TaskCompletedEvent $event): void
     {
-        $task = $event->getTask();
         $this->bus->dispatch(new WorkItemCompleted(       // your own message
-            taskId: $task->getId(),
-            tenantKey: $task->getBoard()->getTenantKey(),
-            actorId: (string) $event->getActor()->getId(),
+            taskId: $event->getTaskId(),
+            tenantKey: $event->getTenantKey(),
+            actorId: $event->getActorId(),
         ));
     }
 }
 ```
 
-**Commands** go through the bundle services (`TaskManager`, `TaskBoardCreator`, `TaskCommentManager`,
-`TaskTimeLogger`, `TaskMover`, `TaskBoardEraser`, `TaskBoardEditor`). Wrap them in your own port (e.g.
-`TaskBoardGateway`) so your application layer depends on an interface you own. For account erasure, call
+**Commands** go through the bundle services. Since 2.10 the main ones have ports, aliased to the bundle's classes:
+`Service\TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`,
+`TaskTimeLoggerInterface` and `BoardColumnManagerInterface`: type-hint them, double them in tests, decorate them (a
+decorator wraps your calls; the bundle's own controllers keep calling the classes). `TaskMover` and `TaskBoardEraser`
+have no port yet; wrap them in your own (e.g. `TaskBoardGateway`). For account erasure, call
 `TaskSyncPeopleReassigner::detachUser()` from your erasure flow.
 
 **Known limitations**
 
 - Users must be a Doctrine entity in the bundle's entity manager; an id-only user reference is not available.
-- Most write events carry the Doctrine entities (`getTask()`) and the user object, not ids: copy the ids out in
-  your listener and do not keep the entities.
-- No events yet for archive/restore, comment delete, time entries, dependencies, links, member removal or column
-  changes; read `TaskChangeHistory` or listen to Doctrine if you need them.
-- The services are `final` and have no interfaces.
+- The older write events still carry the entities and the user object beside their scalar getters; use the getters
+  and do not keep the entities.
+- No events yet for time entries, dependencies, links or member removal; read `TaskChangeHistory` or listen to
+  Doctrine if you need them.
+- `TaskMover`, `TaskBoardEraser` and the other services are `final` without a port; the ports take the bundle's
+  entities and form DTOs (`Task`, `TaskBoard`, `TaskFormData`), not ids.
 - `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are
-  declared but never dispatched.
+  declared but never dispatched (deprecated since 2.10; removed in 3.0).
 
 ## Board index and default view (since 1.24)
 

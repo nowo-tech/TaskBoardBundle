@@ -4,6 +4,10 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.10.0](#to-2100)
+  - [Schema change for every host: a comment's cause](#schema-change-for-every-host-a-comments-cause)
+  - [Schema change with the sync tables mapped: custom id index](#schema-change-with-the-sync-tables-mapped-custom-id-index)
+  - [Beacon hooks: what a host does](#beacon-hooks-what-a-host-does)
 - [To 2.9.0](#to-290)
 - [To 2.8.1](#to-281)
 - [To 2.8.0](#to-280)
@@ -166,6 +170,61 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.10.0
+
+From **2.9.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Specs 214 and 216 (requests of Symfony Beacon 1.144). Additive only: a host that changes nothing gets the same pages, except new `data-testid` attributes on the calendar and one hidden, empty paragraph in the edit-column dialog, and every Task API task body gains `number`.
+
+### Schema change for every host: a comment's cause
+
+`TaskComment::$cause` is mapped whatever the config says. Existing rows keep null.
+
+```sql
+-- MySQL / MariaDB
+ALTER TABLE task_board_task_comments ADD cause VARCHAR(191) DEFAULT NULL;
+-- PostgreSQL
+ALTER TABLE task_board_task_comments ADD cause VARCHAR(191) DEFAULT NULL;
+-- SQLite
+ALTER TABLE task_board_task_comments ADD COLUMN cause VARCHAR(191) DEFAULT NULL;
+```
+
+### Schema change with the sync tables mapped: custom id index
+
+With `sync.enabled` (or sync tables mapped by an earlier config), one index; the table keeps its name whatever `table_prefix` says.
+
+```sql
+-- MySQL / MariaDB, PostgreSQL and SQLite
+CREATE INDEX idx_task_board_sync_items_board_custom ON task_board_sync_items (board_id, custom_id);
+```
+
+On a big MySQL table, `ALTER TABLE task_board_sync_items ADD INDEX idx_task_board_sync_items_board_custom (board_id, custom_id), ALGORITHM=INPLACE, LOCK=NONE;` builds it without blocking writes; on PostgreSQL, `CREATE INDEX CONCURRENTLY …` outside a transaction. Doctrine's schema validation then reports nothing.
+
+### Beacon hooks: what a host does
+
+1. **A comment written by a rule.** Run the write inside `TaskChangeContext::run('rule:42', fn () => …)` (as for history rows since 2.3.0); `TaskCommentManager::add()` keeps the cause. To show it, set `comments.cause_labeler` to a service implementing `Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface` (`label(string $cause, TaskComment $comment): ?string`, plain text, escaped). One class may implement it and `TaskChangeCauseLabelerInterface` and be set in both keys. A host that overrides `manage/_task_comment.html.twig` prints `nowo_task_board_comment_cause(comment)` itself.
+2. **Warnings before deleting a column.** Listen to `TaskBoardEvents::COLUMN_DELETE_CHECK`:
+
+   ```php
+   #[AsEventListener(event: TaskBoardEvents::COLUMN_DELETE_CHECK)]
+   public function __invoke(ColumnDeleteCheckEvent $event): void
+   {
+       foreach ($this->rules->countByColumn($event->boardId, $event->columnIds) as $columnId => $count) {
+           $event->addWarning($columnId, $this->translator->trans('automation.column_used', ['%count%' => $count]));
+       }
+   }
+   ```
+
+   It runs once per board page, only for a person who may manage the columns of a board with more than one column; answer with one query for all `columnIds`. The lines are plain text, shown escaped in the dialog and added to the confirmation. A host that overrides `manage/_board_column.html.twig` or `manage/_edit_column_modal.html.twig` keeps `data-column-delete-warning` on the pencil (from `columnDeleteWarnings[column.id]`) and the `deleteWarning` target; a host that renders the board page from its own controller passes `columnDeleteWarnings` (else none is shown). The rebuilt `task-board.js` is needed for the dialog to show them.
+3. **New events.** `TASK_ARCHIVED`, `TASK_RESTORED`, `TASK_COMMENT_DELETED`, `COLUMN_CREATED`, `COLUMN_UPDATED`, `COLUMN_DELETED`, `COLUMNS_REORDERED`, with ids and scalars only (see [USAGE](USAGE.md#events-after-writes)). They are dispatched after the write is saved; inside `TaskEventDeferral::defer()`, a sync page or an import, after the commit (and not at all on a rollback or a dry run). A provider sync's archive and restore keep dispatching `TASK_REMOTE_ARCHIVED` / `TASK_REMOTE_RESTORED`, not the new ones. `TASK_COMMENT` keeps its two actions. A host calling `BoardColumnManager` or `TaskCommentManager::delete()` itself passes the acting user as the new last argument, or its events carry `actorId: null`.
+4. **Task API numbers.** Strict clients must accept `number` in task bodies. To look a task up by number: `GET /v2/task/123?custom_task_ids=true&space_id=…` (with `task_numbers.scope: tenant`) or `&list_id=…` (any scope). Without either it answers 400 `INPUT_002`; a space whose numbers are per list (scope `board`, or a space without a tenant) answers 400 too.
+5. **DDD hosts.** Every task and board event has scalar getters (`getTaskId()`, `getBoardId()`, `getTenantKey()`, `getActorId()`, …) beside the entity getters, and the command services have ports (`Service\TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`, `TaskTimeLoggerInterface`, `BoardColumnManagerInterface`). Nothing to change; type-hint the interfaces where you want a seam. A class of yours that implements one must follow it when a later minor adds a method (as with any port). `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are deprecated: they were never dispatched, so a listener on them can go.
+6. **Calendar tests.** Use the new `data-testid`s instead of classes: `nowo-task-cal-chip`, `nowo-task-cal-reschedule`, `nowo-task-cal-reschedule-dialog`, `nowo-task-cal-add`, `nowo-task-cal-add-dialog`.
 
 ## To 2.9.0
 
