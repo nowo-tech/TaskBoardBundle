@@ -20,6 +20,7 @@ use function array_filter;
 use function array_map;
 use function array_values;
 use function preg_replace;
+use function substr_count;
 use function usort;
 
 /**
@@ -112,6 +113,51 @@ final class ColumnIconsTest extends FunctionalTestCase
         self::assertSame('tabler:bug', $this->column('Backlog')->getIcon());
         $this->post($edit, ['name' => 'Backlog', 'icon' => '']);
         self::assertNull($this->column('Backlog')->getIcon(), '"No icon" still removes it');
+    }
+
+    /** Since 2.9.1 (audit JM-I7): a stored icon that is no longer storable does not block a rename and is dropped by it. */
+    public function testALegacyIconNoLongerStorableIsDroppedOnARename(): void
+    {
+        $board = $this->board(columns: ['To do', 'Done']);
+        $todo  = $board->getColumns()->first();
+        self::assertInstanceOf(BoardColumn::class, $todo);
+        $todo->setIcon('fa fa-bug');
+        $this->em->flush();
+        $this->login($this->owner);
+
+        $html = $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html();
+        self::assertStringContainsString('data-column-icon="fa fa-bug" data-column-icon-storable="0"', $html);
+        self::assertSame(1, substr_count($html, 'data-column-icon-storable'), 'only the column whose icon would be dropped');
+
+        // A stale dialog (or one without the flag) posts the value back: accepted for this column, then dropped.
+        $edit = '/board/' . $board->getId() . '/column/' . $todo->getId();
+        $this->flashes();
+        $this->post($edit, ['name' => 'Backlog', 'icon' => 'fa fa-bug']);
+        self::assertSame(['success' => ['Column updated.']], $this->flashes());
+        self::assertSame(['Backlog', null], [$this->column('Backlog')->getName(), $this->column('Backlog')->getIcon()]);
+
+        // The dialog opens it as "No icon": same result.
+        $todo = $this->column('Backlog');
+        $todo->setIcon('fa fa-bug');
+        $this->em->flush();
+        $this->post($edit, ['name' => 'To do', 'icon' => '']);
+        self::assertSame(['To do', null], [$this->column('To do')->getName(), $this->column('To do')->getIcon()]);
+    }
+
+    /** Since 2.9.1 (audit JM-I7): the same with a host widget, which opens empty for such an icon. */
+    public function testALegacyIconIsDroppedWithAHostWidget(): void
+    {
+        $this->boot(['board' => ['column_icon_form_type' => TextType::class]]);
+        $board = $this->board(columns: ['To do']);
+        $todo  = $board->getColumns()->first();
+        self::assertInstanceOf(BoardColumn::class, $todo);
+        $todo->setIcon('fa fa-bug');
+        $this->em->flush();
+        $this->login($this->owner);
+
+        self::assertStringContainsString('data-column-icon-storable="0"', $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html());
+        $this->post('/board/' . $board->getId() . '/column/' . $todo->getId(), ['name' => 'Backlog', 'icon' => '']);
+        self::assertSame(['Backlog', null], [$this->column('Backlog')->getName(), $this->column('Backlog')->getIcon()]);
     }
 
     public function testATextWidgetTakesAnOfferedIconIdOrAnEmojiAndNothingElse(): void

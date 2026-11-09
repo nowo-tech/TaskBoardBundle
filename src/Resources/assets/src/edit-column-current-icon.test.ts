@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { showCurrentIcon } from './edit-column-modal-controller';
+import { dialogIcon, showCurrentIcon } from './edit-column-modal-controller';
 
 function mount(): { select: HTMLSelectElement; grid: HTMLElement } {
     document.body.innerHTML = `
@@ -45,5 +45,30 @@ describe('the current column icon in the grid (JM-L1)', () => {
         const select = document.getElementById('icon') as HTMLSelectElement;
         showCurrentIcon(select, '📝');
         expect(select.value).toBe('📝');
+    });
+});
+
+describe('the icon the edit dialog opens with (JM-I7)', () => {
+    function trigger(attributes: string): HTMLElement {
+        document.body.innerHTML = `<button type="button" data-column-id="7" ${attributes}></button>`;
+
+        return document.querySelector('button') as HTMLElement;
+    }
+
+    it('is the stored icon', () => {
+        expect(dialogIcon(trigger('data-column-icon="📝"'))).toBe('📝');
+        expect(dialogIcon(trigger('data-column-icon="tabler:bug"'))).toBe('tabler:bug');
+        expect(dialogIcon(trigger('data-column-icon=""'))).toBe('');
+        expect(dialogIcon(trigger(''))).toBe('');
+    });
+
+    it('is "No icon" for a stored icon the server would not store, so the grid adds no option for it', () => {
+        const button = trigger('data-column-icon="fa fa-bug" data-column-icon-storable="0"');
+        expect(dialogIcon(button)).toBe('');
+
+        const { select } = mount();
+        showCurrentIcon(select, dialogIcon(button));
+        expect(select.value).toBe('');
+        expect(document.querySelectorAll('[data-nowo-task-current-icon]')).toHaveLength(0);
     });
 });

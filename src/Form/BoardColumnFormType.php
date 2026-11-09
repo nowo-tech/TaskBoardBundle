@@ -7,7 +7,6 @@ namespace Nowo\TaskBoardBundle\Form;
 use Nowo\FormKitBundle\Attribute\FormKitConfig;
 use Nowo\FormKitBundle\Form\FormOptionsTrait;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
-use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Component\Form\AbstractType;
@@ -30,6 +29,9 @@ final class BoardColumnFormType extends AbstractType
     use FormOptionsTrait;
 
     public const COLOR_PATTERN = TaskConstraints::COLOR_PATTERN;
+
+    /** Since 2.9.1 (audit JM-I8): the label key of the edited column's own icon in the grid's choices. */
+    public const CURRENT_ICON_LABEL_PREFIX = 'current: ';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -64,9 +66,13 @@ final class BoardColumnFormType extends AbstractType
             }
             // Since 2.9.0 (audit JM-L1): the column's own icon when the grid does not offer it (an emoji of the default columns,
             // the fill command or the API), so an edit can post it back.
+            // Since 2.9.1 (audit JM-I7): whatever it is, so a column whose stored icon is no longer storable (a direct database
+            // write, a legacy `fa fa-bug`) can still be renamed; BoardColumnManager::update() drops such a value.
+            // Since 2.9.1 (audit JM-I8): under its own label key, so a bare name equal to an offered icon's label (`bug` next to
+            // `tabler:bug`) does not replace that choice.
             $current = $options['icon_current'];
-            if (is_string($current) && $current !== '' && !in_array($current, $icons, true) && ColumnIcon::isStorable($current)) {
-                $choices[$current] = $current;
+            if (is_string($current) && $current !== '' && !in_array($current, $icons, true)) {
+                $choices[self::CURRENT_ICON_LABEL_PREFIX . $current] = $current;
             }
 
             $this->addWithDefaults($builder, 'icon', ChoiceType::class, [
