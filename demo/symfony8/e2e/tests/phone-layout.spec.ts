@@ -82,6 +82,14 @@ for (const locale of Object.keys(LEGEND_OVERRUN)) {
         expect.soft(m.maxRight, `last item right ${at}`).toBeLessThanOrEqual(m.viewport);
         expect.soft(m.pageScroll, `page scrollWidth ${at}`).toBeLessThanOrEqual(m.viewport);
 
+        // Since 2.9.0 (audit JI-L3): the dependency key is a dashed CSS swatch, drawn whatever the icon set.
+        const key = await legend.locator('.nowo-task-gantt__legend-dependency').evaluate((el) => ({
+          style: getComputedStyle(el).borderTopStyle,
+          width: el.getBoundingClientRect().width,
+        }));
+        expect.soft(key.style, `dependency key ${at}`).toBe('dashed');
+        expect.soft(key.width, `dependency key width ${at}`).toBeGreaterThan(0);
+
         // Tab from the last control before the legend (the last scale tab) must not land on the legend or inside it.
         await page.locator('.nowo-task-gantt__scales a').last().focus();
         await page.keyboard.press('Tab');
@@ -91,6 +99,22 @@ for (const locale of Object.keys(LEGEND_OVERRUN)) {
     });
   });
 }
+
+test('icons: the demo loads the Bootstrap Icons it configures and the bundle names exist there (JI-L3)', async ({ page }) => {
+  const board = await openBoard(page);
+  await page.goto(`${board}/gantt`);
+  const glyphs = await page.locator('.nowo-task-icon i.bi, .nowo-ui-icon.bi, i.bi').evaluateAll((els) =>
+    els.map((el) => {
+      const before = getComputedStyle(el, '::before');
+
+      return { name: [...el.classList].find((c) => c.startsWith('bi-')) ?? '', content: before.content, font: before.fontFamily };
+    }));
+  expect(glyphs.length).toBeGreaterThan(0);
+  for (const glyph of glyphs) {
+    expect.soft(glyph.content, glyph.name).not.toMatch(/^(none|normal|"")$/);
+    expect.soft(glyph.font, glyph.name).toContain('bootstrap-icons');
+  }
+});
 
 test('board: the column count and the "+n" avatar are 12 px at least on a phone', async ({ page }) => {
   await openBoard(page);
