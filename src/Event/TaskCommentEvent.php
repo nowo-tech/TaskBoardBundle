@@ -27,6 +27,12 @@ final class TaskCommentEvent extends AbstractTaskEvent
         return $this->comment;
     }
 
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getCommentId(): string
+    {
+        return $this->comment->getId();
+    }
+
     /** {@see self::CREATED} or {@see self::EDITED}. */
     public function getAction(): string
     {

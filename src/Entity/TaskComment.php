@@ -61,6 +61,9 @@ class TaskComment
         private array $mentions = [],
         // Since 1.25: the comment's date in the source tool (a provider sync); null = now.
         ?DateTimeImmutable $createdAt = null,
+        // Since 2.10.0 (spec 216, FR-014): why it was written, e.g. "rule:42" (TaskChangeContext); null for a person's own.
+        #[ORM\Column(name: 'cause', type: 'string', length: 191, nullable: true)]
+        private ?string $cause = null,
     ) {
         $this->id         = Uuid::generate()->toString();
         $this->createdAt  = $createdAt ?? new DateTimeImmutable();
@@ -120,6 +123,12 @@ class TaskComment
     public function getAuthorName(): ?string
     {
         return $this->authorName;
+    }
+
+    /** Since 2.10.0 (spec 216): the cause it was written with (e.g. "rule:42"), shown through `comments.cause_labeler`. */
+    public function getCause(): ?string
+    {
+        return $this->cause;
     }
 
     public function getBody(): string

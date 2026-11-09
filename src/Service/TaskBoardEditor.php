@@ -17,7 +17,7 @@ use function array_keys;
  * Since 2.2.0 (spec 213): renames a board and edits its description, with {@see TaskBoardEvents::BOARD_UPDATED} when
  * something changed. The slug stays, as links to the board may hold it. The caller checks access and validates.
  */
-final readonly class TaskBoardEditor
+final readonly class TaskBoardEditor implements TaskBoardEditorInterface
 {
     public function __construct(
         private TaskBoardRepositoryInterface $boardRepository,

@@ -44,6 +44,9 @@
             title="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
             aria-label="{{ 'task_board.board.edit_column_named'|trans({'%column%': column.name}, 'NowoTaskBoardBundle') }}"
             data-action="click->nowo-task-board-edit-column-modal#open mousedown->nowo-task-board-edit-column-modal#stopDrag"
+            {#- Since 2.10.0 (spec 216): the host's delete warnings of this column, one per line. #}
+            {%- set _deleteWarnings = (columnDeleteWarnings ?? {})[column.id] ?? [] %}
+            {% if _deleteWarnings is not empty %}data-column-delete-warning="{{ _deleteWarnings|join('\n') }}"{% endif %}
             data-column-id="{{ column.id }}"
             data-column-name="{{ column.name|e('html_attr') }}"
             data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"

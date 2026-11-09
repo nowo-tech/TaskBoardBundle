@@ -48,32 +48,59 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
      */
     public function defer(callable $write): mixed
     {
-        // @igor-ignore - Scoped to the call (see above).
-        ++$this->depth;
+        $this->begin();
         try {
             $result = $write();
         } catch (Throwable $failure) {
-            // @igor-ignore - Scoped to the call (see above).
-            --$this->depth;
-            if ($this->depth === 0) {
-                // @igor-ignore - Scoped to the call (see above).
-                $this->queue = [];
-            }
+            $this->rollBack();
 
             throw $failure;
         }
-        // @igor-ignore - Scoped to the call (see above).
+        $this->commit();
+
+        return $result;
+    }
+
+    /**
+     * Since 2.10.0: holds the events from now on, for a write that opens its own transaction (a sync page, an import);
+     * pair it with {@see self::commit()} after the commit, or {@see self::rollBack()} after a rollback. Nests with defer().
+     */
+    public function begin(): void
+    {
+        // @igor-ignore - Scoped to the caller's transaction, and cleared by reset() between worker requests.
+        ++$this->depth;
+    }
+
+    /** Since 2.10.0: the transaction of {@see self::begin()} committed: the outermost one dispatches what it held. */
+    public function commit(): void
+    {
+        if ($this->depth === 0) {
+            return;
+        }
+        // @igor-ignore - Scoped to the caller's transaction (see begin()).
         --$this->depth;
         if ($this->depth === 0) {
             $queue = $this->queue;
-            // @igor-ignore - Scoped to the call (see above).
+            // @igor-ignore - Scoped to the caller's transaction (see begin()).
             $this->queue = [];
             foreach ($queue as [$event, $name]) {
                 $this->dispatcher->dispatch($event, $name);
             }
         }
+    }
 
-        return $result;
+    /** Since 2.10.0: the transaction of {@see self::begin()} rolled back: the outermost one drops what it held. */
+    public function rollBack(): void
+    {
+        if ($this->depth === 0) {
+            return;
+        }
+        // @igor-ignore - Scoped to the caller's transaction (see begin()).
+        --$this->depth;
+        if ($this->depth === 0) {
+            // @igor-ignore - Scoped to the caller's transaction (see begin()).
+            $this->queue = [];
+        }
     }
 
     public function reset(): void

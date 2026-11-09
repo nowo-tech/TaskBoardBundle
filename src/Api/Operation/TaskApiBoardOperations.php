@@ -132,7 +132,7 @@ final readonly class TaskApiBoardOperations
     {
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
-        $column = $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()));
+        $column = $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()), $principal->user);
         $this->audit->written($principal, 'column.create', $board, null, ['column' => $column->getId()]);
 
         return $board;
@@ -148,7 +148,7 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
-        $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())));
+        $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())), $principal->user);
         $this->audit->written($principal, 'column.update', $board, null, ['column' => $columnId]);
 
         return $board;
@@ -165,7 +165,7 @@ final readonly class TaskApiBoardOperations
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
         try {
-            if (!$this->columns->delete($column)) {
+            if (!$this->columns->delete($column, $principal->user)) {
                 throw new TaskApiRefusal(409, 'LIST_001', 'A board keeps at least one column');
             }
         } catch (TaskReopenRefusedException) {
@@ -193,7 +193,7 @@ final readonly class TaskApiBoardOperations
         if (count($given) !== count($order) || $given !== $known) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid order: list every column once');
         }
-        $this->columns->reorder($board, $order);
+        $this->columns->reorder($board, $order, $principal->user);
         $this->audit->written($principal, 'column.reorder', $board, null);
 
         return $board;

@@ -30,6 +30,12 @@ final readonly class TaskChangeRecorder
     {
     }
 
+    /** Since 2.10.0: why the writes running now happen ({@see TaskChangeContext::current()}); null outside a cause. */
+    public function currentCause(): ?string
+    {
+        return $this->cause?->current();
+    }
+
     /**
      * Since 1.29.0 (audit HId-L4): a member added or removed. The role and the member's id share `context`
      * ("assignee user:7"), so an erasure finds the member's own rows and not those of someone with the same label.

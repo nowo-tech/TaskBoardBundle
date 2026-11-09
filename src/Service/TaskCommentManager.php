@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskCommentDeletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskCommentEvent;
 use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
@@ -28,14 +29,17 @@ use function trim;
  * Since 1.16: creates, edits and deletes task comments. The mentions sent with a comment (candidate ids) count only
  * for valid candidates whose "@Name" is still in the text; the rest stays plain text. After each saved write it
  * dispatches {@see TaskBoardEvents::TASK_COMMENT} and, for the people newly mentioned (never the author),
- * {@see TaskBoardEvents::TASK_MENTION}.
+ * {@see TaskBoardEvents::TASK_MENTION}. Since 2.10.0 (spec 216): a comment added inside {@see TaskChangeContext::run()} keeps
+ * its cause (`TaskComment::getCause()`), and a deletion dispatches {@see TaskBoardEvents::TASK_COMMENT_DELETED}.
  */
-final readonly class TaskCommentManager
+final readonly class TaskCommentManager implements TaskCommentManagerInterface
 {
     public function __construct(
         private TaskCommentRepositoryInterface $comments,
         private TaskMentionCandidatesResolverInterface $candidates,
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.10.0 (spec 216, FR-014): the cause of the comments added inside TaskChangeContext::run().
+        private ?TaskChangeContext $changeContext = null,
     ) {
     }
 
@@ -49,7 +53,7 @@ final readonly class TaskCommentManager
         $body                   = $this->normalize($body);
         [$mentions, $mentioned] = $this->resolveMentions($task, $body, $mentionIds);
 
-        $comment = new TaskComment($task, $author, $body, $mentions);
+        $comment = new TaskComment($task, $author, $body, $mentions, cause: $this->changeContext?->current());
         $this->comments->save($comment);
         $this->dispatch(new TaskCommentEvent($author, $comment, TaskCommentEvent::CREATED), TaskBoardEvents::TASK_COMMENT);
         $this->dispatchMentions($author, $comment, $mentioned, []);
@@ -74,10 +78,14 @@ final readonly class TaskCommentManager
         $this->dispatchMentions($editor, $comment, $mentioned, $before);
     }
 
-    public function delete(TaskComment $comment): void
+    /**
+     * @param object|null $actor since 2.10.0: who deletes it, for {@see TaskBoardEvents::TASK_COMMENT_DELETED} (null: unknown)
+     */
+    public function delete(TaskComment $comment, ?object $actor = null): void
     {
         $comment->markDeleted();
         $this->comments->save($comment);
+        $this->dispatch(TaskCommentDeletedEvent::of($comment, $actor, $this->changeContext?->current()), TaskBoardEvents::TASK_COMMENT_DELETED);
     }
 
     /** The task's comment author is `$user` (by id, else by identity). */

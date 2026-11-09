@@ -1774,6 +1774,14 @@ dialog.nowo-task-dialog--native::backdrop {
     font-size: 0.8125rem;
 }
 
+/* Since 2.10.0 (spec 216): the host's warnings of "Delete column", one per line. */
+.nowo-task-column-delete-warning {
+    margin-top: 0.5rem;
+    color: var(--nowo-task-danger, var(--nowo-ui-danger));
+    font-weight: 600;
+    white-space: pre-line;
+}
+
 .nowo-task-sync-tag {
     background-color: var(--nowo-task-sync-tag-bg, transparent);
     color: var(--nowo-task-sync-tag-fg, inherit);

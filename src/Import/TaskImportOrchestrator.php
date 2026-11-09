@@ -35,6 +35,7 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Support\Text;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -95,6 +96,8 @@ final readonly class TaskImportOrchestrator
         private int $batchSize = self::DEFAULT_BATCH_SIZE,
         // Since 2.0.0: the host's quota listeners (TaskBoardEvents::QUOTA_CHECK), asked for the tasks the file would create.
         private TaskBoardQuota $quota = new TaskBoardQuota(),
+        // Since 2.10.0: holds the column events of an import until its commit (dropped on a rollback).
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -175,13 +178,16 @@ final readonly class TaskImportOrchestrator
         // manager), inside one transaction: a failure anywhere leaves nothing behind.
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
+        $this->events?->begin();
         try {
             $result = $this->write($board, $source, $rows, $actor, $options, $parentTask);
             $connection->commit();
+            $this->events?->commit();
         } catch (Throwable $exception) {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
+            $this->events?->rollBack();
             // A failed flush already reopened a closed entity manager (RecoveringFlusher).
             if ($this->entityManager->isOpen()) {
                 // What the rollback removed must not be written by a later flush of the request.
@@ -264,7 +270,7 @@ final readonly class TaskImportOrchestrator
             }
 
             // @igor-ignore - Import orchestrator runs in HTTP request context; not a shared cache.
-            $column                                = $this->columnManager->add($board, new BoardColumnFormData(name: $status));
+            $column                                = $this->columnManager->add($board, new BoardColumnFormData(name: $status), $actor);
             $columnsByName[mb_strtolower($status)] = $column;
             ++$columnsCreated;
         }

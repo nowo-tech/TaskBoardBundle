@@ -6,6 +6,11 @@ namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Support\ActorId;
+
+use function array_filter;
+use function array_map;
+use function array_values;
 
 /**
  * Since 1.16: a comment mentions people — {@see TaskBoardEvents::TASK_MENTION}, after flush. On an edit only the
@@ -34,5 +39,21 @@ final class TaskMentionEvent extends AbstractTaskEvent
     public function getMentionedUsers(): array
     {
         return $this->users;
+    }
+
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getCommentId(): string
+    {
+        return $this->comment->getId();
+    }
+
+    /**
+     * Since 2.10.0 (DDD audit G2): the mentioned users' `getId()` as strings (users without a scalar id are left out).
+     *
+     * @return list<string>
+     */
+    public function getMentionedUserIds(): array
+    {
+        return array_values(array_filter(array_map(ActorId::of(...), $this->users), static fn (?string $id): bool => $id !== null));
     }
 }
