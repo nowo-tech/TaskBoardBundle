@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DOMElement;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
+use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
@@ -459,6 +460,50 @@ final class ManageTemplatesRenderingTest extends TestCase
         $newline = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'close_attribute' => "data-x\n"]) . '</div>');
         self::assertCount(1, $newline->filter('button[data-nowo-ui-dialog-close]'));
         self::assertCount(0, $newline->filter('button[data-x]'));
+    }
+
+    /** Since 2.7.0 (TB-15b): Back and Cancel carry their verb icons, and the steps' testids and the icons are the host's to rename. */
+    public function testTheBoardCreateStepsTakeHostTestidsAndTheActionsCarryIcons(): void
+    {
+        $scopes = ['scopes' => [new BoardScope('personal', 'Personal'), new BoardScope('team', 'Team')], 'advanced_slug' => true];
+
+        $form     = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), $scopes)->createView();
+        $defaults = new Crawler($this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form, 'in_dialog' => true]));
+        foreach (['scopes', 'next', 'details', 'advanced', 'back'] as $step) {
+            self::assertCount(1, $defaults->filter('[data-testid="nowo-task-board-create-' . $step . '"]'), $step);
+        }
+        self::assertCount(1, $defaults->filter('[data-nowo-ui-dialog-back] .nowo-task-icon i.ti-arrow-left'));
+        self::assertCount(1, $defaults->filter('[data-nowo-ui-dialog-close] .nowo-task-icon i.ti-x'));
+        self::assertCount(1, $defaults->filter('[data-testid="nowo-task-board-create-submit"] .nowo-task-icon i.ti-plus'));
+        self::assertSame('nowo-task-board-create-form nowo-task-dialog__body', $defaults->filter('form')->attr('class'));
+
+        $form = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), $scopes)->createView();
+        $host = new Crawler($this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form, 'in_dialog' => true, 'step_testid_prefix' => 'tasks-board-create', 'form_class' => 'grid gap-4', 'back_icon' => 'chevron-left', 'cancel_icon' => false, 'create_icon' => 'check']));
+        foreach (['scopes', 'next', 'details', 'advanced', 'back'] as $step) {
+            self::assertCount(1, $host->filter('[data-testid="tasks-board-create-' . $step . '"]'), $step);
+        }
+        self::assertCount(0, $host->filter('[data-testid^="nowo-task-board-create-"]:not([data-testid$="-submit"]):not([data-testid$="-form"])'));
+        self::assertSame('nowo-task-board-create-form nowo-task-dialog__body grid gap-4', $host->filter('form')->attr('class'));
+        self::assertCount(1, $host->filter('[data-nowo-ui-dialog-back] i.ti-chevron-left'));
+        self::assertCount(0, $host->filter('[data-nowo-ui-dialog-close] .nowo-task-icon'));
+        self::assertCount(1, $host->filter('[data-testid="nowo-task-board-create-submit"] i.ti-check'));
+
+        $form    = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), $scopes)->createView();
+        $actions = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form]) . '</div>');
+        self::assertCount(1, $actions->filter('[data-testid="nowo-task-board-create-back"] .nowo-task-icon i.ti-arrow-left'));
+        self::assertCount(1, $actions->filter('[data-nowo-ui-dialog-close] .nowo-task-icon i.ti-x'));
+        self::assertCount(1, $actions->filter('[data-testid="nowo-task-board-create-submit"] .nowo-task-icon i.ti-plus'));
+
+        $form   = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), $scopes)->createView();
+        $prefix = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'step_testid_prefix' => 'tasks-board-create', 'back_icon' => false, 'cancel_icon' => 'circle', 'create_icon' => false]) . '</div>');
+        self::assertCount(1, $prefix->filter('[data-testid="tasks-board-create-back"]'));
+        self::assertCount(0, $prefix->filter('[data-nowo-ui-dialog-back] .nowo-task-icon'));
+        self::assertCount(1, $prefix->filter('[data-nowo-ui-dialog-close] i.ti-circle'));
+        self::assertCount(0, $prefix->filter('button[type=submit] .nowo-task-icon'));
+
+        $form  = $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), $scopes)->createView();
+        $named = new Crawler('<div>' . $this->twig()->render('@NowoTaskBoardBundle/manage/_board_create_actions.html.twig', ['form' => $form, 'step_testid_prefix' => 'ignored', 'back_testid' => 'host-back']) . '</div>');
+        self::assertCount(1, $named->filter('[data-nowo-ui-dialog-back][data-testid="host-back"]'));
     }
 
     /** Since 1.19: a plain-text description is shown rendered, with "Edit description" for editors only. */

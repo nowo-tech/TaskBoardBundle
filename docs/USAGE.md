@@ -476,7 +476,11 @@ it prints whatever it gets, so pass boards already filtered with `TaskBoardResou
 `in_dialog` adds *Cancel*; `id_prefix` for a second copy on the page; since 1.26 the form's id is
 `<id_prefix>nowo-task-board-create-form`, `with_actions: false` leaves out the action row so a dialog can render it in
 its footer with `form="nowo-task-board-create-form"`, and the action row of `in_dialog` carries
-`data-nowo-ui-dialog-actions` for a host dialog).
+`data-nowo-ui-dialog-actions` for a host dialog). Since 2.7.0 *Back* and *Cancel* show `arrow-left` and `x` like
+Create's `plus`; `back_icon`, `cancel_icon`, `create_icon` (a Tabler name, or `false`) change them, `step_testid_prefix`
+(default `nowo-task-board-create`) renames the `-scopes`, `-next`, `-details`, `-advanced` and `-back` testids and
+`form_class` adds classes to the form. `manage/_board_create_actions.html.twig` (the footer for `with_actions: false`)
+takes the same icons and `back_testid` / `step_testid_prefix`.
 
 **Invalid New board.** The create action answers `422` with the values and errors: the index page with the dialog open
 (and an error flash), or — when the request carries the `board.create_dialog_header` header (a host dialog that posts

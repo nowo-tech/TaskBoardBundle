@@ -35,7 +35,7 @@ These extend `nowo_task_board_page_layout() ?? nowo_ui_layout.admin` and fill th
 
 ## Fragments
 
-No layout: `task_panel`, `_board_create_form` (dialog answer; since 2.5.0 `action`, `form_id`, `testid` for a page outside a tenant) and `_board_create_actions` (its dialog footer, since 2.5.0), `_connection_strip` (since 2.5.0, `sync.badge.style: strip`), `_connection_containers`, `_connection_badge`, `_connection_progress`, `_connection_history`, `_connection_people_summary`.
+No layout: `task_panel`, `_board_create_form` (dialog answer; since 2.5.0 `action`, `form_id`, `testid` for a page outside a tenant; since 2.7.0 `step_testid_prefix`, `form_class`, `back_icon`, `cancel_icon`, `create_icon`) and `_board_create_actions` (its dialog footer, since 2.5.0; since 2.7.0 `back_testid`, `step_testid_prefix` and the three icons; Back `arrow-left`, Cancel `x`, Create `plus`, `false` for none), `_connection_strip` (since 2.5.0, `sync.badge.style: strip`), `_connection_containers`, `_connection_badge`, `_connection_progress`, `_connection_history`, `_connection_people_summary`.
 
 ## Layout
 
