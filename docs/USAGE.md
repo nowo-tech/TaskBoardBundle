@@ -20,6 +20,7 @@
   - [Who may be assigned](#who-may-be-assigned)
   - [Events after writes](#events-after-writes)
   - [Template blocks and partials](#template-blocks-and-partials)
+- [Using it from a DDD / hexagonal application](#using-it-from-a-ddd--hexagonal-application)
 - [Board index and default view (since 1.24)](#board-index-and-default-view-since-124)
 - [Columns, column sets and the task panel (since 1.11)](#columns-column-sets-and-the-task-panel-since-111)
   - [Column icon, rename, colour, delete](#column-icon-rename-colour-delete)
@@ -451,6 +452,75 @@ done / total counter per node and `<details>` to expand / collapse. The controll
 `nowo_task_board_subtask_progress(task)` gives done / total from `task.subtasks` when no tree is at hand. Semantic
 classes: `nowo-task-column`, `nowo-task-card` (`__title`, `__meta`, `__priority`, `__subtasks`), `nowo-task-subtree`
 (`__item`, `__row`, `__progress`, `__children`), `nowo-task-panel`, `nowo-task-link--host-object`.
+
+## Using it from a DDD / hexagonal application
+
+TaskBoard is a **bounded context with its own model and persistence**: its own Doctrine entities (`Task`,
+`TaskBoard`, `BoardColumn`, `TaskComment`, ...), mapped by the bundle on `database.entity_manager`, plus its own UI
+and optional API. Keep it beside your domain, not inside it: your domain never references TaskBoard entities, and
+TaskBoard never needs your domain classes.
+
+**What the bundle needs from you**
+
+- `user_class`: a Doctrine entity **in the same entity manager** as the TaskBoard tables, with a scalar `getId()`.
+  TaskBoard maps creator, member, author and time-entry users as `ManyToOne` to it (rewritten at
+  `loadClassMetadata`; no `resolve_target_entities` needed). In a hexagonal app this can be your infrastructure
+  user record, not your domain `User`. Labels come from `getDisplayName()`, `getFullName()`, `getEmail()`,
+  `getUsername()` or `getUserIdentifier()`; the web UI expects Symfony `UserInterface`.
+- Tenants and host objects are plain strings: a board's `tenantKey`, and task links to host objects
+  (`objectType` + `objectId`, `TaskLink::forHostObject()`), resolved by your `TaskObjectLinkResolverInterface`.
+
+**Ports you implement** (service ids in config)
+
+| Concern | Interface |
+|---|---|
+| Who may be assigned | `Assignee\TaskAssigneeProviderInterface` |
+| Access | `Security\TaskBoardAccessCheckerInterface`, `TenantAwareTaskBoardAccessCheckerInterface`, `TaskBoardTeamMembershipResolverInterface` |
+| Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisionerInterface`, `Board\BoardScopeProviderInterface` |
+| Links to your objects | `Link\TaskObjectLinkResolverInterface` |
+| API | `Api\Hook\*Interface` (authenticator, users, workspace, plan gate, ...) |
+
+Policy decisions can also be answered by listening to `TaskBoardEvents::BOARD_ACCESS_CHECK`, `TASK_ACCESS_CHECK`,
+`BOARD_LIST_QUERY` and `QUOTA_CHECK`.
+
+**Events you translate** (after flush; listen in your infrastructure layer and map to your own messages):
+`TASK_CREATED`, `TASK_UPDATED`, `TASK_MOVED`, `TASK_COMPLETED`, `TASK_REOPENED`, `TASK_MEMBER_ADDED`,
+`TASK_COMMENT`, `TASK_MENTION`, `TASK_BOARD_CHANGED`, `TASK_ERASED`, `BOARD_CREATED`, `BOARD_UPDATED`,
+`BOARD_EMPTIED`, `BOARD_DELETED`, `API_WRITE`, and the `SYNC_*` events.
+
+```php
+#[AsEventListener(event: TaskBoardEvents::TASK_COMPLETED)]
+final class TaskCompletedTranslator
+{
+    public function __construct(private MessageBusInterface $bus) {}
+
+    public function __invoke(TaskCompletedEvent $event): void
+    {
+        $task = $event->getTask();
+        $this->bus->dispatch(new WorkItemCompleted(       // your own message
+            taskId: $task->getId(),
+            tenantKey: $task->getBoard()->getTenantKey(),
+            actorId: (string) $event->getActor()->getId(),
+        ));
+    }
+}
+```
+
+**Commands** go through the bundle services (`TaskManager`, `TaskBoardCreator`, `TaskCommentManager`,
+`TaskTimeLogger`, `TaskMover`, `TaskBoardEraser`, `TaskBoardEditor`). Wrap them in your own port (e.g.
+`TaskBoardGateway`) so your application layer depends on an interface you own. For account erasure, call
+`TaskSyncPeopleReassigner::detachUser()` from your erasure flow.
+
+**Known limitations**
+
+- Users must be a Doctrine entity in the bundle's entity manager; an id-only user reference is not available.
+- Most write events carry the Doctrine entities (`getTask()`) and the user object, not ids: copy the ids out in
+  your listener and do not keep the entities.
+- No events yet for archive/restore, comment delete, time entries, dependencies, links, member removal or column
+  changes; read `TaskChangeHistory` or listen to Doctrine if you need them.
+- The services are `final` and have no interfaces.
+- `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are
+  declared but never dispatched.
 
 ## Board index and default view (since 1.24)
 
