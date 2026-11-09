@@ -93,6 +93,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon override reduction (TB-15b). New include parameters only; the New board footer gains two icons and one testid.
+
+### Added
+
+- **TB-15b — host testids and icons on the New board form.** `manage/_board_create_form.html.twig` takes `step_testid_prefix` (default `nowo-task-board-create`: the `-scopes`, `-next`, `-details`, `-advanced` and in-dialog `-back` testids), `form_class` (extra classes of the form) and `back_icon` / `cancel_icon` / `create_icon`. `manage/_board_create_actions.html.twig` takes `back_testid` (default `<step_testid_prefix>-back`), `step_testid_prefix` and the same three icon parameters. An icon is a Tabler name for the bundle's `_icon.html.twig`, or `false` for none.
+
+### Changed
+
+- **Back and Cancel of the New board form carry their verb icons** (`arrow-left`, `x`), like Create's `plus`, in both partials (one action, one icon). Back gets `data-testid="nowo-task-board-create-back"`. Hosts on `ux_icon` already import both icons (USAGE "Icons").
+
 ## [2.6.0] - 2026-11-08
 
 Beacon override reduction (TB-18, TB-19). A host that changes nothing keeps today's behaviour; the task panel root gains one attribute.

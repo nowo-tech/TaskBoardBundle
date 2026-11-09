@@ -10,6 +10,10 @@
     Since 2.5.0 (TB-15), for a page outside any tenant that reuses the form (a host dashboard): action (default the
     board_create route of the current tenant), form_id (default `<id_prefix>nowo-task-board-create-form`) and testid
     (default nowo-task-board-create-form). Pair it with `_board_create_actions.html.twig` for the dialog footer.
+    Since 2.7.0 (TB-15b): step_testid_prefix (default nowo-task-board-create: the steps' testids are `<prefix>-scopes`,
+    `-next`, `-details`, `-advanced` and, on the in-dialog Back, `-back`), form_class (extra classes of the form, default
+    none), back_icon (default arrow-left), cancel_icon (default x) and create_icon (default plus): a Tabler name of the
+    bundle's `_icon.html.twig`, or false for none.
 #}
 {% set _in_dialog = in_dialog|default(false) %}
 {% set _id_prefix = id_prefix|default('') %}
@@ -17,18 +21,23 @@
 {% set _form_id = form_id|default(null) ?: _id_prefix ~ 'nowo-task-board-create-form' %}
 {#- `?:` only builds the default route when no action is given: a page without a tenant has no board_create of its own. -#}
 {% set _action = action|default(null) ?: path(nowo_task_board_route('board_create')) %}
+{% set _tid = step_testid_prefix|default(null) ?: 'nowo-task-board-create' %}
+{% set _form_class = form_class|default(null) ? ' ' ~ form_class : '' %}
+{% set _back_icon = back_icon ?? 'arrow-left' %}
+{% set _cancel_icon = cancel_icon ?? 'x' %}
+{% set _create_icon = create_icon ?? 'plus' %}
 {% set _step_attr = form.scope is defined ? {'data-controller': 'nowo-task-board-create-steps', 'data-nowo-task-board-create-steps-start-value': (form.scope.vars.data is not empty or form.vars.errors|length > 0 or form.vars.submitted) ? 2 : 1} : {} %}
-{{ form_start(form, {action: _action, method: 'POST', attr: _step_attr|merge({id: _form_id, class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : ''), 'data-testid': testid|default(null) ?: 'nowo-task-board-create-form'})}) }}
+{{ form_start(form, {action: _action, method: 'POST', attr: _step_attr|merge({id: _form_id, class: 'nowo-task-board-create-form' ~ (_in_dialog ? ' nowo-task-dialog__body' : '') ~ _form_class, 'data-testid': testid|default(null) ?: 'nowo-task-board-create-form'})}) }}
     {{ form_errors(form) }}
     {#- Since 1.30.0 (spec 211): the scope step, only with a host's board.scope_provider. Without JavaScript all of it shows. -#}
     {% set _steps = form.scope is defined %}
     {% if _steps %}
-        <div class="nowo-task-board-create__scopes" data-nowo-task-board-create-steps-target="scopes" data-testid="nowo-task-board-create-scopes"{% if form.scope|length == 1 %} hidden{% endif %}>
+        <div class="nowo-task-board-create__scopes" data-nowo-task-board-create-steps-target="scopes" data-testid="{{ _tid }}-scopes"{% if form.scope|length == 1 %} hidden{% endif %}>
             {{ form_row(form.scope) }}
-            <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-create-steps#next" data-testid="nowo-task-board-create-next">{{ 'task_board.form.board.scope_next'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            <button type="button" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-create-steps#next" data-testid="{{ _tid }}-next">{{ 'task_board.form.board.scope_next'|trans({}, 'NowoTaskBoardBundle') }}</button>
         </div>
     {% endif %}
-    {% if _steps %}<div class="nowo-task-board-create__details" data-nowo-task-board-create-steps-target="details" data-testid="nowo-task-board-create-details">{% endif %}
+    {% if _steps %}<div class="nowo-task-board-create__details" data-nowo-task-board-create-steps-target="details" data-testid="{{ _tid }}-details">{% endif %}
     {% if _steps %}
         {% for _branch in form.scopeFields %}
             <div data-nowo-task-board-create-steps-target="scopeFields" data-scope="{{ _branch.vars.name }}">{{ form_widget(_branch) }}</div>
@@ -38,7 +47,7 @@
     {% for child in form %}
         {% if not child.rendered %}
             {% if form.vars.advanced_slug|default(false) and child.vars.name == 'slug' %}
-                <details class="nowo-task-board-create__advanced" data-testid="nowo-task-board-create-advanced"{% if child.vars.errors|length > 0 %} open{% endif %}>
+                <details class="nowo-task-board-create__advanced" data-testid="{{ _tid }}-advanced"{% if child.vars.errors|length > 0 %} open{% endif %}>
                     <summary>{{ 'task_board.form.board.advanced'|trans({}, 'NowoTaskBoardBundle') }}</summary>
                     {{ _id_prefix is empty ? form_row(child) : form_row(child, {id: _id_prefix ~ child.vars.id}) }}
                 </details>
@@ -52,13 +61,13 @@
         <div class="nowo-task-dialog__actions"{% if _in_dialog %} data-nowo-ui-dialog-actions{% endif %}>
             {% if _in_dialog and form.scope is defined %}
                 {#- Interim: a host's remote dialog lifts this row to its footer. UiKit's lift to the header uses the same attribute. -#}
-                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _form_id }}" hidden>{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-back data-nowo-task-board-create-form="{{ _form_id }}" data-testid="{{ _tid }}-back" hidden>{% if _back_icon %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: _back_icon}) }}{% endif %}{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
             {% if _in_dialog %}
-                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{% if _cancel_icon %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: _cancel_icon}) }}{% endif %}{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
             {% endif %}
             <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-create-submit">
-                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
+                {% if _create_icon %}{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: _create_icon}) }}{% endif %}{{ 'task_board.action.create'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
         </div>
     {% endif %}

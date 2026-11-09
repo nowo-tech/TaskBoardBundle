@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.7.0](#to-270)
 - [To 2.6.0](#to-260)
 - [To 2.5.0](#to-250)
 - [To 2.4.0](#to-240)
@@ -162,6 +163,12 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.7.0
+
+No schema change and no configuration change. **Default markup:** in `manage/_board_create_form.html.twig` (in-dialog action row) and `manage/_board_create_actions.html.twig`, *Back* starts with the `arrow-left` icon and gains `data-testid="nowo-task-board-create-back"`, and *Cancel* starts with the `x` icon (both inside the bundle's `span.nowo-task-icon`, like Create's `plus`). A test that read the exact button text still reads it; a host that hid the missing icons with CSS or copied the partials for them can drop that.
+
+- **Host copy of the New board form (TB-15b).** A host that copied `_board_create_form` only to rename the step testids or add classes can include the bundle's partial with `step_testid_prefix` (e.g. `tasks-board-create` gives `tasks-board-create-scopes` / `-next` / `-details` / `-advanced` / `-back`) and `form_class`, then delete its copy. Same for a host `_board_create_actions`: `step_testid_prefix` or `back_testid`, and `back_icon` / `cancel_icon` / `create_icon` (a Tabler name, or `false`) when its icons differ.
 
 ## To 2.6.0
 
