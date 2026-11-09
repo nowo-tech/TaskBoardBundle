@@ -3995,9 +3995,10 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
 
 /*
  * Since 2.8.0 — phones (≤ 640px, host mobile UX audit MUX-70, MUX-73, MUX-74). Wider windows are unchanged.
- * Gantt: a 6rem (96px) title column (the title stays whole in its `title` and in the bar label) and the legend in one
- * compact row that scrolls sideways. Subtasks: a 0.75rem indent step (1rem plus the row's 1.25rem padding before), and
- * no empty leading column when no first-level subtask has its own subtasks. Meta texts: 0.75rem (12px) at least.
+ * Gantt: a 6rem (96px) title column (the title stays whole in its `title` and in the bar label) and the legend in at
+ * most two compact rows that wrap (since 2.8.1, audit JD-L4; 2.8.0 scrolled one row behind a hidden scrollbar).
+ * Subtasks: a 0.75rem indent step (1rem plus the row's 1.25rem padding before), and no empty leading column when no
+ * first-level subtask has its own subtasks. Meta texts: 0.75rem (12px) at least.
  */
 @media (max-width: 640px) {
     .nowo-task-gantt {
@@ -4021,23 +4022,19 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
         padding: 0.5rem 0.75rem;
     }
 
+    /* Since 2.8.1 (audit JD-L4): the legend wraps to at most two compact rows instead of scrolling behind a hidden
+       scrollbar, so no item is cut and the list is never a keyboard scroller. */
     .nowo-task-gantt__legend {
         flex: 1 1 100%;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         gap: 0.25rem;
         min-width: 0;
-        overflow-x: auto;
-        scrollbar-width: none;
-    }
-
-    .nowo-task-gantt__legend::-webkit-scrollbar {
-        display: none;
     }
 
     .nowo-task-gantt__legend li {
         flex: 0 0 auto;
         gap: 0.25rem;
-        padding: 0.1rem 0.4rem;
+        padding: 0.1rem 0.35rem;
         white-space: nowrap;
     }
 

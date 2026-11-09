@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.8.1] - 2026-11-09](#281---2026-11-09)
 - [[2.8.0] - 2026-11-09](#280---2026-11-09)
 - [[2.7.0] - 2026-11-09](#270---2026-11-09)
 - [[2.6.0] - 2026-11-08](#260---2026-11-08)
@@ -112,6 +113,16 @@ Target 2.9.0. Emoji column icons (host Symfony Beacon, owner 2026-11-09: default
 ### Security
 
 - **Column icons are validated on every write path.** One emoji (as the board icon: at most 16 bytes, one emoji, a ZWJ sequence, flag or keycap) or an id of `board.column_icons` / `board.default_columns` (`<set>:<name>`), whatever the form type (`TaskConstraints::columnIcon()`, form and API: 400 `INPUT_002`); `board.default_columns[].icon` is checked when the container is built. `BoardColumnManager`, `ColumnSetManager::applyToBoard()` and `TaskBoardCreator` store no other value (`ColumnIcon::normalize()`: anything else becomes no icon). No free text and no markup is stored; every place that prints an icon escapes it (Twig autoescape in the header, the list groups and `data-column-icon`; JSON in the API).
+
+## [2.8.1] - 2026-11-09
+
+Target 2.8.1. Phone Gantt legend (audit JD-L4): CSS inside the `@media (max-width: 640px)` block of `task-board.css` only, wider windows unchanged. The Gantt and Calendar tab navs get their own accessible name and a single class attribute (requires `nowo-tech/ui-kit-bundle` `^2.42.1`).
+
+### Fixed
+
+- **JD-L4 — the phone Gantt legend no longer hides items behind a hidden scrollbar.** 2.8.0 kept the legend on one row that scrolled sideways with no visible scrollbar: in Spanish and German the last item ("Por encima de lo estimado" / "Über der Schätzung") was cut by about 70–80 px at 390 px (English from 360 px down) with no sign that more followed, Chromium made the list an unlabelled Tab stop, and WebKit could not scroll it from the keyboard (WCAG 2.1.1, 1.4.1). On a phone the legend now wraps (`flex-wrap: wrap`, 0.25rem gaps, 12px text, 0.35rem item padding) to at most two rows in en, es and de at 390, 360 and 320 px — still one row fewer than 2.7.0 — so every item is fully visible and nothing is focusable. The `overflow-x`, `scrollbar-width` and `::-webkit-scrollbar` rules are gone. The demo now picks its locale from the browser language (`set_locale_from_accept_language`, `de` enabled) so `phone-layout.spec.ts` checks the legend in en, es and de, in Chromium and WebKit.
+- **Gantt scale tabs and Calendar mode tabs are named by their own label.** `manage/gantt.html.twig` and `manage/calendar.html.twig` passed the label to UiKit's `tabs` partial as `label`, which the partial does not read, so both `<nav>`s were announced as UiKit's default "Sections". They now pass `aria_label`: the navs are named "Scale" and "Calendar mode" (translated).
+- **The Gantt scale `<nav>` and the Calendar mode `<nav>` have one `class` attribute.** UiKit's `tabs` partial printed the bundle's `attr.class` as a second `class` attribute, which browsers drop, so `nowo-task-gantt__scales` and `nowo-task-cal__modes` never reached the page. `nowo-tech/ui-kit-bundle` is now `^2.42.1`, which merges `attr.class` into the nav's class list; the existing `.nowo-task-gantt__scales { flex: 0 0 auto; }` rule now applies, with no visible change at 1280, 768 or 390 px in Chromium and WebKit.
 
 ## [2.8.0] - 2026-11-09
 
@@ -2013,7 +2024,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.8.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

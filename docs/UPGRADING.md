@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 2.9.0](#to-290)
+- [To 2.8.1](#to-281)
 - [To 2.8.0](#to-280)
 - [To 2.7.0](#to-270)
 - [To 2.6.0](#to-260)
@@ -168,7 +169,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.9.0
 
-No schema change (`task_board_columns.icon` is already `VARCHAR(64)`). **A host that changes nothing keeps the 2.8.0 pages byte for byte**: the Tabler grid, the icons it stores and their markup.
+No schema change (`task_board_columns.icon` is already `VARCHAR(64)`). **A host that changes nothing keeps the 2.8.1 pages byte for byte** (the Tabler grid, the icons it stores and their markup) except for the Gantt legend's dependency key and, with `icon_set: bootstrap-icons`, the icon names below.
 
 - **Emoji column icons.** Set `board.column_icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType` (and options under `board.column_icon_form_options`, e.g. `{max_bytes: 16}`) to replace the grid with the emoji picker. The bundle checks the value whatever the widget: one emoji of at most 16 bytes, or one of the `board.column_icons` / `board.default_columns` ids; a refused icon is not saved and the board shows the flash `task_board.flash.column_icon_invalid`. With a text widget, a column that has a Tabler icon opens the edit dialog with an empty icon field (the picker would refuse `tabler:…`), so saving the dialog without picking an emoji **removes** that Tabler icon.
 - **Default columns with emojis.** `board.default_columns[].icon` accepts an emoji. It is now validated: one emoji, `<set>:<name>`, or a bare lowercase name (accepted for configs written before 2.9.0); anything else (text, markup, uppercase) fails the container build. Fix such a value or remove it.
@@ -178,11 +179,15 @@ No schema change (`task_board_columns.icon` is already `VARCHAR(64)`). **A host 
 - **`icon_set: bootstrap-icons` (JI-L3).** The bundle's icons now print Bootstrap Icons names where Tabler's do not exist there (`Support\IconNames::BOOTSTRAP`). A host CSS rule or test that targeted the old, non-existent class (e.g. `.bi-device-floppy`) must use the new one (`.bi-floppy`). Other icon sets are unchanged.
 - **Stored values.** A column icon that is neither an emoji nor an icon id (possible only through direct database writes) is dropped on the next update of that column.
 
+## To 2.8.1
+
+No schema change and no configuration change. **Dependency:** `nowo-tech/ui-kit-bundle` `^2.42.1` (was `^2.37`); `composer update nowo-tech/task-board-bundle nowo-tech/ui-kit-bundle`. **Default markup:** the Gantt scale `<nav>` and the Calendar mode `<nav>` now carry `nowo-task-gantt__scales` / `nowo-task-cal__modes` in their (single) `class` attribute; a host rule on those classes starts to apply. They are named `aria-label="Scale"` and `aria-label="Calendar mode"` (translated) instead of UiKit's default "Sections"; a host test that found them by "Sections" uses the new names. **Phones only (≤ 640px):** the Gantt legend (`.nowo-task-gantt__legend`) wraps to at most two compact rows instead of scrolling one row behind a hidden scrollbar (audit JD-L4); its `overflow-x: auto`, `scrollbar-width: none` and `::-webkit-scrollbar { display: none }` rules are removed. A host that added its own fade, scrollbar or `tabindex`/`role="region"` to the 2.8.0 scroller can drop that. A host that wants the single scrolling row back restores those rules in its own `@media (max-width: 640px)` rule, loaded after the bundle's stylesheet, and then also makes the list keyboard-reachable and labelled.
+
 ## To 2.8.0
 
 No schema change, no configuration change and no markup change. **Phones only (≤ 640px):** `task-board.css` ends with a phone block for the host mobile UX audit items MUX-70, MUX-73 and MUX-74. Desktop and tablet widths keep the 2.7.0 sizes.
 
-- **Gantt.** `--gantt-label-width` is `6rem` on a phone (was `10rem`); the legend (`.nowo-task-gantt__legend`) stays on one row and scrolls sideways. A host that narrowed the title column or folded the legend with its own CSS can drop that; a host that wants another phone width sets `--gantt-label-width` on `.nowo-task-gantt` inside its own `@media (max-width: 640px)` rule, loaded after the bundle's stylesheet.
+- **Gantt.** `--gantt-label-width` is `6rem` on a phone (was `10rem`); the legend (`.nowo-task-gantt__legend`) stays on one row and scrolls sideways (since 2.8.1 it wraps to at most two rows instead, see above). A host that narrowed the title column or folded the legend with its own CSS can drop that; a host that wants another phone width sets `--gantt-label-width` on `.nowo-task-gantt` inside its own `@media (max-width: 640px)` rule, loaded after the bundle's stylesheet.
 - **Subtasks.** In `.nowo-task-subtree`, a nested group (`[role="group"]`) indents by `0.75rem`, nested `.nowo-task-subtree__item` rows inside `.nowo-task-detail__subtask-list` have no side padding and first-level rows `0.75rem`; UiKit's `.nowo-ui-tree__spacer` is hidden on the first level when no first-level subtask has a fold toggle. A host rule that reduced the subtask indent on phones can be deleted.
 - **Meta texts.** `.nowo-task-board__column-count`, `.nowo-task-column__empty`, `.nowo-task-avatar--more`, `.nowo-task-detail__status-badge`, `.nowo-task-gantt__month-label` and `.nowo-task-gantt__weekday` are `0.75rem` on a phone. A host floor for these (e.g. a `--font-size-min` rule, MUX-161) is no longer needed for them.
 
