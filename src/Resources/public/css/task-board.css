@@ -3984,3 +3984,81 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
     display: inline-flex;
     align-items: center;
 }
+
+/*
+ * Since 2.8.0 — phones (≤ 640px, host mobile UX audit MUX-70, MUX-73, MUX-74). Wider windows are unchanged.
+ * Gantt: a 6rem (96px) title column (the title stays whole in its `title` and in the bar label) and the legend in one
+ * compact row that scrolls sideways. Subtasks: a 0.75rem indent step (1rem plus the row's 1.25rem padding before), and
+ * no empty leading column when no first-level subtask has its own subtasks. Meta texts: 0.75rem (12px) at least.
+ */
+@media (max-width: 640px) {
+    .nowo-task-gantt {
+        --gantt-label-width: 6rem;
+    }
+
+    .nowo-task-gantt__label-cell {
+        gap: 0.25rem;
+        padding-inline: calc(0.5rem + var(--nowo-task-depth, 0) * 0.5rem) 0.25rem;
+    }
+
+    .nowo-task-gantt__corner {
+        overflow: hidden;
+        padding-inline: 0.5rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .nowo-task-gantt__toolbar {
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .nowo-task-gantt__legend {
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        gap: 0.25rem;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .nowo-task-gantt__legend::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nowo-task-gantt__legend li {
+        flex: 0 0 auto;
+        gap: 0.25rem;
+        padding: 0.1rem 0.4rem;
+        white-space: nowrap;
+    }
+
+    .nowo-task-gantt__month-label,
+    .nowo-task-gantt__weekday {
+        font-size: 0.75rem;
+    }
+
+    .nowo-task-subtree [role="group"] {
+        padding-inline-start: 0.75rem;
+    }
+
+    /* A nested row no longer repeats its parent's 1.25rem side padding on top of the group indent. */
+    .nowo-task-detail__subtask-list .nowo-task-subtree__item {
+        padding-inline: 0.75rem;
+    }
+
+    .nowo-task-detail__subtask-list [role="group"] .nowo-task-subtree__item {
+        padding-inline: 0;
+    }
+
+    .nowo-task-subtree [role="tree"]:not(:has(> li > .nowo-ui-tree__row > .nowo-ui-tree__toggle)) > li > .nowo-ui-tree__row > .nowo-ui-tree__spacer {
+        display: none;
+    }
+
+    .nowo-task-board__column-count,
+    .nowo-task-column__empty,
+    .nowo-task-avatar--more,
+    .nowo-task-detail__status-badge {
+        font-size: 0.75rem;
+    }
+}

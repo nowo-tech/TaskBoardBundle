@@ -94,6 +94,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.8.0. Phone layout from the host mobile UX audit (2026-11-09): CSS in a `@media (max-width: 640px)` block at the end of `task-board.css`. Wider windows and the markup are unchanged.
+
+### Changed
+
+- **MUX-70 — Gantt on a phone.** The title column is 6rem (96px, was 10rem / 160px), with a smaller depth step (0.5rem); the full title stays in the link's `title` and beside the bar. The legend is one compact row that scrolls sideways instead of wrapping to three rows. Month and weekday labels are 12px.
+- **MUX-73 — subtask indent on a phone.** A nested level indents by 0.75rem without repeating its parent row's 1.25rem side padding (about 36px less per level), first-level rows take 0.75rem side padding, and the empty leading column (UiKit's tree spacer) is dropped when no first-level subtask has subtasks of its own.
+- **MUX-74 — meta texts on a phone.** The board's column count and empty-column count, the "+n" avatar, and the task status badge are 12px (0.75rem) at least, from 11px.
+
 ## [2.7.0] - 2026-11-09
 
 Beacon override reduction (TB-15b). New include parameters only; the New board footer gains two icons and one testid.
