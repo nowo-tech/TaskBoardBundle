@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [Unreleased](#unreleased)
 - [To 2.9.0](#to-290)
 - [To 2.8.1](#to-281)
 - [To 2.8.0](#to-280)
@@ -166,6 +167,13 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## Unreleased
+
+Target 2.9.1 (patch), from 2.9.0: `composer update nowo-tech/task-board-bundle`, then rebuild or re-copy the bundle's assets (`assets:install`) so `task-board.js` is current. No schema change and no configuration change.
+
+- **Legacy column icons (JM-I7).** A column whose stored icon is no longer storable (neither one emoji nor an icon id: a direct database write, a pre-2.9.0 `board.default_columns` value such as `fa fa-bug`, an icon with tag text stored before 2.9.0) is now really **dropped on the next edit** of that column: the edit dialog opens it as "No icon" (grid and host widget), and a rename that posts the old value back (a page loaded before the upgrade) is accepted and stores no icon. 2.9.0 refused such a rename with the icon flash. The edit button of such a column only gains `data-column-icon-storable="0"`; every other column's markup is unchanged.
+- **Bare names next to offered icons (JM-I8).** A column whose icon is a bare name (`bug`, from a config written before 2.9.0) while `board.column_icons` offers an icon with the same label (`tabler:bug`) can now pick that offered icon. A host that read the edit form's choice labels gets `current: <icon>` for the column's own icon.
 
 ## To 2.9.0
 
