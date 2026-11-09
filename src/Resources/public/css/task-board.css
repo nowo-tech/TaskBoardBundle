@@ -1944,6 +1944,14 @@ dialog.nowo-task-dialog--native::backdrop {
     background: color-mix(in srgb, var(--nowo-task-accent, var(--nowo-ui-primary)) 35%, transparent);
 }
 
+/* Since 2.9.0 (audit JI-L3): the dependency key is drawn like the chart's dependency lines, with no icon of any set. */
+.nowo-task-gantt__legend-dependency {
+    flex: 0 0 auto;
+    width: 0.9rem;
+    height: 0;
+    border-top: 2px dashed var(--nowo-task-gantt-link, #6366f1);
+}
+
 .nowo-task-gantt__grid {
     grid-template-columns: var(--gantt-label-width) max-content;
 }

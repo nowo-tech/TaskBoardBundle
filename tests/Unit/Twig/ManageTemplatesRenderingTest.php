@@ -696,6 +696,27 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertSame('', trim($this->twig()->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => null])));
     }
 
+    /** Since 2.9.0 (audit JI-L3): the dependency key is a CSS swatch; Bootstrap Icons get their own names, the Tabler font as before. */
+    public function testTheGanttLegendNeedsNoIconAndBootstrapIconsGetTheirNames(): void
+    {
+        $context = ['board' => $this->board, 'dashboardRoute' => null, 'timeline' => (new TaskGanttBuilder())->build([$this->task])];
+        $legend  = (new Crawler($this->twig()->render('@NowoTaskBoardBundle/manage/gantt.html.twig', $context)))->filter('.nowo-task-gantt__legend li');
+        self::assertCount(4, $legend);
+        self::assertCount(1, $legend->eq(0)->filter('span.nowo-task-gantt__legend-dependency[aria-hidden="true"]'));
+        self::assertCount(0, $legend->filter('.nowo-task-icon'), 'no item depends on the icon set');
+
+        $bootstrap = $this->twig();
+        $bootstrap->addGlobal('nowo_ui_kit_icon_set', 'bootstrap-icons');
+        self::assertStringContainsString('bi bi-floppy', $bootstrap->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'device-floppy']));
+        self::assertStringContainsString('bi bi-pencil', $bootstrap->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'pencil']));
+        self::assertStringContainsString('bi bi-check-circle', $bootstrap->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'tabler:circle-check']));
+        self::assertStringContainsString('bi bi-circle-check', $bootstrap->render('@NowoTaskBoardBundle/manage/_column_icon.html.twig', ['icon' => 'lucide:circle-check']), 'a host id is left alone');
+        $views = $bootstrap->render('@NowoTaskBoardBundle/manage/_board_item_views.html.twig', ['board' => $this->board]);
+        self::assertStringContainsString('bi bi-kanban', $views);
+        self::assertStringContainsString('bi bi-bar-chart', $views);
+        self::assertStringContainsString('ti ti-device-floppy', $this->twig()->render('@NowoTaskBoardBundle/manage/_icon.html.twig', ['name' => 'device-floppy']), 'the Tabler font as before');
+    }
+
     /** Since 2.9.0: an id renders byte for byte as before; any other value is aria-hidden, escaped text, whatever the icon set. */
     public function testAColumnIconThatIsNoIconIdIsPrintedAsHiddenText(): void
     {

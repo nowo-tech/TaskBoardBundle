@@ -1,3 +1,6 @@
 nowo_ui_kit:
     css_framework: bootstrap5
     icon_set: bootstrap-icons
+    # Since 2.9.0 (audit JI-L3): the admin layout loads the Bootstrap Icons stylesheet of this icon set.
+    layouts:
+        admin: admin.html.twig

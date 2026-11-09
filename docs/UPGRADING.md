@@ -174,6 +174,8 @@ No schema change (`task_board_columns.icon` is already `VARCHAR(64)`). **A host 
 - **Default columns with emojis.** `board.default_columns[].icon` accepts an emoji. It is now validated: one emoji, `<set>:<name>`, or a bare lowercase name (accepted for configs written before 2.9.0); anything else (text, markup, uppercase) fails the container build. Fix such a value or remove it.
 - **Existing boards.** New boards get the configured emojis; for existing ones run `bin/console nowo:task-board:apply-default-column-icons --dry-run`, check the table, then without `--dry-run` (per tenant with `--tenant=KEY`, one board with `--board=ID`). It only fills columns with no icon whose name is exactly a `default_columns` name.
 - **API clients.** Every status object gains `icon` (string or null). A strict client that rejects unknown fields must accept it.
+- **Gantt legend markup (JI-L3).** The first legend item starts with `<span class="nowo-task-gantt__legend-dependency" aria-hidden="true"></span>` instead of the bundle's `span.nowo-task-icon` with `line-dashed`. A host on `ux_icon` no longer needs to import `tabler:line-dashed`. The swatch colour follows `--nowo-task-gantt-link` (default `#6366f1`, the dependency lines' colour).
+- **`icon_set: bootstrap-icons` (JI-L3).** The bundle's icons now print Bootstrap Icons names where Tabler's do not exist there (`Support\IconNames::BOOTSTRAP`). A host CSS rule or test that targeted the old, non-existent class (e.g. `.bi-device-floppy`) must use the new one (`.bi-floppy`). Other icon sets are unchanged.
 - **Stored values.** A column icon that is neither an emoji nor an icon id (possible only through direct database writes) is dropped on the next update of that column.
 
 ## To 2.8.0

@@ -71,7 +71,7 @@
                 bundle: 'NowoTaskBoardBundle',
             }, false) }}
             <ul class="nowo-task-gantt__legend">
-                <li>{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'line-dashed'}) }}{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</li>
+                <li><span class="nowo-task-gantt__legend-dependency" aria-hidden="true"></span>{{ 'task_board.gantt.legend_dependency'|trans({}, 'NowoTaskBoardBundle') }}</li>
                 <li><span class="nowo-task-gantt__legend-today" aria-hidden="true"></span>{{ 'task_board.gantt.legend_today'|trans({}, 'NowoTaskBoardBundle') }}</li>
                 <li><span class="nowo-task-gantt__legend-spent" aria-hidden="true"></span>{{ 'task_board.gantt.legend_spent'|trans({}, 'NowoTaskBoardBundle') }}</li>
                 <li><span class="nowo-task-gantt__legend-overrun" aria-hidden="true"></span>{{ 'task_board.gantt.legend_overrun'|trans({}, 'NowoTaskBoardBundle') }}</li>

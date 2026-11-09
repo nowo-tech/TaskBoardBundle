@@ -1,0 +1,10 @@
+{#
+    Demo admin layout (since 2.9.0, audit JI-L3): UiKit's admin layout plus the stylesheet of the icon set the demo
+    configures (nowo_ui_kit.icon_set: bootstrap-icons), so the bundle's icons draw. A host loads its own icon set.
+#}
+{% extends '@NowoUiKit/layout/admin.html.twig' %}
+
+{% block nowo_ui_head %}
+    {{- parent() -}}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+{% endblock %}

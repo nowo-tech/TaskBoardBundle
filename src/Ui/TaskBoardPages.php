@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Ui;
 
+use Nowo\TaskBoardBundle\Support\IconNames;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\UiKitBundle\View\Action;
 use Nowo\UiKitBundle\View\AreaNav;
@@ -121,7 +122,7 @@ final readonly class TaskBoardPages
             $actions[] = new Action(
                 label: $action['label'],
                 href: $action['href'] ?? null,
-                icon: is_string($icon) && $iconSet === 'ux_icon' ? 'tabler:' . $icon : $icon,
+                icon: is_string($icon) ? ($iconSet === 'ux_icon' ? 'tabler:' . $icon : IconNames::forSet($icon, $iconSet)) : $icon,
                 variant: $action['variant'] ?? null,
                 attributes: $action['attributes'] ?? [],
                 dialogId: $action['dialog'] ?? null,
@@ -133,7 +134,7 @@ final readonly class TaskBoardPages
         $tabs = [];
         foreach ($spec['tabs'] ?? [] as $tab) {
             $icon   = $tab['icon'] ?? null;
-            $tabs[] = new AreaNavItem($tab['label'], $tab['href'], $tab['active'] ?? false, icon: is_string($icon) && $iconSet === 'ux_icon' ? 'tabler:' . $icon : $icon);
+            $tabs[] = new AreaNavItem($tab['label'], $tab['href'], $tab['active'] ?? false, icon: is_string($icon) ? ($iconSet === 'ux_icon' ? 'tabler:' . $icon : IconNames::forSet($icon, $iconSet)) : $icon);
         }
         $crumb = $spec['crumb'] ?? null;
 
