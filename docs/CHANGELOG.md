@@ -95,12 +95,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target 2.8.1. Phone Gantt legend (audit JD-L4): CSS inside the `@media (max-width: 640px)` block of `task-board.css` only, wider windows unchanged. The Gantt and Calendar tab navs get their own accessible name.
+Target 2.8.1. Phone Gantt legend (audit JD-L4): CSS inside the `@media (max-width: 640px)` block of `task-board.css` only, wider windows unchanged. The Gantt and Calendar tab navs get their own accessible name and a single class attribute (requires `nowo-tech/ui-kit-bundle` `^2.42.1`).
 
 ### Fixed
 
 - **JD-L4 — the phone Gantt legend no longer hides items behind a hidden scrollbar.** 2.8.0 kept the legend on one row that scrolled sideways with no visible scrollbar: in Spanish and German the last item ("Por encima de lo estimado" / "Über der Schätzung") was cut by about 70–80 px at 390 px (English from 360 px down) with no sign that more followed, Chromium made the list an unlabelled Tab stop, and WebKit could not scroll it from the keyboard (WCAG 2.1.1, 1.4.1). On a phone the legend now wraps (`flex-wrap: wrap`, 0.25rem gaps, 12px text, 0.35rem item padding) to at most two rows in en, es and de at 390, 360 and 320 px — still one row fewer than 2.7.0 — so every item is fully visible and nothing is focusable. The `overflow-x`, `scrollbar-width` and `::-webkit-scrollbar` rules are gone. The demo now picks its locale from the browser language (`set_locale_from_accept_language`, `de` enabled) so `phone-layout.spec.ts` checks the legend in en, es and de, in Chromium and WebKit.
 - **Gantt scale tabs and Calendar mode tabs are named by their own label.** `manage/gantt.html.twig` and `manage/calendar.html.twig` passed the label to UiKit's `tabs` partial as `label`, which the partial does not read, so both `<nav>`s were announced as UiKit's default "Sections". They now pass `aria_label`: the navs are named "Scale" and "Calendar mode" (translated).
+- **The Gantt scale `<nav>` and the Calendar mode `<nav>` have one `class` attribute.** UiKit's `tabs` partial printed the bundle's `attr.class` as a second `class` attribute, which browsers drop, so `nowo-task-gantt__scales` and `nowo-task-cal__modes` never reached the page. `nowo-tech/ui-kit-bundle` is now `^2.42.1`, which merges `attr.class` into the nav's class list; the existing `.nowo-task-gantt__scales { flex: 0 0 auto; }` rule now applies, with no visible change at 1280, 768 or 390 px in Chromium and WebKit.
 
 ## [2.8.0] - 2026-11-09
 

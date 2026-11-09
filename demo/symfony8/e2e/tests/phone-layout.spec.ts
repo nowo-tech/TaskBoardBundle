@@ -83,7 +83,7 @@ for (const locale of Object.keys(LEGEND_OVERRUN)) {
         expect.soft(m.pageScroll, `page scrollWidth ${at}`).toBeLessThanOrEqual(m.viewport);
 
         // Tab from the last control before the legend (the last scale tab) must not land on the legend or inside it.
-        await page.locator('.nowo-task-gantt__toolbar nav a').last().focus();
+        await page.locator('.nowo-task-gantt__scales a').last().focus();
         await page.keyboard.press('Tab');
         const onLegend = await legend.evaluate((el) => el === document.activeElement || el.contains(document.activeElement));
         expect.soft(onLegend, `legend is a Tab stop ${at}`).toBe(false);

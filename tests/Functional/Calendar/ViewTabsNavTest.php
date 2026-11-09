@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Calendar;
 
-use Composer\InstalledVersions;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 use function preg_match;
 use function preg_match_all;
-use function version_compare;
 
 /**
  * Since 2.8.1: the Gantt scale tabs and the Calendar mode tabs (UiKit `tabs` partial) are named by their own label
  * (`aria_label`, not the partial's "Sections" default) and render one `class` attribute that holds both UiKit's tab
- * classes and the bundle's hook class.
+ * classes and the bundle's hook class (UiKit 2.42.1 merges `attr.class`; before, it printed a second `class`).
  */
 final class ViewTabsNavTest extends CalendarTestCase
 {
@@ -34,10 +32,6 @@ final class ViewTabsNavTest extends CalendarTestCase
     #[DataProvider('views')]
     public function testTheTabsNavHasOneClassAttributeWithBothClasses(string $view, string $name, string $hook): void
     {
-        if (version_compare((string) InstalledVersions::getVersion('nowo-tech/ui-kit-bundle'), '2.42.1', '<')) {
-            self::markTestSkipped('UiKit < 2.42.1 prints attr.class as a second class attribute on the tabs <nav>.');
-        }
-
         $tag = $this->navTag($view, $name);
         self::assertSame(1, preg_match_all('/\sclass="/', $tag), $tag);
         self::assertSame(1, preg_match('/\sclass="([^"]*)"/', $tag, $class));
