@@ -5,6 +5,7 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
+- [To 2.9.1](#to-291)
 - [To 2.9.0](#to-290)
 - [To 2.8.1](#to-281)
 - [To 2.8.0](#to-280)
@@ -169,6 +170,14 @@ php bin/console cache:clear
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
+
+## To 2.9.1
+
+From **2.9.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 Target 2.9.1 (patch), from 2.9.0: `composer update nowo-tech/task-board-bundle`, then rebuild or re-copy the bundle's assets (`assets:install`) so `task-board.js` is current. No schema change and no configuration change.
 
