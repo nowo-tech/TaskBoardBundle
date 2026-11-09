@@ -17,11 +17,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use function count;
 use function is_string;
 use function sprintf;
+use function trim;
 
 /**
  * Since 2.9.0: gives the columns of existing boards that have no icon the icon of their `board.default_columns` entry, matched
  * by exact name ({@see DefaultColumnIconFiller}). Fill only and idempotent: an icon a column has is never replaced. Every active
- * board by default; `--tenant` keeps one tenant's boards, `--board` one board (of that tenant, when both are given).
+ * board by default; `--tenant` keeps one tenant's boards (an empty one is refused), `--board` one board (of that tenant, when
+ * both are given; an archived one only with `--include-archived`).
  */
 #[AsCommand(
     name: 'nowo:task-board:apply-default-column-icons',
@@ -41,6 +43,7 @@ final class TaskBoardApplyDefaultColumnIconsCommand extends Command
         $this
             ->addOption('board', null, InputOption::VALUE_REQUIRED, 'Only this board (its id)')
             ->addOption('tenant', null, InputOption::VALUE_REQUIRED, 'Only the boards of this tenant key')
+            ->addOption('include-archived', null, InputOption::VALUE_NONE, 'With --board: fill that board even when it is archived (skipped otherwise)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'List what would change, change nothing');
     }
 
@@ -54,11 +57,25 @@ final class TaskBoardApplyDefaultColumnIconsCommand extends Command
             return Command::SUCCESS;
         }
 
-        $boards = $this->boards($input->getOption('board'), $input->getOption('tenant'));
+        // Since 2.9.0 (audit JM-I1): an empty --tenant (e.g. an unset shell variable) is refused, not read as "every tenant".
+        $tenant = $input->getOption('tenant');
+        if ($tenant !== null && (!is_string($tenant) || trim($tenant) === '')) {
+            $io->error('--tenant is empty: give a tenant key, or leave the option out to fill every board.');
+
+            return Command::INVALID;
+        }
+
+        $boards = $this->boards($input->getOption('board'), is_string($tenant) ? $tenant : null);
         if ($boards === null) {
             $io->error('Board not found.');
 
             return Command::FAILURE;
+        }
+        // Since 2.9.0 (audit JM-I2): an archived board is skipped, as the tenant and all-boards runs skip it, unless asked for.
+        if (count($boards) === 1 && $boards[0]->isArchived() && $input->getOption('include-archived') !== true) {
+            $io->warning('The board is archived: nothing was changed. Add --include-archived to fill it anyway.');
+
+            return Command::SUCCESS;
         }
 
         $rows    = [];
@@ -91,9 +108,8 @@ final class TaskBoardApplyDefaultColumnIconsCommand extends Command
      *
      * @return list<TaskBoard>|null
      */
-    private function boards(mixed $boardId, mixed $tenant): ?array
+    private function boards(mixed $boardId, ?string $tenant): ?array
     {
-        $tenant = is_string($tenant) && $tenant !== '' ? $tenant : null;
         if (is_string($boardId) && $boardId !== '') {
             $board = $this->boards->findById($boardId);
 

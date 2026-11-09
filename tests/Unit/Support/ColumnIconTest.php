@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\DefaultColumnIconFiller;
+use Nowo\TaskBoardBundle\Support\BoardIcon;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
@@ -56,6 +57,14 @@ final class ColumnIconTest extends TestCase
         yield 'uppercase id' => ['Tabler:Bug', false, false];
         yield 'family over 16 bytes' => ["\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}", false, false];
         yield 'long id' => ['tabler:' . str_repeat('a', 60), false, false];
+        // Audit JM-I3: tag characters only in a subdivision flag (black flag + tag letters or digits + cancel tag).
+        yield 'emoji with hidden tag text' => ["\u{2705}\u{E0041}\u{E0042}\u{E0043}", false, false];
+        yield 'lone tag character' => ["\u{E0061}", false, false];
+        yield 'tag flag without the cancel tag' => ["\u{1F3F4}\u{E0061}\u{E0062}", false, false];
+        yield 'tag flag with uppercase tags' => ["\u{1F3F4}\u{E0041}\u{E007F}", false, false];
+        yield 'short tag flag sequence' => ["\u{1F3F4}\u{E0061}\u{E0062}\u{E007F}", true, true];
+        yield 'England flag over 16 bytes' => ["\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}", false, false];
+        yield 'black flag alone' => ["\u{1F3F4}", true, true];
     }
 
     #[DataProvider('icons')]
@@ -70,6 +79,15 @@ final class ColumnIconTest extends TestCase
         if (!$valid) {
             self::assertSame('A column icon is one emoji or one of the offered icons.', $violations[0]?->getMessage());
         }
+    }
+
+    public function testTheBoardIconRefusesHiddenTagTextToo(): void
+    {
+        $validator = Validation::createValidator();
+        self::assertCount(1, $validator->validate("\u{2705}\u{E0041}\u{E0042}\u{E0043}", TaskConstraints::boardIcon('long', 'invalid')));
+        self::assertCount(0, $validator->validate("\u{1F3F4}\u{E0061}\u{E0062}\u{E007F}", TaskConstraints::boardIcon('long', 'invalid')));
+        self::assertFalse(BoardIcon::isValid("\u{1F680}\u{E007F}"));
+        self::assertTrue(BoardIcon::isValid("\u{1F680}"));
     }
 
     public function testEmptyIsNoIconAndAnyIdIsValidWithoutAList(): void

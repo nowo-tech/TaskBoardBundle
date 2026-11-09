@@ -540,7 +540,14 @@ New boards get these icons. For boards that already exist:
 bin/console nowo:task-board:apply-default-column-icons --dry-run          # every active board: what would change
 bin/console nowo:task-board:apply-default-column-icons --tenant=project-42 # one tenant's boards
 bin/console nowo:task-board:apply-default-column-icons --board=BOARD_ID    # one board (add --tenant to require its tenant)
+bin/console nowo:task-board:apply-default-column-icons --board=BOARD_ID --include-archived  # an archived board
 ```
+
+Runs over every board and per tenant cover active boards only; `--board` skips an archived board (and says so) unless
+`--include-archived` is given. An empty `--tenant` (e.g. an unset shell variable) is an error, not "every tenant".
+
+With the default grid, a column whose icon the grid does not offer (such an emoji) shows it as the selected choice in the
+edit dialog and keeps it on save; *No icon* removes it.
 
 The command only fills columns with **no** icon, so it is safe to run again and never replaces an icon a user picked.
 A column keeps no key of the `default_columns` entry it was created from, so it is matched by its **exact name** (case

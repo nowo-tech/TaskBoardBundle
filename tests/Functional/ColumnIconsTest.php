@@ -86,6 +86,34 @@ final class ColumnIconsTest extends FunctionalTestCase
         self::assertNull($this->column('Review')->getIcon());
     }
 
+    /** Since 2.9.0 (audit JM-L1): with the grid, an emoji the grid does not offer survives an edit. */
+    public function testTheGridKeepsAnEmojiItDoesNotOffer(): void
+    {
+        $board = $this->board(columns: ['To do', 'Done']);
+        $todo  = $board->getColumns()->first();
+        self::assertInstanceOf(BoardColumn::class, $todo);
+        $todo->setIcon('📝');
+        $this->em->flush();
+        $this->login($this->owner);
+        $edit = '/board/' . $board->getId() . '/column/' . $todo->getId();
+
+        $this->post($edit, ['name' => 'Backlog']);
+        self::assertSame(['Backlog', '📝'], [$this->column('Backlog')->getName(), $this->column('Backlog')->getIcon()], 'not posted: kept');
+
+        $this->post($edit, ['name' => 'Backlog', 'icon' => '📝']);
+        self::assertSame('📝', $this->column('Backlog')->getIcon(), 'posted back by the dialog: a valid choice for this column');
+
+        $this->flashes();
+        $this->post($edit, ['name' => 'Backlog', 'icon' => '🚧']);
+        self::assertSame(['error' => ['The column was not saved: its icon must be one emoji or one of the offered icons.']], $this->flashes(), 'another emoji is no choice of the grid');
+        self::assertSame('📝', $this->column('Backlog')->getIcon());
+
+        $this->post($edit, ['name' => 'Backlog', 'icon' => 'tabler:bug']);
+        self::assertSame('tabler:bug', $this->column('Backlog')->getIcon());
+        $this->post($edit, ['name' => 'Backlog', 'icon' => '']);
+        self::assertNull($this->column('Backlog')->getIcon(), '"No icon" still removes it');
+    }
+
     public function testATextWidgetTakesAnOfferedIconIdOrAnEmojiAndNothingElse(): void
     {
         $this->boot(['board' => ['column_icon_form_type' => TextType::class, 'column_icons' => ['tabler:bug'], 'default_columns' => [['name' => 'To do', 'icon' => 'tabler:inbox']]]]);
@@ -158,6 +186,34 @@ final class ColumnIconsTest extends FunctionalTestCase
 
         $missing = $this->tester();
         self::assertSame(Command::FAILURE, $missing->execute(['--board' => 'nothing']));
+
+        // Audit JM-I1: an empty --tenant is refused, not read as every tenant.
+        $empty = $this->tester();
+        self::assertSame(Command::INVALID, $empty->execute(['--tenant' => '']));
+        self::assertStringContainsString('--tenant is empty', $this->display($empty));
+        self::assertSame(Command::INVALID, $this->tester()->execute(['--tenant' => '  ']));
+    }
+
+    /** Audit JM-I2: --board skips an archived board unless --include-archived is given. */
+    public function testTheCommandSkipsAnArchivedBoardUnlessAskedFor(): void
+    {
+        $this->boot(['board' => ['default_columns' => self::BEACON_COLUMNS]]);
+        $board = $this->board('Old', ['To do', 'Done'], tenantKey: 'tenant-a');
+        $board->archive();
+        $this->em->flush();
+
+        $skip = $this->tester();
+        self::assertSame(Command::SUCCESS, $skip->execute(['--board' => $board->getId()]));
+        self::assertStringContainsString('The board is archived: nothing was changed', $this->display($skip));
+        self::assertSame([null, null], $this->icons($board));
+        self::assertSame(Command::SUCCESS, $this->tester()->execute(['--tenant' => 'tenant-a']));
+        self::assertSame([null, null], $this->icons($board), 'a tenant run skips it too');
+
+        $dry = $this->tester();
+        self::assertSame(Command::SUCCESS, $dry->execute(['--board' => $board->getId(), '--include-archived' => true, '--dry-run' => true]));
+        self::assertSame([null, null], $this->icons($board));
+        self::assertSame(Command::SUCCESS, $this->tester()->execute(['--board' => $board->getId(), '--tenant' => 'tenant-a', '--include-archived' => true]));
+        self::assertSame(['📝', '✅'], $this->icons($board));
     }
 
     public function testTheCommandHasNothingToDoWithoutConfiguredIcons(): void

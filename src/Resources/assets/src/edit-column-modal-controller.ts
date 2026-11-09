@@ -8,6 +8,51 @@ const ICON_ID = /^[a-z0-9-]+(:[a-z0-9-]+)?$/;
  * Opens the edit-column dialog and posts the updated name / color / icon (since 1.11); the delete form (since 1.11) posts to
  * the column's delete URL, asking first through `data-confirm`.
  */
+/** Marks the option and the grid button {@link showCurrentIcon} adds, so the next opening removes them. */
+const CURRENT = 'data-nowo-task-current-icon';
+
+/**
+ * Since 2.9.0 (audit JM-L1): the grid's hidden <select> only knows `board.column_icons`. A column icon it does not offer (an emoji
+ * from `board.default_columns`, the fill command or the API) gets its own selected option, so it posts back and the edit keeps
+ * it, and a button in the grid that shows it (as text) as the current choice. The server accepts that value for that column.
+ */
+export function showCurrentIcon(select: HTMLSelectElement, icon: string): void {
+    const field = select.closest('.nowo-task-picker');
+    field?.querySelectorAll(`[${CURRENT}]`).forEach((node) => node.remove());
+    if (icon === '' || [...select.options].some((option) => option.value === icon)) {
+        select.value = icon;
+
+        return;
+    }
+
+    const option = new Option(icon, icon, true, true);
+    option.setAttribute(CURRENT, '');
+    select.add(option);
+    select.value = icon;
+
+    const grid = field?.querySelector('.nowo-task-picker__icons');
+    if (grid) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'nowo-task-picker__icon nowo-task-picker__icon--current';
+        button.dataset.value = icon;
+        button.dataset.action = 'nowo-task-board-picker#pick';
+        button.setAttribute('data-nowo-task-board-picker-target', 'option');
+        button.setAttribute('aria-pressed', 'true');
+        button.setAttribute(CURRENT, '');
+        button.title = icon;
+        const glyph = document.createElement('span');
+        glyph.className = 'nowo-task-column__icon nowo-task-column__icon--emoji';
+        glyph.setAttribute('aria-hidden', 'true');
+        glyph.textContent = icon;
+        const label = document.createElement('span');
+        label.className = 'nowo-task-sr-only';
+        label.textContent = icon;
+        button.append(glyph, label);
+        grid.append(button);
+    }
+}
+
 export default class EditColumnModalController extends Controller<HTMLElement> {
     static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'title'];
 
@@ -66,6 +111,9 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
             // Since 2.9.0: a host widget (board.column_icon_form_type, e.g. an emoji picker) is a text field that would
             // refuse an icon id such as tabler:bug: it opens empty for such a column, so the dialog can still be saved.
             this.iconInputTarget.value = this.iconInputTarget instanceof HTMLSelectElement || !ICON_ID.test(icon) ? icon : '';
+            if (this.iconInputTarget instanceof HTMLSelectElement) {
+                showCurrentIcon(this.iconInputTarget, icon);
+            }
             // The icon grid (picker controller) follows the field.
             this.iconInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
         }

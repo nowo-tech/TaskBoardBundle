@@ -150,6 +150,16 @@ final class FormTypesTest extends TestCase
             self::assertSame($valid ? [] : ['Bad icon'], array_map(static fn (\Symfony\Component\Form\FormError|FormErrorIterator $e): string => $e->getMessage(), iterator_to_array($form->get('icon')->getErrors())));
         }
 
+        // Audit JM-L1: the edited column's own icon is a choice of the grid, only when storable and not offered already.
+        $grid = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => '📝']);
+        self::assertContains('📝', array_map(static fn ($choice): string => (string) $choice->value, $grid->createView()['icon']->vars['choices']));
+        $grid->submit(['name' => 'Doing', 'icon' => '📝']);
+        self::assertTrue($grid->isValid());
+        foreach (['tabler:bug', '<b>x</b>', ''] as $current) {
+            $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_current' => $current]);
+            self::assertCount(1, $form->createView()['icon']->vars['choices'], $current);
+        }
+
         // Without icon_known_ids the offered icons are board.column_icons.
         $form = $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => ['tabler:bug'], 'icon_form_type' => TextType::class]);
         $form->submit(['name' => 'Doing', 'icon' => 'tabler:inbox']);

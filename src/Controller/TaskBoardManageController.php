@@ -520,12 +520,16 @@ final class TaskBoardManageController extends AbstractController
             name: $column->getName(),
             color: $column->getColor(),
             icon: $column->getIcon(),
-        ));
+        ), $column->getIcon());
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
+            // Since 2.9.0 (audit JM-L1): an edit that does not post the icon (the grid's <select> had no option for it) keeps it.
+            if ($form->has('icon') && !array_key_exists('icon', $request->request->all($form->getName()))) {
+                $data->icon = $column->getIcon();
+            }
             $this->columnManager->update($column, $data);
             $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
@@ -1941,10 +1945,11 @@ final class TaskBoardManageController extends AbstractController
      *
      * @return FormInterface<BoardColumnFormData>
      */
-    private function createColumnForm(BoardColumnFormData $data): FormInterface
+    private function createColumnForm(BoardColumnFormData $data, ?string $currentIcon = null): FormInterface
     {
         return $this->createForm(BoardColumnFormType::class, $data, [
             'icon_choices'         => $this->columnIcons,
+            'icon_current'         => $currentIcon,
             'icon_invalid_message' => $this->translator->trans('task_board.form.column.icon_invalid', [], 'NowoTaskBoardBundle'),
         ] + $this->columnIconForm);
     }
