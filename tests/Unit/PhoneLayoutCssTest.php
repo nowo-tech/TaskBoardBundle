@@ -16,8 +16,8 @@ use function substr;
 
 /**
  * Since 2.8.0 (host mobile UX audit MUX-70, MUX-73, MUX-74): the phone block (≤ 640px) at the end of task-board.css narrows
- * the Gantt title column, keeps the legend on one row, shrinks the subtask indent and lifts meta texts to 12px. Desktop
- * rules stay as they were.
+ * the Gantt title column, wraps the legend in at most two compact rows (since 2.8.1, audit JD-L4), shrinks the subtask
+ * indent and lifts meta texts to 12px. Desktop rules stay as they were.
  */
 final class PhoneLayoutCssTest extends TestCase
 {
@@ -56,12 +56,27 @@ final class PhoneLayoutCssTest extends TestCase
         self::assertStringContainsString("--gantt-label-width: 10rem;\n        --gantt-day-width: 2.25rem;", $css);
     }
 
-    public function testThePhoneLegendIsOneScrollingRow(): void
+    /** Since 2.8.1 (audit JD-L4): the legend wraps instead of scrolling one row behind a hidden scrollbar. */
+    public function testThePhoneLegendWrapsInsteadOfScrolling(): void
     {
-        $legend = self::rule(self::phoneBlock(), '.nowo-task-gantt__legend');
-        self::assertStringContainsString('flex-wrap: nowrap;', $legend);
-        self::assertStringContainsString('overflow-x: auto;', $legend);
-        self::assertStringContainsString('white-space: nowrap;', self::rule(self::phoneBlock(), '.nowo-task-gantt__legend li'));
+        $block  = self::phoneBlock();
+        $legend = self::rule($block, '.nowo-task-gantt__legend');
+        self::assertStringContainsString('flex-wrap: wrap;', $legend);
+        self::assertStringNotContainsString('nowrap', $legend);
+        self::assertStringNotContainsString('overflow', $legend);
+        self::assertStringNotContainsString('scrollbar', $legend);
+        self::assertStringNotContainsString('.nowo-task-gantt__legend::-webkit-scrollbar', $block);
+        self::assertStringContainsString('white-space: nowrap;', self::rule($block, '.nowo-task-gantt__legend li'));
+    }
+
+    /** The desktop and tablet legend rule is the 2.7.0 one: it wraps and never scrolls. */
+    public function testTheDesktopLegendIsUnchanged(): void
+    {
+        $css    = self::css();
+        $legend = self::rule(substr($css, 0, (int) strrpos($css, '@media (max-width: 640px) {')), '.nowo-task-gantt__legend');
+        self::assertStringContainsString('flex-wrap: wrap;', $legend);
+        self::assertStringContainsString('gap: 0.5rem;', $legend);
+        self::assertStringNotContainsString('overflow', $legend);
     }
 
     public function testThePhoneSubtaskIndentStepIsSmaller(): void

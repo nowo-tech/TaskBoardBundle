@@ -65,7 +65,7 @@
             }) %}
             {{ include(nowo_ui_partial('tabs', 'NowoTaskBoardBundle'), {
                 items: _scale_items,
-                label: 'task_board.gantt.scale'|trans({}, 'NowoTaskBoardBundle'),
+                aria_label: 'task_board.gantt.scale'|trans({}, 'NowoTaskBoardBundle'),
                 level: 'secondary',
                 attr: {class: 'nowo-task-gantt__scales'},
                 bundle: 'NowoTaskBoardBundle',

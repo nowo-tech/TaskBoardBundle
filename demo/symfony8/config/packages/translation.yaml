@@ -1,3 +1,5 @@
 framework:
     default_locale: en
-    enabled_locales: [en, es]
+    enabled_locales: [en, es, de]
+    # Since 2.8.1 (audit JD-L4): the browser language picks the locale, so the phone e2e can check the es and de labels.
+    set_locale_from_accept_language: true
