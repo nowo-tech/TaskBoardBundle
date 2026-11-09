@@ -44,8 +44,17 @@ final class BoardColumnFormType extends AbstractType
         ]);
 
         // Since 1.11: an icon picked from `board.column_icons` (no field when the list is empty).
+        // Since 2.9.0: `board.column_icon_form_type` (e.g. an emoji picker) replaces the grid; the bundle's constraint always applies.
         $icons = $options['icon_choices'];
-        if ($icons !== []) {
+        if ($options['icon_form_type'] !== null) {
+            $this->addWithDefaults($builder, 'icon', $options['icon_form_type'], [
+                'label'       => 'task_board.form.column.icon',
+                'help'        => 'task_board.form.column.icon_help',
+                'required'    => false,
+                'empty_data'  => null,
+                'constraints' => TaskConstraints::columnIcon($options['icon_known_ids'] ?? $icons, $options['icon_invalid_message']),
+            ] + $options['icon_form_options']);
+        } elseif ($icons !== []) {
             $choices = [];
             foreach ($icons as $icon) {
                 $choices[substr($icon, (int) strpos($icon, ':') + 1)] = $icon;
@@ -67,7 +76,16 @@ final class BoardColumnFormType extends AbstractType
             'data_class'         => BoardColumnFormData::class,
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
             'icon_choices'       => [],
+            // Since 2.9.0: `board.column_icon_form_type` / `_options`; the ids a value may name besides an emoji (null: icon_choices).
+            'icon_form_type'       => null,
+            'icon_form_options'    => [],
+            'icon_known_ids'       => null,
+            'icon_invalid_message' => 'A column icon is one emoji or one of the offered icons.',
         ]);
         $resolver->setAllowedTypes('icon_choices', 'string[]');
+        $resolver->setAllowedTypes('icon_form_type', ['null', 'string']);
+        $resolver->setAllowedTypes('icon_form_options', 'array');
+        $resolver->setAllowedTypes('icon_known_ids', ['null', 'string[]']);
+        $resolver->setAllowedTypes('icon_invalid_message', 'string');
     }
 }

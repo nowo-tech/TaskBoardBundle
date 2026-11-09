@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.9.0](#to-290)
 - [To 2.8.0](#to-280)
 - [To 2.7.0](#to-270)
 - [To 2.6.0](#to-260)
@@ -164,6 +165,16 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.9.0
+
+No schema change (`task_board_columns.icon` is already `VARCHAR(64)`). **A host that changes nothing keeps the 2.8.0 pages byte for byte**: the Tabler grid, the icons it stores and their markup.
+
+- **Emoji column icons.** Set `board.column_icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType` (and options under `board.column_icon_form_options`, e.g. `{max_bytes: 16}`) to replace the grid with the emoji picker. The bundle checks the value whatever the widget: one emoji of at most 16 bytes, or one of the `board.column_icons` / `board.default_columns` ids; a refused icon is not saved and the board shows the flash `task_board.flash.column_icon_invalid`. With a text widget, a column that has a Tabler icon opens the edit dialog with an empty icon field (the picker would refuse `tabler:…`), so saving the dialog without picking an emoji **removes** that Tabler icon.
+- **Default columns with emojis.** `board.default_columns[].icon` accepts an emoji. It is now validated: one emoji, `<set>:<name>`, or a bare lowercase name (accepted for configs written before 2.9.0); anything else (text, markup, uppercase) fails the container build. Fix such a value or remove it.
+- **Existing boards.** New boards get the configured emojis; for existing ones run `bin/console nowo:task-board:apply-default-column-icons --dry-run`, check the table, then without `--dry-run` (per tenant with `--tenant=KEY`, one board with `--board=ID`). It only fills columns with no icon whose name is exactly a `default_columns` name.
+- **API clients.** Every status object gains `icon` (string or null). A strict client that rejects unknown fields must accept it.
+- **Stored values.** A column icon that is neither an emoji nor an icon id (possible only through direct database writes) is dropped on the next update of that column.
 
 ## To 2.8.0
 

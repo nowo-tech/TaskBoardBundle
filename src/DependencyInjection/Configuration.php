@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\File\HostAllowlist;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
@@ -690,7 +691,14 @@ final class Configuration implements ConfigurationInterface
                                 ->children()
                                     ->scalarNode('name')->isRequired()->cannotBeEmpty()->end()
                                     ->scalarNode('color')->defaultNull()->end()
-                                    ->scalarNode('icon')->defaultNull()->info('Icon name such as tabler:bug (since 1.11).')->end()
+                                    ->scalarNode('icon')
+                                        ->defaultNull()
+                                        ->info('Icon name such as tabler:bug (since 1.11), or since 2.9.0 one emoji such as 📝 (printed as text, aria-hidden; the name stays the accessible text).')
+                                        ->validate()
+                                            ->ifTrue(static fn (mixed $icon): bool => $icon !== null && (!is_string($icon) || !ColumnIcon::isStorable($icon)))
+                                            ->thenInvalid('A default column icon is one emoji (at most 16 bytes) or an icon name such as tabler:bug: %s')
+                                        ->end()
+                                    ->end()
                                 ->end()
                             ->end()
                             ->requiresAtLeastOneElement()
@@ -710,6 +718,11 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                             ->defaultValue(self::DEFAULT_COLUMN_ICONS)
                         ->end()
+                        ->scalarNode('column_icon_form_type')
+                            ->defaultNull()
+                            ->info('Since 2.9.0: form type of the column icon field in the add / edit column dialogs, e.g. Nowo\\UiKitBundle\\Form\\EmojiPickerType. The bundle\'s constraint always applies: one emoji, or one of board.column_icons / board.default_columns icons. null = the grid of board.column_icons.')
+                        ->end()
+                        ->arrayNode('column_icon_form_options')->variablePrototype()->end()->defaultValue([])->info('Since 2.9.0: options of column_icon_form_type.')->end()
                         ->booleanNode('top_level_only')
                             ->defaultFalse()
                             ->info('The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10.')

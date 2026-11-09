@@ -517,6 +517,36 @@ through `manage/_column_icon.html.twig` → UiKit `components/_icon.html.twig`: 
 full name goes to `ux_icon()` (import the icons you offer in the host, e.g. `bin/console ux:icons:import tabler:bug`),
 with the webfont sets the bare name (`ti ti-bug`); `icon_set: none` shows no icon.
 
+Since 2.9.0 a column icon may also be **one emoji**, printed as text (`aria-hidden="true"`, the column name stays the
+accessible text, with any icon set). `board.column_icon_form_type` gives the dialogs the host's widget instead of the
+grid; the bundle validates the value on every write path (form, API, config, column sets): one emoji of at most 16 bytes
+or an id of `board.column_icons` / `board.default_columns`. The Beacon setup:
+
+```yaml
+nowo_task_board:
+    board:
+        column_icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType
+        column_icon_form_options: { max_bytes: 16 }
+        default_columns:
+            - { name: 'To do', color: '#94a3b8', icon: '📝' }
+            - { name: 'In progress', color: '#3b82f6', icon: '🚧' }
+            - { name: 'Review', color: '#f59e0b', icon: '👀' }
+            - { name: 'Done', color: '#22c55e', icon: '✅' }
+```
+
+New boards get these icons. For boards that already exist:
+
+```bash
+bin/console nowo:task-board:apply-default-column-icons --dry-run          # every active board: what would change
+bin/console nowo:task-board:apply-default-column-icons --tenant=project-42 # one tenant's boards
+bin/console nowo:task-board:apply-default-column-icons --board=BOARD_ID    # one board (add --tenant to require its tenant)
+```
+
+The command only fills columns with **no** icon, so it is safe to run again and never replaces an icon a user picked.
+A column keeps no key of the `default_columns` entry it was created from, so it is matched by its **exact name** (case
+and spaces included): a renamed column is left alone. Each change is logged as a `column_update` write (no event, as a
+column edit in the dialog).
+
 ### Column sets
 
 A column set (`Nowo\TaskBoardBundle\Entity\ColumnSet`, table `task_board_column_sets`) is a named, ordered list of

@@ -188,6 +188,8 @@ task_board.flash.member_not_assignable: "Dieser Benutzer kann den Aufgaben diese
 task_board.board.subtasks_count: '%done% von %total% Unteraufgaben erledigt'
 task_board.form.column.icon: "Symbol"
 task_board.form.column.no_icon: "Kein Symbol"
+task_board.form.column.icon_help: "Ein Emoji, optional."
+task_board.form.column.icon_invalid: "Ein Spaltensymbol ist ein Emoji (höchstens 16 Bytes) oder eines der angebotenen Symbole."
 task_board.form.column.custom_color: 'Eigene Farbe'
 task_board.form.board.column_set: "Spalten"
 task_board.form.board.default_columns: "Standardspalten"
@@ -641,6 +643,7 @@ task_board.sync.error.source_details_unavailable: "Die Beschreibung der Quelle k
 task_board.history.former_user: "Ehemalige Person"
 task_board.flash.task_reopen_refused: "Die Aufgabe wurde nicht verschoben: Ihre Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
 task_board.flash.column_delete_refused: "Die Spalte wurde nicht gelöscht: Sie enthält erledigte Aufgaben, und deren Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
+task_board.flash.column_icon_invalid: "Die Spalte wurde nicht gespeichert: Ihr Symbol muss ein Emoji oder eines der angebotenen Symbole sein."
 task_board.form.board.icon: "Symbol"
 task_board.form.board.icon_help: "Ein Emoji, optional."
 task_board.form.board.icon_too_long: "Zu lang für ein Symbol: Dieses Emoji besteht aus mehreren verbundenen Zeichen, über 16 Byte. Wähle ein einfacheres."

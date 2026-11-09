@@ -1,6 +1,6 @@
 {#
     Since 1.13: the fields of the add / edit column dialogs (ClickUp-like): the name, a colour palette with a custom
-    colour, and the icons as a grid (board.column_icons). The swatches and icon buttons fill the real form fields
+    colour, and the icons as a grid (board.column_icons), or since 2.9.0 the host's widget (board.column_icon_form_type). The swatches and icon buttons fill the real form fields
     through the nowo-task-board-picker controller, so the form posts as before.
     Variables: form (BoardColumnFormType view), controller (the dialog controller's identifier, for its targets),
     defaultColor (optional: the colour picked when the field is empty, the add dialog).
@@ -20,7 +20,15 @@
     defaultColor: defaultColor|default(null),
 }) }}
 
-{% if form.icon is defined %}
+{% if form.icon is defined and form.icon.vars.choices is not defined %}
+    {# Since 2.9.0: board.column_icon_form_type (e.g. an emoji picker) is the host's widget, shown as it renders. #}
+    <div class="nowo-task-field nowo-task-field--column-icon">
+        {{ form_label(form.icon) }}
+        {{ form_widget(form.icon, {attr: {(_target): 'iconInput'}}) }}
+        {{ form_help(form.icon) }}
+        {{ form_errors(form.icon) }}
+    </div>
+{% elseif form.icon is defined %}
     <div class="nowo-task-field nowo-task-picker nowo-task-picker--icons" data-controller="nowo-task-board-picker">
         {{ form_label(form.icon) }}
         <div hidden>{{ form_widget(form.icon, {attr: {(_target): 'iconInput', 'data-nowo-task-board-picker-target': 'input'}}) }}</div>

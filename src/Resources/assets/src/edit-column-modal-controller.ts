@@ -1,6 +1,9 @@
 import { Controller } from '@hotwired/stimulus';
 import { openKitDialog } from './dialog-utils';
 
+/** An icon id (`<set>:<name>`, or a bare name stored before 2.9.0), drawn through the icon set rather than as text. */
+const ICON_ID = /^[a-z0-9-]+(:[a-z0-9-]+)?$/;
+
 /**
  * Opens the edit-column dialog and posts the updated name / color / icon (since 1.11); the delete form (since 1.11) posts to
  * the column's delete URL, asking first through `data-confirm`.
@@ -14,7 +17,7 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
         titleTemplate: String,
     };
 
-    declare readonly iconInputTarget: HTMLSelectElement;
+    declare readonly iconInputTarget: HTMLSelectElement | HTMLInputElement;
 
     declare readonly hasIconInputTarget: boolean;
 
@@ -59,7 +62,10 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
         }
 
         if (this.hasIconInputTarget) {
-            this.iconInputTarget.value = trigger.dataset.columnIcon ?? '';
+            const icon = trigger.dataset.columnIcon ?? '';
+            // Since 2.9.0: a host widget (board.column_icon_form_type, e.g. an emoji picker) is a text field that would
+            // refuse an icon id such as tabler:bug: it opens empty for such a column, so the dialog can still be saved.
+            this.iconInputTarget.value = this.iconInputTarget instanceof HTMLSelectElement || !ICON_ID.test(icon) ? icon : '';
             // The icon grid (picker controller) follows the field.
             this.iconInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
         }

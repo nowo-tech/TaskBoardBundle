@@ -188,6 +188,8 @@ task_board.flash.member_not_assignable: "This user cannot be added to the tasks 
 task_board.board.subtasks_count: '%done% of %total% subtasks done'
 task_board.form.column.icon: "Icon"
 task_board.form.column.no_icon: "No icon"
+task_board.form.column.icon_help: "One emoji, optional."
+task_board.form.column.icon_invalid: "A column icon is one emoji (at most 16 bytes) or one of the offered icons."
 task_board.form.column.custom_color: 'Custom colour'
 task_board.form.board.column_set: "Columns"
 task_board.form.board.default_columns: "Default columns"
@@ -641,6 +643,7 @@ task_board.sync.error.source_details_unavailable: "The source’s description co
 task_board.history.former_user: "Former person"
 task_board.flash.task_reopen_refused: "The task was not moved: reopening it would go over the limit of active tasks."
 task_board.flash.column_delete_refused: "The column was not deleted: it holds completed tasks, and reopening them would go over the limit of active tasks."
+task_board.flash.column_icon_invalid: "The column was not saved: its icon must be one emoji or one of the offered icons."
 task_board.form.board.icon: "Icon"
 task_board.form.board.icon_help: "One emoji, optional."
 task_board.form.board.icon_too_long: "Too long for an icon: this emoji is several characters joined together, over 16 bytes. Pick a simpler one."

@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Event\BoardCreatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Support\SlugGenerator;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -69,7 +70,7 @@ final readonly class TaskBoardCreator
                 name: $columnDef['name'],
                 position: $position,
                 color: $columnDef['color'],
-                icon: $columnDef['icon'] ?? null,
+                icon: ColumnIcon::normalize($columnDef['icon'] ?? null),
             ));
         }
 

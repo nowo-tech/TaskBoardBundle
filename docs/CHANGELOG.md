@@ -95,6 +95,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.9.0. Emoji column icons (host Symfony Beacon, owner 2026-11-09: default columns with emojis).
+
+### Added
+
+- **A column icon may be one emoji.** `board.column_icon_form_type` / `board.column_icon_form_options` (new, default `null` / `{}` = the Tabler grid of `board.column_icons`, as before) set the widget of the column icon in the add / edit column dialogs, e.g. `Nowo\UiKitBundle\Form\EmojiPickerType` as for `board.icon_form_type`. `manage/_column_icon.html.twig` prints a value that is not an icon id as escaped text in `<span class="nowo-task-column__icon nowo-task-column__icon--emoji" aria-hidden="true">`, with any icon set (`none` included); the column name stays the accessible text. Icon ids render byte for byte as in 2.8.0.
+- **`board.default_columns[].icon` takes an emoji** (📝 To do, 🚧 In progress, 👀 Review, ✅ Done) for new boards; the name stays the name.
+- **`nowo:task-board:apply-default-column-icons [--board=ID] [--tenant=KEY] [--dry-run]`.** Gives the columns of existing boards that have *no* icon the icon of their `board.default_columns` entry. Columns keep no key of the entry they were made from, so they are matched by exact name (case and spaces included); a renamed column, or one with an icon, is left alone. Fill only and idempotent; prints a table of what it changed (or would change) and logs a `column_update` write per column, as the dialog does. Every active board by default, one tenant with `--tenant`, one board with `--board` (refused when it is not of `--tenant`).
+- **Task API.** A status (column) carries `icon` (one emoji, an icon id, or null) in every answer; `POST /v2/list/{id}/status` and `PUT /v2/list/{id}/status/{status_id}` take `icon` (`null` or `""` removes it). OpenAPI and *Differences from ClickUp* list it.
+
+### Security
+
+- **Column icons are validated on every write path.** One emoji (as the board icon: at most 16 bytes, one emoji, a ZWJ sequence, flag or keycap) or an id of `board.column_icons` / `board.default_columns` (`<set>:<name>`), whatever the form type (`TaskConstraints::columnIcon()`, form and API: 400 `INPUT_002`); `board.default_columns[].icon` is checked when the container is built. `BoardColumnManager`, `ColumnSetManager::applyToBoard()` and `TaskBoardCreator` store no other value (`ColumnIcon::normalize()`: anything else becomes no icon). No free text and no markup is stored; every place that prints an icon escapes it (Twig autoescape in the header, the list groups and `data-column-icon`; JSON in the API).
+
 ## [2.8.0] - 2026-11-09
 
 Target 2.8.0. Phone layout from the host mobile UX audit (2026-11-09): CSS in a `@media (max-width: 640px)` block at the end of `task-board.css`. Wider windows and the markup are unchanged.
