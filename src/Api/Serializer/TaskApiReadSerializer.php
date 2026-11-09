@@ -135,8 +135,10 @@ final class TaskApiReadSerializer
         $description = (string) $task->getDescription();
 
         $data = [
-            'id'               => $task->getId(),
-            'custom_id'        => null,
+            'id'        => $task->getId(),
+            'custom_id' => null,
+            // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
+            'number'           => $task->getNumber(),
             'name'             => $task->getTitle(),
             'text_content'     => $description,
             'description'      => $description,

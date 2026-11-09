@@ -49,13 +49,14 @@
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
 {% endset %}
+{# Since 2.10.0 (spec 214): the calendar's copy carries data-testid="nowo-task-cal-add-dialog". #}
 {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
     id: 'nowo-task-board-add-task-modal',
     title: 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle'),
     bundle: 'NowoTaskBoardBundle',
     root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
     size: 'wide',
-    attr: {'data-nowo-task-board-add-task-modal-target': 'modal'},
+    attr: {'data-nowo-task-board-add-task-modal-target': 'modal'}|merge((addTaskQuery.calendar ?? null) ? {'data-testid': 'nowo-task-cal-add-dialog'} : {}),
     title_attr: {'data-nowo-task-board-add-task-modal-target': 'title'},
     body: _body,
     footer: _footer,

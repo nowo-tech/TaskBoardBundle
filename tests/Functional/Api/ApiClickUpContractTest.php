@@ -86,6 +86,7 @@ final class ApiClickUpContractTest extends ApiTestCase
         '*: *statuses[].id: extra'                     => 'Statuses are columns and have ids (used by the status paths).',
         '*: *statuses[].icon: extra'                   => 'Since 2.9.0: a status carries its column\'s icon (one emoji or an icon id), or null.',
         '*: *.status.icon: extra'                      => 'Since 2.9.0: a task\'s status carries its column\'s icon too.',
+        '*: *.number: extra'                           => 'Since 2.10.0 (spec 214): a task carries its readable number (#123), or null without task numbers.',
         'getfolderlesslists: .lists[].statuses: extra' => 'Each list carries its statuses (columns).',
         '*: .archived: extra'                          => 'Boards say whether they are archived.',
         '*: .override_statuses: extra'                 => 'Every board has its own statuses.',

@@ -386,10 +386,14 @@ paths:
     get:
       operationId: task
       summary: 'A task'
-      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      description: 'Least level: My tasks (own). The person''s access and where still apply. Since 2.10.0, with custom_task_ids=true the task_id is the task''s number (123 or #123) within space_id or list_id.'
       parameters:
         - {name: 'include_subtasks', in: query, schema: {type: string}}
         - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'custom_task_ids', in: query, description: 'Since 2.10.0: true = task_id is the task number', schema: {type: string}}
+        - {name: 'space_id', in: query, description: 'Since 2.10.0, with custom_task_ids: the space whose numbers to search (task_numbers.scope tenant)', schema: {type: string}}
+        - {name: 'list_id', in: query, description: 'Since 2.10.0, with custom_task_ids: the list whose numbers to search (any scope)', schema: {type: string}}
+        - {name: 'team_id', in: query, description: 'Accepted for ClickUp clients and ignored', schema: {type: string}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Task'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -831,6 +835,7 @@ components:
       type: object
       properties:
         id: {type: string}
+        number: {type: [integer, 'null'], description: 'Since 2.10.0: the readable number (#123); null without task_numbers'}
         name: {type: string}
         description: {type: string}
         text_content: {type: string}

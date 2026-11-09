@@ -82,11 +82,17 @@ final readonly class TaskApiReadController
 
     public function task(Request $request, string $taskId): JsonResponse
     {
-        $query = $request->query->all();
-        $page  = $this->operations->task(TaskApiRequestListener::principalOf($request), $taskId, TaskApiTaskFilter::flag($query, 'include_markdown_description'));
-        $task  = $this->serializer->task($page->tasks[0], $page);
+        $query     = $request->query->all();
+        $principal = TaskApiRequestListener::principalOf($request);
+        $markdown  = TaskApiTaskFilter::flag($query, 'include_markdown_description');
+        // Since 2.10.0 (spec 214): ClickUp's `custom_task_ids=true` names the task by its number, within `space_id` or `list_id`.
+        $page = TaskApiTaskFilter::flag($query, 'custom_task_ids')
+            ? $this->operations->taskByNumber($principal, $taskId, self::text($query, 'space_id'), self::text($query, 'list_id'), $markdown)
+            : $this->operations->task($principal, $taskId, $markdown);
+        $found = $page->tasks[0];
+        $task  = $this->serializer->task($found, $page);
         if (TaskApiTaskFilter::flag($query, 'include_subtasks')) {
-            $task['subtasks'] = array_map(static fn ($subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$taskId] ?? []);
+            $task['subtasks'] = array_map(static fn ($subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$found->getId()] ?? []);
         }
 
         return new JsonResponse($task);
@@ -143,5 +149,11 @@ final readonly class TaskApiReadController
         ));
 
         return new JsonResponse(['data' => array_map(fn (TaskApiTimeEntry $entry): array => $this->serializer->timeEntry($entry, $teamId), $page->entries)]);
+    }
+
+    /** @param array<mixed> $query */
+    private static function text(array $query, string $name): ?string
+    {
+        return is_string($query[$name] ?? null) ? $query[$name] : null;
     }
 }
