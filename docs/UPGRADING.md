@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.11.0](#to-2110)
 - [To 2.10.1](#to-2101)
 - [To 2.10.0](#to-2100)
   - [Schema change for every host: a comment's cause](#schema-change-for-every-host-a-comments-cause)
@@ -172,6 +173,19 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.11.0
+
+From **2.10.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.11.0 (minor). No schema change, no configuration change and no asset rebuild. Nothing to change.
+
+- **New events.** `TASK_TIME_LOGGED`, `TASK_TIME_REMOVED`, `TASK_DEPENDENCY_ADDED`, `TASK_DEPENDENCY_REMOVED`, `TASK_LINK_ADDED`, `TASK_LINK_UPDATED`, `TASK_LINK_REMOVED` and `TASK_MEMBER_REMOVED`, with ids and scalars only (see [USAGE](USAGE.md#events-after-writes)). They follow the 2.10 rules: after the write is saved; inside `TaskEventDeferral::defer()`, a sync page or an import, after the commit, and not at all on a rollback or a dry run. A sync page or an import that adds dependencies now holds those events until its commit. Nothing listens to them by default. **They come from the board and API actions only:** a provider sync, the people sync, the import updater and the move to another board change members, links and dependencies without them, and erasing a task or a board dispatches only `TASK_ERASED` / `BOARD_*`; a projection built from them must also rebuild the task on `TASK_REMOTE_*` / `SYNC_*`, `TASK_BOARD_CHANGED` and `TASK_ERASED` (see [USAGE](USAGE.md#events-after-writes)). Outside a deferred write a listener of these new events that throws is logged as an error and the saved write succeeds (`TaskEventDeferral::dispatchSaved()`).
+- **DDD hosts.** `Move\TaskMoverInterface` and `Service\TaskBoardEraserInterface` join the 2.10 ports (aliased to the classes, public). The mover's port checks no access: check what `TaskCopyController` checks before calling it. The eraser's port checks `canManageBoard()` and the cursor signature itself, like the class; a decorator or replacement must keep both. The bundle's own controllers and API keep calling the classes, so a decorator never changes their checks.
 
 ## To 2.10.1
 

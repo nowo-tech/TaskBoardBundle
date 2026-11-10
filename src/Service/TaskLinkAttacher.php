@@ -9,11 +9,19 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskLinkAddedEvent;
+use Nowo\TaskBoardBundle\Event\TaskLinkRemovedEvent;
+use Nowo\TaskBoardBundle\Event\TaskLinkUpdatedEvent;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\GitLabMergeRequestLinkParser;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
- * Attaches external links (MR, PR, URL) to tasks.
+ * Attaches external links (MR, PR, URL) and host object links to tasks. Since 2.11.0 (DDD audit G3): after each saved
+ * change it dispatches {@see TaskBoardEvents::TASK_LINK_ADDED}, {@see TaskBoardEvents::TASK_LINK_UPDATED} or
+ * {@see TaskBoardEvents::TASK_LINK_REMOVED} (ids only), through {@see TaskEventDeferral}. An existing host object link
+ * returned as it is dispatches nothing.
  */
 final readonly class TaskLinkAttacher
 {
@@ -21,6 +29,8 @@ final readonly class TaskLinkAttacher
         private TaskRepositoryInterface $taskRepository,
         private GitLabMergeRequestLinkParser $gitlabMrParser,
         private TaskChangeRecorder $changeRecorder,
+        // Since 2.11.0 (DDD audit G3): dispatches TASK_LINK_ADDED / TASK_LINK_UPDATED / TASK_LINK_REMOVED (none: no event).
+        private ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -46,6 +56,7 @@ final readonly class TaskLinkAttacher
             $link->getUrl(),
         );
         $this->taskRepository->save($task);
+        $this->dispatchSaved(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
 
         return $link;
     }
@@ -73,6 +84,7 @@ final readonly class TaskLinkAttacher
             $objectType . ':' . $objectId,
         );
         $this->taskRepository->save($task);
+        $this->dispatchSaved(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
 
         return $link;
     }
@@ -120,6 +132,7 @@ final readonly class TaskLinkAttacher
             $link->getUrl(),
         );
         $this->taskRepository->save($task);
+        $this->dispatchSaved(TaskLinkUpdatedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_UPDATED);
 
         return true;
     }
@@ -134,6 +147,7 @@ final readonly class TaskLinkAttacher
         $summary = $this->linkSummary($link);
         $url     = $link->isHostObject() ? $link->getObjectType() . ':' . $link->getObjectId() : $link->getUrl();
 
+        $event = TaskLinkRemovedEvent::of($link, $user, $this->changeRecorder->currentCause());
         $task->removeLink($link);
         $this->changeRecorder->record(
             $task,
@@ -144,6 +158,7 @@ final readonly class TaskLinkAttacher
             $url,
         );
         $this->taskRepository->save($task);
+        $this->dispatchSaved($event, TaskBoardEvents::TASK_LINK_REMOVED);
 
         return true;
     }
@@ -186,5 +201,16 @@ final readonly class TaskLinkAttacher
         }
 
         return $link->isHostObject() ? $link->getObjectType() . ' #' . $link->getObjectId() : $link->getUrl();
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }

@@ -41,7 +41,7 @@ use function str_contains;
  * later run neither updates nor recreates it. History gets a "moved to another board" row per task; TASK_BOARD_CHANGED is
  * dispatched after the commit, and TASK_MOVED is not.
  */
-final readonly class TaskMover
+final readonly class TaskMover implements TaskMoverInterface
 {
     public function __construct(
         private TaskMovePlanner $planner,

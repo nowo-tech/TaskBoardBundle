@@ -8,8 +8,12 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskDependencyAddedEvent;
+use Nowo\TaskBoardBundle\Event\TaskDependencyRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_pop;
 
@@ -18,13 +22,17 @@ use function array_pop;
  *
  * A dependency is refused on the task itself, towards a task of another board, when the same link already exists
  * (in either direction for "blocks" / "blocked by" and "related"), and when it would close a cycle of "blocks" links
- * (A blocks B blocks … blocks A). Each change is recorded in the task's history.
+ * (A blocks B blocks … blocks A). Each change is recorded in the task's history. Since 2.11.0 (DDD audit G3): after each
+ * saved change it dispatches {@see TaskBoardEvents::TASK_DEPENDENCY_ADDED} / {@see TaskBoardEvents::TASK_DEPENDENCY_REMOVED}
+ * (ids only), through {@see TaskEventDeferral}: held until the commit of a sync page or an import.
  */
 final readonly class TaskDependencyManager
 {
     public function __construct(
         private TaskRepositoryInterface $taskRepository,
         private TaskChangeRecorder $changeRecorder,
+        // Since 2.11.0 (DDD audit G3): dispatches TASK_DEPENDENCY_ADDED / TASK_DEPENDENCY_REMOVED (none: no event).
+        private ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -64,6 +72,7 @@ final readonly class TaskDependencyManager
         $task->addOutgoingDependency($dependency);
         $this->changeRecorder->record($task, $user, TaskChangeType::DependencyAdded, null, $other->getTitle(), $type->relation());
         $this->taskRepository->save($task);
+        $this->dispatchSaved(TaskDependencyAddedEvent::of($task, $dependency, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_DEPENDENCY_ADDED);
 
         return $dependency;
     }
@@ -82,9 +91,11 @@ final readonly class TaskDependencyManager
             $other    = $outgoing ? $dependency->getTargetTask() : $dependency->getSourceTask();
             $relation = $dependency->getDependencyType()->relation(!$outgoing);
 
+            $event = TaskDependencyRemovedEvent::of($task, $dependency, $user, $this->changeRecorder->currentCause());
             $task->removeDependency($dependency);
             $this->changeRecorder->record($task, $user, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $relation);
             $this->taskRepository->save($task);
+            $this->dispatchSaved($event, TaskBoardEvents::TASK_DEPENDENCY_REMOVED);
 
             return true;
         }
@@ -198,5 +209,16 @@ final readonly class TaskDependencyManager
         }
 
         return $type->value . ':' . $source->getId() . '>' . $target->getId();
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }
