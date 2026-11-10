@@ -337,7 +337,9 @@ final readonly class TaskRecurrenceManager
                 return $copy;
             });
 
-            return $this->events instanceof TaskEventDeferral ? $this->events->defer($write) : $write();
+            // Audit JY-I6 (since 2.10.1): the copy is committed when its events go out; a failing host listener is logged, never
+            // reported as a failed copy (a retry would create a second one).
+            return $this->events instanceof TaskEventDeferral ? $this->events->defer($write, false) : $write();
             // @codeCoverageIgnoreStart
         } catch (UniqueConstraintViolationException) {
             // A concurrent run wrote the same key between the check above and this insert: it created the occurrence.

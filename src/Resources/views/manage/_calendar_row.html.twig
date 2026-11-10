@@ -1,6 +1,7 @@
 {#
     Since 2.1.0 (spec 214, FR-019, FR-025): a task of a day, in list mode and in a week on a phone. No drag: Reschedule and the panel
     change the dates. Variables: entry, panelTargetPath.
+    Since 2.10.1: `data-testid` nowo-task-cal-reschedule on its Reschedule button, as on the chip's.
 #}
 {% set task = entry.task %}
 <li
@@ -19,5 +20,5 @@
     <a class="nowo-task-cal__row-title" href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}">{% if nowo_task_board_number(task) %}<span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span> {% endif %}{{ task.title }}</a>
     {% if entry.overdue %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-cal__overdue">{{ 'task_board.calendar.overdue'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
     {% if task.column %}<span class="nowo-task-cal__row-column">{{ task.column.name }}</span>{% endif %}
-    {% if entry.editable %}<button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-calendar#openReschedule" aria-label="{{ 'task_board.calendar.reschedule_task'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}">{{ 'task_board.calendar.reschedule'|trans({}, 'NowoTaskBoardBundle') }}</button>{% endif %}
+    {% if entry.editable %}<button type="button" data-testid="nowo-task-cal-reschedule" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-calendar#openReschedule" aria-label="{{ 'task_board.calendar.reschedule_task'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}">{{ 'task_board.calendar.reschedule'|trans({}, 'NowoTaskBoardBundle') }}</button>{% endif %}
 </li>

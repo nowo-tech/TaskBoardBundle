@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceBoardListener;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceRule;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
+use RuntimeException;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -255,6 +256,26 @@ final class TaskRecurrenceManagerTest extends CopyTestCase
         self::assertInstanceOf(Task::class, $this->manager()->createOccurrence($series, 'date:2026-12-01'));
         self::assertSame([false], $inTransaction, 'TASK_CREATED after the commit');
         self::assertCount(2, $this->quota()->asked, 'still asked once per occurrence');
+    }
+
+    public function testAFailingTaskCreatedListenerDoesNotFailACommittedOccurrence(): void
+    {
+        $task       = $this->dated('Invoices', '2026-11-01');
+        $series     = $this->manager()->create($task, $this->monthly(), $this->owner);
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener('nowo_task_board.task_created', static function (): never {
+            throw new RuntimeException('host listener');
+        });
+
+        // Audit JY-I6: the occurrence is committed when TASK_CREATED goes out; the host's failure is logged, not reported,
+        // so the next run does not see a failure, and the key is taken: no second task.
+        $copy = $this->manager()->createOccurrence($series, 'date:2026-12-01');
+
+        self::assertInstanceOf(Task::class, $copy);
+        self::assertNull($this->manager()->createOccurrence($series, 'date:2026-12-01'), 'a retry creates nothing');
+        self::assertSame(1, $this->em->getRepository(TaskOccurrence::class)->count(['occurrenceKey' => 'date:2026-12-01']));
+        self::assertSame($copy, $series->getLatestTask());
     }
 
     public function testACompletionKeyOfAnotherSeriesCreatesNothing(): void

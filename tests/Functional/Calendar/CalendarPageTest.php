@@ -94,6 +94,13 @@ final class CalendarPageTest extends CalendarTestCase
 
         self::assertSame(['2026-11-03', '2026-11-04', '2026-11-20'], $crawler->filter('.nowo-task-cal__list-day')->each(static fn (Crawler $day): ?string => $day->attr('data-date')));
         self::assertSelectorExists('#nowo-task-cal-day-2026-11-20');
+        // Since 2.10.1: the list's controls carry the same data-testids as the month's chip and day.
+        $rows = $crawler->filter('.nowo-task-cal__row');
+        self::assertGreaterThan(0, $rows->count());
+        self::assertCount($rows->count(), $crawler->filter('.nowo-task-cal__row [data-testid="nowo-task-cal-reschedule"][data-action="nowo-task-board-calendar#openReschedule"]'), 'one per task row');
+        self::assertCount(3, $crawler->filter('.nowo-task-cal__list-day [data-testid="nowo-task-cal-add"]'), 'one per day');
+        self::assertSelectorExists('[data-testid="nowo-task-cal-reschedule-dialog"]');
+        self::assertSelectorExists('[data-testid="nowo-task-cal-add-dialog"]');
     }
 
     public function testAnImpossibleDateOrModeFallsBackToTheDefault(): void
@@ -208,6 +215,13 @@ final class CalendarPageTest extends CalendarTestCase
         self::assertSelectorNotExists('.nowo-task-cal__add');
         self::assertSelectorNotExists('#nowo-task-board-add-task-modal');
         self::assertSelectorNotExists('#nowo-task-cal-reschedule');
+        self::assertSelectorNotExists('[data-testid="nowo-task-cal-reschedule"]');
+
+        $this->client->request('GET', $this->calendarUrl($board, 'mode=list&date=2026-11-15'));
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('.nowo-task-cal__row');
+        self::assertSelectorNotExists('[data-testid="nowo-task-cal-reschedule"]');
+        self::assertSelectorNotExists('[data-testid="nowo-task-cal-add"]');
     }
 
     public function testAnOutsiderGetsNoCalendar(): void

@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use RuntimeException;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function array_filter;
 use function array_map;
@@ -119,6 +120,25 @@ final class TaskCopierTest extends CopyTestCase
             self::assertSame('database down', $exception->getMessage());
         }
         self::assertNotContains('task_created', $this->eventNames(), 'audit IC-I3: no listener acts on a rolled-back copy');
+    }
+
+    public function testAFailingTaskCreatedListenerDoesNotFailACommittedCopy(): void
+    {
+        $board      = $this->board();
+        $task       = $this->task($board, 'Parent');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener('nowo_task_board.task_created', static function (): never {
+            throw new RuntimeException('host listener');
+        });
+
+        // Audit JY-I6: the copy is committed when TASK_CREATED goes out; the host's failure is logged, not reported.
+        $result = $this->copier()->copy($task, new TaskCopyOptions(), $this->owner);
+
+        self::assertSame('Parent', $result->task->getTitle());
+        self::assertContains('task_created', $this->eventNames(), 'the held event is still sent');
+        $this->clear();
+        self::assertCount(2, $this->em->getRepository(Task::class)->findBy(['board' => $board->getId()]), 'one copy, saved once');
     }
 
     public function testOptionsLeaveOutSubtasksDatesAndMembers(): void

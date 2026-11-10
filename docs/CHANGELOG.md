@@ -99,6 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.10.1 (patch). No schema change; see [UPGRADING](UPGRADING.md#to-2101).
+
+### Fixed
+
+- **Calendar list mode `data-testid` (Symfony Beacon).** The Reschedule button of a list-mode row (and of a week on a phone, `_calendar_row.html.twig`) now carries `data-testid="nowo-task-cal-reschedule"`, like the chip's button. The other list-mode controls already matched the month: `nowo-task-cal-add` on each day's `+`, and the shared `nowo-task-cal-reschedule-dialog` / `nowo-task-cal-add-dialog`.
+- **A failing listener no longer fails a saved copy or occurrence (audit JY-I6).** `TaskCopier::copy()` / `copyChecked()` and `TaskRecurrenceManager::createOccurrence()` dispatched their held events after the commit and then rethrew the first listener failure, so a host listener throwing on a copy's `TASK_CREATED` reported a saved copy as failed (an error page), and a retry created a second copy. They now use the non-throwing path of the 2.10.0 import and sync fix (JY-L1): every held event is still sent, and a listener's failure is logged as an error (`TaskBoard: a listener failed after the write was committed`). `TaskEventDeferral::defer()` gains an optional `bool $rethrow = true` for this; the default is unchanged.
+
 ## [2.10.0] - 2026-11-10
 
 Target 2.10.0 (minor). For Symfony Beacon 1.144: spec 214 (calendar) and spec 216 (automations). Additive: one nullable column and one index; see [UPGRADING](UPGRADING.md#to-2100).

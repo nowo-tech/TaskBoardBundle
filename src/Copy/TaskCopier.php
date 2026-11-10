@@ -199,7 +199,9 @@ final readonly class TaskCopier
             return new TaskCopyResult($copies[$source->getId()], array_values($copies), array_values(array_unique($dropped)));
         });
 
-        return $this->events instanceof TaskEventDeferral ? $this->events->defer($write) : $write();
+        // Audit JY-I6 (since 2.10.1): the copy is committed when its events go out; a failing host listener is logged, never
+        // reported as a failed copy (a retry would create a second one).
+        return $this->events instanceof TaskEventDeferral ? $this->events->defer($write, false) : $write();
     }
 
     /**
