@@ -112,6 +112,13 @@ Target 2.10.0 (minor). For Symfony Beacon 1.144: spec 214 (calendar) and spec 21
 - **Ports of the command services (DDD audit G4):** `TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`, `TaskTimeLoggerInterface` and `BoardColumnManagerInterface` (namespace `Service`), implemented by the bundle's classes and aliased to them (public), for a host's application layer to depend on, double and decorate.
 - `TaskEventDeferral::begin()` / `commit()` / `rollBack()`, for a write that opens its own transaction; `TaskChangeRecorder::currentCause()`; `Support\ActorId::of()`.
 
+### Fixed (audit JY, before the tag)
+
+- **JY-L1:** a sync page and an import dispatch their held events after the commit, outside their `try`: a host listener that throws no longer reports saved rows as failed (it is logged as an error). `TaskEventDeferral::commit()` dispatches every held event even when one listener throws, then rethrows the first failure (`commit(false)`: logs it instead).
+- **JY-L2:** the six ports and USAGE say that they check nothing: the host checks access, tenant, plan, comment rights, `activeTaskRefusal()` and CSRF before calling them.
+- **JY-L3:** `ActorId::of()` keeps a `Stringable` id (a Symfony `Uuid` / `Ulid`) and gives null for `''`, floats and booleans, so `actorId`, `getUserId()` and `getMentionedUserIds()` work for Uuid users.
+- **JY-I1 / JY-I5:** a task number lookup answers only to the task's current number (a number it left behind is 404 even after it moved back), and `123\n` is not a number.
+
 ### Changed
 
 - `BoardColumnManager::add()`, `update()`, `reorder()`, `delete()` and `TaskCommentManager::delete()` take an optional last `?object $actor` (who made the change, for the events). The bundle's controllers, the API, the sync and the import pass it. Existing calls keep working; their events carry `actorId: null`.

@@ -182,7 +182,6 @@ final readonly class TaskImportOrchestrator
         try {
             $result = $this->write($board, $source, $rows, $actor, $options, $parentTask);
             $connection->commit();
-            $this->events?->commit();
         } catch (Throwable $exception) {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
@@ -196,6 +195,8 @@ final readonly class TaskImportOrchestrator
 
             throw $exception;
         }
+        // Audit JY-L1: after the commit, outside the try: a failing host listener never reports the saved rows as failed.
+        $this->events?->commit(false);
 
         return $result;
     }

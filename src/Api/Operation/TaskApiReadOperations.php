@@ -193,11 +193,13 @@ final readonly class TaskApiReadOperations
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid custom_task_ids: give space_id or list_id');
         }
 
-        if (preg_match('/^#?[1-9][0-9]{0,8}$/', $number) !== 1 || $scopeKey === null || !$this->numbers instanceof TaskNumberLedger || !$this->numberScope instanceof TaskNumberScope) {
+        if (preg_match('/^#?[1-9][0-9]{0,8}$/D', $number) !== 1 || $scopeKey === null || !$this->numbers instanceof TaskNumberLedger || !$this->numberScope instanceof TaskNumberScope) {
             throw TaskApiRefusal::notFound();
         }
-        $task = $this->numbers->find($scopeKey, (int) ltrim($number, '#'));
-        if (!$task instanceof Task || $this->numberScope->keyOf($task->getBoard()) !== $scopeKey) {
+        $wanted = (int) ltrim($number, '#');
+        $task   = $this->numbers->find($scopeKey, $wanted);
+        // Audit JY-I1: only the task's current number in its current sequence; a number it left behind is not found.
+        if (!$task instanceof Task || $task->getNumber() !== $wanted || $this->numberScope->keyOf($task->getBoard()) !== $scopeKey) {
             throw TaskApiRefusal::notFound();
         }
 

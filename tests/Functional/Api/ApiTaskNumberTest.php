@@ -83,6 +83,31 @@ final class ApiTaskNumberTest extends ApiTestCase
         $this->assertRefused(404, 'ACCESS_001');
     }
 
+    public function testATaskThatCameBackAnswersOnlyToItsNewNumber(): void
+    {
+        self::ensureKernelShutdown();
+        static::$hostConfig = ['task_numbers' => ['enabled' => true, 'scope' => 'board']];
+        $this->setUp();
+        $this->task($this->roadmap, 'First');
+        $task = $this->task($this->roadmap, 'Travels');
+        $away = $this->board('Away', tenantKey: 'tenant-a');
+        $task->changeBoard($away, $away->getColumns()->first() ?: null, 0);
+        $this->em->flush();
+        $task->changeBoard($this->roadmap, $this->roadmap->getColumns()->first() ?: null, 0);
+        $this->em->flush();
+        self::assertNotSame(2, $task->getNumber());
+
+        // Audit JY-I1: the number it left behind in this list is 404, its new one is the task.
+        $this->get('/api/tasks/v2/task/2?custom_task_ids=true&list_id=' . $this->roadmap->getId());
+        $this->assertRefused(404, 'ACCESS_001');
+        $this->get('/api/tasks/v2/task/' . $task->getNumber() . '?custom_task_ids=true&list_id=' . $this->roadmap->getId());
+        self::assertResponseIsSuccessful();
+        self::assertSame($task->getId(), $this->json()['id']);
+        // Audit JY-I5: a trailing newline is not a number.
+        $this->get('/api/tasks/v2/task/1%0A?custom_task_ids=true&list_id=' . $this->roadmap->getId());
+        $this->assertRefused(404, 'ACCESS_001');
+    }
+
     public function testMyTasksStillSeesOnlyItsOwn(): void
     {
         $colleague = $this->user('colleague@example.com');

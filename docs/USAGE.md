@@ -438,7 +438,7 @@ Dispatched after the change is flushed (listen with `#[AsEventListener(event: Ta
 | `TASK_REOPENED` | `TaskReopenedEvent` | — (left the last column) |
 | `TASK_MEMBER_ADDED` | `TaskMemberAddedEvent` | `getMember()`, `getUser()` |
 
-Since 2.10 (spec 216, DDD audit G2/G3), id-only events: public readonly scalars, no entity and no user object, so a host translates them into its own messages without touching the bundle's entities. `actorId` is the acting user's `getId()` as a string (null without one, e.g. a sync worker or a caller that passes none); `cause` is `TaskChangeContext::current()` at the write. They are dispatched after the write is saved, through `TaskEventDeferral`: inside `defer()`, a sync page or an import, after the commit, and not at all on a rollback or a dry run.
+Since 2.10 (spec 216, DDD audit G2/G3), id-only events: public readonly scalars, no entity and no user object, so a host translates them into its own messages without touching the bundle's entities. `actorId` is the acting user's `getId()` as a string (null without one, e.g. a sync worker or a caller that passes none); `cause` is `TaskChangeContext::current()` at the write. They are dispatched after the write is saved, through `TaskEventDeferral`: inside `defer()`, a sync page or an import, after the commit, and not at all on a rollback or a dry run. Every held event is dispatched even if a listener throws; after a sync page or an import, whose rows are already committed, the failure is logged (`error`) and the write still succeeds, while `defer()` rethrows the first failure once all are sent.
 
 | Constant | Event | Payload |
 |---|---|---|
@@ -537,6 +537,13 @@ final class TaskCompletedTranslator
 decorator wraps your calls; the bundle's own controllers keep calling the classes). `TaskMover` and `TaskBoardEraser`
 have no port yet; wrap them in your own (e.g. `TaskBoardGateway`). For account erasure, call
 `TaskSyncPeopleReassigner::detachUser()` from your erasure flow.
+
+**The ports check nothing.** Like the classes, they trust their caller: no access, tenant, plan, quota or CSRF check.
+Before calling one from your own endpoint, check what the bundle's controllers check: `TaskBoardResourceAccessChecker`
+(`canEditTask()`, `canEditBoard()`, `canManageBoard()`, `canManageColumns()`, `canTrackTime()`), that the board belongs
+to the current tenant and its plan has the module, comment rights (`comments.readers_can_comment`, the author rules of
+`TaskCommentManager::isAuthor()`), and `TaskManagerInterface::activeTaskRefusal()` before a `create()` or `restore()`.
+Otherwise any signed-in user could change another tenant's tasks.
 
 **Known limitations**
 

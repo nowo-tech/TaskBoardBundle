@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Support;
 
-use function is_scalar;
+use Stringable;
+
+use function is_int;
+use function is_string;
 use function method_exists;
 
 /**
- * Since 2.10.0 (DDD audit G2): the id a host user exposes through `getId()`, as a string, for the id-only event payloads.
- * Null without a user, or when the user has no scalar `getId()`.
+ * Since 2.10.0 (DDD audit G2): the id a host user exposes through `getId()`, as a string, for the id-only event payloads:
+ * an int, a non-empty string or a `Stringable` (a Symfony `Uuid` / `Ulid`, audit JY-L3). Null without a user, without
+ * `getId()`, or for any other value (null, '', a float, a bool, an array).
  */
 final class ActorId
 {
@@ -19,7 +23,11 @@ final class ActorId
             return null;
         }
         $id = $user->getId();
+        if (is_int($id)) {
+            return (string) $id;
+        }
+        $id = $id instanceof Stringable ? (string) $id : $id;
 
-        return is_scalar($id) ? (string) $id : null;
+        return is_string($id) && $id !== '' ? $id : null;
     }
 }

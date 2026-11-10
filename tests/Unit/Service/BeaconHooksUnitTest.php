@@ -11,7 +11,10 @@ use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use RuntimeException;
 use stdClass;
+use Stringable;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
 /**
@@ -30,11 +33,33 @@ final class BeaconHooksUnitTest extends TestCase
                 return 12;
             }
         }));
-        self::assertNull(ActorId::of(new class {
-            /** @return list<int> */
-            public function getId(): array
+        foreach ([[1], '', 1.5, true, null] as $bad) {
+            self::assertNull(ActorId::of(new class($bad) {
+                public function __construct(private readonly mixed $id)
+                {
+                }
+
+                public function getId(): mixed
+                {
+                    return $this->id;
+                }
+            }), 'audit JY-L3: ' . get_debug_type($bad));
+        }
+        // Audit JY-L3: a Stringable id (a Symfony Uuid) is kept.
+        $uuid = new class implements Stringable {
+            public function __toString(): string
             {
-                return [1];
+                return '0195f3b2-7c4e-7d3a-9a7e-2f4c1b9d8e01';
+            }
+        };
+        self::assertSame('0195f3b2-7c4e-7d3a-9a7e-2f4c1b9d8e01', ActorId::of(new class($uuid) {
+            public function __construct(private readonly Stringable $id)
+            {
+            }
+
+            public function getId(): Stringable
+            {
+                return $this->id;
             }
         }));
     }
@@ -80,6 +105,54 @@ final class BeaconHooksUnitTest extends TestCase
         $deferral->rollBack();
         $deferral->dispatch((object) ['name' => 'd'], 'e');
         self::assertSame(['a', 'b', 'd'], $seen, 'a rollback drops what it held');
+    }
+
+    public function testAFailingListenerDoesNotStopTheOtherHeldEvents(): void
+    {
+        $inner = new EventDispatcher();
+        $seen  = [];
+        $inner->addListener('e', static function (stdClass $event) use (&$seen): void {
+            $seen[] = $event->name;
+            if ($event->name !== 'ok') {
+                throw new RuntimeException('listener ' . $event->name);
+            }
+        });
+        $logged = [];
+        $logger = new class($logged) extends AbstractLogger {
+            /** @param list<string> $logged */
+            public function __construct(private array &$logged)
+            {
+            }
+
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                $this->logged[] = $level . ': ' . $context['event'];
+            }
+        };
+        $deferral = new TaskEventDeferral($inner, $logger);
+
+        // Audit JY-L1: every held event is dispatched; the first failure is rethrown after the loop...
+        $deferral->begin();
+        foreach (['first', 'ok', 'second'] as $name) {
+            $deferral->dispatch((object) ['name' => $name], 'e');
+        }
+        try {
+            $deferral->commit();
+            self::fail('Rethrown');
+        } catch (RuntimeException $failure) {
+            self::assertSame('listener first', $failure->getMessage());
+        }
+        self::assertSame(['first', 'ok', 'second'], $seen);
+        self::assertSame([], $logged);
+
+        // ...or, after a committed write, logged and swallowed.
+        $seen = [];
+        $deferral->begin();
+        $deferral->dispatch((object) ['name' => 'bad'], 'e');
+        $deferral->dispatch((object) ['name' => 'ok'], 'e');
+        $deferral->commit(false);
+        self::assertSame(['bad', 'ok'], $seen);
+        self::assertSame(['error: e'], $logged);
     }
 
     public function testTheRecorderSaysTheCurrentCause(): void

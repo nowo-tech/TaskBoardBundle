@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\ColumnCreatedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnDeleteCheckEvent;
@@ -15,6 +16,8 @@ use Nowo\TaskBoardBundle\Event\TaskArchivedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCommentDeletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskRestoredEvent;
+use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
@@ -29,6 +32,7 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
+use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\EventDispatcher\Event;
 
@@ -206,6 +210,24 @@ final class BeaconHooksTest extends FunctionalTestCase
         $editor = $this->service(TaskBoardEditorInterface::class);
         $editor->update($board, 'Renamed through the port', null, $this->owner);
         self::assertSame('Renamed through the port', $board->getName());
+    }
+
+    public function testAFailingColumnListenerDoesNotFailACommittedImport(): void
+    {
+        $board = $this->board('Import', ['To do', 'Done']);
+        $this->listen(TaskBoardEvents::COLUMN_CREATED);
+        $this->dispatcher()->addListener(TaskBoardEvents::COLUMN_CREATED, static function (ColumnCreatedEvent $event): void {
+            throw new RuntimeException('host listener ' . $event->name);
+        });
+
+        // Audit JY-L1: both new columns are created inside the import's transaction; their events wait for its commit.
+        $result = $this->service(TaskImportOrchestrator::class)->import($board, TaskImportSource::ClickUpCsv, "Task ID,Task Name,Status\nt1,One,Review\nt2,Two,QA", 'cols.csv', $this->owner);
+
+        self::assertFalse($result->hasErrors(), 'the rows are saved: the import is not reported as failed');
+        self::assertSame(2, $result->created);
+        self::assertSame(['Review', 'QA'], array_map(static fn (array $entry): string => $entry[1] instanceof ColumnCreatedEvent ? $entry[1]->name : '', $this->events), 'every held event is still sent');
+        $this->em->clear();
+        self::assertCount(2, $this->em->getRepository(Task::class)->findBy(['board' => $board->getId()]));
     }
 
     private function listen(string ...$names): void

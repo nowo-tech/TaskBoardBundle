@@ -126,7 +126,7 @@ GET /v2/task/123?custom_task_ids=true&space_id=SPACE_ID   numbers per tenant (ta
 GET /v2/task/%23123?custom_task_ids=true&list_id=LIST_ID  any scope; "#123" works URL-encoded
 ```
 
-Why a space or a list: ClickUp's custom ids (`DEV-123`) are unique in a workspace because they carry the space's prefix; here a number is unique only in its sequence, which is a tenant (one space) or, with `scope: board` or a board without tenant, one list. `space_id` of a space whose numbers are per list is 400 `INPUT_002`, as is neither parameter. A number not in that sequence, a number a moved task left behind (it now has a number in its new sequence), or any number without the option is 404, the same as a task the token may not see; access, level and plan are then checked as for `GET /v2/task/{id}`. The provider's custom id of a synced task (`DEV-123`) is not looked up here.
+Why a space or a list: ClickUp's custom ids (`DEV-123`) are unique in a workspace because they carry the space's prefix; here a number is unique only in its sequence, which is a tenant (one space) or, with `scope: board` or a board without tenant, one list. `space_id` of a space whose numbers are per list is 400 `INPUT_002`, as is neither parameter. A number not in that sequence, a number a moved task left behind (it now has a number in its new sequence, and only that one answers, even after it moved back), or any number without the option is 404, the same as a task the token may not see; access, level and plan are then checked as for `GET /v2/task/{id}`. The provider's custom id of a synced task (`DEV-123`) is not looked up here.
 
 ## Write endpoints
 
