@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.10.1](#to-2101)
 - [To 2.10.0](#to-2100)
   - [Schema change for every host: a comment's cause](#schema-change-for-every-host-a-comments-cause)
   - [Schema change with the sync tables mapped: custom id index](#schema-change-with-the-sync-tables-mapped-custom-id-index)
@@ -171,6 +172,19 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.10.1
+
+From **2.10.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.10.1 (patch). No schema change, no configuration change and no asset rebuild (only a Twig template and PHP changed).
+
+- **Calendar tests.** In list mode (and a week on a phone), each row's Reschedule button now has `data-testid="nowo-task-cal-reschedule"`, as on the month's chip: a test can use the same selector in every mode. A template override of `_calendar_row.html.twig` adds the attribute itself.
+- **Listeners on a copy or a recurring occurrence (audit JY-I6).** A listener that throws on the events of a copy (Duplicate in the task panel, or `TaskCopier` called by the host) or of a recurring occurrence no longer turns the saved write into an error: the failure is logged as an error by the `logger` service and the other listeners still run. A host that relied on that exception to notice its listener's failure watches the log instead. `TaskEventDeferral::defer()` keeps rethrowing by default; pass `false` as its second argument for a write that has committed its own transaction.
 
 ## To 2.10.0
 

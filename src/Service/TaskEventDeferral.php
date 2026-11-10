@@ -44,6 +44,8 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
 
     /**
      * Runs `$write` holding the events it dispatches; dispatches them after it returns, or drops them if it throws.
+     * Since 2.10.1 (audit JY-I6): with `$rethrow` false, a listener's failure after the dispatch is logged, not rethrown
+     * (see {@see self::commit()}): for a `$write` that commits its own transaction, so a saved copy is never reported as failed.
      *
      * @template T
      *
@@ -51,7 +53,7 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
      *
      * @return T
      */
-    public function defer(callable $write): mixed
+    public function defer(callable $write, bool $rethrow = true): mixed
     {
         $this->begin();
         try {
@@ -61,7 +63,7 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
 
             throw $failure;
         }
-        $this->commit();
+        $this->commit($rethrow);
 
         return $result;
     }
