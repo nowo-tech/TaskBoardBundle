@@ -56,7 +56,7 @@ final readonly class TaskLinkAttacher
             $link->getUrl(),
         );
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
+        $this->dispatchSaved(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
 
         return $link;
     }
@@ -84,7 +84,7 @@ final readonly class TaskLinkAttacher
             $objectType . ':' . $objectId,
         );
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
+        $this->dispatchSaved(TaskLinkAddedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_ADDED);
 
         return $link;
     }
@@ -132,7 +132,7 @@ final readonly class TaskLinkAttacher
             $link->getUrl(),
         );
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch(TaskLinkUpdatedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_UPDATED);
+        $this->dispatchSaved(TaskLinkUpdatedEvent::of($link, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_LINK_UPDATED);
 
         return true;
     }
@@ -158,7 +158,7 @@ final readonly class TaskLinkAttacher
             $url,
         );
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_LINK_REMOVED);
+        $this->dispatchSaved($event, TaskBoardEvents::TASK_LINK_REMOVED);
 
         return true;
     }
@@ -201,5 +201,16 @@ final readonly class TaskLinkAttacher
         }
 
         return $link->isHostObject() ? $link->getObjectType() . ' #' . $link->getObjectId() : $link->getUrl();
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }

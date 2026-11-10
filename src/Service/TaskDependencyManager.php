@@ -72,7 +72,7 @@ final readonly class TaskDependencyManager
         $task->addOutgoingDependency($dependency);
         $this->changeRecorder->record($task, $user, TaskChangeType::DependencyAdded, null, $other->getTitle(), $type->relation());
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch(TaskDependencyAddedEvent::of($task, $dependency, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_DEPENDENCY_ADDED);
+        $this->dispatchSaved(TaskDependencyAddedEvent::of($task, $dependency, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_DEPENDENCY_ADDED);
 
         return $dependency;
     }
@@ -95,7 +95,7 @@ final readonly class TaskDependencyManager
             $task->removeDependency($dependency);
             $this->changeRecorder->record($task, $user, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $relation);
             $this->taskRepository->save($task);
-            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_DEPENDENCY_REMOVED);
+            $this->dispatchSaved($event, TaskBoardEvents::TASK_DEPENDENCY_REMOVED);
 
             return true;
         }
@@ -209,5 +209,16 @@ final readonly class TaskDependencyManager
         }
 
         return $type->value . ':' . $source->getId() . '>' . $target->getId();
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }

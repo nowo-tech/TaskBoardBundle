@@ -43,6 +43,26 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
     }
 
     /**
+     * Since 2.11.0 (audit KO-T-L2): for an event of a write that is already saved. Inside {@see self::begin()} /
+     * {@see self::defer()} it is held like any other; otherwise it is dispatched at once and a listener's failure is
+     * logged as an error, not rethrown, so a saved write is never reported as failed (and a retry does not repeat it).
+     */
+    public function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->depth > 0) {
+            // @igor-ignore - Held for the running call only: emptied when it ends, and by reset() between worker requests.
+            $this->queue[] = [$event, $eventName];
+
+            return;
+        }
+        try {
+            $this->dispatcher->dispatch($event, $eventName);
+        } catch (Throwable $exception) {
+            $this->logger->error('TaskBoard: a listener failed after the write was committed', ['bundle' => 'nowo_task_board', 'event' => $eventName, 'exception' => $exception]);
+        }
+    }
+
+    /**
      * Runs `$write` holding the events it dispatches; dispatches them after it returns, or drops them if it throws.
      * Since 2.10.1 (audit JY-I6): with `$rethrow` false, a listener's failure after the dispatch is logged, not rethrown
      * (see {@see self::commit()}): for a `$write` that commits its own transaction, so a saved copy is never reported as failed.

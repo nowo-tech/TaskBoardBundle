@@ -36,7 +36,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Contracts\EventDispatcher\Event;
 
+use function array_filter;
 use function array_map;
+use function array_values;
 
 /**
  * Since 2.11.0 (DDD audit G3/G4): id-only events of time entries, dependencies, links and member removal, dispatched after
@@ -164,6 +166,26 @@ final class TaskChildEventsTest extends FunctionalTestCase
         $removed = $this->events[0][1];
         self::assertInstanceOf(TaskMemberRemovedEvent::class, $removed);
         self::assertSame([$member->getId(), $task->getId(), $board->getId(), 'acme', (string) $ana->getId(), 'reviewer', (string) $this->owner->getId(), 'rule:9'], [$removed->memberId, $removed->taskId, $removed->boardId, $removed->tenantKey, $removed->userId, $removed->role, $removed->actorId, $removed->cause]);
+    }
+
+    public function testAFailingListenerDoesNotFailASavedBoardWrite(): void
+    {
+        $board = $this->board('Failing');
+        $task  = $this->task($board, 'Logged once');
+        $this->listen(TaskBoardEvents::TASK_TIME_LOGGED);
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_TIME_LOGGED, static function (): never {
+            throw new RuntimeException('host listener');
+        });
+        $this->logger()->records = [];
+
+        // Audit KO-T-L2: outside a deferred write the entry is saved and the listener's failure is logged, not rethrown.
+        $entry = $this->service(TaskTimeLogger::class)->log($task, $this->owner, 15, new DateTimeImmutable('2026-11-10'));
+
+        self::assertCount(1, $this->events);
+        self::assertNotNull($this->em->find($entry::class, $entry->getId()));
+        $errors = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['message'] === 'TaskBoard: a listener failed after the write was committed'));
+        self::assertCount(1, $errors);
+        self::assertSame(TaskBoardEvents::TASK_TIME_LOGGED, $errors[0]['context']['event'] ?? null);
     }
 
     public function testTheMoveAndErasePortsAreAliasedAndTheEraserStillChecksAccess(): void

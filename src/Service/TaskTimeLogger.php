@@ -42,7 +42,7 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
         $task->addTimeEntry($entry);
         $this->changeRecorder->record($task, $user, TaskChangeType::TimeLogged, null, (string) $minutes, $date->format('Y-m-d'));
         $this->taskRepository->save($task);
-        $this->eventDispatcher?->dispatch(TaskTimeLoggedEvent::of($task, $entry, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_TIME_LOGGED);
+        $this->dispatchSaved(TaskTimeLoggedEvent::of($task, $entry, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_TIME_LOGGED);
 
         return $entry;
     }
@@ -64,11 +64,22 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
             $this->timeEntryRepository->remove($entry);
             $this->changeRecorder->record($task, $user, TaskChangeType::TimeRemoved, (string) $entry->getMinutes(), null, $entry->getLoggedAt()->format('Y-m-d'));
             $this->taskRepository->save($task);
-            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_TIME_REMOVED);
+            $this->dispatchSaved($event, TaskBoardEvents::TASK_TIME_REMOVED);
 
             return true;
         }
 
         return false;
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }

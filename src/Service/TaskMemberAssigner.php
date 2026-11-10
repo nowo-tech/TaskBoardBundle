@@ -104,7 +104,7 @@ final readonly class TaskMemberAssigner
             $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value, $this->userLabel($member->getUser()));
             $task->removeMember($member);
             $this->taskRepository->save($task);
-            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_MEMBER_REMOVED);
+            $this->dispatchSaved($event, TaskBoardEvents::TASK_MEMBER_REMOVED);
 
             return true;
         }
@@ -132,5 +132,16 @@ final readonly class TaskMemberAssigner
         }
 
         return 'unknown';
+    }
+
+    /** Since 2.11.0: the event of a saved write; a listener failure is logged, not rethrown (audit KO-T-L2). */
+    private function dispatchSaved(object $event, string $eventName): void
+    {
+        if ($this->eventDispatcher instanceof TaskEventDeferral) {
+            $this->eventDispatcher->dispatchSaved($event, $eventName);
+
+            return;
+        }
+        $this->eventDispatcher?->dispatch($event, $eventName);
     }
 }
