@@ -449,6 +449,14 @@ Since 2.10 (spec 216, DDD audit G2/G3), id-only events: public readonly scalars,
 | `COLUMN_UPDATED` | `ColumnUpdatedEvent` | `columnId`, `name`, `previousName`, `changedFields` (`name`, `color`, `icon`), `isRenamed()`; not dispatched when nothing changed |
 | `COLUMN_DELETED` | `ColumnDeletedEvent` | `columnId`, `name`, `targetColumnId` (where its tasks went), `movedTaskIds` |
 | `COLUMNS_REORDERED` | `ColumnsReorderedEvent` | `columnIds` in the new order; not dispatched when the order is the same |
+| `TASK_TIME_LOGGED` | `TaskTimeLoggedEvent` | since 2.11: `entryId`, `taskId`, `boardId`, `tenantKey`, `userId` (whose time), `minutes`, `loggedOn` (`Y-m-d`), `actorId`, `cause` |
+| `TASK_TIME_REMOVED` | `TaskTimeRemovedEvent` | since 2.11: the same, for the entry as it was |
+| `TASK_DEPENDENCY_ADDED` | `TaskDependencyAddedEvent` | since 2.11: `dependencyId`, `taskId` (the task it was made on), `sourceTaskId`, `targetTaskId`, `type` (`blocks`, `blocked_by`, `related`, `duplicates`), `boardId`, `tenantKey`, `actorId`, `cause` (board, API, sync or import) |
+| `TASK_DEPENDENCY_REMOVED` | `TaskDependencyRemovedEvent` | since 2.11: the same, for the dependency as it was |
+| `TASK_LINK_ADDED` | `TaskLinkAddedEvent` | since 2.11: `linkId`, `taskId`, `boardId`, `tenantKey`, `linkType`, `objectType` / `objectId` (host object links), `actorId`, `cause`; no URL or label. Not dispatched when `attachObject()` returns an existing link |
+| `TASK_LINK_UPDATED` | `TaskLinkUpdatedEvent` | since 2.11: the same, after an edit |
+| `TASK_LINK_REMOVED` | `TaskLinkRemovedEvent` | since 2.11: the same, for the link as it was (`remove()`, `detachObject()`) |
+| `TASK_MEMBER_REMOVED` | `TaskMemberRemovedEvent` | since 2.11: `memberId`, `taskId`, `boardId`, `tenantKey`, `userId`, `role`, `actorId`, `cause` |
 
 A decision event, `COLUMN_DELETE_CHECK` (`ColumnDeleteCheckEvent`: `boardId`, `tenantKey`, `columnIds`, `user`), lets the host warn before a column is deleted: `addWarning($columnId, $text)` adds plain-text lines that the edit-column dialog shows above *Delete column* and repeats in its confirmation. It is dispatched once per board page, for a person who may manage the columns of a board with more than one column; it never refuses the deletion (who may delete stays the access checker's `canManageColumns()`).
 
@@ -506,7 +514,9 @@ Policy decisions can also be answered by listening to `TaskBoardEvents::BOARD_AC
 `TASK_COMMENT`, `TASK_MENTION`, `TASK_BOARD_CHANGED`, `TASK_ERASED`, `BOARD_CREATED`, `BOARD_UPDATED`,
 `BOARD_EMPTIED`, `BOARD_DELETED`, `API_WRITE`, and the `SYNC_*` events. Since 2.10 also `TASK_ARCHIVED`,
 `TASK_RESTORED`, `TASK_COMMENT_DELETED`, `COLUMN_CREATED`, `COLUMN_UPDATED`, `COLUMN_DELETED` and `COLUMNS_REORDERED`,
-which carry scalars only (see [Events after writes](#events-after-writes)).
+and since 2.11 `TASK_TIME_LOGGED`, `TASK_TIME_REMOVED`, `TASK_DEPENDENCY_ADDED`, `TASK_DEPENDENCY_REMOVED`,
+`TASK_LINK_ADDED`, `TASK_LINK_UPDATED`, `TASK_LINK_REMOVED` and `TASK_MEMBER_REMOVED`, which carry scalars only (see
+[Events after writes](#events-after-writes)).
 
 Since 2.10 every task event also has scalar getters, taken when the event is made: `getTaskId()`, `getBoardId()`,
 `getTenantKey()`, `getTaskNumber()`, `getActorId()` (the actor's `getId()` as a string), plus
@@ -533,9 +543,9 @@ final class TaskCompletedTranslator
 
 **Commands** go through the bundle services. Since 2.10 the main ones have ports, aliased to the bundle's classes:
 `Service\TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`,
-`TaskTimeLoggerInterface` and `BoardColumnManagerInterface`: type-hint them, double them in tests, decorate them (a
-decorator wraps your calls; the bundle's own controllers keep calling the classes). `TaskMover` and `TaskBoardEraser`
-have no port yet; wrap them in your own (e.g. `TaskBoardGateway`). For account erasure, call
+`TaskTimeLoggerInterface` and `BoardColumnManagerInterface`, and since 2.11 `Move\TaskMoverInterface` and
+`Service\TaskBoardEraserInterface`: type-hint them, double them in tests, decorate them (a decorator wraps your calls;
+the bundle's own controllers and API keep calling the classes). For account erasure, call
 `TaskSyncPeopleReassigner::detachUser()` from your erasure flow.
 
 **The ports check nothing.** Like the classes, they trust their caller: no access, tenant, plan, quota or CSRF check.
@@ -543,17 +553,24 @@ Before calling one from your own endpoint, check what the bundle's controllers c
 (`canEditTask()`, `canEditBoard()`, `canManageBoard()`, `canManageColumns()`, `canTrackTime()`), that the board belongs
 to the current tenant and its plan has the module, comment rights (`comments.readers_can_comment`, the author rules of
 `TaskCommentManager::isAuthor()`), and `TaskManagerInterface::activeTaskRefusal()` before a `create()` or `restore()`.
-Otherwise any signed-in user could change another tenant's tasks.
+Otherwise any signed-in user could change another tenant's tasks. `TaskMoverInterface` is no exception: check
+`canViewTask()` / `canEditTask()` on the task, `canEditBoard()` on both boards, that the target is one of
+`TaskBoardTargetsInterface::targets()` and the tenant, as `TaskCopyController` does.
+
+**The eraser's port is the exception: it checks access itself.** `TaskBoardEraserInterface::emptyBoard()`,
+`deleteBoard()` and `eraseTask()` refuse with `AccessDeniedException` unless `canManageBoard($actor, $board)` allows it,
+before anything is deleted, and a resumed cursor must be the signed cursor of the same board, actor and operation. A
+decorator or replacement must keep both checks (delegate to the bundle's class, or repeat them); the port never relaxes
+them. You still check the tenant, the plan and CSRF, as the API does.
 
 **Known limitations**
 
 - Users must be a Doctrine entity in the bundle's entity manager; an id-only user reference is not available.
 - The older write events still carry the entities and the user object beside their scalar getters; use the getters
   and do not keep the entities.
-- No events yet for time entries, dependencies, links or member removal; read `TaskChangeHistory` or listen to
-  Doctrine if you need them.
-- `TaskMover`, `TaskBoardEraser` and the other services are `final` without a port; the ports take the bundle's
-  entities and form DTOs (`Task`, `TaskBoard`, `TaskFormData`), not ids.
+- The remaining services (`TaskLinkAttacher`, `TaskDependencyManager`, `TaskMemberAssigner`, `TaskCopier`, ...) are
+  `final` without a port; the ports take the bundle's entities and form DTOs (`Task`, `TaskBoard`, `TaskFormData`), not
+  ids (no id-based command methods).
 - `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are
   declared but never dispatched (deprecated since 2.10; removed in 3.0).
 

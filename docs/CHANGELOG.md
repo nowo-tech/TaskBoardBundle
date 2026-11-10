@@ -100,6 +100,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.11.0 (minor). DDD / hexagonal P2 round (audit 2026-11-09, G3 and G4 leftovers). No schema change; see [UPGRADING](UPGRADING.md#to-2110).
+
+### Added
+
+- **Id-only events of time entries, dependencies, links and member removal (DDD audit G3).** Dispatched after the write is saved, through `TaskEventDeferral` like the 2.10 events (after the commit of a deferred write, a sync page or an import; dropped on a rollback or a dry run; a listener failure after a committed sync page or import is logged): `TASK_TIME_LOGGED` / `TASK_TIME_REMOVED` (`TaskTimeLoggedEvent` / `TaskTimeRemovedEvent`: `entryId`, `taskId`, `boardId`, `tenantKey`, `userId`, `minutes`, `loggedOn`, `actorId`, `cause`), `TASK_DEPENDENCY_ADDED` / `TASK_DEPENDENCY_REMOVED` (`dependencyId`, `taskId`, `sourceTaskId`, `targetTaskId`, `type`, `boardId`, `tenantKey`, `actorId`, `cause`), `TASK_LINK_ADDED` / `TASK_LINK_UPDATED` / `TASK_LINK_REMOVED` (`linkId`, `taskId`, `boardId`, `tenantKey`, `linkType`, `objectType`, `objectId`, `actorId`, `cause`; host object links included, no URL or label) and `TASK_MEMBER_REMOVED` (`TaskMemberRemovedEvent`: `memberId`, `taskId`, `boardId`, `tenantKey`, `userId`, `role`, `actorId`, `cause`).
+- **Ports of the move and the eraser (DDD audit G4):** `Move\TaskMoverInterface` and `Service\TaskBoardEraserInterface`, implemented by the bundle's classes and aliased to them (public). `TaskMoverInterface` checks no access (like the 2.10 ports); `TaskBoardEraserInterface` keeps the eraser's own `canManageBoard()` check and signed cursors, and its docblock asks every implementation to keep them. The bundle's controllers and API keep calling the classes.
+
+### Changed
+
+- `TaskTimeLogger`, `TaskDependencyManager` and `TaskLinkAttacher` take an optional last `?EventDispatcherInterface $eventDispatcher` (wired to `TaskEventDeferral`); `TaskMemberAssigner` uses its existing one for the removal too. Hand-built instances without it dispatch nothing, as before.
+
 ## [2.10.1] - 2026-11-10
 
 Target 2.10.1 (patch). No schema change; see [UPGRADING](UPGRADING.md#to-2101).

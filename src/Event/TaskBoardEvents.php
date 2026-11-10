@@ -167,4 +167,28 @@ final class TaskBoardEvents
 
     /** Since 2.10.0 (spec 216, FR-010): {@see ColumnDeleteCheckEvent}, warnings the column delete dialog shows. */
     public const COLUMN_DELETE_CHECK = 'nowo_task_board.column_delete_check';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskTimeLoggedEvent}, ids only, after a manual time entry is logged. */
+    public const TASK_TIME_LOGGED = 'nowo_task_board.task_time_logged';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskTimeRemovedEvent}, ids only, after a manual time entry is removed. */
+    public const TASK_TIME_REMOVED = 'nowo_task_board.task_time_removed';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskDependencyAddedEvent}, ids only, after a dependency is added. */
+    public const TASK_DEPENDENCY_ADDED = 'nowo_task_board.task_dependency_added';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskDependencyRemovedEvent}, ids only, after a dependency is removed. */
+    public const TASK_DEPENDENCY_REMOVED = 'nowo_task_board.task_dependency_removed';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskLinkAddedEvent}, ids only, after a link (or a host object link) is added. */
+    public const TASK_LINK_ADDED = 'nowo_task_board.task_link_added';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskLinkUpdatedEvent}, ids only, after a link is edited. */
+    public const TASK_LINK_UPDATED = 'nowo_task_board.task_link_updated';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskLinkRemovedEvent}, ids only, after a link (or a host object link) is removed. */
+    public const TASK_LINK_REMOVED = 'nowo_task_board.task_link_removed';
+
+    /** Since 2.11.0 (DDD audit G3): {@see TaskMemberRemovedEvent}, ids only, after a member leaves a task. */
+    public const TASK_MEMBER_REMOVED = 'nowo_task_board.task_member_removed';
 }

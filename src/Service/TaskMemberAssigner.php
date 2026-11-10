@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskMemberAddedEvent;
+use Nowo\TaskBoardBundle\Event\TaskMemberRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -24,13 +25,14 @@ use function ucfirst;
 
 /**
  * Associates users with tasks (assignee, watcher, etc.). With an assignee provider (`assignee_provider`, since 1.10)
- * only the users it allows can be added; a new member dispatches {@see TaskBoardEvents::TASK_MEMBER_ADDED}.
+ * only the users it allows can be added; a new member dispatches {@see TaskBoardEvents::TASK_MEMBER_ADDED}. Since 2.11.0
+ * (DDD audit G3) a removed one dispatches {@see TaskBoardEvents::TASK_MEMBER_REMOVED} (ids only), after the save.
  */
 final readonly class TaskMemberAssigner
 {
     /**
      * @param TaskAssigneeProviderInterface|null $assigneeProvider Who may be a member (none: every user)
-     * @param EventDispatcherInterface|null $eventDispatcher Dispatches TASK_MEMBER_ADDED (none: no event)
+     * @param EventDispatcherInterface|null $eventDispatcher Dispatches TASK_MEMBER_ADDED and TASK_MEMBER_REMOVED (none: no event)
      */
     public function __construct(
         private TaskRepositoryInterface $taskRepository,
@@ -98,9 +100,11 @@ final readonly class TaskMemberAssigner
                 continue;
             }
 
+            $event = TaskMemberRemovedEvent::of($task, $member, $actor, $this->changeRecorder->currentCause());
             $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value, $this->userLabel($member->getUser()));
             $task->removeMember($member);
             $this->taskRepository->save($task);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_MEMBER_REMOVED);
 
             return true;
         }

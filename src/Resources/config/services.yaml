@@ -116,6 +116,19 @@ services:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
 
+    # Since 2.11.0 (DDD audit G3): time entry, dependency and link events, held until the commit of a write that defers them.
+    Nowo\TaskBoardBundle\Service\TaskTimeLogger:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    Nowo\TaskBoardBundle\Service\TaskDependencyManager:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    Nowo\TaskBoardBundle\Service\TaskLinkAttacher:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
     # Since 2.10.0 (DDD audit G4): ports of the command services, aliased to the bundle's classes (public for hosts).
     Nowo\TaskBoardBundle\Service\TaskManagerInterface:
         alias: Nowo\TaskBoardBundle\Service\TaskManager
@@ -134,6 +147,13 @@ services:
         public: true
     Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface:
         alias: Nowo\TaskBoardBundle\Service\BoardColumnManager
+        public: true
+    # Since 2.11.0 (DDD audit G4): the move and erase ports (the eraser keeps its own canManageBoard() check).
+    Nowo\TaskBoardBundle\Move\TaskMoverInterface:
+        alias: Nowo\TaskBoardBundle\Move\TaskMover
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskBoardEraserInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskBoardEraser
         public: true
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).

@@ -69,7 +69,7 @@ use function random_bytes;
  *
  * The HMAC key is a subkey derived from the secret, never the raw `kernel.secret` (audit FP-I10).
  */
-final readonly class TaskBoardEraser
+final readonly class TaskBoardEraser implements TaskBoardEraserInterface
 {
     /** The largest batch a call accepts. */
     public const MAX_BATCH = 1000;
