@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\Service\ResetInterface;
 use Throwable;
@@ -21,8 +23,11 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
     /** @var list<array{0: object, 1: string|null}> */
     private array $queue = [];
 
-    public function __construct(private readonly EventDispatcherInterface $dispatcher)
-    {
+    public function __construct(
+        private readonly EventDispatcherInterface $dispatcher,
+        // Since 2.10.0 (audit JY-L1): where a listener's failure goes when the write it follows is already committed.
+        private readonly LoggerInterface $logger = new NullLogger(),
+    ) {
     }
 
     public function dispatch(object $event, ?string $eventName = null): object
@@ -48,32 +53,74 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
      */
     public function defer(callable $write): mixed
     {
-        // @igor-ignore - Scoped to the call (see above).
-        ++$this->depth;
+        $this->begin();
         try {
             $result = $write();
         } catch (Throwable $failure) {
-            // @igor-ignore - Scoped to the call (see above).
-            --$this->depth;
-            if ($this->depth === 0) {
-                // @igor-ignore - Scoped to the call (see above).
-                $this->queue = [];
-            }
+            $this->rollBack();
 
             throw $failure;
         }
-        // @igor-ignore - Scoped to the call (see above).
+        $this->commit();
+
+        return $result;
+    }
+
+    /**
+     * Since 2.10.0: holds the events from now on, for a write that opens its own transaction (a sync page, an import);
+     * pair it with {@see self::commit()} after the commit, or {@see self::rollBack()} after a rollback. Nests with defer().
+     */
+    public function begin(): void
+    {
+        // @igor-ignore - Scoped to the caller's transaction, and cleared by reset() between worker requests.
+        ++$this->depth;
+    }
+
+    /**
+     * Since 2.10.0: the transaction of {@see self::begin()} committed: the outermost one dispatches what it held. Every held
+     * event is dispatched even when a listener throws (audit JY-L1); then the first failure is rethrown, or, with
+     * `$rethrow` false (the caller's write is committed and must not be reported as failed), logged as an error.
+     */
+    public function commit(bool $rethrow = true): void
+    {
+        if ($this->depth === 0) {
+            return;
+        }
+        // @igor-ignore - Scoped to the caller's transaction (see begin()).
         --$this->depth;
         if ($this->depth === 0) {
             $queue = $this->queue;
-            // @igor-ignore - Scoped to the call (see above).
+            // @igor-ignore - Scoped to the caller's transaction (see begin()).
             $this->queue = [];
+            $failure     = null;
             foreach ($queue as [$event, $name]) {
-                $this->dispatcher->dispatch($event, $name);
+                try {
+                    $this->dispatcher->dispatch($event, $name);
+                } catch (Throwable $exception) {
+                    $failure ??= $exception;
+                    if (!$rethrow) {
+                        $this->logger->error('TaskBoard: a listener failed after the write was committed', ['bundle' => 'nowo_task_board', 'event' => $name ?? $event::class, 'exception' => $exception]);
+                    }
+                }
+            }
+            if ($rethrow && $failure instanceof Throwable) {
+                throw $failure;
             }
         }
+    }
 
-        return $result;
+    /** Since 2.10.0: the transaction of {@see self::begin()} rolled back: the outermost one drops what it held. */
+    public function rollBack(): void
+    {
+        if ($this->depth === 0) {
+            return;
+        }
+        // @igor-ignore - Scoped to the caller's transaction (see begin()).
+        --$this->depth;
+        if ($this->depth === 0) {
+            // @igor-ignore - Scoped to the caller's transaction (see begin()).
+            $this->queue = [];
+        }
     }
 
     public function reset(): void

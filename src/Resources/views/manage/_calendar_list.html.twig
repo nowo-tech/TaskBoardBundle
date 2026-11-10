@@ -6,7 +6,7 @@
         <h3 class="nowo-task-cal__list-date">
             {{ day.date }}
             {% if canEditBoard %}
-                <button type="button" class="nowo-task-cal__add" data-action="nowo-task-board-add-task-modal#open" data-due-date="{{ day.date }}" data-column-name="{{ day.date }}" aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
+                <button type="button" class="nowo-task-cal__add" data-testid="nowo-task-cal-add" data-action="nowo-task-board-add-task-modal#open" data-due-date="{{ day.date }}" data-column-name="{{ day.date }}" aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
             {% endif %}
         </h3>
         <ul class="nowo-task-plain-list">

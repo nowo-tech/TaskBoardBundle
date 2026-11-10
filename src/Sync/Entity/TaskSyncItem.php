@@ -21,6 +21,8 @@ use function is_string;
 #[ORM\UniqueConstraint(name: 'uniq_task_board_sync_items_board_ext', columns: ['board_id', 'external_id'])]
 #[ORM\Index(name: 'idx_task_board_sync_items_task', columns: ['task_id'])]
 #[ORM\Index(name: 'idx_task_board_sync_items_detached', columns: ['detached_task_id'])]
+// Since 2.10.0 (spec 214): a host's search by the provider's custom id (DEV-123) within a board.
+#[ORM\Index(name: 'idx_task_board_sync_items_board_custom', columns: ['board_id', 'custom_id'])]
 class TaskSyncItem
 {
     /** Since 1.27.0: the files could not be read (request budget, or the detail does not say). */

@@ -148,7 +148,7 @@ final readonly class TaskBoardSyncService
         $mayCreate = $this->columnManager instanceof BoardColumnManager && $this->accessChecker->canManageColumns($actor, $board);
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $mayCreate && !$this->hasColumnNamed($board, $entry['status'])) {
-                $connection->addCreatedColumn($this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)))->getId()); // @igor-ignore - writes the board, the manager keeps no state
+                $connection->addCreatedColumn($this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)), $actor)->getId()); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);
@@ -181,7 +181,7 @@ final readonly class TaskBoardSyncService
         }
         foreach ($map as $entry) {
             if ($entry['column'] === StatusColumns::CREATE && $mayCreate && !$this->hasColumnNamed($board, $entry['status'])) {
-                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255))); // @igor-ignore - writes the board, the manager keeps no state
+                $this->columnManager->add($board, new BoardColumnFormData(name: Text::cut($entry['status'], 255)), $actor); // @igor-ignore - writes the board, the manager keeps no state
             }
         }
         $connection->setStatusColumnMap($map);

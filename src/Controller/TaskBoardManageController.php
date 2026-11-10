@@ -36,6 +36,8 @@ use Nowo\TaskBoardBundle\Enum\CalendarMode;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\WeekStart;
+use Nowo\TaskBoardBundle\Event\ColumnDeleteCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
@@ -126,6 +128,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
@@ -229,6 +232,8 @@ final class TaskBoardManageController extends AbstractController
         // Since 2.9.0: `board.column_icon_form_type` / `_options` and the ids a column icon may name (BoardColumnFormType options).
         /** @var array{icon_form_type?: ?string, icon_form_options?: array<string, mixed>, icon_known_ids?: list<string>} */
         private readonly array $columnIconForm = [],
+        // Since 2.10.0 (spec 216, FR-010): asks the host for the warnings of "Delete column" (COLUMN_DELETE_CHECK).
+        private readonly ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -379,13 +384,36 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.11: column icons, column delete, column sets and the task panel URL of the cards.
             'columnIcons'      => $this->columnIcons,
             'columnDeleteForm' => $canManageColumns ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
-            'panelTargetPath'  => $this->currentRequestUri(),
-            'inlineTaskForms'  => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
+            // Since 2.10.0 (spec 216): the host's warnings per column id, shown by the delete dialog.
+            'columnDeleteWarnings' => $canManageColumns ? $this->columnDeleteWarnings($board, $user) : [],
+            'panelTargetPath'      => $this->currentRequestUri(),
+            'inlineTaskForms'      => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
             // Since 1.16: comments per task (one query) for the card counters.
             'commentCounts' => $this->commentCounts($allTasks),
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
         ] + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+    }
+
+    /**
+     * Since 2.10.0 (spec 216, FR-010): the host's warning lines per column id ({@see TaskBoardEvents::COLUMN_DELETE_CHECK}),
+     * asked once per page and only when a column can be deleted.
+     *
+     * @return array<string, list<string>>
+     */
+    private function columnDeleteWarnings(TaskBoard $board, UserInterface $user): array
+    {
+        if (!$this->eventDispatcher instanceof EventDispatcherInterface || $board->getColumns()->count() < 2) {
+            return [];
+        }
+        $ids = [];
+        foreach ($board->getColumns() as $column) {
+            $ids[] = $column->getId();
+        }
+        $check = new ColumnDeleteCheckEvent($board->getId(), $board->getTenantKey(), $ids, $user);
+        $this->eventDispatcher->dispatch($check, TaskBoardEvents::COLUMN_DELETE_CHECK);
+
+        return $check->getAllWarnings();
     }
 
     /**
@@ -399,7 +427,7 @@ final class TaskBoardManageController extends AbstractController
         $column = $this->findColumn($board, $columnId);
 
         try {
-            $deleted = $this->columnManager->delete($column);
+            $deleted = $this->columnManager->delete($column, $user);
         } catch (TaskReopenRefusedException) {
             $this->logRefused('column_delete_limit');
             $this->addFlash('error', 'task_board.flash.column_delete_refused');
@@ -500,7 +528,7 @@ final class TaskBoardManageController extends AbstractController
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
             // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-            $column = $this->columnManager->add($board, $data);
+            $column = $this->columnManager->add($board, $data, $user);
             $this->logWrite('column_create', ['board_id' => $boardId, 'column_id' => $column->getId()]);
             $this->addFlash('success', 'task_board.flash.column_added');
         } else {
@@ -530,7 +558,7 @@ final class TaskBoardManageController extends AbstractController
             if ($form->has('icon') && !array_key_exists('icon', $request->request->all($form->getName()))) {
                 $data->icon = $column->getIcon();
             }
-            $this->columnManager->update($column, $data);
+            $this->columnManager->update($column, $data, $user);
             $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
         } else {
@@ -554,7 +582,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         if ($order !== []) {
-            $this->columnManager->reorder($board, $order);
+            $this->columnManager->reorder($board, $order, $user);
             $this->logWrite('column_reorder', ['board_id' => $boardId, 'columns' => count($order)]);
         }
 
@@ -1455,7 +1483,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-        $manager->delete($comment);
+        $manager->delete($comment, $user);
         $this->logWrite('task_comment_delete', ['task_id' => $taskId, 'comment_id' => $commentId]);
         $this->addFlash('success', 'task_board.flash.comment_deleted');
 

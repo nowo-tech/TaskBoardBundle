@@ -107,6 +107,35 @@ services:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
 
+    # Since 2.10.0 (spec 216): column and comment events, held until the commit of a write that defers them.
+    Nowo\TaskBoardBundle\Service\BoardColumnManager:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    Nowo\TaskBoardBundle\Service\TaskCommentManager:
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    # Since 2.10.0 (DDD audit G4): ports of the command services, aliased to the bundle's classes (public for hosts).
+    Nowo\TaskBoardBundle\Service\TaskManagerInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskManager
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskBoardCreator
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskBoardEditorInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskBoardEditor
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskCommentManagerInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskCommentManager
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskTimeLogger
+        public: true
+    Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface:
+        alias: Nowo\TaskBoardBundle\Service\BoardColumnManager
+        public: true
+
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:
         public: true

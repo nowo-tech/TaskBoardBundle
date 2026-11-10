@@ -5,6 +5,8 @@
     _column_fields.html.twig. Since 1.26 (dialog rule v2) one primary: the footer, outside the scrolling form, holds
     Delete column (secondary, danger outline, bound with form="nowo-task-board-column-delete-form" to the hidden delete
     form, which keeps its confirm) on the left, then Cancel and Save (form="nowo-task-board-edit-column-form").
+    Since 2.10.0 (spec 216, FR-010): the host's warnings of the column (`columnDeleteWarnings`, from COLUMN_DELETE_CHECK, carried
+    by the column's pencil as `data-column-delete-warning`) are shown above the buttons and repeated in the confirmation.
 #}
 {% set _canDelete = (columnDeleteForm ?? null) is not null and board.columns|length > 1 %}
 {% set _body %}
@@ -23,6 +25,8 @@
         {% endfor %}
         {% if _canDelete %}
             <p class="nowo-task-dialog__help nowo-task-dialog__danger-help" id="nowo-task-board-column-delete-help">{{ 'task_board.board.delete_column_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {# Since 2.10.0 (spec 216): the host's warnings for the column being edited (COLUMN_DELETE_CHECK), filled on open. #}
+            <p class="nowo-task-dialog__help nowo-task-dialog__danger-help nowo-task-column-delete-warning" role="note" data-nowo-task-board-edit-column-modal-target="deleteWarning" data-testid="nowo-task-column-delete-warning" hidden></p>
         {% endif %}
     {{ form_end(editColumnForm) }}
     {% if _canDelete %}

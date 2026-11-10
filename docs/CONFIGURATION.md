@@ -418,6 +418,7 @@ contents, CSRF tokens. See [SECURITY.md](SECURITY.md#logging-and-personal-data).
 | Option | Default | Description |
 |--------|---------|-------------|
 | `comments.readers_can_comment` | `true` | People who may read a task but not edit it (read-only boards) may comment, like ClickUp guests with comment rights. `false` = editors only |
+| `comments.cause_labeler` | `null` | Since 2.10 (spec 216): service id of a `Comment\TaskCommentCauseLabelerInterface`: how a comment shows why it was written (`TaskChangeContext`, e.g. an automation rule); null = no cause is shown |
 | `comments.mention_resolver` | `null` | Service id of a `Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface`: who may be @mentioned (the people who can read the task). `null` = the board's assignable users, else its creator and task members |
 
 ### Gantt (since 1.15)

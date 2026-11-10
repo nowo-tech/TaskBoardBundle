@@ -34,4 +34,16 @@ final class TaskMovedEvent extends AbstractTaskEvent
     {
         return $this->toColumn;
     }
+
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getFromColumnId(): ?string
+    {
+        return $this->fromColumn?->getId();
+    }
+
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getToColumnId(): ?string
+    {
+        return $this->toColumn?->getId();
+    }
 }

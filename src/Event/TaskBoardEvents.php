@@ -26,18 +26,23 @@ final class TaskBoardEvents
 {
     public const BOARD_LIST_QUERY = 'nowo_task_board.board_list_query';
 
+    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const BOARD_LIST_RESULT = 'nowo_task_board.board_list_result';
 
+    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const TASK_LIST_QUERY = 'nowo_task_board.task_list_query';
 
+    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const TASK_LIST_RESULT = 'nowo_task_board.task_list_result';
 
     public const BOARD_ACCESS_CHECK = 'nowo_task_board.board_access_check';
 
     public const TASK_ACCESS_CHECK = 'nowo_task_board.task_access_check';
 
+    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const TASK_READ_ONLY_RESOLVE = 'nowo_task_board.task_read_only_resolve';
 
+    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const MEMBER_LIST_QUERY = 'nowo_task_board.member_list_query';
 
     /** {@see TaskCreatedEvent}, after flush (since 1.10). */
@@ -138,4 +143,28 @@ final class TaskBoardEvents
 
     /** Since 1.28.0: {@see UnmatchedColumnsResolvedEvent}. */
     public const SYNC_UNMATCHED_COLUMNS_RESOLVED = 'nowo_task_board.sync_unmatched_columns_resolved';
+
+    /** Since 2.10.0 (spec 216): {@see TaskArchivedEvent}, ids only, after a task is archived by hand (board or API). */
+    public const TASK_ARCHIVED = 'nowo_task_board.task_archived';
+
+    /** Since 2.10.0 (spec 216): {@see TaskRestoredEvent}, ids only, after an archived task is restored by hand. */
+    public const TASK_RESTORED = 'nowo_task_board.task_restored';
+
+    /** Since 2.10.0 (spec 216): {@see TaskCommentDeletedEvent}, ids only, after a comment is deleted. */
+    public const TASK_COMMENT_DELETED = 'nowo_task_board.task_comment_deleted';
+
+    /** Since 2.10.0 (spec 216): {@see ColumnCreatedEvent}, after a column is added. */
+    public const COLUMN_CREATED = 'nowo_task_board.column_created';
+
+    /** Since 2.10.0 (spec 216): {@see ColumnUpdatedEvent}, after a column is renamed or its colour or icon changes. */
+    public const COLUMN_UPDATED = 'nowo_task_board.column_updated';
+
+    /** Since 2.10.0 (spec 216): {@see ColumnDeletedEvent}, after a column is deleted. */
+    public const COLUMN_DELETED = 'nowo_task_board.column_deleted';
+
+    /** Since 2.10.0 (spec 216): {@see ColumnsReorderedEvent}, after a board's columns get a new order. */
+    public const COLUMNS_REORDERED = 'nowo_task_board.columns_reordered';
+
+    /** Since 2.10.0 (spec 216, FR-010): {@see ColumnDeleteCheckEvent}, warnings the column delete dialog shows. */
+    public const COLUMN_DELETE_CHECK = 'nowo_task_board.column_delete_check';
 }

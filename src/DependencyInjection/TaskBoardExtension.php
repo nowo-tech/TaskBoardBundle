@@ -267,6 +267,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
             $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', new Reference($config['history']['cause_labeler']));
         }
+        // Since 2.10.0 (spec 216): the host's label of a comment's cause.
+        if (is_string($config['comments']['cause_labeler']) && $config['comments']['cause_labeler'] !== '') {
+            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$commentCauseLabeler', new Reference($config['comments']['cause_labeler']));
+        }
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);

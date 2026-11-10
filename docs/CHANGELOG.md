@@ -98,6 +98,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.10.0 (minor). For Symfony Beacon 1.144: spec 214 (calendar) and spec 216 (automations). Additive: one nullable column and one index; see [UPGRADING](UPGRADING.md#to-2100).
+
+### Added
+
+- **Task numbers in the Task API (spec 214).** Every task body carries `number` (the readable `#123`, null with `task_numbers` off). `GET /v2/task/{number}?custom_task_ids=true` finds a task by its number, ClickUp's parameter for custom task ids, within `space_id` (numbers per tenant) or `list_id` (any scope); `123` and `#123` are accepted and `team_id` is accepted and ignored. A number a moved task left behind is not found. Access is checked as for `GET /v2/task/{id}`.
+- **Index `idx_task_board_sync_items_board_custom` (spec 214)** on `task_board_sync_items (board_id, custom_id)`, for a host's search by a provider's custom id (`DEV-123`).
+- **Calendar `data-testid`s (spec 214):** `nowo-task-cal-chip`, `nowo-task-cal-reschedule` (the chip's button), `nowo-task-cal-reschedule-dialog`, `nowo-task-cal-add` (the per-day `+`) and `nowo-task-cal-add-dialog` (the add-task dialog of the calendar).
+- **A comment's cause (spec 216, FR-014).** `TaskComment::getCause()` (column `cause`, nullable): a comment added inside `TaskChangeContext::run('rule:42', …)` keeps that cause, like the history rows. `comments.cause_labeler` (a `Comment\TaskCommentCauseLabelerInterface`) prints it next to the author, e.g. "(rule: Review goes to Luis)" (`data-testid="nowo-task-comment-cause"`); without a labeler nothing is shown.
+- **Warnings before deleting a column (spec 216, FR-010).** `TaskBoardEvents::COLUMN_DELETE_CHECK` (`ColumnDeleteCheckEvent`, once per board page for a person who may manage the columns): `addWarning($columnId, $text)` adds plain-text lines that the edit-column dialog shows above *Delete column* (`data-testid="nowo-task-column-delete-warning"`) and repeats in the confirmation. It never refuses the deletion.
+- **Id-only events (spec 216, DDD audit G2/G3)**, dispatched after the write is saved, through `TaskEventDeferral` (so after the commit of a deferred write, a sync page or an import, and dropped on a rollback or a dry run): `TASK_ARCHIVED` / `TASK_RESTORED` (`TaskArchivedEvent` / `TaskRestoredEvent`: `taskId`, `boardId`, `tenantKey`, `number`, `actorId`, `cause`), `TASK_COMMENT_DELETED` (`TaskCommentDeletedEvent`), `COLUMN_CREATED`, `COLUMN_UPDATED` (`changedFields`, `previousName`, `isRenamed()`), `COLUMN_DELETED` (`targetColumnId`, `movedTaskIds`) and `COLUMNS_REORDERED` (`columnIds`). `cause` is `TaskChangeContext::current()` at the write.
+- **Scalar getters on the existing events (DDD audit G2).** Every task event (`AbstractTaskEvent`) has `getTaskId()`, `getBoardId()`, `getTenantKey()`, `getTaskNumber()` and `getActorId()`, taken when the event is made; `TaskMovedEvent::getFromColumnId()` / `getToColumnId()`, `TaskCommentEvent::getCommentId()`, `TaskMentionEvent::getCommentId()` / `getMentionedUserIds()`, `TaskMemberAddedEvent::getMemberId()` / `getUserId()` / `getRole()`, `BoardCreatedEvent` and `BoardUpdatedEvent::getBoardId()` / `getTenantKey()` / `getActorId()`. The entity getters stay.
+- **Ports of the command services (DDD audit G4):** `TaskManagerInterface`, `TaskBoardCreatorInterface`, `TaskBoardEditorInterface`, `TaskCommentManagerInterface`, `TaskTimeLoggerInterface` and `BoardColumnManagerInterface` (namespace `Service`), implemented by the bundle's classes and aliased to them (public), for a host's application layer to depend on, double and decorate.
+- `TaskEventDeferral::begin()` / `commit()` / `rollBack()`, for a write that opens its own transaction; `TaskChangeRecorder::currentCause()`; `Support\ActorId::of()`.
+
+### Fixed (audit JY, before the tag)
+
+- **JY-L1:** a sync page and an import dispatch their held events after the commit, outside their `try`: a host listener that throws no longer reports saved rows as failed (it is logged as an error). `TaskEventDeferral::commit()` dispatches every held event even when one listener throws, then rethrows the first failure (`commit(false)`: logs it instead).
+- **JY-L2:** the six ports and USAGE say that they check nothing: the host checks access, tenant, plan, comment rights, `activeTaskRefusal()` and CSRF before calling them.
+- **JY-L3:** `ActorId::of()` keeps a `Stringable` id (a Symfony `Uuid` / `Ulid`) and gives null for `''`, floats and booleans, so `actorId`, `getUserId()` and `getMentionedUserIds()` work for Uuid users.
+- **JY-I1 / JY-I5:** a task number lookup answers only to the task's current number (a number it left behind is 404 even after it moved back), and `123\n` is not a number.
+
+### Changed
+
+- `BoardColumnManager::add()`, `update()`, `reorder()`, `delete()` and `TaskCommentManager::delete()` take an optional last `?object $actor` (who made the change, for the events). The bundle's controllers, the API, the sync and the import pass it. Existing calls keep working; their events carry `actorId: null`.
+- `BoardColumnManager` and `TaskCommentManager` dispatch through `TaskEventDeferral` (same behaviour outside a deferred write).
+
+### Deprecated
+
+- `TaskBoardEvents::BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` (DDD audit G5): never dispatched; removed in 3.0.
+
 ## [2.9.1] - 2026-11-09
 
 Target 2.9.1 (patch). See [UPGRADING](UPGRADING.md#to-291).

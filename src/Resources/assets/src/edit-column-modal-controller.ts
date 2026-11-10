@@ -54,6 +54,22 @@ export function showCurrentIcon(select: HTMLSelectElement, icon: string): void {
 }
 
 /**
+ * Since 2.10.0 (spec 216, FR-010): the host's warnings of the column (`data-column-delete-warning`, one per line, from
+ * COLUMN_DELETE_CHECK) are shown in the dialog and added to the delete confirmation. Without warnings the help is hidden
+ * and the confirmation is the bundle's own text.
+ */
+export function showDeleteWarning(form: HTMLFormElement, note: HTMLElement | null, warning: string): void {
+    const base = form.dataset.confirmBase ?? form.getAttribute('data-confirm') ?? '';
+    form.dataset.confirmBase = base;
+    const text = warning.trim();
+    form.setAttribute('data-confirm', text === '' || base === '' ? base + text : `${base}\n\n${text}`);
+    if (note) {
+        note.textContent = text;
+        note.hidden = text === '';
+    }
+}
+
+/**
  * Since 2.9.1 (audit JM-I7): the icon the dialog opens with. A stored icon the server would no longer store
  * (`data-column-icon-storable="0"`: a direct database write, a legacy `fa fa-bug`) opens as "No icon", so a rename is not
  * refused and saving drops that icon, with the grid and with a host widget alike.
@@ -63,7 +79,7 @@ export function dialogIcon(trigger: HTMLElement): string {
 }
 
 export default class EditColumnModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'title'];
+    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'deleteWarning', 'title'];
 
     static values = {
         updateUrlTemplate: String,
@@ -78,6 +94,10 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
     declare readonly deleteFormTarget: HTMLFormElement;
 
     declare readonly hasDeleteFormTarget: boolean;
+
+    declare readonly deleteWarningTarget: HTMLElement;
+
+    declare readonly hasDeleteWarningTarget: boolean;
 
     declare deleteUrlTemplateValue: string;
 
@@ -129,6 +149,7 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
 
         if (this.hasDeleteFormTarget && this.deleteUrlTemplateValue !== '') {
             this.deleteFormTarget.action = this.deleteUrlTemplateValue.replace('COLUMN_ID', columnId);
+            showDeleteWarning(this.deleteFormTarget, this.hasDeleteWarningTarget ? this.deleteWarningTarget : null, trigger.dataset.columnDeleteWarning ?? '');
         }
 
         if (this.hasTitleTarget && this.titleTemplateValue !== '') {

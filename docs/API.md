@@ -100,7 +100,7 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 | `GET /v2/space/{id}/folder` | My tasks | Always `{"folders": []}`: every board is a folderless list |
 | `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | `task_count` counts only what the token may read; columns are `statuses` (first `open`, last `closed`, the rest `custom`) |
 | `GET /v2/list/{id}/task`, `GET /v2/team/{team_id}/task` | My tasks (its own) | 100 per page from `page=0`, `last_page`; `archived`, `subtasks`, `include_closed`, `statuses[]`, `assignees[]`, `tags[]`, `due_date_gt`/`_lt`, `date_created_*`, `date_updated_*`, `date_done_*`, `order_by` (`id`, `created`, `updated`, `due_date`), `reverse`, `include_markdown_description`; on a team also `space_ids[]`, `list_ids[]` |
-| `GET /v2/task/{id}` | My tasks (its own) | `include_subtasks`, `include_markdown_description` |
+| `GET /v2/task/{id}` | My tasks (its own) | `include_subtasks`, `include_markdown_description`. Since 2.10.0, `custom_task_ids=true` with `space_id` or `list_id`: `{id}` is the task's number (see [Task numbers](#task-numbers)) |
 | `GET /v2/task/{id}/comment` | My tasks (its own) | 25 per page, newest first; `start` and `start_id` of the oldest one shown give the next page |
 | `GET /v2/task/{id}/member` | Read | Everyone attached to the task |
 | `GET /v2/space/{id}/tag` | Read | Tags of the open tasks the token reaches |
@@ -114,6 +114,19 @@ A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignore
 **Time entries.** Without `task_id`, the bundle checks only the team: the host's time hook must keep to what the token's level and where reach, and to the people whose time the person may see. With `task_id`, the task goes through the guard first.
 
 **What a page shows of other tasks.** Subtasks, dependencies and links are shown only when the token may open the other task too. For *My tasks*, the checklist items of its own tasks are shown whoever created them, as it manages those checklists.
+
+### Task numbers
+
+Since 2.10.0 (spec 214), with `task_numbers.enabled`, every task body carries `number` (the `#123` the UI shows; null without the option or before the backfill reached the task). `custom_id` stays null.
+
+To look a task up by its number, the API follows ClickUp's convention for custom task ids, `custom_task_ids=true` (ClickUp's `team_id` is accepted and ignored):
+
+```text
+GET /v2/task/123?custom_task_ids=true&space_id=SPACE_ID   numbers per tenant (task_numbers.scope: tenant)
+GET /v2/task/%23123?custom_task_ids=true&list_id=LIST_ID  any scope; "#123" works URL-encoded
+```
+
+Why a space or a list: ClickUp's custom ids (`DEV-123`) are unique in a workspace because they carry the space's prefix; here a number is unique only in its sequence, which is a tenant (one space) or, with `scope: board` or a board without tenant, one list. `space_id` of a space whose numbers are per list is 400 `INPUT_002`, as is neither parameter. A number not in that sequence, a number a moved task left behind (it now has a number in its new sequence, and only that one answers, even after it moved back), or any number without the option is 404, the same as a task the token may not see; access, level and plan are then checked as for `GET /v2/task/{id}`. The provider's custom id of a synced task (`DEV-123`) is not looked up here.
 
 ## Write endpoints
 
@@ -232,6 +245,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `*: *statuses[].id: extra` | Statuses are columns and have ids (used by the status paths). |
 | `*: *statuses[].icon: extra` | Since 2.9.0: a status carries its column's icon (one emoji or an icon id), or null. |
 | `*: *.status.icon: extra` | Since 2.9.0: a task's status carries its column's icon too. |
+| `*: *.number: extra` | Since 2.10.0 (spec 214): a task carries its readable number (#123), or null without task numbers. |
 | `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
 | `*: .archived: extra` | Boards say whether they are archived. |
 | `*: .override_statuses: extra` | Every board has its own statuses. |

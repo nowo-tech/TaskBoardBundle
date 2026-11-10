@@ -813,6 +813,7 @@ final class Configuration implements ConfigurationInterface
                     ->addDefaultsIfNotSet()
                     ->info('Task comments and @mentions (since 1.16).')
                     ->children()
+                        ->scalarNode('cause_labeler')->defaultNull()->info('Since 2.10.0 (spec 216): service id of a Nowo\\TaskBoardBundle\\Comment\\TaskCommentCauseLabelerInterface: how a comment shows why it was written (TaskChangeContext, e.g. an automation rule). null = the cause is not shown.')->end()
                         ->booleanNode('readers_can_comment')
                             ->defaultTrue()
                             ->info('People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment.')

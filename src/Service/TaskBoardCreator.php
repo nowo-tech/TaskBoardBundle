@@ -22,7 +22,7 @@ use function strlen;
 /**
  * Creates task boards with default kanban columns.
  */
-final readonly class TaskBoardCreator
+final readonly class TaskBoardCreator implements TaskBoardCreatorInterface
 {
     /** @var list<array{name: string, color: ?string, icon?: ?string}> */
     public const DEFAULT_COLUMNS = [

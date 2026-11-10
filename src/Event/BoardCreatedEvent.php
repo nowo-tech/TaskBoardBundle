@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -18,5 +19,23 @@ final class BoardCreatedEvent extends Event
         public readonly object $actor,
         public readonly ?string $scopeId = null,
     ) {
+    }
+
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getBoardId(): string
+    {
+        return $this->board->getId();
+    }
+
+    /** Since 2.10.0 (DDD audit G2). */
+    public function getTenantKey(): ?string
+    {
+        return $this->board->getTenantKey();
+    }
+
+    /** Since 2.10.0 (DDD audit G2): the actor's `getId()` as a string. */
+    public function getActorId(): ?string
+    {
+        return ActorId::of($this->actor);
     }
 }

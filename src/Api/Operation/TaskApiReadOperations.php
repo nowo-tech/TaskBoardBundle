@@ -28,12 +28,16 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
+use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 
 use function array_filter;
 use function array_map;
 use function array_values;
 use function in_array;
+use function ltrim;
+use function preg_match;
 use function spl_object_id;
 use function str_starts_with;
 
@@ -53,6 +57,9 @@ final readonly class TaskApiReadOperations
         private TaskApiGuard $guard,
         private TaskApiQueryRepository $queries,
         private TaskApiTimeEntriesInterface $timeEntries,
+        // Since 2.10.0 (spec 214): `task_numbers.enabled` (null when off): a task looked up by its number.
+        private ?TaskNumberLedger $numbers = null,
+        private ?TaskNumberScope $numberScope = null,
     ) {
     }
 
@@ -161,6 +168,42 @@ final readonly class TaskApiReadOperations
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
 
         return $this->context($principal, $this->queries->load([$task->getId()]), true, $markdown);
+    }
+
+    /**
+     * Since 2.10.0 (spec 214): `GET /v2/task/{number}?custom_task_ids=true` — the task carrying `$number` (`123` or `#123`)
+     * in the number sequence of a space (`$spaceId`, with `task_numbers.scope: tenant` and a space with a tenant) or of a list
+     * (`$listId`, any scope). ClickUp's custom task ids are unique in a workspace; the numbers here are unique only within their
+     * sequence, hence the space or list. A number a moved task left behind is not found, nor is any without task numbers.
+     *
+     * @throws TaskApiRefusal 400 `INPUT_002` without a space or list that names a sequence; 404 as for any task
+     */
+    public function taskByNumber(TaskApiPrincipal $principal, string $number, ?string $spaceId, ?string $listId, bool $markdown = false): TaskApiTaskPage
+    {
+        if ($listId !== null && $listId !== '') {
+            $board    = $this->guard->board($principal, $listId, TaskApiCapability::ReadOwn);
+            $scopeKey = $this->numberScope?->keyOf($board);
+        } elseif ($spaceId !== null && $spaceId !== '') {
+            $space = $this->guard->space($principal, $spaceId, TaskApiCapability::ReadOwn);
+            if ($this->numberScope instanceof TaskNumberScope && (!$this->numberScope->isPerTenant() || $space->tenantKey === null || $space->tenantKey === '')) {
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid space_id: numbers are per list here, give list_id');
+            }
+            $scopeKey = $space->tenantKey;
+        } else {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid custom_task_ids: give space_id or list_id');
+        }
+
+        if (preg_match('/^#?[1-9][0-9]{0,8}$/D', $number) !== 1 || $scopeKey === null || !$this->numbers instanceof TaskNumberLedger || !$this->numberScope instanceof TaskNumberScope) {
+            throw TaskApiRefusal::notFound();
+        }
+        $wanted = (int) ltrim($number, '#');
+        $task   = $this->numbers->find($scopeKey, $wanted);
+        // Audit JY-I1: only the task's current number in its current sequence; a number it left behind is not found.
+        if (!$task instanceof Task || $task->getNumber() !== $wanted || $this->numberScope->keyOf($task->getBoard()) !== $scopeKey) {
+            throw TaskApiRefusal::notFound();
+        }
+
+        return $this->task($principal, $task->getId(), $markdown);
     }
 
     /**

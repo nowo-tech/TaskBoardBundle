@@ -150,6 +150,18 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame('app.week_start', (string) $host->getAlias(WeekStartResolverInterface::class));
     }
 
+    public function testTheCauseLabelersGoToTheTwigExtension(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class, 'history' => ['cause_labeler' => 'app.history_labeler'], 'comments' => ['cause_labeler' => 'app.comment_labeler']]], $container);
+
+        $twig = $container->getDefinition(TaskBoardTwigExtension::class);
+        self::assertSame('app.history_labeler', (string) $twig->getArgument('$causeLabeler'));
+        self::assertSame('app.comment_labeler', (string) $twig->getArgument('$commentCauseLabeler'));
+    }
+
     public function testPrependRegistersFrameworkAssetsAndDoctrineMapping(): void
     {
         $container = new ContainerBuilder();

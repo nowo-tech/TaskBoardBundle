@@ -29,6 +29,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
@@ -166,6 +167,8 @@ final readonly class SyncTaskWriter
         private bool $fullSyncRereadsDetails = false,
         // Since 1.28.0 (audit HI-L3): lines of the "Fields" document the eraser removed.
         private ?SyncFieldSuppression $suppression = null,
+        // Since 2.10.0: holds the column events of a page until its commit (dropped on a rollback or a dry run).
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -277,6 +280,7 @@ final readonly class SyncTaskWriter
         $post       = [];
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
+        $this->events?->begin();
         try {
             $columns   = $this->columns($ctx, $plan);
             $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $ctx->board);
@@ -307,6 +311,7 @@ final readonly class SyncTaskWriter
             }
             if ($ctx->options->dryRun) {
                 $connection->rollBack();
+                $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
                 $this->entityManager->clear();
@@ -319,10 +324,13 @@ final readonly class SyncTaskWriter
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
+            $this->events?->rollBack();
             $ctx->taskEvents = [];
 
             throw $exception;
         }
+        // Audit JY-L1: after the commit, outside the try: a failing host listener never reports the saved page as failed.
+        $this->events?->commit(false);
 
         // Files, inline images, comments and the fields document of the tasks this page created or changed.
         try {
@@ -1252,7 +1260,7 @@ final readonly class SyncTaskWriter
             }
             // Since 1.28.0: the status's colour now; its order at the end of the first import.
             // @igor-ignore - Its own service's write method for this sync page; it keeps no state between calls.
-            $column = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255), color: $remote->status?->color));
+            $column = $this->columnManager->add($ctx->board, new BoardColumnFormData(name: Text::cut($this->sanitizer->line($status, 255), 255), color: $remote->status?->color), $ctx->actor);
             $ctx->connection->addCreatedColumn($column->getId());
             $byName[mb_strtolower($status)] = $column;
             ++$ctx->columnsCreated;

@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Twig;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface;
+use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -128,7 +129,17 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskChangeCauseLabelerInterface $causeLabeler = null,
         // Since 2.5.0 (TB-16): `sync.badge.style` (badge | strip).
         private readonly string $syncBadgeStyle = 'badge',
+        // Since 2.10.0 (spec 216): `comments.cause_labeler`.
+        private readonly ?TaskCommentCauseLabelerInterface $commentCauseLabeler = null,
     ) {
+    }
+
+    /** Since 2.10.0 (spec 216, FR-014): the host's label of why a comment was written; null without a cause or a labeler. */
+    public function commentCause(TaskComment $comment): ?string
+    {
+        $cause = $comment->getCause();
+
+        return $cause !== null && $this->commentCauseLabeler instanceof TaskCommentCauseLabelerInterface ? $this->commentCauseLabeler->label($cause, $comment) : null;
     }
 
     /** Since 2.3.0 (spec 216, FR-013): the host's label of why a history row happened; null without a cause or a labeler. */
@@ -329,6 +340,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_recurrence', $this->recurrence(...)),
             new TwigFunction('nowo_task_board_repeats', $this->repeats(...)),
             new TwigFunction('nowo_task_board_change_cause', $this->changeCause(...)),
+            new TwigFunction('nowo_task_board_comment_cause', $this->commentCause(...)),
             // Since 2.9.0 (audit JI-L3): a Tabler name as the icon set spells it (Bootstrap Icons names differ).
             new TwigFunction('nowo_task_board_icon_name', IconNames::forSet(...)),
             new TwigFunction('nowo_task_board_column_icon_name', IconNames::columnIcon(...)),

@@ -17,7 +17,7 @@ use function trim;
  * Since 1.15: manual time entries (minutes, date, note) logged from the task detail; they add to the task's spent
  * time ({@see Task::getLoggedMinutes()}) beside the TimeTrack timers. Each change is recorded in the task's history.
  */
-final readonly class TaskTimeLogger
+final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
 {
     public function __construct(
         private TaskRepositoryInterface $taskRepository,

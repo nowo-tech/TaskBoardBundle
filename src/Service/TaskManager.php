@@ -14,11 +14,13 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Event\AbstractTaskEvent;
+use Nowo\TaskBoardBundle\Event\TaskArchivedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCompletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskCreatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
+use Nowo\TaskBoardBundle\Event\TaskRestoredEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
@@ -43,9 +45,10 @@ use const DATE_ATOM;
 
 /**
  * Creates and updates tasks on a board; after each saved write it dispatches the task events (since 1.10:
- * {@see TaskBoardEvents::TASK_CREATED}, TASK_UPDATED, TASK_MOVED, TASK_COMPLETED, TASK_REOPENED).
+ * {@see TaskBoardEvents::TASK_CREATED}, TASK_UPDATED, TASK_MOVED, TASK_COMPLETED, TASK_REOPENED; since 2.10.0 TASK_ARCHIVED and
+ * TASK_RESTORED).
  */
-final readonly class TaskManager
+final readonly class TaskManager implements TaskManagerInterface
 {
     /**
      * @param EventDispatcherInterface|null $eventDispatcher Dispatches the task events (none: no events)
@@ -340,7 +343,7 @@ final readonly class TaskManager
     /**
      * Dispatches a task event (after the write was saved) when a dispatcher is wired.
      */
-    private function dispatch(AbstractTaskEvent $event, string $eventName): void
+    private function dispatch(AbstractTaskEvent|TaskArchivedEvent|TaskRestoredEvent $event, string $eventName): void
     {
         $this->eventDispatcher?->dispatch($event, $eventName);
     }
@@ -577,16 +580,19 @@ final readonly class TaskManager
         $task->archive();
         $this->changeRecorder->record($task, $user, TaskChangeType::Archived, null, 'manual');
         $this->taskRepository->save($task);
+        // Since 2.10.0 (spec 216): after the save, ids only.
+        $this->dispatch(TaskArchivedEvent::of($task, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_ARCHIVED);
 
         return true;
     }
 
     /**
-     * Since 1.23: records and saves a restored task.
+     * Since 1.23: records and saves a restored task; since 2.10.0 (spec 216) then dispatches TASK_RESTORED.
      */
     public function recordRestored(Task $task, object $user): void
     {
         $this->changeRecorder->record($task, $user, TaskChangeType::Restored, null, 'manual');
         $this->taskRepository->save($task);
+        $this->dispatch(TaskRestoredEvent::of($task, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_RESTORED);
     }
 }
