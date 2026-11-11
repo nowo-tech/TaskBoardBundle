@@ -231,6 +231,7 @@ final readonly class TaskApiTaskOperations
                 $mentioned[] = $candidate->id;
             }
         }
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         $comment = $this->comments->add($task, $principal->user, $body, $mentioned);
         $this->audit->written($principal, 'comment.create', $task->getBoard(), $taskId, ['comment' => $comment->getId()]);
 
@@ -301,6 +302,7 @@ final readonly class TaskApiTaskOperations
         $task  = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
         $other = $this->guard->task($principal, $otherId, TaskApiCapability::ReadOwn);
         try {
+            // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
             $this->dependencies->add($task, $other, $type, $principal->user);
         } catch (InvalidTaskDependencyException $invalid) {
             throw $invalid->reason === InvalidTaskDependencyException::REASON_OTHER_BOARD ? new TaskApiRefusal(400, 'LINK_002', 'Dependencies stay within a board') : new TaskApiRefusal(400, 'LINK_001', 'This dependency is not allowed');
@@ -329,6 +331,7 @@ final readonly class TaskApiTaskOperations
             if (!in_array($type, $types, true) || ($taskWaits !== null && $this->waits($task, $dependency->getSourceTask()->getId() === $task->getId(), $type) !== $taskWaits)) {
                 continue;
             }
+            // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
             $this->dependencies->remove($task, $dependency->getId(), $principal->user);
             ++$removed;
         }

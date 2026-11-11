@@ -71,7 +71,8 @@ final readonly class TaskApiWriteController
 
     public function addComment(Request $request, string $taskId): JsonResponse
     {
-        $input   = $this->input($request, ['notify_all', 'assignee', 'group_assignee']);
+        $input = $this->input($request, ['notify_all', 'assignee', 'group_assignee']);
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         $comment = $this->tasks->addComment($this->principal($request), $taskId, $input);
         TaskApiIdempotencyListener::target($request, $comment->getTask()->getBoard());
 
@@ -82,9 +83,10 @@ final readonly class TaskApiWriteController
     {
         // The form fields besides the file are read for their warnings only.
         /** @var array<string, mixed> $fields */
-        $fields              = $request->request->all();
-        $input               = new TaskApiInput($fields, ['filename', 'custom_task_ids', 'team_id']);
-        $file                = $request->files->get('attachment');
+        $fields = $request->request->all();
+        $input  = new TaskApiInput($fields, ['filename', 'custom_task_ids', 'team_id']);
+        $file   = $request->files->get('attachment');
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         [$task, $attachment] = $this->tasks->addAttachment($this->principal($request), $taskId, $file instanceof UploadedFile ? $file : null);
         $extension           = pathinfo($attachment->title, PATHINFO_EXTENSION);
         TaskApiIdempotencyListener::target($request, $task->getBoard());
@@ -132,6 +134,7 @@ final readonly class TaskApiWriteController
 
     public function setField(Request $request, string $taskId): JsonResponse
     {
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         $this->tasks->setField($this->principal($request), $taskId);
     }
 

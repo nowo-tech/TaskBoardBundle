@@ -64,10 +64,12 @@ final readonly class TaskApiQueryRepository
         }
         $qb        = $this->filtered($boardIds, $filter, $assignees, $owner);
         $direction = $filter->reverse ? 'DESC' : 'ASC';
+        // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
         $qb->orderBy(self::ORDER_FIELDS[$filter->orderBy], $direction)->addOrderBy('t.id', $direction);
         $offset = $filter->page * TaskApiTaskFilter::PAGE_SIZE;
 
         /** @var list<array{id: string}> $rows */
+        // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
         $rows = $qb->select('t.id AS id')->setFirstResult($offset)->setMaxResults(TaskApiTaskFilter::PAGE_SIZE + 1)->getQuery()->getArrayResult();
         $ids  = array_map(static fn (array $row): string => (string) $row['id'], $rows);
 

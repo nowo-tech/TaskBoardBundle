@@ -131,7 +131,8 @@ final readonly class TaskApiBoardOperations
     public function createColumn(TaskApiPrincipal $principal, string $boardId, TaskApiInput $input): TaskBoard
     {
         $this->audit->requireListener();
-        $board  = $this->guard->boardColumns($principal, $boardId);
+        $board = $this->guard->boardColumns($principal, $boardId);
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         $column = $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()), $principal->user);
         $this->audit->written($principal, 'column.create', $board, null, ['column' => $column->getId()]);
 

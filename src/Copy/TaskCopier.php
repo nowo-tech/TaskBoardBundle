@@ -166,7 +166,8 @@ final readonly class TaskCopier
     public function copyChecked(Task $source, TaskCopyOptions $options, object $actor, array $tree): TaskCopyResult
     {
         $target = $options->targetBoard ?? $source->getBoard();
-        $write  = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
+        // @igor-ignore - Closure runs synchronously inside wrapInTransaction() and is never stored.
+        $write = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
             $shift   = $this->shiftDays($source, $options);
             $copies  = [];
             $dropped = [];

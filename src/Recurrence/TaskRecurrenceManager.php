@@ -317,6 +317,7 @@ final readonly class TaskRecurrenceManager
         $tree = $this->copier->check($source, $options, $actor);
 
         try {
+            // @igor-ignore - Closure runs synchronously inside wrapInTransaction() and is never stored.
             $write = fn (): Task => $this->entityManager->wrapInTransaction(function () use ($series, $key, $source, $options, $actor, $date, $missed, $tree): Task {
                 $occurrence = new TaskOccurrence($series, $key);
                 $this->entityManager->persist($occurrence);
