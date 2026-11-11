@@ -20,6 +20,7 @@
   - [W-03 — Imports run synchronously inside the HTTP request (Low)](#w-03--imports-run-synchronously-inside-the-http-request-low)
   - [W-04 — Route loader throws if it runs twice in the same process (Low)](#w-04--route-loader-throws-if-it-runs-twice-in-the-same-process-low)
   - [W-05 — `strtok()` keeps global state (Low)](#w-05--strtok-keeps-global-state-low)
+  - [Igor findings (2026-11-11)](#igor-findings-2026-11-11)
 - [Usage recommendations in worker mode](#usage-recommendations-in-worker-mode)
 - [Re-audit triggers](#re-audit-triggers)
 
@@ -109,6 +110,21 @@ Entities, DTOs, enums and events are created per request and are never stored in
 - **Status:** Resolved — `src/Import/Support/DelimitedTableParser.php` uses `strspn()` / `strcspn()` / `substr()` (leading blank lines are still skipped, as `strtok()` did). Covered by the new import tests (leading `\r\n`, semicolon delimiter).
 
 No other findings. The bundle holds no per-user state in services, so there is no cross-user leak under A.
+
+### Igor findings (2026-11-11)
+
+`composer igor` (igor-php 0.10.1) reported ten KO. All are false positives, annotated inline with `// @igor-ignore`
+(CI runs `composer igor` since 2.11.1):
+
+| Where | Igor says | Why it is safe |
+|-------|-----------|----------------|
+| `Api/Operation/TaskApiBoardOperations::createColumn()`, `Api/Operation/TaskApiTaskOperations` (comments, dependencies), `Api/Controller/TaskApiWriteController` | mutation of an injected dependency | `BoardColumnManager`, `TaskCommentManager`, `TaskDependencyManager` and `TaskApiTaskOperations` are `final readonly`: the call writes through Doctrine and keeps nothing in the service. |
+| `Api/Controller/TaskApiManagementController::deleteBoard()` | mutation of a shared `$response` | The `JsonResponse` is built per call by `answer()`. |
+| `Api/Repository/TaskApiQueryRepository::taskPage()` | mutation of a shared `$qb` | `filtered()` creates a new `QueryBuilder` per call. |
+| `Copy/TaskCopier::copyChecked()`, `Recurrence/TaskRecurrenceManager` | closure capturing local state injected into a shared service | `wrapInTransaction()` runs the closure at once and does not keep it. |
+| `Api/Security/TaskApiRequestListener` | mutation of the injected rate limiter | Counting failed tokens across requests is the purpose of the host rate limiter (its storage bounds it); the default `DenyingTaskApiRateLimiter` is `readonly` and keeps nothing. |
+| `Api/TaskApiInput::take()` | mutation of `read` | `TaskApiInput` is a per-request value object built by `fromRequest()`; not a service. |
+| `Api/Doctrine/JsonTextFunction::parse()` | mutation of `field` | A DQL function node: Doctrine creates one per parsed query; it is not a service. |
 
 ## Usage recommendations in worker mode
 

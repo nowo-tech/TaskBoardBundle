@@ -190,6 +190,7 @@ final class TaskApiInput
 
     private function take(string $name): mixed
     {
+        // @igor-ignore - Per-request value object (TaskApiInput::fromRequest), never a shared service.
         $this->read[$name] = true;
 
         return $this->fields[$name] ?? null;

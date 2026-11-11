@@ -54,7 +54,9 @@ final readonly class TaskApiManagementController
             return $this->answer([], $input);
         }
         $response = $this->answer(['status' => 'in_progress'], $input);
+        // @igor-ignore - Response built per call by answer(); not a shared service.
         $response->setStatusCode(Response::HTTP_ACCEPTED);
+        // @igor-ignore - Response built per call by answer(); not a shared service.
         $response->headers->set('Retry-After', '1');
 
         return $response;

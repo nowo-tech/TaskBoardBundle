@@ -101,6 +101,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.11.1 (patch).
+
+### Changed
+
+- **Igor worker-state audit in CI.** A standalone `igor` job runs `composer igor` (igor-php, REQ-CS-008) on every push
+  and pull request (with `COMPOSER_PROCESS_TIMEOUT=0`: the audit of the 537 service files takes about 8 minutes). The
+  ten KO igor reported are false positives, each justified inline with `// @igor-ignore` and recorded in
+  [FRANKENPHP-WORKER-AUDIT](FRANKENPHP-WORKER-AUDIT.md#igor-findings-2026-11-11): calls on stateless `readonly`
+  services, responses and query builders built per call, transaction closures run at once, a per-request input value
+  object, a DQL function node and the host rate limiter's failed-token counter. No behaviour change.
+
 ## [2.11.0] - 2026-11-10
 
 Target 2.11.0 (minor). DDD / hexagonal P2 round (audit 2026-11-09, G3 and G4 leftovers). No schema change; see [UPGRADING](UPGRADING.md#to-2110).

@@ -27,6 +27,7 @@ final class JsonTextFunction extends FunctionNode
     {
         $parser->match(TokenType::T_IDENTIFIER);
         $parser->match(TokenType::T_OPEN_PARENTHESIS);
+        // @igor-ignore - Doctrine DQL function node: a new instance per parsed query, not a service.
         $this->field = $parser->ArithmeticPrimary();
         $parser->match(TokenType::T_CLOSE_PARENTHESIS);
     }

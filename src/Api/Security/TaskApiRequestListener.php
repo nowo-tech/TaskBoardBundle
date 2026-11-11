@@ -136,6 +136,7 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
             throw new TaskApiRefusal(Response::HTTP_NOT_FOUND, 'API_001', 'Not found');
         }
         if ($principal === TaskApiAuthFailure::Invalid) {
+            // @igor-ignore - Failed-token counter is meant to persist across requests (host rate limiter storage).
             $this->rateLimiter->registerFailedToken($clientIp);
 
             throw $this->invalidToken();
@@ -144,6 +145,7 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         if (!$this->accessChecker->canAccess($principal->user)) {
             // Audit IA-L1: the same answer as a bad token, and counted as one, so it cannot drive the host's
             // authenticator without limit.
+            // @igor-ignore - Failed-token counter is meant to persist across requests (host rate limiter storage).
             $this->rateLimiter->registerFailedToken($clientIp);
 
             throw $this->invalidToken();
