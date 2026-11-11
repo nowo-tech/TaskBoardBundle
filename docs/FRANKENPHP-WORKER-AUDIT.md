@@ -6,6 +6,7 @@
 | Audited revision | `v1.5.5` / `22a87cf` |
 | Audit date | 2026-09-23 |
 | Method | Manual review of every PHP file under `src/` (controller, services, importers, repositories, Doctrine and event listeners, Twig extension, form types, route loader, command, DI extension, compiler pass, `services*.yaml`) |
+| Re-audit (2026-11-12, REQ-RUNTIME-002) | 2.11.1: the request memos added since 1.23 (avatars, repeat icons, synced people, change cause, held task events) are cleared at the request, Messenger and console boundaries by `TaskBoardRequestBoundarySubscriber`, not only by `kernel.reset`; one-kernel worker test without the resetter (see [Request memos and boundaries](#request-memos-and-boundaries-2111)) |
 | Remediation (2026-09-25) | W-01, W-03 (positions), W-04, W-05 resolved; W-02 resolved for access decisions and timer aggregation (refresh) with identity-map clearing for rendered pages left to the host; closed EntityManagers are reset by the bundle after failed flushes (`Doctrine\RecoveringFlusher`); regression tests simulate consecutive requests without `reset()` |
 | **Verdict** | ✅ **Viable under scenario B** — bundle services hold no per-request state, a failed flush no longer leaves the worker with a closed EntityManager, time-tracking access and timer aggregation reload managed entities before deciding/mutating. Clearing Doctrine's identity map between requests (freshness of rendered HTML, memory) remains the application's responsibility |
 
@@ -14,6 +15,7 @@
 - [Execution model assumed](#execution-model-assumed)
 - [Summary](#summary)
 - [Services reviewed](#services-reviewed)
+- [Request memos and boundaries (2.11.1)](#request-memos-and-boundaries-2111)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
@@ -37,9 +39,9 @@ A bundle that is safe under **B** is safe under **A** and under classic mode / P
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Mutable state in shared services | ✅ | All services, repositories and listeners are `final readonly` or have no properties; the controller only holds `readonly` dependencies and config |
+| Mutable state in shared services | ✅ | Five request memos (see [Request memos and boundaries](#request-memos-and-boundaries-2111)), cleared at every boundary by the bundle since 2.11.1; every other service, repository and listener is `final readonly` or has no properties |
 | Static properties / `static` locals | ✅ | Only pure static helpers (`SlugGenerator`, `UserIdResolver`, `Uuid`); no static properties |
-| `ResetInterface` / `kernel.reset` coverage | ✅ | The bundle has nothing of its own to reset; closed-manager recovery no longer depends on DoctrineBundle's reset (W-01) |
+| `ResetInterface` / `kernel.reset` coverage | ✅ | The five memos implement `ResetInterface` (each `reset()` is tested) and are also cleared by the boundary subscriber, so they do not rely on `kernel.reset`; closed-manager recovery no longer depends on DoctrineBundle's reset (W-01) |
 | Request / user / locale captured in services | ✅ | The user comes from `getUser()` per action and is passed as a method argument; nothing is captured at construction |
 | Superglobals, `$_ENV`, `putenv`, `ini_set`, `setlocale`, timezone | ✅ | None used; config is compiled into container parameters |
 | Doctrine / EntityManager | ✅ Resolved / host | Slug and member duplicates are prevented and any failed flush resets the closed manager (W-01); access decisions refresh their entities; identity-map clearing stays with the host (W-02) |
@@ -71,6 +73,46 @@ Worker demo: `demo/symfony8/Caddyfile` runs `php_server` with a `worker` block (
 | `Command\TaskBoardImportCommand` | CLI only | none | N/A | N/A |
 
 Entities, DTOs, enums and events are created per request and are never stored in a service property.
+
+## Request memos and boundaries (2.11.1)
+
+Scenario B (no services resetter: a host that removes, replaces or bypasses `services_resetter` or drives `http_kernel`
+directly, `messenger:consume --no-reset`, long-running commands) is covered by the bundle itself. With the stock
+Symfony kernel the resetter still runs before every request, even with `FRANKENPHP_RESET_KERNEL=false`.
+
+| Service | State | Key | Cleared by |
+|---------|-------|-----|------------|
+| `Avatar\TaskMemberAvatars` | avatar URLs of the people a page shows | user | boundary subscriber + `reset()` |
+| `Recurrence\TaskRecurrenceView` (`recurrence.enabled`) | ids of the recurring tasks per board | board | boundary subscriber + `reset()` |
+| `Sync\View\SyncPeopleViewProvider` (`sync.enabled`) | the sync row of each task shown | task | boundary subscriber + `reset()` |
+| `Service\TaskChangeContext` | the cause stack of the running write | call (popped in `finally`) | boundary subscriber + `reset()` (safety net) |
+| `Service\TaskEventDeferral` | depth and held events of the running write | call (commit / rollBack) | boundary subscriber + `reset()` (safety net) |
+
+`EventListener\TaskBoardRequestBoundarySubscriber` (registered by the bundle) calls their `reset()` on:
+
+- main `kernel.request` (priority 4096) and `kernel.terminate` (priority -4096); sub-requests share the main request's memos;
+- Messenger `WorkerMessageReceivedEvent` (4096) and `WorkerMessageHandledEvent` / `WorkerMessageFailedEvent` (-4096);
+- `console.command` (4096) and `console.terminate` (-4096) of the outermost command only, and only outside a message
+  and a main request: a command run in-process (`Application::doRun()`) from another command, a message handler or a
+  controller does not clear the state of the unit that runs it (console depth counter, in-flight message flag set on
+  received and unset on handled / failed / worker stopped, in-flight request flag set on the main `kernel.request` and
+  unset on its `kernel.finish_request`).
+
+It receives the memos as a lazy iterator of `IGNORE_ON_UNINITIALIZED` references: a boundary never builds a service.
+
+**Worker test:** `tests/Functional/WorkerStateTest.php` boots one `FunctionalKernel` (built as production: no query
+logging), drives `http_kernel` directly and consumes with a Messenger `Worker` that has no `ResetServicesListener`.
+Two users, alice and bob, each with their own board, alternate over **500 iterations**: each board page as its owner
+plus the other owner's board (403), i.e. 1,500 requests, and a message of one user that succeeds and one of the other
+that fails half-way with an open deferral, i.e. 1,000 messages. The avatar resolver returns a new URL every iteration.
+It asserts that every page and message shows its own user's current avatar and nothing of the other user, that a task
+event is never held by a deferral an earlier message left open, that every memo is empty after each unit of work, and
+that memory after a cycle collection grows less than **4 MiB** after a 50-iteration warm-up. The test host clears its
+own entity manager at each boundary (REQ-RUNTIME-002 rule 7). The same class also runs a nested `doRun()` command, the
+services resetter and `clear()`; `tests/Unit/EventListener/TaskBoardRequestBoundarySubscriberTest.php` covers each
+boundary. Without the subscriber the worker test fails at its first iteration.
+
+**Static checks:** `composer igor` (CI job `igor`) and the PHPStan FrankenPHP worker ruleset pass.
 
 ## Findings
 
@@ -128,7 +170,7 @@ No other findings. The bundle holds no per-user state in services, so there is n
 
 ## Usage recommendations in worker mode
 
-- Under scenario B the bundle recovers a closed EntityManager by itself, but the host must still clear the identity map between requests (e.g. `EntityManager::clear()` on `kernel.terminate`) to avoid stale pages and memory growth; keeping DoctrineBundle's `kernel.reset` hook (scenario A) does this.
+- Under scenario B the bundle recovers a closed EntityManager and clears its own request memos (2.11.1) by itself, but the host must still clear the identity map of its entity managers at every boundary (main request, Messenger message, console command) (e.g. `EntityManager::clear()` on `kernel.terminate`) to avoid stale pages and memory growth; keeping DoctrineBundle's `kernel.reset` hook (scenario A) does this.
 - Custom `access_checker`, `team_membership_resolver` or `TaskImportUserResolverInterface` implementations must stay stateless or implement `ResetInterface`. Do not cache the current user, roles or memberships in a property.
 - Prefer the CLI command or an async handler for big imports; if imports stay in HTTP, set `max_wait_time` and consider `max_requests` / `FRANKENPHP_LOOP_MAX` to limit memory growth.
 - Do not extend the bundle services with memoized lookups (for example a board-by-id cache) without a reset hook.

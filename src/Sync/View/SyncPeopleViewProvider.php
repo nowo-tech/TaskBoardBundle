@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -32,8 +33,9 @@ use function substr;
 /**
  * Since 1.25: view models of the remote people of a synced task (Twig `task_board_sync_creator(task)`,
  * `task_board_sync_comment_author(comment)`, `task_board_sync_unmatched(task, role)`). Reads the sync rows only;
- * memoised per request (cleared by `kernel.reset`, so a worker never serves an earlier request's rows). Names are
- * shown, never logged.
+ * memoised per request (cleared at every request, message and command boundary by
+ * {@see TaskBoardRequestBoundarySubscriber} and by `kernel.reset`, so a worker
+ * never serves an earlier request's rows). Names are shown, never logged.
  */
 final class SyncPeopleViewProvider implements ResetInterface
 {
