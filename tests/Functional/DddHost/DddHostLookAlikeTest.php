@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\DddHost;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\Tools\SchemaTool;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntryBillableInterface;
@@ -35,8 +37,8 @@ use Symfony\Component\HttpKernel\KernelInterface;
 
 /**
  * Audit OC-M2: every lookup and erasure by user id keeps only the rows whose id is equal byte for byte in PHP. The id
- * columns are created here with a case-insensitive collation (SQLite NOCASE), as a MySQL / MariaDB `*_ci` or PAD SPACE
- * column would compare: the database hands back Bruno's rows for "U-BRUNO", and the bundle must drop them.
+ * columns are created here with a case-insensitive collation (SQLite NOCASE, MySQL / MariaDB utf8mb4_general_ci, which
+ * is PAD SPACE too), as a `*_ci` or PAD SPACE column would compare: the database hands back Bruno's rows for "U-BRUNO", and the bundle must drop them.
  */
 final class DddHostLookAlikeTest extends KernelTestCase
 {
@@ -57,11 +59,20 @@ final class DddHostLookAlikeTest extends KernelTestCase
         $container = self::getContainer();
         $em        = $container->get('app.task_board_em');
         self::assertInstanceOf(TaskBoardEntityManager::class, $em);
+        $platform  = $em->getConnection()->getDatabasePlatform();
+        $collation = match (true) {
+            $platform instanceof SQLitePlatform        => 'NOCASE',
+            $platform instanceof AbstractMySQLPlatform => 'utf8mb4_general_ci', // case-insensitive and PAD SPACE
+            default                                    => null,
+        };
+        if ($collation === null) {
+            self::markTestSkipped('PostgreSQL has no built-in case-insensitive collation; its columns compare exactly.');
+        }
         $metadata = $em->getMetadataFactory()->getAllMetadata();
         foreach ($metadata as $class) {
             foreach ($class->fieldMappings as $field) {
                 if ($field->type === TaskBoardUserRefType::NAME) {
-                    $field->options = ['collation' => 'NOCASE'];
+                    $field->options = ['collation' => $collation];
                 }
             }
         }
