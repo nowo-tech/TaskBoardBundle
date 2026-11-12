@@ -111,6 +111,12 @@ final readonly class MultiBoardTaskFilter
         return new self(null, $this->assigneeId, $this->column, $this->status, $this->priority, $this->dueFrom, $this->dueTo, $this->overdue, $this->label, $this->search, $this->sort, $this->direction);
     }
 
+    /** The same filter without an assignee (an assignee with no task on the readable boards is ignored). */
+    public function withoutAssignee(): self
+    {
+        return new self($this->boardId, null, $this->column, $this->status, $this->priority, $this->dueFrom, $this->dueTo, $this->overdue, $this->label, $this->search, $this->sort, $this->direction);
+    }
+
     /**
      * The query that reproduces the filters (not the sort) in a link.
      *

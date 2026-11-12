@@ -60,7 +60,7 @@ final class MultiBoardExportTest extends MultiBoardTestCase
         '+1+cmd|\' /C calc\'!A0'                => "'+1+cmd|' /C calc'!A0",
         '-2+3'                                  => "'-2+3",
         '@SUM(A1:A2)'                           => "'@SUM(A1:A2)",
-        'Safe;=cmd'                             => 'Safe; =cmd',
+        'Safe;=cmd'                             => "Safe;'=cmd",
     ];
 
     private AppUser $alice;
@@ -82,7 +82,7 @@ final class MultiBoardExportTest extends MultiBoardTestCase
     {
         $due = 1;
         foreach (self::INJECTIONS as $title => $ignored) {
-            $this->make($this->board, $title, ['assignees' => [$this->alice], 'tags' => ['=tag'], 'due' => '2030-01-0' . $due++, 'priority' => TaskPriority::High, 'estimate' => 45, 'logged' => 90, 'start' => '2029-12-31']);
+            $this->make($this->board, $title, ['assignees' => [$this->alice], 'tags' => ['safe', ' @tag'], 'due' => '2030-01-0' . $due++, 'priority' => TaskPriority::High, 'estimate' => 45, 'logged' => 90, 'start' => '2029-12-31']);
         }
 
         $csv = $this->export('csv');
@@ -93,6 +93,7 @@ final class MultiBoardExportTest extends MultiBoardTestCase
         self::assertStringContainsString('no-store', (string) $this->client->getInternalResponse()->getHeader('Cache-Control'));
         self::assertResponseHeaderSame('X-Content-Type-Options', 'nosniff');
         self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Truncated'));
+        self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Partial'));
 
         $lines = array_map(static fn (string $line): array => str_getcsv($line, ',', '"', ''), explode("\n", trim(substr($csv, 3))));
         self::assertSame(['Number', 'Title', 'Board / Project', 'Column', 'Status', 'Priority', 'Assignees', 'Start', 'Due', 'Overdue', 'Labels', 'Estimate (min)', 'Logged (min)', 'Task ID'], $lines[0]);
@@ -100,7 +101,7 @@ final class MultiBoardExportTest extends MultiBoardTestCase
         $titles = [];
         foreach (array_slice($lines, 1) as $line) {
             $titles[] = $line[1];
-            self::assertSame(["'@Project", 'To do', 'Open', 'High', "'=Alice", '2029-12-31', 'No', "'=tag", '45', '90'], [$line[2], $line[3], $line[4], $line[5], $line[6], $line[7], $line[9], $line[10], $line[11], $line[12]]);
+            self::assertSame(["'@Project", 'To do', 'Open', 'High', "'=Alice", '2029-12-31', 'No', "'@tag, safe", '45', '90'], [$line[2], $line[3], $line[4], $line[5], $line[6], $line[7], $line[9], $line[10], $line[11], $line[12]]);
         }
         self::assertSame(array_values(self::INJECTIONS), $titles);
     }

@@ -76,21 +76,27 @@ final class MultiBoardHostSetupTest extends FunctionalTestCase
     public function testAHostPathWithItsOwnVariableTenantLinksAndCaps(): void
     {
         self::$taskBoardConfig = [
-            'multi_board'  => ['enabled' => true, 'scope_provider' => 'app.multi_scope', 'path' => '/orgs/{organisation}/tasks/', 'max_boards' => 2, 'scan_max_rows' => 100, 'per_page' => 10],
+            'multi_board'  => ['enabled' => true, 'scope_provider' => 'app.multi_scope', 'path' => '/orgs/{organisation}/tasks/', 'max_boards' => 4, 'scan_max_rows' => 100, 'per_page' => 10],
             'tenancy'      => ['enabled' => true, 'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']]],
             'route_prefix' => '/app',
         ];
         self::ensureKernelShutdown();
         $this->setUp();
-        $one   = $this->board('One', tenantKey: 'p1');
-        $two   = $this->board('Two', tenantKey: 'p2');
-        $three = $this->board('Three', tenantKey: 'p3');
+        $one      = $this->board('One', tenantKey: 'p1');
+        $two      = $this->board('Two', tenantKey: 'p2');
+        $three    = $this->board('Three', tenantKey: 'p3');
+        $noTenant = $this->board('No tenant');
+        $this->task($noTenant, 'In no tenant');
+        $wrongSlug = $this->board('Wrong slug', tenantKey: 'p4');
+        $this->task($wrongSlug, 'In wrong slug');
         $this->task($one, 'In one');
         $this->task($two, 'In two');
         $this->task($three, 'In three');
         $scope = self::getContainer()->get('app.multi_scope');
         self::assertInstanceOf(ScriptedMultiBoardScope::class, $scope);
         $scope->entries[(string) $this->owner->getId()] = [new MultiBoardScopeEntry($one->getId(), 'Project One', 'p1'), new MultiBoardScopeEntry($two->getId(), null, 'p2'), new MultiBoardScopeEntry($three->getId(), 'Project Three', 'p3')];
+        // Audit NI-3: under tenancy, a board without a tenant, or listed with another tenant's slug, is dropped.
+        array_unshift($scope->entries[(string) $this->owner->getId()], new MultiBoardScopeEntry($noTenant->getId()), new MultiBoardScopeEntry($wrongSlug->getId(), null, 'p1'));
         $this->login($this->owner);
 
         $this->client->request('GET', '/app/orgs/acme/tasks');
@@ -100,16 +106,18 @@ final class MultiBoardHostSetupTest extends FunctionalTestCase
         self::assertSelectorExists('a[href="/t/p1/task/' . $this->taskId('In one') . '"]');
         self::assertSelectorExists('a[href="/t/p2/board/' . $two->getId() . '/list"]');
         self::assertSelectorTextContains('body', 'Project One');
+        self::assertSelectorTextNotContains('body', 'In no tenant');
+        self::assertSelectorTextNotContains('body', 'In wrong slug');
         self::assertSelectorTextNotContains('[data-testid="nowo-task-multi-index"], table', 'In three');
         self::assertSelectorExists('a[data-testid="nowo-task-multi-export-csv"][href^="/app/orgs/acme/tasks/export.csv"]');
         $warnings = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['message'] === 'TaskBoard multi-board scope capped'));
-        self::assertSame(['bundle' => 'nowo_task_board', 'boards' => 3, 'max_boards' => 2], $warnings[0]['context'] ?? null);
+        self::assertSame(['bundle' => 'nowo_task_board', 'boards' => 5, 'max_boards' => 4], $warnings[0]['context'] ?? null);
 
         $this->client->request('GET', '/app/orgs/acme/tasks/export.csv');
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('In two', $this->client->getInternalResponse()->getContent());
         $exports = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['message'] === 'TaskBoard export: {format}'));
-        self::assertSame(['bundle' => 'nowo_task_board', 'format' => 'csv', 'rows' => 2, 'truncated' => false], $exports[0]['context'] ?? null);
+        self::assertSame(['bundle' => 'nowo_task_board', 'format' => 'csv', 'rows' => 2, 'truncated' => false, 'partial' => false], $exports[0]['context'] ?? null);
     }
 
     public function testTheLabelScanStopsAtItsCapAndSaysSo(): void
@@ -137,6 +145,10 @@ final class MultiBoardHostSetupTest extends FunctionalTestCase
         $this->client->request('GET', '/tools/task-board/tasks/export.csv?label=bulk');
         self::assertResponseIsSuccessful();
         self::assertCount(501, explode("\n", trim((string) $this->client->getInternalResponse()->getContent())), 'the header and the 500 scanned matches');
+        self::assertResponseHeaderSame('X-Task-Board-Export-Partial', '1');
+        self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Truncated'));
+        $this->client->request('GET', '/tools/task-board/tasks/export.csv');
+        self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Partial'), 'no label filter: complete');
         $this->client->request('GET', '/tools/task-board/tasks?label=other');
         self::assertSelectorExists('[data-testid="nowo-task-multi-partial"]');
     }

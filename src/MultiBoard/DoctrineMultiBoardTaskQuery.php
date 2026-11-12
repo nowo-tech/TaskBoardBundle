@@ -20,11 +20,13 @@ use SortDirection;
 
 use function array_chunk;
 use function array_keys;
+use function array_map;
 use function array_values;
 use function ctype_digit;
 use function ltrim;
 use function mb_strtolower;
 use function strlen;
+use function strval;
 
 /**
  * Since 2.13.0: the queries of the multi-board list. Every task query is ONE bounded query over an IN-list of board ids
@@ -233,7 +235,8 @@ final readonly class DoctrineMultiBoardTaskQuery
             }
         }
 
-        return array_keys($ids);
+        // Numeric-string keys come back as integers: the ids stay strings.
+        return array_map(strval(...), array_keys($ids));
     }
 
     /**

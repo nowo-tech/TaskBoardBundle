@@ -127,7 +127,13 @@ change. New runtime requirements `nowo-tech/controller-kit-bundle` `^2.3` and `e
   access, never widen it; a crafted board or assignee filter only narrows the checked set.
 - **Read port** `MultiBoard\MultiBoardTaskListInterface` (`boards()`, `page()`, `workload()`, `export()`): values in,
   read models out (`MultiBoardTaskRow`, `MultiBoardWorkloadRow`, ...), for a DDD host that calls it by ids. Unlike the
-  command ports it checks access itself on every call.
+  command ports it checks access itself on every call (manage roles only for the signed-in viewer; with tenancy, the
+  board's tenant must resolve for the viewer). `TaskBoardResourceAccessChecker::canViewBoard()` gains an optional
+  `$manageRoles` argument (default `true`).
+- Audit NI (before the tag): an `assignee` filter without a task on the readable boards is ignored (text for an integer
+  id no longer reaches the database: no 500 on PostgreSQL); a label export cut by `scan_max_rows` sends
+  `X-Task-Board-Export-Partial: 1`; each joined assignee and label, and text behind leading whitespace, is guarded
+  against formula injection; `scan_max_rows` is capped at 50000.
 - One bounded query per page over the IN-list of checked board ids, plus one for the page's assignees and one for their
   names (no N+1); the label filter compares the JSON tags in PHP over at most `multi_board.scan_max_rows` tasks (the page
   says when the result is partial).

@@ -1176,8 +1176,17 @@ read:
 2. `multi_board.scope_provider` returns the boards for the viewer (no provider, or none: an empty list, and the export
    answers 404);
 3. each of those boards is re-checked with `TaskBoardResourceAccessChecker::canViewBoard()` (creator, team,
-   `security.manage_roles`, `BOARD_ACCESS_CHECK` listeners); a board it refuses is left out;
-4. the filters only narrow that set: a `board` outside it is ignored, an assignee only filters the tasks already there.
+   `security.manage_roles` of the signed-in user, `BOARD_ACCESS_CHECK` listeners); a board it refuses is left out. With
+   `tenancy`, the board's tenant must also resolve for the viewer (`TaskBoardTenantContext::tenantOfKey()`, as the Task
+   API does), and an entry's `tenantSlug` must be that tenant's slug;
+4. the filters only narrow that set: a `board` outside it is ignored, and so is an `assignee` who has no task on those
+   boards.
+
+**The provider is authoritative for some viewers.** Step 3 only drops what the bundle's own rules refuse. For a holder of
+`security.manage_roles`, with `security.resource_scoping: false`, or where a `BOARD_ACCESS_CHECK` listener grants every
+board of a tenant, `canViewBoard()` grants every board the provider lists: the provider is then the only filter, so it
+must return only boards the viewer may read. Per-task rules (`TASK_ACCESS_CHECK`) are not applied to the rows: the list
+and the export show every task of a readable board, as the board page does.
 
 ### Standard Symfony host
 
@@ -1243,8 +1252,10 @@ $export   = $tasks->export($viewer, new MultiBoardTaskFilter(), 1000); // null: 
 ```
 
 Unlike the command ports, `MultiBoardTaskListInterface` **checks access itself** on every call (steps 2 to 4 above, for
-the user whose id the viewer carries; an id of nobody reads nothing). `security.manage_roles` are evaluated against the
-current security token, as everywhere in the bundle: outside a request there is none, so a manager role does not apply.
+the user whose id the viewer carries; an id of nobody reads nothing). **Call it for the signed-in user.**
+`security.manage_roles` are the roles of the current security token: they apply only when the viewer's id is the token
+user's id. For another viewer (or outside a request, with no token) the manager shortcut is skipped and only that
+user's own rights count (creator, team, listeners).
 
 ### Filters, sort, workload and export
 
@@ -1269,9 +1280,13 @@ Archived tasks and archived boards never show. Subtasks are listed like any task
 and write the filtered, sorted set: number, title, board / project, column, status, priority, assignees, start, due,
 overdue, labels, estimate and logged minutes, task id. Same visibility as the list (no board: 404). Streamed in batches
 of 500, at most `multi_board.export.max_rows` rows (then `X-Task-Board-Export-Truncated: <max>`), `Cache-Control:
-no-store, private`. Text that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, a tab or a carriage
-return, also after a `;`, `,`, `|` or tab inside the cell) gets a leading `'` (ControllerKit `CsvSafeWriter`), in the CSV
-and in the XLSX alike; numbers stay numbers. The XLSX holds inline strings only, never a formula.
+no-store, private`. With a label filter that stopped at `multi_board.scan_max_rows`, the file may miss matches and the
+response carries `X-Task-Board-Export-Partial: 1`; such an export reads up to `scan_max_rows` tasks twice (a first pass
+counts the matches, so the truncation header is known before the body), hence the 50000 ceiling of that option. Text that
+a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, a tab or a carriage return, also behind leading
+whitespace, and also after a `;`, `,`, `|`, tab or line break inside the cell, so each joined assignee and label) gets a
+`'` before it (the bundle's guard, then ControllerKit `CsvSafeWriter`), in the CSV and in the XLSX alike; numbers stay
+numbers. The XLSX holds inline strings only, never a formula.
 
 **Queries.** One query for the boards of the scope, one `COUNT` and one page query over `board_id IN (...)` (indexes
 `task_board_tasks_board_archived_idx` and `task_board_tasks_board_open_due_idx`), then one query for the page's assignees

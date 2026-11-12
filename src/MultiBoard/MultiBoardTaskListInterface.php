@@ -11,7 +11,8 @@ namespace Nowo\TaskBoardBundle\MultiBoard;
  * Unlike the command ports, this one checks access itself, on every call: the boards are those of
  * `multi_board.scope_provider` for the viewer, each re-checked with `TaskBoardResourceAccessChecker::canViewBoard()` for
  * the user whose id the viewer carries (an unknown user id reads nothing). A filter can only narrow that set.
- * `security.manage_roles` are evaluated against the current security token, as everywhere in the bundle.
+ * With tenancy each board's tenant must resolve for that user too. Call it for the signed-in user: the token's
+ * `security.manage_roles` apply only when the viewer's id is the token user's id.
  */
 interface MultiBoardTaskListInterface
 {

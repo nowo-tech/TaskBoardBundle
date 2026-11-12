@@ -131,6 +131,8 @@ final class MultiBoardValueObjectsTest extends TestCase
         self::assertSame(['board' => 'b1', 'assignee' => '7', 'column' => 'Doing', 'status' => 'all', 'priority' => 'urgent', 'due_from' => '2030-01-01', 'due_to' => '2030-01-31', 'overdue' => '1', 'label' => str_repeat('l', 100), 'q' => 'login'], $filter->toQuery());
         self::assertTrue($filter->isActive());
         self::assertNull($filter->withoutBoard()->boardId);
+        self::assertNull($filter->withoutAssignee()->assigneeId);
+        self::assertSame('b1', $filter->withoutAssignee()->boardId);
         self::assertSame('7', $filter->withoutBoard()->assigneeId);
     }
 

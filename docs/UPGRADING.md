@@ -200,7 +200,10 @@ Off by default (`multi_board.enabled: false`: no route, no service). To offer "A
 1. Implement `Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface`: for a `MultiBoardViewer` (the user
    id and the route variables of the page), return the boards that person may already read, as a `MultiBoardScope` of
    `MultiBoardScopeEntry(boardId, label, tenantSlug)`. Return `MultiBoardScope::none()` for anyone else. The bundle
-   re-checks every board with `canViewBoard()`, so a wrong entry is dropped, not shown.
+   re-checks every board with `canViewBoard()` (and, with tenancy, the board's tenant for that user), so an entry the
+   bundle's rules refuse is dropped. That is not every wrong entry: for a `security.manage_roles` holder, with
+   `security.resource_scoping: false`, or with a listener that grants whole tenants, `canViewBoard()` grants every board,
+   and the provider is the only filter. Return only boards the viewer may read.
 2. Turn it on and point it at your provider:
 
    ```yaml
@@ -216,8 +219,9 @@ Off by default (`multi_board.enabled: false`: no route, no service). To offer "A
    copies.
 4. Only if you override templates: the page is `web_ui.templates.tasks`.
 
-No migration and no asset rebuild. `security.resource_scoping: false` makes `canViewBoard()` grant every board unless a
-`BOARD_ACCESS_CHECK` listener denies it: then the provider is the only filter, so keep it strict.
+No migration and no asset rebuild. `TaskBoardResourceAccessChecker::canViewBoard()` gains an optional third argument
+(`bool $manageRoles = true`); existing callers are unchanged. A label-filtered export that stopped at
+`multi_board.scan_max_rows` carries `X-Task-Board-Export-Partial: 1`.
 
 ## To 2.12.0
 

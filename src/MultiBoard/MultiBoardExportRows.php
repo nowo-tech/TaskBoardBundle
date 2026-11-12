@@ -21,6 +21,8 @@ final readonly class MultiBoardExportRows
         private Closure $rows,
         public int $matching,
         public int $maxRows,
+        // Since audit NI-2: a label filter stopped at multi_board.scan_max_rows, so matches beyond it are missing.
+        public bool $partial = false,
     ) {
     }
 

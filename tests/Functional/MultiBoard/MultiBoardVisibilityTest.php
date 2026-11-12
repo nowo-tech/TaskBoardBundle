@@ -96,6 +96,8 @@ final class MultiBoardVisibilityTest extends MultiBoardTestCase
         yield 'board E' => ['board=%E%'];
         yield 'board array' => ['board[]=%C%'];
         yield 'bob as assignee' => ['assignee=%bob%'];
+        yield 'text as an integer assignee' => ['assignee=abc'];
+        yield 'out-of-range assignee' => ['assignee=99999999999999999999999'];
         yield 'all statuses' => ['status=all'];
         yield 'label' => ['label=shared'];
         yield 'search' => ['q=task'];
@@ -153,6 +155,24 @@ final class MultiBoardVisibilityTest extends MultiBoardTestCase
         $this->get('status=all');
 
         self::assertSame(['task-B'], array_values(array_filter($this->titles(), static fn (string $title): bool => str_starts_with($title, 'task-'))));
+    }
+
+    public function testAnAssigneeWithoutATaskOnTheReadableBoardsIsIgnoredNotAnError(): void
+    {
+        // Audit NI-1: on PostgreSQL, text for an integer user id used to reach the query (500).
+        foreach (['abc', '99999999999999999999999', (string) $this->bob->getId()] as $assignee) {
+            foreach (['', 'view=people&'] as $view) {
+                $this->get($view . 'assignee=' . $assignee . '&status=all');
+                self::assertResponseIsSuccessful($assignee);
+            }
+            $this->get('assignee=' . $assignee . '&status=all');
+            self::assertSame(['task-A', 'task-D'], array_values(array_filter($this->titles(), static fn (string $title): bool => str_starts_with($title, 'task-'))), $assignee);
+            self::assertSelectorNotExists('select[name="assignee"] option[selected]:not([value=""])');
+            foreach (['csv', 'xlsx'] as $format) {
+                $this->export($format, 'assignee=' . $assignee);
+                self::assertResponseIsSuccessful($format . ' ' . $assignee);
+            }
+        }
     }
 
     public function testAnEmptyScopeIsAnEmptyListAndTheExportAnswers404(): void

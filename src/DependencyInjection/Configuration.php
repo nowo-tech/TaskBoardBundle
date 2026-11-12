@@ -895,7 +895,7 @@ final class Configuration implements ConfigurationInterface
                             ->end()
                         ->end()
                         ->integerNode('max_boards')->defaultValue(500)->min(1)->max(2000)->info('The most boards of a scope the list reads (the rest is left out and logged as a warning): bounds the IN-list of the queries and the per-board access checks.')->end()
-                        ->integerNode('scan_max_rows')->defaultValue(10000)->min(100)->max(100000)->info('With a label filter the tasks are compared in PHP (tags are JSON): the most tasks one page, workload or export reads for it. Above it the page says the result is partial.')->end()
+                        ->integerNode('scan_max_rows')->defaultValue(10000)->min(100)->max(50000)->info('With a label filter the tasks are compared in PHP (tags are JSON): the most tasks one page, workload or export reads for it (an export reads them twice: once to count). Above it the page says the result is partial and the export sends X-Task-Board-Export-Partial.')->end()
                         ->arrayNode('export')
                             ->addDefaultsIfNotSet()
                             ->children()

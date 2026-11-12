@@ -125,11 +125,15 @@ final class TaskBoardMultiBoardController extends AbstractController
             $page      = $result->page;
         }
 
-        // A board outside the checked scope was ignored by the query: the links and the form forget it too.
+        // A board outside the checked scope, or an assignee without a task there, was ignored by the query: the links and
+        // the form forget it too.
         if ($filter->boardId !== null && !in_array($filter->boardId, array_map(static fn (MultiBoardBoard $board): string => $board->id, $boards), true)) {
             $filter = $filter->withoutBoard();
-            $kept   = $filter->toQuery() + ($view === self::VIEW_PEOPLE ? ['view' => self::VIEW_PEOPLE] : []);
         }
+        if ($filter->assigneeId !== null && $filter->assigneeId !== MultiBoardTaskFilter::UNASSIGNED && !in_array($filter->assigneeId, array_map(static fn (MultiBoardPerson $person): string => $person->id, $assignees), true)) {
+            $filter = $filter->withoutAssignee();
+        }
+        $kept       = $filter->toQuery() + ($view === self::VIEW_PEOPLE ? ['view' => self::VIEW_PEOPLE] : []);
         $pagination = $total !== null && $total > 0 ? Pagination::fromTotal($total, $page, $perPage, self::PER_PAGE, $this->perPage, self::ROUTE, $kept + $sorting->query() + ['per_page' => (string) $perPage], $routeParams) : null;
 
         $form = $this->formFactory()->createNamed('', MultiBoardTaskFilterType::class, [
@@ -173,12 +177,16 @@ final class TaskBoardMultiBoardController extends AbstractController
         if (!$export instanceof MultiBoardExportRows) {
             throw $this->createNotFoundException();
         }
-        $this->logger->info('TaskBoard export: {format}', ['bundle' => 'nowo_task_board', 'format' => $format, 'rows' => $export->isTruncated() ? $export->maxRows : $export->matching, 'truncated' => $export->isTruncated()]);
+        $this->logger->info('TaskBoard export: {format}', ['bundle' => 'nowo_task_board', 'format' => $format, 'rows' => $export->isTruncated() ? $export->maxRows : $export->matching, 'truncated' => $export->isTruncated(), 'partial' => $export->partial]);
 
         $filename = 'tasks-' . $this->clock->now()->format('Y-m-d') . '.' . $format;
         $headers  = ['Cache-Control' => 'no-store, private'];
         if ($export->isTruncated()) {
             $headers['X-Task-Board-Export-Truncated'] = (string) $export->maxRows;
+        }
+        // Audit NI-2: a label filter compared only the first multi_board.scan_max_rows tasks.
+        if ($export->partial) {
+            $headers['X-Task-Board-Export-Partial'] = '1';
         }
         $table = $this->exportTable;
 
