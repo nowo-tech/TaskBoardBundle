@@ -9,7 +9,12 @@ use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
+use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Spec 213 S5: the bundle's own manual time as the API's time store, for a host without one.
@@ -18,7 +23,7 @@ final class ApiManualTimeTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$api = ['host_decides_access' => true, 'hooks' => [
+        self::$api = ['host_decides_access' => true, 'hooks' => [
             'authenticator' => 'app.api_host',
             'rate_limiter'  => 'app.api_host',
             'plan_gate'     => 'app.api_host',
@@ -59,5 +64,67 @@ final class ApiManualTimeTest extends ApiTestCase
 
         $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['start' => 1790000000000, 'duration' => 60000]);
         $this->assertRefused(400, 'INPUT_002');
+    }
+
+    /** Since 2.12.0 (Beacon D-20261111-12): `billable` on a log, and `PUT` for the token's own entries. */
+    public function testBillableIsLoggedReadAndChangedOnOwnEntries(): void
+    {
+        $board     = $this->board(tenantKey: 'tenant-a');
+        $task      = $this->task($board, 'Timed');
+        $colleague = $this->user('colleague@example.com');
+        $theirs    = new TaskTimeEntry($task, $colleague, 30, new DateTimeImmutable('2026-11-01'));
+        $task->addTimeEntry($theirs);
+        $this->em->persist($theirs);
+        $this->em->flush();
+        $this->issueToken(TaskApiLevel::MyTasks);
+        ScriptedTimeBillable::$default = true;
+
+        $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['tid' => $task->getId(), 'start' => 1790000000000, 'duration' => 600000]);
+        self::assertTrue($this->json()['data']['billable'], 'the host default');
+        $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['tid' => $task->getId(), 'start' => 1790001000000, 'duration' => 600000, 'billable' => false]);
+        $id = $this->json()['data']['id'];
+        self::assertFalse($this->json()['data']['billable']);
+        self::assertArrayNotHasKey('warnings', $this->json());
+
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/' . $id, ['billable' => true, 'description' => 'ignored']);
+        self::assertResponseIsSuccessful();
+        self::assertSame([$id, true], [$this->json()['data']['id'], $this->json()['data']['billable']]);
+        self::assertSame([['field' => 'description', 'reason' => 'not_supported']], $this->json()['warnings']);
+        $this->em->clear();
+        self::assertTrue($this->em->find(TaskTimeEntry::class, $id)?->getBillable());
+        $history = $this->em->find(Task::class, $task->getId())?->getChangeHistory()->last();
+        self::assertSame([TaskChangeType::TimeBillable, 'false', 'true'], [$history?->getChangeType(), $history?->getOldValue(), $history?->getNewValue()]);
+        $this->get('/api/tasks/v2/team/team-1/time_entries?task_id=' . $task->getId());
+        self::assertEqualsCanonicalizing([true, true], array_column($this->listOf('data'), 'billable'));
+
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/' . $id, ['description' => 'no flag']);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/' . $theirs->getId(), ['billable' => true]);
+        $this->assertRefused(404, 'ACCESS_001');
+        $this->send('PUT', '/api/tasks/v2/team/team-9/time_entries/' . $id, ['billable' => true]);
+        $this->assertRefused(404, 'ACCESS_001');
+
+        // A locked period, then an edit right the host withdraws.
+        ScriptedTimeBillable::$lockedDays = ['2026-09-21'];
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/' . $id, ['billable' => false]);
+        $this->assertRefused(409, 'TIME_004');
+        ScriptedTimeBillable::$lockedDays = [];
+        $dispatcher                       = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
+            $event->grant();
+            $event->markReadOnly();
+        });
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/' . $id, ['billable' => false]);
+        $this->assertRefused(403, 'ACCESS_002');
+        ScriptedTimeBillable::reset();
+    }
+
+    /** Since 2.12.0: deleting time stays refused (spec 213). */
+    public function testTimeIsStillNeverDeleted(): void
+    {
+        $this->issueToken();
+        $this->send('DELETE', '/api/tasks/v2/team/team-1/time_entries/any');
+        $this->assertRefused(403, 'TIME_002');
     }
 }

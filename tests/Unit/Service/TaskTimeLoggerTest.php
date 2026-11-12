@@ -13,7 +13,9 @@ use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskTimeEntryRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\NullTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -55,6 +57,23 @@ final class TaskTimeLoggerTest extends TestCase
         self::assertSame('90', $entry->getOldValue());
 
         self::assertNull((new TaskTimeLogger($repo, new TaskChangeRecorder(), $entries))->log($task, $user, 5, new DateTimeImmutable('2026-10-28'))->getDescription());
+    }
+
+    public function testTheBillableFlagComesFromTheCallerOrTheHostDefault(): void
+    {
+        $user     = new stdClass();
+        $task     = new Task(new TaskBoard('Board', 'board', $user), 'Task', $user);
+        $repo     = $this->createMock(TaskRepositoryInterface::class);
+        $entries  = $this->createMock(TaskTimeEntryRepositoryInterface::class);
+        $defaults = $this->createMock(TaskTimeBillableDefaultProviderInterface::class);
+        $defaults->expects(self::exactly(2))->method('defaultFor')->with($user, $task->getId(), $task->getBoard()->getId())->willReturnOnConsecutiveCalls(true, null);
+        $logger = new TaskTimeLogger($repo, new TaskChangeRecorder(), $entries, null, $defaults);
+
+        self::assertTrue($logger->log($task, $user, 10, new DateTimeImmutable('2026-11-10'))->getBillable(), 'the host default');
+        self::assertFalse($logger->log($task, $user, 10, new DateTimeImmutable('2026-11-10'), null, false)->getBillable(), 'an explicit value does not ask');
+        self::assertNull($logger->log($task, $user, 10, new DateTimeImmutable('2026-11-10'))->getBillable(), 'a null default keeps it unset');
+        self::assertNull((new TaskTimeLogger($repo, new TaskChangeRecorder(), $entries))->log($task, $user, 10, new DateTimeImmutable('2026-11-10'))->getBillable(), 'no provider: unset, as before');
+        self::assertNull((new NullTaskTimeBillableDefaultProvider())->defaultFor($user, 't', null));
     }
 
     public function testAddingTheSameEntryTwiceKeepsOne(): void

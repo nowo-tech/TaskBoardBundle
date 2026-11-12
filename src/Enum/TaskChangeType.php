@@ -30,6 +30,8 @@ enum TaskChangeType: string
     case DependencyRemoved = 'dependency_removed';
     case TimeLogged        = 'time_logged';
     case TimeRemoved       = 'time_removed';
+    /** Since 2.12.0: the `billable` flag of a manual time entry (old / new `true`, `false` or null; context = the day). */
+    case TimeBillable = 'time_billable';
     /** Since 1.23: a provider sync kept a field edited here and the provider changed it too. */
     case SyncConflict = 'sync_conflict';
     /** Since 1.23. */

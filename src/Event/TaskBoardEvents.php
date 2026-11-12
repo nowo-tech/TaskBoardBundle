@@ -174,6 +174,9 @@ final class TaskBoardEvents
     /** Since 2.11.0 (DDD audit G3): {@see TaskTimeRemovedEvent}, ids only, after a manual time entry is removed. */
     public const TASK_TIME_REMOVED = 'nowo_task_board.task_time_removed';
 
+    /** Since 2.12.0: {@see TaskTimeBillableChangedEvent}, ids only, after the `billable` flag of a manual time entry changed. */
+    public const TASK_TIME_BILLABLE_CHANGED = 'nowo_task_board.task_time_billable_changed';
+
     /** Since 2.11.0 (DDD audit G3): {@see TaskDependencyAddedEvent}, ids only, after a dependency is added. */
     public const TASK_DEPENDENCY_ADDED = 'nowo_task_board.task_dependency_added';
 

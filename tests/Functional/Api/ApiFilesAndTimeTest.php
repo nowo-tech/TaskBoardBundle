@@ -116,13 +116,26 @@ final class ApiFilesAndTimeTest extends ApiTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame(['entry-1', $this->own->getId(), '1800000', 'Review'], [$this->json()['data']['id'], $this->json()['data']['task']['id'], $this->json()['data']['duration'], $this->json()['data']['description']]);
-        self::assertSame([['field' => 'billable', 'reason' => 'not_supported']], $this->json()['warnings']);
+        // Since 2.12.0: `billable` is taken (no warning) and reaches the host's time store.
+        self::assertArrayNotHasKey('warnings', $this->json());
+        self::assertTrue(ApiTestHost::$logged[0][1]->billable);
         self::assertSame(1790000000, ApiTestHost::$logged[0][1]->start->getTimestamp());
         self::assertSame(1800, ApiTestHost::$logged[0][1]->durationSeconds);
 
         $this->send('POST', '/api/tasks/v2/team/team-1/time_entries', ['start' => 1790000000000, 'duration' => 60000]);
         self::assertResponseIsSuccessful('without a task, the host decides');
         self::assertNull(ApiTestHost::$logged[1][0]);
+    }
+
+    /** Since 2.12.0: a host time store without the billable capability refuses the change. */
+    public function testAStoreWithoutTheBillableCapabilityRefusesTheChange(): void
+    {
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/entry-1', ['billable' => true]);
+        $this->assertRefused(403, 'TIME_003');
+
+        ApiTestHost::$planAllows = false;
+        $this->send('PUT', '/api/tasks/v2/team/team-1/time_entries/entry-1', ['billable' => true]);
+        $this->assertRefused(403, 'PLAN_001');
     }
 
     public function testTimeWithoutATaskIsReplayedForAnyWhere(): void

@@ -66,6 +66,8 @@ final class TaskBoardRouteLoader extends Loader
         'attachment_create' => ['/v2/task/{taskId}/attachment', TaskApiWriteController::class, 'addAttachment', 'POST'],
         'time_log'          => ['/v2/team/{teamId}/time_entries', TaskApiWriteController::class, 'logTime', 'POST'],
         'time_delete'       => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'deleteTime', 'DELETE'],
+        // Since 2.12.0: the billable flag of an own entry.
+        'time_update' => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'updateTime', 'PUT'],
         // Since 2.2.0 (spec 213): management. Columns are statuses, on paths of this API's own (owner, Q-O2).
         'board_create'  => ['/v2/space/{spaceId}/list', TaskApiManagementController::class, 'createBoard', 'POST'],
         'board_update'  => ['/v2/list/{listId}', TaskApiManagementController::class, 'updateBoard', 'PUT'],
@@ -139,6 +141,8 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, 'task_import', 'importIntoTask', ['POST']);
         $this->addRoute($collection, 'task_time', 'logTime', ['POST']);
         $this->addRoute($collection, 'task_time_remove', 'removeTimeEntry', ['POST']);
+        // Since 2.12.0.
+        $this->addRoute($collection, 'task_time_billable', 'setTimeEntryBillable', ['POST']);
         // Since 1.16.
         $this->addRoute($collection, 'task_comment', 'addComment', ['POST']);
         $this->addRoute($collection, 'task_comment_edit', 'editComment', ['POST']);

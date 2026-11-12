@@ -3,7 +3,8 @@
     Since 1.15: time tracking of the task — estimate, time spent, the deviation (difference in time and %, coloured
     on track / over / under), the subtasks' sum beside the task's own, the manual time entries and a "Log time" dialog
     for the editors. Variables: task, deviation, subtaskDeviation (null without subtasks), canEditTask, timeEntryForm
-    (null: no time logger), timeEntryRemoveForm, taskRouteExtra.
+    (null: no time logger), timeEntryRemoveForm, taskRouteExtra; since 2.12.0 billableTimeEntryIds and
+    timeEntryBillableForm (the billable switch of each entry).
 #}
 {% set deviation = deviation|default(nowo_task_board_deviation(task)) %}
 {% set _canEdit = (canEditTask ?? true) and timeEntryForm|default(null) is not null %}
@@ -85,6 +86,21 @@
                 {# Since 1.27.0: the account may be gone; the entry keeps the name it was logged with, until it is forgotten. #}
                 <span class="nowo-task-time-entries__user">{% if entry.user %}{{ memberUi.member_label(entry.user)|trim }}{% else %}{{ entry.userName|default('task_board.time.former_user'|trans({}, 'NowoTaskBoardBundle')) }}{% endif %}</span>
                 {% if entry.description %}<span class="nowo-task-time-entries__note">{{ entry.description }}</span>{% endif %}
+                {# Since 2.12.0: the billable flag (nothing while unset) and, for its author or a board manager, a switch. #}
+                {% if entry.billable is not null %}
+                    <span class="{{ nowo_ui_class(entry.billable ? 'badge_success' : 'badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-badge nowo-task-time-entries__billable" data-billable="{{ entry.billable ? '1' : '0' }}">{{ (entry.billable ? 'task_board.time.billable_yes' : 'task_board.time.billable_no')|trans({}, 'NowoTaskBoardBundle') }}</span>
+                {% endif %}
+                {% if _canEdit and entry.id in billableTimeEntryIds|default([]) %}
+                    <button
+                        type="submit"
+                        form="nowo-task-time-billable-form"
+                        name="billable"
+                        value="{{ entry.billable ? '0' : '1' }}"
+                        formaction="{{ path(nowo_task_board_route('task_time_billable'), {taskId: task.id, entryId: entry.id}|merge(taskRouteExtra|default({}))) }}"
+                        class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-time-entries__billable-toggle"
+                        aria-pressed="{{ entry.billable ? 'true' : 'false' }}"
+                    >{{ (entry.billable ? 'task_board.time.mark_not_billable' : 'task_board.time.mark_billable')|trans({}, 'NowoTaskBoardBundle') }}</button>
+                {% endif %}
                 {% if _canEdit and entry.id in removableTimeEntryIds|default([]) %}
                     <button
                         type="submit"
@@ -111,6 +127,16 @@
                 {% endif %}
             {% endfor %}
         {{ form_end(timeEntryRemoveForm) }}
+        {% if timeEntryBillableForm is defined and timeEntryBillableForm %}
+            {# Since 2.12.0 (REQ-TWIG-005): CSRF-only form; each switch button sets its own formaction and value. #}
+            {{ form_start(timeEntryBillableForm, {action: '#', attr: {id: 'nowo-task-time-billable-form', hidden: 'hidden'}}) }}
+                {% for child in timeEntryBillableForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(timeEntryBillableForm) }}
+        {% endif %}
 
         {% set _body %}
             {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
@@ -120,6 +146,9 @@
                     <div class="nowo-task-field">{{ form_row(timeEntryForm.loggedAt) }}</div>
                 </div>
                 <div class="nowo-task-field">{{ form_row(timeEntryForm.note) }}</div>
+                {% if timeEntryForm.billable is defined %}
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.billable) }}</div>
+                {% endif %}
                 {% for child in timeEntryForm %}
                     {% if not child.rendered %}
                         {{ form_row(child) }}

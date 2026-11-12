@@ -43,6 +43,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
@@ -78,6 +79,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
+use Nowo\TaskBoardBundle\Service\NullTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskCalendarBuilder;
@@ -88,6 +90,8 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskNavigator;
@@ -234,6 +238,9 @@ final class TaskBoardManageController extends AbstractController
         private readonly array $columnIconForm = [],
         // Since 2.10.0 (spec 216, FR-010): asks the host for the warnings of "Delete column" (COLUMN_DELETE_CHECK).
         private readonly ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.12.0 (Beacon D-20261111-12): the billable flag of manual entries (default and audited changes).
+        private readonly ?TaskTimeBillableService $timeBillable = null,
+        private readonly TaskTimeBillableDefaultProviderInterface $billableDefaults = new NullTaskTimeBillableDefaultProvider(),
     ) {
     }
 
@@ -1368,15 +1375,18 @@ final class TaskBoardManageController extends AbstractController
         $task   = $this->findTask($taskId, $user, true);
         $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
 
-        $form = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today()));
+        $default = $this->billableDefault($task, $user);
+        $form    = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today(), billable: $default ?? false));
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $this->denyOnRootErrors($form);
             /** @var TaskTimeEntryFormData $data */
             $data = $form->getData();
             if ($form->isValid() && $data->minutes !== null && $data->loggedAt !== null) {
+                // Since 2.12.0: the switch; left off with no host default it stays unset, as before 2.12.
+                $billable = $data->billable ? true : ($default === null ? null : false);
                 // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-                $entry = $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note);
+                $entry = $logger->log($task, $user, $data->minutes, $data->loggedAt, $data->note, $billable);
                 $this->logWrite('task_time', ['task_id' => $taskId, 'entry_id' => $entry->getId()]);
                 $this->addFlash('success', 'task_board.flash.time_logged');
             } else {
@@ -1412,6 +1422,50 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /**
+     * Since 2.12.0 (Beacon D-20261111-12): marks a manual time entry billable (`billable=1`) or not (`billable=0`) — POST +
+     * CSRF; its author or a board manager, not in a locked period, audited in the task's history
+     * ({@see TaskTimeBillableService}).
+     */
+    public function setTimeEntryBillable(string $taskId, string $entryId, Request $request): Response
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_task_time_billable'));
+        $task    = $this->findTask($taskId, $user, true);
+        $service = $this->timeBillable ?? throw new NotFoundHttpException('Time entries are not available.');
+        $value   = $request->request->getString('billable');
+        if (!in_array($value, ['0', '1'], true)) {
+            throw new BadRequestHttpException('billable must be 0 or 1.');
+        }
+
+        try {
+            // @igor-ignore - HTTP handler delegates to services; no controller worker state.
+            $service->change($task, $entryId, $user, $value === '1');
+        } catch (TaskTimeBillableRefusedException $e) {
+            if ($e->errorCode === TaskTimeBillableRefusedException::NOT_FOUND) {
+                throw new NotFoundHttpException('No such time entry.', $e);
+            }
+            if ($e->errorCode === TaskTimeBillableRefusedException::FORBIDDEN) {
+                $this->logRefused('time_entry_not_own');
+
+                throw $this->createAccessDeniedException('Only its author or a board manager may change a time entry.');
+            }
+            $this->addFlash('error', 'task_board.flash.time_billable_locked');
+
+            return $this->afterTaskWrite($request, $task, $user);
+        }
+        $this->logWrite('task_time_billable', ['task_id' => $taskId, 'entry_id' => $entryId]);
+        $this->addFlash('success', 'task_board.flash.time_billable_changed');
+
+        return $this->afterTaskWrite($request, $task, $user);
+    }
+
+    /** Since 2.12.0: the host's default `billable` of a new manual entry on the task (null = none). */
+    private function billableDefault(Task $task, object $user): ?bool
+    {
+        return $this->billableDefaults->defaultFor($user, $task->getId(), $task->getBoard()->getId());
     }
 
     /**
@@ -1665,10 +1719,13 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.18: import subtasks with their Gantt relations (editors only); since 1.26.2 only when the
             // ACTION_IMPORT_TASKS decision allows it, as importIntoTask() enforces.
             'subtaskImportForm'   => $this->resourceAccessChecker->canImportIntoTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
-            'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $routeExtra)->createView() : null,
+            'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $user, $routeExtra)->createView() : null,
             'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
             // Since 1.27.0: the entries this user may remove (their own, or all for a board manager).
             'removableTimeEntryIds' => array_values(array_map(static fn (TaskTimeEntry $entry): string => $entry->getId(), array_filter($task->getTimeEntries()->toArray(), fn (TaskTimeEntry $entry): bool => $this->resourceAccessChecker->canRemoveTimeEntry($user, $entry, $task)))),
+            // Since 2.12.0: the entries whose billable flag this user may switch (same people; not a deleted user's entry).
+            'billableTimeEntryIds'  => $this->timeBillable instanceof TaskTimeBillableService ? array_values(array_map(static fn (TaskTimeEntry $entry): string => $entry->getId(), array_filter($task->getTimeEntries()->toArray(), fn (TaskTimeEntry $entry): bool => $entry->getUser() !== null && $this->resourceAccessChecker->canEditTimeEntry($user, $entry, $task)))) : [],
+            'timeEntryBillableForm' => $this->csrfActionForm('task_board_task_time_billable')->createView(),
             'deviation'             => TaskDeviation::of($task),
             'subtaskDeviation'      => $descendants === [] ? null : TaskDeviation::sum($descendants),
         ] + $this->withAvatars($task, $this->commentViewData($task, $user, $routeExtra));
@@ -1781,11 +1838,11 @@ final class TaskBoardManageController extends AbstractController
      *
      * @return FormInterface<TaskTimeEntryFormData>
      */
-    private function createTimeEntryForm(Task $task, array $routeExtra = []): FormInterface
+    private function createTimeEntryForm(Task $task, object $user, array $routeExtra = []): FormInterface
     {
         $route = $this->routes['task_time']['name'] ?? null;
 
-        return $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today()), [
+        return $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today(), billable: $this->billableDefault($task, $user) ?? false), [
             'action' => is_string($route) ? $this->generateUrl($route, ['taskId' => $task->getId()] + $routeExtra) : '',
         ]);
     }

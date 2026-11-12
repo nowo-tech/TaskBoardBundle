@@ -231,11 +231,12 @@ final class TaskApiReadSerializer
     public function timeEntry(TaskApiTimeEntry $entry, string $teamId): array
     {
         return [
-            'id'          => $entry->id,
-            'task'        => $entry->taskId === null ? null : ['id' => $entry->taskId],
-            'wid'         => $teamId,
-            'user'        => ['id' => $entry->userApiId],
-            'billable'    => false,
+            'id'   => $entry->id,
+            'task' => $entry->taskId === null ? null : ['id' => $entry->taskId],
+            'wid'  => $teamId,
+            'user' => ['id' => $entry->userApiId],
+            // Since 2.12.0: the entry's flag; an unset one is false, as before.
+            'billable'    => $entry->billable ?? false,
             'start'       => $this->ms($entry->start),
             'end'         => (string) ((int) $this->ms($entry->start) + $entry->durationSeconds * 1000),
             'duration'    => (string) ($entry->durationSeconds * 1000),

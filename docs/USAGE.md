@@ -5,6 +5,7 @@
 - [Manage UI](#manage-ui)
 - [Task operations](#task-operations)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
+  - [Billable manual entries (since 2.12)](#billable-manual-entries-since-212)
 - [Teams](#teams)
 - [Import tasks from ClickUp, Jira, or Trello](#import-tasks-from-clickup-jira-or-trello)
 - [Custom access control](#custom-access-control)
@@ -133,6 +134,45 @@ When TimeTrack is installed and configured with `nowo_task_board.task_provider`:
 - Users can start/stop timers on trackable tasks (assignee or team member).
 - On timer stop, `TimeSpentAggregatorListener` adds duration to `task.total_time_seconds`.
 - Team context for TimeTrack comes from `nowo_task_board.team_context_provider`.
+
+### Billable manual entries (since 2.12)
+
+Manual entries (*Log time*) carry a nullable `billable` flag (Beacon D-20261111-12). The dialog has a *Billable* switch
+preset to the host default; each entry shows a badge, and its author or a board manager can switch it.
+
+| Piece | Without TimeTrack | With TimeTrack installed |
+|---|---|---|
+| Default of a new entry (`TaskTimeBillableDefaultProviderInterface`) | none (`NullTaskTimeBillableDefaultProvider`): an entry logged with the switch off stays "not set" | TimeTrack 1.21's `TimeEntryBillableDefaultProviderInterface`, asked with the task's TimeTrack scope (`''` without one) |
+| Period lock (`TaskTimePeriodLockInterface`) | none (`NoTaskTimePeriodLock`) | TimeTrack's `PeriodLockGuard` (>= 1.13): a locked or submitted timesheet of the entry's user covering its day refuses the change |
+
+Alias either port to your own service to answer differently (no framework type in either: the host user object, ids, a
+date).
+
+`Service\TaskTimeBillableService::change(Task $task, string $entryId, object $actor, ?bool $billable)` is the setter the
+task page and the Task API use (public for hosts):
+
+| Refusal (`TaskTimeBillableRefusedException`) | When |
+|---|---|
+| `not_found` | the task has no entry with that id |
+| `anonymised` | the entry's user was deleted: it never changes |
+| `forbidden` | the actor is neither its author nor a manager of the board, or cannot edit the task (`canEditTimeEntry()`) |
+| `period_locked` | its period is locked or waiting for approval |
+
+Each change is recorded in the task's activity (`time_billable`, old → new, the entry's day) and dispatched as
+`TaskBoardEvents::TASK_TIME_BILLABLE_CHANGED` (`TaskTimeBillableChangedEvent`: `entryId`, `taskId`, `boardId`,
+`tenantKey`, `userId`, `actorId`, `oldBillable`, `newBillable`, `cause`) after the save:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::TASK_TIME_BILLABLE_CHANGED)]
+public function onBillable(TaskTimeBillableChangedEvent $event): void
+{
+    $this->audit->record('task_time.billable', $event->entryId, $event->actorId, ['from' => $event->oldBillable, 'to' => $event->newBillable]);
+}
+```
+
+Task API: `billable` on `POST /v2/team/{team_id}/time_entries`, and `PUT /v2/team/{team_id}/time_entries/{timer_id}`
+`{"billable": true}` for the token's own entries (see [openapi.yaml](openapi.yaml)). Time entries are never deleted
+through the API.
 
 ## Teams
 

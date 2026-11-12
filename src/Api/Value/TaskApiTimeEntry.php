@@ -18,6 +18,8 @@ final readonly class TaskApiTimeEntry
         public int $durationSeconds,
         public ?string $taskId = null,
         public ?string $description = null,
+        // Since 2.12.0: the entry's billable flag (null = not set; answered as false).
+        public ?bool $billable = null,
     ) {
     }
 }

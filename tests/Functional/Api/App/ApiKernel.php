@@ -8,12 +8,15 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as Doctrine
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingAttachmentStorage;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
+use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\UiKitBundle\NowoUiKitBundle;
@@ -98,6 +101,10 @@ final class ApiKernel extends Kernel
         $services->set('app.api_firewall', ApiFirewallAuthenticator::class);
         $services->set('app.tenant_resolver', ScriptedTenantResolver::class);
         $services->set('app.plain_checker', PlainCreateChecker::class);
+        // Since 2.12.0: the host's billable default and period lock of manual entries (none until a test sets them).
+        $container->services()->set('app.time_billable', ScriptedTimeBillable::class);
+        $container->services()->alias(TaskTimeBillableDefaultProviderInterface::class, 'app.time_billable');
+        $container->services()->alias(TaskTimePeriodLockInterface::class, 'app.time_billable');
         // The host's plan limits and its audit of API writes.
         $services->set('app.quota_listener', RecordingQuotaListener::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);

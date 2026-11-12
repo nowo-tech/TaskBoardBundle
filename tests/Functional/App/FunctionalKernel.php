@@ -11,7 +11,9 @@ use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
+use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
@@ -116,6 +118,10 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.default_view', PreferredViewResolver::class)->public();
         // Since 2.5.0 (TB-17): the help link's URL from the host.
         $container->services()->set('app.help_link_urls', ManualHelpLinkUrls::class);
+        // Since 2.12.0: the host's billable default and period lock of manual entries (none until a test sets them).
+        $container->services()->set('app.time_billable', ScriptedTimeBillable::class);
+        $container->services()->alias(TaskTimeBillableDefaultProviderInterface::class, 'app.time_billable');
+        $container->services()->alias(TaskTimePeriodLockInterface::class, 'app.time_billable');
         // Since 1.25: host-facing services no bundle code calls (the host does), kept public for the tests.
         $container->services()->alias('app.board_eraser', TaskBoardEraser::class)->public();
         $container->services()->alias('app.snapshot_purger', TaskTimeEntrySnapshotPurger::class)->public();

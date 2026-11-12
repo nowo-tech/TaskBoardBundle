@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -54,6 +55,10 @@ class TaskTimeEntry
     /** Since 1.27.0: the user's name when the entry was logged, kept when the user is deleted; null once forgotten. */
     #[ORM\Column(name: 'user_name', type: 'string', length: Task::USER_NAME_MAX, nullable: true)]
     private ?string $userName;
+
+    /** Since 2.12.0 (Beacon D-20261111-12): billable flag; null = not set (rows logged before 2.12). */
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    private ?bool $billable = null;
 
     public function __construct(
         Task $task,
@@ -205,5 +210,28 @@ class TaskTimeEntry
     public function getDescription(): ?string
     {
         return $this->description;
+    }
+
+    /** Since 2.12.0: billable flag (null = not set). */
+    public function getBillable(): ?bool
+    {
+        return $this->billable;
+    }
+
+    /**
+     * Since 2.12.0: sets the billable flag; true when it changed. No checks here: use
+     * {@see TaskTimeBillableService}, which authorises, honours the period lock and audits.
+     *
+     * @internal used by the bundle's services (a new entry's value, the billable service)
+     */
+    public function markBillable(?bool $billable): bool
+    {
+        if ($this->billable === $billable) {
+            return false;
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->billable = $billable;
+
+        return true;
     }
 }

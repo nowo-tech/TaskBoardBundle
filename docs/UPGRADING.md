@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.12.0](#to-2120)
+  - [Schema change for every host: billable manual entries](#schema-change-for-every-host-billable-manual-entries)
+  - [Billable: what a host does](#billable-what-a-host-does)
 - [To 2.11.0](#to-2110)
 - [To 2.10.1](#to-2101)
 - [To 2.10.0](#to-2100)
@@ -173,6 +176,54 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.12.0
+
+From **2.11.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.12.0 (minor; Beacon D-20261111-12). One nullable column; `nowo-tech/form-kit-bundle` now needs **^2.22** (the
+`switch` option of the *Billable* switch). No asset rebuild.
+
+### Schema change for every host: billable manual entries
+
+`task_board_task_time_entries.billable` (nullable boolean, no default). Existing rows stay `NULL` ("not set"); nothing is
+rewritten or dropped. Generate it with `doctrine:migrations:diff`, or apply (table prefix `task_board_`):
+
+```sql
+-- MySQL / MariaDB / PostgreSQL / SQLite
+ALTER TABLE task_board_task_time_entries ADD billable BOOLEAN DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_task_time_entries DROP billable;
+```
+
+The demo ships it as `demo/symfony8/migrations/Version20261112120000.php`.
+
+### Billable: what a host does
+
+Nothing, unless you want a default or wrote the flag yourself:
+
+- **Default for new manual entries.** With TimeTrackBundle >= 1.21 installed, TaskBoard asks TimeTrack's
+  `TimeEntryBillableDefaultProviderInterface` (one provider for both bundles, with the task's TimeTrack scope). Without
+  TimeTrack, or for a different answer, alias `Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface`
+  (`defaultFor(object $user, string $taskId, ?string $boardId): ?bool`; null = no default) to your service.
+- **Period lock.** With TimeTrackBundle >= 1.13 installed, a manual entry follows TimeTrack's timesheet lock (a locked or
+  submitted period of its user refuses the change). Alias `Service\TaskTimePeriodLockInterface` for another source.
+- **Changing the flag** goes through `Service\TaskTimeBillableService::change()` (public): its author or a board
+  manager with the edit right on the task, never on a deleted user's entry or in a locked period; recorded in the
+  task's history (`time_billable`) and dispatched as `TASK_TIME_BILLABLE_CHANGED`. If you wrote the column yourself
+  (Beacon override D23), call it instead.
+- **Reports** that counted manual entries with a project default can read the column now (`NULL` = not set).
+- **Task API.** `billable` is accepted on `POST …/time_entries` and changed with `PUT …/time_entries/{timer_id}`
+  (`api.hooks.time_entries` must implement `Api\Hook\TaskApiTimeEntryBillableInterface`; `ManualTaskApiTimeEntries`
+  does). A time store of your own keeps working: without the interface the new route answers 403 `TIME_003`. Time is
+  still never deleted through the API (403 `TIME_002`).
+- `TaskTimeLogger::log()` gains a trailing `?bool $billable = null`; `TaskTimeLoggerInterface` is unchanged.
+- Twig overrides of `manage/_task_time_section.html.twig` get `billableTimeEntryIds` and `timeEntryBillableForm`, and
+  `timeEntryForm.billable`; an override that renders the form children in a loop shows the switch already.
 
 ## To 2.11.0
 
