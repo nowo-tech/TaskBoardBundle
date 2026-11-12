@@ -189,7 +189,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 ## To 2.15.0
 
 Additive (REQ-ARCH-001 / REQ-RUNTIME-002). Nothing to do: with an unchanged configuration and unchanged host services
-2.15 behaves exactly as 2.14.1. No schema change.
+2.15 behaves exactly as 2.14.1. No schema change with the defaults (only the opt-in `database.user_reference: id` changes the user columns).
 
 ### Framework-free host ports
 
