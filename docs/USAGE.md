@@ -1186,7 +1186,14 @@ Beacon spec 204. The host knows who works when; the board's calendar (`calendar.
   Return only what this viewer may read, and never a medical or other special category reason: use "Absent"
   (Beacon shows *Absent* to everyone without `leave.manage`). A label is at most 80 printable characters.
 - **Defaults.** Without a provider nothing is called and the markup is the 2.13 markup. A provider that returns nothing
-  changes nothing either. An exception from the provider fails the page, like any other error of the host.
+  changes nothing either. Since 2.14.1 an exception from the provider no longer fails the page: the calendar renders
+  without annotations (the 2.13 page) and the failure is logged as a warning (`TaskBoard calendar day annotations
+  failed`, with the exception).
+- **Per-task access.** The calendar query (since 2.1) reads the board's tasks without asking `TASK_ACCESS_CHECK` for each
+  one: board access decides what the calendar shows, and the tasks passed to `assigneeDays()` (and their assignee ids)
+  are those of the visible page. A host that denies single tasks with a `TASK_ACCESS_CHECK` listener must apply the
+  same rule in its annotation provider (return nothing for the assignees of tasks the viewer may not read) and should
+  not rely on the calendar to hide those tasks.
 
 ### Calendar annotations: Standard Symfony host
 

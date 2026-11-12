@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay } from './calendar-utils';
+import { addDays, dayDiff, dragEdge, grabOffset, gridStep, movedDates, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay } from './calendar-utils';
 
 describe('calendar date maths', () => {
     it('counts days across months, years and a daylight-saving change', () => {
@@ -65,5 +65,22 @@ describe('calendar date maths', () => {
         expect(snapDates({ start: '2026-11-15', due: '' }, off)).toEqual({ start: '2026-11-17', due: '' });
         expect(snapDates({ start: '', due: '' }, off)).toEqual({ start: '', due: '' });
         expect(snapDates({ start: '2026-11-14', due: '2026-11-15' }, new Set())).toEqual({ start: '2026-11-14', due: '2026-11-15' });
+    });
+});
+
+describe('movedDates (2.14.1, audit NN-L2)', () => {
+    const weekend = new Set(['2030-03-09', '2030-03-10']);
+
+    it('writes a move that changes the dates', () => {
+        expect(movedDates({ start: '2030-03-04', due: '2030-03-05' }, 1, new Set())).toEqual({ start: '2030-03-05', due: '2030-03-06' });
+        expect(movedDates({ start: '2030-03-07', due: '2030-03-07' }, 2, weekend)).toEqual({ start: '2030-03-11', due: '2030-03-11' });
+    });
+
+    it('writes nothing when the move snaps back onto the same dates', () => {
+        // Friday 8 March dropped on Saturday 9: the next working day is Monday 11, not back. Monday 11 dropped on Sunday 10
+        // snaps forward to Monday 11 again.
+        expect(movedDates({ start: '2030-03-11', due: '2030-03-11' }, -1, weekend)).toBeNull();
+        expect(movedDates({ start: '', due: '2030-03-11' }, -2, weekend)).toBeNull();
+        expect(movedDates({ start: '2030-03-04', due: '2030-03-04' }, 0, new Set())).toBeNull();
     });
 });

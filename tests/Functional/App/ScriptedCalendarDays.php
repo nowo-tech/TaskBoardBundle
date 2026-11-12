@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotation;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotations;
 use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
+use RuntimeException;
 
 /**
  * Since 2.14.0: the host's calendar days of the functional tests: the annotations a test sets per user id, and every call
@@ -25,9 +26,15 @@ final class ScriptedCalendarDays implements CalendarDayAnnotationProviderInterfa
     /** @var list<array{string, CalendarViewer, CalendarDateRange, list<string>}> */
     public array $calls = [];
 
+    /** Since 2.14.1: thrown by the next viewerDays() call when set (a failing host provider). */
+    public ?RuntimeException $failure = null;
+
     public function viewerDays(CalendarViewer $viewer, CalendarDateRange $range): CalendarDayAnnotations
     {
         $this->calls[] = ['viewer', $viewer, $range, []];
+        if ($this->failure instanceof RuntimeException) {
+            throw $this->failure;
+        }
 
         return new CalendarDayAnnotations(array_filter($this->viewer[$viewer->userId] ?? [], static fn (CalendarDayAnnotation $day): bool => $range->contains($day->date)));
     }

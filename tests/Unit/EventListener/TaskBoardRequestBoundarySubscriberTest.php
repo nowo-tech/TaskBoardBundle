@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\EventListener;
 
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
+use Nowo\TaskBoardBundle\EventListener\UnitOfWorkFrames;
 use Nowo\TaskBoardBundle\Service\TaskChangeContext;
+use Nowo\TaskBoardBundle\Tests\Support\BoundaryDriver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -13,10 +15,6 @@ use RuntimeException;
 use stdClass;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\ConsoleEvents;
-use Symfony\Component\Console\Event\ConsoleCommandEvent;
-use Symfony\Component\Console\Event\ConsoleTerminateEvent;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -33,9 +31,12 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
+use Symfony\Component\Messenger\Event\WorkerMessageSkipEvent;
 use Symfony\Component\Messenger\Event\WorkerStoppedEvent;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Worker;
+
+use const PHP_INT_MAX;
 
 /**
  * Since 2.11.1 (REQ-RUNTIME-002): the boundaries of {@see TaskBoardRequestBoundarySubscriber} — the same memo
@@ -43,6 +44,7 @@ use Symfony\Component\Messenger\Worker;
  * run.
  */
 #[CoversClass(TaskBoardRequestBoundarySubscriber::class)]
+#[CoversClass(UnitOfWorkFrames::class)]
 final class TaskBoardRequestBoundarySubscriberTest extends TestCase
 {
     private TaskChangeContext $context;
@@ -51,27 +53,32 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
 
     private HttpKernelInterface $kernel;
 
+    private BoundaryDriver $units;
+
     protected function setUp(): void
     {
         $this->context    = new TaskChangeContext();
         $this->dispatcher = new EventDispatcher();
         $this->dispatcher->addSubscriber(new TaskBoardRequestBoundarySubscriber([$this->context]));
         $this->kernel = $this->createStub(HttpKernelInterface::class);
+        $this->units  = new BoundaryDriver($this->dispatcher, $this->kernel);
     }
 
     public function testSubscribesToTheRequestMessengerAndConsoleBoundaries(): void
     {
         $events = TaskBoardRequestBoundarySubscriber::getSubscribedEvents();
 
-        self::assertSame(['onKernelRequest', 4096], $events[KernelEvents::REQUEST]);
-        self::assertSame(['onKernelFinishRequest', -4096], $events[KernelEvents::FINISH_REQUEST]);
-        self::assertSame(['onKernelTerminate', -4096], $events[KernelEvents::TERMINATE]);
-        self::assertSame(['onMessageReceived', 4096], $events[WorkerMessageReceivedEvent::class]);
-        self::assertSame(['onMessageFinished', -4096], $events[WorkerMessageHandledEvent::class]);
-        self::assertSame(['onMessageFinished', -4096], $events[WorkerMessageFailedEvent::class]);
-        self::assertSame(['onWorkerStopped', -4096], $events[WorkerStoppedEvent::class]);
-        self::assertSame(['onConsoleCommand', 4096], $events[ConsoleEvents::COMMAND]);
-        self::assertSame(['onConsoleTerminate', -4096], $events[ConsoleEvents::TERMINATE]);
+        self::assertSame(['onKernelRequest', PHP_INT_MAX], $events[KernelEvents::REQUEST]);
+        self::assertSame(['onKernelFinishRequest', PHP_INT_MAX], $events[KernelEvents::FINISH_REQUEST]);
+        self::assertSame([['onKernelTerminateStarted', PHP_INT_MAX], ['onKernelTerminate', -4096]], $events[KernelEvents::TERMINATE]);
+        self::assertSame(['onMessageReceived', PHP_INT_MAX], $events[WorkerMessageReceivedEvent::class]);
+        self::assertSame([['onMessageEnded', PHP_INT_MAX], ['onMessageFinished', -4096]], $events[WorkerMessageHandledEvent::class]);
+        self::assertSame([['onMessageEnded', PHP_INT_MAX], ['onMessageFinished', -4096]], $events[WorkerMessageFailedEvent::class]);
+        self::assertSame(['onMessageEnded', PHP_INT_MAX], $events[WorkerMessageSkipEvent::class]);
+        self::assertSame(['onWorkerStopped', PHP_INT_MAX], $events[WorkerStoppedEvent::class]);
+        self::assertSame(['onConsoleCommand', PHP_INT_MAX], $events[ConsoleEvents::COMMAND]);
+        self::assertSame(['onConsoleError', PHP_INT_MAX], $events[ConsoleEvents::ERROR]);
+        self::assertSame([['onConsoleCommandEnded', PHP_INT_MAX], ['onConsoleTerminate', -4096]], $events[ConsoleEvents::TERMINATE]);
     }
 
     public function testMainRequestStartAndTerminateClearTheMemos(): void
@@ -81,6 +88,7 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
         self::assertNull($this->context->current(), 'the next main request starts empty');
 
         $this->leak();
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
         $this->terminate();
         self::assertNull($this->context->current(), 'terminate clears what the request left');
     }
@@ -199,16 +207,93 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
         $this->dispatcher->dispatch(new WorkerStoppedEvent(new Worker([], $this->createStub(MessageBusInterface::class))));
         $this->leak();
 
-        $this->consoleTerminate();
+        $this->consoleCommand();
 
         self::assertNull($this->context->current(), 'the stopped worker no longer counts as a message in flight');
     }
 
-    public function testTerminateWithoutCommandEventStillClears(): void
+    /** Since 2.14.1 (audit NM): a terminate of a run that never started ends nothing (never a blind decrement). */
+    public function testTerminateWithoutCommandEventEndsNothing(): void
     {
+        $this->consoleCommand();
         $this->leak();
-        $this->consoleTerminate();
+        $this->units->commandEndsUnknown();
 
+        self::assertSame('rule:leaked', $this->context->current());
+        $this->consoleTerminate();
+        self::assertNull($this->context->current());
+    }
+
+    /** Since 2.14.1 (audit NL2-v): a command that runs itself in-process is one frame per run. */
+    public function testACommandRunningItselfIsTrackedPerRun(): void
+    {
+        $command = new Command('app:recursive');
+        $this->units->commandStarts($command);
+        $this->leak();
+        $this->units->commandStarts($command);
+        $this->consoleTerminate();
+        self::assertSame('rule:leaked', $this->context->current(), 'the inner run does not end the outer one');
+        $this->consoleTerminate();
+        self::assertNull($this->context->current());
+    }
+
+    /**
+     * Since 2.14.1 (audit NM / NL2-v): a run whose error listener threw (no terminate) is dropped at the next main
+     * request, so the request is the outermost unit again and clears.
+     */
+    public function testAFailingRunWithoutTerminateDoesNotBlockTheNextRequest(): void
+    {
+        $this->consoleCommand();
+        $this->units->commandFailsWithoutTerminate();
+        $this->leak();
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        self::assertNull($this->context->current());
+        $this->leak();
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
+        $this->terminate();
+        self::assertNull($this->context->current());
+    }
+
+    /**
+     * Since 2.14.1 (audit NL2-v2): a handler runs a command that fails with a throwing error listener, the message
+     * fails, the worker stops: no message stays in flight and the next main request clears.
+     */
+    public function testAFailedCommandInsideAFailedMessageThenAStoppedWorker(): void
+    {
+        $this->units->received();
+        $this->consoleCommand();
+        $this->units->commandFailsWithoutTerminate();
+        $this->units->failed();
+        $this->units->workerStopped();
+        $this->leak();
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        self::assertNull($this->context->current());
+    }
+
+    /** Since 2.14.1 (audit NL2-v): a run started inside a message that never terminated ends with the message. */
+    public function testARunThatNeverTerminatedEndsWithItsMessage(): void
+    {
+        $this->units->received();
+        $this->consoleCommand();
+        $this->units->handled();
+        $this->leak();
+        $this->units->commandStarts();
+        self::assertNull($this->context->current(), 'the next command is the outermost unit again');
+    }
+
+    /** Since 2.14.1 (audit NL2-v): a main request handled inside another one neither clears nor ends the outer one. */
+    public function testANestedMainRequestKeepsTheOuterRequestState(): void
+    {
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        $this->leak();
+        // In-process http_kernel->handle() (no terminate(): only the front controller terminates the outer request).
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
+        $this->consoleCommand();
+        $this->consoleTerminate();
+        self::assertSame('rule:leaked', $this->context->current());
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
+        $this->terminate();
         self::assertNull($this->context->current());
     }
 
@@ -264,11 +349,11 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
 
     private function consoleCommand(): void
     {
-        $this->dispatcher->dispatch(new ConsoleCommandEvent(new Command('app:probe'), new ArrayInput([]), new NullOutput()), ConsoleEvents::COMMAND);
+        $this->units->commandStarts();
     }
 
     private function consoleTerminate(): void
     {
-        $this->dispatcher->dispatch(new ConsoleTerminateEvent(new Command('app:probe'), new ArrayInput([]), new NullOutput(), 0), ConsoleEvents::TERMINATE);
+        $this->units->commandEnds();
     }
 }

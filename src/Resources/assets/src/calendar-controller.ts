@@ -1,5 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
-import { dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay, type CalendarEdge, type TaskDates } from './calendar-utils';
+import { dayDiff, dragEdge, grabOffset, gridStep, movedDates, phoneListUrl, sameDates, snapToWorkingDay, type CalendarEdge, type TaskDates } from './calendar-utils';
 import { openKitDialog } from './dialog-utils';
 import { openFold } from './filter-fold-utils';
 
@@ -122,8 +122,15 @@ export default class CalendarController extends Controller<HTMLElement> {
     private readonly onSortableMoved = (event: Event): void => {
         const { detail } = event as CustomEvent<SortableDetail>;
         const dates = this.datesOf(detail.item);
-        void this.send(detail.item, this.snap(shiftDates(dates, this.days(detail))), dates, detail.revert);
+        const next = movedDates(dates, this.days(detail), this.nonWorkingDays());
         this.grab = 0;
+        if (next === null) {
+            // Since 2.14.1 (audit NN-L2): it snapped back onto its own dates: the bar goes back, no write, no Undo.
+            detail.revert?.();
+
+            return;
+        }
+        void this.send(detail.item, next, dates, detail.revert);
     };
 
     /** FR-031: arrow keys, Home and End move between the days; the links and buttons inside a day keep their own keys. */
@@ -211,10 +218,6 @@ export default class CalendarController extends Controller<HTMLElement> {
         }
 
         return new Set(Array.from(this.gridTarget.querySelectorAll<HTMLElement>('[data-non-working]'), (cell) => cell.dataset.date ?? ''));
-    }
-
-    private snap(dates: TaskDates): TaskDates {
-        return snapDates(dates, this.nonWorkingDays());
     }
 
     private snapDay(day: string): string {
