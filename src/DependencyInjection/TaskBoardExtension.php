@@ -929,11 +929,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * Since 2.15.0: the Doctrine mapping of one group of TaskBoard entities from its XML files (Resources/config/doctrine-xml,
      * deliberately not Resources/config/doctrine, so DoctrineBundle's auto_mapping keeps the attributes by default).
      *
-     * @return array{type: string, is_bundle: false, dir: string, prefix: string, alias: string}
+     * @return array{type: string, is_bundle: false, dir: string, prefix: string}
      */
-    private function xmlMappingOf(string $group, string $prefix, string $alias): array
+    private function xmlMappingOf(string $group, string $prefix): array
     {
-        return ['type' => 'xml', 'is_bundle' => false, 'dir' => __DIR__ . '/../Resources/config/doctrine-xml/' . $group, 'prefix' => $prefix, 'alias' => $alias];
+        return ['type' => 'xml', 'is_bundle' => false, 'dir' => __DIR__ . '/../Resources/config/doctrine-xml/' . $group, 'prefix' => $prefix];
     }
 
     public function getAlias(): string
@@ -962,7 +962,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 'orm' => [
                     'mappings' => [
                         'TaskBoardBundle' => $this->xmlMapping($container)
-                            ? $this->xmlMappingOf('core', 'Nowo\\TaskBoardBundle\\Entity', 'TaskBoardBundle')
+                            ? $this->xmlMappingOf('core', 'Nowo\\TaskBoardBundle\\Entity')
                             : ['type' => 'attribute', 'is_bundle' => true],
                     ],
                 ],
@@ -974,7 +974,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardSync' => $this->xmlMapping($container) ? $this->xmlMappingOf('sync', 'Nowo\\TaskBoardBundle\\Sync\\Entity', 'TaskBoardSync') : [
+                        'TaskBoardSync' => $this->xmlMapping($container) ? $this->xmlMappingOf('sync', 'Nowo\\TaskBoardBundle\\Sync\\Entity') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Sync/Entity',
@@ -1000,7 +1000,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardApi' => $this->xmlMapping($container) ? $this->xmlMappingOf('api', 'Nowo\\TaskBoardBundle\\Api\\Entity', 'TaskBoardApi') : [
+                        'TaskBoardApi' => $this->xmlMapping($container) ? $this->xmlMappingOf('api', 'Nowo\\TaskBoardBundle\\Api\\Entity') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Api/Entity',
@@ -1016,7 +1016,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardRecurrence' => $this->xmlMapping($container) ? $this->xmlMappingOf('recurrence', 'Nowo\\TaskBoardBundle\\Recurrence\\Entity', 'TaskBoardRecurrence') : [
+                        'TaskBoardRecurrence' => $this->xmlMapping($container) ? $this->xmlMappingOf('recurrence', 'Nowo\\TaskBoardBundle\\Recurrence\\Entity') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Recurrence/Entity',
@@ -1032,7 +1032,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardNumber' => $this->xmlMapping($container) ? $this->xmlMappingOf('number', 'Nowo\\TaskBoardBundle\\Number\\Entity', 'TaskBoardNumber') : [
+                        'TaskBoardNumber' => $this->xmlMapping($container) ? $this->xmlMappingOf('number', 'Nowo\\TaskBoardBundle\\Number\\Entity') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Number/Entity',

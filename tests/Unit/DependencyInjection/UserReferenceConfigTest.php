@@ -68,7 +68,7 @@ final class UserReferenceConfigTest extends TestCase
             self::assertFalse($mappings[$name]['is_bundle']);
             self::assertStringEndsWith('/Resources/config/doctrine-xml/' . $group, $mappings[$name]['dir']);
             self::assertDirectoryExists($mappings[$name]['dir']);
-            self::assertSame($name, $mappings[$name]['alias']);
+            self::assertArrayNotHasKey('alias', $mappings[$name], 'deprecated by DoctrineBundle 3.4');
         }
 
         $layered = $this->prepend(['database' => ['mapping_type' => 'xml']], ['database' => ['mapping_type' => 'attribute']]);
