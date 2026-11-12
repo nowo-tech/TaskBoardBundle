@@ -144,7 +144,9 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   `TaskCommentSnapshot`, `TaskChangeSnapshot`, `TaskSyncDirectorySnapshot`: ids, names, dates, the creator's id; no
   entity, collection or user object). The HTTP request travels as `Api\Value\TaskApiRequestContext` (method, path,
   route, client IP, the `Authorization` credential and the headers; never a cookie), an upload as
-  `Api\Value\TaskApiUpload` (temporary path, client name and type, size, `open()`).
+  `Api\Value\TaskApiUpload` (temporary path, client name and client-supplied type, size, `open()`). Audit OC-I1: the
+  request context never copies credential headers (Authorization, Proxy-Authorization, PHP-Auth-*, Cookie, X-Api-Key),
+  so a host may log it; the credential reaches the host only as `$credential`.
 - **Selection rule.** A service implementing the deprecated interface is asked exactly as in 2.14, also when it
   implements the twin too. A service implementing only the twin is asked through an internal gate (`Port\*Gate`). The
   same configuration keys take either (`api.hooks.*`, `assignee_provider`, `comments.*`, `history.cause_labeler`,
