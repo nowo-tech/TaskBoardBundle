@@ -1,0 +1,35 @@
+# Since 2.13.0 (Beacon D-20261112-01): the multi-board task list, its workload and its export — loaded only with
+# `multi_board.enabled: true`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\MultiBoard\NullMultiBoardScopeProvider: ~
+
+    Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery:
+        arguments:
+            $userClass: '%nowo_task_board.user_class%'
+
+    Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskList:
+        arguments:
+            $userClass: '%nowo_task_board.user_class%'
+            $maxBoards: '%nowo_task_board.multi_board.max_boards%'
+            $scanMaxRows: '%nowo_task_board.multi_board.scan_max_rows%'
+            $exportMaxRows: '%nowo_task_board.multi_board.export.max_rows%'
+
+    Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface:
+        alias: Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskList
+
+    Nowo\TaskBoardBundle\MultiBoard\Export\MultiBoardExportTable: ~
+
+    Nowo\TaskBoardBundle\Form\MultiBoardTaskFilterType: ~
+
+    Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController:
+        public: true
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $dashboardRoute: '%nowo_task_board.dashboard_route%'
+            $perPage: '%nowo_task_board.multi_board.per_page%'

@@ -171,6 +171,9 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.first_board', RecordingBoardProvisioner::class)->autowire()->public();
         // Since 2.3.0 (spec 216): the host's history label of a change's cause (used when a test sets history.cause_labeler).
         $container->services()->set('app.cause_labeler', RuleCauseLabeler::class)->public();
+        // Since 2.13.0: the host's multi-board scopes (used when a test sets multi_board.scope_provider).
+        $container->services()->set('app.multi_scope', ScriptedMultiBoardScope::class)->public();
+        $container->services()->set('app.domain_scope', DomainProjectBoardScope::class)->public();
         // Since 2.3.0 (audit IC-I1): a move.targets hook that offers every board (used when a test sets move.targets).
         $container->services()->set('app.all_targets', AllBoardsTargets::class)->autowire()->public();
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {

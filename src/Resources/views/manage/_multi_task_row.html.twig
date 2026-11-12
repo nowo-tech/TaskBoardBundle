@@ -1,0 +1,30 @@
+{#
+    Since 2.13.0: one task of the multi-board list as the cells of a row. Variables: row (MultiBoardTaskRow), taskRoute,
+    boardRoute (route names; with tenancy the links carry the board's tenant slug from the host's scope).
+#}
+{% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
+{% set _slug = row.board.tenantSlug ? {tenantSlug: row.board.tenantSlug} : {} %}
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.number'|trans({}, 'NowoTaskBoardBundle') }}">{% if row.number %}<span class="nowo-task-number">#{{ row.number }}</span>{% else %}<span class="nowo-task-list__none">—</span>{% endif %}</td>
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.title'|trans({}, 'NowoTaskBoardBundle') }}">
+    <span class="nowo-task-list__title{{ row.completed ? ' is-completed' : '' }}">
+        <a href="{{ path(taskRoute, {taskId: row.taskId} + _slug) }}" data-testid="nowo-task-multi-title">{{ row.title }}</a>
+    </span>
+    {% if row.labels is not empty %}{{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: row.labels}, with_context: false) }}{% endif %}
+</td>
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.board'|trans({}, 'NowoTaskBoardBundle') }}">
+    <a href="{{ path(boardRoute, {boardId: row.board.id} + _slug) }}" data-testid="nowo-task-multi-board">{{ row.board.label }}</a>
+</td>
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.column'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.columnName ?? '—' }}</td>
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.assignees'|trans({}, 'NowoTaskBoardBundle') }}">
+    {% for person in row.assignees %}<span class="nowo-task-multi__person">{{ person.label }}</span>{{ not loop.last ? ', ' }}{% else %}<span class="nowo-task-list__none">—</span>{% endfor %}
+</td>
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.priority'|trans({}, 'NowoTaskBoardBundle') }}">
+    <span class="nowo-task-priority nowo-task-priority--{{ row.priority.value }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ ('task_board.priority.' ~ row.priority.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
+</td>
+<td class="{{ _cell }} nowo-task-list__date" data-label="{{ 'task_board.multi.column.due'|trans({}, 'NowoTaskBoardBundle') }}">
+    {% if row.dueAt %}
+        <time datetime="{{ row.dueAt|date('Y-m-d') }}" class="{{ row.overdue ? 'is-late' : '' }}">{{ row.dueAt|date('Y-m-d') }}</time>{% if row.overdue %}<span class="nowo-task-sr-only"> {{ 'task_board.multi.overdue'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+    {% else %}
+        <span class="nowo-task-list__none">—</span>
+    {% endif %}
+</td>

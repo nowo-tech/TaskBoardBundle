@@ -19,6 +19,7 @@ use function array_map;
 use function is_string;
 use function preg_match;
 use function str_contains;
+use function str_starts_with;
 
 /**
  * Configuration tree for TaskBoardBundle.
@@ -595,6 +596,8 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('gantt')->defaultValue('@NowoTaskBoardBundle/manage/gantt.html.twig')->end()
                         // Since 2.1.0 (spec 214, with calendar.enabled).
                         ->scalarNode('calendar')->defaultValue('@NowoTaskBoardBundle/manage/calendar.html.twig')->end()
+                        // Since 2.13.0 (with multi_board.enabled).
+                        ->scalarNode('tasks')->defaultValue('@NowoTaskBoardBundle/manage/tasks.html.twig')->end()
                         ->scalarNode('task')->defaultValue('@NowoTaskBoardBundle/manage/task.html.twig')->end()
                         ->scalarNode('import')->defaultValue('@NowoTaskBoardBundle/manage/import.html.twig')->end()
                         // Since 2.3.0 (spec 217, with move.enabled).
@@ -864,6 +867,41 @@ final class Configuration implements ConfigurationInterface
                     ->info('Since 2.1.0 (spec 214): the Calendar view of a board and the task_schedule route. Opt-in: false = no routes, no tab.')
                     ->children()
                         ->booleanNode('enabled')->defaultFalse()->end()
+                    ->end()
+                ->end()
+                ->arrayNode('multi_board')
+                    ->addDefaultsIfNotSet()
+                    ->info('Since 2.13.0 (Beacon D-20261112-01): the tasks of several boards in one list ("All tasks"), with a Board / Project column, filters, pagination, the workload per person and a CSV / XLSX export. Opt-in: false = no routes, services or output change.')
+                    ->children()
+                        ->booleanNode('enabled')->defaultFalse()->end()
+                        ->scalarNode('scope_provider')
+                            ->defaultNull()
+                            ->info('Service id of a Nowo\\TaskBoardBundle\\MultiBoard\\MultiBoardScopeProviderInterface: the boards each viewer may read here (re-checked with canViewBoard()). null = no board for anyone (deny by default).')
+                        ->end()
+                        ->scalarNode('path')
+                            ->defaultValue('/tools/task-board/tasks')
+                            ->info('Path of the list (route nowo_task_board_tasks); the export is <path>/export.{format} (nowo_task_board_tasks_export). May hold route variables (e.g. /orgs/{organisation}/tasks): they reach the provider in MultiBoardViewer::$context. Not copied under tenancy.tenant_paths.')
+                            ->validate()
+                                ->ifTrue(static fn (mixed $path): bool => !is_string($path) || !str_starts_with($path, '/') || str_contains($path, '{format}'))
+                                ->thenInvalid('multi_board.path must start with "/" and must not use {format}.')
+                            ->end()
+                        ->end()
+                        ->integerNode('per_page')
+                            ->defaultValue(25)
+                            ->info('Default rows per page: 10, 25, 50 or 100 (the page offers the same choices).')
+                            ->validate()
+                                ->ifNotInArray([10, 25, 50, 100])
+                                ->thenInvalid('multi_board.per_page must be 10, 25, 50 or 100.')
+                            ->end()
+                        ->end()
+                        ->integerNode('max_boards')->defaultValue(500)->min(1)->max(2000)->info('The most boards of a scope the list reads (the rest is left out and logged as a warning): bounds the IN-list of the queries and the per-board access checks.')->end()
+                        ->integerNode('scan_max_rows')->defaultValue(10000)->min(100)->max(100000)->info('With a label filter the tasks are compared in PHP (tags are JSON): the most tasks one page, workload or export reads for it. Above it the page says the result is partial.')->end()
+                        ->arrayNode('export')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_rows')->defaultValue(5000)->min(1)->max(100000)->info('The most rows of one CSV / XLSX export (streamed in batches of 500). Above it the export stops there and carries the header X-Task-Board-Export-Truncated.')->end()
+                            ->end()
+                        ->end()
                     ->end()
                 ->end()
                 ->arrayNode('history')

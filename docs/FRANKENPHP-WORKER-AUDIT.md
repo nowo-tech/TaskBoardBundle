@@ -7,6 +7,7 @@
 | Audit date | 2026-09-23 |
 | Method | Manual review of every PHP file under `src/` (controller, services, importers, repositories, Doctrine and event listeners, Twig extension, form types, route loader, command, DI extension, compiler pass, `services*.yaml`) |
 | Re-audit (2026-11-12, REQ-RUNTIME-002) | 2.11.1: the request memos added since 1.23 (avatars, repeat icons, synced people, change cause, held task events) are cleared at the request, Messenger and console boundaries by `TaskBoardRequestBoundarySubscriber`, not only by `kernel.reset`; one-kernel worker test without the resetter (see [Request memos and boundaries](#request-memos-and-boundaries-2111)) |
+| Re-audit (2026-11-12, 2.13.0) | The multi-board list (`multi_board.enabled`) adds no state: `MultiBoardTaskList`, `DoctrineMultiBoardTaskQuery`, `MultiBoardExportTable`, `NullMultiBoardScopeProvider` and the controller are `final readonly` (or have only constructor dependencies); the viewer, the checked boards and every row live in the call, an export's batches in its generator; `XlsxStreamWriter` is built per export. Worker test `tests/Functional/MultiBoard/MultiBoardWorkerTest.php` (see [Multi-board list (2.13.0)](#multi-board-list-2130)) |
 | Remediation (2026-09-25) | W-01, W-03 (positions), W-04, W-05 resolved; W-02 resolved for access decisions and timer aggregation (refresh) with identity-map clearing for rendered pages left to the host; closed EntityManagers are reset by the bundle after failed flushes (`Doctrine\RecoveringFlusher`); regression tests simulate consecutive requests without `reset()` |
 | **Verdict** | ✅ **Viable under scenario B** — bundle services hold no per-request state, a failed flush no longer leaves the worker with a closed EntityManager, time-tracking access and timer aggregation reload managed entities before deciding/mutating. Clearing Doctrine's identity map between requests (freshness of rendered HTML, memory) remains the application's responsibility |
 
@@ -16,6 +17,7 @@
 - [Summary](#summary)
 - [Services reviewed](#services-reviewed)
 - [Request memos and boundaries (2.11.1)](#request-memos-and-boundaries-2111)
+- [Multi-board list (2.13.0)](#multi-board-list-2130)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
@@ -115,6 +117,25 @@ services resetter and `clear()`; `tests/Unit/EventListener/TaskBoardRequestBound
 boundary. Without the subscriber the worker test fails at its first iteration.
 
 **Static checks:** `composer igor` (CI job `igor`) and the PHPStan FrankenPHP worker ruleset pass.
+
+## Multi-board list (2.13.0)
+
+| Service | State | Notes |
+|---------|-------|-------|
+| `MultiBoard\MultiBoardTaskList` | none (`final readonly`) | Asks the host's provider once per call, loads the boards, re-checks `canViewBoard()`; the user is loaded by id per call |
+| `MultiBoard\DoctrineMultiBoardTaskQuery` | none (`final readonly`) | Array hydration only: tasks never enter the identity map; the assignees' users do (one query per page or batch), cleared by the host per rule 7 |
+| `MultiBoard\Export\MultiBoardExportTable` | none | Translator per call |
+| `MultiBoard\Export\XlsxStreamWriter` | per file | `new` per export inside the response callback, never a service |
+| `Controller\TaskBoardMultiBoardController` | none | The viewer is built from `getUser()` and the request per action |
+
+The host's `MultiBoardScopeProviderInterface` must resolve per call too (stated on the interface).
+
+**Worker test:** `tests/Functional/MultiBoard/MultiBoardWorkerTest.php` boots one `FunctionalKernel` built as production
+(`TASK_BOARD_TEST_DEBUG=0`), drives `http_kernel` directly without the services resetter, and alternates alice and bob
+(two boards each in their own scope) over **300 iterations** of the list, the workload with a label filter and a CSV
+export of each (1,800 requests). Each response must hold its own user's tasks and none of the other's tasks, boards or
+e-mail; memory after a cycle collection grows less than **4 MiB** after a 30-iteration warm-up. The test host clears its
+entity manager at each boundary (REQ-RUNTIME-002 rule 7).
 
 ## Findings
 

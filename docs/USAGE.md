@@ -48,6 +48,10 @@
 - [Provider connections and archived tasks (since 1.23)](#provider-connections-and-archived-tasks-since-123)
 - [Task member pictures (since 1.23)](#task-member-pictures-since-123)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
+- [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
+  - [Standard Symfony host](#standard-symfony-host)
+  - [DDD / hexagonal host](#ddd--hexagonal-host)
+  - [Filters, sort, workload and export](#filters-sort-workload-and-export)
 - [Translations](#translations)
 
 ## Manage UI
@@ -548,6 +552,7 @@ TaskBoard never needs your domain classes.
 | Access | `Security\TaskBoardAccessCheckerInterface`, `TenantAwareTaskBoardAccessCheckerInterface`, `TaskBoardTeamMembershipResolverInterface` |
 | Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisionerInterface`, `Board\BoardScopeProviderInterface` |
 | Links to your objects | `Link\TaskObjectLinkResolverInterface` |
+| Boards of the multi-board list (since 2.13) | `MultiBoard\MultiBoardScopeProviderInterface` (values only) |
 | API | `Api\Hook\*Interface` (authenticator, users, workspace, plan gate, ...) |
 
 Policy decisions can also be answered by listening to `TaskBoardEvents::BOARD_ACCESS_CHECK`, `TASK_ACCESS_CHECK`,
@@ -1157,6 +1162,123 @@ Check that the viewer may read what it returns: the ledger does not. The route `
 **Calendar.** `/board/{boardId}/calendar?mode=month|week|list&date=Y-m-d`, with the filters `assignee`, `priority`, `tag`, `column`, `completed=1` and `subtasks=1`. A link reproduces the view. Completed tasks and subtasks are hidden unless asked for. A task shows as a bar with both dates, on its day with one, and not at all with none.
 
 Editors change dates four ways, all through `task_schedule` (`start`, `due`, `_token`; an empty date clears it, and both are required): drag the body, drag an edge, *Reschedule*, or `TaskManager::reschedule()` from code. The server checks `canEditTask()` on every write: read-only answers 403, out of reach 404.
+
+## Multi-board task list (since 2.13)
+
+"All tasks" of an organisation (Beacon D-20261112-01): the tasks of several boards in one list, with a Board / Project
+column, filters, server-side sort and pagination, the workload per person and a CSV / XLSX export. Opt-in
+(`multi_board.enabled`); options in [CONFIGURATION](CONFIGURATION.md#multi-board-task-list-since-213).
+
+**Who sees what.** The host says which boards a viewer may read; the bundle never opens one the viewer cannot already
+read:
+
+1. the manage UI checks (`canAccess()`, `canListBoards()` of the access checker), else 403;
+2. `multi_board.scope_provider` returns the boards for the viewer (no provider, or none: an empty list, and the export
+   answers 404);
+3. each of those boards is re-checked with `TaskBoardResourceAccessChecker::canViewBoard()` (creator, team,
+   `security.manage_roles`, `BOARD_ACCESS_CHECK` listeners); a board it refuses is left out;
+4. the filters only narrow that set: a `board` outside it is ignored, an assignee only filters the tasks already there.
+
+### Standard Symfony host
+
+```php
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardScope;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeEntry;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardViewer;
+
+final readonly class OrganisationBoardScope implements MultiBoardScopeProviderInterface
+{
+    public function __construct(private ProjectRepository $projects) {}
+
+    public function readableBoards(MultiBoardViewer $viewer): MultiBoardScope
+    {
+        $entries = [];
+        // One query: the projects of the organisation in the URL the user may read tasks of.
+        foreach ($this->projects->readableTaskBoards($viewer->userId, $viewer->context('organisation')) as $project) {
+            $entries[] = new MultiBoardScopeEntry($project->taskBoardId(), $project->name(), (string) $project->id());
+        }
+
+        return new MultiBoardScope($entries);   // MultiBoardScope::none() for anyone else
+    }
+}
+```
+
+```yaml
+nowo_task_board:
+    multi_board:
+        enabled: true
+        scope_provider: App\Tasks\OrganisationBoardScope
+        path: /organisations/{organisation}/tasks
+```
+
+- `MultiBoardViewer::$userId` is the signed-in user's `getId()` as a string; `$context` holds the route variables of
+  `multi_board.path` (here `organisation`), never `_` attributes.
+- `MultiBoardScopeEntry::$label` is what the Board / Project column shows (null: the board's name). With `tenancy`,
+  `$tenantSlug` makes the task and board links go to the tenant copies (`/projects/<slug>/tasks/task/<id>`); the list
+  itself is not copied under the tenant paths.
+- Called once per page, workload or export, never per row. Resolve per call: no viewer in a property (FrankenPHP
+  worker mode).
+- The page is UiKit's list scaffold (`web_ui.templates.tasks`, `manage/tasks.html.twig`); one row is
+  `manage/_multi_task_row.html.twig` (`row`: a `MultiBoardTaskRow`) or `_multi_workload_row.html.twig`.
+
+### DDD / hexagonal host
+
+The port and its values carry no framework type (REQ-ARCH-001): the adapter receives a `MultiBoardViewer` (ids and
+strings) and returns ids. To read the list from your own application layer (a report, a message handler, an API of
+yours), call the read port by ids; it returns read models, never entities:
+
+```php
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardViewer;
+
+$viewer = new MultiBoardViewer($userId, ['organisation' => 'acme']);
+$page   = $tasks->page($viewer, MultiBoardTaskFilter::fromQuery(['status' => 'all', 'sort' => 'due']), 1, 50);
+foreach ($page->rows as $row) {            // MultiBoardTaskRow: ids, title, board label, column, dates, assignees
+    // ...
+}
+$workload = $tasks->workload($viewer, new MultiBoardTaskFilter());   // MultiBoardWorkloadRow per assignee
+$export   = $tasks->export($viewer, new MultiBoardTaskFilter(), 1000); // null: no board; rows() is a generator
+```
+
+Unlike the command ports, `MultiBoardTaskListInterface` **checks access itself** on every call (steps 2 to 4 above, for
+the user whose id the viewer carries; an id of nobody reads nothing). `security.manage_roles` are evaluated against the
+current security token, as everywhere in the bundle: outside a request there is none, so a manager role does not apply.
+
+### Filters, sort, workload and export
+
+| Query | Meaning |
+|-------|---------|
+| `board` | One board of the scope (ignored otherwise) |
+| `assignee` | A user id, or `none` for unassigned tasks |
+| `column` | A column name (any board; case-insensitive) |
+| `status` | `open` (default), `done` or `all` |
+| `priority` | `low`, `normal`, `high`, `urgent` |
+| `due_from`, `due_to` | `Y-m-d`, both inclusive |
+| `overdue=1` | Open tasks due before now |
+| `label` | One tag (case-insensitive) |
+| `q` | Title contains (`LIKE`, escaped), or `#123` / `123`: that number |
+| `sort`, `dir` | `due` (no date last), `priority`, `title`, `board` (board name), `column`, `number`, `created`, `updated`; `asc` / `desc` |
+| `page`, `per_page` | 1-based page; 10, 25, 50 or 100 (default `multi_board.per_page`) |
+| `view=people` | The workload: per assignee (and *Unassigned*), open, overdue and done tasks, the estimate of the open ones and the time logged; a task with two assignees counts for both; the status filter does not apply |
+
+Archived tasks and archived boards never show. Subtasks are listed like any task.
+
+**Export.** `<path>/export.csv` and `<path>/export.xlsx` take the same query (the header buttons carry the current one)
+and write the filtered, sorted set: number, title, board / project, column, status, priority, assignees, start, due,
+overdue, labels, estimate and logged minutes, task id. Same visibility as the list (no board: 404). Streamed in batches
+of 500, at most `multi_board.export.max_rows` rows (then `X-Task-Board-Export-Truncated: <max>`), `Cache-Control:
+no-store, private`. Text that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, a tab or a carriage
+return, also after a `;`, `,`, `|` or tab inside the cell) gets a leading `'` (ControllerKit `CsvSafeWriter`), in the CSV
+and in the XLSX alike; numbers stay numbers. The XLSX holds inline strings only, never a formula.
+
+**Queries.** One query for the boards of the scope, one `COUNT` and one page query over `board_id IN (...)` (indexes
+`task_board_tasks_board_archived_idx` and `task_board_tasks_board_open_due_idx`), then one query for the page's assignees
+and one for their names; the filter choices are two more (assignees and column names of the scope). The workload is one
+grouped query. An export reads 500 tasks per query. The label filter is the exception: tags are a JSON column no portable
+query searches, so the matching tasks are read in batches and compared in PHP, at most `multi_board.scan_max_rows`
+(the page then says the result may be incomplete).
 
 ## Translations
 

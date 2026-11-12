@@ -47,6 +47,10 @@ use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
+use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskList;
+use Nowo\TaskBoardBundle\MultiBoard\NullMultiBoardScopeProvider;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
@@ -282,6 +286,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerRecurrence($container, $loader, $config, $emName);
+        $this->registerMultiBoard($container, $loader, $config, $emName);
         // Since 2.3.0 (spec 216): the host's label of a history row's cause.
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
             $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', new Reference($config['history']['cause_labeler']));
@@ -357,6 +362,33 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+    }
+
+    /**
+     * Since 2.13.0 (Beacon D-20261112-01): `multi_board.*`. With `enabled: false` nothing is registered: no route, service
+     * or parameter, so nothing changes for a host.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerMultiBoard(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $multi = $config['multi_board'];
+        if (!$multi['enabled']) {
+            return;
+        }
+
+        $container->setParameter('nowo_task_board.multi_board.per_page', $multi['per_page']);
+        $container->setParameter('nowo_task_board.multi_board.max_boards', $multi['max_boards']);
+        $container->setParameter('nowo_task_board.multi_board.scan_max_rows', $multi['scan_max_rows']);
+        $container->setParameter('nowo_task_board.multi_board.export.max_rows', $multi['export']['max_rows']);
+        $loader->load('services_multi_board.yaml');
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $container->getDefinition(DoctrineMultiBoardTaskQuery::class)->setArgument('$entityManager', $manager);
+        $container->getDefinition(MultiBoardTaskList::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$scopeProvider', new Reference($this->serviceOr($multi['scope_provider'], NullMultiBoardScopeProvider::class)));
+        $container->setAlias(MultiBoardScopeProviderInterface::class, $this->serviceOr($multi['scope_provider'], NullMultiBoardScopeProvider::class));
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$multiBoardPath', $multi['path']);
     }
 
     /**

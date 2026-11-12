@@ -1,0 +1,8 @@
+{# Since 2.13.0: one assignee of the multi-board workload as the cells of a row. Variable: row (MultiBoardWorkloadRow). #}
+{% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
+<td class="{{ _cell }}" data-label="{{ 'task_board.multi.column.person'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.person ? row.person.label : 'task_board.multi.filter.unassigned'|trans({}, 'NowoTaskBoardBundle') }}</td>
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.open'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.open }}</td>
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.overdue'|trans({}, 'NowoTaskBoardBundle') }}"><span class="{{ row.overdue > 0 ? 'is-late' : '' }}">{{ row.overdue }}</span></td>
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.done'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.completed }}</td>
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.estimate'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.estimatedMinutes > 0 ? row.estimatedMinutes|nowo_task_board_duration : '—' }}</td>
+<td class="{{ _cell }} nowo-task-list__num" data-label="{{ 'task_board.multi.column.logged'|trans({}, 'NowoTaskBoardBundle') }}">{{ row.loggedMinutes|nowo_task_board_duration }}</td>
