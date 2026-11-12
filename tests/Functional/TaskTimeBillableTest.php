@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 
 use function array_values;
 use function in_array;
+use function krsort;
 
 /**
  * Since 2.12.0 (Beacon D-20261111-12): the Billable switch of *Log time* (host default), the per-entry switch for its
@@ -73,6 +74,8 @@ final class TaskTimeBillableTest extends FunctionalTestCase
         foreach ($this->em->find(Task::class, $taskId)?->getTimeEntries() ?? [] as $entry) {
             $minutes[$entry->getMinutes()] = $entry->getBillable();
         }
+        // Entries come back in no guaranteed order on every database.
+        krsort($minutes);
         self::assertSame([30 => true, 20 => false, 10 => null, 5 => true], $minutes, 'switched off with no host default: not set, as before');
     }
 
@@ -126,7 +129,7 @@ final class TaskTimeBillableTest extends FunctionalTestCase
 
         // Audit: two history rows (who, old, new, the day) and two events.
         $rows = array_values(array_filter($this->em->find(Task::class, $taskId)?->getChangeHistory()->toArray() ?? [], static fn (TaskChangeHistory $row): bool => $row->getChangeType() === TaskChangeType::TimeBillable));
-        self::assertSame([[null, 'true', '2026-11-02', 'author@example.com'], ['true', 'false', '2026-11-02', 'owner@example.com']], array_map(static fn (TaskChangeHistory $row): array => [$row->getOldValue(), $row->getNewValue(), $row->getContext(), $row->getUser()?->getEmail()], $rows));
+        self::assertEqualsCanonicalizing([[null, 'true', '2026-11-02', 'author@example.com'], ['true', 'false', '2026-11-02', 'owner@example.com']], array_map(static fn (TaskChangeHistory $row): array => [$row->getOldValue(), $row->getNewValue(), $row->getContext(), $row->getUser()?->getEmail()], $rows));
         self::assertSame([[null, true], [true, false]], array_map(static fn (TaskTimeBillableChangedEvent $e): array => [$e->oldBillable, $e->newBillable], $this->events));
         $crawler = $this->client->request('GET', self::BASE . 'task/' . $taskId);
         $page    = (string) $this->client->getResponse()->getContent();

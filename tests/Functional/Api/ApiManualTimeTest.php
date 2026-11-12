@@ -92,8 +92,14 @@ final class ApiManualTimeTest extends ApiTestCase
         self::assertSame([['field' => 'description', 'reason' => 'not_supported']], $this->json()['warnings']);
         $this->em->clear();
         self::assertTrue($this->em->find(TaskTimeEntry::class, $id)?->getBillable());
-        $history = $this->em->find(Task::class, $task->getId())?->getChangeHistory()->last();
-        self::assertSame([TaskChangeType::TimeBillable, 'false', 'true'], [$history?->getChangeType(), $history?->getOldValue(), $history?->getNewValue()]);
+        // The task's history rows have no guaranteed order on every database: look for the billable one.
+        $rows = [];
+        foreach ($this->em->find(Task::class, $task->getId())?->getChangeHistory() ?? [] as $row) {
+            if ($row->getChangeType() === TaskChangeType::TimeBillable) {
+                $rows[] = [$row->getOldValue(), $row->getNewValue()];
+            }
+        }
+        self::assertSame([['false', 'true']], $rows);
         $this->get('/api/tasks/v2/team/team-1/time_entries?task_id=' . $task->getId());
         self::assertEqualsCanonicalizing([true, true], array_column($this->listOf('data'), 'billable'));
 
