@@ -32,7 +32,10 @@ use function max;
  *
  * Boundaries:
  * - main `kernel.request` (priority 4096, before any bundle listener) and `kernel.terminate` (priority -4096, after
- *   the host's terminate listeners); sub-requests (fragments, ESI) share the main request's memos and are left alone;
+ *   the host's terminate listeners), only outside a Messenger message and a console command: a main request handled
+ *   in-process by a message handler or a command (`http_kernel->handle()`, e.g. to render a PDF or an e-mail) belongs
+ *   to the outer unit and must not drop its open {@see TaskEventDeferral::defer()};
+ *   sub-requests (fragments, ESI) share the main request's memos and are left alone;
  * - Messenger `WorkerMessageReceivedEvent` (priority 4096) and `WorkerMessageHandledEvent` /
  *   `WorkerMessageFailedEvent` (priority -4096);
  * - `console.command` and `console.terminate` of the OUTERMOST command only, and only outside a Messenger message and
@@ -81,7 +84,7 @@ final class TaskBoardRequestBoundarySubscriber implements EventSubscriberInterfa
         $events = [
             KernelEvents::REQUEST        => ['onKernelRequest', 4096],
             KernelEvents::FINISH_REQUEST => ['onKernelFinishRequest', -4096],
-            KernelEvents::TERMINATE      => ['clear', -4096],
+            KernelEvents::TERMINATE      => ['onKernelTerminate', -4096],
         ];
 
         if (class_exists(WorkerMessageReceivedEvent::class)) {
@@ -107,7 +110,20 @@ final class TaskBoardRequestBoundarySubscriber implements EventSubscriberInterfa
         }
         // @igor-ignore - Unit-of-work flag, set and unset at the main request boundaries.
         $this->requestInFlight = true;
-        $this->clear();
+        if ($this->isOutsideMessageAndCommand()) {
+            $this->clear();
+        }
+    }
+
+    /**
+     * End of a main request: clears only outside a message and a command (an in-process `http_kernel->handle()` run
+     * by a message handler or a command, e.g. to render a PDF or an e-mail, ends inside the outer unit).
+     */
+    public function onKernelTerminate(): void
+    {
+        if ($this->isOutsideMessageAndCommand()) {
+            $this->clear();
+        }
     }
 
     public function onKernelFinishRequest(FinishRequestEvent $event): void
@@ -170,6 +186,11 @@ final class TaskBoardRequestBoundarySubscriber implements EventSubscriberInterfa
 
     private function isOutermostUnit(): bool
     {
-        return $this->consoleDepth === 0 && !$this->messageInFlight && !$this->requestInFlight;
+        return $this->isOutsideMessageAndCommand() && !$this->requestInFlight;
+    }
+
+    private function isOutsideMessageAndCommand(): bool
+    {
+        return $this->consoleDepth === 0 && !$this->messageInFlight;
     }
 }

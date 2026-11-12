@@ -65,7 +65,7 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
 
         self::assertSame(['onKernelRequest', 4096], $events[KernelEvents::REQUEST]);
         self::assertSame(['onKernelFinishRequest', -4096], $events[KernelEvents::FINISH_REQUEST]);
-        self::assertSame(['clear', -4096], $events[KernelEvents::TERMINATE]);
+        self::assertSame(['onKernelTerminate', -4096], $events[KernelEvents::TERMINATE]);
         self::assertSame(['onMessageReceived', 4096], $events[WorkerMessageReceivedEvent::class]);
         self::assertSame(['onMessageFinished', -4096], $events[WorkerMessageHandledEvent::class]);
         self::assertSame(['onMessageFinished', -4096], $events[WorkerMessageFailedEvent::class]);
@@ -81,7 +81,7 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
         self::assertNull($this->context->current(), 'the next main request starts empty');
 
         $this->leak();
-        $this->dispatcher->dispatch(new TerminateEvent($this->kernel, new Request(), new Response()), KernelEvents::TERMINATE);
+        $this->terminate();
         self::assertNull($this->context->current(), 'terminate clears what the request left');
     }
 
@@ -163,6 +163,36 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
         self::assertNull($this->context->current(), 'after the request a command starts empty again');
     }
 
+    public function testMainRequestHandledInsideAMessageDoesNotClearTheMessageState(): void
+    {
+        $this->dispatcher->dispatch(new WorkerMessageReceivedEvent(new Envelope(new stdClass()), 'async'));
+        $this->leak();
+
+        // In-process http_kernel->handle() inside the handler (e.g. rendering a PDF).
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
+        $this->terminate();
+        self::assertSame('rule:leaked', $this->context->current(), 'the message keeps its state');
+
+        $this->dispatcher->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'async'));
+        self::assertNull($this->context->current());
+    }
+
+    public function testMainRequestHandledInsideACommandDoesNotClearTheCommandState(): void
+    {
+        $this->consoleCommand();
+        $this->leak();
+
+        // In-process http_kernel->handle() inside the command (e.g. rendering an e-mail).
+        $this->request(HttpKernelInterface::MAIN_REQUEST);
+        $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
+        $this->terminate();
+        self::assertSame('rule:leaked', $this->context->current(), 'the command keeps its state');
+
+        $this->consoleTerminate();
+        self::assertNull($this->context->current());
+    }
+
     public function testSkippedMessageDoesNotBlockTheClearAfterTheWorkerStops(): void
     {
         $this->dispatcher->dispatch(new WorkerMessageReceivedEvent(new Envelope(new stdClass()), 'async'));
@@ -220,6 +250,11 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
     private function request(int $type): void
     {
         $this->dispatcher->dispatch(new RequestEvent($this->kernel, new Request(), $type), KernelEvents::REQUEST);
+    }
+
+    private function terminate(): void
+    {
+        $this->dispatcher->dispatch(new TerminateEvent($this->kernel, new Request(), new Response()), KernelEvents::TERMINATE);
     }
 
     private function finishRequest(int $type): void

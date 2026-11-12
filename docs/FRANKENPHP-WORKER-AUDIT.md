@@ -90,7 +90,9 @@ Symfony kernel the resetter still runs before every request, even with `FRANKENP
 
 `EventListener\TaskBoardRequestBoundarySubscriber` (registered by the bundle) calls their `reset()` on:
 
-- main `kernel.request` (priority 4096) and `kernel.terminate` (priority -4096); sub-requests share the main request's memos;
+- main `kernel.request` (priority 4096) and `kernel.terminate` (priority -4096), only outside a Messenger message and a
+  console command (a page rendered in-process by a handler or a command keeps the outer unit and its open `defer()`);
+  sub-requests share the main request's memos;
 - Messenger `WorkerMessageReceivedEvent` (4096) and `WorkerMessageHandledEvent` / `WorkerMessageFailedEvent` (-4096);
 - `console.command` (4096) and `console.terminate` (-4096) of the outermost command only, and only outside a message
   and a main request: a command run in-process (`Application::doRun()`) from another command, a message handler or a
@@ -108,7 +110,7 @@ that fails half-way with an open deferral, i.e. 1,000 messages. The avatar resol
 It asserts that every page and message shows its own user's current avatar and nothing of the other user, that a task
 event is never held by a deferral an earlier message left open, that every memo is empty after each unit of work, and
 that memory after a cycle collection grows less than **4 MiB** after a 50-iteration warm-up. The test host clears its
-own entity manager at each boundary (REQ-RUNTIME-002 rule 7). The same class also runs a nested `doRun()` command, the
+own entity manager at each boundary (REQ-RUNTIME-002 rule 7). The same class also runs a nested `doRun()` command, an in-process request inside a message with an open `defer()`, the
 services resetter and `clear()`; `tests/Unit/EventListener/TaskBoardRequestBoundarySubscriberTest.php` covers each
 boundary. Without the subscriber the worker test fails at its first iteration.
 

@@ -28,10 +28,13 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\EventDispatcher\GenericEvent;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\HttpKernel;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
+use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
 use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 use Symfony\Component\Messenger\EventListener\ResetServicesListener;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -204,6 +207,33 @@ final class WorkerStateTest extends FunctionalTestCase
 
         self::assertSame(['rule:42', 'rule:42'], $seen->getArrayCopy(), 'the nested command and the outer command after it see the outer cause');
         self::assertNull($context->current(), 'the end of the outermost command clears the context');
+    }
+
+    public function testMainRequestHandledInsideAMessageKeepsTheOpenDeferral(): void
+    {
+        $container  = self::getContainer();
+        $http       = $container->get('http_kernel');
+        $dispatcher = $container->get('event_dispatcher');
+        $events     = $container->get(TaskEventDeferral::class);
+        self::assertInstanceOf(HttpKernel::class, $http);
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        self::assertInstanceOf(TaskEventDeferral::class, $events);
+        $delivered = new ArrayObject();
+        $dispatcher->addListener('app.worker_probe_deferred', static function () use ($delivered): void {
+            $delivered->append(true);
+        });
+
+        // A message handler that holds a task event, then renders a page in-process (e.g. a PDF) before its commit.
+        $dispatcher->dispatch(new WorkerMessageReceivedEvent(new Envelope(new WorkerProbeMessage('alice@example.com', '1', false)), 'probe'));
+        $events->defer(static function () use ($events, $http, $delivered): void {
+            $events->dispatch(new GenericEvent(), 'app.worker_probe_deferred');
+            $request = Request::create('/tools/task-board/no-such-page');
+            $http->terminate($request, $http->handle($request));
+            self::assertCount(0, $delivered, 'still held inside the write');
+        });
+        $dispatcher->dispatch(new WorkerMessageHandledEvent(new Envelope(new WorkerProbeMessage('alice@example.com', '1', false)), 'probe'));
+
+        self::assertCount(1, $delivered, 'the in-process request did not drop the held event');
     }
 
     public function testServicesResetterStillResetsEveryMemo(): void

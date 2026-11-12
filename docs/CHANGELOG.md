@@ -117,12 +117,18 @@ Target 2.11.1 (patch).
   grew with every board viewed, a change cause left by a crashed write could label later history rows, and a write that
   died between `TaskEventDeferral::begin()` and its rollback held, and never dispatched, every later task event of that
   worker. The new
-  `EventListener\TaskBoardRequestBoundarySubscriber` clears them on the main `kernel.request` and `kernel.terminate`, on
+  `EventListener\TaskBoardRequestBoundarySubscriber` clears them on the main `kernel.request` and `kernel.terminate`
+  (outside a Messenger message and a console command: a page rendered in-process by a handler or a command, e.g. a PDF
+  or an e-mail, keeps the outer unit and its open `defer()`), on
   Messenger message received / handled / failed, and on the start and end of the outermost console command (a command
   run in-process from another command, a message handler or a controller does not clear the state of the unit that
   runs it). The services keep `ResetInterface`; the subscriber gets them as `IGNORE_ON_UNINITIALIZED` references and
   never builds one. Test: `WorkerStateTest` (one kernel, no resetter, alice and bob over 500 iterations: 1,500
   requests and 1,000 messages, memory within 4 MiB) and `TaskBoardRequestBoundarySubscriberTest`.
+  **Affected:** 1.23.0 to 2.11.0 (`TaskMemberAvatars` from 1.23.0, `SyncPeopleViewProvider` from 1.25.0,
+  `TaskRecurrenceView` / `TaskChangeContext` / `TaskEventDeferral` from 2.3.0), only under the precondition above: the
+  services resetter removed, replaced or bypassed (or `http_kernel` driven directly), `messenger:consume --no-reset`, or
+  a long-running console command.
 - **Dev dependency:** `symfony/messenger` (worker test only; the bundle does not require it).
 
 ### Changed
