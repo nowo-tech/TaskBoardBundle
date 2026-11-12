@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Service;
 
 use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
@@ -120,6 +121,30 @@ final class TaskTimeBillableServiceTest extends TestCase
         (new TaskTimeBillableService($repo, new TaskChangeRecorder(), $this->checker()))->change($this->task, $this->entry->getId(), $this->author, false);
         self::assertFalse($this->entry->getBillable());
         self::assertFalse((new NoTaskTimePeriodLock())->isLocked($this->author, 't', null, new DateTimeImmutable()));
+    }
+
+    /** Audit MV-B-L2: the lock check and the save run inside one transaction; a lock refusal leaves it without a write. */
+    public function testTheLockCheckAndTheSaveShareOneTransaction(): void
+    {
+        $lock = $this->createMock(TaskTimePeriodLockInterface::class);
+        $lock->method('isLocked')->willReturnOnConsecutiveCalls(false, true);
+        $inside = 0;
+        $em     = $this->createMock(EntityManagerInterface::class);
+        $em->expects(self::exactly(2))->method('wrapInTransaction')->willReturnCallback(static function (callable $write) use (&$inside): mixed {
+            ++$inside;
+
+            return $write();
+        });
+        $repo = $this->createMock(TaskRepositoryInterface::class);
+        $repo->expects(self::once())->method('save')->willReturnCallback(static function () use (&$inside): void {
+            self::assertSame(1, $inside, 'saved inside the transaction');
+        });
+        $service = new TaskTimeBillableService($repo, new TaskChangeRecorder(), $this->checker(), $lock, $this->dispatcher, $em);
+
+        $service->change($this->task, $this->entry->getId(), $this->author, true);
+        $this->expectRefusal(TaskTimeBillableRefusedException::PERIOD_LOCKED, fn (): TaskTimeEntry => $service->change($this->task, $this->entry->getId(), $this->author, false));
+        self::assertTrue($this->entry->getBillable());
+        self::assertCount(1, $this->events);
     }
 
     private function service(int $saves, ?TaskTimePeriodLockInterface $lock = null, ?EventDispatcher $dispatcher = null, ?TaskEventDeferral $deferral = null): TaskTimeBillableService

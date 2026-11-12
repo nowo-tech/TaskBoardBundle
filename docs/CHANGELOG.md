@@ -128,6 +128,12 @@ Target 2.12.0 (minor; Beacon D-20261111-12, request 2026-11-11 *billable time en
   through the API is still refused (403 `TIME_002`, spec 213).
 - `TaskTimeLogger::log()` takes a trailing `?bool $billable` (null = the host default).
 - Demo migration `Version20261112120000`.
+- **Audit MV (before the tag):** the TimeTrack lock bridge compares the entry's calendar day with each timesheet's
+  `periodStart` / `periodEnd` instead of noon in the PHP time zone, which checked the wrong day for UTC+13/+14 timesheets
+  (MV-B-L1); the lock check and the save run in one transaction of the bundle's entity manager, and the guarding
+  timesheets are read with TimeTrack's locking read when the store has it (MV-B-L2); the API docs say PUT is own entries
+  only (the board-manager path is the task page) and `TIME_004` means a locked period (MV-B-L3); the API audit row of
+  a billable change names the board (MV-B-I2).
 
 ### Changed
 

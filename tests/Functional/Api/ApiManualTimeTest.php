@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -90,6 +91,12 @@ final class ApiManualTimeTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertSame([$id, true], [$this->json()['data']['id'], $this->json()['data']['billable']]);
         self::assertSame([['field' => 'description', 'reason' => 'not_supported']], $this->json()['warnings']);
+        // Audit MV-B-I2: the audit row names the board.
+        $audit = self::getContainer()->get('app.api_audit');
+        self::assertInstanceOf(ApiAuditRecorder::class, $audit);
+        $row = end($audit->events);
+        self::assertNotFalse($row);
+        self::assertSame(['time.billable', $board->getId(), 'tenant-a', $task->getId(), ['billable']], [$row->operation, $row->boardId, $row->tenantKey, $row->taskId, $row->changedFields]);
         $this->em->clear();
         self::assertTrue($this->em->find(TaskTimeEntry::class, $id)?->getBillable());
         // The task's history rows have no guaranteed order on every database: look for the billable one.

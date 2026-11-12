@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -23,7 +24,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * deleted (`anonymised`: such an entry never changes), when the actor is neither its author nor a manager of the board or
  * cannot edit the task (`forbidden`, {@see TaskBoardResourceAccessChecker::canEditTimeEntry()}), and when the entry's
  * period is locked or waiting for approval (`period_locked`, {@see TaskTimePeriodLockInterface}: TimeTrack's timesheets when
- * it is installed). Each real change is recorded in the task's history (`time_billable`, old and new value, the entry's
+ * it is installed); the lock check and the save run in one transaction of the bundle's entity manager (audit MV-B-L2).
+ * Each real change is recorded in the task's history (`time_billable`, old and new value, the entry's
  * day as context) and dispatches {@see TaskTimeBillableChangedEvent} after the save. Setting the value it already has
  * writes nothing.
  */
@@ -35,6 +37,8 @@ final readonly class TaskTimeBillableService
         private TaskBoardResourceAccessChecker $accessChecker,
         private TaskTimePeriodLockInterface $periodLock = new NoTaskTimePeriodLock(),
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.12.0 (audit MV-B-L2): the lock check and the save in one transaction (null: one after the other).
+        private ?EntityManagerInterface $entityManager = null,
     ) {
     }
 
@@ -62,16 +66,29 @@ final readonly class TaskTimeBillableService
         if (!$this->accessChecker->canEditTimeEntry($actor, $entry, $task)) {
             throw new TaskTimeBillableRefusedException(TaskTimeBillableRefusedException::FORBIDDEN);
         }
-        if ($this->periodLock->isLocked($owner, $task->getId(), $task->getBoard()->getId(), $entry->getLoggedAt())) {
+        $old = $entry->getBillable();
+        // @igor-ignore - The closure runs at once (inside wrapInTransaction() or directly) and is never stored.
+        $write = function () use ($task, $entry, $owner, $actor, $old, $billable): ?bool {
+            // Inside the transaction: the lock port reads the guarding timesheets with a locking read when it can. A
+            // refusal is returned, not thrown, so the entity manager is not closed by a rollback.
+            if ($this->periodLock->isLocked($owner, $task->getId(), $task->getBoard()->getId(), $entry->getLoggedAt())) {
+                return null;
+            }
+            if (!$entry->markBillable($billable)) {
+                return false;
+            }
+            $this->changeRecorder->record($task, $actor, TaskChangeType::TimeBillable, $this->format($old), $this->format($billable), $entry->getLoggedAt()->format('Y-m-d'));
+            $this->taskRepository->save($task);
+
+            return true;
+        };
+        $changed = $this->entityManager instanceof EntityManagerInterface ? $this->entityManager->wrapInTransaction($write) : $write();
+        if ($changed === null) {
             throw new TaskTimeBillableRefusedException(TaskTimeBillableRefusedException::PERIOD_LOCKED);
         }
-
-        $old = $entry->getBillable();
-        if (!$entry->markBillable($billable)) {
+        if (!$changed) {
             return $entry;
         }
-        $this->changeRecorder->record($task, $actor, TaskChangeType::TimeBillable, $this->format($old), $this->format($billable), $entry->getLoggedAt()->format('Y-m-d'));
-        $this->taskRepository->save($task);
 
         $board = $task->getBoard();
         $event = new TaskTimeBillableChangedEvent($entry->getId(), $task->getId(), $board->getId(), $board->getTenantKey(), ActorId::of($owner), ActorId::of($actor), $old, $billable, $this->changeRecorder->currentCause());

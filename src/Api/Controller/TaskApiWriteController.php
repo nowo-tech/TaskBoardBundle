@@ -115,8 +115,9 @@ final readonly class TaskApiWriteController
     /** Since 2.12.0: the `billable` flag of one of the token's own time entries. */
     public function updateTime(Request $request, string $teamId, string $timerId): JsonResponse
     {
-        $input = $this->input($request, TaskApiTimeOperations::UPDATE_NOT_SUPPORTED);
-        $entry = $this->time->updateTime($this->principal($request), $teamId, $timerId, $input);
+        $input           = $this->input($request, TaskApiTimeOperations::UPDATE_NOT_SUPPORTED);
+        [$board, $entry] = $this->time->updateTime($this->principal($request), $teamId, $timerId, $input);
+        TaskApiIdempotencyListener::target($request, $board);
 
         return $this->answer(['data' => $this->serializer->timeEntry($entry, $teamId)], $input);
     }

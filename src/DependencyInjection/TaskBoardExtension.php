@@ -86,6 +86,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
@@ -125,6 +126,7 @@ use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
 use Symfony\Component\Config\FileLocator;
@@ -398,6 +400,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$moveEnabled', $enabled)
             ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class));
+        // Since 2.12.0 (audit MV-B-L2): the billable change runs the period lock check and the save in one transaction.
+        $container->getDefinition(TaskTimeBillableService::class)->setArgument('$entityManager', $manager);
         $container->getDefinition(TaskCopier::class)
             ->setArgument('$entityManager', $manager)
             ->setArgument('$maxSubtasks', $move['max_subtasks'])
@@ -733,6 +737,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (class_exists($this->timeTrackPeriodLockGuard)) {
             $container->register(TimeTrackTaskTimePeriodLock::class, TimeTrackTaskTimePeriodLock::class)
                 ->setArgument('$guard', new Reference($this->timeTrackPeriodLockGuard, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$timesheets', new Reference(TimesheetRepositoryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
                 ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
             $container->setAlias(TaskTimePeriodLockInterface::class, TimeTrackTaskTimePeriodLock::class);
         }

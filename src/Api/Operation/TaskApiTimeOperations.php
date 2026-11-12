@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 
 use function intdiv;
@@ -95,8 +96,10 @@ final readonly class TaskApiTimeOperations
      * {@see TaskApiTimeEntryBillableInterface} (403 `TIME_003` otherwise).
      *
      * @throws TaskApiRefusal
+     *
+     * @return array{0: ?TaskBoard, 1: TaskApiTimeEntry} the entry's board (audit row, idempotency target) and the entry
      */
-    public function updateTime(TaskApiPrincipal $principal, string $teamId, string $entryId, TaskApiInput $input): TaskApiTimeEntry
+    public function updateTime(TaskApiPrincipal $principal, string $teamId, string $entryId, TaskApiInput $input): array
     {
         $this->audit->requireListener();
         if (!$this->planGate->allowsTasks($principal->user, null)) {
@@ -110,9 +113,11 @@ final readonly class TaskApiTimeOperations
 
         // @igor-ignore - The time store writes through the bundle's billable service (Doctrine); ManualTaskApiTimeEntries is final readonly and keeps nothing.
         $entry = $this->timeEntries->setBillable($principal, $entryId, $billable);
-        $this->audit->written($principal, 'time.billable', null, $entry->taskId, ['entry' => $entry->id], ['billable']);
+        // Audit MV-B-I2: the audit row names the entry's board (the store already checked the task with the same rule).
+        $board = $entry->taskId === null ? null : $this->guard->task($principal, $entry->taskId, TaskApiCapability::WorkOnTask)->getBoard();
+        $this->audit->written($principal, 'time.billable', $board, $entry->taskId, ['entry' => $entry->id], ['billable']);
 
-        return $entry;
+        return [$board, $entry];
     }
 
     /**

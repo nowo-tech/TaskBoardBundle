@@ -742,7 +742,7 @@ paths:
     put:
       operationId: time_update
       summary: 'Since 2.12.0: set the billable flag of one of the token''s own entries'
-      description: 'Least level: My tasks (own task). Only billable changes; the other fields come back as warnings. Its author or a board manager, never in a locked or submitted period (409 TIME_004). 403 TIME_003 when the time store cannot change entries.'
+      description: 'Least level: My tasks (own task). Only billable changes; the other fields come back as warnings. Own entries only (another person''s is 404; the board-manager path is the task page), never in a locked or submitted period (409 TIME_004). 403 TIME_003 when the time store cannot change entries.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/TimeEntryUpdate'}}}}
