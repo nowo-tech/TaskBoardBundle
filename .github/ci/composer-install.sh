@@ -10,7 +10,7 @@ DOCTRINE_BUNDLE="${2:?Doctrine bundle constraint required (e.g. ^2.10)}"
 echo "Using doctrine/doctrine-bundle ${DOCTRINE_BUNDLE} with Symfony ^${SYMFONY}"
 
 jq --arg symfony "^${SYMFONY}" --arg doctrine "${DOCTRINE_BUNDLE}" '
-  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.21" |
   del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/clock"] = $symfony |
   .require["symfony/config"] = $symfony |

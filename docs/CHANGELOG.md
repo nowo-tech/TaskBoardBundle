@@ -138,8 +138,9 @@ Target 2.12.0 (minor; Beacon D-20261111-12, request 2026-11-11 *billable time en
 ### Changed
 
 - `nowo-tech/form-kit-bundle` requirement raised to `^2.22` (the `switch` checkbox option).
-- Tests load TimeTrack 1.21's port from `tests/phpstan-stubs` while the installed TimeTrack is older
-  (`tests/bootstrap.php`); remove the stub once `require-dev` asks for `^1.21`.
+- Dev dependency `nowo-tech/time-track-bundle` raised to `^1.21` (also in the CI install scripts), so the tests and
+  PHPStan run against TimeTrack's real billable default port. The optional runtime integration still works with older
+  TimeTrack: the billable bridge is registered only when the port exists.
 
 ## [2.11.1] - 2026-11-12
 
