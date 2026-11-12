@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.11.1] - 2026-11-12](#2111---2026-11-12)
 - [[2.11.0] - 2026-11-10](#2110---2026-11-10)
 - [[2.10.1] - 2026-11-10](#2101---2026-11-10)
 - [[2.10.0] - 2026-11-10](#2100---2026-11-10)
@@ -133,6 +134,38 @@ Target 2.12.0 (minor; Beacon D-20261111-12, request 2026-11-11 *billable time en
 - `nowo-tech/form-kit-bundle` requirement raised to `^2.22` (the `switch` checkbox option).
 - Tests load TimeTrack 1.21's port from `tests/phpstan-stubs` while the installed TimeTrack is older
   (`tests/bootstrap.php`); remove the stub once `require-dev` asks for `^1.21`.
+
+## [2.11.1] - 2026-11-12
+
+Target 2.11.1 (patch).
+
+### Fixed
+
+- **Request memos cleared at every boundary, also without the services resetter (REQ-RUNTIME-002).** The avatar URLs
+  (`TaskMemberAvatars`), the repeat icons (`TaskRecurrenceView`), the synced people rows (`SyncPeopleViewProvider`),
+  the change cause (`TaskChangeContext`) and the held task events (`TaskEventDeferral`) were cleared only by
+  `kernel.reset`. **Precondition:** with the stock Symfony kernel the services resetter still runs before every request
+  (also with `FRANKENPHP_RESET_KERNEL=false`), so nothing leaked there. It leaked only where the resetter does not run:
+  a host that removes, replaces or bypasses `services_resetter` (or drives `http_kernel` directly), Messenger consumers
+  started with `--no-reset`, and long-running console commands. There, a page or message could show an avatar URL, a
+  repeat icon or a synced task row resolved during an earlier request, possibly another viewer's (the memos are keyed by
+  user, board or task; board access is still checked per request, so no board of another tenant was shown), the memos
+  grew with every board viewed, a change cause left by a crashed write could label later history rows, and a write that
+  died between `TaskEventDeferral::begin()` and its rollback held, and never dispatched, every later task event of that
+  worker. The new
+  `EventListener\TaskBoardRequestBoundarySubscriber` clears them on the main `kernel.request` and `kernel.terminate`
+  (outside a Messenger message and a console command: a page rendered in-process by a handler or a command, e.g. a PDF
+  or an e-mail, keeps the outer unit and its open `defer()`), on
+  Messenger message received / handled / failed, and on the start and end of the outermost console command (a command
+  run in-process from another command, a message handler or a controller does not clear the state of the unit that
+  runs it). The services keep `ResetInterface`; the subscriber gets them as `IGNORE_ON_UNINITIALIZED` references and
+  never builds one. Test: `WorkerStateTest` (one kernel, no resetter, alice and bob over 500 iterations: 1,500
+  requests and 1,000 messages, memory within 4 MiB) and `TaskBoardRequestBoundarySubscriberTest`.
+  **Affected:** 1.23.0 to 2.11.0 (`TaskMemberAvatars` from 1.23.0, `SyncPeopleViewProvider` from 1.25.0,
+  `TaskRecurrenceView` / `TaskChangeContext` / `TaskEventDeferral` from 2.3.0), only under the precondition above: the
+  services resetter removed, replaced or bypassed (or `http_kernel` driven directly), `messenger:consume --no-reset`, or
+  a long-running console command.
+- **Dev dependency:** `symfony/messenger` (worker test only; the bundle does not require it).
 
 ### Changed
 
@@ -2144,7 +2177,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.11.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

@@ -7,6 +7,7 @@
 - [To 2.12.0](#to-2120)
   - [Schema change for every host: billable manual entries](#schema-change-for-every-host-billable-manual-entries)
   - [Billable: what a host does](#billable-what-a-host-does)
+- [To 2.11.1](#to-2111)
 - [To 2.11.0](#to-2110)
 - [To 2.10.1](#to-2101)
 - [To 2.10.0](#to-2100)
@@ -179,7 +180,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.12.0
 
-From **2.11.x**:
+From **2.11.1**:
 
 ```bash
 composer update nowo-tech/task-board-bundle
@@ -224,6 +225,22 @@ Nothing, unless you want a default or wrote the flag yourself:
 - `TaskTimeLogger::log()` gains a trailing `?bool $billable = null`; `TaskTimeLoggerInterface` is unchanged.
 - Twig overrides of `manage/_task_time_section.html.twig` get `billableTimeEntryIds` and `timeEntryBillableForm`, and
   `timeEntryForm.billable`; an override that renders the form children in a loop shows the switch already.
+
+## To 2.11.1
+
+From **2.11.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.11.1 (patch). No schema change, no configuration change and no asset rebuild. Nothing to change.
+
+- **Worker hosts without the services resetter.** The bundle now clears its own request memos at the request, Messenger
+  and console boundaries (`TaskBoardRequestBoundarySubscriber`, registered by the bundle). It does not touch your
+  entity manager: a host that removes or bypasses `services_resetter`, or runs `messenger:consume --no-reset`, must
+  still clear its own entity managers at every boundary (see
+  [FRANKENPHP-WORKER-AUDIT](FRANKENPHP-WORKER-AUDIT.md#usage-recommendations-in-worker-mode)).
 
 ## To 2.11.0
 

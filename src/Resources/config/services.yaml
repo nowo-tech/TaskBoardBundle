@@ -308,3 +308,16 @@ services:
             $logger: '@?logger'
         tags: [{ name: kernel.reset, method: reset }]
 
+    # Since 2.11.1 (REQ-RUNTIME-002): clears the request memos at the request, Messenger and console boundaries, also
+    # where the services resetter does not run. Lazy iterator of IGNORE_ON_UNINITIALIZED references ('@!'): a boundary
+    # never builds a service. TaskBoardExtension adds TaskRecurrenceView / SyncPeopleViewProvider when they are loaded.
+    Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber:
+        autowire: false
+        arguments:
+            $state: !iterator
+                - '@!Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
+                - '@!Nowo\TaskBoardBundle\Service\TaskChangeContext'
+                - '@!Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+        tags:
+            - { name: kernel.event_subscriber }
+

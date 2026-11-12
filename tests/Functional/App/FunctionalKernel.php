@@ -17,6 +17,8 @@ use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeHandler;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeMessage;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
@@ -150,7 +152,17 @@ final class FunctionalKernel extends Kernel
                 $container->services()->set('app.ux_icons', TablerOnlyUxIcons::class)->tag('twig.extension');
             }
         }
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + array_diff_key($this->taskBoard, ['__ui_kit' => true]));
+        // Since 2.11.1 (REQ-RUNTIME-002): a Messenger bus and the probe handler of the worker-state test; not a bundle option.
+        if (($this->taskBoard['__worker'] ?? false) === true) {
+            $container->extension('framework', ['messenger' => [
+                'default_bus' => 'messenger.bus.default',
+                'buses'       => ['messenger.bus.default' => []],
+            ]]);
+            $container->services()->set(WorkerProbeHandler::class)->autowire()->public()
+                ->tag('messenger.message_handler', ['handles' => WorkerProbeMessage::class])
+                ->tag('kernel.event_listener', ['event' => WorkerProbeHandler::EVENT, 'method' => 'onProbe']);
+        }
+        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).
         $container->services()->set('app.board_scopes', ScriptedBoardScopes::class)->public();
         // Since 2.0.0: the host's plan limits and first-board provisioning.
