@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
@@ -371,7 +372,9 @@ final readonly class TaskRecurrenceManager
             return 0;
         }
         $changed = 0;
-        foreach ($this->entityManager->getRepository(TaskRecurrence::class)->findBy(['author' => $id]) as $series) {
+        // Since 2.15.0 (audit OC-M2): exactly this user's series (a collation may fold case, accents or trailing spaces).
+        $own = array_filter($this->entityManager->getRepository(TaskRecurrence::class)->findBy(['author' => $id]), static fn (TaskRecurrence $series): bool => TaskBoardUsers::same($series->getAuthor(), $id));
+        foreach ($own as $series) {
             if ($series->isActive()) {
                 $series->setStatus(TaskRecurrence::STATUS_PAUSED, TaskRecurrence::REASON_AUTHOR);
             }

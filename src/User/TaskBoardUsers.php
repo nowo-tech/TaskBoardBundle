@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\User;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
@@ -95,6 +97,57 @@ final class TaskBoardUsers implements ResetInterface
         }
 
         return $this->find($user->id) ?? $user;
+    }
+
+    /** Since 2.15.0 (audit OC-M2): whether a user value (a reference or a host user) has exactly this id. */
+    public static function same(?object $user, string $id): bool
+    {
+        return $user !== null && ActorId::of($user) === $id;
+    }
+
+    /**
+     * Since 2.15.0 (audit OC-M2): the id of a user the bundle erases or looks up by, refused unless it can be matched
+     * exactly ({@see TaskBoardUserRef::isValid()}).
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function exactId(object $user): string
+    {
+        $id = ActorId::of($user);
+        if ($id === null || !TaskBoardUserRef::isValid($id)) {
+            throw new InvalidArgumentException('TaskBoard: the user has no id that can be matched exactly (user_reference: id).');
+        }
+
+        return $id;
+    }
+
+    /**
+     * Since 2.15.0 (audit OC-M2): the primary keys of the rows whose user field holds exactly `$id`. The database
+     * selects the candidates (its collation may fold case, accents or trailing spaces); PHP keeps the exact ones.
+     *
+     * @param class-string $class
+     *
+     * @return list<string>
+     */
+    public static function exactRowIds(EntityManagerInterface $manager, string $class, string $field, string $id): array
+    {
+        /** @var list<array{id: mixed, ref: mixed}> $rows */
+        $rows = $manager->createQueryBuilder()
+            ->select('x.id AS id', 'x.' . $field . ' AS ref')
+            ->from($class, 'x')
+            ->where('x.' . $field . ' = :id')
+            ->setParameter('id', $id)
+            ->getQuery()
+            ->getArrayResult();
+        $ids = [];
+        foreach ($rows as $row) {
+            $ref = $row['ref'];
+            if (($ref instanceof TaskBoardUserRef ? $ref->id : $ref) === $id) {
+                $ids[] = (string) $row['id'];
+            }
+        }
+
+        return $ids;
     }
 
     public function reset(): void

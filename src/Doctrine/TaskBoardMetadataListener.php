@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Doctrine;
 
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
+use Doctrine\DBAL\Platforms\MySQL80Platform;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Mapping\AssociationMapping;
 use Doctrine\ORM\Mapping\ClassMetadata;
@@ -95,7 +97,8 @@ final readonly class TaskBoardMetadataListener
     /**
      * Since 2.15.0 (`database.user_reference: id`): the user field becomes a string column with the user's id
      * ({@see TaskBoardUserRefType}) in the join column's place, same name and nullability, with an index of its own. On
-     * MySQL / MariaDB the column compares byte for byte (`utf8mb4_bin`, BUNDLES_FIX_RULES "Identifier columns").
+     * MySQL / MariaDB the column compares byte for byte with NO PAD (`utf8mb4_0900_bin` on MySQL 8, `utf8mb4_nopad_bin` on
+     * MariaDB; audit OC-M1, BUNDLES_FIX_RULES "Identifier columns").
      *
      * @param ClassMetadata<object> $metadata
      */
@@ -112,8 +115,15 @@ final readonly class TaskBoardMetadataListener
             'length'     => TaskBoardUserRef::MAX_LENGTH,
             'nullable'   => !$join instanceof JoinColumnMapping || $join->nullable !== false,
         ];
-        if ($platform instanceof AbstractMySQLPlatform) {
-            $field['options'] = ['collation' => 'utf8mb4_bin'];
+        // Audit OC-M1: a binary NO PAD collation (utf8mb4_bin is PAD SPACE: "u " = "u").
+        $collation = match (true) {
+            $platform instanceof MariaDBPlatform       => 'utf8mb4_nopad_bin',
+            $platform instanceof MySQL80Platform       => 'utf8mb4_0900_bin',
+            $platform instanceof AbstractMySQLPlatform => 'utf8mb4_bin', // MySQL 5.7: no NO PAD binary collation; ids with edge spaces are refused
+            default                                    => null,
+        };
+        if ($collation !== null) {
+            $field['options'] = ['collation' => $collation];
         }
         $metadata->mapField($field);
         $metadata->table['indexes']['idx_' . substr(sha1($metadata->getTableName() . '.' . $column), 0, 16)] = ['columns' => [$column]];

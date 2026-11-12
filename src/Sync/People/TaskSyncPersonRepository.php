@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -21,7 +22,9 @@ use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use SortDirection;
 
+use function array_filter;
 use function array_map;
+use function array_values;
 use function count;
 use function in_array;
 use function is_array;
@@ -200,6 +203,11 @@ final readonly class TaskSyncPersonRepository
 
         /** @var list<TaskSyncPerson> $people */
         $people = $builder->getQuery()->getResult();
+        if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): exactly this user's people.
+            $id     = ActorId::of($user);
+            $people = $id === null ? [] : array_values(array_filter($people, static fn (TaskSyncPerson $person): bool => TaskBoardUsers::same($person->getMappedUser(), $id) || TaskBoardUsers::same($person->getSuggestedUser(), $id)));
+        }
 
         return $people;
     }

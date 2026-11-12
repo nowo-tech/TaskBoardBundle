@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Doctrine\Type;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Types\Exception\InvalidType;
 use Doctrine\DBAL\Types\StringType;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
@@ -26,15 +27,21 @@ final class TaskBoardUserRefType extends StringType
 
     public function convertToDatabaseValue(mixed $value, AbstractPlatform $platform): ?string
     {
-        if ($value === null || is_string($value)) {
-            return $value;
+        if ($value === null) {
+            return null;
         }
-        if ($value instanceof TaskBoardUserRef) {
-            return $value->id;
-        }
-        $id = is_object($value) ? ActorId::of($value) : null;
+        $id = match (true) {
+            $value instanceof TaskBoardUserRef => $value->id,
+            is_string($value)                  => $value,
+            is_object($value)                  => ActorId::of($value),
+            default                            => null,
+        };
         if ($id === null) {
             throw InvalidType::new($value, self::NAME, ['null', 'string', TaskBoardUserRef::class, 'an object with getId()']);
+        }
+        // Audit OC-M1 (and OC-L2): checked before any write, on every platform (SQLite does not enforce the length).
+        if (!TaskBoardUserRef::isValid($id)) {
+            throw new InvalidArgumentException('A TaskBoard user reference is a valid UTF-8 id of 1 to 128 characters, without whitespace at its edges and without control or format characters.');
         }
 
         return $id;

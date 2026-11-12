@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\DddHost;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Types\ConversionException;
 use Doctrine\ORM\Tools\SchemaTool;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
@@ -13,12 +15,14 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardPerson;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardViewer;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardWorkloadRow;
+use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
@@ -26,6 +30,7 @@ use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
 use Nowo\TaskBoardBundle\Service\TaskChangeContext;
 use Nowo\TaskBoardBundle\Service\TaskCommentManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
 use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
@@ -33,13 +38,15 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpKernel\KernelInterface;
 
-/**
+/*
  * Since 2.15.0 (REQ-ARCH-001, both host kinds tested): the DDD host of {@see DddHostKernel} — users that are plain PHP
  * objects, XML mapping, the private entity manager, user references by id, ports through their twins only — creates a
  * board, columns, tasks, comments, members and time through the bundle's ports, and the bundle's pages show it with the
  * names the host's directory gives. The rows keep the users' ids exactly (a look-alike id in another case is another
  * user).
  */
+use function json_encode;
+
 final class DddHostKernelTest extends WebTestCase
 {
     private KernelBrowser $client;
@@ -137,11 +144,33 @@ final class DddHostKernelTest extends WebTestCase
         // list and its people (named by the directory).
         $trackable = $repository->findTrackableForUser('u-bruno', null, 10, 0);
         self::assertSame([$taskId], array_map(static fn (Task $task): string => $task->getId(), $trackable));
-        self::assertSame([], $repository->findTrackableForUser('U-BRUNO', null, 10, 0));
+        // Audit OC-M1 / OC-M2: look-alike ids never match (trailing / leading space, ZWSP, NBSP, case, accent). On MySQL
+        // and MariaDB (CI) the id columns are binary NO PAD; every lookup re-checks the id byte for byte in PHP.
+        foreach (['u-bruno ', ' u-bruno', "u-bruno\u{200B}", "u-bruno\u{00A0}", 'U-BRUNO', 'u-brunó'] as $lookAlike) {
+            self::assertSame([], $repository->findTrackableForUser($lookAlike, null, 10, 0), 'look-alike ' . json_encode($lookAlike));
+        }
         $teams = $container->get(TeamMemberRepositoryInterface::class);
         self::assertInstanceOf(TeamMemberRepositoryInterface::class, $teams);
         self::assertSame([], $teams->findByUserId('u-ana'));
         self::assertFalse($teams->isManagerOf('u-ana', 'u-bruno'));
+        // A look-alike id is refused before any write (a PAD SPACE collation would take it for Bruno).
+        $tasks2 = $container->get(TaskManagerInterface::class);
+        self::assertInstanceOf(TaskManagerInterface::class, $tasks2);
+        try {
+            $tasks2->create($this->repositoryBoard($boardId), new TaskFormData('Look-alike'), new DddUser('u-bruno ', 'Spaced', 'spaced@example.com'));
+            self::fail('an id with a trailing space is refused');
+        } catch (InvalidArgumentException|ConversionException) {
+        }
+        $this->em->clear();
+        $purger = $container->get('app.snapshot_purger');
+        self::assertInstanceOf(TaskTimeEntrySnapshotPurger::class, $purger);
+        try {
+            $purger->detachUser(new DddUser("u-bruno\u{200B}", 'Zwsp', 'zwsp@example.com'));
+            self::fail('a look-alike id is refused at the erasure entry point');
+        } catch (InvalidArgumentException) {
+        }
+        self::assertSame(0, $purger->detachUser(new DddUser('U-BRUNO', 'Upper', 'upper@example.com')), 'another user (case) has no rows');
+        self::assertSame(1, $this->rows(TaskTimeEntry::class, 'user_id = ?', ['u-bruno']), 'Bruno keeps his time');
         DddMultiBoardScope::$boardIds = [$boardId];
         $list                         = $container->get(MultiBoardTaskListInterface::class);
         self::assertInstanceOf(MultiBoardTaskListInterface::class, $list);
@@ -155,6 +184,16 @@ final class DddHostKernelTest extends WebTestCase
         self::assertNotNull($after);
         self::assertNotSame($before, $after);
         self::assertSame(1, $this->rows(TaskBoard::class, 'slug = ?', ['domain-board']));
+    }
+
+    private function repositoryBoard(string $id): TaskBoard
+    {
+        $boards = static::getContainer()->get(TaskBoardRepositoryInterface::class);
+        self::assertInstanceOf(TaskBoardRepositoryInterface::class, $boards);
+        $board = $boards->findById($id);
+        self::assertInstanceOf(TaskBoard::class, $board);
+
+        return $board;
     }
 
     /**

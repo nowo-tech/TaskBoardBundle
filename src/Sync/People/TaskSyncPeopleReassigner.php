@@ -208,11 +208,20 @@ final readonly class TaskSyncPeopleReassigner
         $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $counts = [];
         foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName'], [TaskChangeHistory::class, 'user', 'userName']] as [$class, $field, $name]) {
+            // Since 2.15.0 (audit OC-M2, user_reference: id): the rows of exactly this id, by primary key.
+            [$where, $match] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+                ? ['x.id IN (:match)', TaskBoardUsers::exactRowIds($this->entityManager, $class, $field, TaskBoardUsers::exactId($user))]
+                : ['x.' . $field . ' = :match', $user];
+            if ($match === []) {
+                $counts[] = 0;
+
+                continue;
+            }
             // Rows written before 1.25 have no snapshot yet: they get the current name first.
-            $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
-                ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $this->userParameter($user))->execute();
-            $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
-                ->setParameter('user', $this->userParameter($user))->execute();
+            $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE ' . $where . ' AND x.' . $name . ' IS NULL')
+                ->setParameter('label', $forgetName ? null : $label)->setParameter('match', $match)->execute();
+            $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE ' . $where)
+                ->setParameter('match', $match)->execute();
         }
         if ($forgetName) {
             $this->forgetMemberRows($user);
@@ -303,11 +312,5 @@ final readonly class TaskSyncPeopleReassigner
         }
 
         return $report->withCursor(null);
-    }
-
-    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
-    private function userParameter(object $user): object|string|null
-    {
-        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

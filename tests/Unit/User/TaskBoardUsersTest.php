@@ -16,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 
 use function in_array;
+use function json_encode;
 use function str_repeat;
 
 /**
@@ -25,13 +26,19 @@ final class TaskBoardUsersTest extends TestCase
 {
     public function testTheReferenceIsAnExactNonEmptyId(): void
     {
-        $ref = new TaskBoardUserRef(' Ana ');
-        self::assertSame(' Ana ', $ref->getId(), 'never trimmed');
-        self::assertSame(' Ana ', (string) $ref);
+        $ref = new TaskBoardUserRef('Ana Domain');
+        self::assertSame('Ana Domain', $ref->getId(), 'never trimmed or folded');
+        self::assertSame('Ana Domain', (string) $ref);
         new TaskBoardUserRef(str_repeat('x', 128));
+        self::assertTrue(TaskBoardUserRef::isValid('ünïcode-ü'));
+
+        // Audit OC-M1 / OC-L2: what a PAD SPACE or folding collation, or an invisible character, would confuse.
+        foreach (['', str_repeat('x', 129), 'u ', ' u', "u\t", "u\u{00A0}", "\u{3000}u", "u\u{200B}x", "u\u{FEFF}", "u\u{202E}x", "u\x00x", "u\xC3"] as $invalid) {
+            self::assertFalse(TaskBoardUserRef::isValid($invalid), json_encode($invalid) ?: 'invalid UTF-8');
+        }
 
         $this->expectException(InvalidArgumentException::class);
-        new TaskBoardUserRef(str_repeat('x', 129));
+        new TaskBoardUserRef(' Ana ');
     }
 
     public function testAnEmptyReferenceIsRefused(): void
@@ -53,6 +60,13 @@ final class TaskBoardUsersTest extends TestCase
         self::assertNull($type->convertToPHPValue('', $platform));
         self::assertEquals(new TaskBoardUserRef('U-1'), $type->convertToPHPValue('U-1', $platform));
         self::assertEquals(new TaskBoardUserRef('7'), $type->convertToPHPValue(7, $platform));
+        foreach (['u-3 ', new TestUser("u\u{200B}3", 'zwsp'), str_repeat('x', 129)] as $lookAlike) {
+            try {
+                $type->convertToDatabaseValue($lookAlike, $platform);
+                self::fail('refused before any write');
+            } catch (InvalidArgumentException) {
+            }
+        }
 
         $this->expectException(InvalidType::class);
         $type->convertToDatabaseValue(new stdClass(), $platform);

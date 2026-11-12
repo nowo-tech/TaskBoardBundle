@@ -261,7 +261,8 @@ nowo_task_board:
 - `mapping_type: xml` maps the same tables (no schema change). Keep DoctrineBundle's `auto_mapping` as it is: the XML
   files are outside `Resources/config/doctrine`.
 - `user_reference: id` **changes the schema** of an existing database: each user column (`creator_id`, `user_id`,
-  `author_id`, ...) becomes a `VARCHAR(128)` with no foreign key (binary collation on MySQL / MariaDB). Turn it on for a
+  `author_id`, ...) becomes a `VARCHAR(128)` with no foreign key (binary NO PAD collation on MySQL 8 / MariaDB). Ids
+  with whitespace at an edge, control or format characters or more than 128 characters are refused. Turn it on for a
   new installation, or migrate the columns yourself (the ids you have stay valid: an integer id becomes its decimal
   text). Without the foreign keys, deleting a user no longer removes their task and team memberships: call
   `TaskSyncPeopleReassigner::detachUser()` and `TaskTimeEntrySnapshotPurger::detachUser()` from your erasure flow, as the

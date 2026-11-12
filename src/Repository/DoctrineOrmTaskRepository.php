@@ -22,15 +22,18 @@ use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use SortDirection;
 
 use function array_chunk;
+use function array_keys;
 use function array_map;
 use function array_unique;
 use function array_values;
 use function count;
 use function in_array;
 use function is_array;
+use function is_object;
 use function max;
 use function mb_strtolower;
 use function uksort;
@@ -186,26 +189,46 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->leftJoin('t2.board', 'board')
             ->leftJoin('board.team', 'team')
             ->leftJoin(TeamMember::class, 'tm', 'WITH', 'tm.team = team');
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('t')
+            ->from(Task::class, 't')
+            ->andWhere('t.completedAt IS NULL')
+            ->andWhere('t.archivedAt IS NULL')
+            ->orderBy('t.createdAt', SortDirection::Descending)
+            ->setMaxResults(max(1, $limit))
+            ->setFirstResult(max(0, $offset));
         if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
-            // Since 2.15.0 (database.user_reference: id): the members' id columns themselves.
-            $ids->where('taskMember.user = :userId OR tm.user = :userId');
+            // Since 2.15.0 (database.user_reference: id; audit OC-M2): the candidates the database finds through the id
+            // columns, kept only when a member's id is exactly the user's (a collation may fold case, accents or
+            // trailing spaces), then the tasks of those ids.
+            if (!TaskBoardUserRef::isValid($userId)) {
+                return [];
+            }
+            /** @var list<array{id: string, assignee: mixed, teamMember: mixed}> $rows */
+            $rows = $ids->select('t2.id AS id', 'taskMember.user AS assignee', 'tm.user AS teamMember')
+                ->where('taskMember.user = :userId OR tm.user = :userId')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('userId', $userId)
+                ->getQuery()
+                ->getArrayResult();
+            $exact = [];
+            foreach ($rows as $row) {
+                if (TaskBoardUsers::same(is_object($row['assignee']) ? $row['assignee'] : null, $userId) || TaskBoardUsers::same(is_object($row['teamMember']) ? $row['teamMember'] : null, $userId)) {
+                    $exact[$row['id']] = true;
+                }
+            }
+            if ($exact === []) {
+                return [];
+            }
+            $qb->andWhere('t.id IN (:exact)')->setParameter('exact', array_keys($exact));
         } else {
             $ids->leftJoin('taskMember.user', 'assignee')
                 ->leftJoin('tm.user', 'tmUser')
                 ->where('assignee.id = :userId OR tmUser.id = :userId');
+            $qb->andWhere('t.id IN (' . $ids->getDQL() . ')')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('userId', $userId);
         }
-
-        $qb = $this->entityManager->createQueryBuilder()
-            ->select('t')
-            ->from(Task::class, 't')
-            ->where('t.id IN (' . $ids->getDQL() . ')')
-            ->andWhere('t.completedAt IS NULL')
-            ->andWhere('t.archivedAt IS NULL')
-            ->setParameter('assigneeRole', TaskMemberRole::Assignee)
-            ->setParameter('userId', $userId)
-            ->orderBy('t.createdAt', SortDirection::Descending)
-            ->setMaxResults(max(1, $limit))
-            ->setFirstResult(max(0, $offset));
 
         if ($search !== null && $search !== '') {
             // Since 1.25 (audit FP-I12): `%`, `_` and `!` in the search match literally (ESCAPE '!').

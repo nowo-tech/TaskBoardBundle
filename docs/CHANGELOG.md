@@ -186,6 +186,15 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   `User\TaskBoardUsers` (per unit of work, cleared at every boundary) keeps the bundle's queries mode-aware (the column
   itself instead of `IDENTITY()`, the id as the parameter). The member picker offers the assignee policy's users by id.
   Twig: `nowo_task_board_user(user)` (the host user behind a reference; used by the member label and avatar partials).
+  Audit OC (before release): the id columns compare in binary **NO PAD** (`utf8mb4_0900_bin` on MySQL 8,
+  `utf8mb4_nopad_bin` on MariaDB; `utf8mb4_bin` is PAD SPACE, so `"u "` matched `"u"`); an id with whitespace at an
+  edge, a control or format character (ZWSP, BOM, bidi marks), invalid UTF-8 or more than 128 characters is refused by
+  `TaskBoardUserRef` and by the column type before any write (also on SQLite); every lookup by user id (trackable tasks,
+  the API's owner and assignee filters, the multi-board assignee filter, the API time entries and their billable
+  change, the people mapped to a user) keeps only the rows whose id is equal byte for byte in PHP; the erasure ports
+  (`TaskTimeEntrySnapshotPurger::detachUser()`, `TaskSyncPeopleReassigner::detachUser()`) refuse an id that cannot
+  be matched exactly, select the rows, keep the exact ones and update them by primary key, and
+  `TaskRecurrenceManager::forgetAuthor()` keeps only the exact author's series.
 
 - **Private entity manager for the TaskBoard rows (opt-in, REQ-ARCH-001 rule 6).**
   `nowo_task_board.database.private_entity_manager: true` makes every bundle service read and write through

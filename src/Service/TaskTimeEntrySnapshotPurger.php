@@ -76,11 +76,19 @@ final readonly class TaskTimeEntrySnapshotPurger
     private function detachUserNow(object $user, bool $forgetName): int
     {
         $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        // Since 2.15.0 (audit OC-M2, user_reference: id): the rows of exactly this id (refused when it cannot be matched
+        // exactly), selected first and updated by primary key; a relation (the default) is matched as 2.14 did.
+        [$where, $match] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+            ? ['e.id IN (:match)', TaskBoardUsers::exactRowIds($this->entityManager, TaskTimeEntry::class, 'user', TaskBoardUsers::exactId($user))]
+            : ['e.user = :match', $user];
+        if ($match === []) {
+            return 0;
+        }
         // Rows written before 1.27 have no name yet: they get the current one first.
-        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE e.user = :user AND e.userName IS NULL')
-            ->setParameter('label', $label)->setParameter('user', $this->userParameter($user))->execute();
-        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE e.user = :user')
-            ->setParameter('user', $this->userParameter($user))->execute();
+        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE ' . $where . ' AND e.userName IS NULL')
+            ->setParameter('label', $label)->setParameter('match', $match)->execute();
+        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE ' . $where)
+            ->setParameter('match', $match)->execute();
         // The bulk updates bypass the identity map: loaded entries follow.
         foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[TaskTimeEntry::class] ?? [] as $entry) {
             if ($entry instanceof TaskTimeEntry && SyncUser::same($entry->getUser(), $user)) {
@@ -150,11 +158,5 @@ final readonly class TaskTimeEntrySnapshotPurger
         }
 
         return $builder;
-    }
-
-    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
-    private function userParameter(object $user): object|string|null
-    {
-        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

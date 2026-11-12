@@ -16,11 +16,14 @@ use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
+use function array_keys;
 use function array_map;
 use function array_slice;
 use function array_values;
@@ -418,7 +421,10 @@ final readonly class TaskApiQueryRepository
         if ($filter->statuses !== []) {
             $qb->join('t.column', 'statusColumn')->andWhere('LOWER(statusColumn.name) IN (:statuses)')->setParameter('statuses', $filter->statuses);
         }
-        if ($assignees !== []) {
+        if ($assignees !== [] && $this->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly one of them.
+            $qb->andWhere('t.id IN (:exactAssigneeTasks)')->setParameter('exactAssigneeTasks', $this->exactTaskIds($assignees, false));
+        } elseif ($assignees !== []) {
             $qb->andWhere('EXISTS (SELECT am.id FROM ' . TaskMember::class . ' am WHERE am.task = t AND am.memberRole = :assigneeRole AND am.user IN (:assignees))')
                 ->setParameter('assignees', array_map($this->userParameter(...), $assignees))
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
@@ -439,6 +445,12 @@ final readonly class TaskApiQueryRepository
         if ($owner === null) {
             return;
         }
+        if ($this->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): created by or assigned to exactly this id.
+            $qb->andWhere('t.id IN (:exactOwnTasks)')->setParameter('exactOwnTasks', $this->exactTaskIds([$owner], true));
+
+            return;
+        }
         $qb->andWhere('t.creator = :owner OR EXISTS (SELECT om.id FROM ' . TaskMember::class . ' om WHERE om.task = t AND om.memberRole = :ownerRole AND om.user = :owner)')
             ->setParameter('owner', $this->userParameter($owner))
             ->setParameter('ownerRole', TaskMemberRole::Assignee);
@@ -454,5 +466,62 @@ final readonly class TaskApiQueryRepository
     private function users(): TaskBoardUsers
     {
         return $this->users ?? new TaskBoardUsers();
+    }
+
+    private function idMode(): bool
+    {
+        return $this->users instanceof TaskBoardUsers && $this->users->idMode();
+    }
+
+    /**
+     * Since 2.15.0 (audit OC-M2): the tasks a user is the assignee (and, with `$creator`, the creator) of, by exact id.
+     * The database finds the candidates; PHP keeps the rows whose id is byte for byte one asked. Never empty (a match on
+     * no task is an impossible id), so the IN list stays valid.
+     *
+     * @param list<object> $users
+     *
+     * @return list<string>
+     */
+    private function exactTaskIds(array $users, bool $creator): array
+    {
+        $ids = [];
+        foreach ($users as $user) {
+            $id = ActorId::of($user);
+            if ($id !== null && TaskBoardUserRef::isValid($id)) {
+                $ids[$id] = true;
+            }
+        }
+        $tasks = [];
+        if ($ids !== []) {
+            /** @var list<array{taskId: mixed, ref: mixed}> $rows */
+            $rows = $this->entityManager->createQueryBuilder()
+                ->select('IDENTITY(m.task) AS taskId', 'm.user AS ref')
+                ->from(TaskMember::class, 'm')
+                ->where('m.memberRole = :role')
+                ->andWhere('m.user IN (:ids)')
+                ->setParameter('role', TaskMemberRole::Assignee)
+                ->setParameter('ids', array_keys($ids))
+                ->getQuery()
+                ->getArrayResult();
+            if ($creator) {
+                /** @var list<array{taskId: mixed, ref: mixed}> $created */
+                $created = $this->entityManager->createQueryBuilder()
+                    ->select('t.id AS taskId', 't.creator AS ref')
+                    ->from(Task::class, 't')
+                    ->where('t.creator IN (:ids)')
+                    ->setParameter('ids', array_keys($ids))
+                    ->getQuery()
+                    ->getArrayResult();
+                $rows = [...$rows, ...$created];
+            }
+            foreach ($rows as $row) {
+                $ref = $row['ref'] instanceof TaskBoardUserRef ? $row['ref']->id : null;
+                if ($ref !== null && isset($ids[$ref])) {
+                    $tasks[(string) $row['taskId']] = true;
+                }
+            }
+        }
+
+        return $tasks === [] ? [''] : array_keys($tasks);
     }
 }

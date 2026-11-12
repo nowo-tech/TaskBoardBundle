@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use SortDirection;
 
 use function array_chunk;
@@ -341,6 +342,18 @@ final readonly class DoctrineMultiBoardTaskQuery
         if ($filter->assigneeId === MultiBoardTaskFilter::UNASSIGNED) {
             $qb->andWhere('t.id NOT IN (SELECT IDENTITY(na.task) FROM ' . TaskMember::class . ' na WHERE na.memberRole = :assigneeRole)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
+        } elseif ($filter->assigneeId !== null && $this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly the filter's.
+            $exact = [];
+            if (TaskBoardUserRef::isValid($filter->assigneeId)) {
+                foreach (TaskBoardUsers::exactRowIds($this->entityManager, TaskMember::class, 'user', $filter->assigneeId) as $memberId) {
+                    $member = $this->entityManager->find(TaskMember::class, $memberId);
+                    if ($member instanceof TaskMember && $member->getMemberRole() === TaskMemberRole::Assignee) {
+                        $exact[] = $member->getTask()->getId();
+                    }
+                }
+            }
+            $qb->andWhere('t.id IN (:exactAssigneeTasks)')->setParameter('exactAssigneeTasks', $exact === [] ? [''] : $exact);
         } elseif ($filter->assigneeId !== null) {
             $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND ' . $this->userValue('am.user') . ' = :assignee)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee)

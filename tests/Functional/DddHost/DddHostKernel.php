@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as Doctrine
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
@@ -117,6 +118,7 @@ final class DddHostKernel extends Kernel
             'multi_board'       => ['enabled' => true, 'scope_provider' => 'app.multi_scope'],
         ] + $this->taskBoard);
         $services->alias('app.task_board_em', TaskBoardEntityManager::class)->public();
+        $services->alias('app.snapshot_purger', TaskTimeEntrySnapshotPurger::class)->public();
     }
 
     /**
