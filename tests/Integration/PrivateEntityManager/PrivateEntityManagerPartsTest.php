@@ -301,6 +301,25 @@ final class PrivateEntityManagerPartsTest extends KernelTestCase
     }
 
     #[Test]
+    public function aServiceRepositoryIsAskedOfTheSourceFactory(): void
+    {
+        $private  = $this->privateManager();
+        $metadata = $private->live()->getClassMetadata(AppUser::class);
+        $before   = $metadata->customRepositoryClassName;
+        // A host entity whose repository is a ServiceEntityRepository: DefaultRepositoryFactory could not build it (its
+        // constructor takes a registry); the source factory (DoctrineBundle's container factory) is asked instead.
+        $metadata->customRepositoryClassName = HostServiceRepository::class;
+        try {
+            $private->getRepository(AppUser::class);
+            self::fail('the container factory is asked for the service');
+        } catch (RuntimeException $exception) {
+            self::assertStringContainsString(HostServiceRepository::class, $exception->getMessage());
+        } finally {
+            $metadata->customRepositoryClassName = $before;
+        }
+    }
+
+    #[Test]
     public function undefinedMagicPropertiesFail(): void
     {
         $this->expectException(LogicException::class);
