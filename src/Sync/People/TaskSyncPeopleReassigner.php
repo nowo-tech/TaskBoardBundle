@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 
 use DateInterval;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -194,6 +195,12 @@ final readonly class TaskSyncPeopleReassigner
      * name snapshot and lose the user reference. Idempotent; loaded rows follow.
      */
     private function detachContent(object $user, bool $forgetName): ReassignReport
+    {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return TaskBoardSavepoint::write($this->entityManager, fn (): ReassignReport => $this->detachContentNow($user, $forgetName));
+    }
+
+    private function detachContentNow(object $user, bool $forgetName): ReassignReport
     {
         $label  = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $counts = [];

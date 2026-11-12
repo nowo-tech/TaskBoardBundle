@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Service;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
@@ -53,7 +54,8 @@ final readonly class TaskTimeEntrySnapshotPurger
             $loggedBefore,
         );
 
-        return (int) $query->getQuery()->execute();
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return (int) TaskBoardSavepoint::write($this->entityManager, static fn (): mixed => $query->getQuery()->execute());
     }
 
     /**
@@ -63,6 +65,12 @@ final readonly class TaskTimeEntrySnapshotPurger
      * @return int the entries detached
      */
     public function detachUser(object $user, bool $forgetName = false): int
+    {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return TaskBoardSavepoint::write($this->entityManager, fn (): int => $this->detachUserNow($user, $forgetName));
+    }
+
+    private function detachUserNow(object $user, bool $forgetName): int
     {
         $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         // Rows written before 1.27 have no name yet: they get the current one first.
@@ -87,6 +95,12 @@ final readonly class TaskTimeEntrySnapshotPurger
      * @return int the entries changed
      */
     public function forgetUserName(string $name): int
+    {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return TaskBoardSavepoint::write($this->entityManager, fn (): int => $this->forgetUserNameNow($name));
+    }
+
+    private function forgetUserNameNow(string $name): int
     {
         // Since 1.28.0: the task history keeps the same name.
         $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.userName = NULL WHERE h.user IS NULL AND h.userName = :name')

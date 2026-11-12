@@ -10,6 +10,7 @@ kept alive and not reset (REQ-RUNTIME-002, see [FRANKENPHP-WORKER-AUDIT](FRANKEN
 
 - [Host ports](#host-ports)
 - [Events](#events)
+- [Persistence](#persistence)
 
 ## Host ports
 
@@ -61,3 +62,28 @@ Every event that carries a bundle entity also offers ids and snapshots (`getBoar
 `getTenantKey()`, `getActorId()` / `getSubjectId()`, `getBoardSnapshot()`, `getTaskSnapshot()`, `getCommentSnapshot()`,
 ...). The entity members are deprecated and removed in 3.0. Write events are dispatched after the write is saved,
 through `TaskEventDeferral` (after the commit of a deferred write, dropped on a rollback).
+
+## Persistence
+
+**Standard host (default).** TaskBoard reads and writes through `database.entity_manager` (`default`), exactly as up to
+2.14: a TaskBoard save flushes that manager, including what your application left pending in it.
+
+**Private entity manager (opt-in, `database.private_entity_manager: true`; the only mode in 3.0).** Every bundle
+service reads and writes through `Doctrine\TaskBoardEntityManager`, a private manager created on the connection,
+mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rule 6):
+
+- it never flushes, clears or closes your manager; a failed TaskBoard write closes only the private one, which is
+  created again on the next call (also when its connection changed, or when a rollback undid rows it wrote: DBAL 4
+  middleware on the source connection only);
+- it is dropped at every outermost unit-of-work boundary (main request, Messenger message, console command) and at
+  `kernel.reset`: dropped first, then its pending changes are logged (classes and counts only) and cleared;
+- the source manager's SQL filters are mirrored on every call;
+- repositories: service repositories come from your configuration's factory, every other one is built and kept per
+  manager (no growth in a kept-alive worker);
+- your security user and other host objects on TaskBoard rows are adopted as the private manager's references before
+  each flush;
+- TaskBoard bulk / DBAL statements inside your open transaction run in a savepoint; a failure rolls back to it and the
+  original exception is rethrown.
+
+`PrivateEntityManagerReferencesPass` moves every service of the bundle onto the private manager and its registry at
+build time; your services keep your manager.

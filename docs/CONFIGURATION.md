@@ -50,6 +50,7 @@
 |--------|---------|-------------|
 | `table_prefix` | `task_board_` | Prefix for Doctrine table names. |
 | `database.entity_manager` | `default` | Doctrine ORM entity manager name. |
+| `database.private_entity_manager` | `null` | Since 2.15.0 (REQ-ARCH-001 rule 6). `true`: the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `null` keeps the 2.14 behaviour; `false` too, deprecated: `true` becomes the only mode in 3.0. |
 
 Tables created by the bundle (with default prefix):
 
@@ -76,6 +77,7 @@ nowo_task_board:
     table_prefix: task_board_
     database:
         entity_manager: default
+        private_entity_manager: null   # since 2.15.0; true = the bundle's own unit of work
 ```
 
 ## Routes

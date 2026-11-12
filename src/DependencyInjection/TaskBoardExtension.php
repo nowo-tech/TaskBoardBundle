@@ -37,7 +37,12 @@ use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
+use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
+use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerReferencesPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
+use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
@@ -155,6 +160,7 @@ use function is_array;
 use function is_string;
 use function rtrim;
 use function sprintf;
+use function trigger_deprecation;
 
 /**
  * Loads bundle configuration and registers services.
@@ -301,7 +307,39 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
+        $this->registerPrivateEntityManager($container, $config['database']['private_entity_manager'], $emName);
         $this->registerRequestBoundary($container);
+    }
+
+    /**
+     * Since 2.15.0 (REQ-ARCH-001 rule 6): `database.private_entity_manager: true` registers {@see TaskBoardEntityManager}
+     * and {@see TaskBoardManagerRegistry}; {@see PrivateEntityManagerReferencesPass} then points every bundle service at
+     * them, and {@see PrivateEntityManagerPass} attaches the rollback middleware (DBAL 4) to the source manager's
+     * connection. null keeps the 2.14 wiring; false too, with a deprecation (the private manager is the only mode in 3.0).
+     */
+    private function registerPrivateEntityManager(ContainerBuilder $container, ?bool $private, string $emName): void
+    {
+        $container->setParameter(PrivateEntityManagerReferencesPass::PARAMETER, $private === true);
+        $container->setParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER, $emName);
+        if ($private === false) {
+            trigger_deprecation('nowo-tech/task-board-bundle', '2.15', '"nowo_task_board.database.private_entity_manager: false" is deprecated: TaskBoard writes then flush the application\'s entity manager, including its pending changes; the private entity manager becomes the only mode in 3.0. Set it to true (see UPGRADING.md "To 2.15.0").');
+        }
+        if ($private !== true) {
+            return;
+        }
+
+        $container->register(TaskBoardEntityManager::class, TaskBoardEntityManager::class)
+            ->setArguments([new Reference('doctrine'), $emName, new Reference('logger', ContainerInterface::IGNORE_ON_INVALID_REFERENCE)])
+            ->addTag('kernel.reset', ['method' => 'reset'])
+            // Audit NJV-1 (Vault): loads of the private manager inside a transaction are tracked like its writes.
+            ->addTag('doctrine.event_listener', ['event' => 'postLoad', 'method' => 'postLoad', 'lazy' => true, 'entity_manager' => $emName]);
+        $container->register(TaskBoardManagerRegistry::class, TaskBoardManagerRegistry::class)
+            ->setArguments([new Reference('doctrine'), new Reference(TaskBoardEntityManager::class), $emName]);
+        if (PrivateEntityManagerPass::supportsRollbackMiddleware()) {
+            $container->register(PrivateEntityManagerMiddleware::class, PrivateEntityManagerMiddleware::class)
+                ->setArguments([new Reference(TaskBoardEntityManager::class)])
+                ->addTag('doctrine.middleware');
+        }
     }
 
     /**
@@ -313,7 +351,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $subscriber = $container->getDefinition(TaskBoardRequestBoundarySubscriber::class);
         $state      = $subscriber->getArgument('$state');
         $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
-        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class] as $id) {
+        // Since 2.15.0: the private entity manager last, after the memos that may still hold its rows.
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardEntityManager::class] as $id) {
             if ($container->hasDefinition($id)) {
                 $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
             }

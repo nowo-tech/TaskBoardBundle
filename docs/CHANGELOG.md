@@ -167,6 +167,33 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - `Sync\Time\ImportedTimeEntryCandidate::personId()`, `personProviderUserId()`, `taskId()`, `boardId()`;
   `Api\TaskApiWhere::reachesBoardOf(string $boardId, ?string $tenantKey)`.
 
+- **Private entity manager for the TaskBoard rows (opt-in, REQ-ARCH-001 rule 6).**
+  `nowo_task_board.database.private_entity_manager: true` makes every bundle service read and write through
+  `Doctrine\TaskBoardEntityManager`, a private manager created on the connection, mapping, caches, proxies and event
+  manager of `database.entity_manager` (where 2.14 wrote; the tables do not move, the bundle's and the host's Doctrine
+  listeners still run). A TaskBoard write then never flushes a change the application left pending in its own manager,
+  never clears it, and a failed TaskBoard write closes only the private manager (created again on the next call). Adapted
+  from AuthKitBundle 1.46.0 (audits NV, NJ-2, NJV-1, NF-2, NF2-2, NF3-2, NF-7):
+  - `PrivateEntityManagerReferencesPass` moves every bundle service (inline definitions, iterators, method calls and
+    properties included) from the source manager, the manager `EntityManagerInterface` autowires and the `doctrine`
+    registry onto the private manager and `Doctrine\TaskBoardManagerRegistry`; host services are never touched.
+  - Dropped at every outermost unit-of-work boundary (main request start and `kernel.terminate`, Messenger message
+    received / handled / failed, outermost console command; through `TaskBoardRequestBoundarySubscriber`, after the
+    request memos) and at `kernel.reset`: the manager is dropped FIRST, then its pending changes are inspected (logged as
+    a warning by entity class and count, never a value) and cleared, each step guarded.
+  - Recreated when closed, when the connection changed, or when a rollback undid rows it wrote (DBAL 4 middleware
+    `PrivateEntityManagerMiddleware`, attached only to the source manager's connection); the source manager's SQL filters
+    are mirrored on every call.
+  - Bundle-owned repository factory (audit NZ's corrected pattern, `Doctrine\PrivateManagerRepositoryFactory`): service
+    repositories (`ServiceEntityRepositoryInterface`, e.g. a host entity a host listener loads through the private
+    manager) come from the source factory; every other repository is built and kept per manager, so a replaced manager
+    is collected.
+  - Host objects on TaskBoard rows (the `user_class` creator, author, member, ...) that the private manager does not hold,
+    such as the security user, are adopted before each flush as the private manager's reference to the same id; the
+    application's instance is never written.
+  - `Doctrine\TaskBoardSavepoint`: a TaskBoard DBAL / bulk DQL write inside an open transaction runs in a savepoint
+    (`nowo_task_board_*`) with the option on; when rolling back to it fails too, the ORIGINAL exception is rethrown.
+
 ### Deprecated
 
 - The 21 port interfaces above (`@deprecated`; Symfony's DebugClassLoader reports an application class implementing
@@ -174,6 +201,8 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - The entity members of the events (`getTask()`, `getBoard()`, `getComment()`, `getMember()`, `getColumnSet()`,
   `getFromColumn()` / `getToColumn()`, the public `$board` / `$task` properties), of `ImportedTimeEntryCandidate`
   (`$person`, `$task`) and `TaskApiWhere::reachesBoard(TaskBoard)`; removed in 3.0. No runtime deprecation is triggered.
+- `nowo_task_board.database.private_entity_manager: false` (explicit) is deprecated: the private entity manager becomes
+  the only mode in 3.0. The default (`null`, not set) keeps the 2.14 behaviour without a deprecation.
 
 ### Changed
 
@@ -190,6 +219,20 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - `PortEquivalenceTest`: the decisions 2.15 routes through `Port\Ports` equal the LITERAL v2.14.1 code
   (`tests/Support/Legacy/Legacy2141PortDecisions.php`) for every service 2.14 could have, and a twin-only service gives
   the answer of its 2.14 equivalent.
+- Private entity manager: `PrivateEntityManagerKernelTest` (board, task, comment, time and update writes leave a pending
+  application insert unflushed; the security user is adopted; a failing write closes only the private manager),
+  `LegacyEntityManagerKernelTest` (the default flushes it, as 2.14), `PrivateEntityManagerPartsTest` (rollback
+  middleware, replacement rules, boundary drop that cannot be poisoned, logged changes by class only, filters,
+  repositories, registry, savepoints with the original exception rethrown, build pass), `PrivateEntityManagerConfigTest`
+  (the option, the deprecation, the references pass on bundle and host services).
+- `PrivateEntityManagerWorkerTest` (REQ-RUNTIME-002): one kernel driven through `http_kernel->handle()` / `terminate()`
+  (no services resetter), 300 iterations of two users writing (task moves) and reading their boards: no cross-user
+  data, the private manager dropped after every request, a pending application change never flushed, memory within
+  4 MiB after the warm-up.
+- **Private-manager replay** (`phpunit.private-em.xml.dist`, a CI job): the functional suite runs with the option on and
+  the fixtures written through the private manager (774 of the 874 functional test cases; the 13 classes left out keep entity objects across a
+  request boundary, mix the application's manager with the bundle's, or assert the application's manager is closed after
+  a failure, which the private manager deliberately changes).
 - **Twin replay** (`TASK_BOARD_TEST_PORTS=twin`, a CI job): the whole functional suite runs with every host stub of the
   test kernels behind an adapter that implements ONLY the 2.15 twin (`tests/Support/TwinPorts`): 870 tests, same results.
 

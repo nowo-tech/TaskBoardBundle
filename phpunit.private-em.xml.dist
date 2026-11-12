@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Since 2.15.0: the private-entity-manager replay (TASK_BOARD_TEST_PRIVATE_EM=1, CI job "private-em"): the functional
+    suite with database.private_entity_manager: true and the fixtures written through the bundle's private manager.
+
+    Excluded: tests that keep entity objects across a request or a unit-of-work boundary, that mix the application's
+    manager with the bundle's (a service built by hand on EntityManagerInterface, a host stub comparing user objects of
+    two managers), or that assert the application's manager is closed after a failure. The private manager is dropped at
+    every boundary and is created again when closed, by design (REQ-RUNTIME-002 / REQ-ARCH-001 rule 6); those behaviours
+    have their own tests in tests/Functional/PrivateEntityManager and tests/Integration/PrivateEntityManager.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+>
+    <php>
+        <ini name="memory_limit" value="1G"/>
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="max[direct]=0"/>
+        <env name="TASK_BOARD_TEST_PRIVATE_EM" value="1"/>
+        <server name="KERNEL_CLASS" value="Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel"/>
+    </php>
+    <testsuites>
+        <testsuite name="functional">
+            <directory>tests/Functional</directory>
+            <exclude>tests/Functional/Api/ApiManagementTest.php</exclude>
+            <exclude>tests/Functional/Api/ApiWriteEndpointsTest.php</exclude>
+            <exclude>tests/Functional/ImportAuthorizationTest.php</exclude>
+            <exclude>tests/Functional/Import/IdempotentImportTest.php</exclude>
+            <exclude>tests/Functional/ManageWritesTest.php</exclude>
+            <exclude>tests/Functional/Move/MoveLockFailureTest.php</exclude>
+            <exclude>tests/Functional/Move/TaskCopyPagesTest.php</exclude>
+            <exclude>tests/Functional/Repository/DoctrineRepositoriesTest.php</exclude>
+            <exclude>tests/Functional/Sync/ConnectionBadgeProgressTest.php</exclude>
+            <exclude>tests/Functional/Sync/ConnectionStripTest.php</exclude>
+            <exclude>tests/Functional/Sync/People/SyncPeopleViewTest.php</exclude>
+            <exclude>tests/Functional/Sync/SyncServiceEdgesTest.php</exclude>
+            <exclude>tests/Functional/TaskEditFormColumnTest.php</exclude>
+        </testsuite>
+    </testsuites>
+</phpunit>

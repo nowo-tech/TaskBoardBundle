@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeHandler;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeMessage;
+use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
@@ -80,7 +81,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient, TwinPortAdapters::enabled()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient, TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -163,7 +164,8 @@ final class FunctionalKernel extends Kernel
                 ->tag('messenger.message_handler', ['handles' => WorkerProbeMessage::class])
                 ->tag('kernel.event_listener', ['event' => WorkerProbeHandler::EVENT, 'method' => 'onProbe']);
         }
-        $taskBoard = array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]);
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]));
+        PrivateEntityManagerReplay::alias($container, $taskBoard);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).

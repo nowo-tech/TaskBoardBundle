@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
+use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
@@ -74,7 +75,7 @@ final class ApiKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -139,6 +140,8 @@ final class ApiKernel extends Kernel
             'time_entries'  => 'app.api_host',
             'attachments'   => 'app.api_host',
         ]]] + array_diff_key($this->taskBoard, ['security' => true]);
+        $taskBoardConfig = PrivateEntityManagerReplay::configure($taskBoardConfig);
+        PrivateEntityManagerReplay::alias($container, $taskBoardConfig);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoardConfig) : $taskBoardConfig);
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {

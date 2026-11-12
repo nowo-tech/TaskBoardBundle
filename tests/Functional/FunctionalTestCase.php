@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
+use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -44,7 +45,9 @@ abstract class FunctionalTestCase extends WebTestCase
     {
         $this->client = static::createClient();
         $this->client->disableReboot();
-        $em = static::getContainer()->get('doctrine.orm.entity_manager');
+        // Since 2.15.0: TASK_BOARD_TEST_PRIVATE_EM=1 replays the suite with database.private_entity_manager: true; the
+        // fixtures then go through the bundle's private manager, as a host goes through the bundle's services.
+        $em = static::getContainer()->get(PrivateEntityManagerReplay::enabled() && static::getContainer()->has('app.task_board_em') ? 'app.task_board_em' : 'doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         $this->em = $em;
 

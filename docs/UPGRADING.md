@@ -6,6 +6,7 @@
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
+  - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
 - [To 2.14.1](#to-2141)
 - [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
@@ -209,6 +210,32 @@ objects instead (the table is in the [CHANGELOG](CHANGELOG.md#unreleased)). The 
 
 Events: read `getBoardId()` / `getTaskId()` / `getTenantKey()` and the `get*Snapshot()` accessors instead of the
 entities; the entity getters and public entity properties are deprecated and removed in 3.0.
+
+### Private entity manager (opt-in)
+
+Up to 2.14 every TaskBoard write flushed `database.entity_manager` (your `default` manager unless configured): it also
+wrote whatever your application had left pending there, and a failed TaskBoard write closed your manager. Turn on the
+private manager (it becomes the only mode in 3.0; an explicit `false` is deprecated now):
+
+```yaml
+nowo_task_board:
+    database:
+        entity_manager: default          # the source: its connection, mapping, caches and listeners
+        private_entity_manager: true
+```
+
+- The tables do not move and no migration is needed. The connection is shared: a transaction you open includes the
+  TaskBoard rows written inside it (the bundle's own transactions and bulk statements become savepoints).
+- Read and write TaskBoard rows through the bundle's services and repository interfaces. A TaskBoard entity you load
+  through your own manager belongs to your manager: changing it and calling a TaskBoard service does not save it, and
+  your `flush()` does not save TaskBoard rows you load through the bundle.
+- Your security user (managed by your manager) can be passed to the bundle as before: before each flush the bundle
+  replaces it on its rows by its own reference to the same id. User objects you read from TaskBoard rows (creator,
+  author, member) belong to the private manager: look them up again in your manager before you write them.
+- The private manager is dropped at every request, Messenger message and console command boundary (REQ-RUNTIME-002);
+  TaskBoard entities you keep across a boundary are detached.
+- With doctrine/dbal 3 the rollback middleware is not available: after a rolled-back transaction the private manager is
+  replaced at the next boundary instead of at once.
 
 ## To 2.14.1
 
