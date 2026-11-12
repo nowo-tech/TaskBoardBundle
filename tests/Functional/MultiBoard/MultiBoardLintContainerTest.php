@@ -13,7 +13,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Since 2.13.0: `lint:container` on the functional host kernel, with the multi-board list off and on (with and without a
- * provider): every service argument of the bundle matches its type.
+ * provider), and since 2.14.0 with the calendar day annotations: every service argument of the bundle matches its type.
  */
 #[CoversNothing]
 final class MultiBoardLintContainerTest extends TestCase
@@ -25,6 +25,7 @@ final class MultiBoardLintContainerTest extends TestCase
     {
         yield 'off' => [[]];
         yield 'on, no provider' => [['multi_board' => ['enabled' => true]]];
+        yield 'calendar with day annotations' => [['calendar' => ['enabled' => true, 'day_annotation_provider' => 'app.calendar_days', 'skip_non_working_days' => true]]];
         yield 'on, provider' => [['multi_board' => ['enabled' => true, 'scope_provider' => 'app.multi_scope'], 'task_numbers' => ['enabled' => true], 'calendar' => ['enabled' => true]]];
     }
 

@@ -55,7 +55,7 @@
         data-nowo-task-board-calendar-failed-value="{{ 'task_board.calendar.failed'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undo-value="{{ 'task_board.calendar.undo'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undone-value="{{ 'task_board.calendar.undone'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
-        data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"
+        data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"{% if skipNonWorkingDays|default(false) %} data-nowo-task-board-calendar-skip-non-working-value="true"{% endif %}
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.calendar.add_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
         {% block nowo_task_board_calendar_filters %}

@@ -32,15 +32,15 @@
         <div class="nowo-task-cal__week" role="row">
             {% for day in week %}
                 <div
-                    class="nowo-task-cal__day{{ day.inPeriod ? '' : ' is-outside' }}{{ day.today ? ' is-today' : '' }}{{ day.weekend ? ' is-weekend' : '' }}"
+                    class="nowo-task-cal__day{{ day.inPeriod ? '' : ' is-outside' }}{{ day.today ? ' is-today' : '' }}{{ day.weekend ? ' is-weekend' : '' }}{{ day.annotation ? ' is-day-' ~ day.annotation.kind.value ~ (day.annotation.nonWorking ? ' is-non-working' : '') : '' }}"
                     role="gridcell"
                     tabindex="{{ day.date == _focus ? 0 : -1 }}"
                     data-date="{{ day.date }}"
-                    {% if day.today %}aria-current="date"{% endif %}
+                    {% if day.today %}aria-current="date"{% endif %}{% if day.annotation and day.annotation.nonWorking %} data-non-working="1"{% endif %}
                     {% if calendar.anyEditable %}data-nowo-ui-sortable-zone{% endif %}
                 >
                     <div class="nowo-task-cal__day-head">
-                        <a class="nowo-task-cal__day-number" href="{{ path(nowo_task_board_route('calendar'), {boardId: board.id}|merge(calendarQuery)|merge({mode: 'list', date: day.date})) }}#nowo-task-cal-day-{{ day.date }}" title="{{ 'task_board.calendar.day_tasks'|trans({'%date%': day.date, '%count%': day.entries|length}, 'NowoTaskBoardBundle') }}"><span class="nowo-task-sr-only">{{ day.date }} </span><span aria-hidden="true">{{ day.day }}</span>{% if day.entries is not empty %} <span class="nowo-task-cal__day-count">({{ day.entries|length }})</span>{% endif %}</a>
+                        <a class="nowo-task-cal__day-number" href="{{ path(nowo_task_board_route('calendar'), {boardId: board.id}|merge(calendarQuery)|merge({mode: 'list', date: day.date})) }}#nowo-task-cal-day-{{ day.date }}" title="{{ 'task_board.calendar.day_tasks'|trans({'%date%': day.date, '%count%': day.entries|length}, 'NowoTaskBoardBundle') }}"><span class="nowo-task-sr-only">{{ day.date }} </span><span aria-hidden="true">{{ day.day }}</span>{% if day.entries is not empty %} <span class="nowo-task-cal__day-count">({{ day.entries|length }})</span>{% endif %}</a>{% if day.annotation %}{{ include('@NowoTaskBoardBundle/manage/_calendar_day_label.html.twig', {annotation: day.annotation}, with_context: false) }}{% endif %}
                         {% if canEditBoard %}
                             <button type="button" class="nowo-task-cal__add" data-testid="nowo-task-cal-add" data-action="nowo-task-board-add-task-modal#open" data-due-date="{{ day.date }}" data-column-name="{{ day.date }}" aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
                         {% endif %}

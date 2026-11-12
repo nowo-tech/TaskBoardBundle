@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Calendar;
+
+use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+
+use function array_chunk;
+use function array_filter;
+use function array_keys;
+use function array_map;
+use function max;
+use function min;
+use function strval;
+
+/**
+ * Since 2.14.0 (Beacon spec 204): asks `calendar.day_annotation_provider` for a calendar page: one call for the viewer's
+ * days, one query for the assignees of the page's tasks and one call for all their days, then the warnings of each task.
+ * Without a provider it does nothing and the page is drawn as in 2.13. Stateless: everything lives in the call.
+ *
+ * @internal
+ */
+final readonly class CalendarDayAnnotator
+{
+    /** Task ids per query of the assignee lookup. */
+    private const ID_CHUNK = 500;
+
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private ?CalendarDayAnnotationProviderInterface $provider = null,
+    ) {
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->provider instanceof CalendarDayAnnotationProviderInterface;
+    }
+
+    /**
+     * @param list<Task> $tasks the tasks of the page
+     */
+    public function annotate(CalendarViewer $viewer, CalendarDateRange $range, array $tasks): ?CalendarAnnotations
+    {
+        if (!$this->provider instanceof CalendarDayAnnotationProviderInterface) {
+            return null;
+        }
+
+        $days      = $this->provider->viewerDays($viewer, $range);
+        $assignees = $this->assignees($tasks);
+        $userIds   = [];
+        foreach ($assignees as $ids) {
+            foreach ($ids as $id) {
+                $userIds[$id] = true;
+            }
+        }
+        $people = $userIds === [] ? [] : $this->provider->assigneeDays($viewer, array_map(strval(...), array_keys($userIds)), $range);
+
+        $warnings = [];
+        // Only dated tasks are on a calendar.
+        foreach (array_filter($tasks, static fn (Task $task): bool => $task->getStartAt() !== null || $task->getDueAt() !== null) as $task) {
+            $first = (string) ($task->getStartAt() ?? $task->getDueAt())?->format('Y-m-d');
+            $last  = (string) ($task->getDueAt() ?? $task->getStartAt())?->format('Y-m-d');
+            // Within the page only: the provider was asked for these days.
+            $from = max($first, $range->from);
+            $to   = min(max($first, $last), $range->to);
+            foreach ($assignees[$task->getId()] ?? [] as $userId) {
+                $personal = $people[$userId] ?? null;
+                if (!$personal instanceof CalendarDayAnnotations) {
+                    continue;
+                }
+                for ($day = new DateTimeImmutable($from); $day->format('Y-m-d') <= $to; $day = $day->modify('+1 day')) {
+                    $annotation = $personal->for($day->format('Y-m-d'));
+                    if ($annotation instanceof CalendarDayAnnotation && $annotation->nonWorking) {
+                        $warnings[$task->getId()][] = new CalendarTaskWarning($userId, $annotation);
+                    }
+                }
+            }
+        }
+
+        return new CalendarAnnotations($days, $warnings);
+    }
+
+    /**
+     * The assignee ids of each task (one query per 500 tasks).
+     *
+     * @param list<Task> $tasks
+     *
+     * @return array<string, list<string>>
+     */
+    private function assignees(array $tasks): array
+    {
+        $assignees = [];
+        foreach (array_chunk(array_map(static fn (Task $task): string => $task->getId(), $tasks), self::ID_CHUNK) as $chunk) {
+            /** @var list<array{taskId: mixed, userId: mixed}> $rows */
+            $rows = $this->entityManager->createQueryBuilder()
+                ->select('IDENTITY(m.task) AS taskId', 'IDENTITY(m.user) AS userId')
+                ->from(TaskMember::class, 'm')
+                ->where('IDENTITY(m.task) IN (:tasks)')
+                ->andWhere('m.memberRole = :role')
+                ->setParameter('tasks', $chunk)
+                ->setParameter('role', TaskMemberRole::Assignee)
+                ->getQuery()
+                ->getArrayResult();
+            foreach ($rows as $row) {
+                $assignees[(string) $row['taskId']][] = (string) $row['userId'];
+            }
+        }
+
+        return $assignees;
+    }
+}

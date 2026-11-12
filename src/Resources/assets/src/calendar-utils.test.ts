@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates } from './calendar-utils';
+import { addDays, dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay } from './calendar-utils';
 
 describe('calendar date maths', () => {
     it('counts days across months, years and a daylight-saving change', () => {
@@ -51,5 +51,19 @@ describe('calendar date maths', () => {
         expect(phoneListUrl('https://h.test/c?date=2026-11-01', true)).toBe('https://h.test/c?date=2026-11-01&mode=list');
         expect(phoneListUrl('https://h.test/c?mode=month', true)).toBeNull();
         expect(phoneListUrl('https://h.test/c', false)).toBeNull();
+    });
+
+    it('snaps a drop to the next working day (calendar.skip_non_working_days)', () => {
+        const off = new Set(['2026-11-14', '2026-11-15', '2026-11-16']);
+        expect(snapToWorkingDay('2026-11-13', off)).toBe('2026-11-13');
+        expect(snapToWorkingDay('2026-11-14', off)).toBe('2026-11-17');
+        expect(snapToWorkingDay('2026-11-14', off, 2)).toBe('2026-11-14');
+        expect(snapToWorkingDay('2026-11-14', new Set())).toBe('2026-11-14');
+        expect(snapDates({ start: '2026-11-14', due: '2026-11-15' }, off)).toEqual({ start: '2026-11-17', due: '2026-11-18' });
+        expect(snapDates({ start: '2026-11-12', due: '2026-11-14' }, off)).toEqual({ start: '2026-11-12', due: '2026-11-17' });
+        expect(snapDates({ start: '', due: '2026-11-15' }, off)).toEqual({ start: '', due: '2026-11-17' });
+        expect(snapDates({ start: '2026-11-15', due: '' }, off)).toEqual({ start: '2026-11-17', due: '' });
+        expect(snapDates({ start: '', due: '' }, off)).toEqual({ start: '', due: '' });
+        expect(snapDates({ start: '2026-11-14', due: '2026-11-15' }, new Set())).toEqual({ start: '2026-11-14', due: '2026-11-15' });
     });
 });

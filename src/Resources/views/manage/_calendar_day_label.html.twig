@@ -1,0 +1,5 @@
+{#
+    Since 2.14.0 (Beacon spec 204, calendar.day_annotation_provider): the host's label of a day (holiday, weekend, absent...).
+    Printed as given, escaped; the bundle adds nothing. Variable: annotation (Calendar\\CalendarDayAnnotation).
+#}
+<span class="nowo-task-cal__day-label nowo-task-cal__day-label--{{ annotation.kind.value }}{{ annotation.nonWorking ? ' is-non-working' : '' }}" title="{{ annotation.label }}" data-testid="nowo-task-cal-day-label">{{ annotation.label }}</span>

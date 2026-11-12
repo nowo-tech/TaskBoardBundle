@@ -913,3 +913,5 @@ task_board.multi.empty_scope: "Não há quadros para mostrar."
 task_board.multi.empty_scope_hint: "Ainda não pode ler nenhum quadro aqui."
 task_board.multi.partial: "O filtro de etiqueta só leu as primeiras tarefas: o resultado pode estar incompleto. Restrinja os outros filtros."
 task_board.multi.overdue: "em atraso"
+# Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
+task_board.calendar.off_day: "Um responsável não trabalha a %date%: %label%"

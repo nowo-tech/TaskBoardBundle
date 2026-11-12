@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Dto;
 
+use Nowo\TaskBoardBundle\Calendar\CalendarTaskWarning;
 use Nowo\TaskBoardBundle\Entity\Task;
 
 /**
@@ -19,6 +20,9 @@ final readonly class TaskCalendarEntry
         public string $last,
         public bool $overdue,
         public bool $editable,
+        // Since 2.14.0 (calendar.day_annotation_provider): the days of the page its assignees are off.
+        /** @var list<CalendarTaskWarning> */
+        public array $warnings = [],
     ) {
     }
 

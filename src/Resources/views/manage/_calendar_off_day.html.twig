@@ -1,0 +1,8 @@
+{#
+    Since 2.14.0 (Beacon spec 204): a task whose assignee is off on one of its days. Shows the host's label of the first such day
+    (and how many more), with the date in the tooltip; nothing else about the person or the reason. Variable: warnings
+    (list of Calendar\\CalendarTaskWarning).
+#}
+{% set _first = warnings|first %}
+{% set _text = 'task_board.calendar.off_day'|trans({'%label%': _first.day.label, '%date%': _first.day.date}, 'NowoTaskBoardBundle') %}
+<span class="nowo-task-cal__off-day nowo-task-cal__off-day--{{ _first.day.kind.value }}" title="{{ _text }}" data-testid="nowo-task-cal-off-day">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'alert-triangle'}) }}<span class="nowo-task-cal__off-day-label">{{ _first.day.label }}</span>{% if warnings|length > 1 %} <span class="nowo-task-cal__off-day-more">+{{ warnings|length - 1 }}</span>{% endif %}<span class="nowo-task-sr-only"> {{ _text }}</span></span>

@@ -10,6 +10,9 @@ use LogicException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarDateRange;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
+use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
@@ -241,6 +244,10 @@ final class TaskBoardManageController extends AbstractController
         // Since 2.12.0 (Beacon D-20261111-12): the billable flag of manual entries (default and audited changes).
         private readonly ?TaskTimeBillableService $timeBillable = null,
         private readonly TaskTimeBillableDefaultProviderInterface $billableDefaults = new NullTaskTimeBillableDefaultProvider(),
+        // Since 2.14.0 (Beacon spec 204): the host's working days, holidays and leave on the calendar, and
+        // `calendar.skip_non_working_days` (a drag snaps to the next working day).
+        private readonly ?CalendarDayAnnotator $dayAnnotator = null,
+        private readonly bool $skipNonWorkingDays = false,
     ) {
     }
 
@@ -890,6 +897,13 @@ final class TaskBoardManageController extends AbstractController
             $editable[$task->getId()] = $this->resourceAccessChecker->canEditTask($user, $task);
         }
 
+        // Since 2.14.0: the host's day annotations of the visible days (none without calendar.day_annotation_provider).
+        $annotations = $this->dayAnnotator?->annotate(
+            new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey()),
+            new CalendarDateRange($from->format('Y-m-d'), $to->modify('-1 day')->format('Y-m-d')),
+            $tasks,
+        );
+
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         $filterForm   = $this->formFactory()->createNamed('', TaskCalendarFilterType::class, [
             'mode'      => $mode->value,
@@ -903,19 +917,21 @@ final class TaskBoardManageController extends AbstractController
         ], ['assignees' => $assignees, 'columns' => $columns]);
 
         return $this->render($this->templates['calendar'], [
-            'board'            => $board,
-            'calendar'         => $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable),
-            'calendarModes'    => CalendarMode::cases(),
-            'calendarQuery'    => $filter->toQuery(),
-            'calendarFiltered' => $filter->isActive(),
-            'filterForm'       => $filterForm->createView(),
-            'undatedCount'     => $repository->countUndated($board, $filter),
-            'dashboardRoute'   => $this->dashboardRoute,
-            'panelTargetPath'  => $this->currentRequestUri(),
-            'taskWindow'       => new TaskWindow(count($tasks), $total, $this->maxTasks),
-            'canEditBoard'     => $canEditBoard,
-            'taskForm'         => $canEditBoard ? $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columns === [] ? null : reset($columns)), ['column_choices' => $columns])->createView() : null,
-            'scheduleForm'     => in_array(true, $editable, true) ? $this->formFactory()->createNamed('', TaskScheduleFormType::class)->createView() : null,
+            'board'    => $board,
+            'calendar' => $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable, $annotations),
+            // Since 2.14.0: a drag snaps to the next working day of the viewer (with a provider only).
+            'skipNonWorkingDays' => $this->skipNonWorkingDays && $annotations !== null,
+            'calendarModes'      => CalendarMode::cases(),
+            'calendarQuery'      => $filter->toQuery(),
+            'calendarFiltered'   => $filter->isActive(),
+            'filterForm'         => $filterForm->createView(),
+            'undatedCount'       => $repository->countUndated($board, $filter),
+            'dashboardRoute'     => $this->dashboardRoute,
+            'panelTargetPath'    => $this->currentRequestUri(),
+            'taskWindow'         => new TaskWindow(count($tasks), $total, $this->maxTasks),
+            'canEditBoard'       => $canEditBoard,
+            'taskForm'           => $canEditBoard ? $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columns === [] ? null : reset($columns)), ['column_choices' => $columns])->createView() : null,
+            'scheduleForm'       => in_array(true, $editable, true) ? $this->formFactory()->createNamed('', TaskScheduleFormType::class)->createView() : null,
         ]);
     }
 
