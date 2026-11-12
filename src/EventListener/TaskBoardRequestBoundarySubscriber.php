@@ -86,7 +86,7 @@ final readonly class TaskBoardRequestBoundarySubscriber implements EventSubscrib
         $events = [
             KernelEvents::REQUEST        => ['onKernelRequest', PHP_INT_MAX],
             KernelEvents::FINISH_REQUEST => ['onKernelFinishRequest', PHP_INT_MAX],
-            KernelEvents::TERMINATE      => ['onKernelTerminate', -4096],
+            KernelEvents::TERMINATE      => [['onKernelTerminateStarted', PHP_INT_MAX], ['onKernelTerminate', -4096]],
         ];
 
         if (class_exists(WorkerMessageReceivedEvent::class)) {
@@ -120,6 +120,15 @@ final readonly class TaskBoardRequestBoundarySubscriber implements EventSubscrib
         if ($event->isMainRequest()) {
             $this->units->requestFinished();
         }
+    }
+
+    /**
+     * `kernel.terminate` (PHP_INT_MAX): a top-level request boundary resets the main-request counter, even when the
+     * request's `kernel.finish_request` never came (audit NR-b M1).
+     */
+    public function onKernelTerminateStarted(): void
+    {
+        $this->units->requestBoundaryEnded();
     }
 
     /**

@@ -122,7 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `console.error` marks the frame, and a marked frame whose terminate never came is dropped at the next main request,
   received message, command or worker stop; the end of a main request or a message drops the frames started inside it.
   Main requests are counted, so a main request handled in-process inside another one no longer clears or ends the outer
-  unit. The clears keep their priorities. `WorkerMessageSkipEvent` (dispatched by `messenger:failed:retry`) ends the
+  unit. A top-level `kernel.terminate` (nothing else running) resets the main-request count, so a request whose `kernel.finish_request` never came (a throwing `kernel.exception` listener) does not stop the next clears (audit NR-b M1). The clears keep their priorities. `WorkerMessageSkipEvent` (dispatched by `messenger:failed:retry`) ends the
   in-flight message.
 - **A failing calendar day annotation provider no longer breaks the calendar (audit NN-L1).** An exception from
   `calendar.day_annotation_provider` is caught: the page renders without annotations (the 2.13 page) and a warning is

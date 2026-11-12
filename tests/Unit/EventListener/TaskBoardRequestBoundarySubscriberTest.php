@@ -70,7 +70,7 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
 
         self::assertSame(['onKernelRequest', PHP_INT_MAX], $events[KernelEvents::REQUEST]);
         self::assertSame(['onKernelFinishRequest', PHP_INT_MAX], $events[KernelEvents::FINISH_REQUEST]);
-        self::assertSame(['onKernelTerminate', -4096], $events[KernelEvents::TERMINATE]);
+        self::assertSame([['onKernelTerminateStarted', PHP_INT_MAX], ['onKernelTerminate', -4096]], $events[KernelEvents::TERMINATE]);
         self::assertSame(['onMessageReceived', PHP_INT_MAX], $events[WorkerMessageReceivedEvent::class]);
         self::assertSame([['onMessageEnded', PHP_INT_MAX], ['onMessageFinished', -4096]], $events[WorkerMessageHandledEvent::class]);
         self::assertSame([['onMessageEnded', PHP_INT_MAX], ['onMessageFinished', -4096]], $events[WorkerMessageFailedEvent::class]);
@@ -286,9 +286,9 @@ final class TaskBoardRequestBoundarySubscriberTest extends TestCase
     {
         $this->request(HttpKernelInterface::MAIN_REQUEST);
         $this->leak();
+        // In-process http_kernel->handle() (no terminate(): only the front controller terminates the outer request).
         $this->request(HttpKernelInterface::MAIN_REQUEST);
         $this->finishRequest(HttpKernelInterface::MAIN_REQUEST);
-        $this->terminate();
         $this->consoleCommand();
         $this->consoleTerminate();
         self::assertSame('rule:leaked', $this->context->current());
