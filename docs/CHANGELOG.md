@@ -105,6 +105,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Console boundary counter could leak in a long-lived process (audit NM / NL2-v, REQ-RUNTIME-002).**
+  `TaskBoardRequestBoundarySubscriber` (avatar URLs, repeat icons, synced people, change cause, held task events)
+  counted running console commands with `++` on `console.command` (4096) and `--` on `console.terminate` (-4096). A
+  terminate listener in between that threw or stopped the propagation, or a `console.error` listener that threw
+  (Symfony then skips `console.terminate`), left the count above zero forever. In a kept-alive worker that ran a command
+  in-process, the memos were then never cleared between HTTP requests again (another user's avatar URLs, synced people
+  or held task events could outlive their request). A `console.command` listener above 4096 that stopped the propagation
+  skipped the `++` while the `--` still ran, so a nested command cleared the outer unit mid-run (an open
+  `TaskEventDeferral::defer()` lost its held events).
+  Every unit-of-work state change now happens at `PHP_INT_MAX` (new internal `EventListener\UnitOfWorkFrames`): each
+  console run is a frame keyed by its command and its input, saving the message flag and the main-request depth when
+  pushed and restoring them when removed; `console.terminate` removes only its own frame (and the frames above it);
+  `console.error` marks the frame, and a marked frame whose terminate never came is dropped at the next main request,
+  received message, command or worker stop; the end of a main request or a message drops the frames started inside it.
+  Main requests are counted, so a main request handled in-process inside another one no longer clears or ends the outer
+  unit. The clears keep their priorities. `WorkerMessageSkipEvent` (dispatched by `messenger:failed:retry`) ends the
+  in-flight message.
+- **A failing calendar day annotation provider no longer breaks the calendar (audit NN-L1).** An exception from
+  `calendar.day_annotation_provider` is caught: the page renders without annotations (the 2.13 page) and a warning is
+  logged with the exception.
+- **A drag that snaps back onto the same dates writes nothing (audit NN-L2).** With `skip_non_working_days`, a bar dropped
+  on a non-working day that snaps back to its own dates goes back without a request, a "moved" toast or an Undo
+  (`movedDates()` in `calendar-utils.ts`; `task-board.js` rebuilt).
+- **The calendar's assignee filter has a stable order (audit NN-I2).** `DoctrineOrmTaskRepository::findCalendarAssignees()`
+  sorts the people by label, then id, so the filter lists them in the same order on SQLite, MySQL and PostgreSQL.
+
+### Documentation
+
+- USAGE: the calendar query does not apply the per-task `TASK_ACCESS_CHECK` (since 2.1); hosts that deny single tasks
+  apply the same rule in their annotation provider (audit NN-I1).
+
+### Tests
+
+- `tests/Functional/ConsoleBoundaryCounterTest.php`: a real console `Application` and a real `HttpKernel` sharing one
+  event dispatcher, no services resetter: throwing `console.terminate` / `console.error` listeners (also at
+  `PHP_INT_MIN`), a self-recursive command whose inner run fails with a throwing error listener, an unknown nested
+  command, a nested command whose `console.command` propagation is stopped above 4096, a throwing
+  `WorkerMessageReceivedEvent` listener inside an in-process consume command, a nested main request, a failed command
+  inside a failed message followed by a worker stop, and the unchanged clears. The calendar markup equivalence test
+  compares the whole page again (the assignee filter is no longer masked).
+
 ## [2.14.0] - 2026-11-12
 
 Target 2.14.0 (minor; Beacon spec 204). Opt-in (`calendar.day_annotation_provider`); without a provider the calendar markup is the 2.13

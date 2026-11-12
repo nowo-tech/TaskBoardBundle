@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.14.1](#to-2141)
 - [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
   - [Multi-board task list: what a host does](#multi-board-task-list-what-a-host-does)
@@ -180,6 +181,28 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.14.1
+
+From **2.14.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.14.1 (patch). **No schema change, no configuration change.**
+
+- The request-memo boundary subscriber now tracks every console run, Messenger message and main request at
+  `PHP_INT_MAX` (audit NM): a host `console.terminate` / `console.error` listener that throws or stops the propagation can
+  no longer stop the memos from being cleared between requests. Edge case: a main request handled in-process inside
+  another main request no longer clears the outer request's memos.
+- A calendar day annotation provider that throws no longer fails the page: it renders without annotations and the
+  failure is logged as a warning. If you relied on the exception reaching your error page, watch the log instead.
+- The built `task-board.js` changes (a drag that snaps back onto its own dates writes nothing); hosts that copy the
+  bundle's assets re-run `assets:install`.
+- The calendar's assignee filter is sorted by label, then id.
+- If a `TASK_ACCESS_CHECK` listener denies single tasks, apply the same rule in your annotation provider: the calendar
+  query does not ask it per task ([USAGE](USAGE.md#calendar-working-days-holidays-and-leave-since-214)).
 
 ## To 2.14.0
 

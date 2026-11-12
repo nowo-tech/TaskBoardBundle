@@ -108,3 +108,13 @@ export function snapDates(dates: TaskDates, nonWorking: ReadonlySet<string>): Ta
         due: shifted.due === '' || dates.start === '' ? shifted.due : snapToWorkingDay(shifted.due, nonWorking),
     };
 }
+
+/**
+ * Since 2.14.1 (audit NN-L2): the dates a dropped bar is written with, or null when the move snaps back onto the dates it
+ * already has (a drop on a non-working day that snaps to where it was): nothing to write, nothing to undo.
+ */
+export function movedDates(dates: TaskDates, days: number, nonWorking: ReadonlySet<string>): TaskDates | null {
+    const next = snapDates(shiftDates(dates, days), nonWorking);
+
+    return sameDates(next, dates) ? null : next;
+}

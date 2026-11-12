@@ -137,6 +137,7 @@ use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionIn
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Throwable;
 use Twig\Environment;
 
 use function array_filter;
@@ -898,11 +899,18 @@ final class TaskBoardManageController extends AbstractController
         }
 
         // Since 2.14.0: the host's day annotations of the visible days (none without calendar.day_annotation_provider).
-        $annotations = $this->dayAnnotator?->annotate(
-            new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey()),
-            new CalendarDateRange($from->format('Y-m-d'), $to->modify('-1 day')->format('Y-m-d')),
-            $tasks,
-        );
+        // Since 2.14.1 (audit NN-L1): a failing provider never breaks the calendar; it renders without annotations, as
+        // in 2.13, and the failure is logged.
+        try {
+            $annotations = $this->dayAnnotator?->annotate(
+                new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey()),
+                new CalendarDateRange($from->format('Y-m-d'), $to->modify('-1 day')->format('Y-m-d')),
+                $tasks,
+            );
+        } catch (Throwable $exception) {
+            $annotations = null;
+            $this->logger->warning('TaskBoard calendar day annotations failed: {message}', ['bundle' => 'nowo_task_board', 'exception' => $exception, 'message' => $exception->getMessage()]);
+        }
 
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         $filterForm   = $this->formFactory()->createNamed('', TaskCalendarFilterType::class, [

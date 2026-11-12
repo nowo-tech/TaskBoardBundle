@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Service\TaskCalendarBuilder;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedCalendarDays;
 use PHPUnit\Framework\Attributes\CoversClass;
+use RuntimeException;
 
 use function preg_replace;
 
@@ -55,9 +56,8 @@ final class CalendarDayAnnotationsTest extends CalendarTestCase
             foreach (['month', 'week', 'list'] as $mode) {
                 $this->client->request('GET', $this->calendarUrl($this->em->getRepository(TaskBoard::class)->findAll()[0], 'mode=' . $mode . '&date=2030-03-04'));
                 self::assertResponseIsSuccessful();
-                $page = (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', 'ID', (string) $this->client->getResponse()->getContent());
-                // The assignee filter lists people in database order, which MySQL does not keep from one schema to the next.
-                $pages[$mode][] = (string) preg_replace('#<select id="assignee".*?</select>#s', '<select id="assignee"></select>', $page);
+                // Since 2.14.1 (audit NN-I2) the assignee filter is sorted by label, then id: the whole page compares.
+                $pages[$mode][] = (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', 'ID', (string) $this->client->getResponse()->getContent());
             }
         }
 
@@ -129,6 +129,31 @@ final class CalendarDayAnnotationsTest extends CalendarTestCase
         $crawler = $this->client->request('GET', $this->calendarUrl($board, 'mode=week&date=2030-03-04'));
         self::assertCount(0, $crawler->filter('[data-title="Span over an absence"] .nowo-task-cal__off-day-more'));
         self::assertSame('2030-03-04', $days->calls[array_key_last($days->calls)][2]->from);
+    }
+
+    /**
+     * Since 2.14.1 (audit NN-L1): a provider that throws never breaks the calendar: the page renders without annotations
+     * (the 2.13 page) and the failure is logged.
+     */
+    public function testAFailingProviderRendersThePageWithoutAnnotations(): void
+    {
+        self::$taskBoardConfig = self::WITH_PROVIDER;
+        self::ensureKernelShutdown();
+        $this->setUp();
+        [$board, $alice]                              = $this->seed();
+        $days                                         = $this->days();
+        $days->viewer[(string) $this->owner->getId()] = [new CalendarDayAnnotation('2030-03-04', true, 'Holiday', CalendarDayKind::Holiday)];
+        $days->people[(string) $alice->getId()]       = [new CalendarDayAnnotation('2030-03-04', true, 'Absent', CalendarDayKind::Absent)];
+        $days->failure                                = new RuntimeException('HR service down');
+
+        $crawler = $this->client->request('GET', $this->calendarUrl($board, 'mode=month&date=2030-03-04'));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-title="Due on a holiday"]'), 'the tasks are still shown');
+        $content = (string) $this->client->getResponse()->getContent();
+        foreach (['data-non-working', 'nowo-task-cal__day-label', 'has-off-day', 'nowo-task-cal__off-day'] as $marker) {
+            self::assertStringNotContainsString($marker, $content, $marker);
+        }
     }
 
     public function testSkipNonWorkingDaysTellsTheDragToSnap(): void

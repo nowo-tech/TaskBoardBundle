@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\Like;
+use Nowo\TaskBoardBundle\Support\UserLabel;
 use SortDirection;
 
 use function array_chunk;
@@ -30,6 +31,7 @@ use function in_array;
 use function is_array;
 use function max;
 use function mb_strtolower;
+use function uksort;
 
 final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterface, BoundedTaskRepositoryInterface, ArchiveAwareTaskRepositoryInterface, TaskCalendarRepositoryInterface
 {
@@ -343,6 +345,10 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
                 $people[(string) $id] = $user;
             }
         }
+
+        // Since 2.14.1 (audit NN-I2): a deterministic order, by label then id (the database order of the join differs
+        // between MySQL, PostgreSQL and SQLite, and from one schema to the next).
+        uksort($people, static fn (int|string $a, int|string $b): int => [UserLabel::of($people[$a]), (string) $a] <=> [UserLabel::of($people[$b]), (string) $b]);
 
         return $people;
     }
