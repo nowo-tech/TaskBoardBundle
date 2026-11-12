@@ -9,6 +9,7 @@
 | Re-audit (2026-11-12, REQ-RUNTIME-002) | 2.11.1: the request memos added since 1.23 (avatars, repeat icons, synced people, change cause, held task events) are cleared at the request, Messenger and console boundaries by `TaskBoardRequestBoundarySubscriber`, not only by `kernel.reset`; one-kernel worker test without the resetter (see [Request memos and boundaries](#request-memos-and-boundaries-2111)) |
 | Re-audit (2026-11-12, 2.13.0) | The multi-board list (`multi_board.enabled`) adds no state: `MultiBoardTaskList`, `DoctrineMultiBoardTaskQuery`, `MultiBoardExportTable`, `NullMultiBoardScopeProvider` and the controller are `final readonly` (or have only constructor dependencies); the viewer, the checked boards and every row live in the call, an export's batches in its generator; `XlsxStreamWriter` is built per export. Worker test `tests/Functional/MultiBoard/MultiBoardWorkerTest.php` (see [Multi-board list (2.13.0)](#multi-board-list-2130)) |
 | Re-audit (2026-11-12, 2.14.0) | The calendar day annotations add no state: `Calendar\CalendarDayAnnotator` is `final readonly` (provider and entity manager only), the viewer, range, assignees and warnings live in the call; the host's provider must resolve per call. Worker test `tests/Functional/Calendar/CalendarDayAnnotationsWorkerTest.php`: one kernel without the resetter, alice and bob alternate over 300 iterations of the month calendar (600 requests), each page shows only its viewer's labels and warnings, memory < 4 MiB after a 30-iteration warm-up |
+| Re-audit (2026-11-12, 2.14.1, audit NM / NL2-v) | The console depth counter of `TaskBoardRequestBoundarySubscriber` could stay above zero after a throwing or propagation-stopping console listener, after which the request memos were never cleared between HTTP requests again. Units of work are now tracked at `PHP_INT_MAX` by `EventListener\UnitOfWorkFrames` (one frame per console run keyed by command and input, saving and restoring the message / request state; failing runs without terminate dropped at the next unit; main requests counted; no request data). Test: `tests/Functional/ConsoleBoundaryCounterTest.php` |
 | Remediation (2026-09-25) | W-01, W-03 (positions), W-04, W-05 resolved; W-02 resolved for access decisions and timer aggregation (refresh) with identity-map clearing for rendered pages left to the host; closed EntityManagers are reset by the bundle after failed flushes (`Doctrine\RecoveringFlusher`); regression tests simulate consecutive requests without `reset()` |
 | **Verdict** | ✅ **Viable under scenario B** — bundle services hold no per-request state, a failed flush no longer leaves the worker with a closed EntityManager, time-tracking access and timer aggregation reload managed entities before deciding/mutating. Clearing Doctrine's identity map between requests (freshness of rendered HTML, memory) remains the application's responsibility |
 
@@ -93,15 +94,17 @@ Symfony kernel the resetter still runs before every request, even with `FRANKENP
 
 `EventListener\TaskBoardRequestBoundarySubscriber` (registered by the bundle) calls their `reset()` on:
 
-- main `kernel.request` (priority 4096) and `kernel.terminate` (priority -4096), only outside a Messenger message and a
-  console command (a page rendered in-process by a handler or a command keeps the outer unit and its open `defer()`);
-  sub-requests share the main request's memos;
-- Messenger `WorkerMessageReceivedEvent` (4096) and `WorkerMessageHandledEvent` / `WorkerMessageFailedEvent` (-4096);
-- `console.command` (4096) and `console.terminate` (-4096) of the outermost command only, and only outside a message
-  and a main request: a command run in-process (`Application::doRun()`) from another command, a message handler or a
-  controller does not clear the state of the unit that runs it (console depth counter, in-flight message flag set on
-  received and unset on handled / failed / worker stopped, in-flight request flag set on the main `kernel.request` and
-  unset on its `kernel.finish_request`).
+- main `kernel.request` (`PHP_INT_MAX`) and `kernel.terminate` (priority -4096), only for the outermost unit: not inside
+  a Messenger message, a console command or another main request (a page rendered in-process keeps the outer unit and
+  its open `defer()`); sub-requests share the main request's memos;
+- Messenger `WorkerMessageReceivedEvent` (`PHP_INT_MAX`) and `WorkerMessageHandledEvent` / `WorkerMessageFailedEvent`
+  (-4096);
+- `console.command` (`PHP_INT_MAX`) and `console.terminate` (-4096) of the outermost run only, outside a message and a
+  main request: a command run in-process (`Application::doRun()`) from another command, a message handler or a
+  controller does not clear the state of the unit that runs it. Since 2.14.1 (audit NM / NL2-v) the bookkeeping is
+  `UnitOfWorkFrames`, changed at `PHP_INT_MAX`: one frame per console run keyed by command and input (removed by its
+  own `console.terminate`; marked by `console.error` and dropped at the next unit when no terminate follows), a message
+  flag (unset on handled / failed / skipped / worker stopped) and a main-request counter.
 
 It receives the memos as a lazy iterator of `IGNORE_ON_UNINITIALIZED` references: a boundary never builds a service.
 
