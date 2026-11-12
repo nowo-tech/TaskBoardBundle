@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
@@ -121,6 +122,7 @@ use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Config\FileLocator;
+use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
@@ -274,6 +276,24 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
+        $this->registerRequestBoundary($container);
+    }
+
+    /**
+     * Since 2.11.1 (REQ-RUNTIME-002): the optional request memos (recurrence, sync) join the ones the boundary
+     * subscriber clears, as IGNORE_ON_UNINITIALIZED references (a boundary never builds a service).
+     */
+    private function registerRequestBoundary(ContainerBuilder $container): void
+    {
+        $subscriber = $container->getDefinition(TaskBoardRequestBoundarySubscriber::class);
+        $state      = $subscriber->getArgument('$state');
+        $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class] as $id) {
+            if ($container->hasDefinition($id)) {
+                $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
+            }
+        }
+        $subscriber->setArgument('$state', new IteratorArgument($values));
     }
 
     /**

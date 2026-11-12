@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Avatar;
 
+use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\Service\ResetInterface;
@@ -16,7 +17,9 @@ use function is_string;
 /**
  * @internal since 1.23: the avatar URLs of one request — {@see self::prime()} asks the host's resolver once for the
  * people a page shows (after its access filters), {@see self::urlOf()} answers from the memo (a miss primes that one
- * user). URLs go through {@see AvatarUrlPolicy}; a failing resolver gives null and a warning. Reset after each request.
+ * user). URLs go through {@see AvatarUrlPolicy}; a failing resolver gives null and a warning. Cleared at every request,
+ * message and command boundary ({@see TaskBoardRequestBoundarySubscriber}) and by
+ * `kernel.reset`.
  */
 final class TaskMemberAvatars implements ResetInterface
 {
