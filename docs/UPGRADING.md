@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
   - [Multi-board task list: what a host does](#multi-board-task-list-what-a-host-does)
 - [To 2.12.0](#to-2120)
@@ -179,6 +180,33 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.14.0
+
+From **2.13.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.14.0 (minor; Beacon spec 204). **No schema change, no configuration change, no output change** without
+`calendar.day_annotation_provider`: the calendar markup is the 2.13 markup. The built `task-board.js` changes (the drag can
+snap); hosts that copy the bundle's assets re-run `assets:install`.
+
+To show working days, holidays and leave on the calendar, implement
+`Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface` and set:
+
+```yaml
+nowo_task_board:
+    calendar:
+        enabled: true
+        day_annotation_provider: App\Leave\TaskCalendarDays
+        skip_non_working_days: true   # optional: a drop lands on the next working day
+```
+
+Return only labels the viewer may read, and never a medical or other special category reason: "Absent" is enough. A host
+overriding `_calendar_grid`, `_calendar_chip`, `_calendar_row` or `_calendar_list` adds the new parts from the bundle's
+templates (`_calendar_day_label.html.twig`, `_calendar_off_day.html.twig`) to see them.
 
 ## To 2.13.0
 

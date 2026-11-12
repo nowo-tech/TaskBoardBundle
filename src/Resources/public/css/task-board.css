@@ -316,7 +316,7 @@ body.modal-open {
 
 .nowo-task-detail__status-nav:hover:not(:disabled) {
     background: var(--nowo-task-surface-muted, var(--nowo-ui-surface-muted));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 .nowo-task-detail__status-nav:disabled {
@@ -409,7 +409,7 @@ body.modal-open {
     border: 0;
     border-radius: calc(var(--nowo-task-radius, var(--nowo-ui-radius)) - 2px);
     background: transparent;
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.875rem;
     text-align: left;
     text-transform: none;
@@ -453,7 +453,7 @@ body.modal-open {
 /* Since 1.20 the section headings of the task (Description) read like the other sections (Subtasks, Time): sentence case. */
 .nowo-task-detail__section-title {
     margin: 0 0 0.75rem;
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.9375rem;
     font-weight: 600;
     letter-spacing: normal;
@@ -1032,7 +1032,7 @@ button.nowo-task-detail__priority-tag:hover {
     border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
     background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 .nowo-task-detail__toolbar {
@@ -1233,7 +1233,7 @@ button.nowo-task-detail__priority-tag:hover {
     border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
     background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 .nowo-task-section__header {
@@ -1606,7 +1606,7 @@ details.nowo-task-section[open] > summary,
     border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
     background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 .nowo-task-list__group-header {
@@ -1651,7 +1651,7 @@ details.nowo-task-section[open] > summary,
     padding: 0.15rem 0.6rem;
     border-radius: 999px;
     background: color-mix(in srgb, var(--nowo-task-column-color) 12%, var(--nowo-task-surface, var(--nowo-ui-surface)));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -1905,7 +1905,7 @@ dialog.nowo-task-dialog--native::backdrop {
     border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     border-radius: var(--nowo-task-radius, var(--nowo-ui-radius));
     background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     overflow: hidden;
 }
 
@@ -1980,7 +1980,7 @@ dialog.nowo-task-dialog--native::backdrop {
 
 .nowo-task-gantt__month-label {
     min-height: 0.7rem;
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -2061,7 +2061,7 @@ dialog.nowo-task-dialog--native::backdrop {
     padding: 0;
     max-width: 16rem;
     overflow: hidden;
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.75rem;
     font-weight: 500;
     text-overflow: ellipsis;
@@ -2120,7 +2120,7 @@ dialog.nowo-task-dialog--native::backdrop {
 
 .nowo-task-detail__status-current:not(.nowo-task-detail__status-current--colored) {
     background: var(--nowo-task-surface-muted, var(--nowo-ui-surface-muted));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 @media (max-width: 640px) {
@@ -2615,7 +2615,7 @@ select.nowo-task-dependency-picker option {
     padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     background: var(--nowo-task-info-soft, var(--nowo-ui-info-bg));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-size: 0.8125rem;
 }
 
@@ -2641,7 +2641,7 @@ select.nowo-task-dependency-picker option {
     inset: 0 auto 0 0;
     width: calc(var(--nowo-task-spent, 0) * 1%);
     border-radius: inherit;
-    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--nowo-ui-text)) 16%, transparent));
+    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--nowo-ui-text, currentColor)) 16%, transparent));
     pointer-events: none;
 }
 
@@ -2678,7 +2678,7 @@ select.nowo-task-dependency-picker option {
     width: 0.65rem;
     height: 0.65rem;
     border-radius: 2px;
-    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--nowo-ui-text)) 16%, transparent));
+    background: var(--nowo-task-gantt-spent, color-mix(in srgb, var(--nowo-task-ink, var(--nowo-ui-text, currentColor)) 16%, transparent));
 }
 
 .nowo-task-gantt__legend-overrun {
@@ -2735,7 +2735,7 @@ details.nowo-task-section > summary {
 }
 
 .nowo-task-detail__parents-list [aria-current] {
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-weight: 500;
 }
 
@@ -2764,7 +2764,7 @@ details.nowo-task-section > summary {
 
 .nowo-task-activity__filter-btn[aria-pressed='true'] {
     background: var(--nowo-task-surface, var(--nowo-ui-surface));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     font-weight: 600;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
@@ -2868,7 +2868,7 @@ details.nowo-task-section > summary {
 .nowo-task-mention-list__option[aria-selected='true'],
 .nowo-task-mention-list__option:hover {
     background: var(--nowo-task-hover, var(--nowo-ui-surface-muted));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
 }
 
 .nowo-task-card__comments,
@@ -3116,7 +3116,7 @@ details.nowo-task-section > summary {
     height: 1.75rem;
     border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
     border-radius: var(--nowo-task-radius-sm, var(--nowo-ui-radius));
-    color: var(--nowo-task-ink, var(--nowo-ui-text));
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
     text-decoration: none;
 }
 
@@ -4074,4 +4074,51 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
     .nowo-task-detail__status-badge {
         font-size: 0.75rem;
     }
+}
+
+/* Since 2.14.0 (Beacon spec 204, calendar.day_annotation_provider): the host's day annotations and the off-day warning. */
+.nowo-task-cal__day.is-non-working {
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--nowo-ui-muted) 10%, transparent) 0 6px, transparent 6px 12px);
+}
+
+.nowo-task-cal__day.is-non-working.is-today {
+    box-shadow: inset 0 0 0 2px var(--nowo-ui-primary);
+}
+
+.nowo-task-cal__day-label {
+    overflow: hidden;
+    max-width: 60%;
+    padding-inline: 0.35rem;
+    border-radius: var(--nowo-task-radius-sm, var(--nowo-ui-radius));
+    font-size: 0.75rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nowo-task-muted, var(--nowo-ui-muted));
+    background: color-mix(in srgb, var(--nowo-ui-muted) 12%, transparent);
+}
+
+.nowo-task-cal__day-label--holiday.is-non-working,
+.nowo-task-cal__day-label--absent.is-non-working {
+    color: var(--nowo-task-ink, var(--nowo-ui-text, currentColor));
+}
+
+.nowo-task-cal__off-day {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    max-width: 100%;
+    margin-inline-start: 0.25rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    color: var(--nowo-task-warning, var(--nowo-ui-warning-text));
+}
+
+.nowo-task-cal__off-day-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nowo-task-cal__chip.has-off-day {
+    outline: 1px dashed var(--nowo-task-warning, var(--nowo-ui-warning-text));
+    outline-offset: -1px;
 }

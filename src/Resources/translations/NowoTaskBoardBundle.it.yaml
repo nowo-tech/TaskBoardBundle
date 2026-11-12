@@ -913,3 +913,5 @@ task_board.multi.empty_scope: "Nessuna bacheca da mostrare."
 task_board.multi.empty_scope_hint: "Non puoi ancora leggere nessuna bacheca qui."
 task_board.multi.partial: "Il filtro etichetta ha letto solo le prime attività: il risultato potrebbe essere incompleto. Restringi gli altri filtri."
 task_board.multi.overdue: "in ritardo"
+# Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
+task_board.calendar.off_day: "Un assegnatario non lavora il %date%: %label%"

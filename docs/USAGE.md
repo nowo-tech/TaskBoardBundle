@@ -48,6 +48,9 @@
 - [Provider connections and archived tasks (since 1.23)](#provider-connections-and-archived-tasks-since-123)
 - [Task member pictures (since 1.23)](#task-member-pictures-since-123)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
+- [Calendar: working days, holidays and leave (since 2.14)](#calendar-working-days-holidays-and-leave-since-214)
+  - [Calendar annotations: Standard Symfony host](#calendar-annotations-standard-symfony-host)
+  - [Calendar annotations: DDD / hexagonal host](#calendar-annotations-ddd--hexagonal-host)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
   - [DDD / hexagonal host](#ddd--hexagonal-host)
@@ -1162,6 +1165,79 @@ Check that the viewer may read what it returns: the ledger does not. The route `
 **Calendar.** `/board/{boardId}/calendar?mode=month|week|list&date=Y-m-d`, with the filters `assignee`, `priority`, `tag`, `column`, `completed=1` and `subtasks=1`. A link reproduces the view. Completed tasks and subtasks are hidden unless asked for. A task shows as a bar with both dates, on its day with one, and not at all with none.
 
 Editors change dates four ways, all through `task_schedule` (`start`, `due`, `_token`; an empty date clears it, and both are required): drag the body, drag an edge, *Reschedule*, or `TaskManager::reschedule()` from code. The server checks `canEditTask()` on every write: read-only answers 403, out of reach 404.
+
+## Calendar: working days, holidays and leave (since 2.14)
+
+Beacon spec 204. The host knows who works when; the board's calendar (`calendar.enabled`) only draws it. With
+`calendar.day_annotation_provider` set:
+
+- **Day shading.** `viewerDays(CalendarViewer, CalendarDateRange)` returns the viewer's days. A non-working day is shaded
+  (`is-non-working`, `is-day-holiday|weekend|absent|other`, `data-non-working="1"`) and every annotated day shows its
+  label (`_calendar_day_label.html.twig`), in the month, week and list modes.
+- **Task warnings.** `assigneeDays(CalendarViewer, list<string> $assigneeIds, CalendarDateRange)` is called **once per
+  page** with every assignee of the page's tasks (one query finds them). A task whose assignee is off (`nonWorking`) on its
+  due date, its start or a day between, within the page, gets `has-off-day` and a badge with the first such label, "+n"
+  for more, and the date in its tooltip (`_calendar_off_day.html.twig`). A working annotation (a training day) is a label
+  only, never a warning.
+- **Snapping.** `calendar.skip_non_working_days: true` makes a drag (the bar or one edge) land on the next working day of
+  the viewer's shading (the bar keeps its length; at most 31 days ahead). The Reschedule dialog and the server keep the
+  dates as typed. Off by default.
+- **Privacy.** The bundle prints the label it gets, escaped by Twig, and nothing else; the JavaScript never writes a label.
+  Return only what this viewer may read, and never a medical or other special category reason: use "Absent"
+  (Beacon shows *Absent* to everyone without `leave.manage`). A label is at most 80 printable characters.
+- **Defaults.** Without a provider nothing is called and the markup is the 2.13 markup. A provider that returns nothing
+  changes nothing either. An exception from the provider fails the page, like any other error of the host.
+
+### Calendar annotations: Standard Symfony host
+
+```php
+use Nowo\TaskBoardBundle\Calendar\CalendarDateRange;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotation;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotations;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayKind;
+use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
+
+final readonly class TaskCalendarDays implements CalendarDayAnnotationProviderInterface
+{
+    public function __construct(private HolidayRepository $holidays, private LeaveRepository $leave) {}
+
+    public function viewerDays(CalendarViewer $viewer, CalendarDateRange $range): CalendarDayAnnotations
+    {
+        $days = [];
+        foreach ($this->holidays->forUser($viewer->userId, $range->from, $range->to) as $holiday) {
+            $days[] = new CalendarDayAnnotation($holiday->date(), true, $holiday->name(), CalendarDayKind::Holiday);
+        }
+
+        return new CalendarDayAnnotations($days);
+    }
+
+    public function assigneeDays(CalendarViewer $viewer, array $assigneeIds, CalendarDateRange $range): array
+    {
+        $byPerson = [];
+        // One query for everyone; the label the viewer may see ("Absent", never the reason).
+        foreach ($this->leave->approvedDays($assigneeIds, $range->from, $range->to) as $day) {
+            $byPerson[$day->userId()][] = new CalendarDayAnnotation($day->date(), true, 'Absent', CalendarDayKind::Absent);
+        }
+
+        return array_map(static fn (array $days): CalendarDayAnnotations => new CalendarDayAnnotations($days), $byPerson);
+    }
+}
+```
+
+```yaml
+nowo_task_board:
+    calendar:
+        enabled: true
+        day_annotation_provider: App\Leave\TaskCalendarDays
+```
+
+### Calendar annotations: DDD / hexagonal host
+
+The port and its values carry no framework type (REQ-ARCH-001): the adapter gets the viewer's user id, the board id and
+its tenant key (`CalendarViewer`), the visible days as `Y-m-d` strings (`CalendarDateRange`) and assignee ids as strings,
+and returns `CalendarDayAnnotations`. Keep it in your infrastructure layer and map your own leave and holiday read models;
+nothing in it needs a bundle entity. Resolve per call (FrankenPHP worker mode): no viewer in a property.
 
 ## Multi-board task list (since 2.13)
 

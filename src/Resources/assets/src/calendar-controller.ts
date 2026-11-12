@@ -1,5 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
-import { dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates, type CalendarEdge, type TaskDates } from './calendar-utils';
+import { dayDiff, dragEdge, grabOffset, gridStep, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay, type CalendarEdge, type TaskDates } from './calendar-utils';
 import { openKitDialog } from './dialog-utils';
 import { openFold } from './filter-fold-utils';
 
@@ -23,6 +23,8 @@ export default class CalendarController extends Controller<HTMLElement> {
         undo: String,
         undone: String,
         filtered: Boolean,
+        // Since 2.14.0: `calendar.skip_non_working_days` (with a day annotation provider).
+        skipNonWorking: Boolean,
     };
 
     declare readonly bodyTarget: HTMLElement;
@@ -56,6 +58,8 @@ export default class CalendarController extends Controller<HTMLElement> {
     declare readonly undoneValue: string;
 
     declare readonly filteredValue: boolean;
+
+    declare readonly skipNonWorkingValue: boolean;
 
     private grab = 0;
 
@@ -118,7 +122,7 @@ export default class CalendarController extends Controller<HTMLElement> {
     private readonly onSortableMoved = (event: Event): void => {
         const { detail } = event as CustomEvent<SortableDetail>;
         const dates = this.datesOf(detail.item);
-        void this.send(detail.item, shiftDates(dates, this.days(detail)), dates, detail.revert);
+        void this.send(detail.item, this.snap(shiftDates(dates, this.days(detail))), dates, detail.revert);
         this.grab = 0;
     };
 
@@ -161,7 +165,7 @@ export default class CalendarController extends Controller<HTMLElement> {
         const day = this.dayAt(event.clientX, event.clientY);
         if (day !== null && day !== this.edge.day) {
             this.edge.day = day;
-            this.paintRange(dragEdge(this.datesOf(this.edge.chip), this.edge.edge, day));
+            this.paintRange(dragEdge(this.datesOf(this.edge.chip), this.edge.edge, this.snapDay(day)));
         }
     };
 
@@ -173,7 +177,7 @@ export default class CalendarController extends Controller<HTMLElement> {
         this.endEdge();
         if (day !== null) {
             const dates = this.datesOf(chip);
-            const next = dragEdge(dates, edge, day);
+            const next = dragEdge(dates, edge, this.snapDay(day));
             if (!sameDates(dates, next)) {
                 void this.send(chip, next, dates);
             }
@@ -198,6 +202,23 @@ export default class CalendarController extends Controller<HTMLElement> {
         window.removeEventListener('pointercancel', this.onEdgeCancel);
         window.removeEventListener('keydown', this.onEdgeKey, true);
         this.paintRange(null);
+    }
+
+    /** Since 2.14.0: the viewer's non-working days of the grid, when a drop snaps to working days. */
+    private nonWorkingDays(): Set<string> {
+        if (!this.skipNonWorkingValue || !this.hasGridTarget) {
+            return new Set();
+        }
+
+        return new Set(Array.from(this.gridTarget.querySelectorAll<HTMLElement>('[data-non-working]'), (cell) => cell.dataset.date ?? ''));
+    }
+
+    private snap(dates: TaskDates): TaskDates {
+        return snapDates(dates, this.nonWorkingDays());
+    }
+
+    private snapDay(day: string): string {
+        return snapToWorkingDay(day, this.nonWorkingDays());
     }
 
     private dayAt(x: number, y: number): string | null {

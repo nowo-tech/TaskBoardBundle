@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Calendar\CalendarAnnotations;
+use Nowo\TaskBoardBundle\Calendar\CalendarTaskWarning;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarChip;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarDay;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarEntry;
@@ -86,8 +88,9 @@ final readonly class TaskCalendarBuilder
     /**
      * @param list<Task> $tasks the dated tasks overlapping the range
      * @param array<string, bool> $editable task id => whether the user may change it
+     * @param CalendarAnnotations|null $annotations since 2.14.0: the host's day annotations of the page (null: none, the 2.13 page)
      */
-    public function build(CalendarMode $mode, DateTimeImmutable $date, WeekStart $weekStart, array $tasks, array $editable = []): TaskCalendarView
+    public function build(CalendarMode $mode, DateTimeImmutable $date, WeekStart $weekStart, array $tasks, array $editable = [], ?CalendarAnnotations $annotations = null): TaskCalendarView
     {
         $today       = $this->clock->now()->format('Y-m-d');
         [$from, $to] = $this->range($mode, $date, $weekStart);
@@ -95,7 +98,7 @@ final readonly class TaskCalendarBuilder
 
         $entries = [];
         foreach ($tasks as $task) {
-            $entry = $this->entry($task, $today, $editable[$task->getId()] ?? false);
+            $entry = $this->entry($task, $today, $editable[$task->getId()] ?? false, $annotations?->warningsFor($task->getId()) ?? []);
             if ($entry instanceof TaskCalendarEntry) {
                 $entries[] = $entry;
             }
@@ -108,7 +111,7 @@ final readonly class TaskCalendarBuilder
         }
 
         $weeks = $mode === CalendarMode::List ? [] : array_map(
-            fn (array $week): array => $this->week($week, $entries, $mode === CalendarMode::Month ? self::MONTH_LANES : null, $today, $period),
+            fn (array $week): array => $this->week($week, $entries, $mode === CalendarMode::Month ? self::MONTH_LANES : null, $today, $period, $annotations),
             array_chunk($dates, 7),
         );
 
@@ -117,7 +120,7 @@ final readonly class TaskCalendarBuilder
             foreach ($dates as $key) {
                 $covering = $this->covering($entries, $key);
                 if ($covering !== []) {
-                    $days[] = $this->calendarDay($key, [], $covering, 0, $today, null);
+                    $days[] = $this->calendarDay($key, [], $covering, 0, $today, null, $annotations);
                 }
             }
         }
@@ -141,7 +144,10 @@ final readonly class TaskCalendarBuilder
         );
     }
 
-    private function entry(Task $task, string $today, bool $editable): ?TaskCalendarEntry
+    /**
+     * @param list<CalendarTaskWarning> $warnings
+     */
+    private function entry(Task $task, string $today, bool $editable, array $warnings): ?TaskCalendarEntry
     {
         $start = $task->getStartAt()?->format('Y-m-d');
         $due   = $task->getDueAt()?->format('Y-m-d');
@@ -160,6 +166,7 @@ final readonly class TaskCalendarBuilder
             last: max($first, $last),
             overdue: $due !== null && $due < $today && !$task->isCompleted(),
             editable: $editable,
+            warnings: $warnings,
         );
     }
 
@@ -174,7 +181,7 @@ final readonly class TaskCalendarBuilder
      *
      * @return list<TaskCalendarDay>
      */
-    private function week(array $dates, array $entries, ?int $maxLanes, string $today, ?string $period): array
+    private function week(array $dates, array $entries, ?int $maxLanes, string $today, ?string $period, ?CalendarAnnotations $annotations): array
     {
         $segments = [];
         foreach ($entries as $entry) {
@@ -216,7 +223,7 @@ final readonly class TaskCalendarBuilder
 
         $days = [];
         foreach ($dates as $index => $key) {
-            $days[] = $this->calendarDay($key, $chips[$index] ?? [], $this->covering($entries, $key), $more[$index] ?? 0, $today, $period);
+            $days[] = $this->calendarDay($key, $chips[$index] ?? [], $this->covering($entries, $key), $more[$index] ?? 0, $today, $period, $annotations);
         }
 
         return $days;
@@ -263,7 +270,7 @@ final readonly class TaskCalendarBuilder
      * @param list<TaskCalendarChip> $chips
      * @param list<TaskCalendarEntry> $entries
      */
-    private function calendarDay(string $key, array $chips, array $entries, int $more, string $today, ?string $period): TaskCalendarDay
+    private function calendarDay(string $key, array $chips, array $entries, int $more, string $today, ?string $period, ?CalendarAnnotations $annotations): TaskCalendarDay
     {
         $day = new DateTimeImmutable($key);
 
@@ -278,6 +285,7 @@ final readonly class TaskCalendarBuilder
             chips: $chips,
             entries: $entries,
             more: $more,
+            annotation: $annotations?->days->for($key),
         );
     }
 }

@@ -62,6 +62,8 @@ services:
             - '../../Link/TaskObjectLinkResolverInterface.php'
             - '../../Link/TaskObjectBadge.php'
             - '../../Comment/MentionCandidate.php'
+            # Since 2.14.0: value objects of the calendar annotations; the annotator is registered with a provider only.
+            - '../../Calendar/'
             # Since 2.13.0: loaded only with `multi_board.enabled` (services_multi_board.yaml).
             - '../../MultiBoard/'
             - '../../Controller/TaskBoardMultiBoardController.php'

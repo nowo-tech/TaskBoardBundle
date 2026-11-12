@@ -30,6 +30,8 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -463,6 +465,17 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$taskNumbersEnabled', $numbers)
             ->setArgument('$calendarEnabled', $calendar);
         $container->getDefinition(TaskBoardManageController::class)->setArgument('$calendarEnabled', $calendar);
+        // Since 2.14.0 (Beacon spec 204): the host's day annotations, only with the calendar and a provider.
+        $provider = $config['calendar']['day_annotation_provider'];
+        if ($calendar && is_string($provider) && $provider !== '') {
+            $container->setDefinition(CalendarDayAnnotator::class, (new Definition(CalendarDayAnnotator::class))
+                ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+                ->setArgument('$provider', new Reference($provider)));
+            $container->setAlias(CalendarDayAnnotationProviderInterface::class, $provider);
+            $container->getDefinition(TaskBoardManageController::class)
+                ->setArgument('$dayAnnotator', new Reference(CalendarDayAnnotator::class))
+                ->setArgument('$skipNonWorkingDays', (bool) $config['calendar']['skip_non_working_days']);
+        }
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$taskNumbersEnabled', $numbers)
             ->setArgument('$calendarEnabled', $calendar);

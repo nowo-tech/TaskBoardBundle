@@ -104,6 +104,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.14.0 (minor; Beacon spec 204). Opt-in (`calendar.day_annotation_provider`); without a provider the calendar markup is the 2.13
+markup. No schema change, see [UPGRADING](UPGRADING.md#to-2140).
+
+### Added
+
+- **Calendar day annotations.** Host port `Calendar\CalendarDayAnnotationProviderInterface` with bundle-owned value
+  objects only (`CalendarViewer`, `CalendarDateRange`, `CalendarDayAnnotation`: date, `nonWorking`, label, `CalendarDayKind`
+  holiday / weekend / absent / other, `CalendarDayAnnotations`). `viewerDays()` shades and labels the viewer's days
+  (`is-non-working`, `is-day-<kind>`, `data-non-working`); `assigneeDays()` is asked once for every assignee of the page,
+  and a task whose assignee is off on its due date, its start or a day between (within the page) carries a warning badge
+  with the host's label (`has-off-day`, `_calendar_off_day.html.twig`). One query for the page's assignees.
+- `calendar.skip_non_working_days` (default `false`): with a provider, a dragged task (body or edge) lands on the next
+  working day of the viewer.
+- The bundle renders only the host's label, escaped in Twig; the JavaScript never writes a label. Hosts must not pass
+  medical or other special category reasons (use "Absent").
+- `TaskCalendarBuilder::build()` takes an optional `CalendarAnnotations`; `TaskCalendarDay::$annotation` and
+  `TaskCalendarEntry::$warnings` (optional, at the end of the constructors).
+
 ## [2.13.0] - 2026-11-12
 
 Target 2.13.0 (minor; Beacon D-20261112-01, "All tasks" of an organisation). Opt-in (`multi_board.enabled`); no schema

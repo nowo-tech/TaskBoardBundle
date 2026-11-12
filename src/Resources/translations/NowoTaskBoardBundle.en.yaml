@@ -913,3 +913,5 @@ task_board.multi.empty_scope: "No boards to show."
 task_board.multi.empty_scope_hint: "You cannot read any board here yet."
 task_board.multi.partial: "The label filter read the first tasks only: the result may be incomplete. Narrow the other filters."
 task_board.multi.overdue: "overdue"
+# Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
+task_board.calendar.off_day: "An assignee is off on %date%: %label%"

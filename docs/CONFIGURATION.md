@@ -764,6 +764,8 @@ pnpm install && pnpm run build
 | `task_numbers.enabled` | `false` | A readable `#123` per task: the mapping of the counter and the ledger, the listener, `nowo:task-board:numbers-backfill`, the route `task_by_number` and the numbers on the pages |
 | `task_numbers.scope` | `tenant` | `tenant`: one sequence per `TaskBoard::$tenantKey` (a board without one uses its id). `board`: one per board |
 | `calendar.enabled` | `false` | The route `calendar` and `task_schedule`, and the Calendar tab |
+| `calendar.day_annotation_provider` | `null` | Since 2.14.0: service id of a `Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface` (working days, holidays, leave; see [USAGE](USAGE.md#calendar-working-days-holidays-and-leave-since-214)). `null`: the 2.13 calendar |
+| `calendar.skip_non_working_days` | `false` | Since 2.14.0, with a provider: a dragged task lands on the next working day of the viewer |
 | `routes.task_by_number` | `/tools/task-board/n/{number}` | With `task_numbers.enabled`. A tenant copy is `<tenant path>/n/{number}` |
 | `routes.calendar` | `/tools/task-board/board/{boardId}/calendar` | With `calendar.enabled` |
 | `routes.task_schedule` | `/tools/task-board/task/{taskId}/schedule` | With `calendar.enabled`. POST |

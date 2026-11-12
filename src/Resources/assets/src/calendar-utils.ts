@@ -78,3 +78,33 @@ export function phoneListUrl(href: string, phone: boolean): string | null {
 
     return url.toString();
 }
+
+/**
+ * Since 2.14.0 (`calendar.skip_non_working_days`): the day itself when it is a working day, else the next one, at most `limit`
+ * days later (a run of non-working days longer than that keeps the day: the server still answers for the dates).
+ */
+export function snapToWorkingDay(day: string, nonWorking: ReadonlySet<string>, limit = 31): string {
+    let next = day;
+    for (let step = 0; step < limit && nonWorking.has(next); step++) {
+        next = addDays(next, 1);
+    }
+
+    return nonWorking.has(next) ? day : next;
+}
+
+/**
+ * Since 2.14.0: a moved bar lands on working days. The first date goes to the next working day and the other follows by the same
+ * days (the duration stays), then it too goes to the next working day. A missing date stays missing.
+ */
+export function snapDates(dates: TaskDates, nonWorking: ReadonlySet<string>): TaskDates {
+    const first = dates.start !== '' ? dates.start : dates.due;
+    if (first === '' || nonWorking.size === 0) {
+        return dates;
+    }
+    const shifted = shiftDates(dates, dayDiff(first, snapToWorkingDay(first, nonWorking)));
+
+    return {
+        start: shifted.start,
+        due: shifted.due === '' || dates.start === '' ? shifted.due : snapToWorkingDay(shifted.due, nonWorking),
+    };
+}

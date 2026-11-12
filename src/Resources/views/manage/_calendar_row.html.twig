@@ -5,7 +5,7 @@
 #}
 {% set task = entry.task %}
 <li
-    class="nowo-task-cal__row{{ task.completed ? ' is-completed' : '' }}{{ entry.overdue ? ' is-overdue' : '' }}"
+    class="nowo-task-cal__row{{ task.completed ? ' is-completed' : '' }}{{ entry.overdue ? ' is-overdue' : '' }}{{ entry.warnings is not empty ? ' has-off-day' : '' }}"
     data-task-id="{{ task.id }}"
     data-title="{{ task.title }}"
     data-nowo-task-title="{{ task.title }}"
@@ -18,7 +18,7 @@
     {% endif %}
 >
     <a class="nowo-task-cal__row-title" href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}">{% if nowo_task_board_number(task) %}<span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span> {% endif %}{{ task.title }}</a>
-    {% if entry.overdue %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-cal__overdue">{{ 'task_board.calendar.overdue'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
+    {% if entry.overdue %}<span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }} nowo-task-cal__overdue">{{ 'task_board.calendar.overdue'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}{% if entry.warnings is not empty %}{{ include('@NowoTaskBoardBundle/manage/_calendar_off_day.html.twig', {warnings: entry.warnings}, with_context: false) }}{% endif %}
     {% if task.column %}<span class="nowo-task-cal__row-column">{{ task.column.name }}</span>{% endif %}
     {% if entry.editable %}<button type="button" data-testid="nowo-task-cal-reschedule" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-action="nowo-task-board-calendar#openReschedule" aria-label="{{ 'task_board.calendar.reschedule_task'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}">{{ 'task_board.calendar.reschedule'|trans({}, 'NowoTaskBoardBundle') }}</button>{% endif %}
 </li>
