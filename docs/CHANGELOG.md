@@ -179,6 +179,9 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 
 ### Changed
 
+- The prepended Doctrine mappings of the sync, API, recurrence and task-number entities no longer set `alias`
+  (deprecated by DoctrineBundle 3.4, whose deprecation failed the Symfony 8.1 cells). Nothing in the bundle used the
+  `TaskBoardSync:Entity` short names; a host that did writes the class name instead.
 - `Board\BoardScopeField::$formType` is documented as a plain `class-string` (the value object no longer names the
   Symfony Form component); the New board form narrows it. Same value, same behaviour.
 - The bundle injects the comment and history cause labelers, the first-board provisioner, the people inviter and the
