@@ -184,6 +184,33 @@ jobs:
           SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
         run: composer test -- --testsuite functional
 
+  twin-ports:
+    name: Functional suite through the framework-free ports (twin replay)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout TaskBoardBundle
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies (Symfony 7.4)
+        run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      # Since 2.15.0 (REQ-ARCH-001): every host stub of the test kernels behind an adapter that implements ONLY the
+      # framework-free twin of its port; the suite must give the same results.
+      - name: Run the functional suite with twin-only host ports
+        env:
+          TASK_BOARD_TEST_PORTS: twin
+          SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
+        run: composer test -- --testsuite functional
+
   code-style:
     name: Code Style
     runs-on: ubuntu-latest

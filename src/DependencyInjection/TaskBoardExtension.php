@@ -37,6 +37,7 @@ use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
+use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
@@ -291,11 +292,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerMultiBoard($container, $loader, $config, $emName);
         // Since 2.3.0 (spec 216): the host's label of a history row's cause.
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
-            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', new Reference($config['history']['cause_labeler']));
+            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$causeLabeler', $this->portReference($container, 'change_cause_labeler', $config['history']['cause_labeler']));
         }
         // Since 2.10.0 (spec 216): the host's label of a comment's cause.
         if (is_string($config['comments']['cause_labeler']) && $config['comments']['cause_labeler'] !== '') {
-            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$commentCauseLabeler', new Reference($config['comments']['cause_labeler']));
+            $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$commentCauseLabeler', $this->portReference($container, 'comment_cause_labeler', $config['comments']['cause_labeler']));
         }
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
@@ -512,7 +513,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardManageController::class)
             ->setArgument('$openSingleBoard', $config['tenancy']['open_single_board'])
             ->setArgument('$openSingleBoardPaths', $openSingleBoardPaths)
-            ->setArgument('$firstBoardProvisioner', is_string($provisioner) && $provisioner !== '' ? new Reference($provisioner) : null);
+            ->setArgument('$firstBoardProvisioner', is_string($provisioner) && $provisioner !== '' ? $this->portReference($container, 'first_board_provisioner', $provisioner) : null);
         $helpLink    = $config['import']['help_link'];
         $urlResolver = $helpLink['url_resolver'] ?? null;
         $container->getDefinition(ImportHelpLinkResolver::class)
@@ -655,7 +656,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$defaultBatchSize', $people['reassign_batch_size']);
         // Since 1.27.0 (TB-SYNC-2): the People page.
         $container->getDefinition(PeopleMappingService::class)
-            ->setArgument('$inviter', is_string($people['inviter']) && $people['inviter'] !== '' ? new Reference($people['inviter']) : null)
+            ->setArgument('$inviter', is_string($people['inviter']) && $people['inviter'] !== '' ? $this->portReference($container, 'people_inviter', $people['inviter']) : null)
             ->setArgument('$candidateLimit', $people['candidate_limit'])
             ->setArgument('$reapplySeconds', (float) $people['reapply_seconds']);
         $container->getDefinition(TaskSyncPeopleScanner::class)
@@ -664,7 +665,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$timeWindow', $people['scan']['time_window'])
             ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call']);
         $container->getDefinition(TimeEntryPhase::class)
-            ->setArgument('$sink', is_string($time['sink']) && $time['sink'] !== '' ? new Reference($time['sink']) : null)
+            ->setArgument('$sink', is_string($time['sink']) && $time['sink'] !== '' ? $this->portReference($container, 'time_entry_sink', $time['sink']) : null)
             ->setArgument('$windowDays', $time['window_days'])
             ->setArgument('$maxAssigneesPerCall', $time['max_assignees_per_call'])
             ->setArgument('$maxEntriesPerWindow', $time['max_entries_per_window'])
@@ -689,6 +690,17 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$syncPeople', new Reference(SyncPeopleViewProvider::class))
             ->setArgument('$syncFields', new Reference(SyncFieldViewProvider::class));
+    }
+
+    /**
+     * Since 2.15.0: the reference the bundle injects for a host port it does not reach through the deprecated interface's
+     * id; {@see TaskBoardPortsPass} turns it into the twin's gate when the service implements only the 2.15 twin.
+     */
+    private function portReference(ContainerBuilder $container, string $port, string $serviceId): Reference
+    {
+        $container->setAlias(TaskBoardPortsPass::PORT_PREFIX . $port, $serviceId);
+
+        return new Reference(TaskBoardPortsPass::PORT_PREFIX . $port);
     }
 
     private function serviceOr(mixed $id, string $default): string

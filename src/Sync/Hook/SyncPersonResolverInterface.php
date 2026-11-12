@@ -12,6 +12,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 /**
  * Since 1.25 (`sync.people.resolver`): who remote people may be mapped to. Every answer is scoped to the board's
  * candidates (the host decides: project and organization members); the bundle never looks a user up elsewhere.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see SyncPersonDirectoryInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface SyncPersonResolverInterface
 {

@@ -106,6 +106,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.15.0 (minor; REQ-ARCH-001 / REQ-RUNTIME-002). Every change is additive: with an unchanged configuration and
+unchanged host services TaskBoard behaves exactly as 2.14.1 (the whole functional suite also runs through the new
+ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
+
+### Added
+
+- **Framework-free host ports (REQ-ARCH-001 rules 1 and 3).** Each host port typed with a bundle entity, the HTTP
+  `Request` or an `UploadedFile` has a 2.15 twin that takes and returns only bundle value objects, scalars and the
+  host's own user object:
+
+  | Deprecated (removed in 3.0) | 2.15 twin |
+  |---|---|
+  | `Api\Hook\TaskApiAuthenticatorInterface` (`Request`) | `Api\Hook\TaskApiRequestAuthenticatorInterface` (`Api\Value\TaskApiRequestContext`) |
+  | `Api\Hook\TaskApiAttachmentsInterface` (`Task`, `UploadedFile`) | `Api\Hook\TaskApiAttachmentStoreInterface` (`TaskSnapshot`, `Api\Value\TaskApiUpload`) |
+  | `Api\Hook\TaskApiTimeEntriesInterface` | `Api\Hook\TaskApiTimeStoreInterface` |
+  | `Assignee\TaskAssigneeProviderInterface` | `Assignee\TaskAssigneePolicyInterface` |
+  | `Comment\TaskCommentCauseLabelerInterface` | `Comment\TaskCommentCauseTextInterface` |
+  | `Comment\TaskMentionCandidatesResolverInterface` | `Comment\TaskMentionCandidatesProviderInterface` |
+  | `History\TaskChangeCauseLabelerInterface` | `History\TaskChangeCauseTextInterface` |
+  | `Import\BoardAwareTaskImportUserResolverInterface` | `Import\BoardScopedTaskImportUserResolverInterface` |
+  | `Import\TaskImportLinkLookupInterface` | `Import\TaskImportLinkFinderInterface` |
+  | `Move\TaskBoardTargetsInterface` | `Move\TaskBoardTargetIdsInterface` (board ids) |
+  | `View\TaskBoardDefaultViewResolverInterface` | `View\TaskBoardDefaultViewPolicyInterface` |
+  | `Tenancy\FirstBoardProvisionerInterface` | `Tenancy\FirstBoardProvisioningInterface` (the new board's id) |
+  | `Sync\Hook\AttributionOnlyResolverInterface` | `Sync\Hook\AttributionOnlyPolicyInterface` |
+  | `Sync\Hook\ImportedTimeEntrySinkInterface` / `OwnerlessTimeEntrySinkInterface` | `Sync\Hook\ImportedTimeEntryReceiverInterface` / `OwnerlessTimeEntryReceiverInterface` |
+  | `Sync\Hook\InlineImageRewriterInterface` | `Sync\Hook\SyncedImageRewriterInterface` |
+  | `Sync\Hook\PeopleInviterInterface` | `Sync\Hook\PeopleInvitationInterface` |
+  | `Sync\Hook\ProviderCredentialResolverInterface` | `Sync\Hook\ProviderCredentialSourceInterface` |
+  | `Sync\Hook\SyncActorResolverInterface` | `Sync\Hook\SyncActorProviderInterface` |
+  | `Sync\Hook\SyncLimitCheckerInterface` | `Sync\Hook\SyncQuotaPolicyInterface` |
+  | `Sync\Hook\SyncPersonResolverInterface` | `Sync\Hook\SyncPersonDirectoryInterface` |
+  | `Sync\Hook\TaskAttachmentStorageInterface` | `Sync\Hook\SyncedFileStorageInterface` |
+
+  Entities travel as snapshots copied when the port is called (`ValueObject\TaskBoardSnapshot`, `TaskSnapshot`,
+  `TaskCommentSnapshot`, `TaskChangeSnapshot`, `TaskSyncDirectorySnapshot`: ids, names, dates, the creator's id; no
+  entity, collection or user object). The HTTP request travels as `Api\Value\TaskApiRequestContext` (method, path,
+  route, client IP, the `Authorization` credential and the headers; never a cookie), an upload as
+  `Api\Value\TaskApiUpload` (temporary path, client name and type, size, `open()`).
+- **Selection rule.** A service implementing the deprecated interface is asked exactly as in 2.14, also when it
+  implements the twin too. A service implementing only the twin is asked through an internal gate (`Port\*Gate`). The
+  same configuration keys take either (`api.hooks.*`, `assignee_provider`, `comments.*`, `history.cause_labeler`,
+  `move.targets`, `board.default_view_resolver`, `tenancy.first_board_provisioner`, `sync.*`); the
+  `TaskImportLinkLookupInterface` and `TaskImportUserResolverInterface` aliases too.
+- `DependencyInjection\Compiler\TaskBoardPortsPass`: the build fails when a configured port service implements neither
+  interface, naming the configuration key; a service whose class cannot be known before compilation (a factory) is
+  checked when it is built and fails closed (`LogicException`).
+- **Framework-free event accessors (REQ-ARCH-001 rules 1 and 4).** Every event that carried a bundle entity also answers
+  with ids and snapshots, built on call: `getBoardId()`, `getTenantKey()`, `getBoardSnapshot()` and `getSubjectId()` on
+  `BoardAccessCheckEvent`; `getTaskId()`, `getBoardId()`, `getTenantKey()`, `getTaskSnapshot()`, `getSubjectId()` on
+  `TaskAccessCheckEvent`; `getColumnSetId()`, `getColumnSetScopeKey()`, `getColumnSetCreatorId()`, `getSubjectId()` on
+  `ColumnSetAccessCheckEvent`; `getBoardId()`, `getBoardSnapshot()`, `getSubjectId()` on `ColumnSetQueryEvent`;
+  `getBoardId()`, `getBoardSnapshot()`, `getActorId()` on `TaskBoardQuotaCheckEvent`; `getBoardSnapshot()` on
+  `BoardCreatedEvent` / `BoardUpdatedEvent`; `getBoardId()`, `getTenantKey()`, `getBoardSnapshot()` (and
+  `getActorId()` where there is an actor) on `BoardConnectionEvent`, `SyncStartedEvent`, `SyncPageDoneEvent`,
+  `SyncFinishedEvent`, `SyncFailedEvent`; `getTaskId()`, `getBoardId()`, `getTenantKey()`, `getTaskSnapshot()` on
+  `TaskRemoteArchivedEvent` / `TaskRemoteRestoredEvent`; `getTaskSnapshot()` on every task event;
+  `getCommentSnapshot()` on `TaskCommentEvent` / `TaskMentionEvent`.
+- `Sync\Time\ImportedTimeEntryCandidate::personId()`, `personProviderUserId()`, `taskId()`, `boardId()`;
+  `Api\TaskApiWhere::reachesBoardOf(string $boardId, ?string $tenantKey)`.
+
+### Deprecated
+
+- The 21 port interfaces above (`@deprecated`; Symfony's DebugClassLoader reports an application class implementing
+  one in debug mode). They keep working unchanged until 3.0.
+- The entity members of the events (`getTask()`, `getBoard()`, `getComment()`, `getMember()`, `getColumnSet()`,
+  `getFromColumn()` / `getToColumn()`, the public `$board` / `$task` properties), of `ImportedTimeEntryCandidate`
+  (`$person`, `$task`) and `TaskApiWhere::reachesBoard(TaskBoard)`; removed in 3.0. No runtime deprecation is triggered.
+
+### Changed
+
+- `Board\BoardScopeField::$formType` is documented as a plain `class-string` (the value object no longer names the
+  Symfony Form component); the New board form narrows it. Same value, same behaviour.
+- The bundle injects the comment and history cause labelers, the first-board provisioner, the people inviter and the
+  time-entry sink through `nowo_task_board.port.<name>` aliases of the configured services (the gates when needed).
+
+### Tests
+
+- `PortsTest` (the selection rule of all 21 ports: deprecated, both, twin only, neither), `PortGatesTest` (every gate
+  passes snapshots, values and answers through), `SnapshotsTest`, `TaskBoardPortsPassTest`,
+  `FrameworkFreeEventAccessorsTest`, `TaskApiFrameworkFreeValuesTest`.
+- `PortEquivalenceTest`: the decisions 2.15 routes through `Port\Ports` equal the LITERAL v2.14.1 code
+  (`tests/Support/Legacy/Legacy2141PortDecisions.php`) for every service 2.14 could have, and a twin-only service gives
+  the answer of its 2.14 equivalent.
+- **Twin replay** (`TASK_BOARD_TEST_PORTS=twin`, a CI job): the whole functional suite runs with every host stub of the
+  test kernels behind an adapter that implements ONLY the 2.15 twin (`tests/Support/TwinPorts`): 870 tests, same results.
+
 ## [2.14.1] - 2026-11-12
 
 ### Fixed

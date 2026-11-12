@@ -10,12 +10,12 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
+use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
@@ -211,7 +211,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         $user     = $person->getMappedUser();
         $access   = $user === null ? null : $this->accessChecker->canViewBoard($user, $task->getBoard());
         // Since 1.28.0: attribution to a host user the board does not give access to: their label, nothing else.
-        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($task->getBoard(), $user);
+        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver !== null && Ports::isAttributionOnly($this->resolver, $task->getBoard(), $user);
         if ($attribution) {
             $access = false;
         }

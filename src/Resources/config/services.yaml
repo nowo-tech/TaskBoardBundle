@@ -68,6 +68,8 @@ services:
             - '../../MultiBoard/'
             - '../../Controller/TaskBoardMultiBoardController.php'
             - '../../Form/MultiBoardTaskFilterType.php'
+            # Since 2.15.0: the gates and factories of the framework-free host ports (built by TaskBoardPortsPass).
+            - '../../Port/'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'

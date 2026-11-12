@@ -16,6 +16,9 @@ use Nowo\TaskBoardBundle\Sync\Time\ImportedTimeEntryCandidate;
  * $candidate->personName(), $scopeKey)` and, once the person is mapped, `new ImportedTimeEntryClaim($user,
  * $candidate->person->getId(), $scopeKey)`: a plain user row on an entry with no owner is refused. TaskBoardBundle does
  * not depend on TimeTrackBundle.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see OwnerlessTimeEntryReceiverInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface OwnerlessTimeEntrySinkInterface extends ImportedTimeEntrySinkInterface
 {

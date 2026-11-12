@@ -12,12 +12,18 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
 /**
  * Since 1.25: one tracked-time entry handed to the host's sink — the remote entry, its person in the directory (with
  * the mapping) and the local task when the remote task is linked on the run's board (null otherwise).
+ *
+ * Since 2.15.0 (REQ-ARCH-001 rule 1) read it through the id accessors ({@see self::personId()},
+ * {@see self::personProviderUserId()}, {@see self::taskId()}, {@see self::boardId()}, {@see self::user()},
+ * {@see self::personName()}); `$person` and `$task` (entities) are deprecated, removed in 3.0.
  */
 final readonly class ImportedTimeEntryCandidate
 {
     public function __construct(
         public RemoteTimeEntry $entry,
+        /** @deprecated since 2.15.0, use {@see self::personId()} and the other accessors; removed in 3.0 */
         public TaskSyncPerson $person,
+        /** @deprecated since 2.15.0, use {@see self::taskId()} / {@see self::boardId()}; removed in 3.0 */
         public ?Task $task,
     ) {
     }
@@ -43,5 +49,29 @@ final readonly class ImportedTimeEntryCandidate
     public function personName(): ?string
     {
         return $this->person->isAnonymised() ? null : $this->person->getName();
+    }
+
+    /** Since 2.15.0: the id of the person in the bundle's people directory. */
+    public function personId(): string
+    {
+        return $this->person->getId();
+    }
+
+    /** Since 2.15.0: the provider's id of the person. */
+    public function personProviderUserId(): string
+    {
+        return $this->person->getProviderUserId();
+    }
+
+    /** Since 2.15.0: the id of the local task, null when the remote task is not linked on the run's board. */
+    public function taskId(): ?string
+    {
+        return $this->task?->getId();
+    }
+
+    /** Since 2.15.0: the board of the local task, null without a local task. */
+    public function boardId(): ?string
+    {
+        return $this->task?->getBoard()->getId();
     }
 }

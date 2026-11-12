@@ -10,6 +10,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 /**
  * Since 1.23: where synced files go (Beacon: StorageKit). The host never fetches a URL: `$download()` returns a
  * read-only stream of a temporary file the bundle already downloaded and checked.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see SyncedFileStorageInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface TaskAttachmentStorageInterface
 {

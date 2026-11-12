@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.15.0](#to-2150)
+  - [Framework-free host ports](#framework-free-host-ports)
 - [To 2.14.1](#to-2141)
 - [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
@@ -181,6 +183,32 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.15.0
+
+Additive (REQ-ARCH-001 / REQ-RUNTIME-002). Nothing to do: with an unchanged configuration and unchanged host services
+2.15 behaves exactly as 2.14.1. No schema change.
+
+### Framework-free host ports
+
+Each host port typed with a bundle entity, the HTTP `Request` or an `UploadedFile` has a twin that takes bundle value
+objects instead (the table is in the [CHANGELOG](CHANGELOG.md#unreleased)). The deprecated interfaces keep working until
+**3.0**, where they are removed. To move a service:
+
+1. Implement the twin instead of the deprecated interface. The method names stay; the entity parameters become
+   snapshots (`ValueObject\TaskBoardSnapshot`, `TaskSnapshot`, `TaskCommentSnapshot`, `TaskChangeSnapshot`,
+   `TaskSyncDirectorySnapshot`), the request a `Api\Value\TaskApiRequestContext` (`$request->credential` is the
+   `Authorization` credential `TaskApiCredential::fromRequest()` read), the upload a `Api\Value\TaskApiUpload`.
+   `TaskBoardTargetIdsInterface::targetIds()` returns board ids and `FirstBoardProvisioningInterface::provision()` the
+   new board's id: the bundle loads the boards.
+2. Keep the configuration key as it is (`api.hooks.authenticator`, `assignee_provider`, `sync.people.resolver`, ...).
+   The bundle asks a service that implements only the twin through an internal gate; one that still implements the
+   deprecated interface is asked through that one.
+3. A service that implements neither stops the container build (`nowo_task_board: the service "…" of <key> must
+   implement …`). Before 2.15 such a mistake surfaced at run time.
+
+Events: read `getBoardId()` / `getTaskId()` / `getTenantKey()` and the `get*Snapshot()` accessors instead of the
+entities; the entity getters and public entity properties are deprecated and removed in 3.0.
 
 ## To 2.14.1
 

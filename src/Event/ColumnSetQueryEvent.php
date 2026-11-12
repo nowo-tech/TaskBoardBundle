@@ -6,6 +6,9 @@ namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -38,6 +41,9 @@ final class ColumnSetQueryEvent extends Event
         return $this->subject;
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getBoardId()} or {@see self::getBoardSnapshot()}; removed in 3.0
+     */
     public function getBoard(): ?TaskBoard
     {
         return $this->board;
@@ -73,5 +79,23 @@ final class ColumnSetQueryEvent extends Event
     public function getOverrideList(): ?array
     {
         return $this->overrideList;
+    }
+
+    /** Since 2.15.0 (REQ-ARCH-001 rule 4): the id of the board the sets are listed for; null outside a board. */
+    public function getBoardId(): ?string
+    {
+        return $this->board?->getId();
+    }
+
+    /** Since 2.15.0: the board as a framework-free snapshot (copied on each call); null outside a board. */
+    public function getBoardSnapshot(): ?TaskBoardSnapshot
+    {
+        return $this->board instanceof TaskBoard ? Snapshots::board($this->board) : null;
+    }
+
+    /** Since 2.15.0: the subject's `getId()` as a string ({@see ActorId}); null without one. */
+    public function getSubjectId(): ?string
+    {
+        return ActorId::of($this->subject);
     }
 }

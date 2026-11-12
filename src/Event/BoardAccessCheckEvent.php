@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -73,6 +76,9 @@ final class BoardAccessCheckEvent extends Event
         return $this->subject;
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getBoardId()}, {@see self::getTenantKey()} or {@see self::getBoardSnapshot()}; removed in 3.0
+     */
     public function getBoard(): TaskBoard
     {
         return $this->board;
@@ -129,5 +135,29 @@ final class BoardAccessCheckEvent extends Event
     public function isReadOnly(): bool
     {
         return $this->readOnly;
+    }
+
+    /** Since 2.15.0 (REQ-ARCH-001 rule 4): the board's id. */
+    public function getBoardId(): string
+    {
+        return $this->board->getId();
+    }
+
+    /** Since 2.15.0: the board's tenant key (null without tenancy). */
+    public function getTenantKey(): ?string
+    {
+        return $this->board->getTenantKey();
+    }
+
+    /** Since 2.15.0: the board as a framework-free snapshot, copied on each call. */
+    public function getBoardSnapshot(): TaskBoardSnapshot
+    {
+        return Snapshots::board($this->board);
+    }
+
+    /** Since 2.15.0: the subject's `getId()` as a string ({@see ActorId}); null without one. */
+    public function getSubjectId(): ?string
+    {
+        return ActorId::of($this->subject);
     }
 }

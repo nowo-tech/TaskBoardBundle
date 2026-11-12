@@ -25,11 +25,17 @@ final class TaskMovedEvent extends AbstractTaskEvent
         parent::__construct($task, $actor);
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getFromColumnId()}; removed in 3.0
+     */
     public function getFromColumn(): ?BoardColumn
     {
         return $this->fromColumn;
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getToColumnId()}; removed in 3.0
+     */
     public function getToColumn(): ?BoardColumn
     {
         return $this->toColumn;
