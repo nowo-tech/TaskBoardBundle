@@ -39,6 +39,7 @@ final readonly class TaskApiBillableTimeStoreGate implements TaskApiTimeEntriesI
 
     public function setBillable(TaskApiPrincipal $principal, string $entryId, bool $billable): TaskApiTimeEntry
     {
+        // @igor-ignore - Forwards the call to the host's store (it persists the flag); the gate keeps no state.
         return $this->store->setBillable($principal, $entryId, $billable);
     }
 }
