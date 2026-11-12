@@ -5,7 +5,8 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    # feat/** too: the 2.15.0 REQ-ARCH-001 track is a stack of PRs whose bases are feature branches.
+    branches: [main, master, 'feat/**']
 
 jobs:
   git-hygiene:
