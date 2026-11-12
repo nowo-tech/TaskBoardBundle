@@ -38,8 +38,9 @@ final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepo
             ->select('c')
             ->from(TaskComment::class, 'c');
         // Since 1.25: an erased author is null; since 2.15.0 no join with user_reference: id.
+        ($this->users ?? new TaskBoardUsers())->eager($builder, 'c.author', 'a');
         /** @var list<TaskComment> $comments */
-        $comments = ($this->users ?? new TaskBoardUsers())->eager($builder, 'c.author', 'a')
+        $comments = $builder
             ->where('c.task = :task')
             ->setParameter('task', $task)
             ->orderBy('c.createdAt', 'ASC')

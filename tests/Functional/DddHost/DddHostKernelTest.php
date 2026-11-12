@@ -14,7 +14,13 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardPerson;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardViewer;
+use Nowo\TaskBoardBundle\MultiBoard\MultiBoardWorkloadRow;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
 use Nowo\TaskBoardBundle\Service\TaskChangeContext;
@@ -126,6 +132,26 @@ final class DddHostKernelTest extends WebTestCase
         self::assertResponseRedirects();
         $this->em->clear();
         $after = $repository->findById($taskId)?->getColumn()?->getId();
+
+        // Lookups by user id use the id columns, exactly: Bruno's tracked tasks, the team rows of a user, the multi-board
+        // list and its people (named by the directory).
+        $trackable = $repository->findTrackableForUser('u-bruno', null, 10, 0);
+        self::assertSame([$taskId], array_map(static fn (Task $task): string => $task->getId(), $trackable));
+        self::assertSame([], $repository->findTrackableForUser('U-BRUNO', null, 10, 0));
+        $teams = $container->get(TeamMemberRepositoryInterface::class);
+        self::assertInstanceOf(TeamMemberRepositoryInterface::class, $teams);
+        self::assertSame([], $teams->findByUserId('u-ana'));
+        self::assertFalse($teams->isManagerOf('u-ana', 'u-bruno'));
+        DddMultiBoardScope::$boardIds = [$boardId];
+        $list                         = $container->get(MultiBoardTaskListInterface::class);
+        self::assertInstanceOf(MultiBoardTaskListInterface::class, $list);
+        $viewer = new MultiBoardViewer('u-ana');
+        self::assertCount(1, $list->boards($viewer));
+        $workload = $list->workload($viewer, new MultiBoardTaskFilter());
+        self::assertSame(['Bruno Domain'], array_map(static fn (MultiBoardWorkloadRow $row): string => $row->person?->label ?? '-', $workload->rows));
+        self::assertSame(['u-bruno'], array_map(static fn (MultiBoardPerson $person): string => $person->id, $workload->assignees));
+        self::assertSame([], $list->boards(new MultiBoardViewer('u-nobody')), 'a viewer the directory does not know sees nothing');
+        DddMultiBoardScope::$boardIds = [];
         self::assertNotNull($after);
         self::assertNotSame($before, $after);
         self::assertSame(1, $this->rows(TaskBoard::class, 'slug = ?', ['domain-board']));

@@ -194,8 +194,9 @@ final readonly class TaskApiQueryRepository
             ->select('t', 'm')
             ->from(Task::class, 't')
             ->leftJoin('t.members', 'm');
+        $this->users()->eager($subtasks, 'm.user', 'u');
         /** @var list<Task> $result */
-        $result = $this->users()->eager($subtasks, 'm.user', 'u')
+        $result = $subtasks
             ->where('t.parent IN (:parents)')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('parents', $taskIds)
@@ -246,8 +247,8 @@ final readonly class TaskApiQueryRepository
         $qb = $this->entityManager->createQueryBuilder()
             ->select('c')
             ->from(TaskComment::class, 'c');
-        $qb = $this->users()->eager($qb, 'c.author', 'a')
-            ->where('c.task = :task')
+        $this->users()->eager($qb, 'c.author', 'a');
+        $qb->where('c.task = :task')
             ->andWhere('c.deletedAt IS NULL')
             ->setParameter('task', $task)
             ->orderBy('c.createdAt', 'DESC')
@@ -363,8 +364,9 @@ final readonly class TaskApiQueryRepository
             ->leftJoin('t.column', 'col')
             ->leftJoin('t.members', 'm');
         $this->users()->eager($builder, 't.creator', 'c');
+        $this->users()->eager($builder, 'm.user', 'u');
         /** @var list<Task> $tasks */
-        $tasks = $this->users()->eager($builder, 'm.user', 'u')
+        $tasks = $builder
             ->where('t.id IN (:ids)')
             ->setParameter('ids', $ids)
             ->getQuery()

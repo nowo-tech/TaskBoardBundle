@@ -114,8 +114,8 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
                 ->select('t', 'taskMember')
                 ->from(Task::class, 't')
                 ->leftJoin('t.members', 'taskMember');
-            ($this->users ?? new TaskBoardUsers())->eager($builder, 'taskMember.user', 'memberUser')
-                ->where('t IN (:tasks)')
+            ($this->users ?? new TaskBoardUsers())->eager($builder, 'taskMember.user', 'memberUser');
+            $builder->where('t IN (:tasks)')
                 ->setParameter('tasks', $result)
                 ->getQuery()
                 ->getResult();
