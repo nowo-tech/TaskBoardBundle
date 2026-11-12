@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\DddHost;
 
+use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as DoctrineConfiguration;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
@@ -16,6 +17,8 @@ use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
+use Symfony\Component\Config\Definition\ArrayNode;
+use Symfony\Component\Config\Definition\BaseNode;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
@@ -25,6 +28,8 @@ use function getenv;
 use function md5;
 use function serialize;
 use function sys_get_temp_dir;
+
+use const PHP_VERSION_ID;
 
 /**
  * Since 2.15.0 (REQ-ARCH-001, the DDD / hexagonal host path): a host whose users are plain PHP objects (no Doctrine
@@ -95,7 +100,7 @@ final class DddHostKernel extends Kernel
         $services->set('app.multi_scope', DddMultiBoardScope::class);
         $container->extension('doctrine', [
             'dbal' => ['url' => FunctionalKernel::databaseUrl()],
-            'orm'  => ['auto_mapping' => false],
+            'orm'  => ['auto_mapping' => false] + $this->nativeLazyObjects(),
         ]);
         $container->extension('security', [
             'providers' => ['app' => ['id' => 'app.users']],
@@ -112,6 +117,25 @@ final class DddHostKernel extends Kernel
             'multi_board'       => ['enabled' => true, 'scope_provider' => 'app.multi_scope'],
         ] + $this->taskBoard);
         $services->alias('app.task_board_em', TaskBoardEntityManager::class)->public();
+    }
+
+    /**
+     * ORM 3 on PHP 8.4+ needs native lazy objects: DoctrineBundle 2.x defaults `enable_native_lazy_objects` to false,
+     * 3.x always uses them and deprecates the option (as the functional kernel does).
+     *
+     * @return array<string, bool>
+     */
+    private function nativeLazyObjects(): array
+    {
+        if (PHP_VERSION_ID < 80400) {
+            return [];
+        }
+
+        $root = (new DoctrineConfiguration(false))->getConfigTreeBuilder()->buildTree();
+        $orm  = $root instanceof ArrayNode ? ($root->getChildren()['orm'] ?? null) : null;
+        $node = $orm instanceof ArrayNode ? ($orm->getChildren()['enable_native_lazy_objects'] ?? null) : null;
+
+        return $node instanceof BaseNode && !$node->isDeprecated() ? ['enable_native_lazy_objects' => true] : [];
     }
 
     private function configureRoutes(RoutingConfigurator $routes): void
