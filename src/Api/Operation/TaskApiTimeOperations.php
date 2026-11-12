@@ -108,6 +108,7 @@ final readonly class TaskApiTimeOperations
             throw new TaskApiRefusal(403, 'TIME_003', 'Time entries cannot be changed through this store');
         }
 
+        // @igor-ignore - The time store writes through the bundle's billable service (Doctrine); ManualTaskApiTimeEntries is final readonly and keeps nothing.
         $entry = $this->timeEntries->setBillable($principal, $entryId, $billable);
         $this->audit->written($principal, 'time.billable', null, $entry->taskId, ['entry' => $entry->id], ['billable']);
 
