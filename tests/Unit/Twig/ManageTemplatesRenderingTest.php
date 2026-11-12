@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Twig;
 use DateTimeImmutable;
 use DOMElement;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
+use Nowo\FormKitBundle\Form\Extension\SwitchExtension;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
 use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
@@ -834,17 +835,23 @@ final class ManageTemplatesRenderingTest extends TestCase
         $task->getSubtasks()->add($blocked);
         $task->addOutgoingDependency(new TaskDependency($task, $blocked, TaskDependencyType::Blocks));
         $blocker->addOutgoingDependency(new TaskDependency($blocker, $task, TaskDependencyType::Duplicates));
-        $task->addTimeEntry(new TaskTimeEntry($task, $this->user, 120, new DateTimeImmutable('2026-10-27'), 'Pairing'));
+        $pairing = new TaskTimeEntry($task, $this->user, 120, new DateTimeImmutable('2026-10-27'), 'Pairing');
+        $pairing->markBillable(true);
+        $task->addTimeEntry($pairing);
         $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::DependencyAdded, null, 'Deploy', 'blocks'));
+        $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::TimeBillable, null, 'true', '2026-10-27'));
         $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::TimeRemoved, '95', null, '2026-10-26'));
 
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + [
             'dependencyForm'       => $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData(), ['task_choices' => ['Design' => $blocker->getId()]])->createView(),
             'dependencyRemoveForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
-            'timeEntryForm'        => $this->factory()->create(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('2026-10-28')))->createView(),
+            'timeEntryForm'        => $this->factory()->create(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('2026-10-28'), billable: true))->createView(),
             'timeEntryRemoveForm'  => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 't'])->createView(),
-            'deviation'            => TaskDeviation::of($task),
-            'subtaskDeviation'     => TaskDeviation::sum([$blocked]),
+            // Since 2.12.0: the billable switch of each entry.
+            'billableTimeEntryIds'  => [$pairing->getId()],
+            'timeEntryBillableForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'b'])->createView(),
+            'deviation'             => TaskDeviation::of($task),
+            'subtaskDeviation'      => TaskDeviation::sum([$blocked]),
         ]);
 
         // Dependencies: the add dialog with its searchable picker, one remove button per row, both directions.
@@ -868,6 +875,15 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('data-dialog="time"', $html);
         self::assertStringContainsString('name="task_time_entry[minutes]"', $html);
         self::assertStringContainsString('id="nowo-task-time-remove-form"', $html);
+        // Since 2.12.0: the Billable switch (checked: the host default), the entry's badge and its switch button, the history row.
+        self::assertMatchesRegularExpression('~<input type="checkbox" id="task_time_entry_billable" name="task_time_entry\[billable\]"[^>]*checked~', $html);
+        self::assertStringContainsString('data-billable="1"', $html);
+        self::assertStringContainsString('id="nowo-task-time-billable-form"', $html);
+        self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/time/' . $pairing->getId() . '/billable"', $html);
+        self::assertStringContainsString('name="billable"' . "\n" . '                        value="0"', $html);
+        self::assertStringContainsString('task_board.time.mark_not_billable', $html);
+        self::assertStringContainsString('task_board.history.type.time_billable', $html);
+        self::assertStringContainsString('<span class="nowo-task-activity__old">task_board.time.billable_unset</span>', $html);
         self::assertStringContainsString('nowo-task-deviation-pill--over', $html);
         self::assertStringContainsString('task_board.history.type.dependency_added', $html);
         self::assertStringContainsString('<span class="nowo-task-activity__old">1 h 35 min</span>', $html);
@@ -1296,6 +1312,8 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         return Forms::createFormFactoryBuilder()
             ->addExtension(new ValidatorExtension(Validation::createValidator()))
+            // Since 2.12.0: FormKit's `switch` checkbox option (the Log time dialog's Billable switch).
+            ->addTypeExtension(new SwitchExtension())
             ->addTypes($types)
             ->getFormFactory();
     }

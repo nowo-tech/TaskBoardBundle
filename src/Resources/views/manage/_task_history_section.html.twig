@@ -107,6 +107,12 @@
                                     {# Since 1.15: the minutes and the day of a manual time entry. #}
                                     <span class="{{ entry.changeType.value == 'time_removed' ? 'nowo-task-activity__old' : '' }}">{{ ((entry.newValue ?? entry.oldValue) + 0)|nowo_task_board_duration }}</span>
                                     {% if entry.context %}<time datetime="{{ entry.context }}">{{ entry.context }}</time>{% endif %}
+                                {% elseif entry.changeType.value == 'time_billable' %}
+                                    {# Since 2.12.0: the billable flag of a manual entry (unset, yes, no) and its day. #}
+                                    <span class="nowo-task-activity__old">{{ (entry.oldValue == 'true' ? 'task_board.time.billable_yes' : (entry.oldValue == 'false' ? 'task_board.time.billable_no' : 'task_board.time.billable_unset'))|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'arrow-right'}) }}
+                                    <span>{{ (entry.newValue == 'true' ? 'task_board.time.billable_yes' : (entry.newValue == 'false' ? 'task_board.time.billable_no' : 'task_board.time.billable_unset'))|trans({}, 'NowoTaskBoardBundle') }}</span>
+                                    {% if entry.context %}<time datetime="{{ entry.context }}">{{ entry.context }}</time>{% endif %}
                                 {% elseif entry.changeType.value in ['link_added', 'link_updated', 'link_removed'] %}
                                     {% if entry.oldValue %}
                                         <span class="nowo-task-activity__old">{{ entry.oldValue }}</span>

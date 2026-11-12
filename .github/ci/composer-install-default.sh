@@ -3,7 +3,7 @@
 set -euo pipefail
 
 jq '
-  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.0" |
+  ."require-dev"["nowo-tech/time-track-bundle"] = "^1.21" |
   del(.require["nowo-tech/time-track-bundle"]) |
   .require["symfony/clock"] = "^7.4" |
   .require["symfony/config"] = "^7.4" |

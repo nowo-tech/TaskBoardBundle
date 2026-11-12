@@ -16,6 +16,8 @@ final readonly class TaskApiNewTimeEntry
         public DateTimeImmutable $start,
         public int $durationSeconds,
         public ?string $description = null,
+        // Since 2.12.0: `billable` of the request (null = the host default).
+        public ?bool $billable = null,
     ) {
     }
 }

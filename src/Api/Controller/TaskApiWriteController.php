@@ -112,6 +112,16 @@ final readonly class TaskApiWriteController
         return $this->answer(['data' => $this->serializer->timeEntry($entry, $teamId)], $input);
     }
 
+    /** Since 2.12.0: the `billable` flag of one of the token's own time entries. */
+    public function updateTime(Request $request, string $teamId, string $timerId): JsonResponse
+    {
+        $input           = $this->input($request, TaskApiTimeOperations::UPDATE_NOT_SUPPORTED);
+        [$board, $entry] = $this->time->updateTime($this->principal($request), $teamId, $timerId, $input);
+        TaskApiIdempotencyListener::target($request, $board);
+
+        return $this->answer(['data' => $this->serializer->timeEntry($entry, $teamId)], $input);
+    }
+
     /** Tracked time is never deleted through the API (owner, Q-O7): refused before anything is read or looked up. */
     public function deleteTime(): JsonResponse
     {

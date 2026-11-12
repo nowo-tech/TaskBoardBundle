@@ -157,7 +157,7 @@ No other findings. The bundle holds no per-user state in services, so there is n
 
 ### Igor findings (2026-11-11)
 
-`composer igor` (igor-php 0.10.1) reported ten KO. All are false positives, annotated inline with `// @igor-ignore`
+`composer igor` (igor-php 0.10.1) reported ten KO (eleven with 2.12.0). All are false positives, annotated inline with `// @igor-ignore`
 (CI runs `composer igor` since 2.11.1):
 
 | Where | Igor says | Why it is safe |
@@ -168,6 +168,7 @@ No other findings. The bundle holds no per-user state in services, so there is n
 | `Copy/TaskCopier::copyChecked()`, `Recurrence/TaskRecurrenceManager` | closure capturing local state injected into a shared service | `wrapInTransaction()` runs the closure at once and does not keep it. |
 | `Api/Security/TaskApiRequestListener` | mutation of the injected rate limiter | Counting failed tokens across requests is the purpose of the host rate limiter (its storage bounds it); the default `DenyingTaskApiRateLimiter` is `readonly` and keeps nothing. |
 | `Api/TaskApiInput::take()` | mutation of `read` | `TaskApiInput` is a per-request value object built by `fromRequest()`; not a service. |
+| `Api/Operation/TaskApiTimeOperations::updateTime()` (2.12.0) | mutation of the injected time store | `setBillable()` writes through `TaskTimeBillableService` (Doctrine); `ManualTaskApiTimeEntries` is `final readonly` and keeps nothing. The new billable service, ports and TimeTrack bridges are `final readonly` (or have no properties) and are asked per call. |
 | `Api/Doctrine/JsonTextFunction::parse()` | mutation of `field` | A DQL function node: Doctrine creates one per parsed query; it is not a service. |
 
 ## Usage recommendations in worker mode

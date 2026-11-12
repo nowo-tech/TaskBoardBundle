@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Hook;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
+use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
@@ -14,6 +16,8 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimePage;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 
 /**
@@ -21,7 +25,7 @@ use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
  * logs them. For a host without its own time store: `api.hooks.time_entries: Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries`.
  * It lists the token's own person's entries on tasks the token may open, and logs on a task only.
  */
-final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInterface
+final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInterface, TaskApiTimeEntryBillableInterface
 {
     /** The most entries one list answers. */
     public const LIMIT = 500;
@@ -31,6 +35,8 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
         private TaskTimeLogger $logger,
         private TaskApiGuard $guard,
         private TaskApiUsersInterface $users,
+        // Since 2.12.0: the audited billable setter.
+        private TaskTimeBillableService $billable,
     ) {
     }
 
@@ -47,10 +53,10 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
         if ($query->taskId !== null) {
             $qb->andWhere('t.id = :task')->setParameter('task', $query->taskId);
         }
-        if ($query->from !== null) {
+        if ($query->from instanceof DateTimeImmutable) {
             $qb->andWhere('e.loggedAt >= :from')->setParameter('from', $query->from);
         }
-        if ($query->to !== null) {
+        if ($query->to instanceof DateTimeImmutable) {
             $qb->andWhere('e.loggedAt <= :to')->setParameter('to', $query->to);
         }
         $apiId   = $this->users->apiId($principal->user);
@@ -73,11 +79,34 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid tid: manual time is logged on a task');
         }
 
-        return $this->entry($this->logger->log($task, $principal->user, max(1, intdiv($entry->durationSeconds, 60)), $entry->start, $entry->description), $this->users->apiId($principal->user));
+        return $this->entry($this->logger->log($task, $principal->user, max(1, intdiv($entry->durationSeconds, 60)), $entry->start, $entry->description, $entry->billable), $this->users->apiId($principal->user));
+    }
+
+    /**
+     * Since 2.12.0: one of the token's own entries, on a task it reaches and may work on, through {@see TaskTimeBillableService}
+     * (the author or a board manager, no locked period, recorded in the task's history).
+     */
+    public function setBillable(TaskApiPrincipal $principal, string $entryId, bool $billable): TaskApiTimeEntry
+    {
+        $own  = $this->entityManager->getRepository(TaskTimeEntry::class)->findOneBy(['id' => $entryId, 'user' => $principal->user]);
+        $task = $own instanceof TaskTimeEntry ? $own->getTask() : null;
+        if (!$task instanceof Task) {
+            throw TaskApiRefusal::notFound();
+        }
+        $task = $this->guard->task($principal, $task->getId(), TaskApiCapability::WorkOnTask);
+
+        try {
+            $entry = $this->billable->change($task, $entryId, $principal->user, $billable);
+        } catch (TaskTimeBillableRefusedException $e) {
+            // The entry is the token's own and on this task: only the edit right or the period lock can refuse it.
+            throw $e->errorCode === TaskTimeBillableRefusedException::PERIOD_LOCKED ? new TaskApiRefusal(409, 'TIME_004', 'This time entry can no longer change') : TaskApiRefusal::permissionRefused();
+        }
+
+        return $this->entry($entry, $this->users->apiId($principal->user));
     }
 
     private function entry(TaskTimeEntry $entry, string $apiId): TaskApiTimeEntry
     {
-        return new TaskApiTimeEntry($entry->getId(), $apiId, $entry->getLoggedAt(), $entry->getMinutes() * 60, $entry->getTask()?->getId(), $entry->getDescription());
+        return new TaskApiTimeEntry($entry->getId(), $apiId, $entry->getLoggedAt(), $entry->getMinutes() * 60, $entry->getTask()?->getId(), $entry->getDescription(), $entry->getBillable());
     }
 }

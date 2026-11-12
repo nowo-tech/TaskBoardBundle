@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Override;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -18,7 +19,8 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
- * Since 1.15: the "Log time" dialog of the task detail — minutes spent, the day and an optional note.
+ * Since 1.15: the "Log time" dialog of the task detail — minutes spent, the day and an optional note. Since 2.12.0 a
+ * *Billable* switch (FormKit's `switch` checkbox), preset to the host default.
  *
  * @extends AbstractType<TaskTimeEntryFormData>
  */
@@ -57,6 +59,12 @@ final class TaskTimeEntryFormType extends AbstractType
                 'required'    => false,
                 'constraints' => TaskConstraints::timeNote(),
                 'attr'        => ['class' => 'form-control', 'maxlength' => 512],
+            ])
+            ->add('billable', CheckboxType::class, [
+                'label'    => 'task_board.time.form.billable',
+                'help'     => 'task_board.time.form.billable_help',
+                'required' => false,
+                'switch'   => true,
             ]);
     }
 

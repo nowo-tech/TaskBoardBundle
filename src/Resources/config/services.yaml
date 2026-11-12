@@ -121,6 +121,19 @@ services:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
 
+    # Since 2.12.0 (Beacon D-20261111-12): the audited billable setter of manual entries (public for hosts).
+    Nowo\TaskBoardBundle\Service\TaskTimeBillableService:
+        public: true
+        arguments:
+            $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    # Since 2.12.0: ports of the billable default and the period lock of manual entries. With TimeTrackBundle the extension
+    # points them at its bridges; a host alias of its own wins over both.
+    Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface:
+        alias: Nowo\TaskBoardBundle\Service\NullTaskTimeBillableDefaultProvider
+    Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface:
+        alias: Nowo\TaskBoardBundle\Service\NoTaskTimePeriodLock
+
     Nowo\TaskBoardBundle\Service\TaskDependencyManager:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'

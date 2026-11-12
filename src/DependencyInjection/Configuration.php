@@ -417,6 +417,14 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('name')->defaultValue('nowo_task_board_task_time_remove')->end()
                             ->end()
                         ->end()
+                        // Since 2.12.0: the billable switch of a manual time entry.
+                        ->arrayNode('task_time_billable')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time/{entryId}/billable')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_task_time_billable')->end()
+                            ->end()
+                        ->end()
                         // Since 2.1.0 (spec 214): task_by_number exists only with task_numbers.enabled, calendar and task_schedule only with calendar.enabled.
                         ->arrayNode('task_by_number')
                             ->addDefaultsIfNotSet()

@@ -167,6 +167,15 @@ final readonly class TaskBoardResourceAccessChecker
      */
     public function canRemoveTimeEntry(object $user, TaskTimeEntry $entry, Task $task): bool
     {
+        return $this->canEditTimeEntry($user, $entry, $task);
+    }
+
+    /**
+     * Since 2.12.0: who may change a manual time entry of a task they can edit (its `billable` flag) — the same people
+     * as {@see self::canRemoveTimeEntry()}: its author or a manager of the board.
+     */
+    public function canEditTimeEntry(object $user, TaskTimeEntry $entry, Task $task): bool
+    {
         return $this->canEditTask($user, $task) && ($this->sameUser($user, $entry->getUser()) || $this->canManageBoard($user, $task->getBoard()));
     }
 

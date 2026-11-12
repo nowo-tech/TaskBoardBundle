@@ -18,7 +18,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use function trim;
 
 /**
- * Since 1.15: manual time entries (minutes, date, note) logged from the task detail; they add to the task's spent
+ * Since 1.15: manual time entries (minutes, date, note; since 2.12.0 the `billable` flag) logged from the task detail; they add to the task's spent
  * time ({@see Task::getLoggedMinutes()}) beside the TimeTrack timers. Each change is recorded in the task's history.
  * Since 2.11.0 (DDD audit G3): after each saved change it dispatches {@see TaskBoardEvents::TASK_TIME_LOGGED} /
  * {@see TaskBoardEvents::TASK_TIME_REMOVED} (ids only), through {@see TaskEventDeferral}.
@@ -31,13 +31,20 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
         private TaskTimeEntryRepositoryInterface $timeEntryRepository,
         // Since 2.11.0 (DDD audit G3): dispatches TASK_TIME_LOGGED / TASK_TIME_REMOVED (none: no event).
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.12.0: the default `billable` of an entry logged without one (none: the flag stays unset).
+        private TaskTimeBillableDefaultProviderInterface $billableDefaults = new NullTaskTimeBillableDefaultProvider(),
     ) {
     }
 
-    public function log(Task $task, object $user, int $minutes, DateTimeImmutable $date, ?string $note = null): TaskTimeEntry
+    /**
+     * Logs a manual entry. Since 2.12.0 `$billable` sets its flag; null asks {@see TaskTimeBillableDefaultProviderInterface}
+     * (unset when it has no default).
+     */
+    public function log(Task $task, object $user, int $minutes, DateTimeImmutable $date, ?string $note = null, ?bool $billable = null): TaskTimeEntry
     {
         $note  = $note !== null && trim($note) !== '' ? trim($note) : null;
         $entry = new TaskTimeEntry($task, $user, $minutes, $date, $note);
+        $entry->markBillable($billable ?? $this->billableDefaults->defaultFor($user, $task->getId(), $task->getBoard()->getId()));
 
         $task->addTimeEntry($entry);
         $this->changeRecorder->record($task, $user, TaskChangeType::TimeLogged, null, (string) $minutes, $date->format('Y-m-d'));

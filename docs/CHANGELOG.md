@@ -102,6 +102,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.12.0 (minor; Beacon D-20261111-12, request 2026-11-11 *billable time entries*). One nullable column
+(`task_board_task_time_entries.billable`), see [UPGRADING](UPGRADING.md#to-2120).
+
+### Added
+
+- **Billable manual entries.** `TaskTimeEntry::getBillable()` (nullable: rows before 2.12 are "not set") and a
+  *Billable* switch in *Log time* (FormKit's `switch` checkbox, preset to the host default). Each entry shows a
+  *Billable* / *Not billable* badge, and its author or a board manager gets a *Mark billable* / *Mark not billable*
+  button (route `task_time_billable`, POST + CSRF).
+- **`Service\TaskTimeBillableService`** (public): the authorised, audited setter. Refused
+  (`Exception\TaskTimeBillableRefusedException`) for an unknown entry, a deleted user's entry (never changes), an actor
+  who is neither its author nor a board manager with the edit right (`TaskBoardResourceAccessChecker::canEditTimeEntry()`,
+  the rule of `canRemoveTimeEntry()`), and a locked or submitted period. Each change is a history row
+  (`TaskChangeType::TimeBillable`: old and new value, the entry's day) and `TASK_TIME_BILLABLE_CHANGED`
+  (`TaskTimeBillableChangedEvent`: ids, old and new value, cause) after the save.
+- **Ports** `Service\TaskTimeBillableDefaultProviderInterface` (default of a new entry; `NullTaskTimeBillableDefaultProvider`)
+  and `Service\TaskTimePeriodLockInterface` (`NoTaskTimePeriodLock`), with no framework type (REQ-ARCH-001). With
+  TimeTrackBundle installed (optional dependency) they are bridged: the default is TimeTrack 1.21's
+  `TimeEntryBillableDefaultProviderInterface`, the lock TimeTrack's timesheet `PeriodLockGuard` (>= 1.13).
+- **Task API:** `billable` on `POST /v2/team/{team_id}/time_entries` (no longer listed as not supported), the real flag in
+  every time entry answer (`false` when not set, as before), and `PUT /v2/team/{team_id}/time_entries/{timer_id}` with
+  `billable` for the token's own entries (`Api\Hook\TaskApiTimeEntryBillableInterface`, implemented by
+  `ManualTaskApiTimeEntries`; 409 `TIME_004` in a locked period, 403 `TIME_003` for a store without it). Deleting time
+  through the API is still refused (403 `TIME_002`, spec 213).
+- `TaskTimeLogger::log()` takes a trailing `?bool $billable` (null = the host default).
+- Demo migration `Version20261112120000`.
+- **Audit MV (before the tag):** the TimeTrack lock bridge compares the entry's calendar day with each timesheet's
+  `periodStart` / `periodEnd` instead of noon in the PHP time zone, which checked the wrong day for UTC+13/+14 timesheets
+  (MV-B-L1); the lock check and the save run in one transaction of the bundle's entity manager, and the guarding
+  timesheets are read with TimeTrack's locking read when the store has it (MV-B-L2); the API docs say PUT is own entries
+  only (the board-manager path is the task page) and `TIME_004` means a locked period (MV-B-L3); the API audit row of
+  a billable change names the board (MV-B-I2).
+
+### Changed
+
+- `nowo-tech/form-kit-bundle` requirement raised to `^2.22` (the `switch` checkbox option).
+- Dev dependency `nowo-tech/time-track-bundle` raised to `^1.21` (also in the CI install scripts), so the tests and
+  PHPStan run against TimeTrack's real billable default port. The optional runtime integration still works with older
+  TimeTrack: the billable bridge is registered only when the port exists.
+
 ## [2.11.1] - 2026-11-12
 
 Target 2.11.1 (patch).

@@ -145,7 +145,8 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
 | `POST /v2/checklist/{id}/checklist_item`, `PUT`, `DELETE …/checklist_item/{item}` | My tasks (own) | An item is a subtask tagged `checklist:<name>`, counted against the plan's active tasks. `resolved` moves it to the done column or back to the first. *My tasks* assigns an item only to its own person. Deleting archives it. Items are edited under the parent task's right, whoever created them; any editor who tags a subtask `checklist:<name>` makes it an item, visible to a *My tasks* token of the parent |
 | `POST /v2/task/{id}/attachment` | Tasks | Multipart, field `attachment`. The host stores it through `TaskApiAttachmentsInterface`, with all its upload checks (content sniffing, plan storage, sizes); its refusal is the answer. The file's bytes are part of an idempotency key's request |
-| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. With `tid`, the person needs the time-tracking decision, not the edit right (since 2.4.0; see [Logging time](#logging-time)). Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task |
+| `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. With `tid`, the person needs the time-tracking decision, not the edit right (since 2.4.0; see [Logging time](#logging-time)). Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task. Since 2.12.0 `billable` (boolean; absent or null = the host default) |
+| `PUT /v2/team/{team_id}/time_entries/{id}` | My tasks (own task) | Since 2.12.0: `billable` (required boolean) of one of the token's own entries; other fields are warnings. Own entries only (another person's is 404); the board-manager path is the task page. The edit right on the task applies (403 `ACCESS_002`); 409 `TIME_004` when its period is locked or submitted (TimeTrack timesheets); 403 `TIME_003` when the time store does not implement `TaskApiTimeEntryBillableInterface` |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
 ## Management endpoints (Full)
@@ -208,6 +209,8 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
 | `TIME_001` | 403 | No time store; the host's store may answer its own `TIME_*` |
 | `TIME_002` | 403 | Deleting a time entry |
+| `TIME_003` | 403 | Since 2.12.0: the time store cannot change an entry's `billable` flag |
+| `TIME_004` | 409 | Since 2.12.0: the time entry's period is locked or waiting for approval |
 | `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |

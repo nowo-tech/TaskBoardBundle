@@ -28,6 +28,8 @@ use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -83,6 +85,9 @@ use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
+use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
@@ -121,6 +126,9 @@ use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
+use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -157,13 +165,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      *                                       imported-time aggregation
      * @param string $timeTrackEntryCreatedEvent Since 1.26.1: event class whose presence (TimeTrack >= 1.14) enables the
      *                                           aggregation of manual and calendar entries
+     * @param string $timeTrackBillableDefaults Since 2.12.0: interface whose presence (TimeTrack >= 1.21) makes TimeTrack's
+     *                                          billable default the default of manual entries
+     * @param string $timeTrackPeriodLockGuard Since 2.12.0: class whose presence (TimeTrack >= 1.13) puts manual entries
+     *                                         under TimeTrack's period lock
      */
     public function __construct(
         private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
         private readonly string $timeTrackImportedEvent = TimeEntryImportedEvent::class,
         private readonly string $timeTrackEntryCreatedEvent = TimeEntryCreatedEvent::class,
+        private readonly string $timeTrackBillableDefaults = self::TIME_TRACK_BILLABLE_DEFAULTS,
+        private readonly string $timeTrackPeriodLockGuard = PeriodLockGuard::class,
     ) {
     }
+
+    /** Since 2.12.0: TimeTrack's billable default port (TimeTrack >= 1.21); a string, so older TimeTrack still loads. */
+    public const TIME_TRACK_BILLABLE_DEFAULTS = 'Nowo\\TimeTrackBundle\\Integration\\TimeEntryBillableDefaultProviderInterface';
 
     public function load(array $configs, ContainerBuilder $container): void
     {
@@ -383,6 +400,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$moveEnabled', $enabled)
             ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class));
+        // Since 2.12.0 (audit MV-B-L2): the billable change runs the period lock check and the save in one transaction.
+        $container->getDefinition(TaskTimeBillableService::class)->setArgument('$entityManager', $manager);
         $container->getDefinition(TaskCopier::class)
             ->setArgument('$entityManager', $manager)
             ->setArgument('$maxSubtasks', $move['max_subtasks'])
@@ -706,6 +725,21 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (class_exists($this->timeTrackEntryCreatedEvent) && defined(TimeTrackEvents::class . '::TIME_ENTRY_CREATED')) {
             $container->getDefinition(TimeSpentAggregatorListener::class)
                 ->addTag('kernel.event_listener', ['event' => TimeTrackEvents::TIME_ENTRY_CREATED, 'method' => 'onTimeEntryCreated']);
+        }
+
+        // Since 2.12.0 (Beacon D-20261111-12): manual entries share TimeTrack's billable default and period lock.
+        if (interface_exists($this->timeTrackBillableDefaults)) {
+            $container->register(TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimeBillableDefaultProvider::class)
+                ->setArgument('$defaults', new Reference($this->timeTrackBillableDefaults, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+            $container->setAlias(TaskTimeBillableDefaultProviderInterface::class, TimeTrackTaskTimeBillableDefaultProvider::class);
+        }
+        if (class_exists($this->timeTrackPeriodLockGuard)) {
+            $container->register(TimeTrackTaskTimePeriodLock::class, TimeTrackTaskTimePeriodLock::class)
+                ->setArgument('$guard', new Reference($this->timeTrackPeriodLockGuard, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$timesheets', new Reference(TimesheetRepositoryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+            $container->setAlias(TaskTimePeriodLockInterface::class, TimeTrackTaskTimePeriodLock::class);
         }
     }
 

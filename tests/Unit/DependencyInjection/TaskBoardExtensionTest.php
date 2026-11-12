@@ -10,6 +10,8 @@ use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
@@ -31,7 +33,11 @@ use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Service\NoTaskTimePeriodLock;
+use Nowo\TaskBoardBundle\Service\NullTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Service\TaskManager;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
+use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
@@ -128,6 +134,30 @@ final class TaskBoardExtensionTest extends TestCase
         (new TaskBoardExtension(timeTrackEntryCreatedEvent: 'Nowo\\TimeTrackBundle\\Event\\MissingCreatedEvent'))->load([['user_class' => User::class]], $without);
         self::assertTrue($without->hasDefinition(TimeSpentAggregatorListener::class));
         self::assertSame([], $without->getDefinition(TimeSpentAggregatorListener::class)->getTag('kernel.event_listener'));
+    }
+
+    /** Since 2.12.0: manual entries take TimeTrack's billable default (>= 1.21) and period lock (>= 1.13) when present. */
+    public function testBillablePortsAreBridgedToTimeTrackWhenItHasThem(): void
+    {
+        $with = new ContainerBuilder();
+        $with->setParameter('kernel.environment', 'test');
+        $with->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $with);
+        self::assertSame(TimeTrackTaskTimeBillableDefaultProvider::class, (string) $with->getAlias(TaskTimeBillableDefaultProviderInterface::class));
+        self::assertSame(TimeTrackTaskTimePeriodLock::class, (string) $with->getAlias(TaskTimePeriodLockInterface::class));
+        $defaults = $with->getDefinition(TimeTrackTaskTimeBillableDefaultProvider::class)->getArgument('$defaults');
+        self::assertInstanceOf(Reference::class, $defaults);
+        self::assertSame(TaskBoardExtension::TIME_TRACK_BILLABLE_DEFAULTS, (string) $defaults);
+        self::assertSame(ContainerInterface::NULL_ON_INVALID_REFERENCE, $defaults->getInvalidBehavior(), 'TimeTrack installed but not enabled');
+
+        // An older TimeTrack: the bundle's own defaults (no default, no lock).
+        $without = new ContainerBuilder();
+        $without->setParameter('kernel.environment', 'test');
+        $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension(timeTrackBillableDefaults: 'Nowo\\TimeTrackBundle\\Integration\\MissingPort', timeTrackPeriodLockGuard: 'Nowo\\TimeTrackBundle\\Timesheet\\MissingGuard'))->load([['user_class' => User::class]], $without);
+        self::assertSame(NullTaskTimeBillableDefaultProvider::class, (string) $without->getAlias(TaskTimeBillableDefaultProviderInterface::class));
+        self::assertSame(NoTaskTimePeriodLock::class, (string) $without->getAlias(TaskTimePeriodLockInterface::class));
+        self::assertFalse($without->hasDefinition(TimeTrackTaskTimePeriodLock::class) && !$without->getDefinition(TimeTrackTaskTimePeriodLock::class)->hasTag('container.excluded'));
     }
 
     public function testWeekStartResolverFollowsTheGanttConfig(): void
