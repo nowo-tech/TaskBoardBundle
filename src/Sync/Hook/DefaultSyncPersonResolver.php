@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function array_slice;
 use function count;
@@ -32,6 +33,8 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
         private string $userClass,
         private ?TaskAssigneeProviderInterface $assigneeProvider = null,
         private bool $requireVerifiedEmail = true,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -83,7 +86,8 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
     {
         /** @var class-string $class */
         $class = $this->userClass;
-        $user  = $this->entityManager->find($class, $userId);
+        // Since 2.15.0: through user_directory with user_reference: id (user_class is no Doctrine entity).
+        $user = $this->users instanceof TaskBoardUsers && $this->users->idMode() ? $this->users->find($userId) : $this->entityManager->find($class, $userId);
 
         return $user !== null && $this->isCandidate($board, $user) ? $user : null;
     }

@@ -28,6 +28,7 @@ use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -62,6 +63,8 @@ final readonly class TaskSyncPeopleReassigner
         private ClockInterface $clock = new NativeClock(),
         private int $defaultBatchSize = 500,
         ?TaskTimeEntrySnapshotPurger $timeEntries = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
         $this->timeEntries = $timeEntries ?? new TaskTimeEntrySnapshotPurger($entityManager);
     }
@@ -207,9 +210,9 @@ final readonly class TaskSyncPeopleReassigner
         foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName'], [TaskChangeHistory::class, 'user', 'userName']] as [$class, $field, $name]) {
             // Rows written before 1.25 have no snapshot yet: they get the current name first.
             $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE x.' . $field . ' = :user AND x.' . $name . ' IS NULL')
-                ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $user)->execute();
+                ->setParameter('label', $forgetName ? null : $label)->setParameter('user', $this->userParameter($user))->execute();
             $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE x.' . $field . ' = :user')
-                ->setParameter('user', $user)->execute();
+                ->setParameter('user', $this->userParameter($user))->execute();
         }
         if ($forgetName) {
             $this->forgetMemberRows($user);
@@ -300,5 +303,11 @@ final readonly class TaskSyncPeopleReassigner
         }
 
         return $report->withCursor(null);
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

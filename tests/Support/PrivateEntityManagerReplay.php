@@ -12,8 +12,8 @@ use function is_array;
 
 /**
  * Since 2.15.0: TASK_BOARD_TEST_PRIVATE_EM=1 runs the functional suite with `database.private_entity_manager: true`
- * (unless a test sets the option itself). With the option on, the kernels expose the private manager as the public
- * `app.task_board_em`.
+ * (unless a test sets the option itself), and with TASK_BOARD_TEST_XML_MAPPING=1 `database.mapping_type: xml`. With the
+ * option on, the kernels expose the private manager as the public `app.task_board_em`.
  */
 final class PrivateEntityManagerReplay
 {
@@ -34,6 +34,10 @@ final class PrivateEntityManagerReplay
         }
         $database = is_array($taskBoard['database'] ?? null) ? $taskBoard['database'] : [];
         $database += ['private_entity_manager' => true];
+        // Since 2.15.0: TASK_BOARD_TEST_XML_MAPPING=1 maps the entities from the XML files too.
+        if (getenv('TASK_BOARD_TEST_XML_MAPPING') === '1') {
+            $database += ['mapping_type' => 'xml'];
+        }
         $taskBoard['database'] = $database;
 
         return $taskBoard;

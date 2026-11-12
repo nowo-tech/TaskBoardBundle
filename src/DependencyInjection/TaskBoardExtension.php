@@ -44,6 +44,7 @@ use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
@@ -132,6 +133,8 @@ use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
@@ -274,7 +277,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         $this->registerRepositories($container, $emName);
-        $this->registerMetadataListener($container, $prefix, $config['user_class']);
+        $this->registerUserReferences($container, $config);
+        $this->registerMetadataListener($container, $prefix, $config['user_class'], (string) $config['database']['user_reference']);
         $this->registerAccessChecker($container, $config['security']);
         $this->registerResourceAccessChecker($container, $config['security']);
         $this->registerTeamResolver($container, $config['team_membership_resolver'] ?? null);
@@ -352,7 +356,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $state      = $subscriber->getArgument('$state');
         $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
         // Since 2.15.0: the private entity manager last, after the memos that may still hold its rows.
-        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardEntityManager::class] as $id) {
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardEntityManager::class] as $id) {
             if ($container->hasDefinition($id)) {
                 $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
             }
@@ -510,7 +514,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if ($calendar && is_string($provider) && $provider !== '') {
             $container->setDefinition(CalendarDayAnnotator::class, (new Definition(CalendarDayAnnotator::class))
                 ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
-                ->setArgument('$provider', new Reference($provider)));
+                ->setArgument('$provider', new Reference($provider))
+                ->setArgument('$users', new Reference(TaskBoardUsers::class)));
             $container->setAlias(CalendarDayAnnotationProviderInterface::class, $provider);
             $container->getDefinition(TaskBoardManageController::class)
                 ->setArgument('$dayAnnotator', new Reference(CalendarDayAnnotator::class))
@@ -890,6 +895,47 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         return $enabled;
     }
 
+    /**
+     * Since 2.15.0: whether `database.user_reference` ends up `id` (the last config that sets it wins).
+     */
+    private function userReferencesById(ContainerBuilder $container): bool
+    {
+        $mode = TaskBoardUsers::ENTITY;
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config['database'] ?? null) && is_string($config['database']['user_reference'] ?? null)) {
+                $mode = $config['database']['user_reference'];
+            }
+        }
+
+        return $mode === TaskBoardUsers::ID;
+    }
+
+    /**
+     * Since 2.15.0: whether `database.mapping_type` ends up `xml` (the last config that sets it wins).
+     */
+    private function xmlMapping(ContainerBuilder $container): bool
+    {
+        $type = 'attribute';
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (is_array($config['database'] ?? null) && is_string($config['database']['mapping_type'] ?? null)) {
+                $type = $config['database']['mapping_type'];
+            }
+        }
+
+        return $type === 'xml';
+    }
+
+    /**
+     * Since 2.15.0: the Doctrine mapping of one group of TaskBoard entities from its XML files (Resources/config/doctrine-xml,
+     * deliberately not Resources/config/doctrine, so DoctrineBundle's auto_mapping keeps the attributes by default).
+     *
+     * @return array{type: string, is_bundle: false, dir: string, prefix: string, alias: string}
+     */
+    private function xmlMappingOf(string $group, string $prefix, string $alias): array
+    {
+        return ['type' => 'xml', 'is_bundle' => false, 'dir' => __DIR__ . '/../Resources/config/doctrine-xml/' . $group, 'prefix' => $prefix, 'alias' => $alias];
+    }
+
     public function getAlias(): string
     {
         return Configuration::ALIAS;
@@ -911,13 +957,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         if ($container->hasExtension('doctrine')) {
+            // Since 2.15.0: `database.mapping_type: xml` maps the same tables from Resources/config/doctrine-xml.
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardBundle' => [
-                            'type'      => 'attribute',
-                            'is_bundle' => true,
-                        ],
+                        'TaskBoardBundle' => $this->xmlMapping($container)
+                            ? $this->xmlMappingOf('core', 'Nowo\\TaskBoardBundle\\Entity', 'TaskBoardBundle')
+                            : ['type' => 'attribute', 'is_bundle' => true],
                     ],
                 ],
             ]);
@@ -928,7 +974,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardSync' => [
+                        'TaskBoardSync' => $this->xmlMapping($container) ? $this->xmlMappingOf('sync', 'Nowo\\TaskBoardBundle\\Sync\\Entity', 'TaskBoardSync') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Sync/Entity',
@@ -938,6 +984,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                     ],
                 ],
             ]);
+        }
+
+        // Since 2.15.0 (database.user_reference: id): the column type of the user fields.
+        if ($container->hasExtension('doctrine') && $this->userReferencesById($container)) {
+            $container->prependExtensionConfig('doctrine', ['dbal' => ['types' => [TaskBoardUserRefType::NAME => TaskBoardUserRefType::class]]]);
         }
 
         // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.
@@ -950,7 +1001,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardApi' => [
+                        'TaskBoardApi' => $this->xmlMapping($container) ? $this->xmlMappingOf('api', 'Nowo\\TaskBoardBundle\\Api\\Entity', 'TaskBoardApi') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Api/Entity',
@@ -967,7 +1018,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardRecurrence' => [
+                        'TaskBoardRecurrence' => $this->xmlMapping($container) ? $this->xmlMappingOf('recurrence', 'Nowo\\TaskBoardBundle\\Recurrence\\Entity', 'TaskBoardRecurrence') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Recurrence/Entity',
@@ -984,7 +1035,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'TaskBoardNumber' => [
+                        'TaskBoardNumber' => $this->xmlMapping($container) ? $this->xmlMappingOf('number', 'Nowo\\TaskBoardBundle\\Number\\Entity', 'TaskBoardNumber') : [
                             'type'      => 'attribute',
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Number/Entity',
@@ -1150,13 +1201,38 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             if (in_array($implementation, $flushingRepos, true)) {
                 $definition->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE));
             }
+            if (in_array($implementation, [DoctrineOrmTaskRepository::class, DoctrineOrmTaskCommentRepository::class, DoctrineOrmTeamMemberRepository::class], true)) {
+                $definition->setArgument('$users', new Reference(TaskBoardUsers::class));
+            }
 
             $container->setDefinition($implementation, $definition);
             $container->setAlias($interface, $implementation);
         }
     }
 
-    private function registerMetadataListener(ContainerBuilder $container, string $prefix, string $userClass): void
+    /**
+     * Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference` and `user_directory`. The id mode needs the host's
+     * directory (the bundle finds users by id through it); {@see TaskBoardUsers} answers both modes.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerUserReferences(ContainerBuilder $container, array $config): void
+    {
+        $mode      = (string) $config['database']['user_reference'];
+        $directory = $config['user_directory'];
+        $container->setParameter('nowo_task_board.user_reference', $mode);
+        if ($mode === TaskBoardUsers::ID && (!is_string($directory) || $directory === '')) {
+            throw new LogicException('nowo_task_board.database.user_reference: id needs user_directory: the service id of a Nowo\\TaskBoardBundle\\User\\TaskBoardUserDirectoryInterface (finds a host user by id).');
+        }
+        if (is_string($directory) && $directory !== '') {
+            $container->setAlias(TaskBoardUserDirectoryInterface::class, $directory);
+        }
+        $container->register(TaskBoardUsers::class, TaskBoardUsers::class)
+            ->setArguments([$mode, is_string($directory) && $directory !== '' ? new Reference($directory) : null])
+            ->addTag('kernel.reset', ['method' => 'reset']);
+    }
+
+    private function registerMetadataListener(ContainerBuilder $container, string $prefix, string $userClass, string $userReference = TaskBoardUsers::ENTITY): void
     {
         $container->setDefinition(TaskBoardMetadataListener::class, (new Definition(TaskBoardMetadataListener::class))
             ->setAutowired(false)
@@ -1165,6 +1241,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$teamsTableName', $prefix . '_teams')
             ->setArgument('$teamMembersTableName', $prefix . '_team_members')
             ->setArgument('$userClass', $userClass)
+            ->setArgument('$userReference', $userReference)
             ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
     }
 

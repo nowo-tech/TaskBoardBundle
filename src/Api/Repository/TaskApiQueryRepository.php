@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function array_map;
 use function array_slice;
@@ -45,6 +46,8 @@ final readonly class TaskApiQueryRepository
     public function __construct(
         private EntityManagerInterface $entityManager,
         private bool $syncEnabled = false,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -155,17 +158,18 @@ final readonly class TaskApiQueryRepository
         if ($taskIds === []) {
             return [];
         }
-        /** @var list<TaskDependency> $dependencies */
-        $dependencies = $this->entityManager->createQueryBuilder()
+        $builder = $this->entityManager->createQueryBuilder()
             // Both ends with their members: whether the token may open the other end is asked of each (audit IA-I7).
-            ->select('d', 's', 'sm', 'su', 'e', 'em', 'eu')
+            ->select('d', 's', 'sm', 'e', 'em')
             ->from(TaskDependency::class, 'd')
             ->join('d.sourceTask', 's')
             ->leftJoin('s.members', 'sm')
-            ->leftJoin('sm.user', 'su')
             ->join('d.targetTask', 'e')
-            ->leftJoin('e.members', 'em')
-            ->leftJoin('em.user', 'eu')
+            ->leftJoin('e.members', 'em');
+        $this->users()->eager($builder, 'sm.user', 'su');
+        $this->users()->eager($builder, 'em.user', 'eu');
+        /** @var list<TaskDependency> $dependencies */
+        $dependencies = $builder
             ->where('d.sourceTask IN (:tasks) OR d.targetTask IN (:tasks)')
             ->setParameter('tasks', $taskIds)
             ->getQuery()
@@ -186,12 +190,12 @@ final readonly class TaskApiQueryRepository
         if ($taskIds === []) {
             return [];
         }
-        /** @var list<Task> $subtasks */
         $subtasks = $this->entityManager->createQueryBuilder()
-            ->select('t', 'm', 'u')
+            ->select('t', 'm')
             ->from(Task::class, 't')
-            ->leftJoin('t.members', 'm')
-            ->leftJoin('m.user', 'u')
+            ->leftJoin('t.members', 'm');
+        /** @var list<Task> $result */
+        $result = $this->users()->eager($subtasks, 'm.user', 'u')
             ->where('t.parent IN (:parents)')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('parents', $taskIds)
@@ -200,7 +204,7 @@ final readonly class TaskApiQueryRepository
             ->getQuery()
             ->getResult();
 
-        return $subtasks;
+        return $result;
     }
 
     /**
@@ -240,9 +244,9 @@ final readonly class TaskApiQueryRepository
     public function comments(Task $task, ?DateTimeImmutable $before, ?string $beforeId, int $limit): array
     {
         $qb = $this->entityManager->createQueryBuilder()
-            ->select('c', 'a')
-            ->from(TaskComment::class, 'c')
-            ->leftJoin('c.author', 'a')
+            ->select('c')
+            ->from(TaskComment::class, 'c');
+        $qb = $this->users()->eager($qb, 'c.author', 'a')
             ->where('c.task = :task')
             ->andWhere('c.deletedAt IS NULL')
             ->setParameter('task', $task)
@@ -350,17 +354,17 @@ final readonly class TaskApiQueryRepository
         if ($ids === []) {
             return [];
         }
-        /** @var list<Task> $tasks */
-        $tasks = $this->entityManager->createQueryBuilder()
+        $builder = $this->entityManager->createQueryBuilder()
             // The boards' columns too: each task shows its status among them, one query for all boards (audit IA-I8).
-            ->select('t', 'c', 'col', 'm', 'u', 'b', 'bc')
+            ->select('t', 'col', 'm', 'b', 'bc')
             ->from(Task::class, 't')
             ->join('t.board', 'b')
             ->leftJoin('b.columns', 'bc')
-            ->leftJoin('t.creator', 'c')
             ->leftJoin('t.column', 'col')
-            ->leftJoin('t.members', 'm')
-            ->leftJoin('m.user', 'u')
+            ->leftJoin('t.members', 'm');
+        $this->users()->eager($builder, 't.creator', 'c');
+        /** @var list<Task> $tasks */
+        $tasks = $this->users()->eager($builder, 'm.user', 'u')
             ->where('t.id IN (:ids)')
             ->setParameter('ids', $ids)
             ->getQuery()
@@ -414,7 +418,7 @@ final readonly class TaskApiQueryRepository
         }
         if ($assignees !== []) {
             $qb->andWhere('EXISTS (SELECT am.id FROM ' . TaskMember::class . ' am WHERE am.task = t AND am.memberRole = :assigneeRole AND am.user IN (:assignees))')
-                ->setParameter('assignees', $assignees)
+                ->setParameter('assignees', array_map($this->userParameter(...), $assignees))
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
         }
         $columns = ['due_date' => 't.dueAt', 'date_created' => 't.createdAt', 'date_updated' => 't.updatedAt', 'date_done' => 't.completedAt'];
@@ -434,7 +438,19 @@ final readonly class TaskApiQueryRepository
             return;
         }
         $qb->andWhere('t.creator = :owner OR EXISTS (SELECT om.id FROM ' . TaskMember::class . ' om WHERE om.task = t AND om.memberRole = :ownerRole AND om.user = :owner)')
-            ->setParameter('owner', $owner)
+            ->setParameter('owner', $this->userParameter($owner))
             ->setParameter('ownerRole', TaskMemberRole::Assignee);
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
+    }
+
+    /** Since 2.15.0: the user reference mode (a relation, as 2.14, when the service is built by hand). */
+    private function users(): TaskBoardUsers
+    {
+        return $this->users ?? new TaskBoardUsers();
     }
 }

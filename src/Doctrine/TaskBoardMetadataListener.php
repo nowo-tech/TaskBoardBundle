@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Doctrine;
 
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Mapping\AssociationMapping;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Doctrine\ORM\Mapping\JoinColumnMapping;
+use Doctrine\ORM\Mapping\ToOneOwningSideMapping;
+use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -22,9 +27,13 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
 use function array_replace_recursive;
 use function ltrim;
+use function sha1;
+use function substr;
 
 final readonly class TaskBoardMetadataListener
 {
@@ -34,6 +43,8 @@ final readonly class TaskBoardMetadataListener
         private string $teamsTableName,
         private string $teamMembersTableName,
         private string $userClass,
+        // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
+        private string $userReference = TaskBoardUsers::ENTITY,
     ) {
     }
 
@@ -72,9 +83,40 @@ final readonly class TaskBoardMetadataListener
 
         foreach ($userFieldsByClass[$class] ?? [] as $field) {
             if (isset($metadata->associationMappings[$field])) {
-                $this->remapUserAssociation($metadata, $field);
+                if ($this->userReference === TaskBoardUsers::ID) {
+                    $this->mapUserReference($metadata, $field, $args->getObjectManager()->getConnection()->getDatabasePlatform());
+                } else {
+                    $this->remapUserAssociation($metadata, $field);
+                }
             }
         }
+    }
+
+    /**
+     * Since 2.15.0 (`database.user_reference: id`): the user field becomes a string column with the user's id
+     * ({@see TaskBoardUserRefType}) in the join column's place, same name and nullability, with an index of its own. On
+     * MySQL / MariaDB the column compares byte for byte (`utf8mb4_bin`, BUNDLES_FIX_RULES "Identifier columns").
+     *
+     * @param ClassMetadata<object> $metadata
+     */
+    private function mapUserReference(ClassMetadata $metadata, string $fieldName, AbstractPlatform $platform): void
+    {
+        $mapping = $metadata->associationMappings[$fieldName];
+        $join    = $mapping instanceof ToOneOwningSideMapping ? ($mapping->joinColumns[0] ?? null) : null;
+        $column  = $join instanceof JoinColumnMapping ? $join->name : $fieldName . '_id';
+        unset($metadata->associationMappings[$fieldName]);
+        $field = [
+            'fieldName'  => $fieldName,
+            'type'       => TaskBoardUserRefType::NAME,
+            'columnName' => $column,
+            'length'     => TaskBoardUserRef::MAX_LENGTH,
+            'nullable'   => !$join instanceof JoinColumnMapping || $join->nullable !== false,
+        ];
+        if ($platform instanceof AbstractMySQLPlatform) {
+            $field['options'] = ['collation' => 'utf8mb4_bin'];
+        }
+        $metadata->mapField($field);
+        $metadata->table['indexes']['idx_' . substr(sha1($metadata->getTableName() . '.' . $column), 0, 16)] = ['columns' => [$column]];
     }
 
     /**

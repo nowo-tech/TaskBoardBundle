@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function count;
 
@@ -30,6 +31,8 @@ final readonly class TaskTimeEntrySnapshotPurger
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -75,9 +78,9 @@ final readonly class TaskTimeEntrySnapshotPurger
         $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         // Rows written before 1.27 have no name yet: they get the current one first.
         $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE e.user = :user AND e.userName IS NULL')
-            ->setParameter('label', $label)->setParameter('user', $user)->execute();
+            ->setParameter('label', $label)->setParameter('user', $this->userParameter($user))->execute();
         $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE e.user = :user')
-            ->setParameter('user', $user)->execute();
+            ->setParameter('user', $this->userParameter($user))->execute();
         // The bulk updates bypass the identity map: loaded entries follow.
         foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[TaskTimeEntry::class] ?? [] as $entry) {
             if ($entry instanceof TaskTimeEntry && SyncUser::same($entry->getUser(), $user)) {
@@ -147,5 +150,11 @@ final readonly class TaskTimeEntrySnapshotPurger
         }
 
         return $builder;
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

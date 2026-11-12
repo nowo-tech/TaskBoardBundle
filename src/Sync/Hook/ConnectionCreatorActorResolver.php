@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\Hook;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Stringable;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -35,6 +36,8 @@ final readonly class ConnectionCreatorActorResolver implements SyncActorResolver
         private EntityManagerInterface $entityManager,
         private string $userClass,
         private ?UserCheckerInterface $userChecker = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -44,7 +47,8 @@ final readonly class ConnectionCreatorActorResolver implements SyncActorResolver
             // Audit EX-L2: a named actor that no longer resolves (deleted, erased) or whose lookup fails is refused;
             // the user who linked the board never acts in their place.
             try {
-                $user = $this->entityManager->find($this->userClass, $actorId);
+                // Since 2.15.0: through user_directory with user_reference: id (user_class is no Doctrine entity).
+                $user = $this->users instanceof TaskBoardUsers && $this->users->idMode() ? $this->users->find($actorId) : $this->entityManager->find($this->userClass, $actorId);
             } catch (Throwable) {
                 return null;
             }

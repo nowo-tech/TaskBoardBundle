@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Entity\TaskChangeHistory" table="task_board_task_change_history">
+        <indexes>
+            <index name="task_board_change_history_task_idx" columns="task_id"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="userName" type="string" column="user_name" length="180" nullable="true"/>
+        <field name="changeType" type="string" column="change_type" length="32" enum-type="Nowo\TaskBoardBundle\Enum\TaskChangeType"/>
+        <field name="oldValue" type="text" column="old_value" nullable="true"/>
+        <field name="newValue" type="text" column="new_value" nullable="true"/>
+        <field name="context" type="string" length="255" nullable="true"/>
+        <field name="cause" type="string" length="191" nullable="true"/>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task" inversed-by="changeHistory">
+            <join-column nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="user" target-entity="App\Entity\User">
+            <join-column on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

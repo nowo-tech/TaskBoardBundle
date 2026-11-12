@@ -11,6 +11,8 @@ kept alive and not reset (REQ-RUNTIME-002, see [FRANKENPHP-WORKER-AUDIT](FRANKEN
 - [Host ports](#host-ports)
 - [Events](#events)
 - [Persistence](#persistence)
+- [Mapping and user references](#mapping-and-user-references)
+- [Both host kinds, tested](#both-host-kinds-tested)
 
 ## Host ports
 
@@ -87,3 +89,24 @@ mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rul
 
 `PrivateEntityManagerReferencesPass` moves every service of the bundle onto the private manager and its registry at
 build time; your services keep your manager.
+
+## Mapping and user references
+
+| | Standard host (default) | DDD host (opt-in) |
+|---|---|---|
+| Mapping of the 28 bundle entities | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
+| Host users on TaskBoard rows | `ManyToOne` to `user_class` (a Doctrine entity in the same manager) | `database.user_reference: id`: the id in a string column (`TaskBoardUserRef`), found again through `user_directory` |
+| Bundle base classes / traits for host entities | none (the bundle owns its entities; the host references them by id) | none |
+
+The bundle's entities are bundle-owned: a host never extends them and references them by id (`TaskSnapshot::$id`,
+`TaskBoardSnapshot::$id`, the id getters of the events). With the id mode the bundle never queries the host's user table:
+DQL compares the id column, lookups go through the directory (re-checked byte for byte), and the column compares in
+binary on MySQL / MariaDB.
+
+## Both host kinds, tested
+
+- **Standard host**: the whole unit and functional suite (`FunctionalKernel`: attribute mapping, `AppUser` Doctrine
+  entity, the deprecated ports' stubs), plus its replays: every host port through its twin only
+  (`TASK_BOARD_TEST_PORTS=twin`) and the private entity manager on (`TASK_BOARD_TEST_PRIVATE_EM=1`), each a CI job.
+- **DDD host**: `tests/Functional/DddHost` (`DddHostKernel`: plain PHP users with no mapping, XML mapping, private entity
+  manager, user references by id, twin ports only), and `XmlMappingParityTest`.

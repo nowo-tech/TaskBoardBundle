@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use SortDirection;
 
 use function array_map;
@@ -37,6 +38,8 @@ final readonly class TaskSyncPersonRepository
 
     public function __construct(
         private EntityManagerInterface $entityManager,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -188,7 +191,7 @@ final readonly class TaskSyncPersonRepository
     {
         $builder = $this->entityManager->createQueryBuilder()->select('p')->from(TaskSyncPerson::class, 'p')
             ->where('(p.mappedUser = :user AND p.mapping IN (:mapped))')
-            ->setParameter('user', $user)
+            ->setParameter('user', $this->userParameter($user))
             ->setParameter('mapped', [TaskSyncPersonMapping::Auto, TaskSyncPersonMapping::Manual])
             ->orderBy('p.id', SortDirection::Ascending);
         if ($includeSuggested) {
@@ -484,5 +487,11 @@ final readonly class TaskSyncPersonRepository
             'lastSeenAt'     => $person->getLastSeenAt()->format(DATE_ATOM),
             'anonymisedAt'   => $person->getAnonymisedAt()?->format(DATE_ATOM),
         ];
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

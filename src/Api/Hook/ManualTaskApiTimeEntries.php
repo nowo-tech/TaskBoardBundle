@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 /**
  * Since 2.2.0 (spec 213): a time store over the bundle's own manual entries, through {@see TaskTimeLogger} as the task page
@@ -37,6 +38,8 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
         private TaskApiUsersInterface $users,
         // Since 2.12.0: the audited billable setter.
         private TaskTimeBillableService $billable,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $userReferences = null,
     ) {
     }
 
@@ -47,7 +50,7 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
             ->from(TaskTimeEntry::class, 'e')
             ->join('e.task', 't')
             ->where('e.user = :user')
-            ->setParameter('user', $principal->user)
+            ->setParameter('user', $this->userParameter($principal->user))
             ->orderBy('e.loggedAt', 'DESC')
             ->setMaxResults(self::LIMIT);
         if ($query->taskId !== null) {
@@ -108,5 +111,11 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
     private function entry(TaskTimeEntry $entry, string $apiId): TaskApiTimeEntry
     {
         return new TaskApiTimeEntry($entry->getId(), $apiId, $entry->getLoggedAt(), $entry->getMinutes() * 60, $entry->getTask()?->getId(), $entry->getDescription(), $entry->getBillable());
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->userReferences instanceof TaskBoardUsers ? $this->userReferences->parameter($user) : $user;
     }
 }

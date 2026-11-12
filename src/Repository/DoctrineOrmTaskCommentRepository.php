@@ -9,12 +9,15 @@ use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepositoryInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -31,11 +34,12 @@ final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepo
 
     public function findByTask(Task $task): array
     {
+        $builder = $this->entityManager->createQueryBuilder()
+            ->select('c')
+            ->from(TaskComment::class, 'c');
+        // Since 1.25: an erased author is null; since 2.15.0 no join with user_reference: id.
         /** @var list<TaskComment> $comments */
-        $comments = $this->entityManager->createQueryBuilder()
-            ->select('c', 'a')
-            ->from(TaskComment::class, 'c')
-            ->leftJoin('c.author', 'a') // since 1.25: an erased author is null
+        $comments = ($this->users ?? new TaskBoardUsers())->eager($builder, 'c.author', 'a')
             ->where('c.task = :task')
             ->setParameter('task', $task)
             ->orderBy('c.createdAt', 'ASC')
