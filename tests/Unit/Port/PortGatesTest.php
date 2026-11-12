@@ -249,7 +249,7 @@ final class PortGatesTest extends TestCase
                 return $request->credential === 'token-REDACTED-TEST' ? $this->principal : TaskApiAuthFailure::Invalid;
             }
         };
-        $request = Request::create('/api/tasks/v2/team', 'GET', server: ['REMOTE_ADDR' => '10.0.0.9', 'HTTP_AUTHORIZATION' => 'Bearer token-REDACTED-TEST', 'HTTP_X_TRACE' => 'abc', 'HTTP_COOKIE' => 'sid=secret']);
+        $request = Request::create('/api/tasks/v2/team', 'GET', server: ['REMOTE_ADDR' => '10.0.0.9', 'HTTP_AUTHORIZATION' => 'Bearer token-REDACTED-TEST', 'HTTP_X_TRACE' => 'abc', 'HTTP_COOKIE' => 'sid=REDACTED-TEST', 'PHP_AUTH_USER' => 'u', 'PHP_AUTH_PW' => 'REDACTED-TEST', 'HTTP_X_API_KEY' => 'REDACTED-TEST', 'HTTP_PROXY_AUTHORIZATION' => 'REDACTED-TEST']);
         $request->attributes->set('_route', 'task_api_teams');
 
         self::assertSame($principal, Ports::apiAuthenticator($authenticator)->authenticate($request));
@@ -262,6 +262,10 @@ final class PortGatesTest extends TestCase
         self::assertSame('token-REDACTED-TEST', $context->credential);
         self::assertSame('abc', $context->header('X-Trace'));
         self::assertNull($context->header('cookie'), 'Cookies are never copied.');
+        self::assertNull($context->header('authorization'), 'OC-I1: no credential header in a context a host may log');
+        self::assertNull($context->header('php-auth-pw'));
+        self::assertNull($context->header('x-api-key'));
+        self::assertNull($context->header('proxy-authorization'));
         self::assertSame(TaskApiAuthFailure::Invalid, Ports::apiAuthenticator($authenticator)->authenticate(Request::create('/api')));
         self::assertNull($authenticator->request->route);
     }

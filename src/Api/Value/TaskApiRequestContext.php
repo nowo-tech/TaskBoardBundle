@@ -16,6 +16,8 @@ use function strtolower;
  *
  * `$credential` is what {@see TaskApiCredential::fromRequest()} reads: the `Authorization`
  * header without `Bearer`, never the query string. Header names are lower case; each header keeps its first value.
+ * Credential headers (Authorization, Proxy-Authorization, PHP-Auth-*, Cookie, X-Api-Key) are left out, so the context
+ * can be logged.
  */
 final readonly class TaskApiRequestContext
 {
