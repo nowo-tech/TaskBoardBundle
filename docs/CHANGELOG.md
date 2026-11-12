@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.14.0] - 2026-11-12](#2140---2026-11-12)
 - [[2.13.0] - 2026-11-12](#2130---2026-11-12)
 - [[2.12.0] - 2026-11-12](#2120---2026-11-12)
 - [[2.11.1] - 2026-11-12](#2111---2026-11-12)
@@ -103,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [2.14.0] - 2026-11-12
 
 Target 2.14.0 (minor; Beacon spec 204). Opt-in (`calendar.day_annotation_provider`); without a provider the calendar markup is the 2.13
 markup. No schema change, see [UPGRADING](UPGRADING.md#to-2140).
@@ -2249,7 +2252,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.13.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.14.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
