@@ -55,7 +55,9 @@ final class CalendarDayAnnotationsTest extends CalendarTestCase
             foreach (['month', 'week', 'list'] as $mode) {
                 $this->client->request('GET', $this->calendarUrl($this->em->getRepository(TaskBoard::class)->findAll()[0], 'mode=' . $mode . '&date=2030-03-04'));
                 self::assertResponseIsSuccessful();
-                $pages[$mode][] = (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', 'ID', (string) $this->client->getResponse()->getContent());
+                $page = (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', 'ID', (string) $this->client->getResponse()->getContent());
+                // The assignee filter lists people in database order, which MySQL does not keep from one schema to the next.
+                $pages[$mode][] = (string) preg_replace('#<select id="assignee".*?</select>#s', '<select id="assignee"></select>', $page);
             }
         }
 
