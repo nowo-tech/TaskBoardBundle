@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
 use Nowo\TaskBoardBundle\Service\TaskCommentManagerInterface;
@@ -72,6 +74,25 @@ final class PrivateEntityManagerKernelTest extends FunctionalTestCase
 
         $this->host->flush();
         self::assertSame(1, $this->rows(AppUser::class, 'email = ?', ['pending@example.com']), 'the application flushes its own change');
+    }
+
+    public function testANewRowTheFlushCascadesGetsItsHostUserAdoptedToo(): void
+    {
+        $private = $this->privateManager();
+        $owner   = $this->host->find(AppUser::class, $this->owner->getId());
+        self::assertInstanceOf(AppUser::class, $owner);
+        $board = new TaskBoard('Cascade', 'cascade', null);
+        $task  = new Task($board, 'Cascaded member', null);
+        $private->persist($board);
+        $private->persist($task);
+        $private->flush();
+
+        // The member is only reached through Task::$members (cascade persist), with the application's user on it.
+        $task->addMember(new TaskMember($task, $owner, TaskMemberRole::Assignee));
+        $private->flush();
+
+        self::assertSame(1, $this->rows(TaskMember::class, 'task_id = ? AND user_id = ?', [$task->getId(), $owner->getId()]));
+        self::assertTrue($this->host->contains($owner), 'the application keeps its own user object');
     }
 
     public function testAFailingTaskBoardWriteClosesOnlyThePrivateManager(): void
