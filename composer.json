@@ -31,6 +31,8 @@
     "require": {
         "doctrine/doctrine-bundle": "^2.10 || ^3.0",
         "doctrine/orm": "^3.7",
+        "ext-zlib": "*",
+        "nowo-tech/controller-kit-bundle": "^2.3",
         "nowo-tech/form-kit-bundle": "^2.22",
         "nowo-tech/ui-kit-bundle": "^2.42.1",
         "php": ">=8.2 <8.6",

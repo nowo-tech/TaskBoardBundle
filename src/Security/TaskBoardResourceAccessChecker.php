@@ -50,9 +50,13 @@ final readonly class TaskBoardResourceAccessChecker
     ) {
     }
 
-    public function canViewBoard(object $user, TaskBoard $board): bool
+    /**
+     * @param bool $manageRoles since 2.13.0: false leaves `security.manage_roles` out of the default decision (they are the
+     *                          roles of the signed-in user, so they say nothing about another `$user`)
+     */
+    public function canViewBoard(object $user, TaskBoard $board, bool $manageRoles = true): bool
     {
-        return $this->isBoardViewable($this->resolveBoardAccess($user, $board));
+        return $this->isBoardViewable($this->resolveBoardAccess($user, $board, $manageRoles));
     }
 
     /**
@@ -272,9 +276,9 @@ final readonly class TaskBoardResourceAccessChecker
     /**
      * Dispatches BOARD_ACCESS_CHECK with the default decision; the event carries grant / deny / read-only.
      */
-    private function resolveBoardAccess(object $user, TaskBoard $board): BoardAccessCheckEvent
+    private function resolveBoardAccess(object $user, TaskBoard $board, bool $manageRoles = true): BoardAccessCheckEvent
     {
-        $event = new BoardAccessCheckEvent($user, $board, $this->defaultBoardDecision($user, $board));
+        $event = new BoardAccessCheckEvent($user, $board, $this->defaultBoardDecision($user, $board, $manageRoles));
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
         return $event;
@@ -285,9 +289,9 @@ final readonly class TaskBoardResourceAccessChecker
         return !$event->isDenied() && ($event->isGranted() || $event->isDefaultGranted());
     }
 
-    private function defaultBoardDecision(object $user, TaskBoard $board): bool
+    private function defaultBoardDecision(object $user, TaskBoard $board, bool $manageRoles = true): bool
     {
-        if (!$this->scopingEnabled || $this->hasManageRole()) {
+        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole())) {
             return true;
         }
 

@@ -62,6 +62,10 @@ services:
             - '../../Link/TaskObjectLinkResolverInterface.php'
             - '../../Link/TaskObjectBadge.php'
             - '../../Comment/MentionCandidate.php'
+            # Since 2.13.0: loaded only with `multi_board.enabled` (services_multi_board.yaml).
+            - '../../MultiBoard/'
+            - '../../Controller/TaskBoardMultiBoardController.php'
+            - '../../Form/MultiBoardTaskFilterType.php'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
@@ -70,6 +74,8 @@ services:
         exclude:
             - '../../Controller/TaskBoardConnectionController.php'
             - '../../Controller/TaskRecurrenceController.php'
+            # Since 2.13.0: registered by services_multi_board.yaml (multi_board.enabled).
+            - '../../Controller/TaskBoardMultiBoardController.php'
         public: true
 
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:

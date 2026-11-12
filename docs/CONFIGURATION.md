@@ -34,6 +34,9 @@
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
 - [New board (since 1.30)](#new-board-since-130)
+- [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
+  - [Standard Symfony host](#standard-symfony-host)
+  - [DDD / hexagonal host](#ddd--hexagonal-host)
 
 ## Required
 
@@ -788,3 +791,43 @@ All off by default, under `nowo_task_board.board`:
 **Back button.** It carries `data-nowo-ui-dialog-back`, so a dialog that lifts it can place it; until then it sits with the other actions.
 
 **Widgets in step 2.** A widget in step 2 mounts while the step is hidden. Tested in a real browser (Chromium) with `MilkdownEditorType` on 2026-11-07: it needs no mounting on reveal, typing and saving work after the step opens, after Back, and after a 422. A widget that measures itself can listen to `step-shown`.
+
+## Multi-board task list (since 2.13)
+
+All off by default, under `nowo_task_board.multi_board`. Usage, access rules and the export: [USAGE](USAGE.md#multi-board-task-list-since-213).
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `enabled` | `false` | The routes `nowo_task_board_tasks` (`path`) and `nowo_task_board_tasks_export` (`<path>/export.{format}`, `csv` or `xlsx`), and their services. `false`: nothing is registered |
+| `scope_provider` | `null` | Service id of a `Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface`. `null`: no board for anyone (deny by default) |
+| `path` | `/tools/task-board/tasks` | Path of the list, after `route_prefix`. May hold route variables (`/organisations/{organisation}/tasks`), passed to the provider in `MultiBoardViewer::$context`. Must start with `/`; `{format}` is reserved. Never copied under `tenancy.tenant_paths` |
+| `per_page` | `25` | Rows per page by default: 10, 25, 50 or 100 |
+| `max_boards` | `500` | The most boards of one scope read (in the provider's order; the rest is left out and logged as a warning). Bounds the IN-list and the per-board access checks |
+| `scan_max_rows` | `10000` | The most tasks a label filter compares in PHP per page, workload or export (max 50000; an export reads them twice). Above it the page says the result is partial and the export sends `X-Task-Board-Export-Partial: 1` |
+| `export.max_rows` | `5000` | The most rows of one export (max 100000) |
+| `web_ui.templates.tasks` | `@NowoTaskBoardBundle/manage/tasks.html.twig` | The page |
+
+Protect `path` like the other manage routes in `security.yaml`. Runtime requirements: `nowo-tech/controller-kit-bundle`
+(static CSV helpers; its bundle need not be registered) and `ext-zlib` (XLSX).
+
+### Standard Symfony host
+
+```yaml
+# config/packages/nowo_task_board.yaml
+nowo_task_board:
+    multi_board:
+        enabled: true
+        scope_provider: App\Tasks\OrganisationBoardScope   # an autowired service of yours
+```
+
+### DDD / hexagonal host
+
+Same options. The provider is an adapter of your infrastructure layer that maps your project memberships (by ids) to
+`MultiBoardScopeEntry` values; nothing in it needs a Symfony, Doctrine or bundle entity type. Your application layer may
+call `Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface` (autowirable alias) by ids, see
+[USAGE](USAGE.md#ddd--hexagonal-host).
+
+**Beacon** (organisation "All tasks"): `path: /organisations/{organisation}/tasks` (or the path of its organisation
+area), `scope_provider` = an adapter that returns, for the organisation in the URL, the task boards of the projects where
+the user holds the tasks-view permission, each with the project name as `label` and the project slug as `tenantSlug`.
+

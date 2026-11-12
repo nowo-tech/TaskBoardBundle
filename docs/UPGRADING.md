@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.13.0](#to-2130)
+  - [Multi-board task list: what a host does](#multi-board-task-list-what-a-host-does)
 - [To 2.12.0](#to-2120)
   - [Schema change for every host: billable manual entries](#schema-change-for-every-host-billable-manual-entries)
   - [Billable: what a host does](#billable-what-a-host-does)
@@ -177,6 +179,49 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.13.0
+
+From **2.12.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Target 2.13.0 (minor; Beacon D-20261112-01). **No schema change, no configuration change, no output change** unless you
+turn the new list on. Two new runtime requirements: `nowo-tech/controller-kit-bundle` `^2.3` (its CSV writer and download
+headers; a static helper, no service of it is used, so registering its bundle is optional) and the `zlib` extension (the
+XLSX export; part of every standard PHP build).
+
+### Multi-board task list: what a host does
+
+Off by default (`multi_board.enabled: false`: no route, no service). To offer "All tasks":
+
+1. Implement `Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface`: for a `MultiBoardViewer` (the user
+   id and the route variables of the page), return the boards that person may already read, as a `MultiBoardScope` of
+   `MultiBoardScopeEntry(boardId, label, tenantSlug)`. Return `MultiBoardScope::none()` for anyone else. The bundle
+   re-checks every board with `canViewBoard()` (and, with tenancy, the board's tenant for that user), so an entry the
+   bundle's rules refuse is dropped. That is not every wrong entry: for a `security.manage_roles` holder, with
+   `security.resource_scoping: false`, or with a listener that grants whole tenants, `canViewBoard()` grants every board,
+   and the provider is the only filter. Return only boards the viewer may read.
+2. Turn it on and point it at your provider:
+
+   ```yaml
+   nowo_task_board:
+       multi_board:
+           enabled: true
+           scope_provider: App\Tasks\OrganisationBoardScope
+           path: /organisations/{organisation}/tasks   # optional; {organisation} reaches the provider
+   ```
+
+3. Protect the path like the other manage routes (`access_control`). It is **not** copied under
+   `tenancy.tenant_paths`; with tenancy, give each entry its `tenantSlug` so the task and board links go to the tenant
+   copies.
+4. Only if you override templates: the page is `web_ui.templates.tasks`.
+
+No migration and no asset rebuild. `TaskBoardResourceAccessChecker::canViewBoard()` gains an optional third argument
+(`bool $manageRoles = true`); existing callers are unchanged. A label-filtered export that stopped at
+`multi_board.scan_max_rows` carries `X-Task-Board-Export-Partial: 1`.
 
 ## To 2.12.0
 

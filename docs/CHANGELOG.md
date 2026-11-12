@@ -103,6 +103,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.13.0 (minor; Beacon D-20261112-01, "All tasks" of an organisation). Opt-in (`multi_board.enabled`); no schema
+change. New runtime requirements `nowo-tech/controller-kit-bundle` `^2.3` and `ext-zlib`, see
+[UPGRADING](UPGRADING.md#to-2130).
+
+### Added
+
+- **Multi-board task list** (`multi_board.enabled`, route `nowo_task_board_tasks` at `multi_board.path`, default
+  `/tools/task-board/tasks`): the tasks of every board a host lets the viewer read, on UiKit's list scaffold, with a
+  Board / Project column, filters (board / project, assignee or *Unassigned*, column, status, priority, due range,
+  overdue, label, search by title or `#number`), server-side sort and pagination (10 / 25 / 50 / 100 per page), and
+  `?view=people`: the workload per assignee (open, overdue, done, estimate of the open tasks, time logged).
+- **Export** (route `nowo_task_board_tasks_export`, `<path>/export.csv` and `.xlsx`): the filtered, sorted set, streamed
+  in batches of 500 and capped by `multi_board.export.max_rows` (default 5000; above it the header
+  `X-Task-Board-Export-Truncated`). `Cache-Control: no-store`. Every text cell is guarded against formula injection
+  (ControllerKit's `CsvSafeWriter`: a leading `=`, `+`, `-`, `@`, tab or CR gets a `'`); the XLSX writes inline strings
+  only (never a formula) through a streaming writer of the bundle, without a spreadsheet library.
+- **Host port** `MultiBoard\MultiBoardScopeProviderInterface` (`multi_board.scope_provider`) with bundle-owned value
+  objects only (`MultiBoardViewer`: user id and the route variables of the page; `MultiBoardScope` /
+  `MultiBoardScopeEntry`: board id, optional label and tenant slug). **Deny by default**: no provider or an empty scope
+  shows an empty list and the export answers 404. Every board of the scope is re-checked with
+  `TaskBoardResourceAccessChecker::canViewBoard()` (and its BOARD_ACCESS_CHECK listeners), so the provider can narrow
+  access, never widen it; a crafted board or assignee filter only narrows the checked set.
+- **Read port** `MultiBoard\MultiBoardTaskListInterface` (`boards()`, `page()`, `workload()`, `export()`): values in,
+  read models out (`MultiBoardTaskRow`, `MultiBoardWorkloadRow`, ...), for a DDD host that calls it by ids. Unlike the
+  command ports it checks access itself on every call (manage roles only for the signed-in viewer; with tenancy, the
+  board's tenant must resolve for the viewer). `TaskBoardResourceAccessChecker::canViewBoard()` gains an optional
+  `$manageRoles` argument (default `true`).
+- Audit NI (before the tag): an `assignee` filter without a task on the readable boards is ignored (text for an integer
+  id no longer reaches the database: no 500 on PostgreSQL); a label export cut by `scan_max_rows` sends
+  `X-Task-Board-Export-Partial: 1`; each joined assignee and label, and text behind leading whitespace, is guarded
+  against formula injection; `scan_max_rows` is capped at 50000.
+- One bounded query per page over the IN-list of checked board ids, plus one for the page's assignees and one for their
+  names (no N+1); the label filter compares the JSON tags in PHP over at most `multi_board.scan_max_rows` tasks (the page
+  says when the result is partial).
+- Options `multi_board.*` and `web_ui.templates.tasks` (`@NowoTaskBoardBundle/manage/tasks.html.twig`,
+  `_multi_task_row.html.twig`, `_multi_workload_row.html.twig`); translations in the seven locales.
+
+### Changed
+
+- `nowo-tech/controller-kit-bundle` `^2.3` (CSV writer and download headers) and `ext-zlib` (XLSX) are required.
+
 ## [2.12.0] - 2026-11-12
 
 Target 2.12.0 (minor; Beacon D-20261111-12, request 2026-11-11 *billable time entries*). One nullable column

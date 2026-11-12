@@ -1,0 +1,30 @@
+{#
+    Since 2.13.0 (Beacon D-20261112-01, web_ui.templates.tasks): the tasks of every board the host lets the viewer read, on
+    the UiKit list scaffold. Variables: page (ListPage from TaskBoardMultiBoardController: the filters, the sortable task
+    table or, with view "people", the workload table, the pagination and the empty state), view (tasks | people), boards
+    (MultiBoardBoard after the bundle's read check), filter (MultiBoardTaskFilter), total, partial (a label filter stopped
+    at multi_board.scan_max_rows), taskRoute, boardRoute, dashboardRoute.
+    Blocks: nowo_ui_list_row (one row: `row` is a MultiBoardTaskRow, or a MultiBoardWorkloadRow with view "people").
+    Every value is printed with Twig's autoescape; nothing is marked safe.
+#}
+{% extends '@NowoUiKitBundle/page/list.html.twig' %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_list_filters %}
+    {{ parent() }}
+    {% if partial|default(false) %}
+        <p class="nowo-task-window-notice" role="status" data-testid="nowo-task-multi-partial">{{ 'task_board.multi.partial'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {% endif %}
+{% endblock %}
+
+{% block nowo_ui_list_row %}
+    {% if view == 'people' %}
+        {{ include('@NowoTaskBoardBundle/manage/_multi_workload_row.html.twig', {row: row}, with_context: false) }}
+    {% else %}
+        {{ include('@NowoTaskBoardBundle/manage/_multi_task_row.html.twig', {row: row, taskRoute: taskRoute, boardRoute: boardRoute}, with_context: false) }}
+    {% endif %}
+{% endblock %}

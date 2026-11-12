@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
 use Symfony\Component\Config\Loader\Loader;
@@ -102,6 +103,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $moveEnabled = false,
         // Since 2.3.0 (spec 215): task_recurrence and task_recurrence_action exist only with `recurrence.enabled`.
         private readonly bool $recurrenceEnabled = false,
+        // Since 2.13.0 (Beacon D-20261112-01): `multi_board.path` with `multi_board.enabled`; null: no multi-board route.
+        private readonly ?string $multiBoardPath = null,
     ) {
     }
 
@@ -179,6 +182,7 @@ final class TaskBoardRouteLoader extends Loader
         }
 
         $this->addTenantCopies($collection);
+        $this->addMultiBoardRoutes($collection);
         $this->addApiRoutes($collection);
 
         return $collection;
@@ -211,6 +215,21 @@ final class TaskBoardRouteLoader extends Loader
                 $methods,
             ),
         );
+    }
+
+    /**
+     * Since 2.13.0: the multi-board list and its export, after the tenant copies: they span tenants, so they are never
+     * copied under a tenant path (the provider scopes them, with the path's own variables if it has any).
+     */
+    private function addMultiBoardRoutes(RouteCollection $collection): void
+    {
+        if ($this->multiBoardPath === null) {
+            return;
+        }
+
+        $path = $this->routePrefix . rtrim($this->multiBoardPath, '/');
+        $collection->add(TaskBoardMultiBoardController::ROUTE, new Route($path === '' ? '/' : $path, ['_controller' => TaskBoardMultiBoardController::class . '::tasks'], [], [], '', [], ['GET']));
+        $collection->add(TaskBoardMultiBoardController::ROUTE_EXPORT, new Route($path . '/export.{format}', ['_controller' => TaskBoardMultiBoardController::class . '::export'], ['format' => 'csv|xlsx'], [], '', [], ['GET']));
     }
 
     /**
