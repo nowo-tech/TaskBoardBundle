@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Nowo\TaskBoardBundle\Doctrine\ManagerOf;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -51,8 +52,9 @@ final readonly class TaskAccessGuard
      */
     private function refreshForDecision(Task $task): void
     {
-        $entityManager = $this->managerRegistry?->getManagerForClass(Task::class);
-        if (!$entityManager instanceof EntityManagerInterface || !$entityManager->isOpen() || !$entityManager->contains($task)) {
+        // Since 2.15.0 (audit OC-I2): the manager that holds the task, not only the one getManagerForClass() names.
+        $entityManager = ManagerOf::entity($this->managerRegistry, $task);
+        if (!$entityManager instanceof EntityManagerInterface) {
             return;
         }
 

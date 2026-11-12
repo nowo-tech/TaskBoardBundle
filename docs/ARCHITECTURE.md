@@ -83,7 +83,8 @@ mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rul
 - repositories: service repositories come from your configuration's factory, every other one is built and kept per
   manager (no growth in a kept-alive worker);
 - your security user and other host objects on TaskBoard rows are adopted as the private manager's references before
-  each flush;
+  each flush; users read back from TaskBoard rows are the private manager's instances, so hooks and listeners compare
+  users **by id**, never with `===` (audit OC-L1);
 - TaskBoard bulk / DBAL statements inside your open transaction run in a savepoint; a failure rolls back to it and the
   original exception is rethrown.
 

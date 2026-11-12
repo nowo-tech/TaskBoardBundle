@@ -15,7 +15,8 @@ use function sprintf;
  * {@see TaskApiAttachmentStoreInterface} sees it. The bundle already checked that the
  * upload succeeded; every other check (content sniffing, plan storage, sizes) is the host's, as before.
  *
- * `$clientName` and `$clientMimeType` come from the client: untrusted. `$pathname` is the temporary file PHP wrote; it is
+ * `$clientName` and `$clientMimeType` come from the client: untrusted (the MIME type is what the client claims, not a
+ * sniffed type; check the content yourself). `$pathname` is the temporary file PHP wrote; it is
  * removed at the end of the request, so store a copy, never the path.
  */
 final readonly class TaskApiUpload

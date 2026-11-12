@@ -144,7 +144,9 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   `TaskCommentSnapshot`, `TaskChangeSnapshot`, `TaskSyncDirectorySnapshot`: ids, names, dates, the creator's id; no
   entity, collection or user object). The HTTP request travels as `Api\Value\TaskApiRequestContext` (method, path,
   route, client IP, the `Authorization` credential and the headers; never a cookie), an upload as
-  `Api\Value\TaskApiUpload` (temporary path, client name and type, size, `open()`).
+  `Api\Value\TaskApiUpload` (temporary path, client name and client-supplied type, size, `open()`). Audit OC-I1: the
+  request context never copies credential headers (Authorization, Proxy-Authorization, PHP-Auth-*, Cookie, X-Api-Key),
+  so a host may log it; the credential reaches the host only as `$credential`.
 - **Selection rule.** A service implementing the deprecated interface is asked exactly as in 2.14, also when it
   implements the twin too. A service implementing only the twin is asked through an internal gate (`Port\*Gate`). The
   same configuration keys take either (`api.hooks.*`, `assignee_provider`, `comments.*`, `history.cause_labeler`,
@@ -209,6 +211,12 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   - Host objects on TaskBoard rows (the `user_class` creator, author, member, ...) that the private manager does not hold,
     such as the security user, are adopted before each flush as the private manager's reference to the same id; the
     application's instance is never written.
+  - Users read back from TaskBoard rows are the private manager's instances: host hooks and listeners compare users by
+    id, never with `===` (audit OC-L1; UPGRADING).
+  - Audit OC-I2: the worker-mode refreshes before an access decision or a time total (`TaskAccessGuard`, the time
+    aggregators) use the manager that holds the task (`Doctrine\ManagerOf`), not only the one `getManagerForClass()`
+    names (DoctrineBundle 3.4 with a dedicated `database.entity_manager` named the default one and the refresh was
+    skipped). This also applies without the option.
   - `Doctrine\TaskBoardSavepoint`: a TaskBoard DBAL / bulk DQL write inside an open transaction runs in a savepoint
     (`nowo_task_board_*`) with the option on; when rolling back to it fails too, the ORIGINAL exception is rethrown.
 

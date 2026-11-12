@@ -233,6 +233,11 @@ nowo_task_board:
 - Your security user (managed by your manager) can be passed to the bundle as before: before each flush the bundle
   replaces it on its rows by its own reference to the same id. User objects you read from TaskBoard rows (creator,
   author, member) belong to the private manager: look them up again in your manager before you write them.
+- **Compare users by id, never by object identity (audit OC-L1).** With the private manager, a user object the bundle
+  read from its rows (a creator, an author, a member) is the private manager's instance, while your security user is
+  your manager's: `$user === $board->getCreator()` is always false. A host hook or listener that denies on such an
+  identity check would never deny. Compare ids (`getId()`, the `*Id` getters of the events, `getSubjectId()`, the
+  snapshots' `creatorId`), as the bundle itself does.
 - The private manager is dropped at every request, Messenger message and console command boundary (REQ-RUNTIME-002);
   TaskBoard entities you keep across a boundary are detached.
 - With doctrine/dbal 3 the rollback middleware is not available: after a rolled-back transaction the private manager is
