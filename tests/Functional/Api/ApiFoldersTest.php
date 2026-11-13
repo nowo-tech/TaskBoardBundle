@@ -126,6 +126,21 @@ final class ApiFoldersTest extends ApiTestCase
         self::assertResponseIsSuccessful();
     }
 
+    public function testTheFolderRightAndAWholeTenantAreNeeded(): void
+    {
+        $folder = $this->service(TaskBoardRestructureInterface::class)->createFolder($this->owner, 'tenant-a', 'Epic');
+        $this->user('noroles@example.com', ['ROLE_GUEST']);
+        $this->issueToken(email: 'noroles@example.com');
+        $this->send('POST', '/api/tasks/v2/space/space-tenant-a/folder', ['name' => 'New']);
+        $this->assertRefused(403, 'ACCESS_002');
+        $this->send('PUT', '/api/tasks/v2/folder/' . $folder->id, ['name' => 'Renamed']);
+        $this->assertRefused(403, 'ACCESS_002');
+
+        $this->issueToken(where: TaskApiWhere::limitedTo([], [$this->roadmap->getId()]));
+        $this->send('POST', '/api/tasks/v2/space/space-tenant-a/folder', ['name' => 'New']);
+        $this->assertRefused(404, 'ACCESS_001');
+    }
+
     public function testAnInvalidNameIsRefused(): void
     {
         $this->send('POST', '/api/tasks/v2/space/space-tenant-a/folder', ['name' => '   ']);

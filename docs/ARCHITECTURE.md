@@ -58,6 +58,13 @@ The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInte
 `MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, the API users / workspace / plan gate /
 rate limiter / idempotency store, the providers, ...) already take values only.
 
+**Since 2.17.0 (Beacon spec 234).** New ports are framework-free from the start (no deprecated twin):
+`restructure.policy` → `Folder\TaskBoardRestructurePolicyInterface` (`mayManageFolders($user, ?$tenantKey)`,
+`mayRestructureBoard($user, TaskBoardSnapshot)`); the public service `Folder\TaskBoardRestructureInterface` takes ids
+and returns `Folder\TaskBoardFolderSnapshot` / `TaskBoardMoveResult`. Every restructure write runs in one transaction it
+opens and closes; on a failure after in-memory changes the entity manager is closed and reset through the registry, so
+a worker with kernel reset off never keeps a closed manager; `TASK_BOARD_CHANGED` goes out after the commit.
+
 ## Events
 
 Every event that carries a bundle entity also offers ids and snapshots (`getBoardId()`, `getTaskId()`,
