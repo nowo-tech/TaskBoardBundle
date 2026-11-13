@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -71,6 +72,8 @@ final readonly class MultiBoardTaskList implements MultiBoardTaskListInterface
         private ?TaskBoardTenantContext $tenantContext = null,
         // Since audit NI-4: the signed-in user, whose manage roles apply only when the viewer is that user.
         private ?TokenStorageInterface $tokenStorage = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -299,6 +302,10 @@ final readonly class MultiBoardTaskList implements MultiBoardTaskListInterface
     /** The user of the viewer's id; null for an id that names nobody (or cannot, e.g. text for an integer id). */
     private function user(string $userId): ?object
     {
+        // Since 2.15.0: through user_directory with user_reference: id (exact match, user_class is no Doctrine entity).
+        if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            return $this->users->find($userId);
+        }
         $metadata = $this->entityManager->getClassMetadata($this->userClass);
         $type     = $metadata->getTypeOfField($metadata->getSingleIdentifierFieldName());
         if (in_array($type, ['integer', 'smallint', 'bigint'], true) && !ctype_digit($userId)) {

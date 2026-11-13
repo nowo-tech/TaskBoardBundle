@@ -15,6 +15,9 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * {@see TaskApiCredential::fromRequest()} reads the credential. The API must sit behind a stateless
  * firewall whose security user is the principal's user, as access checkers read the security token: otherwise it answers 500.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see TaskApiRequestAuthenticatorInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface TaskApiAuthenticatorInterface
 {

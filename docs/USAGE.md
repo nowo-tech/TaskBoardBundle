@@ -547,16 +547,19 @@ TaskBoard never needs your domain classes.
 - Tenants and host objects are plain strings: a board's `tenantKey`, and task links to host objects
   (`objectType` + `objectId`, `TaskLink::forHostObject()`), resolved by your `TaskObjectLinkResolverInterface`.
 
-**Ports you implement** (service ids in config)
+**Ports you implement** (service ids in config). Since 2.15 every port that took a bundle entity, the HTTP `Request`
+or an `UploadedFile` has a framework-free twin that takes value objects (snapshots with ids, a request context, an
+upload): implement the twin in a DDD host; see [ARCHITECTURE](ARCHITECTURE.md#host-ports) for the full table.
 
-| Concern | Interface |
+| Concern | Interface (2.15 twin in a DDD host) |
 |---|---|
-| Who may be assigned | `Assignee\TaskAssigneeProviderInterface` |
+| Who may be assigned | `Assignee\TaskAssigneePolicyInterface` (deprecated: `TaskAssigneeProviderInterface`) |
 | Access | `Security\TaskBoardAccessCheckerInterface`, `TenantAwareTaskBoardAccessCheckerInterface`, `TaskBoardTeamMembershipResolverInterface` |
-| Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisionerInterface`, `Board\BoardScopeProviderInterface` |
+| Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisioningInterface` (deprecated: `FirstBoardProvisionerInterface`), `Board\BoardScopeProviderInterface` |
 | Links to your objects | `Link\TaskObjectLinkResolverInterface` |
 | Boards of the multi-board list (since 2.13) | `MultiBoard\MultiBoardScopeProviderInterface` (values only) |
-| API | `Api\Hook\*Interface` (authenticator, users, workspace, plan gate, ...) |
+| API | `Api\Hook\TaskApiRequestAuthenticatorInterface`, `TaskApiAttachmentStoreInterface`, `TaskApiTimeStoreInterface` (twins), users, workspace, plan gate, rate limiter, ... |
+| Provider sync | `Sync\Hook\ProviderCredentialSourceInterface`, `SyncPersonDirectoryInterface`, `SyncedFileStorageInterface`, ... (twins) |
 
 Policy decisions can also be answered by listening to `TaskBoardEvents::BOARD_ACCESS_CHECK`, `TASK_ACCESS_CHECK`,
 `BOARD_LIST_QUERY` and `QUOTA_CHECK`.
@@ -617,9 +620,12 @@ them. You still check the tenant, the plan and CSRF, as the API does.
 
 **Known limitations**
 
-- Users must be a Doctrine entity in the bundle's entity manager; an id-only user reference is not available.
-- The older write events still carry the entities and the user object beside their scalar getters; use the getters
-  and do not keep the entities.
+- Since 2.15 users need not be a Doctrine entity: with `database.user_reference: id` the rows keep the user's id and
+  `user_directory` finds the user again (see [ARCHITECTURE](ARCHITECTURE.md#mapping-and-user-references)); the default
+  is still the relation to a Doctrine `user_class`. `database.mapping_type: xml` and `database.private_entity_manager`
+  complete the DDD path.
+- The older write events still carry the entities and the user object beside their scalar getters (deprecated since
+  2.15, removed in 3.0); use the id getters and the `get*Snapshot()` accessors and do not keep the entities.
 - The remaining services (`TaskLinkAttacher`, `TaskDependencyManager`, `TaskMemberAssigner`, `TaskCopier`, ...) are
   `final` without a port; the ports take the bundle's entities and form DTOs (`Task`, `TaskBoard`, `TaskFormData`), not
   ids (no id-based command methods).

@@ -6,7 +6,9 @@ namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskCommentSnapshot;
 
 use function array_filter;
 use function array_map;
@@ -30,6 +32,9 @@ final class TaskMentionEvent extends AbstractTaskEvent
         parent::__construct($comment->getTask(), $actor);
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getCommentId()} or {@see self::getCommentSnapshot()}; removed in 3.0
+     */
     public function getComment(): TaskComment
     {
         return $this->comment;
@@ -55,5 +60,11 @@ final class TaskMentionEvent extends AbstractTaskEvent
     public function getMentionedUserIds(): array
     {
         return array_values(array_filter(array_map(ActorId::of(...), $this->users), static fn (?string $id): bool => $id !== null));
+    }
+
+    /** Since 2.15.0: the comment as a framework-free snapshot, copied on each call. */
+    public function getCommentSnapshot(): TaskCommentSnapshot
+    {
+        return Snapshots::comment($this->comment);
     }
 }

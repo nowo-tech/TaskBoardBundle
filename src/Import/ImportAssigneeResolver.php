@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Import;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
+use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 
 use function array_keys;
@@ -106,9 +107,8 @@ final class ImportAssigneeResolver
      */
     public function userByEmail(string $email): ?object
     {
-        $user = $this->userResolver instanceof BoardAwareTaskImportUserResolverInterface
-            ? $this->userResolver->resolveByEmailForBoard($email, $this->board)
-            : $this->userResolver->resolveByEmail($email);
+        // Since 2.15.0: the deprecated board-aware interface first, then its framework-free twin, else resolveByEmail().
+        $user = Ports::importUser($this->userResolver, $email, $this->board);
 
         return $user !== null && (!$this->assigneeProvider instanceof TaskAssigneeProviderInterface || $this->assigneeProvider->canBeAssigned($this->board, $user)) ? $user : null;
     }

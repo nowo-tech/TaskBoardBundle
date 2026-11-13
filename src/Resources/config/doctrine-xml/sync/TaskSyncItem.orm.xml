@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem" table="task_board_sync_items">
+        <indexes>
+            <index name="idx_task_board_sync_items_task" columns="task_id"/>
+            <index name="idx_task_board_sync_items_detached" columns="detached_task_id"/>
+            <index name="idx_task_board_sync_items_board_custom" columns="board_id,custom_id"/>
+        </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_sync_items_board_ext" columns="board_id,external_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="fieldHashes" type="json" column="field_hashes"/>
+        <field name="conflictHashes" type="json" column="conflict_hashes"/>
+        <field name="remoteArchivedAt" type="datetime_immutable" column="remote_archived_at" nullable="true"/>
+        <field name="lastSeenRunId" type="string" column="last_seen_run_id" length="36" nullable="true"/>
+        <field name="unmatchedPeople" type="json" column="unmatched_people" nullable="true"/>
+        <field name="remoteMeta" type="json" column="remote_meta" nullable="true"/>
+        <field name="pendingReads" type="smallint" column="pending_reads">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="customId" type="string" column="custom_id" length="64" nullable="true"/>
+        <field name="backfillLevel" type="smallint" column="backfill_level">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="itemKind" type="string" column="item_kind" length="16">
+            <options>
+                <option name="default">task</option>
+            </options>
+        </field>
+        <field name="boardId" type="string" column="board_id" length="36"/>
+        <field name="externalId" type="string" column="external_id" length="128"/>
+        <field name="remoteUpdatedAt" type="datetime_immutable" column="remote_updated_at"/>
+        <many-to-one field="creatorPerson" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson">
+            <join-column name="creator_person_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="detachedTask" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="detached_task_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="connection" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection">
+            <join-column name="connection_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="task_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

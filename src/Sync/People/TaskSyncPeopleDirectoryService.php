@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -228,10 +229,10 @@ final readonly class TaskSyncPeopleDirectoryService
         return $this->people->unreviewedCount($directory);
     }
 
-    /** Since 1.28.0: the host says the user is shown for attribution only (see {@see AttributionOnlyResolverInterface}). */
+    /** Since 1.28.0: the host says the user is shown for attribution only (see {@see AttributionOnlyResolverInterface}; since 2.15.0 also its twin). */
     public function isAttributionOnly(TaskBoard $board, object $user): bool
     {
-        return $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($board, $user);
+        return Ports::isAttributionOnly($this->resolver, $board, $user);
     }
 
     /** The People step was saved: the first import may run (`SyncOptions::requirePeopleMapping`). */

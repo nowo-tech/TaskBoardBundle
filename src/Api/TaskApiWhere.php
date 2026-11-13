@@ -53,9 +53,18 @@ final readonly class TaskApiWhere
         return new self(false, [], $tenantKeys, $boardIds);
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::reachesBoardOf()} (ids, REQ-ARCH-001 rule 1); removed in 3.0
+     */
     public function reachesBoard(TaskBoard $board): bool
     {
-        return $this->reachesTenant($board->getTenantKey()) || (!$this->everything && in_array($board->getId(), $this->boardIds, true));
+        return $this->reachesBoardOf($board->getId(), $board->getTenantKey());
+    }
+
+    /** Since 2.15.0: whether the board of this id and tenant is reached (its whole tenant, or the board by id). */
+    public function reachesBoardOf(string $boardId, ?string $tenantKey): bool
+    {
+        return $this->reachesTenant($tenantKey) || (!$this->everything && in_array($boardId, $this->boardIds, true));
     }
 
     /** Whether the board's id is named, whatever its tenant (a board that no longer exists, for a replay). */

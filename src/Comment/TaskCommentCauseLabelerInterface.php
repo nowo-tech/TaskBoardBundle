@@ -12,6 +12,9 @@ use Nowo\TaskBoardBundle\Service\TaskChangeContext;
  * {@see TaskChangeContext} it was added in, e.g. "rule:42"), next to its author:
  * "(rule: Review goes to Luis)". Return the text, which is escaped, or null to show nothing. Without a labeler no cause is
  * shown. One host service may implement this and `TaskChangeCauseLabelerInterface` both.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see TaskCommentCauseTextInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface TaskCommentCauseLabelerInterface
 {

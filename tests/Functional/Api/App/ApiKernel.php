@@ -19,6 +19,8 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
+use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
+use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
@@ -73,7 +75,7 @@ final class ApiKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -129,7 +131,7 @@ final class ApiKernel extends Kernel
         ]);
         $container->extension('twig', ['strict_variables' => true]);
         // Like Beacon: no resource scoping, the host's listeners decide (one configuration, so one container, for most tests).
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false] + ($this->taskBoard['security'] ?? []), 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
+        $taskBoardConfig = ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false] + ($this->taskBoard['security'] ?? []), 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
             'authenticator' => 'app.api_host',
             'rate_limiter'  => 'app.api_host',
             'plan_gate'     => 'app.api_host',
@@ -137,12 +139,19 @@ final class ApiKernel extends Kernel
             'users'         => 'app.api_host',
             'time_entries'  => 'app.api_host',
             'attachments'   => 'app.api_host',
-        ]]] + array_diff_key($this->taskBoard, ['security' => true]));
+        ]]] + array_diff_key($this->taskBoard, ['security' => true]);
+        $taskBoardConfig = PrivateEntityManagerReplay::configure($taskBoardConfig);
+        PrivateEntityManagerReplay::alias($container, $taskBoardConfig);
+        // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
+        $container->extension('nowo_task_board', TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoardConfig) : $taskBoardConfig);
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {
             // The host side of a provider sync, for the imported custom fields.
             $services->set('app.sync_credentials', TestCredentialResolver::class)->public();
             $services->set('app.sync_storage', RecordingAttachmentStorage::class)->public();
             $services->set('app.sync_limits', TestSyncLimitChecker::class)->public();
+        }
+        if (TwinPortAdapters::enabled()) {
+            TwinPortAdapters::register($container);
         }
     }
 

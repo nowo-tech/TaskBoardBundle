@@ -10,15 +10,16 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
+use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -49,6 +50,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         private readonly ?string $userClass = null,
         // Since 1.28.0: tells who is shown for attribution only.
         private readonly ?SyncPersonResolverInterface $resolver = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -179,7 +182,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         if ($kind === 'user' && $this->userClass !== null && $id !== '') {
             /** @var class-string $class */
             $class = $this->userClass;
-            $user  = $this->entityManager->find($class, $id);
+            // Since 2.15.0: through user_directory with user_reference: id (user_class is no Doctrine entity).
+            $user = $this->users instanceof TaskBoardUsers && $this->users->idMode() ? $this->users->find($id) : $this->entityManager->find($class, $id);
 
             return $user !== null ? UserLabel::of($user) : $token;
         }
@@ -211,7 +215,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         $user     = $person->getMappedUser();
         $access   = $user === null ? null : $this->accessChecker->canViewBoard($user, $task->getBoard());
         // Since 1.28.0: attribution to a host user the board does not give access to: their label, nothing else.
-        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver instanceof AttributionOnlyResolverInterface && $this->resolver->isAttributionOnly($task->getBoard(), $user);
+        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver !== null && Ports::isAttributionOnly($this->resolver, $task->getBoard(), $user);
         if ($attribution) {
             $access = false;
         }

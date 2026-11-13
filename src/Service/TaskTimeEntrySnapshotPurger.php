@@ -7,12 +7,14 @@ namespace Nowo\TaskBoardBundle\Service;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function count;
 
@@ -29,6 +31,8 @@ final readonly class TaskTimeEntrySnapshotPurger
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -53,7 +57,8 @@ final readonly class TaskTimeEntrySnapshotPurger
             $loggedBefore,
         );
 
-        return (int) $query->getQuery()->execute();
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return (int) TaskBoardSavepoint::write($this->entityManager, static fn (): mixed => $query->getQuery()->execute());
     }
 
     /**
@@ -64,12 +69,26 @@ final readonly class TaskTimeEntrySnapshotPurger
      */
     public function detachUser(object $user, bool $forgetName = false): int
     {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return TaskBoardSavepoint::write($this->entityManager, fn (): int => $this->detachUserNow($user, $forgetName));
+    }
+
+    private function detachUserNow(object $user, bool $forgetName): int
+    {
         $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        // Since 2.15.0 (audit OC-M2, user_reference: id): the rows of exactly this id (refused when it cannot be matched
+        // exactly), selected first and updated by primary key; a relation (the default) is matched as 2.14 did.
+        [$where, $match] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+            ? ['e.id IN (:match)', TaskBoardUsers::exactRowIds($this->entityManager, TaskTimeEntry::class, 'user', TaskBoardUsers::exactId($user))]
+            : ['e.user = :match', $user];
+        if ($match === []) {
+            return 0;
+        }
         // Rows written before 1.27 have no name yet: they get the current one first.
-        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE e.user = :user AND e.userName IS NULL')
-            ->setParameter('label', $label)->setParameter('user', $user)->execute();
-        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE e.user = :user')
-            ->setParameter('user', $user)->execute();
+        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE ' . $where . ' AND e.userName IS NULL')
+            ->setParameter('label', $label)->setParameter('match', $match)->execute();
+        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE ' . $where)
+            ->setParameter('match', $match)->execute();
         // The bulk updates bypass the identity map: loaded entries follow.
         foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[TaskTimeEntry::class] ?? [] as $entry) {
             if ($entry instanceof TaskTimeEntry && SyncUser::same($entry->getUser(), $user)) {
@@ -87,6 +106,12 @@ final readonly class TaskTimeEntrySnapshotPurger
      * @return int the entries changed
      */
     public function forgetUserName(string $name): int
+    {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        return TaskBoardSavepoint::write($this->entityManager, fn (): int => $this->forgetUserNameNow($name));
+    }
+
+    private function forgetUserNameNow(string $name): int
     {
         // Since 1.28.0: the task history keeps the same name.
         $this->entityManager->createQuery('UPDATE ' . TaskChangeHistory::class . ' h SET h.userName = NULL WHERE h.user IS NULL AND h.userName = :name')

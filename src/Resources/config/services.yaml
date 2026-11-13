@@ -68,6 +68,10 @@ services:
             - '../../MultiBoard/'
             - '../../Controller/TaskBoardMultiBoardController.php'
             - '../../Form/MultiBoardTaskFilterType.php'
+            # Since 2.15.0: the gates and factories of the framework-free host ports (built by TaskBoardPortsPass).
+            - '../../Port/'
+            # Since 2.15.0: registered by the extension (database.user_reference).
+            - '../../User/'
 
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
@@ -94,6 +98,7 @@ services:
             $routes: '%nowo_task_board.routes%'
             $templates: '%nowo_task_board.templates%'
             $userClass: '%nowo_task_board.user_class%'
+            $userReference: '%nowo_task_board.user_reference%'
             $dashboardRoute: '%nowo_task_board.dashboard_route%'
             $topLevelOnly: '%nowo_task_board.board.top_level_only%'
             $columnIcons: '%nowo_task_board.board.column_icons%'

@@ -10,6 +10,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 /**
  * Since 1.23 (required with `sync.enabled`): the host keeps the provider tokens; the bundle only knows their
  * opaque reference.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see ProviderCredentialSourceInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface ProviderCredentialResolverInterface
 {

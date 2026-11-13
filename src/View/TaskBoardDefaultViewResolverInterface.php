@@ -11,6 +11,9 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
  * requested without an explicit view (e.g. a "Default task view" preference of the host). The bundle redirects a
  * main GET request of the board route to the list or Gantt route of the same board; `?view=board`, an XHR request
  * or a link from another page of the same board (same-origin `Referer`) keeps the board view.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see TaskBoardDefaultViewPolicyInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface TaskBoardDefaultViewResolverInterface
 {

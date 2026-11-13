@@ -11,6 +11,9 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
  * attribution only, such as a suspended member. A person mapped to them shows the user's label as creator, comment
  * author and on tracked time (the sink gets the user), and that is all: no task member row, not written as task creator
  * or comment author, no notification, no board access. The answer wins over the host's board access check.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see AttributionOnlyPolicyInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface AttributionOnlyResolverInterface
 {

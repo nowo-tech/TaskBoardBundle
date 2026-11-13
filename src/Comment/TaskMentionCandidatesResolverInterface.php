@@ -11,6 +11,9 @@ use Nowo\TaskBoardBundle\Entity\Task;
  * can read a board (project members, people a board is shared with…): set `nowo_task_board.comments.mention_resolver`
  * to your service. The default ({@see DefaultTaskMentionCandidatesResolver}) offers the assignable users of the board
  * (the assignee provider), else the board's creator and the members of its tasks.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see TaskMentionCandidatesProviderInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface TaskMentionCandidatesResolverInterface
 {

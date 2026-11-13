@@ -249,6 +249,8 @@ final class TaskBoardManageController extends AbstractController
         // `calendar.skip_non_working_days` (a drag snaps to the next working day).
         private readonly ?CalendarDayAnnotator $dayAnnotator = null,
         private readonly bool $skipNonWorkingDays = false,
+        // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
+        private readonly string $userReference = 'entity',
     ) {
     }
 
@@ -2444,8 +2446,9 @@ final class TaskBoardManageController extends AbstractController
     private function createMemberForm(TaskBoard $board): FormInterface
     {
         return $this->createForm(TaskMemberFormType::class, new TaskMemberFormData(), [
-            'user_class'   => $this->userClass,
-            'user_choices' => $this->memberAssigner->assignableUsers($board),
+            'user_class'     => $this->userClass,
+            'user_choices'   => $this->memberAssigner->assignableUsers($board),
+            'user_reference' => $this->userReference,
         ]);
     }
 

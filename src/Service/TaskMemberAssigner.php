@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Event\TaskMemberAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMemberRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function get_object_vars;
@@ -74,7 +76,10 @@ final readonly class TaskMemberAssigner
         }
 
         foreach ($task->getMembers() as $existing) {
-            if ($existing->getUser() === $data->user && $existing->getMemberRole() === $data->memberRole) {
+            $same = $existing->getUser() === $data->user
+                // Since 2.15.0 (database.user_reference: id): a member read back is a reference to the user's id.
+                || ($existing->getUser() instanceof TaskBoardUserRef && $existing->getUser()->id === ActorId::of($data->user));
+            if ($same && $existing->getMemberRole() === $data->memberRole) {
                 return $existing;
             }
         }

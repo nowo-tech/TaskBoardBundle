@@ -1,4 +1,6 @@
 {% macro member_label(user) %}
+    {#- Since 2.15.0: the host user behind a user reference (database.user_reference: id); the user as it is otherwise. -#}
+    {%- set user = nowo_task_board_user(user) -%}
     {% if user.displayName is defined and user.displayName %}
         {{ user.displayName }}
     {% elseif user.fullName is defined and user.fullName %}

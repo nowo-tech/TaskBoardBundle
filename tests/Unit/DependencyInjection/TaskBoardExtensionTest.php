@@ -188,8 +188,11 @@ final class TaskBoardExtensionTest extends TestCase
         (new TaskBoardExtension())->load([['user_class' => User::class, 'history' => ['cause_labeler' => 'app.history_labeler'], 'comments' => ['cause_labeler' => 'app.comment_labeler']]], $container);
 
         $twig = $container->getDefinition(TaskBoardTwigExtension::class);
-        self::assertSame('app.history_labeler', (string) $twig->getArgument('$causeLabeler'));
-        self::assertSame('app.comment_labeler', (string) $twig->getArgument('$commentCauseLabeler'));
+        // Since 2.15.0 through the port ids, which TaskBoardPortsPass turns into the twins' gates when needed.
+        self::assertSame('nowo_task_board.port.change_cause_labeler', (string) $twig->getArgument('$causeLabeler'));
+        self::assertSame('nowo_task_board.port.comment_cause_labeler', (string) $twig->getArgument('$commentCauseLabeler'));
+        self::assertSame('app.history_labeler', (string) $container->getAlias('nowo_task_board.port.change_cause_labeler'));
+        self::assertSame('app.comment_labeler', (string) $container->getAlias('nowo_task_board.port.comment_cause_labeler'));
     }
 
     public function testPrependRegistersFrameworkAssetsAndDoctrineMapping(): void

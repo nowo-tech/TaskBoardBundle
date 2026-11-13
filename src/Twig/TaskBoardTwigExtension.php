@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\Label;
@@ -131,6 +132,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly string $syncBadgeStyle = 'badge',
         // Since 2.10.0 (spec 216): `comments.cause_labeler`.
         private readonly ?TaskCommentCauseLabelerInterface $commentCauseLabeler = null,
+        // Since 2.15.0 (database.user_reference): the host user behind a user reference.
+        private readonly ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -258,7 +261,16 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      */
     public function memberAvatarUrl(?object $user): ?string
     {
-        return $this->avatars?->urlOf($user);
+        return $this->avatars?->urlOf($this->user($user));
+    }
+
+    /**
+     * Since 2.15.0: what a page shows for a user field. With `database.user_reference: id` the host user behind the
+     * reference (through `user_directory`), else the reference; anything else as it is.
+     */
+    public function user(?object $user): ?object
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->resolve($user) : $user;
     }
 
     /**
@@ -317,6 +329,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('task_board_sync_comment_meta', $this->syncCommentMeta(...)),
             new TwigFunction('task_board_sync_details', $this->syncDetails(...)),
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
+            // Since 2.15.0 (database.user_reference: id): the host user behind a user reference.
+            new TwigFunction('nowo_task_board_user', $this->user(...)),
             new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true, 'deprecation_info' => new DeprecatedCallableInfo('nowo-tech/task-board-bundle', '2.0', 'nowo_ui_class')]),
             // Since 2.0.0: the UiKit page contract.
             new TwigFunction('nowo_task_board_page_layout', $this->pages->layout(...), ['needs_environment' => true]),

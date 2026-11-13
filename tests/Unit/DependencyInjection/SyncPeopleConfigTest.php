@@ -93,7 +93,9 @@ final class SyncPeopleConfigTest extends TestCase
         $phase = $container->getDefinition(TimeEntryPhase::class);
         $sink  = $phase->getArgument('$sink');
         self::assertInstanceOf(Reference::class, $sink);
-        self::assertSame('app.time_sink', (string) $sink);
+        // Since 2.15.0 through the port id, which TaskBoardPortsPass turns into the twin's gate when needed.
+        self::assertSame('nowo_task_board.port.time_entry_sink', (string) $sink);
+        self::assertSame('app.time_sink', (string) $container->getAlias('nowo_task_board.port.time_entry_sink'));
         self::assertSame([7, 10, 100, 3, 9], [$phase->getArgument('$windowDays'), $phase->getArgument('$maxAssigneesPerCall'), $phase->getArgument('$maxEntriesPerWindow'), $phase->getArgument('$maxWindowsPerRun'), $phase->getArgument('$fallbackMaxTasks')]);
         $cache = $container->getDefinition(ClickUpTaskProvider::class)->getArgument('$lookupCache');
         self::assertInstanceOf(Reference::class, $cache);

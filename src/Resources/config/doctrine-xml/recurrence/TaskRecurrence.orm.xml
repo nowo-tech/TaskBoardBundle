@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence" table="task_board_task_recurrences">
+        <indexes>
+            <index name="idx_task_board_task_recurrences_due" columns="status,next_date"/>
+            <index name="idx_task_board_task_recurrences_latest" columns="latest_task_id"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
+        <field name="status" type="string" length="16"/>
+        <field name="reason" type="string" length="32" nullable="true"/>
+        <field name="nextDate" type="date_immutable" column="next_date" nullable="true"/>
+        <field name="skippedDates" type="json" column="skipped_dates"/>
+        <field name="skipNext" type="boolean" column="skip_next">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="occurrences" type="integer"/>
+        <field name="authorName" type="string" column="author_name" length="180" nullable="true"/>
+        <field name="mode" type="string" length="16"/>
+        <field name="unit" type="string" length="8"/>
+        <field name="interval" type="integer" column="interval_count"/>
+        <field name="anchor" type="date_immutable" column="anchor_date"/>
+        <field name="weekdays" type="json"/>
+        <field name="monthDay" type="smallint" column="month_day" nullable="true"/>
+        <field name="endDate" type="date_immutable" column="end_date" nullable="true"/>
+        <field name="endCount" type="integer" column="end_count" nullable="true"/>
+        <field name="nextOnCompletion" type="boolean" column="next_on_completion">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="leadDays" type="smallint" column="lead_days"/>
+        <field name="copySubtasks" type="boolean" column="copy_subtasks">
+            <options>
+                <option name="default">1</option>
+            </options>
+        </field>
+        <field name="copyMembers" type="boolean" column="copy_members">
+            <options>
+                <option name="default">1</option>
+            </options>
+        </field>
+        <many-to-one field="author" target-entity="App\Entity\User">
+            <join-column name="author_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="board" target-entity="Nowo\TaskBoardBundle\Entity\TaskBoard">
+            <join-column name="board_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="latestTask" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="latest_task_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="startColumn" target-entity="Nowo\TaskBoardBundle\Entity\BoardColumn">
+            <join-column name="start_column_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

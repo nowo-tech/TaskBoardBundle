@@ -19,6 +19,8 @@ use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeHandler;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Worker\WorkerProbeMessage;
+use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
+use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
@@ -79,7 +81,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient, TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -162,7 +164,10 @@ final class FunctionalKernel extends Kernel
                 ->tag('messenger.message_handler', ['handles' => WorkerProbeMessage::class])
                 ->tag('kernel.event_listener', ['event' => WorkerProbeHandler::EVENT, 'method' => 'onProbe']);
         }
-        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]));
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]));
+        PrivateEntityManagerReplay::alias($container, $taskBoard);
+        // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
+        $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).
         $container->services()->set('app.board_scopes', ScriptedBoardScopes::class)->public();
         // Since 2.0.0: the host's plan limits and first-board provisioning.
@@ -197,7 +202,10 @@ final class FunctionalKernel extends Kernel
                 $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();
             }
             $services->set('app.import_users', BoardAwareUserResolver::class)->autowire();
-            $services->alias(TaskImportUserResolverInterface::class, 'app.import_users');
+            $services->alias(TaskImportUserResolverInterface::class, TwinPortAdapters::enabled() ? 'app.import_users.twin' : 'app.import_users');
+        }
+        if (TwinPortAdapters::enabled()) {
+            TwinPortAdapters::register($container);
         }
     }
 

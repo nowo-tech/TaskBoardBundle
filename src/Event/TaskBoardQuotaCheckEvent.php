@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -34,6 +37,7 @@ final class TaskBoardQuotaCheckEvent extends Event
     public function __construct(
         public readonly string $action,
         public readonly ?string $tenantKey,
+        /** @deprecated since 2.15.0, use getBoardId() or getBoardSnapshot(); removed in 3.0 */
         public readonly ?TaskBoard $board,
         public readonly int $count,
         public readonly object $actor,
@@ -55,5 +59,23 @@ final class TaskBoardQuotaCheckEvent extends Event
     public function getReason(): ?string
     {
         return $this->reason;
+    }
+
+    /** Since 2.15.0 (REQ-ARCH-001 rule 4): the board's id; null when the action creates a board. */
+    public function getBoardId(): ?string
+    {
+        return $this->board?->getId();
+    }
+
+    /** Since 2.15.0: the board as a framework-free snapshot (copied on each call); null when the action creates a board. */
+    public function getBoardSnapshot(): ?TaskBoardSnapshot
+    {
+        return $this->board instanceof TaskBoard ? Snapshots::board($this->board) : null;
+    }
+
+    /** Since 2.15.0: the actor's `getId()` as a string ({@see ActorId}); null without one. */
+    public function getActorId(): ?string
+    {
+        return ActorId::of($this->actor);
     }
 }

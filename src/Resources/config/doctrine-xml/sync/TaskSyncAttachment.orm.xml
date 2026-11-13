@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment" table="task_board_sync_attachments">
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_sync_attachments_task_remote" columns="task_id,remote_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="remoteId" type="string" column="remote_id" length="128"/>
+        <field name="remoteSize" type="bigint" column="remote_size" nullable="true"/>
+        <field name="remoteUpdatedAt" type="datetime_immutable" column="remote_updated_at" nullable="true"/>
+        <field name="storedRef" type="string" column="stored_ref" length="191"/>
+        <field name="storedUrl" type="string" column="stored_url" length="2048"/>
+        <field name="name" type="string" length="255"/>
+        <field name="mime" type="string" length="127"/>
+        <field name="size" type="bigint"/>
+        <field name="sha256" type="string" length="64" nullable="true"/>
+        <many-to-one field="item" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem">
+            <join-column name="item_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="task_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="link" target-entity="Nowo\TaskBoardBundle\Entity\TaskLink">
+            <join-column name="link_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

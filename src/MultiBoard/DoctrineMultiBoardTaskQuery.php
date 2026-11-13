@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use SortDirection;
 
 use function array_chunk;
@@ -62,6 +64,8 @@ final readonly class DoctrineMultiBoardTaskQuery
     public function __construct(
         private EntityManagerInterface $entityManager,
         private string $userClass,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -156,7 +160,7 @@ final readonly class DoctrineMultiBoardTaskQuery
         foreach (array_chunk($taskIds, self::ID_CHUNK) as $chunk) {
             /** @var list<array{taskId: mixed, userId: mixed}> $members */
             $members = $this->entityManager->createQueryBuilder()
-                ->select('IDENTITY(m.task) AS taskId', 'IDENTITY(m.user) AS userId')
+                ->select('IDENTITY(m.task) AS taskId', $this->userValue('m.user') . ' AS userId')
                 ->from(TaskMember::class, 'm')
                 ->where('IDENTITY(m.task) IN (:tasks)')
                 ->andWhere('m.memberRole = :role')
@@ -184,6 +188,18 @@ final readonly class DoctrineMultiBoardTaskQuery
      */
     public function people(array $userIds): array
     {
+        // Since 2.15.0 (database.user_reference: id): the host's directory names them (no user table to read).
+        if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            $labels = [];
+            foreach ($userIds as $id) {
+                $user = $this->users->find($id);
+                if ($user !== null) {
+                    $labels[$id] = UserLabel::of($user);
+                }
+            }
+
+            return $labels;
+        }
         $field  = $this->entityManager->getClassMetadata($this->userClass)->getSingleIdentifierFieldName();
         $labels = [];
         foreach (array_chunk($userIds, self::ID_CHUNK) as $chunk) {
@@ -217,7 +233,7 @@ final readonly class DoctrineMultiBoardTaskQuery
     {
         /** @var list<array{userId: mixed}> $rows */
         $rows = $this->entityManager->createQueryBuilder()
-            ->select('DISTINCT IDENTITY(m.user) AS userId')
+            ->select('DISTINCT ' . $this->userValue('m.user') . ' AS userId')
             ->from(TaskMember::class, 'm')
             ->innerJoin('m.task', 't')
             ->where('IDENTITY(t.board) IN (:boards)')
@@ -278,7 +294,7 @@ final readonly class DoctrineMultiBoardTaskQuery
     {
         $qb = $this->base($boardIds, $filter, $now, false)
             ->select(
-                'IDENTITY(wm.user) AS userId',
+                $this->userValue('wm.user') . ' AS userId',
                 'SUM(CASE WHEN t.completedAt IS NULL THEN 1 ELSE 0 END) AS openCount',
                 'SUM(CASE WHEN t.completedAt IS NULL AND t.dueAt < :workloadNow THEN 1 ELSE 0 END) AS overdueCount',
                 'SUM(CASE WHEN t.completedAt IS NOT NULL THEN 1 ELSE 0 END) AS doneCount',
@@ -326,8 +342,20 @@ final readonly class DoctrineMultiBoardTaskQuery
         if ($filter->assigneeId === MultiBoardTaskFilter::UNASSIGNED) {
             $qb->andWhere('t.id NOT IN (SELECT IDENTITY(na.task) FROM ' . TaskMember::class . ' na WHERE na.memberRole = :assigneeRole)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
+        } elseif ($filter->assigneeId !== null && $this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly the filter's.
+            $exact = [];
+            if (TaskBoardUserRef::isValid($filter->assigneeId)) {
+                foreach (TaskBoardUsers::exactRowIds($this->entityManager, TaskMember::class, 'user', $filter->assigneeId) as $memberId) {
+                    $member = $this->entityManager->find(TaskMember::class, $memberId);
+                    if ($member instanceof TaskMember && $member->getMemberRole() === TaskMemberRole::Assignee) {
+                        $exact[] = $member->getTask()->getId();
+                    }
+                }
+            }
+            $qb->andWhere('t.id IN (:exactAssigneeTasks)')->setParameter('exactAssigneeTasks', $exact === [] ? [''] : $exact);
         } elseif ($filter->assigneeId !== null) {
-            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND IDENTITY(am.user) = :assignee)')
+            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND ' . $this->userValue('am.user') . ' = :assignee)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee)
                 ->setParameter('assignee', $filter->assigneeId);
         }
@@ -352,5 +380,11 @@ final readonly class DoctrineMultiBoardTaskQuery
         }
 
         return $qb;
+    }
+
+    /** Since 2.15.0: the DQL of a user field's value (`IDENTITY()` for a relation, the column itself with user_reference: id). */
+    private function userValue(string $path): string
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->identity($path) : 'IDENTITY(' . $path . ')';
     }
 }

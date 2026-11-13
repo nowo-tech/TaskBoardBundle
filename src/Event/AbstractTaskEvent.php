@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -41,6 +43,9 @@ abstract class AbstractTaskEvent extends Event
         $this->actorId    = ActorId::of($actor);
     }
 
+    /**
+     * @deprecated since 2.15.0, use {@see self::getTaskId()}, {@see self::getBoardId()}, {@see self::getTenantKey()}, {@see self::getTaskNumber()} or {@see self::getTaskSnapshot()}; removed in 3.0
+     */
     public function getTask(): Task
     {
         return $this->task;
@@ -79,5 +84,11 @@ abstract class AbstractTaskEvent extends Event
     public function getActorId(): ?string
     {
         return $this->actorId;
+    }
+
+    /** Since 2.15.0: the task as a framework-free snapshot, copied on each call. */
+    public function getTaskSnapshot(): TaskSnapshot
+    {
+        return Snapshots::task($this->task);
     }
 }

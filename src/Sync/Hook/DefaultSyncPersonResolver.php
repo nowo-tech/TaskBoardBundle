@@ -7,12 +7,13 @@ namespace Nowo\TaskBoardBundle\Sync\Hook;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Import\BoardAwareTaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function array_slice;
 use function count;
@@ -32,6 +33,8 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
         private string $userClass,
         private ?TaskAssigneeProviderInterface $assigneeProvider = null,
         private bool $requireVerifiedEmail = true,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -70,9 +73,8 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
         if ($normalizedEmail === null) {
             return null;
         }
-        $user = $this->userResolver instanceof BoardAwareTaskImportUserResolverInterface
-            ? $this->userResolver->resolveByEmailForBoard($normalizedEmail, $board)
-            : $this->userResolver->resolveByEmail($normalizedEmail);
+        // Since 2.15.0: the deprecated board-aware interface first, then its framework-free twin, else resolveByEmail().
+        $user = Ports::importUser($this->userResolver, $normalizedEmail, $board);
         if ($user === null || !$this->isCandidate($board, $user)) {
             return null;
         }
@@ -84,7 +86,8 @@ final readonly class DefaultSyncPersonResolver implements SyncPersonResolverInte
     {
         /** @var class-string $class */
         $class = $this->userClass;
-        $user  = $this->entityManager->find($class, $userId);
+        // Since 2.15.0: through user_directory with user_reference: id (user_class is no Doctrine entity).
+        $user = $this->users instanceof TaskBoardUsers && $this->users->idMode() ? $this->users->find($userId) : $this->entityManager->find($class, $userId);
 
         return $user !== null && $this->isCandidate($board, $user) ? $user : null;
     }

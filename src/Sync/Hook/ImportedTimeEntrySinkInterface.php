@@ -15,6 +15,9 @@ use Nowo\TaskBoardBundle\Sync\Time\TimeWindow;
  * data: the host stages the entries and materialises them (e.g. TimeTrackBundle's ImportedTimeEntryWriter for mapped
  * people). Called synchronously under the board's sync lock, once per window and assignee chunk. Running timers and
  * entries without a task are filtered out before.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see ImportedTimeEntryReceiverInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface ImportedTimeEntrySinkInterface
 {

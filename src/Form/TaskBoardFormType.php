@@ -18,6 +18,7 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\FormTypeInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -171,7 +172,9 @@ final class TaskBoardFormType extends AbstractType
             foreach ($scope->fields as $name => $field) {
                 $options = $field->options;
                 unset($options['constraints']);
-                $branch->add($name, $field->formType, ['required' => false] + $options);
+                /** @var class-string<FormTypeInterface<mixed>> $type the scope field names a form type (BoardScopeField, since 2.15 a plain class string) */
+                $type = $field->formType;
+                $branch->add($name, $type, ['required' => false] + $options);
             }
             $all->add($branch);
         }

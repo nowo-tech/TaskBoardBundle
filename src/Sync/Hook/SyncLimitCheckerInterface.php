@@ -12,6 +12,9 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
  * downloaded (`$newBytes`). Since 1.29.0 also when a task is restored by hand, when a move reopens a completed task
  * (`$newTasks` = 1) and when deleting a column would reopen its completed tasks (`$newTasks` = how many). File imports and
  * a provider's checklist item can reopen a task with no call. null = allowed.
+ *
+ * @deprecated since 2.15.0, implement the framework-free {@see SyncQuotaPolicyInterface} instead (REQ-ARCH-001); removed in 3.0. A
+ *             service implementing this interface is still asked through it, exactly as before.
  */
 interface SyncLimitCheckerInterface
 {
