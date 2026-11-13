@@ -43,8 +43,14 @@ interface TaskBoardRestructureInterface
     /** Only an empty folder (no board, archived ones included): `not_empty` otherwise. */
     public function deleteFolder(object $actor, string $folderId): void;
 
-    /** Puts a board in a folder of its own tenant, or out of any (`$folderId` null). The board's tasks do not change. */
-    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId): void;
+    /**
+     * Puts a board in a folder of its own tenant, or out of any (`$folderId` null). Into a folder with a shared status set
+     * (since 2.17.0, FR-034) the board takes the set's columns: `$columnMap` (current column id or name => a column name of
+     * the set) moves the tasks of a column the set does not have; without it such a column is `columns_in_use`.
+     *
+     * @param array<string, string> $columnMap
+     */
+    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void;
 
     /**
      * Moves tasks, each with its whole subtree, to another board of the same tenant; a subtask becomes a top-level task

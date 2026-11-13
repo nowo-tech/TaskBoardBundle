@@ -7,6 +7,7 @@
 - [To 2.17.0](#to-2170)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
+  - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -225,6 +226,36 @@ Nothing, unless you use folders:
   right the bundle already has.
 - **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
   folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`.
+
+### Schema change for every host: column types and status sets
+
+Two nullable columns; nothing is rewritten:
+
+```sql
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL; -- LONGTEXT on MariaDB < 10.2, TEXT on SQLite
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
+```
+
+A column without a type follows its position (first `open`, last `closed`, the rest `custom`), which is what the spec's
+migration writes, so no data step is needed. A host that wants the types stored (for its own SQL reports) may run, per
+board, the equivalent of:
+
+```sql
+-- MySQL 8 / MariaDB 10.2+ / PostgreSQL: first column open, last closed, the rest custom, for boards with no type yet
+UPDATE task_board_columns c SET column_type = CASE
+  WHEN c.position = (SELECT MIN(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 AND c.position <> (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) THEN 'open'
+  WHEN c.position = (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 THEN 'closed'
+  WHEN (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) = 1 THEN 'closed'
+  ELSE 'custom' END
+WHERE NOT EXISTS (SELECT 1 FROM task_board_columns t WHERE t.board_id = c.board_id AND t.column_type IS NOT NULL);
+```
+
+(MySQL refuses a subquery on the updated table: run it through a temporary copy, or let the bundle write the types the
+first time a type is set on the board.) **Behaviour to know:** a board with types no longer treats "the last column" as
+done; *Done* goes to its first `done`/`closed` column.
 
 ## To 2.15.0
 

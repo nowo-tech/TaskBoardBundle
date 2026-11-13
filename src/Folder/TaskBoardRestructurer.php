@@ -97,10 +97,10 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->folders->delete($actor, $this->requireFolder($folderId));
     }
 
-    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId): void
+    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void
     {
         $board = $this->requireBoard($boardId);
-        $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId));
+        $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId), $columnMap);
     }
 
     public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = []): TaskBoardMoveResult

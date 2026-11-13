@@ -7,6 +7,9 @@ namespace Nowo\TaskBoardBundle\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Enum\ColumnType;
+use Nowo\TaskBoardBundle\Service\BoardColumnManager;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
@@ -18,6 +21,13 @@ class BoardColumn
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
+
+    /**
+     * Since 2.17.0 (Beacon spec 234, FR-033): `open`, `custom`, `done` or `closed`; null: by position
+     * ({@see ColumnTypes::of()}).
+     */
+    #[ORM\Column(name: 'column_type', type: 'string', length: 16, nullable: true, enumType: ColumnType::class)]
+    private ?ColumnType $type = null;
 
     /** @var Collection<int, Task> */
     #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'column')]
@@ -112,6 +122,24 @@ class BoardColumn
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->icon = $icon;
+
+        return $this;
+    }
+
+    /**
+     * Since 2.17.0: the type written on the column, null when it follows its position. Read the effective type with
+     * {@see ColumnTypes::of()}.
+     */
+    public function getStoredType(): ?ColumnType
+    {
+        return $this->type;
+    }
+
+    /** Since 2.17.0: through {@see BoardColumnManager}, which keeps the board's types coherent. */
+    public function setType(?ColumnType $type): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->type = $type;
 
         return $this;
     }

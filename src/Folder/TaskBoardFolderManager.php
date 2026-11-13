@@ -6,15 +6,21 @@ namespace Nowo\TaskBoardBundle\Folder;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnsRefusedException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Throwable;
 
 use function array_filter;
 use function array_map;
 use function array_values;
+use function implode;
 use function max;
 use function mb_strlen;
 use function strcmp;
@@ -38,6 +44,8 @@ final readonly class TaskBoardFolderManager
         private EntityManagerInterface $entityManager,
         private TaskBoardRestructurePolicyInterface $policy,
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 2.17.0 (FR-034): a board moved into a folder with a shared status set takes its columns.
+        private BoardColumnsApplier $columnsApplier = new BoardColumnsApplier(),
     ) {
     }
 
@@ -146,11 +154,14 @@ final readonly class TaskBoardFolderManager
 
     /**
      * Puts the board in the folder, or out of any (null). Needs the policy on the board, and on the folders' tenant when a
-     * folder is named.
+     * folder is named. Into a folder with a shared status set the board takes its columns (FR-034): `$columnMap` (current
+     * column id or name => a column name of the set) moves the tasks of a column the set does not have.
      *
-     * @throws TaskBoardRestructureRefusedException `not_found` (another tenant), `not_allowed`
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException `not_found` (another tenant), `not_allowed`, `columns_in_use`, `invalid`
      */
-    public function moveBoard(object $actor, TaskBoard $board, ?TaskBoardFolder $folder): void
+    public function moveBoard(object $actor, TaskBoard $board, ?TaskBoardFolder $folder, array $columnMap = []): void
     {
         if ($folder instanceof TaskBoardFolder && $folder->getTenantKey() !== $board->getTenantKey()) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
@@ -161,7 +172,12 @@ final readonly class TaskBoardFolderManager
         if ($board->getFolderId() === $folder?->getId()) {
             return;
         }
-        $this->write(static function () use ($board, $folder): void {
+        $this->write(function () use ($board, $folder, $columnMap): void {
+            // The columns first: a refusal there leaves the board, in memory too, where it was.
+            $set = $folder?->getStatusSet();
+            if ($set !== null) {
+                $this->applyColumns($board, $set, $columnMap);
+            }
             $board->changeFolder($folder);
         });
     }
@@ -172,6 +188,65 @@ final readonly class TaskBoardFolderManager
     public function boardIds(TaskBoardFolder $folder): array
     {
         return array_map(static fn (TaskBoard $board): string => $board->getId(), $this->boardsIn($folder, true));
+    }
+
+    /**
+     * Since 2.17.0 (FR-034): makes the board's columns the set, inside the caller's transaction (no flush).
+     *
+     * @param list<BoardColumnSpec> $set
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException `columns_in_use` (`board`, `columns`), `invalid` (`field` columns),
+     *                                              `quota` (reopened tasks over the host's limit)
+     */
+    public function applyColumns(TaskBoard $board, array $set, array $columnMap = []): void
+    {
+        $this->columns(function () use ($board, $set, $columnMap): void {
+            foreach ($this->columnsApplier->apply($board, $set, $columnMap) as $removed) {
+                $this->entityManager->remove($removed);
+            }
+        });
+    }
+
+    /**
+     * Since 2.17.0: every refusal of {@see self::applyColumns()}, changing nothing.
+     *
+     * @param list<BoardColumnSpec>  $set
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    public function checkColumns(TaskBoard $board, array $set, array $columnMap = []): void
+    {
+        $this->columns(fn (): array => $this->columnsApplier->check($board, $set, $columnMap));
+    }
+
+    /**
+     * @param callable(): mixed $call
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    private function columns(callable $call): void
+    {
+        try {
+            $call();
+        } catch (BoardColumnsRefusedException $refused) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::COLUMNS_IN_USE, ['board' => $refused->boardId, 'columns' => implode(', ', $refused->columns)]);
+        } catch (InvalidArgumentException) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'columns']);
+        } catch (TaskReopenRefusedException $refused) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::QUOTA, [], $refused->getMessage());
+        }
+    }
+
+    /**
+     * Since 2.17.0: runs `$change` in a transaction of the manager ({@see self::write()}).
+     *
+     * @param callable(): void $change
+     */
+    public function transactional(callable $change): void
+    {
+        $this->write($change);
     }
 
     /**

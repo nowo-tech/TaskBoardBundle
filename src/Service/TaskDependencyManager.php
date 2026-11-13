@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
@@ -12,6 +13,8 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskDependencyAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskDependencyRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
+use Nowo\TaskBoardBundle\Folder\TaskBoardDependencyScope;
+use Nowo\TaskBoardBundle\Folder\TaskBoardFolderManager;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -33,6 +36,9 @@ final readonly class TaskDependencyManager
         private TaskChangeRecorder $changeRecorder,
         // Since 2.11.0 (DDD audit G3): dispatches TASK_DEPENDENCY_ADDED / TASK_DEPENDENCY_REMOVED (none: no event).
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.17.0 (Beacon spec 234, FR-032): two boards of one folder may be joined.
+        private TaskBoardDependencyScope $scope = new TaskBoardDependencyScope(),
+        private ?TaskBoardFolderManager $folders = null,
     ) {
     }
 
@@ -47,11 +53,12 @@ final readonly class TaskDependencyManager
             throw InvalidTaskDependencyException::self();
         }
 
-        if ($task->getBoard()->getId() !== $other->getBoard()->getId()) {
+        // Since 2.17.0 (FR-032): the same board, or two boards of the same folder; any other pair stays refused.
+        if (!$this->scope->allows($task->getBoard(), $other->getBoard())) {
             throw InvalidTaskDependencyException::otherBoard();
         }
 
-        $boardTasks   = $this->taskRepository->findByBoard($task->getBoard(), true);
+        $boardTasks   = $this->scopeTasks($task, $other);
         $boardTasks[] = $task;
         $boardTasks[] = $other;
         $existing     = $this->dependenciesOf($boardTasks);
@@ -220,5 +227,29 @@ final readonly class TaskDependencyManager
             return;
         }
         $this->eventDispatcher?->dispatch($event, $eventName);
+    }
+
+    /**
+     * Since 2.17.0 (FR-032): the tasks a cycle may run through — the board's, or every board's of the folder when the two
+     * tasks are on different boards of it.
+     *
+     * @return list<Task>
+     */
+    private function scopeTasks(Task $task, Task $other): array
+    {
+        $board = $task->getBoard();
+        if ($board->getId() === $other->getBoard()->getId()) {
+            return $this->taskRepository->findByBoard($board, true);
+        }
+        $folder = $board->getFolder();
+        $boards = $folder instanceof TaskBoardFolder && $this->folders instanceof TaskBoardFolderManager ? $this->folders->boardsIn($folder, true) : [$board, $other->getBoard()];
+        $tasks  = [];
+        foreach ($boards as $member) {
+            foreach ($this->taskRepository->findByBoard($member, true) as $candidate) {
+                $tasks[] = $candidate;
+            }
+        }
+
+        return $tasks;
     }
 }

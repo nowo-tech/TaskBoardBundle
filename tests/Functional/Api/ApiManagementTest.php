@@ -186,7 +186,9 @@ final class ApiManagementTest extends ApiTestCase
         $statuses = $this->json()['statuses'];
         self::assertSame(['To do', 'Doing', 'Done', 'Review'], array_column($statuses, 'status'));
         self::assertSame('#3b82f6', $statuses[3]['color']);
-        self::assertSame([['field' => 'type', 'reason' => 'not_supported']], $this->json()['warnings']);
+        // Since 2.17.0 (FR-033): `type` is read; the first type set writes the position types of the other columns.
+        self::assertArrayNotHasKey('warnings', $this->json());
+        self::assertSame(['open', 'custom', 'closed', 'custom'], array_column($statuses, 'type'));
         $review = $statuses[3]['id'];
 
         $this->send('PUT', $base . '/' . $review, ['status' => 'Code review']);

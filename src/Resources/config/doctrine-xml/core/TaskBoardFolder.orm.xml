@@ -11,6 +11,7 @@
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
         <field name="name" type="string" length="255"/>
+        <field name="statusSet" type="json" column="status_set" nullable="true"/>
         <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
         <field name="description" type="text" nullable="true"/>
         <field name="position" type="integer"/>

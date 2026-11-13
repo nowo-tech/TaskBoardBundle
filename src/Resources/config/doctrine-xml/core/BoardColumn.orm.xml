@@ -5,6 +5,7 @@
                   xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
     <entity name="Nowo\TaskBoardBundle\Entity\BoardColumn" table="task_board_columns">
         <id name="id" type="string" length="36"/>
+        <field name="type" type="string" column="column_type" length="16" nullable="true" enum-type="Nowo\TaskBoardBundle\Enum\ColumnType"/>
         <field name="name" type="string" length="128"/>
         <field name="position" type="integer"/>
         <field name="color" type="string" length="32" nullable="true"/>

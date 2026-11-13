@@ -16,6 +16,9 @@ final class ColumnUpdatedEvent extends AbstractColumnEvent
     public const FIELD_COLOR = 'color';
     public const FIELD_ICON  = 'icon';
 
+    /** Since 2.17.0 (FR-033). */
+    public const FIELD_TYPE = 'type';
+
     /**
      * @param list<string> $changedFields of `name`, `color`, `icon`
      */

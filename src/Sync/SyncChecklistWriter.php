@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
@@ -27,7 +28,6 @@ use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use SortDirection;
 
 use function array_diff_key;
-use function array_key_last;
 use function count;
 use function in_array;
 use function max;
@@ -58,9 +58,9 @@ final readonly class SyncChecklistWriter
 
     public function sync(SyncRunContext $ctx, ?PeopleSession $session, TaskSyncItem $parentItem, Task $parent, RemoteTask $remote): void
     {
-        $columns = $ctx->board->getColumns()->toArray();
         // Done items: the column the status map gives the first closed / done status, else the last one (1.23 rule).
-        $done   = StatusColumns::doneColumn($ctx->connection->getStatusColumnMap(), $ctx->board) ?? ($columns === [] ? null : $columns[array_key_last($columns)]);
+        // Since 2.17.0 (FR-033): else the board's first done or closed column (the last one on an untyped board).
+        $done   = StatusColumns::doneColumn($ctx->connection->getStatusColumnMap(), $ctx->board) ?? ColumnTypes::doneColumn($ctx->board);
         $open   = $parent->getColumn();
         $wanted = [];
         foreach ($remote->checklists as $checklist) {

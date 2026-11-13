@@ -36,6 +36,7 @@ use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Support\Text;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -823,8 +824,8 @@ final readonly class TaskImportOrchestrator
             return;
         }
 
-        $lastColumn = $columns[array_key_last($columns)];
-        if ($column->getId() === $lastColumn->getId()) {
+        // Since 2.17.0 (FR-033): a done or closed column (the last one on an untyped board).
+        if (ColumnTypes::isDone($column, ColumnTypes::ordered($board))) {
             $task->markCompleted();
         }
     }

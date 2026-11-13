@@ -117,14 +117,15 @@ final readonly class TaskApiManagementController
 
     public function createColumn(Request $request, string $listId): JsonResponse
     {
-        $input = $this->input($request, ['orderindex', 'type']);
+        // Since 2.17.0 (FR-033): `type` is read.
+        $input = $this->input($request, ['orderindex']);
 
         return $this->board($request, $this->boards->createColumn($this->principal($request), $listId, $input), $input);
     }
 
     public function updateColumn(Request $request, string $listId, string $statusId): JsonResponse
     {
-        $input = $this->input($request, ['orderindex', 'type']);
+        $input = $this->input($request, ['orderindex']);
 
         return $this->board($request, $this->boards->updateColumn($this->principal($request), $listId, $statusId, $input), $input);
     }

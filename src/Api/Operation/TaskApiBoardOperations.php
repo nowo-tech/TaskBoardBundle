@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
@@ -14,6 +15,7 @@ use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -133,7 +135,7 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board = $this->guard->boardColumns($principal, $boardId);
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
-        $column = $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()), $principal->user);
+        $column = $this->columnWrite(fn (): BoardColumn => $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()), $principal->user));
         $this->audit->written($principal, 'column.create', $board, null, ['column' => $column->getId()]);
 
         return $board;
@@ -149,7 +151,11 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
-        $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())), $principal->user);
+        $this->columnWrite(function () use ($column, $input, $principal): BoardColumn {
+            $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())), $principal->user);
+
+            return $column;
+        });
         $this->audit->written($principal, 'column.update', $board, null, ['column' => $columnId]);
 
         return $board;
@@ -229,6 +235,14 @@ final readonly class TaskApiBoardOperations
             }
             $data->color = $color;
         }
+        // Since 2.17.0 (FR-033): `open`, `custom`, `done` or `closed` (at most two closed columns per board).
+        if ($input->has('type')) {
+            $type = ColumnType::tryFrom((string) $input->string('type'));
+            if (!$type instanceof ColumnType) {
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid type');
+            }
+            $data->type = $type;
+        }
         // Since 2.9.0: one emoji or an offered icon id; null or "" removes the icon.
         if ($input->has('icon')) {
             $icon = $input->string('icon');
@@ -263,5 +277,23 @@ final readonly class TaskApiBoardOperations
         }
 
         return $value;
+    }
+
+    /**
+     * Since 2.17.0: a column write, with the refusals of a column type.
+     *
+     * @param callable(): BoardColumn $write
+     *
+     * @throws TaskApiRefusal
+     */
+    private function columnWrite(callable $write): BoardColumn
+    {
+        try {
+            return $write();
+        } catch (InvalidArgumentException) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid type: a board has at most ' . ColumnType::MAX_CLOSED . ' closed columns');
+        } catch (TaskReopenRefusedException) {
+            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        }
     }
 }
