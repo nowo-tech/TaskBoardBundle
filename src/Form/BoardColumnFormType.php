@@ -83,6 +83,25 @@ final class BoardColumnFormType extends AbstractType
                 'placeholder'               => 'task_board.form.column.no_icon',
             ]);
         }
+        $this->addHumansOnly($builder, $options);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-016): the *humans only* toggle, with `humans_only_field`.
+     *
+     * @param FormBuilderInterface<mixed> $builder
+     * @param array<string, mixed> $options
+     */
+    private function addHumansOnly(FormBuilderInterface $builder, array $options): void
+    {
+        if ($options['humans_only_field'] !== true) {
+            return;
+        }
+        $this->addCheckbox($builder, 'humansOnly', [
+            'label'    => 'task_board.form.column.humans_only',
+            'help'     => 'task_board.form.column.humans_only_help',
+            'required' => false,
+        ]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -98,7 +117,10 @@ final class BoardColumnFormType extends AbstractType
             // Since 2.9.0 (audit JM-L1): the edited column's icon, a valid choice of the grid even when not offered.
             'icon_current'         => null,
             'icon_invalid_message' => 'A column icon is one emoji or one of the offered icons.',
+            // Since 2.16.0 (spec 234): the humans-only toggle (`board.column_humans_only_field`).
+            'humans_only_field' => false,
         ]);
+        $resolver->setAllowedTypes('humans_only_field', 'bool');
         $resolver->setAllowedTypes('icon_choices', 'string[]');
         $resolver->setAllowedTypes('icon_form_type', ['null', 'string']);
         $resolver->setAllowedTypes('icon_form_options', 'array');

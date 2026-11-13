@@ -158,6 +158,29 @@ final class TaskApiInput
     }
 
     /**
+     * Since 2.16.0: a list of JSON objects (each an array keyed by field name), e.g. the items of a bulk update.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function objects(string $name): array
+    {
+        $value = $this->take($name) ?? [];
+        if (!is_array($value) || !array_is_list($value)) {
+            throw self::invalid($name);
+        }
+        foreach ($value as $item) {
+            if (!is_array($item) || ($item !== [] && array_is_list($item))) {
+                throw self::invalid($name);
+            }
+        }
+
+        /* @var list<array<string, mixed>> $value */
+        return $value;
+    }
+
+    /**
      * ClickUp's `{"add": [...], "rem": [...]}`.
      *
      * @throws TaskApiRefusal

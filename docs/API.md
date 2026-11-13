@@ -149,6 +149,26 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `PUT /v2/team/{team_id}/time_entries/{id}` | My tasks (own task) | Since 2.12.0: `billable` (required boolean) of one of the token's own entries; other fields are warnings. Own entries only (another person's is 404); the board-manager path is the task page. The edit right on the task applies (403 `ACCESS_002`); 409 `TIME_004` when its period is locked or submitted (TimeTrack timesheets); 403 `TIME_003` when the time store does not implement `TaskApiTimeEntryBillableInterface` |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
 
+## Column transitions, revisions and bulk updates (since 2.16)
+
+Beacon spec 234 (AI Flow). Every write that sets a status asks the host's `column_transition_policy` first, with the
+principal's channel (`api`, or `mcp` for an in-process caller) and the operation (`create`, `move`, `bulk`,
+`checklist`). A refusal is 403 with the policy's code and message, e.g. `{"err": "Only people can move tasks into this
+status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written.
+
+| Endpoint | Level | Notes |
+|---|---|---|
+| `GET /v2/task/{id}` | My tasks | Since 2.16.0 the task carries `revision` (an integer, +1 on every change but a reorder) and the answer `ETag: "<revision>"` |
+| `PUT /v2/task/{id}` | as before | `If-Match: "<revision>"` (also `n`, `W/"n"`; `*` = any) or `base_revision` in the body: the row is locked and compared; another revision is 409 `{"err", "ECODE": "TASK_409", "current_revision": n}` and nothing is written. The answer carries the new `ETag` |
+| `POST /v2/task/bulk` | My tasks (own fields) / Tasks | `{"tasks": [{"id", "base_revision"?, "description" \| "markdown_content", "status", "tags" (the whole list), "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`: 1 to 50 tasks of one space, all or none, one transaction. 200 `{"tasks": [<task>, …]}` in the request's order. Any refusal: `{"err", "ECODE": "BULK_001", "failures": [{"index", "id", "status", "ECODE", "err", "current_revision"?}]}` with the status of the first failure, nothing written. Any other field of an item is refused (`INPUT_002`). After the commit: one `API_WRITE` per task and one `API_BULK_WRITE` with the count |
+| `PUT /v2/comment/{id}` | My tasks (own task) | `comment_text`; the comment's task must be one the token may comment on, then `api.hooks.comment_edit_policy` decides (default: its author). Answers `{}`. Missing, deleted, out of reach or not editable: 404 `ACCESS_001` alike |
+| `GET /v2/team/{id}/member` | any | The team's members (`api.hooks.members`): `{"members": [{"id", "username", "email", "color", "initials", "profilePicture", "service_account"}]}`; `email` only on the viewer's own row. With `?name=`: a prefix of the name or of one of its words, case and accents aside, at most 20, `{"id", "username", "service_account"}` only. A lookup never assigns anyone by name. A team the viewer is not in: 404 |
+| `GET /v2/team/{id}/task?query=…`, `GET /v2/list/{id}/task?query=…` | as the list | Since 2.16.0: every word (white space separated, at most 8, `query` ≤ 200 characters) in the title or description (`search.comments`: or a comment). Only within the boards the token reaches, before any page; the other filters and *My tasks* apply. More than `search.max_matches`: 400 `SEARCH_001` |
+
+`GET /v2/team` lists each team's `members` the same way (`[{"user": {…, "service_account": bool}}]`; `[]` without
+`api.hooks.members`). Status objects carry `humans_only`; `POST` / `PUT /v2/list/{id}/status…` accept `humans_only`
+(boolean).
+
 ## Management endpoints (Full)
 
 Every management write needs a *Full* token and the board's manage decision (`BoardAccessCheckEvent::ACTION_MANAGE`; in Beacon `project.tasks.manage`, `organization.tasks.manage`, or a personal board's owner); since 2.5.0 the status (column) paths also need the column decision (`BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS`, granted by default); a new board needs the host's create check for the space's tenant and the board plan limit.
@@ -186,7 +206,7 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 
 ## Errors
 
-Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
+Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds `current_revision` and `BULK_001` adds `failures`); `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
 
 | ECODE | HTTP | When |
 |---|---|---|
@@ -213,6 +233,10 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `TIME_004` | 409 | Since 2.12.0: the time entry's period is locked or waiting for approval |
 | `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
+| `STATUS_HUMANS_ONLY`, `STATUS_REFUSED`, a policy's own code | 403 | Since 2.16.0: the column transition policy refused the status (its message in `err`) |
+| `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`) |
+| `BULK_001`, `BULK_002`, `BULK_003` | first failure's, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
+| `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp
@@ -248,6 +272,9 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `*: *statuses[].id: extra` | Statuses are columns and have ids (used by the status paths). |
 | `*: *statuses[].icon: extra` | Since 2.9.0: a status carries its column's icon (one emoji or an icon id), or null. |
 | `*: *.status.icon: extra` | Since 2.9.0: a task's status carries its column's icon too. |
+| `*: *statuses[].humans_only: extra` | Since 2.16.0 (spec 234): a status says whether only people may move tasks into it. |
+| `*: *.status.humans_only: extra` | Since 2.16.0 (spec 234): a task's status says it too. |
+| `*: *.revision: extra` | Since 2.16.0 (spec 234): a task carries its optimistic-lock revision (If-Match / base_revision). |
 | `*: *.number: extra` | Since 2.10.0 (spec 214): a task carries its readable number (#123), or null without task numbers. |
 | `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
 | `*: .archived: extra` | Boards say whether they are archived. |

@@ -226,6 +226,6 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
 
     private function answer(TaskApiRefusal $refusal): JsonResponse
     {
-        return new JsonResponse(['err' => $refusal->getMessage(), 'ECODE' => $refusal->ecode], $refusal->status);
+        return new JsonResponse($refusal->body(), $refusal->status);
     }
 }

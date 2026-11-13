@@ -88,6 +88,13 @@ class Task
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $number = null;
 
+    /**
+     * Since 2.16.0 (spec 234, FR-018): +1 on every flush that changes the task (any field but its position, its total time
+     * and `updatedAt`) or its assignees and watchers; 1 for a new task. The Task API's optimistic lock.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    private int $revision = 1;
+
     /** @var Collection<int, TaskChangeHistory> */
     #[ORM\OneToMany(targetEntity: TaskChangeHistory::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['createdAt' => SortDirection::Ascending])]
@@ -824,5 +831,24 @@ class Task
         sort($normalized);
 
         return $normalized;
+    }
+
+    /** Since 2.16.0 (spec 234, FR-018): the optimistic-lock revision; see {@see self::$revision}. */
+    public function getRevision(): int
+    {
+        return $this->revision;
+    }
+
+    /**
+     * Since 2.16.0: called by the bundle's flush listener only.
+     *
+     * @internal
+     */
+    public function bumpRevision(): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        ++$this->revision;
+
+        return $this;
     }
 }

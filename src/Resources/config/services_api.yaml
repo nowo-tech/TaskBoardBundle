@@ -10,6 +10,8 @@ services:
     Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries: ~
     Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace: ~
     Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers: ~
+    Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiMembers: ~
+    Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy: ~
     Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments: ~
 
     Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener:
@@ -29,6 +31,10 @@ services:
 
     Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations:
         public: true
+        arguments:
+            # Since 2.16.0 (spec 234, FR-026).
+            $search: '@Nowo\TaskBoardBundle\Search\TaskTextSearchInterface'
+            $searchMaxMatches: '%nowo_task_board.search.max_matches%'
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController:
         public: true
@@ -50,6 +56,12 @@ services:
 
     Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations:
         public: true
+
+    # Since 2.16.0 (spec 234): the transaction of an update with a base revision and of a bulk update.
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction:
+        arguments:
+            $managerRegistry: '@?doctrine'
+            $events: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
 
     Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations:
         public: true

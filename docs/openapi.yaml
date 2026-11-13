@@ -97,6 +97,25 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/comment/{comment_id}':
+    parameters:
+      - {name: comment_id, in: path, required: true, schema: {type: string}}
+    put:
+      operationId: comment_update
+      summary: 'Edit a comment (since 2.16.0); its author by default (api.hooks.comment_edit_policy)'
+      description: 'Least level: My tasks (own). Missing, deleted, out of reach or not editable: 404 alike.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/CommentCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/list/{list_id}':
     parameters:
       - {name: list_id, in: path, required: true, schema: {type: string}}
@@ -260,6 +279,7 @@ paths:
         - {name: 'date_done_gt', in: query, schema: {type: string}}
         - {name: 'date_done_lt', in: query, schema: {type: string}}
         - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'query', in: query, schema: {type: string, maxLength: 200}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskPage'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -358,6 +378,23 @@ paths:
       description: 'Least level: Read. The person''s access and where still apply.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Tags'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/bulk':
+    post:
+      operationId: task_bulk
+      summary: 'Atomic bulk update of 1 to 50 tasks of one space (since 2.16.0)'
+      description: 'Least level: My tasks (own fields). Any refusal writes nothing: BULK_001 with failures[].'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {type: object, required: [tasks], properties: {tasks: {type: array, maxItems: 50, items: {type: object, required: [id], properties: {id: {type: string}, base_revision: {type: integer}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, tags: {type: array, items: {type: string}}, priority: {type: integer, nullable: true}, due_date: {type: integer, nullable: true}, start_date: {type: integer, nullable: true}, assignees: {type: object}}}}}}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {tasks: {type: array, items: {$ref: '#/components/schemas/Task'}}}}}}}
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
@@ -645,6 +682,23 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/member':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: team_members
+      summary: 'Members of one of the viewer''s teams; ?name= looks one up (since 2.16.0)'
+      description: 'Any level. A team the viewer is not in: 404. The e-mail only on the viewer''s own row; a name lookup answers id, username and service_account only.'
+      parameters:
+        - {name: 'name', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {members: {type: array, items: {type: object}}}}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/team/{team_id}/space':
     parameters:
       - {name: team_id, in: path, required: true, schema: {type: string}}
@@ -687,6 +741,7 @@ paths:
         - {name: 'date_done_gt', in: query, schema: {type: string}}
         - {name: 'date_done_lt', in: query, schema: {type: string}}
         - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'query', in: query, schema: {type: string, maxLength: 200}}
         - {name: 'space_ids[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'list_ids[]', in: query, schema: {type: array, items: {type: string}}}
       responses:

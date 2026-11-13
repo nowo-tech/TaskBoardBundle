@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% sur %total% sous-tâches terminées'
 task_board.form.column.icon: "Icône"
 task_board.form.column.no_icon: "Aucune icône"
 task_board.form.column.icon_help: "Un emoji, facultatif."
+task_board.form.column.humans_only: "Seules les personnes peuvent déplacer des tâches ici"
+task_board.form.column.humans_only_help: "Les déplacements vers cette colonne par l’API ou par un agent sont refusés."
+task_board.board.column_humans_only: "Personnes uniquement"
+task_board.board.column_humans_only_help: "Seules les personnes peuvent déplacer des tâches dans cette colonne."
 task_board.form.column.icon_invalid: "L’icône d’une colonne est un emoji (16 octets au plus) ou l’une des icônes proposées."
 task_board.form.column.custom_color: 'Couleur personnalisée'
 task_board.form.board.column_set: "Colonnes"
@@ -642,6 +646,7 @@ task_board.sync.completeness.status.not_exposed: "Non exposé par l’API du fou
 task_board.sync.error.source_details_unavailable: "La description de la source n’a pas pu être lue."
 task_board.history.former_user: "Ancienne personne"
 task_board.flash.task_reopen_refused: "La tâche n’a pas été déplacée : la rouvrir dépasserait la limite de tâches actives."
+task_board.flash.task_move_refused: "La tâche n’a pas été déplacée : cette colonne ne l’accepte pas depuis ici."
 task_board.flash.column_delete_refused: "La colonne n’a pas été supprimée : elle contient des tâches terminées, et les rouvrir dépasserait la limite de tâches actives."
 task_board.flash.column_icon_invalid: "La colonne n’a pas été enregistrée : son icône doit être un emoji ou l’une des icônes proposées."
 task_board.form.board.icon: "Icône"

@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% di %total% sottoattività completate'
 task_board.form.column.icon: "Icona"
 task_board.form.column.no_icon: "Nessuna icona"
 task_board.form.column.icon_help: "Un emoji, facoltativo."
+task_board.form.column.humans_only: "Solo le persone possono spostare attività qui"
+task_board.form.column.humans_only_help: "Gli spostamenti in questa colonna tramite l’API o un agente sono rifiutati."
+task_board.board.column_humans_only: "Solo persone"
+task_board.board.column_humans_only_help: "Solo le persone possono spostare attività in questa colonna."
 task_board.form.column.icon_invalid: "L’icona di una colonna è un emoji (al massimo 16 byte) o una delle icone proposte."
 task_board.form.column.custom_color: 'Colore personalizzato'
 task_board.form.board.column_set: "Colonne"
@@ -642,6 +646,7 @@ task_board.sync.completeness.status.not_exposed: "Non esposto dall’API del pro
 task_board.sync.error.source_details_unavailable: "Non è stato possibile leggere la descrizione della fonte."
 task_board.history.former_user: "Ex persona"
 task_board.flash.task_reopen_refused: "L’attività non è stata spostata: riaprirla supererebbe il limite di attività attive."
+task_board.flash.task_move_refused: "L’attività non è stata spostata: questa colonna non la accetta da qui."
 task_board.flash.column_delete_refused: "La colonna non è stata eliminata: contiene attività completate e riaprirle supererebbe il limite di attività attive."
 task_board.flash.column_icon_invalid: "La colonna non è stata salvata: la sua icona deve essere un emoji o una delle icone proposte."
 task_board.form.board.icon: "Icona"
