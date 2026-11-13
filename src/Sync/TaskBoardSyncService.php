@@ -344,7 +344,6 @@ final readonly class TaskBoardSyncService
         } catch (Throwable $exception) {
             // Anything before the phases (the provider's container lookup, the database): the run fails cleanly.
             $this->logger->error('TaskBoard sync failed', ['bundle' => 'nowo_task_board', 'board_id' => $board->getId(), 'run_id' => $runId] + $this->failure($exception));
-            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
             $report = $this->bare($board, $provider->id(), SyncStatus::Failed, $exception instanceof ProviderException ? $exception->errorCode->value : 'internal', $runId);
             try {
                 $this->store->findRun($runId)?->record($report, $this->clock->now());
@@ -352,6 +351,7 @@ final readonly class TaskBoardSyncService
             } catch (Throwable) {
                 // The history row stays as it was; the lock is still released.
             }
+            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
             $this->eventDispatcher?->dispatch(new SyncFailedEvent($board, $report->errors[0], $report), TaskBoardEvents::SYNC_FAILED);
 
             return $report;

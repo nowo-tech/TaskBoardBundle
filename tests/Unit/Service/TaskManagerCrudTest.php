@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
@@ -248,5 +249,16 @@ final class TaskManagerCrudTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         (new TaskMemberAssigner($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))
             ->assign($task, new TaskMemberFormData(memberRole: TaskMemberRole::Assignee), new stdClass());
+    }
+
+    /** Since 2.15.1: a repository with only the tenant lookup (no BoardSlugTakenInterface) is still asked per tenant. */
+    public function testATenantSlugLookupWithoutTheTakenCheckIsAsked(): void
+    {
+        $repo = $this->createMockForIntersectionOfInterfaces([TaskBoardRepositoryInterface::class, TenantBoardSlugLookupInterface::class]);
+        $repo->method('findBySlugInTenant')->willReturnCallback(static fn (string $slug, ?string $tenant): ?TaskBoard => $slug === 'roadmap' && $tenant === 'acme' ? new TaskBoard('Roadmap', 'roadmap', null) : null);
+        $repo->expects(self::once())->method('save');
+
+        $board = (new TaskBoardCreator($repo))->create(new TaskBoardFormData(name: 'Roadmap'), new TestUser('1', 'owner@example.com'), 'acme');
+        self::assertSame('roadmap-2', $board->getSlug());
     }
 }
