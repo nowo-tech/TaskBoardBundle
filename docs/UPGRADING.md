@@ -211,10 +211,10 @@ Beacon spec 234, FR-061.
    CREATE INDEX idx_task_board_task_templates_tenant ON task_board_task_templates (tenant_key);
    CREATE INDEX IDX_DA1B12A8E7EC5785 ON task_board_task_templates (board_id);
    ALTER TABLE task_board_task_templates ADD CONSTRAINT FK_DA1B12A8E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE;
-   -- MySQL / MariaDB: DATETIME, LONGTEXT and JSON (see demo/symfony8/migrations/Version20261113120000.php); SQLite: DATETIME, CLOB.
+   -- MySQL / MariaDB: DATETIME, LONGTEXT and JSON (see demo/symfony8/migrations/Version20261113130000.php); SQLite: DATETIME, CLOB.
    ```
 
-   `default_column_name` is a tenant template's default column, by exact name (a board template keeps `default_column_id`). On MySQL / MariaDB give `tenant_key` a binary NO PAD collation (`utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB), as for the boards' `tenant_key` (REQ-SEC-006). The bundle compares every key it reads back byte for byte anyway, so a folding collation never mixes two tenants' templates.
+   `default_column_name` is a tenant template's default column, by exact name (a board template keeps `default_column_id`). Since 2.15.1 the mapping listener gives `tenant_key` the same binary NO PAD collation as the boards' (`utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL), so `doctrine:migrations:diff` writes it into the `CREATE TABLE`; a host that writes the SQL by hand adds `COLLATE` to that column as it did for the boards' `tenant_key` (REQ-SEC-006). The bundle compares every key it reads back byte for byte anyway, so a folding collation never mixes two tenants' templates.
 3. **Settings screen.** Build it on `TaskTemplateManager` (FR-062): it has no page of its own. See [USAGE "Task templates"](USAGE.md#task-templates-since-216).
 4. **API / MCP.** With `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on `POST …/list/{id}/task` ([API](API.md#task-templates-since-216)). In process: `TaskApiTemplateOperations::snapshots()`.
 5. **Presets.** `TaskTemplateManager::export()` and `replaceAll()` read and write a scope's templates as plain data (`TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`), for a configuration exporter.

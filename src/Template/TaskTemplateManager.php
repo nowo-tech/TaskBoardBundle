@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Psr\Clock\ClockInterface;
@@ -79,7 +80,7 @@ final readonly class TaskTemplateManager
      */
     public function createForTenant(object $actor, ?string $tenantKey, TaskTemplateData $data): TaskTemplate
     {
-        if ($tenantKey !== null && !$this->isExactKey($tenantKey)) {
+        if ($tenantKey !== null && !ExactKey::isUsable($tenantKey)) {
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
         $this->requireManage($actor, TaskTemplateScope::tenant($tenantKey));
@@ -150,7 +151,7 @@ final readonly class TaskTemplateManager
      */
     public function replaceAll(object $actor, ?TaskBoard $board, ?string $tenantKey, array $templates): array
     {
-        if (!$board instanceof TaskBoard && $tenantKey !== null && !$this->isExactKey($tenantKey)) {
+        if (!$board instanceof TaskBoard && $tenantKey !== null && !ExactKey::isUsable($tenantKey)) {
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
         $this->requireManage($actor, $board instanceof TaskBoard ? TaskTemplateScope::board(Snapshots::board($board)) : TaskTemplateScope::tenant($tenantKey));
@@ -227,7 +228,8 @@ final readonly class TaskTemplateManager
     }
 
     /**
-     * The templates of a tenant (null: of the boards without a tenant), by name. The key is compared byte for byte.
+     * The templates of a tenant (null: of the boards without a tenant), by name. The key is compared byte for byte
+     * ({@see ExactKey}), so a folding collation never mixes two tenants' templates.
      *
      * @return list<TaskTemplate>
      */
@@ -246,7 +248,7 @@ final readonly class TaskTemplateManager
         $rows = $query->getQuery()->getResult();
 
         // REQ-SEC-006: `Acme`, `acme` and `acme ` are three tenants, whatever the column's collation.
-        return $this->sorted(array_filter($rows, static fn (TaskTemplate $template): bool => !$template->getBoard() instanceof TaskBoard && $template->getTenantKey() === $tenantKey));
+        return $this->sorted(array_filter($rows, static fn (TaskTemplate $template): bool => !$template->getBoard() instanceof TaskBoard && ExactKey::same($template->getTenantKey(), $tenantKey)));
     }
 
     /**
@@ -420,18 +422,6 @@ final readonly class TaskTemplateManager
         }
 
         throw new InvalidTaskTemplateException('default_column_id', 'The default column must be a column of the template\'s board.');
-    }
-
-    /**
-     * REQ-SEC-006 entry refusal, as the bundle's other string keys: no edge whitespace, control or format characters.
-     */
-    private function isExactKey(string $key): bool
-    {
-        if ($key === '' || preg_match('//u', $key) !== 1 || mb_strlen($key) > 191) {
-            return false;
-        }
-
-        return preg_match('/^[\s\p{Z}]|[\s\p{Z}]$|\p{C}/u', $key) !== 1;
     }
 
     /**

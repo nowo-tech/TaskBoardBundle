@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
+use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 use Stringable;
@@ -74,6 +75,9 @@ final class KeyCollationTest extends TestCase
         self::assertSame('utf8mb4_nopad_bin', $this->metadata(TaskLink::class, new MariaDBPlatform())->getFieldMapping('externalId')->options['collation'] ?? null);
         self::assertSame('utf8mb4_nopad_bin', $this->metadata(TaskLink::class, new MariaDBPlatform())->getFieldMapping('importSource')->options['collation'] ?? null);
         self::assertSame('utf8mb4_0900_bin', $this->metadata(TaskNumberCounter::class, new MySQL80Platform())->getFieldMapping('scopeKey')->options['collation'] ?? null);
+        // Since 2.16.0 (spec 234, FR-061): a task template's tenant is a key column too.
+        self::assertSame('utf8mb4_0900_bin', $this->metadata(TaskTemplate::class, new MySQL80Platform(), '8.4.3')->getFieldMapping('tenantKey')->options['collation'] ?? null);
+        self::assertNull($this->metadata(TaskTemplate::class, new SQLitePlatform())->getFieldMapping('tenantKey')->options);
         self::assertNull($this->metadata(TaskBoard::class, new SQLitePlatform())->getFieldMapping('tenantKey')->options);
         self::assertNull($this->metadata(TaskBoard::class, new MySQL80Platform())->getFieldMapping('name')->options, 'not a key');
 

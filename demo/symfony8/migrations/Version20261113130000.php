@@ -11,7 +11,7 @@ use Doctrine\Migrations\AbstractMigration;
  * TaskBoardBundle 2.16 (Beacon spec 234, FR-061, task_templates.enabled): the task template table. Additive: a new
  * table, nothing existing is rewritten or dropped.
  */
-final class Version20261113120000 extends AbstractMigration
+final class Version20261113130000 extends AbstractMigration
 {
     public function getDescription(): string
     {

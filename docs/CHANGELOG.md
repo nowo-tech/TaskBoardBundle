@@ -117,7 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Task API: `GET /v2/list/{id}/taskTemplate`, and `template_id` on `POST /v2/list/{id}/task` (body fields win over the template; any template the board does not offer is the same 400). `TaskApiTemplateOperations` for in-process (MCP) callers.
   - Templates as data for configuration presets (Beacon block W, TaskBoard 2.17 board configuration): `TaskTemplateManager::export()` / `replaceAll()`, `TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`.
   - `TaskBoardResourceAccessChecker::canManageTenantTemplates()`.
-- REQ-SEC-006: template ids and tenant keys are matched exactly (`===` on every row read back, before any cap); a tenant key with edge whitespace, control or format characters is refused.
+- REQ-SEC-006: template ids and tenant keys are matched exactly (`Support\ExactKey` on every row read back, before any cap); a tenant key with edge whitespace, control or format characters is refused on entry, and `task_board_task_templates.tenant_key` gets the binary NO PAD collation of the other key columns (2.15.1).
 
 ## [2.15.1] - 2026-11-13
 

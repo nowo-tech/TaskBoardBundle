@@ -10,12 +10,12 @@
         <id name="id" type="string" length="36"/>
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
-        <field name="defaultColumnName" type="string" column="default_column_name" length="128" nullable="true"/>
         <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
         <field name="name" type="string" length="120"/>
         <field name="body" type="text" nullable="true"/>
         <field name="defaultTags" type="json" column="default_tags"/>
         <field name="defaultColumnId" type="string" column="default_column_id" length="36" nullable="true"/>
+        <field name="defaultColumnName" type="string" column="default_column_name" length="128" nullable="true"/>
         <many-to-one field="board" target-entity="Nowo\TaskBoardBundle\Entity\TaskBoard">
             <join-column name="board_id" on-delete="CASCADE"/>
         </many-to-one>
