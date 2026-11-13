@@ -25,10 +25,10 @@ enum CustomFieldType: string
     public static function fromApi(string $type): ?self
     {
         return match ($type) {
-            'short_text', 'text' => self::Text,
-            'number'             => self::Number,
+            'short_text', 'text'    => self::Text,
+            'number'                => self::Number,
             'drop_down', 'dropdown' => self::Dropdown,
-            default              => null,
+            default                 => null,
         };
     }
 }

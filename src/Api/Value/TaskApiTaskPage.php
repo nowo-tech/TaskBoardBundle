@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Value;
 
 use Nowo\TaskBoardBundle\Entity\Task;
-use Nowo\TaskBoardBundle\Entity\TaskDependency;
-use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 
 /**
  * Since 2.2.0 (spec 213): tasks a token may read, with everything needed to show them, loaded in a fixed number of queries.

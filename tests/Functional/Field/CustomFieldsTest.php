@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Field;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
-use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldListView;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
@@ -26,6 +27,8 @@ use function str_repeat;
 use function str_replace;
 use function trim;
 use function urlencode;
+
+use const INF;
 
 /**
  * Since 2.17.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or board, values, the Task API
@@ -192,7 +195,7 @@ final class CustomFieldsTest extends ApiTestCase
 
         $this->em->clear();
         $values = $this->fields()->valuesOf([$task->getId()])[$task->getId()] ?? [];
-        $shown = array_map($this->fields()->display(...), $values);
+        $shown  = array_map($this->fields()->display(...), $values);
         sort($shown);
         self::assertSame(['3', 'infra'], $shown, 'the unchanged number stays, the too long text is refused');
         $this->client->followRedirect();
@@ -201,12 +204,12 @@ final class CustomFieldsTest extends ApiTestCase
 
     public function testTheListViewOperators(): void
     {
-        $view   = self::getContainer()->get(TaskCustomFieldListView::class);
+        $view = self::getContainer()->get(TaskCustomFieldListView::class);
         self::assertInstanceOf(TaskCustomFieldListView::class, $view);
-        $layer  = $this->fields()->define($this->owner, $this->board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
-        $num    = $this->fields()->define($this->owner, $this->board, null, 'N', CustomFieldType::Number);
-        $text   = $this->fields()->define($this->owner, $this->board, null, 'T', CustomFieldType::Text);
-        $task   = $this->task($this->board, 'Task');
+        $layer = $this->fields()->define($this->owner, $this->board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
+        $num   = $this->fields()->define($this->owner, $this->board, null, 'N', CustomFieldType::Number);
+        $text  = $this->fields()->define($this->owner, $this->board, null, 'T', CustomFieldType::Text);
+        $task  = $this->task($this->board, 'Task');
         $this->fields()->setField($task, $layer->getId(), 'a', $this->owner);
         $this->fields()->setField($task, $num->getId(), '4', $this->owner);
         $this->fields()->setField($task, $text->getId(), 'x', $this->owner);
@@ -266,7 +269,7 @@ final class CustomFieldsTest extends ApiTestCase
 
         $value = $fields->valuesOf([$task->getId()])[$task->getId()][0];
         self::assertNotSame('', $value->getId());
-        self::assertLessThanOrEqual(new \DateTimeImmutable(), $value->getUpdatedAt());
+        self::assertLessThanOrEqual(new DateTimeImmutable(), $value->getUpdatedAt());
     }
 
     /**

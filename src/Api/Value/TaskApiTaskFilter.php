@@ -10,20 +10,20 @@ use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldCondition;
 
 use function array_filter;
+use function array_is_list;
 use function array_map;
 use function array_values;
+use function count;
 use function ctype_digit;
 use function in_array;
 use function intdiv;
 use function is_array;
-use function is_string;
-use function mb_strtolower;
-use function preg_match;
-use function array_is_list;
-use function count;
 use function is_float;
 use function is_int;
+use function is_string;
 use function json_decode;
+use function mb_strtolower;
+use function preg_match;
 use function strtolower;
 
 /**
@@ -110,9 +110,9 @@ final readonly class TaskApiTaskFilter
      * Since 2.17.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
      * `=`, `!=`, `<`, `>`, `IS NOT NULL`, `IS NULL`, `ANY` (value: a list). At most 10 conditions; anything else is 400.
      *
-     * @return list<TaskCustomFieldCondition>
-     *
      * @throws TaskApiRefusal
+     *
+     * @return list<TaskCustomFieldCondition>
      */
     public static function customFields(mixed $raw): array
     {

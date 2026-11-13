@@ -9,10 +9,10 @@ use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface;
 use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
-use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
@@ -430,8 +430,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * Since 2.0.0 (K3): the table of one group of the list view. The row attributes carry what the client filters, sort and
      * totals read; the cells come from `_list_row_cells.html.twig`.
      *
-     * @param iterable<Task>         $tasks
-     * @param list<TaskCustomField>  $customFields since 2.17.0 (FR-028): a column per field, after the tags
+     * @param iterable<Task> $tasks
+     * @param list<TaskCustomField> $customFields since 2.17.0 (FR-028): a column per field, after the tags
      */
     public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = []): Table
     {

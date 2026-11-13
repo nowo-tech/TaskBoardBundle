@@ -14,14 +14,14 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
-use Nowo\TaskBoardBundle\Entity\TaskCustomField;
-use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
-use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 
 use function array_map;
 use function array_slice;

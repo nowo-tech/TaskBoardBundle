@@ -32,7 +32,7 @@ final readonly class TaskCustomFieldForm
     }
 
     /**
-     * @return list<array{id: string, name: string, name_attr: string, type: string, value: string|float|null, choices: array<string, string>}>
+     * @return list<array{id: string, name: string, name_attr: string, type: string, value: float|string|null, choices: array<string, string>}>
      */
     public function options(TaskBoard $board, ?Task $task = null): array
     {

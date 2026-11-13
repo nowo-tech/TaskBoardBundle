@@ -21,10 +21,10 @@ use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Throwable;
 
-use function array_filter;
-use function array_map;
 use function abs;
+use function array_filter;
 use function array_keys;
+use function array_map;
 use function array_values;
 use function in_array;
 use function is_finite;
@@ -85,7 +85,7 @@ final readonly class TaskCustomFieldManager
         $tenants = [];
         $none    = false;
         foreach ($boards as $board) {
-            $byBoard[$board->getId()] = [];
+            $byBoard[$board->getId()]               = [];
             $board->getTenantKey() === null ? $none = true : $tenants[$board->getTenantKey()] = true;
         }
         if ($byBoard === []) {
@@ -241,7 +241,7 @@ final readonly class TaskCustomFieldManager
      */
     public function setField(Task $task, string $fieldId, mixed $value, object $actor): void
     {
-        $field = $this->fieldOfBoard($task->getBoard(), $fieldId) ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
+        $field           = $this->fieldOfBoard($task->getBoard(), $fieldId) ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
         [$text, $number] = $this->normalize($field, $value);
         $this->write(function () use ($task, $field, $text, $number, $actor): void {
             $current = $this->entityManager->getRepository(TaskCustomFieldValue::class)->findOneBy(['task' => $task, 'field' => $field]);
@@ -298,8 +298,8 @@ final readonly class TaskCustomFieldManager
      * Narrows a task query (`$alias` the task) to the tasks every condition holds for. A condition on a field the board does
      * not have, or a malformed one, is refused, never ignored.
      *
-     * @param list<TaskCustomFieldCondition>   $conditions
-     * @param array<string, TaskCustomField>   $fields     the fields the conditions may name, by id
+     * @param list<TaskCustomFieldCondition> $conditions
+     * @param array<string, TaskCustomField> $fields the fields the conditions may name, by id
      *
      * @throws TaskCustomFieldRefusedException `not_found`, `invalid` (`value`)
      */
@@ -332,9 +332,9 @@ final readonly class TaskCustomFieldManager
     }
 
     /**
-     * @return array{0: ?string, 1: ?string} text, number
-     *
      * @throws TaskCustomFieldRefusedException
+     *
+     * @return array{0: ?string, 1: ?string} text, number
      */
     private function normalize(TaskCustomField $field, mixed $value): array
     {
@@ -344,8 +344,8 @@ final readonly class TaskCustomFieldManager
         $invalid = new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::INVALID, ['field' => 'value']);
 
         return match ($field->getType()) {
-            CustomFieldType::Text => is_string($value) && mb_strlen($value) <= self::TEXT_MAX ? [$value, null] : throw $invalid,
-            CustomFieldType::Number => [null, $this->number($value) ?? throw $invalid],
+            CustomFieldType::Text     => is_string($value) && mb_strlen($value) <= self::TEXT_MAX ? [$value, null] : throw $invalid,
+            CustomFieldType::Number   => [null, $this->number($value) ?? throw $invalid],
             CustomFieldType::Dropdown => [is_string($value) || is_int($value) ? ($this->optionId($field, (string) $value) ?? throw $invalid) : throw $invalid, null],
         };
     }

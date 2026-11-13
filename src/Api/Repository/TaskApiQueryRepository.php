@@ -9,23 +9,23 @@ use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
+use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
-use Nowo\TaskBoardBundle\Entity\TaskCustomField;
-use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
-use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
-use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 
 use function array_keys;
 use function array_map;
@@ -68,9 +68,9 @@ final readonly class TaskApiQueryRepository
      * @param object|null $owner My tasks: only the tasks it created or is assigned
      * @param array<string, TaskCustomField> $fields since 2.17.0: the native fields `custom_fields` may name, by id
      *
-     * @return array{tasks: list<Task>, lastPage: bool}
-     *
      * @throws TaskApiRefusal
+     *
+     * @return array{tasks: list<Task>, lastPage: bool}
      */
     public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner, array $fields = []): array
     {

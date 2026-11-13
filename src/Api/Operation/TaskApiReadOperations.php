@@ -27,12 +27,12 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
-use Nowo\TaskBoardBundle\Entity\TaskCustomField;
-use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 
 use function array_filter;
 use function array_map;
@@ -277,9 +277,9 @@ final readonly class TaskApiReadOperations
     /**
      * Since 2.17.0 (FR-028): the board's native custom fields (its tenant's and its own) and its synced ones.
      *
-     * @return array{native: list<TaskCustomField>, synced: list<TaskSyncField>}
-     *
      * @throws TaskApiRefusal
+     *
+     * @return array{native: list<TaskCustomField>, synced: list<TaskSyncField>}
      */
     public function allBoardFields(TaskApiPrincipal $principal, string $boardId): array
     {

@@ -57,7 +57,7 @@ final readonly class TaskCustomFieldListView
         $condition = $this->condition($form, $fields);
         if ($condition !== null) {
             [$field, $operator, $wanted] = $condition;
-            $tasks = array_values(array_filter($tasks, fn (Task $task): bool => $this->holds($field, $this->valueOf($values[$task->getId()] ?? [], $field), $operator, $wanted)));
+            $tasks                       = array_values(array_filter($tasks, fn (Task $task): bool => $this->holds($field, $this->valueOf($values[$task->getId()] ?? [], $field), $operator, $wanted)));
         }
         $shown = [];
         foreach ($values as $taskId => $ofTask) {
@@ -78,12 +78,12 @@ final readonly class TaskCustomFieldListView
     public function holds(TaskCustomField $field, ?TaskCustomFieldValue $value, CustomFieldOperator $operator, array $wanted): bool
     {
         $current = match (true) {
-            !$value instanceof TaskCustomFieldValue                => null,
-            $field->getType() === CustomFieldType::Number          => (string) $value->getNumberValue(),
-            default                                                => (string) $value->getTextValue(),
+            !$value instanceof TaskCustomFieldValue       => null,
+            $field->getType() === CustomFieldType::Number => (string) $value->getNumberValue(),
+            default                                       => (string) $value->getTextValue(),
         };
-        $wanted = array_map(fn (string $one): string => $field->getType() === CustomFieldType::Dropdown ? (string) ($field->option($one)['id'] ?? $field->optionNamed($one)['id'] ?? '') : trim($one), $wanted);
-        $equals = fn (string $one): bool => $current !== null && ($field->getType() === CustomFieldType::Number ? is_numeric($one) && (float) $current === (float) $one : $current === $one);
+        $wanted = array_map(static fn (string $one): string => $field->getType() === CustomFieldType::Dropdown ? (string) ($field->option($one)['id'] ?? $field->optionNamed($one)['id'] ?? '') : trim($one), $wanted);
+        $equals = static fn (string $one): bool => $current !== null && ($field->getType() === CustomFieldType::Number ? is_numeric($one) && (float) $current === (float) $one : $current === $one);
 
         return match ($operator) {
             CustomFieldOperator::IsSet       => $current !== null,
@@ -97,7 +97,7 @@ final readonly class TaskCustomFieldListView
     }
 
     /**
-     * @param FormInterface<mixed>  $form
+     * @param FormInterface<mixed> $form
      * @param list<TaskCustomField> $fields
      *
      * @return array{0: TaskCustomField, 1: CustomFieldOperator, 2: list<string>}|null

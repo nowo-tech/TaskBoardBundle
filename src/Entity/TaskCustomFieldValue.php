@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
@@ -75,7 +76,7 @@ class TaskCustomFieldValue
     }
 
     /**
-     * @internal through {@see \Nowo\TaskBoardBundle\Field\TaskCustomFieldManager::setField()}, which validates it
+     * @internal through {@see TaskCustomFieldManager::setField()}, which validates it
      */
     public function change(?string $text, ?string $number): self
     {
