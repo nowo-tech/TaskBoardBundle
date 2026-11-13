@@ -37,6 +37,8 @@ services:
     Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
         public: true
         tags: ['controller.service_arguments']
+        arguments:
+            $listsIncludeFolders: '%nowo_task_board.api.lists_include_folders%'
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController:
         public: true

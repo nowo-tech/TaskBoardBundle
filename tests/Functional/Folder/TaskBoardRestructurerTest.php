@@ -126,6 +126,9 @@ final class TaskBoardRestructurerTest extends CopyTestCase
         $result = $this->restructurer()->moveTasks($this->owner, [$child->getId(), $sibling->getId(), $grandchild->getId()], $target->getId());
 
         self::assertSame([$child->getId(), $grandchild->getId(), $sibling->getId()], $result->movedTaskIds, 'the grandchild moves with its parent, once');
+        self::assertSame([$child->getId() => $story->getId(), $grandchild->getId() => $child->getId(), $sibling->getId() => $story->getId()], $result->formerParents);
+        $moveRow = $this->em->getRepository(TaskChangeHistory::class)->findOneBy(['task' => $child->getId(), 'changeType' => TaskChangeType::BoardMoved]);
+        self::assertSame('parent:' . $story->getId(), $moveRow?->getContext());
         $this->clear();
         $moved = $this->reload($child);
         self::assertSame($target->getId(), $moved->getBoard()->getId());

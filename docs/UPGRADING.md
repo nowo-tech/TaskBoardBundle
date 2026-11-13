@@ -226,7 +226,8 @@ Nothing, unless you use folders:
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.
 - **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
-  folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`.
+  folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`, or pass `include_folders=true`. A host whose
+  clients expect every board sets `api.lists_include_folders: true`.
 
 ### Schema change for every host: column types and status sets
 
