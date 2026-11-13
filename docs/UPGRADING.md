@@ -231,7 +231,8 @@ punctuation (`C-12`) are matched with `LIKE` either way.
 1. **Column transition policy.** Set `column_transition_policy` to a service implementing
    `Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface` (e.g. the bundled
    `Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy`, or your own that decorates it to add WIP limits
-   or "blocked needs a reason"). It is asked for **every** move, the board UI's included (channel `web`); return
+   or "blocked needs a reason"). The bundled one is strict: `api` and `mcp` may not enter a humans-only column by any
+   operation, checklist ticks included (`humans_only_policy.allow_checklist: true` relaxes that). It is asked for **every** move, the board UI's included (channel `web`); return
    `ColumnTransitionDecision::refuse('WIP_LIMIT', $translatedMessage)` to refuse: the Task API answers 403 with that
    `ECODE` and message, the board shows the message. An in-process caller (MCP) builds its `TaskApiPrincipal` with
    `channel: 'mcp'`; the policy then sees `mcp`. Imports are not asked.

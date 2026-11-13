@@ -117,8 +117,8 @@ final class ApiSyncFieldsTest extends ApiTestCase
 
         try {
             $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $open->getId(), 'description' => 'x'], ['id' => $done->getId(), 'status' => 'To do']]]);
-            self::assertResponseStatusCodeSame(403);
-            self::assertSame([[1, 'PLAN_002']], array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE']], $this->json()['failures']));
+            self::assertResponseStatusCodeSame(409);
+            self::assertSame([[1, 'PLAN_002', 403]], array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE'], $failure['status']], $this->json()['failures']));
         } finally {
             TestSyncLimitChecker::reset();
         }

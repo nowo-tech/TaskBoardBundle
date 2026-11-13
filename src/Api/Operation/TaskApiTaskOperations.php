@@ -50,7 +50,6 @@ use function array_values;
 use function count;
 use function in_array;
 use function intdiv;
-use function is_int;
 use function is_string;
 use function ksort;
 use function mb_strtolower;
@@ -272,7 +271,8 @@ final readonly class TaskApiTaskOperations
      * Every item is checked as its own `PUT /v2/task/{id}` would be (reach, token level, values, the column transition
      * policy with operation `bulk`, the host's limit) and, inside one transaction, its row is locked (in id order) and its
      * `base_revision` compared. Any refusal writes nothing and answers `BULK_001` with every failing item (`failures`:
-     * index, id, status, ECODE, err, and `current_revision` for `TASK_409`), with the HTTP status of the first one.
+     * index, id, status, ECODE, err, and `current_revision` for `TASK_409`), always with HTTP 409 (Beacon review 2026-11-13):
+     * each item's own status and ECODE stay in `failures`.
      * After the commit: one `API_WRITE` (`task.bulk_update`) per task and one `API_BULK_WRITE` with the count.
      *
      * @throws TaskApiRefusal
@@ -483,10 +483,8 @@ final readonly class TaskApiTaskOperations
     private static function bulkRefused(array $failures): TaskApiRefusal
     {
         ksort($failures);
-        $failures = array_values($failures);
-        $first    = $failures[0]['status'];
 
-        return new TaskApiRefusal(is_int($first) ? $first : 400, 'BULK_001', 'Bulk update refused: nothing was changed', ['failures' => $failures]);
+        return new TaskApiRefusal(409, 'BULK_001', 'Bulk update refused: nothing was changed', ['failures' => array_values($failures)]);
     }
 
     /**

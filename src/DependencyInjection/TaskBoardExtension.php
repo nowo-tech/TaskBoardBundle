@@ -144,6 +144,7 @@ use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -304,6 +305,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
         $this->registerTextSearch($container, $config['search'], $emName);
+        $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
         $this->registerWeekStartResolver($container, $config['gantt']);

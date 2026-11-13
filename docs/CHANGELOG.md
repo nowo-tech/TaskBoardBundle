@@ -124,7 +124,8 @@ host** (three columns, one optional index): see [UPGRADING](UPGRADING.md#to-2160
   (`STATUS_HUMANS_ONLY`, a host's `WIP_LIMIT`, `BLOCK_REASON_REQUIRED`, …; `STATUS_REFUSED` by default) and message;
   the board shows the message as a flash and the dragged card goes back (409 on the drag). Option
   `column_transition_policy` (default `AllowAllColumnTransitionPolicy`); the bundled opt-in
-  `HumansOnlyColumnTransitionPolicy` refuses `api` and `mcp` into a *humans only* column (checklist items aside).
+  `HumansOnlyColumnTransitionPolicy` refuses `api` and `mcp` into a *humans only* column, checklist items included
+  (strict; `humans_only_policy.allow_checklist: true` lets them tick checklist items).
   `TaskManager` methods gain an optional trailing `?ColumnTransitionVia $via` (null = `web`) and
   `assertCanEnter()`; `ColumnTransitionRefusedException` (with the decision) is new.
 - **`humansOnly` column flag** (`task_board_columns.humans_only`, default false): `BoardColumn::isHumansOnly()` /
@@ -140,7 +141,8 @@ host** (three columns, one optional index): see [UPGRADING](UPGRADING.md#to-2160
 - **Atomic bulk update** (FR-021): `POST /v2/task/bulk` with `{"tasks": [{"id", "base_revision"?, "description" |
   "markdown_content", "status", "tags", "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`, at most
   50 tasks of one space (`BULK_003`, `BULK_002`), one transaction (rows locked in id order). Any refusal writes nothing
-  and answers `BULK_001` with every failing item in `failures` (index, id, status, ECODE, err, `current_revision`); a
+  and answers 409 `BULK_001` with every failing item in `failures` (index, id, its own status and ECODE, err,
+  `current_revision`); a
   field a bulk item does not take is refused. After the commit, one `API_WRITE` per task (`task.bulk_update`) and one
   `TaskBoardEvents::API_BULK_WRITE` (`TaskApiBulkWriteEvent`, with `$count`), so a host counts N writes. Worker mode:
   refusals are checked before the first write; a failed write rolls back, resets a closed manager and reloads the

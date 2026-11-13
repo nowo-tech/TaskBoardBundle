@@ -154,13 +154,14 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 Beacon spec 234 (AI Flow). Every write that sets a status asks the host's `column_transition_policy` first, with the
 principal's channel (`api`, or `mcp` for an in-process caller) and the operation (`create`, `move`, `bulk`,
 `checklist`). A refusal is 403 with the policy's code and message, e.g. `{"err": "Only people can move tasks into this
-status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written.
+status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written. The bundled `HumansOnlyColumnTransitionPolicy` is
+strict: ticking a checklist item into a humans-only column is refused too, unless `humans_only_policy.allow_checklist`.
 
 | Endpoint | Level | Notes |
 |---|---|---|
 | `GET /v2/task/{id}` | My tasks | Since 2.16.0 the task carries `revision` (an integer, +1 on every change but a reorder) and the answer `ETag: "<revision>"` |
 | `PUT /v2/task/{id}` | as before | `If-Match: "<revision>"` (also `n`, `W/"n"`; `*` = any) or `base_revision` in the body: the row is locked and compared; another revision is 409 `{"err", "ECODE": "TASK_409", "current_revision": n}` and nothing is written. The answer carries the new `ETag` |
-| `POST /v2/task/bulk` | My tasks (own fields) / Tasks | `{"tasks": [{"id", "base_revision"?, "description" \| "markdown_content", "status", "tags" (the whole list), "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`: 1 to 50 tasks of one space, all or none, one transaction. 200 `{"tasks": [<task>, …]}` in the request's order. Any refusal: `{"err", "ECODE": "BULK_001", "failures": [{"index", "id", "status", "ECODE", "err", "current_revision"?}]}` with the status of the first failure, nothing written. Any other field of an item is refused (`INPUT_002`). After the commit: one `API_WRITE` per task and one `API_BULK_WRITE` with the count |
+| `POST /v2/task/bulk` | My tasks (own fields) / Tasks | `{"tasks": [{"id", "base_revision"?, "description" \| "markdown_content", "status", "tags" (the whole list), "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`: 1 to 50 tasks of one space, all or none, one transaction. 200 `{"tasks": [<task>, …]}` in the request's order. Any refusal: `{"err", "ECODE": "BULK_001", "failures": [{"index", "id", "status", "ECODE", "err", "current_revision"?}]}` always with HTTP 409 (each item's own status and ECODE are in `failures`), nothing written. Any other field of an item is refused (`INPUT_002`). After the commit: one `API_WRITE` per task and one `API_BULK_WRITE` with the count |
 | `PUT /v2/comment/{id}` | My tasks (own task) | `comment_text`; the comment's task must be one the token may comment on, then `api.hooks.comment_edit_policy` decides (default: its author). Answers `{}`. Missing, deleted, out of reach or not editable: 404 `ACCESS_001` alike |
 | `GET /v2/team/{id}/member` | any | The team's members (`api.hooks.members`): `{"members": [{"id", "username", "email", "color", "initials", "profilePicture", "service_account"}]}`; `email` only on the viewer's own row. With `?name=`: a prefix of the name or of one of its words, case and accents aside, at most 20, `{"id", "username", "service_account"}` only. A lookup never assigns anyone by name. A team the viewer is not in: 404 |
 | `GET /v2/team/{id}/task?query=…`, `GET /v2/list/{id}/task?query=…` | as the list | Since 2.16.0: every word (white space separated, at most 8, `query` ≤ 200 characters) in the title or description (`search.comments`: or a comment). Only within the boards the token reaches, before any page; the other filters and *My tasks* apply. More than `search.max_matches`: 400 `SEARCH_001` |
@@ -235,7 +236,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
 | `STATUS_HUMANS_ONLY`, `STATUS_REFUSED`, a policy's own code | 403 | Since 2.16.0: the column transition policy refused the status (its message in `err`) |
 | `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`) |
-| `BULK_001`, `BULK_002`, `BULK_003` | first failure's, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
+| `BULK_001`, `BULK_002`, `BULK_003` | 409, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
 | `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 

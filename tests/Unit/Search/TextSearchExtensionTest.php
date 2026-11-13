@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchMetadataListener;
 use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -27,6 +28,8 @@ final class TextSearchExtensionTest extends TestCase
         self::assertFalse($container->getDefinition(TaskTextSearchMetadataListener::class)->hasTag('doctrine.event_listener'));
         self::assertSame(500, $container->getParameter('nowo_task_board.search.max_matches'));
         self::assertFalse($container->getParameter('nowo_task_board.board.column_icon_form')['humans_only_field']);
+        self::assertFalse($container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->getArgument('$allowChecklist'));
+        self::assertTrue($this->load(['humans_only_policy' => ['allow_checklist' => true]])->getDefinition(HumansOnlyColumnTransitionPolicy::class)->getArgument('$allowChecklist'));
     }
 
     public function testFulltextMapsTheIndexesAndAHostPolicyShowsTheToggle(): void

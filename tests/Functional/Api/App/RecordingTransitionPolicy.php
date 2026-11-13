@@ -23,10 +23,14 @@ final class RecordingTransitionPolicy implements ColumnTransitionPolicyInterface
     /** @var list<string> column names refused with WIP_LIMIT */
     public static array $wipFull = [];
 
+    /** `humans_only_policy.allow_checklist` of the bundled rule. */
+    public static bool $allowChecklist = false;
+
     public static function reset(): void
     {
-        self::$asked   = [];
-        self::$wipFull = [];
+        self::$asked          = [];
+        self::$wipFull        = [];
+        self::$allowChecklist = false;
     }
 
     public function decide(ColumnTransition $transition): ColumnTransitionDecision
@@ -36,6 +40,6 @@ final class RecordingTransitionPolicy implements ColumnTransitionPolicyInterface
             return ColumnTransitionDecision::refuse('WIP_LIMIT', 'Only one task per repository in ' . $transition->to->name);
         }
 
-        return (new HumansOnlyColumnTransitionPolicy())->decide($transition);
+        return (new HumansOnlyColumnTransitionPolicy(self::$allowChecklist))->decide($transition);
     }
 }

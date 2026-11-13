@@ -200,7 +200,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
             ['id' => $third->getId(), 'base_revision' => 1, 'description' => 'stale'],
             ['id' => $first->getId() . 'x', 'description' => 'nobody'],
         ]]);
-        $this->assertBulkFailures(404, [[3, 'ACCESS_001']]);
+        $this->assertBulkFailures([[3, 'ACCESS_001', 404]]);
 
         // Reach first; once every task is reached, every check is listed.
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [
@@ -209,14 +209,14 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
             ['id' => $third->getId(), 'base_revision' => 1, 'description' => 'stale'],
             ['id' => $first->getId() . '', 'name' => 'unknown field'],
         ]]);
-        $this->assertBulkFailures(400, [[3, 'INPUT_002']]);
+        $this->assertBulkFailures([[3, 'INPUT_002', 400]]);
 
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [
             ['id' => $first->getId(), 'description' => 'would change'],
             ['id' => $second->getId(), 'status' => 'done'],
             ['id' => $third->getId(), 'base_revision' => 1, 'description' => 'stale'],
         ]]);
-        $this->assertBulkFailures(403, [[1, 'STATUS_HUMANS_ONLY'], [2, 'TASK_409']]);
+        $this->assertBulkFailures([[1, 'STATUS_HUMANS_ONLY', 403], [2, 'TASK_409', 409]]);
         self::assertSame(2, $this->json()['failures'][1]['current_revision']);
         $this->em->clear();
         self::assertNull($this->em->find(Task::class, $first->getId())?->getDescription());
@@ -239,7 +239,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $here->getId(), 'description' => 'x'], ['id' => $there->getId(), 'description' => 'y']]]);
         $this->assertRefused(400, 'BULK_002');
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $here->getId()], ['id' => $here->getId()]]]);
-        $this->assertBulkFailures(400, [[1, 'INPUT_002']]);
+        $this->assertBulkFailures([[1, 'INPUT_002', 400]]);
     }
 
     public function testATaskOfAnotherTenantIsNotFoundInABulkUpdate(): void
@@ -247,7 +247,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         ApiTestHost::$tenants = ['tenant-a'];
         $there                = $this->task($this->board('Other', tenantKey: 'tenant-b'), 'There');
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $there->getId(), 'description' => 'x']]]);
-        $this->assertBulkFailures(404, [[0, 'ACCESS_001']]);
+        $this->assertBulkFailures([[0, 'ACCESS_001', 404]]);
         $this->em->clear();
         self::assertNull($this->em->find(Task::class, $there->getId())?->getDescription());
     }
@@ -286,10 +286,14 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         $checklist = $this->json()['checklist']['id'];
         $this->send('POST', '/api/tasks/v2/checklist/' . $checklist . '/checklist_item', ['name' => 'Tick me'], [], 'bt_mcp');
         $item = $this->json()['checklist']['items'][0]['id'];
-        // The bundled rule lets an agent tick an item into a humans-only done column; a host rule may refuse it.
+        // Strict by default: an agent may not tick an item into a humans-only done column either.
+        $this->send('PUT', '/api/tasks/v2/checklist/' . $checklist . '/checklist_item/' . $item, ['resolved' => true], [], 'bt_mcp');
+        $this->assertRefused(403, 'STATUS_HUMANS_ONLY');
+        self::assertSame('checklist', RecordingTransitionPolicy::$asked[1]->via->operation);
+        // humans_only_policy.allow_checklist: true lets it; a host rule may still refuse the way back.
+        RecordingTransitionPolicy::$allowChecklist = true;
         $this->send('PUT', '/api/tasks/v2/checklist/' . $checklist . '/checklist_item/' . $item, ['resolved' => true], [], 'bt_mcp');
         self::assertResponseIsSuccessful();
-        self::assertSame('checklist', RecordingTransitionPolicy::$asked[1]->via->operation);
         RecordingTransitionPolicy::$wipFull = ['To do'];
         $this->send('PUT', '/api/tasks/v2/checklist/' . $checklist . '/checklist_item/' . $item, ['resolved' => false], [], 'bt_mcp');
         $this->assertRefused(403, 'WIP_LIMIT');
@@ -314,7 +318,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         $this->em->flush();
 
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $first->getId()], ['id' => $second->getId(), 'name' => 'Renamed']]]);
-        $this->assertBulkFailures(400, [[1, 'INPUT_002']]);
+        $this->assertBulkFailures([[1, 'INPUT_002', 400]]);
         self::assertSame('Invalid name: not taken by a bulk update', $this->json()['failures'][0]['err']);
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => 'all']);
         $this->assertRefused(400, 'INPUT_002');
@@ -343,14 +347,16 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
     }
 
     /**
-     * @param list<array{0: int, 1: string}> $failures
+     * `BULK_001` is always 409; each item keeps its own status and ECODE in `failures`.
+     *
+     * @param list<array{0: int, 1: string, 2: int}> $failures index, ECODE, the item's own HTTP status
      */
-    private function assertBulkFailures(int $status, array $failures): void
+    private function assertBulkFailures(array $failures): void
     {
-        self::assertResponseStatusCodeSame($status);
+        self::assertResponseStatusCodeSame(409);
         $json = $this->json();
         self::assertSame('BULK_001', $json['ECODE']);
-        self::assertSame($failures, array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE']], $json['failures']));
+        self::assertSame($failures, array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE'], $failure['status']], $json['failures']));
     }
 
     private function column(string $name): BoardColumn

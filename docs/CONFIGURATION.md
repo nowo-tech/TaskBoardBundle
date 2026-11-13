@@ -170,6 +170,8 @@ nowo_task_board:
     # Service id of a Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface: asked before every move (board UI,
     # Task API, MCP, bulk). null = every move is allowed.
     column_transition_policy: Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy
+    humans_only_policy:
+        allow_checklist: false # true: the Task API / MCP may still tick checklist items into a humans-only column
     board:
         # The "Only people can move tasks here" toggle of the column dialogs. null = shown when a policy is set.
         column_humans_only_field: ~

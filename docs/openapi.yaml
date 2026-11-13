@@ -389,7 +389,7 @@ paths:
     post:
       operationId: task_bulk
       summary: 'Atomic bulk update of 1 to 50 tasks of one space (since 2.16.0)'
-      description: 'Least level: My tasks (own fields). Any refusal writes nothing: BULK_001 with failures[].'
+      description: 'Least level: My tasks (own fields). Any item refused writes nothing: 409 BULK_001 with failures[] (each item''s own status and ECODE).'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody: {content: {application/json: {schema: {type: object, required: [tasks], properties: {tasks: {type: array, maxItems: 50, items: {type: object, required: [id], properties: {id: {type: string}, base_revision: {type: integer}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, tags: {type: array, items: {type: string}}, priority: {type: integer, nullable: true}, due_date: {type: integer, nullable: true}, start_date: {type: integer, nullable: true}, assignees: {type: object}}}}}}}}}

@@ -29,7 +29,7 @@ final class ColumnTransitionPolicyTest extends TestCase
         yield 'mcp creates there' => [true, ColumnTransitionVia::MCP, ColumnTransitionVia::OP_CREATE, false];
         yield 'web into humans only' => [true, ColumnTransitionVia::WEB, ColumnTransitionVia::OP_MOVE, true];
         yield 'a host label' => [true, 'cron', ColumnTransitionVia::OP_MOVE, true];
-        yield 'checklist item by the api' => [true, ColumnTransitionVia::API, ColumnTransitionVia::OP_CHECKLIST, true];
+        yield 'checklist item by the api' => [true, ColumnTransitionVia::API, ColumnTransitionVia::OP_CHECKLIST, false];
         yield 'api into a plain column' => [false, ColumnTransitionVia::API, ColumnTransitionVia::OP_MOVE, true];
     }
 
@@ -40,6 +40,13 @@ final class ColumnTransitionPolicyTest extends TestCase
         self::assertSame($allowed, $decision->allowed);
         self::assertSame($allowed ? '' : 'STATUS_HUMANS_ONLY', $decision->code);
         self::assertTrue((new AllowAllColumnTransitionPolicy())->decide($this->transition($humansOnly, ColumnTransitionVia::web()))->allowed);
+    }
+
+    public function testChecklistItemsMayBeAllowedByOption(): void
+    {
+        $lenient = new HumansOnlyColumnTransitionPolicy(allowChecklist: true);
+        self::assertTrue($lenient->decide(self::transition(true, new ColumnTransitionVia(ColumnTransitionVia::MCP, ColumnTransitionVia::OP_CHECKLIST)))->allowed);
+        self::assertFalse($lenient->decide(self::transition(true, new ColumnTransitionVia(ColumnTransitionVia::MCP, ColumnTransitionVia::OP_MOVE)))->allowed);
     }
 
     public function testADecisionKeepsAValidCodeOnly(): void
