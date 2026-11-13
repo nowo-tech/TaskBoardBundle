@@ -153,7 +153,9 @@ columns.
 - `ScopeKeyLookAlikeTest`: `Bob`, `bób`, `bob `, `bob\n`, NBSP and ZWSP tenants side by side on the bundle's mapping
   (MySQL / MariaDB NO PAD, SQLite, PostgreSQL), and on key columns recreated with a folding collation (SQLite NOCASE,
   MySQL / MariaDB `utf8mb4_general_ci`) every lookup, the import lookup, the ledger, `purgeScope()` and the counter
-  drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`.
+  drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`,
+  `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows).
+
 ### Documentation
 
 - `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).
