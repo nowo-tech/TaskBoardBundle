@@ -80,6 +80,9 @@ final class TaskBoardPortsPass implements CompilerPassInterface
     /** Service id prefix of the ports the bundle injects by reference. */
     public const PORT_PREFIX = 'nowo_task_board.port.';
 
+    /** Container parameter holding the configured `sync.actor_resolver` service id ('' when none). */
+    public const ACTOR_RESOLVER_PARAMETER = 'nowo_task_board.sync.actor_resolver';
+
     /**
      * @var array<string, array{id: string, legacy: class-string, twin: class-string, factory: string, option: string, boards?: true}>
      */
@@ -145,6 +148,32 @@ final class TaskBoardPortsPass implements CompilerPassInterface
                 ->setArguments($arguments)
                 ->setPublic($public));
         }
+
+        $this->pointActorProviderAlias($container);
+    }
+
+    /**
+     * Since 2.15.1 (audit OM TB-I1): the public {@see SyncActorProviderInterface} alias the extension points at the
+     * bundle's default resolver follows `sync.actor_resolver` when that service implements the twin, so a host that
+     * configured a stricter resolver autowires its own and never the laxer default. A configured service that
+     * implements only the deprecated interface (or whose class is not known before compilation) leaves the alias on the
+     * default: the bundle asks it through {@see SyncActorResolverInterface} anyway.
+     */
+    private function pointActorProviderAlias(ContainerBuilder $container): void
+    {
+        if (!$container->hasParameter(self::ACTOR_RESOLVER_PARAMETER) || !$container->hasAlias(SyncActorProviderInterface::class)) {
+            return;
+        }
+        $configured = $container->getParameter(self::ACTOR_RESOLVER_PARAMETER);
+        if (!is_string($configured) || $configured === '' || (!$container->hasAlias($configured) && !$container->hasDefinition($configured))) {
+            return;
+        }
+        $target = $this->resolve($container, $configured);
+        $class  = $this->classOf($container, $target);
+        if ($class === null || !is_a($class, SyncActorProviderInterface::class, true)) {
+            return;
+        }
+        $container->setAlias(SyncActorProviderInterface::class, $target)->setPublic(true);
     }
 
     private function resolve(ContainerBuilder $container, string $id): string

@@ -125,4 +125,21 @@ final class TaskBoardUsersTest extends TestCase
         $users->find('u-ana');
         self::assertSame(4, $directory->calls, 'asked again after the boundary');
     }
+
+    /** Since 2.15.1 (audit OC Low): the tasks a folding database matched only through a look-alike id. */
+    public function testLookAlikeOnlyTasks(): void
+    {
+        $rows = [
+            ['taskId' => 't1', 'ref' => new TaskBoardUserRef('u-bruno')],
+            ['taskId' => 't1', 'ref' => new TaskBoardUserRef('U-BRUNO')],
+            ['taskId' => 't2', 'ref' => new TaskBoardUserRef('U-BRUNO')],
+            ['taskId' => 't3', 'ref' => 'u-bruno'],
+            ['taskId' => 't4', 'ref' => 'u-brunó'],
+            ['taskId' => 7, 'ref' => 'u-bruno '],
+            ['taskId' => null, 'ref' => 'u-bruno'],
+        ];
+
+        self::assertSame(['t2', 't4', '7'], TaskBoardUsers::lookAlikeOnlyTasks($rows, ['u-bruno' => true]));
+        self::assertSame([], TaskBoardUsers::lookAlikeOnlyTasks([], ['u-bruno' => true]));
+    }
 }

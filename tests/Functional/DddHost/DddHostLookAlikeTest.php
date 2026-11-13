@@ -112,6 +112,10 @@ final class DddHostLookAlikeTest extends KernelTestCase
         self::assertSame([], $query->taskPage([$board->getId()], new TaskApiTaskFilter(), [], $upper)['tasks']);
         self::assertSame([], $query->taskPage([$board->getId()], new TaskApiTaskFilter(assigneeIds: ['x']), [$upper], null)['tasks']);
         self::assertCount(1, $query->taskPage([$board->getId()], new TaskApiTaskFilter(assigneeIds: ['x']), [$bruno], null)['tasks']);
+        // Since 2.15.1: an id that cannot be matched exactly finds nothing, as assignee or as owner.
+        $unusable = new DddUser("u-bruno\u{200B}", 'ZWSP Bruno', 'zwsp-bruno@example.com');
+        self::assertSame([], $query->taskPage([$board->getId()], new TaskApiTaskFilter(assigneeIds: ['x']), [$unusable], null)['tasks']);
+        self::assertSame([], $query->taskPage([$board->getId()], new TaskApiTaskFilter(), [], $unusable)['tasks']);
 
         $multi = $container->get(DoctrineMultiBoardTaskQuery::class);
         self::assertInstanceOf(DoctrineMultiBoardTaskQuery::class, $multi);
