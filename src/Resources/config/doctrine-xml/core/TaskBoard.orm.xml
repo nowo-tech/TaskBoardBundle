@@ -18,6 +18,7 @@
         <field name="creatorName" type="string" column="creator_name" length="180" nullable="true"/>
         <field name="icon" type="string" length="16" nullable="true"/>
         <field name="descriptionFormat" type="string" column="description_format" length="16" nullable="true"/>
+        <field name="numberPrefix" type="string" column="number_prefix" length="16" nullable="true"/>
         <field name="name" type="string" length="255"/>
         <field name="slug" type="string" length="255"/>
         <field name="description" type="text" nullable="true"/>

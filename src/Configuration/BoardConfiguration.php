@@ -37,9 +37,9 @@ final readonly class BoardConfiguration
     public const VERSION = 1;
 
     /**
-     * @param list<BoardColumnSpec>         $columns
-     * @param list<BoardFieldSpec>          $fields
-     * @param list<array<string, mixed>>    $templates
+     * @param list<BoardColumnSpec> $columns
+     * @param list<BoardFieldSpec> $fields
+     * @param list<array<string, mixed>> $templates
      */
     public function __construct(
         public array $columns,
@@ -87,7 +87,7 @@ final readonly class BoardConfiguration
             }
         }
 
-        /** @var list<array<string, mixed>> $templates */
+        /* @var list<array<string, mixed>> $templates */
         return new self(
             array_values(array_map(BoardColumnSpec::fromArray(...), $columns)),
             array_values(array_map(BoardFieldSpec::fromArray(...), $fields)),

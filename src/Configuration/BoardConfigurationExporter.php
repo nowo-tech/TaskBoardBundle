@@ -10,9 +10,9 @@ use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 
+use function array_filter;
 use function array_map;
 use function array_values;
-use function array_filter;
 
 /**
  * Since 2.17.0 (Beacon block W): reads a board's configuration as a {@see BoardConfiguration} — its columns (with their
