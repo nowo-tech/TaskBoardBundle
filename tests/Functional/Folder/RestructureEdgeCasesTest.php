@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Folder;
 
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
