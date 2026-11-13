@@ -499,6 +499,7 @@ task_board.sync.error.restore_refused: "Tasks back in the provider were not rest
 task_board.sync.error.relation_skipped: "Some parent or dependency relations were skipped (the other task is missing or not editable)."
 task_board.sync.error.parent_cycle: "A parent change was refused: it would make a task its own ancestor."
 task_board.sync.error.assignee_unresolved: "Some assignees do not match a person of this board; those tasks keep their assignees."
+task_board.sync.error.external_id_look_alike: "Some provider tasks were skipped: their id differs from an already synced one only by case, accents or trailing spaces. Ask your administrator to apply the TaskBoard 2.15.1 database upgrade."
 task_board.sync.error.status_without_column: "Some statuses have no column on the board; those tasks went to the fallback column."
 task_board.sync.error.file_quota: "Some files were not copied: the storage limit was reached."
 task_board.sync.error.storage_disabled: "Files are not copied: no storage is configured."

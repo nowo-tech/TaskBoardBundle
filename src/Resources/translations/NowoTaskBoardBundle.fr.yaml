@@ -499,6 +499,7 @@ task_board.sync.error.restore_refused: "Des tâches revenues chez le fournisseur
 task_board.sync.error.relation_skipped: "Certaines relations parent ou dépendance ont été ignorées (l'autre tâche manque ou n'est pas modifiable)."
 task_board.sync.error.parent_cycle: "Un changement de parent a été refusé : une tâche deviendrait son propre ancêtre."
 task_board.sync.error.assignee_unresolved: "Certains responsables ne correspondent à personne de ce tableau ; ces tâches gardent leurs responsables."
+task_board.sync.error.external_id_look_alike: "Certaines tâches du fournisseur ont été ignorées : leur identifiant ne diffère d'une tâche déjà synchronisée que par la casse, les accents ou des espaces finaux. Demandez à votre administrateur d'appliquer la mise à jour de base de données de TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Certains statuts n'ont pas de colonne sur le tableau ; ces tâches sont allées dans la colonne par défaut."
 task_board.sync.error.file_quota: "Certains fichiers n'ont pas été copiés : la limite de stockage est atteinte."
 task_board.sync.error.storage_disabled: "Les fichiers ne sont pas copiés : aucun stockage n'est configuré."

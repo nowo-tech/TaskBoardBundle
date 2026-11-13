@@ -6,7 +6,9 @@ namespace Nowo\TaskBoardBundle\Sync;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -169,6 +171,8 @@ final readonly class SyncTaskWriter
         private ?SyncFieldSuppression $suppression = null,
         // Since 2.10.0: holds the column events of a page until its commit (dropped on a rollback or a dry run).
         private ?TaskEventDeferral $events = null,
+        // Since 2.15.1 (audit OM TB-M1): reopens the manager a failed page closed (worker mode).
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
@@ -203,10 +207,11 @@ final readonly class SyncTaskWriter
             return;
         }
 
-        $ids   = array_map(strval(...), array_keys($rows));
-        $items = $this->store->itemsByExternalIds($ctx->connection, $ids);
-        $links = $this->tasks->findImportedByExternalIds($ctx->board, $ctx->scope, $ids);
-        $known = $links;
+        $ids        = array_map(strval(...), array_keys($rows));
+        $lookAlikes = [];
+        $items      = $this->store->itemsByExternalIds($ctx->connection, $ids, $lookAlikes);
+        $links      = $this->tasks->findImportedByExternalIds($ctx->board, $ctx->scope, $ids);
+        $known      = $links;
         foreach ($items as $id => $item) {
             $task = $item->getTask();
             if ($task instanceof Task) {
@@ -223,6 +228,13 @@ final readonly class SyncTaskWriter
             // Since 2.0.1 (audit HY-B): PHP makes an all-digit array key an integer.
             $id   = (string) $id;
             $item = $items[$id] ?? null;
+            // Since 2.15.1 (REQ-SEC-006, audit OM TB-M1): a look-alike item holds this id on a column that still folds
+            // (before the UPGRADING ALTER); a new item would break the unique key. Skipped and reported.
+            if (isset($lookAlikes[$id])) {
+                $ctx->count('skipLookAlike');
+                $ctx->warn('external_id_look_alike');
+                continue;
+            }
             if ($item instanceof TaskSyncItem && $item->isTombstone()) {
                 ++$ctx->skipLocallyDeleted;
                 continue;
@@ -326,6 +338,7 @@ final readonly class SyncTaskWriter
             }
             $this->events?->rollBack();
             $ctx->taskEvents = [];
+            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
 
             throw $exception;
         }
@@ -642,12 +655,19 @@ final readonly class SyncTaskWriter
      */
     private function checklistTasks(SyncRunContext $ctx, string $parentExternalId): array
     {
-        /** @var list<Task> $tasks */
-        $tasks = $this->entityManager->createQueryBuilder()->select('t')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
+        /** @var list<array{0: Task, externalId: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()->select('t', 'i.externalId AS externalId')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
             ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere("i.externalId LIKE :prefix ESCAPE '!'")
             ->setParameter('board', $ctx->board->getId())->setParameter('kind', TaskSyncItem::KIND_CHECKLIST_ITEM)
             ->setParameter('prefix', Like::literal($parentExternalId) . '#%')
             ->getQuery()->getResult();
+        $tasks = [];
+        foreach ($rows as $row) {
+            // Since 2.15.1 (REQ-SEC-006): LIKE may fold the prefix; only the exact parent's items count.
+            if (str_starts_with($row['externalId'], $parentExternalId . '#')) {
+                $tasks[] = $row[0];
+            }
+        }
 
         return $tasks;
     }

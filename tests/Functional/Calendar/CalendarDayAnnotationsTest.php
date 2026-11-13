@@ -132,6 +132,33 @@ final class CalendarDayAnnotationsTest extends CalendarTestCase
     }
 
     /**
+     * Since 2.15.1 (REQ-SEC-006): the provider's answer is read by the exact id asked. A key that is not byte for byte
+     * one of the ids the bundle asked for (another spelling, a look-alike, a differently-typed key PHP's array-key
+     * juggling would match) annotates nobody; the assignee answered under the exact id still carries her warning.
+     */
+    public function testOnlyAKeyExactlyAsAskedAnnotatesAnAssignee(): void
+    {
+        self::$taskBoardConfig = self::WITH_PROVIDER;
+        self::ensureKernelShutdown();
+        $this->setUp();
+        [$board, $alice, $bob]                  = $this->seed();
+        $days                                   = $this->days();
+        $days->people[(string) $alice->getId()] = [new CalendarDayAnnotation('2030-03-04', true, 'Absent alice', CalendarDayKind::Absent)];
+        $days->people[(string) $bob->getId()]   = [new CalendarDayAnnotation('2030-03-03', true, 'Absent bob', CalendarDayKind::Absent)];
+        // Alice is answered under the int id (a host that keys its answer by `getId()`): still the id asked.
+        $days->answerKeys[(string) $alice->getId()] = (int) $alice->getId();
+        // Bob is answered under a key that is not the id asked: an edge space (a look-alike of his id).
+        $days->answerKeys[(string) $bob->getId()] = ' ' . $bob->getId();
+
+        $crawler = $this->client->request('GET', $this->calendarUrl($board, 'mode=month&date=2030-03-04'));
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Absent alice', $crawler->filter('[data-title="Due on a holiday"] .nowo-task-cal__off-day-label')->text(), 'the id asked, answered as an int key, still annotates');
+        self::assertStringNotContainsString('Absent bob', (string) $this->client->getResponse()->getContent());
+        self::assertCount(0, $crawler->filter('[data-title="Span over an absence"] [data-testid="nowo-task-cal-off-day"]'));
+    }
+
+    /**
      * Since 2.14.1 (audit NN-L1): a provider that throws never breaks the calendar: the page renders without annotations
      * (the 2.13 page) and the failure is logged.
      */

@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -209,19 +210,19 @@ final readonly class TaskSyncPeopleReassigner
         $counts = [];
         foreach ([[Task::class, 'creator', 'creatorName'], [TaskComment::class, 'author', 'authorName'], [TaskBoard::class, 'creator', 'creatorName'], [TaskDocument::class, 'creator', 'creatorName'], [TaskChangeHistory::class, 'user', 'userName']] as [$class, $field, $name]) {
             // Since 2.15.0 (audit OC-M2, user_reference: id): the rows of exactly this id, by primary key.
-            [$where, $match] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
-                ? ['x.id IN (:match)', TaskBoardUsers::exactRowIds($this->entityManager, $class, $field, TaskBoardUsers::exactId($user))]
-                : ['x.' . $field . ' = :match', $user];
-            if ($match === []) {
-                $counts[] = 0;
-
-                continue;
+            // Since 2.15.1 (audit OC Low): the primary keys go 500 per statement, far below PostgreSQL's 65,535 parameters.
+            [$where, $batches] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+                ? ['x.id IN (:match)', array_chunk(TaskBoardUsers::exactRowIds($this->entityManager, $class, $field, TaskBoardUsers::exactId($user)), ExactKey::CHUNK)]
+                : ['x.' . $field . ' = :match', [$user]];
+            $count = 0;
+            foreach ($batches as $match) {
+                // Rows written before 1.25 have no snapshot yet: they get the current name first.
+                $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE ' . $where . ' AND x.' . $name . ' IS NULL')
+                    ->setParameter('label', $forgetName ? null : $label)->setParameter('match', $match)->execute();
+                $count += (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE ' . $where)
+                    ->setParameter('match', $match)->execute();
             }
-            // Rows written before 1.25 have no snapshot yet: they get the current name first.
-            $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE ' . $where . ' AND x.' . $name . ' IS NULL')
-                ->setParameter('label', $forgetName ? null : $label)->setParameter('match', $match)->execute();
-            $counts[] = (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE ' . $where)
-                ->setParameter('match', $match)->execute();
+            $counts[] = $count;
         }
         if ($forgetName) {
             $this->forgetMemberRows($user);

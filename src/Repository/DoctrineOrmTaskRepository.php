@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -312,7 +313,10 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
                 ->getQuery()
                 ->getResult();
             foreach ($links as $link) {
-                $found[(string) $link->getExternalId()] ??= [$link->getTask(), $link];
+                // Since 2.15.1 (REQ-SEC-006): the database may fold the id and the scope; only exact rows count.
+                if ($link->getImportSource() === $scope && ExactKey::oneOf($link->getExternalId(), $chunk)) {
+                    $found[(string) $link->getExternalId()] ??= [$link->getTask(), $link];
+                }
             }
         }
 

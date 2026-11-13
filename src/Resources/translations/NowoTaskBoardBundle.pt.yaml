@@ -499,6 +499,7 @@ task_board.sync.error.restore_refused: "Tarefas que voltaram ao fornecedor não 
 task_board.sync.error.relation_skipped: "Algumas relações de tarefa principal ou dependência foram ignoradas (a outra tarefa falta ou não é editável)."
 task_board.sync.error.parent_cycle: "Uma alteração de tarefa principal foi recusada: uma tarefa seria o seu próprio antecessor."
 task_board.sync.error.assignee_unresolved: "Alguns responsáveis não correspondem a ninguém deste quadro; essas tarefas mantêm os seus responsáveis."
+task_board.sync.error.external_id_look_alike: "Algumas tarefas do fornecedor foram ignoradas: o seu id só difere de uma já sincronizada em maiúsculas, acentos ou espaços finais. Peça ao seu administrador que aplique a atualização da base de dados do TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alguns estados não têm coluna no quadro; essas tarefas foram para a coluna por omissão."
 task_board.sync.error.file_quota: "Alguns ficheiros não foram copiados: o limite de armazenamento foi atingido."
 task_board.sync.error.storage_disabled: "Os ficheiros não são copiados: não há armazenamento configurado."
