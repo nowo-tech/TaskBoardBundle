@@ -143,7 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
-  by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`. Nothing changes until a folder is used.
+  by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`, or with `include_folders=true` (default:
+  `api.lists_include_folders`, false). Nothing changes until a folder is used.
+- `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
+  context of the `board_moved` history row, so a host can archive the emptied story.
 
 ### Documentation
 
