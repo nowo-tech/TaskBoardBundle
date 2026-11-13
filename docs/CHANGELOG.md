@@ -108,6 +108,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.16.0 (minor; Symfony Beacon spec 234 "AI Flow on Beacon tasks", steps 2–6). Additive: with an unchanged
+configuration every existing answer and behaviour stays, except that the Task API answers gain `revision`,
+`humans_only` and an `ETag`, and `/v2/team` lists members once `api.hooks.members` is set. **Schema change for every
+host** (three columns, one optional index): see [UPGRADING](UPGRADING.md#to-2160).
+
+### Added
+
+- **Column transition policy** (FR-014 – FR-017). `Transition\ColumnTransitionPolicyInterface::decide(ColumnTransition):
+  ColumnTransitionDecision` (framework-free: board, task and column snapshots, the task's tags, the actor and a
+  `ColumnTransitionVia` channel `web` / `api` / `mcp` / host label and operation `create` / `move` / `bulk` /
+  `checklist`). Asked before anything changes by every move of `TaskManager` (`move()`, previous / next / done,
+  `moveToColumn()`, a column change in `update()`, a create in a column), board UI included, and by every Task API
+  operation that sets a status (create, update, bulk, checklist items) with the principal's own channel (an MCP
+  call reads `mcp`, never `web`). A refusal carries a code and a message: the Task API answers 403 with that code
+  (`STATUS_HUMANS_ONLY`, a host's `WIP_LIMIT`, `BLOCK_REASON_REQUIRED`, …; `STATUS_REFUSED` by default) and message;
+  the board shows the message as a flash and the dragged card goes back (409 on the drag). Option
+  `column_transition_policy` (default `AllowAllColumnTransitionPolicy`); the bundled opt-in
+  `HumansOnlyColumnTransitionPolicy` refuses `api` and `mcp` into a *humans only* column, checklist items included
+  (strict; `humans_only_policy.allow_checklist: true` lets them tick checklist items).
+  `TaskManager` methods gain an optional trailing `?ColumnTransitionVia $via` (null = `web`) and
+  `assertCanEnter()`; `ColumnTransitionRefusedException` (with the decision) is new.
+- **`humansOnly` column flag** (`task_board_columns.humans_only`, default false): `BoardColumn::isHumansOnly()` /
+  `setHumansOnly()`, `BoardColumnFormData::$humansOnly`, `BoardColumnManager::setHumansOnly()` (the domain setter a
+  board configuration copier uses; COLUMN_UPDATED with field `humansOnly`), a toggle in the add / edit column dialogs
+  (`board.column_humans_only_field`, shown by default only with a `column_transition_policy`), a tag in the column
+  header, and `humans_only` on every API status (read, and written by `POST` / `PUT /v2/list/{id}/status…`).
+- **Optimistic locking** (FR-018). `Task::getRevision()` (`task_board_tasks.revision`, 1 for a new task) is bumped once
+  per flush that changes the task (its position, total time and `updatedAt` aside) or its assignees / watchers
+  (`Doctrine\TaskRevisionListener`). The Task API returns `revision` on every task and `ETag: "n"` on
+  `GET` / `PUT /v2/task/{id}`; `PUT /v2/task/{id}` honours `If-Match` (`"n"`, `n`, `W/"n"`, `*`) or `base_revision`: the
+  row is locked, a stale value answers 409 `TASK_409` with `current_revision` and nothing is written.
+- **Atomic bulk update** (FR-021): `POST /v2/task/bulk` with `{"tasks": [{"id", "base_revision"?, "description" |
+  "markdown_content", "status", "tags", "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`, at most
+  50 tasks of one space (`BULK_003`, `BULK_002`), one transaction (rows locked in id order). Any refusal writes nothing
+  and answers 409 `BULK_001` with every failing item in `failures` (index, id, its own status and ECODE, err,
+  `current_revision`); a
+  field a bulk item does not take is refused. After the commit, one `API_WRITE` per task (`task.bulk_update`) and one
+  `TaskBoardEvents::API_BULK_WRITE` (`TaskApiBulkWriteEvent`, with `$count`), so a host counts N writes. Worker mode:
+  refusals are checked before the first write; a failed write rolls back, resets a closed manager and reloads the
+  touched tasks (`Api\Operation\TaskApiTransaction`). The one-space rule compares the tenant keys byte for byte
+  (2.15.1, REQ-SEC-006): a look-alike tenant is another space.
+- **Text search** (FR-026): `query` on `GET /v2/team/{id}/task` and `GET /v2/list/{id}/task`, through
+  `Search\TaskTextSearchInterface` (option `search.provider`), default `DoctrineTaskTextSearch`: every word in the title
+  or description (and, with `search.comments`, a comment that is not deleted); MySQL FULLTEXT with `search.fulltext`
+  (index mapped on MySQL only, `search.min_token_length`), `LIKE` with escaping elsewhere and for short words; user text
+  never reaches the server as boolean-mode operators. Matches are taken only within the boards the token reaches,
+  before any page or limit, then every other filter and *My tasks* apply in SQL; more than `search.max_matches`
+  (default 500) answers 400 `SEARCH_001`.
+- **Team members** (FR-025): `Api\Hook\TaskApiMembersInterface` (`api.hooks.members`, default empty) with
+  `Api\Value\TaskApiMember` (id, name, `isServiceAccount()`, e-mail, colour, picture). `/v2/team` lists them as
+  ClickUp's `members[].user` plus `service_account`; the e-mail is kept only on the viewer's own row whatever the host
+  returns. `GET /v2/team/{id}/member` (all) and `?name=` (prefix of the name or a word of it, case and accents aside;
+  id, username and service-account flag only; at most 20). A team the viewer's workspace hook does not list is 404
+  before the host is asked.
+- **Comment edit**: `PUT /v2/comment/{id}` (`comment_text`, ClickUp's shape, answers `{}`), for a token that may comment
+  on the comment's task, then `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`, default
+  `AuthorOnlyTaskApiCommentEditPolicy`). Missing, deleted, out of reach or not editable: 404 alike.
+- **`TASK_003` names the task (Beacon spec 234).** The 409 a task that cannot be numbered answers (its scope's counter
+  belongs to a look-alike scope, 2.15.1) now carries `task_id` and `scope`, so a client that writes many tasks at once
+  does not bisect its batch to find the offending one. `scope` is the key the caller's **own** board asks for, never the
+  look-alike key stored for another tenant, and nothing else of the task is exposed. It stays a request-level refusal,
+  never an entry of a bulk update's `failures`: the write is all or none.
+  `Exception\TaskNumberScopeConflictException` carries `$scopeKey` and `$taskId` (no number: the conflict is raised
+  before one is reserved).
+- **`TaskBoardEvents::TASK_STATUS_CHANGED`** (`TaskStatusChangedEvent`): after every column change of a task, whatever
+  the channel: task and column snapshots, actor id, channel / operation, and `$toType` (always null until column types
+  arrive in 2.17).
+- **Dependents**: `TaskDependencyManager::dependentsOf(Task)` and `Repository\TaskDependentsLookupInterface`
+  (implemented by `DoctrineOrmTaskDependencyRepository`): the tasks blocked by a task, of its tenant only.
+
 ## [2.15.1] - 2026-11-13
 
 Target 2.15.1 (patch). See [UPGRADING](UPGRADING.md#to-2151): MySQL / MariaDB hosts change the collation of the key

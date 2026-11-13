@@ -7,22 +7,27 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
+use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiMembers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
 use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -44,6 +49,7 @@ use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\Doctrine\TaskRevisionListener;
 use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
@@ -82,6 +88,7 @@ use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDependencyRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskDependentsLookupInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDocumentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskLinkRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskMemberRepositoryInterface;
@@ -91,6 +98,9 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Routing\TenantPaths;
 use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
+use Nowo\TaskBoardBundle\Search\DoctrineTaskTextSearch;
+use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
+use Nowo\TaskBoardBundle\Search\TaskTextSearchMetadataListener;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
@@ -133,6 +143,9 @@ use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
+use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -248,6 +261,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             'icon_form_type'    => $config['board']['column_icon_form_type'],
             'icon_form_options' => $config['board']['column_icon_form_options'],
             'icon_known_ids'    => $this->columnIconIds($config['board']),
+            // Since 2.16.0 (spec 234): the humans-only toggle; by default only with a column transition policy.
+            'humans_only_field' => $config['board']['column_humans_only_field'] ?? (is_string($config['column_transition_policy']) && $config['column_transition_policy'] !== ''),
         ]);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
@@ -290,6 +305,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTimeTrackIntegration($container, $loader);
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
+        $this->registerTextSearch($container, $config['search'], $emName);
+        $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
+        // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
+        $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         // Since 1.24: the host's default board view per user, else the board view.
@@ -395,6 +414,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias(TaskApiPlanGateInterface::class, $this->serviceOr($api['hooks']['plan_gate'], DenyingTaskApiPlanGate::class));
         $container->setAlias(TaskApiWorkspaceInterface::class, $this->serviceOr($api['hooks']['workspace'], EmptyTaskApiWorkspace::class));
         $container->setAlias(TaskApiUsersInterface::class, $this->serviceOr($api['hooks']['users'], EmptyTaskApiUsers::class));
+        // Since 2.16.0 (spec 234, FR-025).
+        $container->setAlias(TaskApiMembersInterface::class, $this->serviceOr($api['hooks']['members'], EmptyTaskApiMembers::class));
+        $container->setAlias(TaskApiCommentEditPolicyInterface::class, $this->serviceOr($api['hooks']['comment_edit_policy'], AuthorOnlyTaskApiCommentEditPolicy::class));
         $container->setAlias(TaskApiTimeEntriesInterface::class, $this->serviceOr($api['hooks']['time_entries'], DenyingTaskApiTimeEntries::class));
         $container->setAlias(TaskApiAttachmentsInterface::class, $this->serviceOr($api['hooks']['attachments'], DenyingTaskApiAttachments::class));
         if (is_string($api['hooks']['idempotency_store']) && $api['hooks']['idempotency_store'] !== '') {
@@ -409,6 +431,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(TaskApiTransaction::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
     }
 
     /**
@@ -776,6 +799,28 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$inner', new Reference(TenantPathUrlGenerator::class . '.inner'))
             ->setArgument('$tenantPaths', new Reference(TenantPaths::class))
             ->setArgument('$requestStack', new Reference('request_stack')));
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-026): {@see TaskTextSearchInterface} is `search.provider` or {@see DoctrineTaskTextSearch}
+     * on the bundle's manager; with `search.fulltext` the FULLTEXT indexes are mapped on MySQL.
+     *
+     * @param array{provider: string|null, fulltext: bool, comments: bool, min_token_length: int, max_matches: int} $search
+     */
+    private function registerTextSearch(ContainerBuilder $container, array $search, string $emName): void
+    {
+        $container->setParameter('nowo_task_board.search.max_matches', $search['max_matches']);
+        $container->setDefinition(DoctrineTaskTextSearch::class, (new Definition(DoctrineTaskTextSearch::class))
+            ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+            ->setArgument('$fulltext', $search['fulltext'])
+            ->setArgument('$comments', $search['comments'])
+            ->setArgument('$minTokenLength', $search['min_token_length']));
+        $container->setAlias(TaskTextSearchInterface::class, $this->serviceOr($search['provider'], DoctrineTaskTextSearch::class));
+        if ($search['fulltext']) {
+            $container->setDefinition(TaskTextSearchMetadataListener::class, (new Definition(TaskTextSearchMetadataListener::class))
+                ->setArgument('$comments', $search['comments'])
+                ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
+        }
     }
 
     /**
@@ -1198,6 +1243,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             DoctrineOrmTaskCommentRepository::class,
         ];
 
+        // Since 2.16.0 (spec 234): the reverse lookup of blocked_by.
+        $container->setAlias(TaskDependentsLookupInterface::class, DoctrineOrmTaskDependencyRepository::class);
         foreach ($repos as $interface => $implementation) {
             $definition = (new Definition($implementation))
                 ->setAutowired(false)
@@ -1250,6 +1297,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             // Since 2.15.1 (REQ-SEC-006 item 8): the server_version fallback warning.
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
+        // Since 2.16.0 (spec 234, FR-018): the task revision of the Task API's optimistic lock, on every manager.
+        $container->setDefinition(TaskRevisionListener::class, (new Definition(TaskRevisionListener::class))
+            ->setAutowired(false)
+            ->addTag('doctrine.event_listener', ['event' => 'onFlush']));
     }
 
     /** @param array<string, mixed> $security */

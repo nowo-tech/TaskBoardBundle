@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
+use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
@@ -22,9 +24,12 @@ use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
@@ -32,11 +37,13 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
+use function array_key_first;
 use function array_key_last;
 use function array_map;
 use function array_unique;
@@ -44,9 +51,13 @@ use function array_values;
 use function count;
 use function in_array;
 use function intdiv;
+use function is_string;
+use function ksort;
 use function mb_strtolower;
 use function str_contains;
+use function strcmp;
 use function trim;
+use function uasort;
 
 /**
  * Since 2.2.0 (spec 213): the task writes of the API, through the services the UI uses (FR-011), without HTTP. Each method
@@ -65,6 +76,9 @@ final readonly class TaskApiTaskOperations
     /** ClickUp's task fields Beacon has no equivalent for: warned, never saved. */
     public const NOT_SUPPORTED = ['tags', 'points', 'group_assignees', 'custom_item_id', 'custom_fields', 'notify_all', 'links_to', 'check_required_custom_fields', 'parent', 'due_date_time', 'start_date_time', 'custom_task_ids', 'team_id'];
 
+    /** Since 2.16.0 (spec 234, FR-021): at most this many tasks in one bulk update. */
+    public const BULK_MAX = 50;
+
     /** The task form's tag field takes at most 20. */
     public const MAX_TAGS = 20;
 
@@ -82,7 +96,21 @@ final readonly class TaskApiTaskOperations
         private TaskCommentManager $comments,
         private TaskMentionCandidatesResolverInterface $mentionCandidates,
         private TaskApiAttachmentsInterface $attachments,
+        // Since 2.16.0 (spec 234): the transaction of an update with a base revision.
+        private TaskApiTransaction $transaction,
+        // Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`.
+        private TaskCommentRepositoryInterface $commentRepository,
+        private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
     ) {
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): how a write of this principal enters a column: its channel as it is (`api`, `mcp` or a
+     * host's own), never `web`.
+     */
+    public static function via(TaskApiPrincipal $principal, string $operation = ColumnTransitionVia::OP_MOVE): ColumnTransitionVia
+    {
+        return new ColumnTransitionVia($principal->channel, $operation);
     }
 
     /**
@@ -110,7 +138,7 @@ final readonly class TaskApiTaskOperations
         $assignees  = $this->assignable($board, $input->strings('assignees'));
         $this->audit->requireTaskQuota($board, 1, $principal->user);
 
-        $task = $this->tasks->create($board, $data, $principal->user, $parent);
+        $task = $this->withinPlan(fn (): Task => $this->tasks->create($board, $data, $principal->user, $parent, null, self::via($principal, ColumnTransitionVia::OP_CREATE)));
         foreach ($assignees as $user) {
             $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
         }
@@ -122,14 +150,57 @@ final readonly class TaskApiTaskOperations
     /**
      * `PUT /v2/task/{id}`. A *My tasks* token changes only status, dates and description; any other field is 403 `TOKEN_001`.
      *
+     * Since 2.16.0 (spec 234, FR-018): with a base revision (`$ifMatch`, the `If-Match` header, else `base_revision` in the
+     * body) the task's row is locked and compared first: another revision is 409 `TASK_409` with `current_revision`, and
+     * nothing is written. The whole update is then one transaction.
+     *
      * @throws TaskApiRefusal
      */
-    public function updateTask(TaskApiPrincipal $principal, string $taskId, TaskApiInput $input): Task
+    public function updateTask(TaskApiPrincipal $principal, string $taskId, TaskApiInput $input, ?int $ifMatch = null): Task
     {
         $this->audit->requireListener();
         $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived');
+        $base          = $ifMatch ?? self::baseRevision($input);
         $task          = $this->guard->task($principal, $taskId, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
-        $board         = $task->getBoard();
+        if ($base === null) {
+            return $this->applyUpdate($principal, $task, $input);
+        }
+
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+        return $this->transaction->run(function () use ($principal, $task, $input, $base): Task {
+            $current = $this->transaction->lockedRevision($task);
+            if ($current !== $base) {
+                throw TaskApiRefusal::stale($current);
+            }
+
+            return $this->applyUpdate($principal, $task, $input);
+        }, [$task]);
+    }
+
+    /**
+     * Since 2.16.0: `base_revision` of a body: a positive integer, or none.
+     *
+     * @throws TaskApiRefusal
+     */
+    public static function baseRevision(TaskApiInput $input): ?int
+    {
+        if (!$input->has('base_revision')) {
+            return null;
+        }
+        $base = $input->int('base_revision');
+        if ($base === null || $base < 1) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid base_revision');
+        }
+
+        return $base;
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    private function applyUpdate(TaskApiPrincipal $principal, Task $task, TaskApiInput $input): Task
+    {
+        $board = $task->getBoard();
 
         // Everything that can be refused, before the first save.
         $data = TaskFormData::fromTask($task);
@@ -162,13 +233,13 @@ final readonly class TaskApiTaskOperations
         if ($archived === false && $this->withinPlan(fn (): bool => $this->tasks->restore($task, $principal->user))) {
             $changed[] = 'archived';
         }
-        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user))) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, self::via($principal)))) {
             $changed[] = 'status';
         }
         // The column is where the move left it: update() must never move the task (it would skip completion and its events).
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user));
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
             $changed[] = 'fields';
         }
         foreach ([TaskMemberRole::Assignee, TaskMemberRole::Watcher] as $role) {
@@ -191,6 +262,234 @@ final readonly class TaskApiTaskOperations
         $this->audit->written($principal, 'task.update', $board, $task->getId(), [], array_values(array_unique($changed)));
 
         return $task;
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-021): `POST /v2/task/bulk`, `{"tasks": [{"id": …, "base_revision"?: n, "description" |
+     * "markdown_content", "status", "tags" (the whole list), "priority", "due_date", "start_date", "assignees": {"add",
+     * "rem"}}, …]}`: at most {@see self::BULK_MAX} tasks of one space (tenant), all or none.
+     *
+     * Every item is checked as its own `PUT /v2/task/{id}` would be (reach, token level, values, the column transition
+     * policy with operation `bulk`, the host's limit) and, inside one transaction, its row is locked (in id order) and its
+     * `base_revision` compared. Any refusal writes nothing and answers `BULK_001` with every failing item (`failures`:
+     * index, id, status, ECODE, err, and `current_revision` for `TASK_409`), always with HTTP 409 (Beacon review 2026-11-13):
+     * each item's own status and ECODE stay in `failures`.
+     * After the commit: one `API_WRITE` (`task.bulk_update`) per task and one `API_BULK_WRITE` with the count.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<Task> in the order of the request
+     */
+    public function updateMany(TaskApiPrincipal $principal, TaskApiInput $input): array
+    {
+        $this->audit->requireListener();
+        $items = $input->objects('tasks');
+        if ($items === []) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid tasks: at least one');
+        }
+        if (count($items) > self::BULK_MAX) {
+            throw new TaskApiRefusal(400, 'BULK_003', 'At most ' . self::BULK_MAX . ' tasks in one bulk update');
+        }
+
+        // 1. Reach, as each update would ask it; nothing is locked or written yet.
+        $failures = [];
+        $tasks    = [];
+        $inputs   = [];
+        $bases    = [];
+        $seen     = [];
+        foreach ($items as $index => $fields) {
+            $item           = new TaskApiInput($fields, self::NOT_SUPPORTED);
+            $inputs[$index] = $item;
+            try {
+                $id = (string) $item->string('id', true);
+                if (isset($seen[$id])) {
+                    throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid id: twice in one bulk update');
+                }
+                $seen[$id]     = true;
+                $bases[$index] = self::baseRevision($item);
+                $ownFieldsOnly = !$item->hasAny('priority', 'time_estimate', 'assignees', 'tags');
+                $tasks[$index] = $this->guard->task($principal, $id, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
+            } catch (TaskApiRefusal $refusal) {
+                $failures[$index] = self::failure($index, $fields['id'] ?? null, $refusal);
+            }
+        }
+        if ($failures !== []) {
+            throw self::bulkRefused($failures);
+        }
+        // Since 2.15.1 (REQ-SEC-006): the keys are compared byte for byte, never through PHP's array keys, so a
+        // look-alike tenant (`Acme` next to `acme`, a null next to an empty key) is a second space, not the same one.
+        $tenant = null;
+        foreach ($tasks as $position => $task) {
+            $key = $task->getBoard()->getTenantKey();
+            if ($position === array_key_first($tasks)) {
+                $tenant = $key;
+            } elseif ($key !== $tenant) {
+                throw new TaskApiRefusal(400, 'BULK_002', 'A bulk update stays within one space');
+            }
+        }
+
+        // 2. One transaction: lock, compare, check everything, then write.
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+        $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases): array {
+            $ordered = $tasks;
+            uasort($ordered, static fn (Task $a, Task $b): int => strcmp($a->getId(), $b->getId()));
+            $failures = [];
+            foreach ($ordered as $index => $task) {
+                $current = $this->transaction->lockedRevision($task);
+                if ($bases[$index] !== null && $bases[$index] !== $current) {
+                    $failures[$index] = self::failure($index, $task->getId(), TaskApiRefusal::stale($current));
+                }
+            }
+            $plans = [];
+            foreach ($tasks as $index => $task) {
+                if (isset($failures[$index])) {
+                    continue;
+                }
+                try {
+                    $plans[$index] = $this->bulkPlan($principal, $task, $inputs[$index]);
+                } catch (TaskApiRefusal $refusal) {
+                    $failures[$index] = self::failure($index, $task->getId(), $refusal);
+                }
+            }
+            $failures += $this->bulkLimits($tasks, $plans);
+            if ($failures !== []) {
+                throw self::bulkRefused($failures);
+            }
+            $changed = [];
+            foreach ($plans as $index => $plan) {
+                $changed[$index] = $this->bulkWrite($principal, $tasks[$index], $plan);
+            }
+
+            return $changed;
+        }, array_values($tasks));
+
+        foreach ($tasks as $index => $task) {
+            $this->audit->written($principal, 'task.bulk_update', $task->getBoard(), $task->getId(), [], $changed[$index] ?? []);
+        }
+        $this->audit->bulkWritten($principal, $tenant, array_values(array_map(static fn (Task $task): string => $task->getId(), $tasks)));
+
+        return array_values($tasks);
+    }
+
+    /**
+     * What one bulk item changes, checked: nothing is written here.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return array{data: TaskFormData, status: BoardColumn|null, add: list<object>, rem: list<string>}
+     */
+    private function bulkPlan(TaskApiPrincipal $principal, Task $task, TaskApiInput $item): array
+    {
+        $board          = $task->getBoard();
+        $data           = TaskFormData::fromTask($task);
+        $data->columnId = $task->getColumn()?->getId();
+        $this->applyFields($data, $item);
+        if ($item->has('tags')) {
+            $data->tags = $this->tags($item->strings('tags'));
+        }
+        $status = $item->has('status') ? $this->columnOf($board, $item->string('status', true)) : null;
+        if ($status instanceof BoardColumn) {
+            try {
+                $this->tasks->assertCanEnter($task, $status, $principal->user, self::via($principal, ColumnTransitionVia::OP_BULK), $data->tags);
+            } catch (ColumnTransitionRefusedException $refused) {
+                throw TaskApiRefusal::transitionRefused($refused);
+            }
+        }
+        $assignees = $item->addRemove('assignees');
+        // A field a bulk item does not take is refused, never silently skipped (an agent would believe it saved).
+        foreach ($item->warnings() as $warning) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid ' . $warning['field'] . ': not taken by a bulk update');
+        }
+
+        return ['data' => $data, 'status' => $status, 'add' => $this->assignable($board, $assignees['add']), 'rem' => $assignees['rem']];
+    }
+
+    /**
+     * The host's limit of active tasks, per board, on every completed task a bulk update reopens (audit IA-L6).
+     *
+     * @param array<int, Task> $tasks
+     * @param array<int, array{data: TaskFormData, status: BoardColumn|null, add: list<object>, rem: list<string>}> $plans
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function bulkLimits(array $tasks, array $plans): array
+    {
+        $reopens = [];
+        foreach ($plans as $index => $plan) {
+            $task    = $tasks[$index];
+            $columns = $task->getBoard()->getColumns()->toArray();
+            $last    = $columns === [] ? null : $columns[array_key_last($columns)];
+            if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $plan['status']->getId() !== $last->getId()) {
+                $reopens[$task->getBoard()->getId()][] = $index;
+            }
+        }
+        $failures = [];
+        foreach ($reopens as $indexes) {
+            $board = $tasks[$indexes[0]]->getBoard();
+            if ($this->tasks->activeTaskRefusal($board, count($indexes)) instanceof LimitRefusal) {
+                foreach ($indexes as $index) {
+                    $failures[$index] = self::failure($index, $tasks[$index]->getId(), new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached'));
+                }
+            }
+        }
+
+        return $failures;
+    }
+
+    /**
+     * @param array{data: TaskFormData, status: BoardColumn|null, add: list<object>, rem: list<string>} $plan
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<string> what changed
+     */
+    private function bulkWrite(TaskApiPrincipal $principal, Task $task, array $plan): array
+    {
+        $via     = self::via($principal, ColumnTransitionVia::OP_BULK);
+        $changed = [];
+        // The fields first (the column stays), so the move is asked with the tags the item gives the task, as checked.
+        $data           = $plan['data'];
+        $data->columnId = $task->getColumn()?->getId();
+        if ($data != TaskFormData::fromTask($task)) {
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, $via));
+            $changed[] = 'fields';
+        }
+        $status = $plan['status'];
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, $via))) {
+            $changed[] = 'status';
+        }
+        foreach ($plan['add'] as $user) {
+            $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
+            $changed[] = 'assignees';
+        }
+        foreach ($plan['rem'] as $apiId) {
+            foreach ($task->getMembers() as $member) {
+                if ($member->getMemberRole() === TaskMemberRole::Assignee && $this->users->apiId($member->getUser()) === $apiId) {
+                    $this->members->unassign($task, $member->getId(), $principal->user);
+                    $changed[] = 'assignees';
+                }
+            }
+        }
+
+        return array_values(array_unique($changed));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function failure(int $index, mixed $id, TaskApiRefusal $refusal): array
+    {
+        return ['index' => $index, 'id' => is_string($id) ? $id : null, 'status' => $refusal->status, 'ECODE' => $refusal->ecode, 'err' => $refusal->getMessage()] + $refusal->extra;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $failures by index
+     */
+    private static function bulkRefused(array $failures): TaskApiRefusal
+    {
+        ksort($failures);
+
+        return new TaskApiRefusal(409, 'BULK_001', 'Bulk update refused: nothing was changed', ['failures' => array_values($failures)]);
     }
 
     /**
@@ -239,6 +538,44 @@ final readonly class TaskApiTaskOperations
     }
 
     /**
+     * Since 2.16.0 (spec 234): `PUT /v2/comment/{id}` (`comment_text`). The comment's task must be one the token may
+     * comment on (its tenant and reach, as `POST /v2/task/{id}/comment`), then `api.hooks.comment_edit_policy` decides
+     * (default: its author only). A comment that does not exist, is deleted, is out of reach or may not be edited is
+     * 404 alike, so nothing tells them apart. Mentions work as on create.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function editComment(TaskApiPrincipal $principal, string $commentId, TaskApiInput $input): TaskComment
+    {
+        $this->audit->requireListener();
+        $comment = $this->commentRepository->findById($commentId);
+        if (!$comment instanceof TaskComment || $comment->getId() !== $commentId || $comment->isDeleted()) {
+            throw TaskApiRefusal::notFound();
+        }
+        try {
+            $task = $this->guard->task($principal, $comment->getTask()->getId(), TaskApiCapability::Comment);
+        } catch (TaskApiRefusal) {
+            throw TaskApiRefusal::notFound();
+        }
+        if (!$this->commentEdits->mayEdit($principal, Snapshots::comment($comment))) {
+            throw TaskApiRefusal::notFound();
+        }
+        $body = (string) $input->string('comment_text', true);
+        $this->validate($body, TaskConstraints::commentBody(), 'comment_text');
+        $mentioned = [];
+        foreach ($this->mentionCandidates->candidates($task) as $candidate) {
+            if (str_contains($body, '@' . $candidate->label)) {
+                $mentioned[] = $candidate->id;
+            }
+        }
+        // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
+        $this->comments->edit($comment, $principal->user, $body, $mentioned);
+        $this->audit->written($principal, 'comment.update', $task->getBoard(), $task->getId(), ['comment' => $comment->getId()]);
+
+        return $comment;
+    }
+
+    /**
      * `POST /v2/task/{id}/attachment` (multipart, field `attachment`): stored by the host, with all its upload checks (FR-014).
      *
      * @throws TaskApiRefusal
@@ -272,7 +609,7 @@ final readonly class TaskApiTaskOperations
         $data->tags = $add
             ? $this->tags([...$task->getTags(), $name])
             : array_values(array_filter($task->getTags(), static fn (string $tag): bool => mb_strtolower($tag) !== mb_strtolower($name)));
-        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user));
+        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
         $this->audit->written($principal, $add ? 'tag.add' : 'tag.remove', $task->getBoard(), $taskId, [], ['tags']);
 
         return $task;
@@ -488,6 +825,9 @@ final readonly class TaskApiTaskOperations
             return $write();
         } catch (TaskReopenRefusedException) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (spec 234, FR-015 / FR-017).
+            throw TaskApiRefusal::transitionRefused($refused);
         }
     }
 }

@@ -31,10 +31,12 @@ final class TaskBoardRouteLoader extends Loader
 {
     /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action, method (GET when absent)]. */
     private const API_ROUTES = [
-        'user'          => ['/v2/user', TaskApiIdentityController::class, 'user'],
-        'team'          => ['/v2/team', TaskApiIdentityController::class, 'teams'],
-        'spaces'        => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
-        'team_tasks'    => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        'user'       => ['/v2/user', TaskApiIdentityController::class, 'user'],
+        'team'       => ['/v2/team', TaskApiIdentityController::class, 'teams'],
+        'spaces'     => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
+        'team_tasks' => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        // Since 2.16.0 (spec 234, FR-025).
+        'team_members'  => ['/v2/team/{teamId}/member', TaskApiIdentityController::class, 'members'],
         'time_entries'  => ['/v2/team/{teamId}/time_entries', TaskApiReadController::class, 'timeEntries'],
         'space'         => ['/v2/space/{spaceId}', TaskApiReadController::class, 'space'],
         'folders'       => ['/v2/space/{spaceId}/folder', TaskApiReadController::class, 'folders'],
@@ -47,10 +49,14 @@ final class TaskBoardRouteLoader extends Loader
         'task_comments' => ['/v2/task/{taskId}/comment', TaskApiReadController::class, 'comments'],
         'task_members'  => ['/v2/task/{taskId}/member', TaskApiReadController::class, 'members'],
         // Since 2.2.0 (spec 213): writes.
-        'task_create'       => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
-        'task_update'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
-        'task_delete'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
-        'comment_create'    => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        'task_create' => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
+        'task_update' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
+        'task_delete' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
+        // Since 2.16.0 (spec 234, FR-021): the atomic bulk update.
+        'task_bulk'      => ['/v2/task/bulk', TaskApiWriteController::class, 'updateTasks', 'POST'],
+        'comment_create' => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        // Since 2.16.0 (spec 234).
+        'comment_update'    => ['/v2/comment/{commentId}', TaskApiWriteController::class, 'updateComment', 'PUT'],
         'tag_add'           => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'addTag', 'POST'],
         'tag_remove'        => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'removeTag', 'DELETE'],
         'field_set'         => ['/v2/task/{taskId}/field/{fieldId}', TaskApiWriteController::class, 'setField', 'POST'],
@@ -247,7 +253,7 @@ final class TaskBoardRouteLoader extends Loader
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'commentId' => '[^/]+'],
                 [],
                 '',
                 [],

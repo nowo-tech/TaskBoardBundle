@@ -58,6 +58,19 @@ The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInte
 `MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, the API users / workspace / plan gate /
 rate limiter / idempotency store, the providers, ...) already take values only.
 
+**Since 2.16 (Beacon spec 234), new ports are framework-free from the start** (no deprecated twin):
+
+| Configuration key | Interface | Value objects |
+|---|---|---|
+| `column_transition_policy` | `Transition\ColumnTransitionPolicyInterface` (default `AllowAllColumnTransitionPolicy`; opt-in `HumansOnlyColumnTransitionPolicy`) | `ValueObject\ColumnTransition` (board, task and column snapshots, tags, actor, `ColumnTransitionVia`), `ColumnTransitionDecision` |
+| `api.hooks.members` | `Api\Hook\TaskApiMembersInterface` (default `EmptyTaskApiMembers`) | `Api\Value\TaskApiMember` |
+| `api.hooks.comment_edit_policy` | `Api\Hook\TaskApiCommentEditPolicyInterface` (default `AuthorOnlyTaskApiCommentEditPolicy`) | `ValueObject\TaskCommentSnapshot` |
+| `search.provider` | `Search\TaskTextSearchInterface` (default `DoctrineTaskTextSearch`) | `ValueObject\TaskTextQuery` |
+
+The policy is a domain rule: `TaskManager` asks it before every move, whatever the channel, and the Task API passes its
+principal's channel through `ColumnTransitionVia`, so a host writes its rules once for the board UI, the API and MCP.
+`TaskBoardEvents::TASK_STATUS_CHANGED` (`TaskStatusChangedEvent`, snapshots only) follows every column change.
+
 ## Events
 
 Every event that carries a bundle entity also offers ids and snapshots (`getBoardId()`, `getTaskId()`,

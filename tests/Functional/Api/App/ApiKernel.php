@@ -111,7 +111,10 @@ final class ApiKernel extends Kernel
         $services->set('app.quota_listener', RecordingQuotaListener::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::QUOTA_CHECK]);
         $services->set('app.api_audit', ApiAuditRecorder::class)->public()
-            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_WRITE]);
+            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_WRITE])
+            ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_BULK_WRITE, 'method' => 'onBulk']);
+        // Since 2.16.0 (spec 234): a column transition policy that records what it is asked.
+        $services->set('app.transition_policy', RecordingTransitionPolicy::class)->public();
         $container->extension('doctrine', [
             'dbal' => ['url' => FunctionalKernel::databaseUrl()],
             'orm'  => [
@@ -139,6 +142,7 @@ final class ApiKernel extends Kernel
             'users'         => 'app.api_host',
             'time_entries'  => 'app.api_host',
             'attachments'   => 'app.api_host',
+            'members'       => 'app.api_host',
         ]]] + array_diff_key($this->taskBoard, ['security' => true]);
         $taskBoardConfig = PrivateEntityManagerReplay::configure($taskBoardConfig);
         PrivateEntityManagerReplay::alias($container, $taskBoardConfig);

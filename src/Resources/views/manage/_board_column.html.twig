@@ -32,6 +32,10 @@
         <h3 class="nowo-task-board__column-title nowo-task-column__title">
             {{ include('@NowoTaskBoardBundle/manage/_column_icon.html.twig', {icon: column.icon}) }}
             <span class="nowo-task-board__column-name nowo-task-column__name" id="nowo-task-column-{{ column.id }}-name">{{ column.name }}</span>
+            {#- Since 2.16.0 (spec 234, FR-016): only people may move tasks into this column. #}
+            {% if column.humansOnly %}
+                <span class="nowo-task-column__humans-only" data-testid="nowo-task-column-humans-only" title="{{ 'task_board.board.column_humans_only_help'|trans({}, 'NowoTaskBoardBundle') }}">{{ 'task_board.board.column_humans_only'|trans({}, 'NowoTaskBoardBundle') }}</span>
+            {% endif %}
             <span
                 class="nowo-task-board__column-count nowo-task-column__count"
                 aria-label="{{ 'task_board.board.column_task_count'|trans({'%count%': columnTasks|length}, 'NowoTaskBoardBundle') }}"
@@ -50,6 +54,7 @@
             data-column-id="{{ column.id }}"
             data-column-name="{{ column.name|e('html_attr') }}"
             data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"
+            data-column-humans-only="{{ column.humansOnly ? '1' : '0' }}"
             data-column-icon="{{ column.icon|default('') }}"{{ column.icon is not empty and not nowo_task_board_column_icon_storable(column.icon) ? ' data-column-icon-storable="0"' : '' }}
         >
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}

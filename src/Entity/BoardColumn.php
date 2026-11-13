@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -18,6 +19,14 @@ class BoardColumn
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
+
+    /**
+     * Since 2.16.0 (spec 234, FR-014): only people may move tasks into this column; what that means is the host's
+     * `column_transition_policy` (the bundled {@see HumansOnlyColumnTransitionPolicy}
+     * refuses the Task API and MCP). False by default.
+     */
+    #[ORM\Column(name: 'humans_only', type: 'boolean', options: ['default' => false])]
+    private bool $humansOnly = false;
 
     /** @var Collection<int, Task> */
     #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'column')]
@@ -120,5 +129,19 @@ class BoardColumn
     public function getTasks(): Collection
     {
         return $this->tasks;
+    }
+
+    /** Since 2.16.0 (spec 234): only people may move tasks into this column. */
+    public function isHumansOnly(): bool
+    {
+        return $this->humansOnly;
+    }
+
+    public function setHumansOnly(bool $humansOnly): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->humansOnly = $humansOnly;
+
+        return $this;
     }
 }

@@ -78,8 +78,13 @@ export function dialogIcon(trigger: HTMLElement): string {
     return trigger.dataset.columnIconStorable === '0' ? '' : (trigger.dataset.columnIcon ?? '');
 }
 
+/** Since 2.16.0 (spec 234): whether the edited column is flagged *humans only* (`data-column-humans-only="1"`). */
+export function humansOnly(trigger: HTMLElement): boolean {
+    return trigger.dataset.columnHumansOnly === '1';
+}
+
 export default class EditColumnModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'deleteForm', 'deleteWarning', 'title'];
+    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'humansOnlyInput', 'deleteForm', 'deleteWarning', 'title'];
 
     static values = {
         updateUrlTemplate: String,
@@ -113,6 +118,10 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
 
     declare readonly hasColorInputTarget: boolean;
 
+    declare readonly humansOnlyInputTarget: HTMLInputElement;
+
+    declare readonly hasHumansOnlyInputTarget: boolean;
+
     declare updateUrlTemplateValue: string;
 
     declare titleTemplateValue: string;
@@ -145,6 +154,11 @@ export default class EditColumnModalController extends Controller<HTMLElement> {
             }
             // The icon grid (picker controller) follows the field.
             this.iconInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Since 2.16.0 (spec 234): the column's humans-only flag (`data-column-humans-only="1"`).
+        if (this.hasHumansOnlyInputTarget) {
+            this.humansOnlyInputTarget.checked = humansOnly(trigger);
         }
 
         if (this.hasDeleteFormTarget && this.deleteUrlTemplateValue !== '') {

@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\TaskApiRevision;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Psr\Clock\ClockInterface;
@@ -22,6 +23,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
+use function array_map;
 use function is_string;
 use function pathinfo;
 
@@ -55,9 +57,28 @@ final readonly class TaskApiWriteController
     public function updateTask(Request $request, string $taskId): JsonResponse
     {
         $input = $this->input($request, TaskApiTaskOperations::NOT_SUPPORTED);
-        $task  = $this->tasks->updateTask($this->principal($request), $taskId, $input);
+        // Since 2.16.0 (spec 234, FR-018): `If-Match`, else `base_revision` in the body.
+        $task = $this->tasks->updateTask($this->principal($request), $taskId, $input, TaskApiRevision::ifMatch($request->headers->get('If-Match')));
 
         return $this->taskAnswer($request, $task, $input);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-021): `POST /v2/task/bulk`, all or none; answers `{"tasks": [...]}` in the request's order.
+     */
+    public function updateTasks(Request $request): JsonResponse
+    {
+        $input     = $this->input($request);
+        $principal = $this->principal($request);
+        $tasks     = $this->tasks->updateMany($principal, $input);
+        TaskApiIdempotencyListener::target($request, $tasks[0]->getBoard());
+        $page = $this->reads->taskList($principal, array_map(static fn (Task $task): string => $task->getId(), $tasks));
+        $data = [];
+        foreach ($page->tasks as $task) {
+            $data[] = $this->serializer->task($task, $page);
+        }
+
+        return $this->answer(['tasks' => $data], $input);
     }
 
     public function deleteTask(Request $request, string $taskId): JsonResponse
@@ -77,6 +98,18 @@ final readonly class TaskApiWriteController
         TaskApiIdempotencyListener::target($request, $comment->getTask()->getBoard());
 
         return $this->answer(['id' => $comment->getId(), 'hist_id' => $comment->getId(), 'date' => (int) $comment->getCreatedAt()->format('Uv')], $input);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`; answers `{}` as ClickUp does.
+     */
+    public function updateComment(Request $request, string $commentId): JsonResponse
+    {
+        $input   = $this->input($request, ['assignee', 'group_assignee', 'resolved', 'notify_all']);
+        $comment = $this->tasks->editComment($this->principal($request), $commentId, $input);
+        TaskApiIdempotencyListener::target($request, $comment->getTask()->getBoard());
+
+        return $this->answer([], $input);
     }
 
     public function addAttachment(Request $request, string $taskId): JsonResponse
@@ -249,7 +282,8 @@ final readonly class TaskApiWriteController
         $page = $this->reads->task($this->principal($request), $task->getId());
         $data = $this->serializer->task($page->tasks[0], $page);
 
-        return $this->answer($wrapped ? ['task' => $data] : $data, $input);
+        // Since 2.16.0 (spec 234): the revision as an ETag.
+        return TaskApiRevision::etag($this->answer($wrapped ? ['task' => $data] : $data, $input), $page->tasks[0]);
     }
 
     private function checklistAnswer(Request $request, Task $task, string $name, TaskApiInput $input): JsonResponse

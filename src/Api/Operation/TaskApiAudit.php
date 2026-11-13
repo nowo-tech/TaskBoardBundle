@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Api\Operation;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\TaskApiBulkWriteEvent;
 use Nowo\TaskBoardBundle\Event\TaskApiWriteEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
@@ -66,6 +67,20 @@ final readonly class TaskApiAudit
         $refusal = $this->quota->refusal($action, $tenantKey, $board, $count, $actor);
         if ($refusal !== null) {
             throw new TaskApiRefusal(403, 'PLAN_002', $refusal);
+        }
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): after an atomic bulk update's commit, its {@see TaskApiBulkWriteEvent} (the count of tasks).
+     *
+     * @param list<string> $taskIds
+     */
+    public function bulkWritten(TaskApiPrincipal $principal, ?string $tenantKey, array $taskIds): void
+    {
+        try {
+            $this->dispatcher->dispatch(new TaskApiBulkWriteEvent($principal, $tenantKey, $taskIds), TaskBoardEvents::API_BULK_WRITE);
+        } catch (Throwable $failure) {
+            $this->logger->error('TaskBoard API: the API_BULK_WRITE listener failed.', ['bundle' => 'nowo_task_board', 'exception_class' => $failure::class]);
         }
     }
 

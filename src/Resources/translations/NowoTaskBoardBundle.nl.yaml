@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% van %total% subtaken klaar'
 task_board.form.column.icon: "Pictogram"
 task_board.form.column.no_icon: "Geen pictogram"
 task_board.form.column.icon_help: "Eén emoji, optioneel."
+task_board.form.column.humans_only: "Alleen mensen kunnen taken hierheen verplaatsen"
+task_board.form.column.humans_only_help: "Verplaatsingen naar deze kolom via de API of door een agent worden geweigerd."
+task_board.board.column_humans_only: "Alleen mensen"
+task_board.board.column_humans_only_help: "Alleen mensen kunnen taken naar deze kolom verplaatsen."
 task_board.form.column.icon_invalid: "Een kolompictogram is één emoji (hoogstens 16 bytes) of een van de aangeboden pictogrammen."
 task_board.form.column.custom_color: 'Eigen kleur'
 task_board.form.board.column_set: "Kolommen"
@@ -643,6 +647,7 @@ task_board.sync.completeness.status.not_exposed: "Niet beschikbaar via de API va
 task_board.sync.error.source_details_unavailable: "De beschrijving van de bron kon niet worden gelezen."
 task_board.history.former_user: "Voormalig persoon"
 task_board.flash.task_reopen_refused: "De taak is niet verplaatst: heropenen zou de limiet van actieve taken overschrijden."
+task_board.flash.task_move_refused: "De taak is niet verplaatst: deze kolom accepteert haar niet vanaf hier."
 task_board.flash.column_delete_refused: "De kolom is niet verwijderd: er staan voltooide taken in, en die heropenen zou de limiet van actieve taken overschrijden."
 task_board.flash.column_icon_invalid: "De kolom is niet opgeslagen: het pictogram moet één emoji of een van de aangeboden pictogrammen zijn."
 task_board.form.board.icon: "Pictogram"

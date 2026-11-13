@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiMembers;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
@@ -17,6 +19,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiBoardList;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiCommentPage;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiMember;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskPage;
@@ -30,16 +33,22 @@ use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
+use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
+use Nowo\TaskBoardBundle\Support\TextFold;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\ValueObject\TaskTextQuery;
 
 use function array_filter;
 use function array_map;
 use function array_values;
+use function count;
 use function in_array;
 use function ltrim;
+use function mb_strlen;
 use function preg_match;
 use function spl_object_id;
 use function str_starts_with;
+use function trim;
 
 /**
  * Since 2.2.0 (spec 213): what the API reads, without HTTP: each method takes the principal and applies every check, so
@@ -47,6 +56,9 @@ use function str_starts_with;
  */
 final readonly class TaskApiReadOperations
 {
+    /** Since 2.16.0: at most this many members answer a name lookup. */
+    public const MEMBER_MATCHES = 20;
+
     /** Comments per page, as ClickUp. */
     public const COMMENTS_PER_PAGE = 25;
 
@@ -60,7 +72,68 @@ final readonly class TaskApiReadOperations
         // Since 2.10.0 (spec 214): `task_numbers.enabled` (null when off): a task looked up by its number.
         private ?TaskNumberLedger $numbers = null,
         private ?TaskNumberScope $numberScope = null,
+        // Since 2.16.0 (spec 234, FR-025): the members of a team.
+        private TaskApiMembersInterface $members = new EmptyTaskApiMembers(),
+        // Since 2.16.0 (spec 234, FR-026): the text search, and `search.max_matches`.
+        private ?TaskTextSearchInterface $search = null,
+        private int $searchMaxMatches = 500,
     ) {
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-025): the members of one of the viewer's teams; any other team is 404 before the host is
+     * asked. The e-mail is kept only on the viewer's own row.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiMember>
+     */
+    public function teamMembers(TaskApiPrincipal $principal, string $teamId): array
+    {
+        $this->requireTeam($principal, $teamId);
+
+        return $this->membersOf($principal, $teamId);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-025): the members of one of the viewer's teams whose name, or a word of it, starts with
+     * `$name`, case and accents aside; at most {@see self::MEMBER_MATCHES}. A lookup only: nothing is ever assigned by name.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiMember>
+     */
+    public function findMembers(TaskApiPrincipal $principal, string $teamId, string $name): array
+    {
+        $this->requireTeam($principal, $teamId);
+        if (mb_strlen(trim($name)) > 128) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid name: at most 128 characters');
+        }
+        $found = [];
+        foreach ($this->membersOf($principal, $teamId) as $member) {
+            if (TextFold::prefixMatches($name, $member->name)) {
+                $found[] = $member;
+                if (count($found) === self::MEMBER_MATCHES) {
+                    break;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @return list<TaskApiMember>
+     */
+    private function membersOf(TaskApiPrincipal $principal, string $teamId): array
+    {
+        try {
+            $own = $this->users->apiId($principal->user);
+        } catch (TaskApiRefusal) {
+            $own = null;
+        }
+
+        return array_values(array_map(static fn (TaskApiMember $member): TaskApiMember => $own !== null && $member->id === $own ? $member : $member->withoutEmail(), $this->members->members($principal, $teamId)));
     }
 
     /**
@@ -83,6 +156,18 @@ final readonly class TaskApiReadOperations
         $this->requireIdentity($principal);
 
         return $this->workspace->teams($principal);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-025): the viewer's teams, each with its members (`members: []` without `api.hooks.members`).
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<array{team: TaskApiTeam, members: list<TaskApiMember>}>
+     */
+    public function teamsWithMembers(TaskApiPrincipal $principal): array
+    {
+        return array_map(fn (TaskApiTeam $team): array => ['team' => $team, 'members' => $this->membersOf($principal, $team->id)], $this->teams($principal));
     }
 
     /**
@@ -168,6 +253,17 @@ final readonly class TaskApiReadOperations
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
 
         return $this->context($principal, $this->queries->load([$task->getId()]), true, $markdown);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): tasks the caller already reached (a bulk update's), in the given order, with what serializing
+     * them needs, in a fixed number of queries.
+     *
+     * @param list<string> $taskIds
+     */
+    public function taskList(TaskApiPrincipal $principal, array $taskIds): TaskApiTaskPage
+    {
+        return $this->context($principal, $this->queries->load($taskIds), true, false);
     }
 
     /**
@@ -299,7 +395,21 @@ final readonly class TaskApiReadOperations
                 $assignees[] = $user;
             }
         }
-        $result = $this->queries->taskPage($this->ids($boards), $filter, $assignees, $this->owner($principal));
+        $ids     = $this->ids($boards);
+        $matches = null;
+        if ($filter->query !== null && $ids !== []) {
+            // Since 2.16.0 (spec 234, FR-026): only within the boards already checked, before any page or limit; the
+            // other filters and My tasks apply to the matches in SQL.
+            if (!$this->search instanceof TaskTextSearchInterface) {
+                // The container always wires one.
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid query: text search is not available'); // @codeCoverageIgnore
+            }
+            $matches = $this->search->matchingTaskIds(new TaskTextQuery($filter->query, $ids, $this->searchMaxMatches));
+            if (count($matches) > $this->searchMaxMatches) {
+                throw new TaskApiRefusal(400, 'SEARCH_001', 'Too many matches: narrow the query');
+            }
+        }
+        $result = $this->queries->taskPage($ids, $filter, $assignees, $this->owner($principal), $matches);
 
         return $this->context($principal, $result['tasks'], $result['lastPage'], $filter->markdown);
     }
