@@ -154,6 +154,9 @@ columns.
   (MySQL / MariaDB NO PAD, SQLite, PostgreSQL), and on key columns recreated with a folding collation (SQLite NOCASE,
   MySQL / MariaDB `utf8mb4_general_ci`) every lookup, the import lookup, the ledger, `purgeScope()` and the counter
   drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`.
+### Documentation
+
+- `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).
 
 ## [2.15.0] - 2026-11-13
 

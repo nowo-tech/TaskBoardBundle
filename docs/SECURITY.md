@@ -281,7 +281,9 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
 An auditor's reading for owners and counsel (audit GW, 2026-11-06), not legal advice.
 
-**AI security audit (REQ-SEC-004): 2.2.1 (unreleased): Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`). Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
+**AI security audit (REQ-SEC-004), latest: Appendix NN (2026-11-12), 2.14.0 (calendar day annotations, audited at `7cc4f1b`): Pass, no High or Medium, no advisory; follow-ups L1, L2 and I1..I4 went to 2.14.1.** Appendix NI (2026-11-12), 2.13.0 (multi-board task list, immediate audit of permissions and export): NI-1..NI-7 fixed before release, no out-of-scope board leaks. Appendix KO (2026-11-10), 2.11.0: OK to tag, Info only. Appendix JY (2026-11-10), 2.10.0 and 2.10.1: OK to tag, JY-L1..L3 fixed. 2.15.0 adds framework-free host ports and event accessors with no new route, template, upload or outbound call and has no separate audit appendix. Grade recorded in the Nowo monorepo `BUNDLES_SECURITY_ANALYSIS.md`.
+
+Earlier audits: 2.2.1: Audit IB (2026-11-08): Pass (good) / Low at `0d4f804` (Appendix IB; audited at `4539b80`, IB-L1 fixed in `0d4f804`). Pass (good) / Low at `4ac4848` (Appendix HZ, 2026-11-07), for 2.1.1.** 2.1.0: Pass (good) / Low at `3c105a1` (Appendix HY). 2.0.2: Pass (good) / Low at `a510f4f` (Appendix HY). 2.0.1: Pass (good) / Low at `f2fa0d4` (Appendix HY). 2.0.0: Pass (good) / Low at `08e51a4` (Appendix HX).
 
 **Default, for the owner to see: everything is imported.** That includes e-mail, phone and free-text custom fields,
 estimates per assignee and archived tasks. `sync.custom_fields.exclude_types` and `sync.import_archived: false` reduce it
