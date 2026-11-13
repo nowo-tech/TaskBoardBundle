@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\SlugGenerator;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -51,7 +52,10 @@ final readonly class TaskBoardCreator implements TaskBoardCreatorInterface
     public function create(TaskBoardFormData $data, object $creator, ?string $tenantKey = null, ?ColumnSet $columnSet = null): TaskBoard
     {
         $generated = $this->transliterateSlug ? SlugGenerator::transliterated($data->name) : SlugGenerator::fromName($data->name);
-        $slug      = $this->uniqueSlug(trim($data->slug) !== '' ? trim($data->slug) : $generated, $tenantKey);
+        $asked     = trim($data->slug);
+        // Since 2.15.1 (REQ-SEC-006): a slug that cannot be matched exactly (control or format characters, invalid
+        // UTF-8) is not kept; the board gets the slug of its name instead.
+        $slug = $this->uniqueSlug(ExactKey::isUsable($asked, 255) ? $asked : $generated, ExactKey::assertUsable($tenantKey, 'tenant key'));
 
         $board = new TaskBoard(
             name: $data->name,

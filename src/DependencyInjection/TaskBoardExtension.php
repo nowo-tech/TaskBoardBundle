@@ -113,6 +113,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
 use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
@@ -650,6 +651,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias('nowo_task_board.sync.api_client', is_string($client) && $client !== '' ? $client : 'nowo_task_board.sync.http_client');
         $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
         $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
+        // Since 2.15.1 (Beacon request): the default resolver under its framework-free twin, so a host (e.g. a queued
+        // sync handler) autowires it without the deprecated interface. Whatever `sync.actor_resolver` names, this is the
+        // bundle's default; the port the bundle asks stays the alias above.
+        $container->setAlias(SyncActorProviderInterface::class, ConnectionCreatorActorResolver::class)->setPublic(true);
         // Since 1.24: the host's account checks for the default actor resolver (disabled / erased users never act).
         if (is_string($sync['actor_checker']) && $sync['actor_checker'] !== '') {
             $container->getDefinition(ConnectionCreatorActorResolver::class)->setArgument('$userChecker', new Reference($sync['actor_checker']));
@@ -1238,6 +1243,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$teamMembersTableName', $prefix . '_team_members')
             ->setArgument('$userClass', $userClass)
             ->setArgument('$userReference', $userReference)
+            // Since 2.15.1 (REQ-SEC-006 item 8): the server_version fallback warning.
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
     }
 

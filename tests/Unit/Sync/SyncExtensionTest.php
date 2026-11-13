@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
@@ -72,6 +73,7 @@ final class SyncExtensionTest extends TestCase
 
         $container = $this->load(['enabled' => true, 'credential_resolver' => 'app.credentials', 'actor_resolver' => 'app.active_actor']);
         self::assertSame('app.active_actor', (string) $container->getAlias(SyncActorResolverInterface::class));
+        self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorProviderInterface::class), 'the twin alias is always the bundle default');
     }
 
     public function testEnablingSyncNeedsACredentialResolver(): void
@@ -88,6 +90,9 @@ final class SyncExtensionTest extends TestCase
         self::assertSame('app.credentials', (string) $container->getAlias(ProviderCredentialResolverInterface::class));
         self::assertSame('app.runner', (string) $container->getAlias(SyncRunnerInterface::class));
         self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorResolverInterface::class));
+        // Since 2.15.1 (Beacon request): the default resolver under its framework-free twin, public for hosts.
+        self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorProviderInterface::class));
+        self::assertTrue($container->getAlias(SyncActorProviderInterface::class)->isPublic());
         // Since 1.24: no sync.actor_checker, no user checker (only isEnabled()).
         self::assertNull($container->getDefinition(ConnectionCreatorActorResolver::class)->getArgument('$userChecker'));
         self::assertSame(NullTaskAttachmentStorage::class, (string) $container->getAlias(TaskAttachmentStorageInterface::class));

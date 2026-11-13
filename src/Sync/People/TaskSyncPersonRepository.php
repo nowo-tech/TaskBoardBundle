@@ -48,7 +48,14 @@ final readonly class TaskSyncPersonRepository
 
     public function findDirectory(string $provider, string $scopeKey, string $workspaceId): ?TaskSyncDirectory
     {
-        return $this->entityManager->getRepository(TaskSyncDirectory::class)->findOneBy(['provider' => $provider, 'scopeKey' => $scopeKey, 'workspaceId' => $workspaceId]);
+        // Since 2.15.1 (REQ-SEC-006): the database may fold the keys; the directory whose keys are exactly these.
+        foreach ($this->entityManager->getRepository(TaskSyncDirectory::class)->findBy(['provider' => $provider, 'scopeKey' => $scopeKey, 'workspaceId' => $workspaceId]) as $directory) {
+            if ($directory->getProvider() === $provider && $directory->getScopeKey() === $scopeKey && $directory->getWorkspaceId() === $workspaceId) {
+                return $directory;
+            }
+        }
+
+        return null;
     }
 
     public function findPerson(string $id): ?TaskSyncPerson

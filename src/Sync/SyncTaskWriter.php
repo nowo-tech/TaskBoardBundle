@@ -642,12 +642,19 @@ final readonly class SyncTaskWriter
      */
     private function checklistTasks(SyncRunContext $ctx, string $parentExternalId): array
     {
-        /** @var list<Task> $tasks */
-        $tasks = $this->entityManager->createQueryBuilder()->select('t')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
+        /** @var list<array{0: Task, externalId: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()->select('t', 'i.externalId AS externalId')->from(TaskSyncItem::class, 'i')->join(Task::class, 't', 'WITH', 't = i.task')
             ->where('i.boardId = :board')->andWhere('i.itemKind = :kind')->andWhere("i.externalId LIKE :prefix ESCAPE '!'")
             ->setParameter('board', $ctx->board->getId())->setParameter('kind', TaskSyncItem::KIND_CHECKLIST_ITEM)
             ->setParameter('prefix', Like::literal($parentExternalId) . '#%')
             ->getQuery()->getResult();
+        $tasks = [];
+        foreach ($rows as $row) {
+            // Since 2.15.1 (REQ-SEC-006): LIKE may fold the prefix; only the exact parent's items count.
+            if (str_starts_with($row['externalId'], $parentExternalId . '#')) {
+                $tasks[] = $row[0];
+            }
+        }
 
         return $tasks;
     }

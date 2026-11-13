@@ -98,8 +98,14 @@ final readonly class TaskNumberReserver
                 if ($updated === 0) {
                     return null;
                 }
+                $row = $db->fetchAssociative(sprintf('SELECT scope_key, last_number FROM %s WHERE scope_key = ?', TaskNumberCounter::TABLE), [$scope]);
+                // Since 2.15.1 (REQ-SEC-006 items 2 and 6): on a column that still folds (before the UPGRADING ALTER) the
+                // counter found may be a look-alike scope's (`Acme` for `acme`): fail closed, the update is rolled back.
+                if ($row === false || $row['scope_key'] !== $scope) {
+                    throw new RuntimeException(sprintf('The task-number counter of scope "%s" is shared with a look-alike scope: apply the TaskBoard 2.15.1 UPGRADING collation change.', $scope));
+                }
 
-                return (int) $db->fetchOne(sprintf('SELECT last_number FROM %s WHERE scope_key = ?', TaskNumberCounter::TABLE), [$scope]) - $count + 1;
+                return (int) $row['last_number'] - $count + 1;
             });
             if ($first !== null) {
                 return $first;

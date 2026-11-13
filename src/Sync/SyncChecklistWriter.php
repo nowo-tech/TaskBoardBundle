@@ -33,6 +33,7 @@ use function in_array;
 use function max;
 use function min;
 use function sprintf;
+use function str_starts_with;
 
 /**
  * Since 1.25: ClickUp checklists as subtasks — one subtask per item, under the task, in checklist order, tagged
@@ -184,7 +185,10 @@ final readonly class SyncChecklistWriter
             ->orderBy('i.externalId', SortDirection::Ascending)->getQuery()->getResult();
         $byId = [];
         foreach ($items as $item) {
-            $byId[$item->getExternalId()] = $item;
+            // Since 2.15.1 (REQ-SEC-006): LIKE may fold the prefix; only the exact parent's items count.
+            if (str_starts_with($item->getExternalId(), $parentExternalId . '#')) {
+                $byId[$item->getExternalId()] = $item;
+            }
         }
 
         return $byId;

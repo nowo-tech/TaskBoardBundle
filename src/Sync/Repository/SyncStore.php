@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -111,7 +112,10 @@ final readonly class SyncStore
                 ->getQuery()
                 ->getResult();
             foreach ($found as $item) {
-                $items[$item->getExternalId()] = $item;
+                // Since 2.15.1 (REQ-SEC-006): the database may fold the id; only exact items count.
+                if (ExactKey::oneOf($item->getExternalId(), $chunk)) {
+                    $items[$item->getExternalId()] = $item;
+                }
             }
         }
 

@@ -63,7 +63,7 @@ final class TaskNumberReserverTest extends TestCase
         $caller->method('getConfiguration')->willReturn(new Configuration());
         $caller->method('transactional')->willReturnCallback(static fn (Closure $run): mixed => $run($caller));
         $caller->method('executeStatement')->willReturn(1);
-        $caller->method('fetchOne')->willReturn(9);
+        $caller->method('fetchAssociative')->willReturn(['scope_key' => 'a', 'last_number' => 9]);
 
         try {
             self::assertSame(['a' => 9], (new TaskNumberReserver())->reserve($caller, ['a' => 1]));
@@ -82,7 +82,7 @@ final class TaskNumberReserverTest extends TestCase
         $caller->method('getConfiguration')->willReturn(new Configuration());
         $caller->method('transactional')->willReturnCallback(static fn (Closure $run): mixed => $run($caller));
         $caller->method('executeStatement')->willReturn(1);
-        $caller->method('fetchOne')->willReturn(3);
+        $caller->method('fetchAssociative')->willReturn(['scope_key' => 'a', 'last_number' => 3]);
 
         self::assertSame(['a' => 3], (new TaskNumberReserver())->reserve($caller, ['a' => 1]));
     }
@@ -91,7 +91,7 @@ final class TaskNumberReserverTest extends TestCase
     {
         $connection = $this->connection();
         $connection->method('executeStatement')->willReturnOnConsecutiveCalls(0, 1);
-        $connection->method('fetchOne')->willReturn(5);
+        $connection->method('fetchAssociative')->willReturn(['scope_key' => 'a', 'last_number' => 5]);
         $connection->expects(self::once())->method('insert')->willThrowException($this->createStub(UniqueConstraintViolationException::class));
 
         self::assertSame(['a' => 4], (new TaskNumberReserver())->reserve($connection, ['a' => 2]));
@@ -104,6 +104,21 @@ final class TaskNumberReserverTest extends TestCase
         $connection->expects(self::exactly(3))->method('insert')->willThrowException($this->createStub(UniqueConstraintViolationException::class));
 
         $this->expectException(RuntimeException::class);
+        (new TaskNumberReserver())->reserve($connection, ['a' => 1]);
+    }
+
+    /**
+     * Since 2.15.1 (REQ-SEC-006 items 2 and 6): on a counter column that still folds, the row the update hit belongs to a
+     * look-alike scope (`A` for `a`): the reservation fails closed instead of sharing that scope's sequence.
+     */
+    public function testALookAlikeScopesCounterIsNeverShared(): void
+    {
+        $connection = $this->connection();
+        $connection->method('executeStatement')->willReturn(1);
+        $connection->method('fetchAssociative')->willReturn(['scope_key' => 'A', 'last_number' => 7]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('look-alike');
         (new TaskNumberReserver())->reserve($connection, ['a' => 1]);
     }
 

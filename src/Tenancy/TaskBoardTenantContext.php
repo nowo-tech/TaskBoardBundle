@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tenancy;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -102,7 +103,7 @@ final readonly class TaskBoardTenantContext
      */
     public function tenantOfKey(string $key, object $user): ?TaskBoardTenant
     {
-        if (!$this->enabled || $key === '') {
+        if (!$this->enabled || !ExactKey::isUsable($key)) {
             return null;
         }
         $tenant = $this->resolver->resolve($key, $user);
