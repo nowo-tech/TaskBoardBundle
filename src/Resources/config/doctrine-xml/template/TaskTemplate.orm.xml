@@ -10,6 +10,7 @@
         <id name="id" type="string" length="36"/>
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
+        <field name="defaultColumnName" type="string" column="default_column_name" length="128" nullable="true"/>
         <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
         <field name="name" type="string" length="120"/>
         <field name="body" type="text" nullable="true"/>

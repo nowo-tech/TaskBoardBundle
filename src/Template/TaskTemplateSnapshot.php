@@ -30,8 +30,9 @@ final readonly class TaskTemplateSnapshot
         public ?string $tenantKey,
         public ?string $body,
         public array $defaultTags,
-        /** A column of the template's board that still exists, or null. */
+        /** A column of the template's board that still exists, or null (always null for a tenant template). */
         public ?string $defaultColumnId,
+        /** The name of that column; for a tenant template, the name stored (matched exactly on each board). */
         public ?string $defaultColumnName = null,
     ) {
     }
@@ -56,7 +57,8 @@ final readonly class TaskTemplateSnapshot
             body: $template->getBody(),
             defaultTags: $template->getDefaultTags(),
             defaultColumnId: $column?->getId(),
-            defaultColumnName: $column?->getName(),
+            // A tenant template's name as stored (its boards are not known here).
+            defaultColumnName: $board instanceof TaskBoard ? $column?->getName() : $template->getDefaultColumnName(),
         );
     }
 

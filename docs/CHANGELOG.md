@@ -109,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Task templates** (Beacon spec 234, FR-061; opt-in `task_templates.enabled`). A template belongs to one board or one tenant and holds a name, a Markdown description body, default tags and (board templates) a default column.
+- **Task templates** (Beacon spec 234, FR-061; opt-in `task_templates.enabled`). A template belongs to one board or one tenant and holds a name, a Markdown description body, default tags and a default column (board templates: a column id of the board; tenant templates: `default_column_name`, applied only on an exact `===` match on the board, else the board's first column).
   - Table `task_board_task_templates` (attribute and XML mapping, additive), `Template\TaskTemplateManager` (create, update, delete, list, `usableOn()`, `usable()`, `prefill()`).
   - Host port `Template\TaskTemplatePermissionInterface` (`canManage` / `canUse`, framework-free VOs `TaskTemplateScope` and `TaskTemplateSnapshot`), option `task_templates.permission`; the default `DefaultTaskTemplatePermission` falls back to the existing rights (manage board / `security.manage_roles` / add tasks).
   - Add-task dialog: a *Template* picker (`TaskTemplatePickerType`) that pre-fills the description, the tags and the column, all still editable.

@@ -50,7 +50,7 @@ final class ApiTaskTemplateTest extends ApiTestCase
         $doing         = $this->roadmap->getColumns()->get(1);
         self::assertNotNull($doing);
         $this->story   = $this->templates()->createForBoard($this->owner, $this->roadmap, new TaskTemplateData('Historia', "## Contexto\n\n- [ ] uno", ['repo:', 'capa:'], $doing->getId()));
-        $this->shared  = $this->templates()->createForTenant($this->owner, 'tenant-a', new TaskTemplateData('Tarea', 'Código commit'));
+        $this->shared  = $this->templates()->createForTenant($this->owner, 'tenant-a', new TaskTemplateData('Tarea', 'Código commit', [], null, 'Done'));
         $this->foreign = [
             'other board'  => $this->templates()->createForBoard($this->owner, $sibling, new TaskTemplateData('Sibling')),
             'other tenant' => $this->templates()->createForTenant($this->owner, 'tenant-b', new TaskTemplateData('B')),
@@ -70,7 +70,7 @@ final class ApiTaskTemplateTest extends ApiTestCase
         self::assertSame("## Contexto\n\n- [ ] uno", $templates[0]['description']);
         self::assertSame(['repo:', 'capa:'], array_column($templates[0]['tags'], 'name'));
         self::assertSame('Doing', $templates[0]['status']['status'] ?? null);
-        self::assertNull($templates[1]['status']);
+        self::assertSame('Done', $templates[1]['status']['status'] ?? null);
 
         // The same list for an in-process caller (the host's MCP template_list).
         $operations = self::getContainer()->get(TaskApiTemplateOperations::class);
@@ -105,10 +105,20 @@ final class ApiTaskTemplateTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertSame([], $this->created('Plain')->getTags());
 
-        // A tenant template has no column: the board's first.
+        // A tenant template names its column: the board's column of exactly that name.
         $this->send('POST', '/api/tasks/v2/list/' . $this->roadmap->getId() . '/task', ['name' => 'Shared', 'template_id' => $this->shared->getId()]);
         self::assertResponseIsSuccessful();
-        self::assertSame('To do', $this->created('Shared')->getColumn()?->getName());
+        self::assertSame('Done', $this->created('Shared')->getColumn()?->getName());
+
+        // A look-alike name does not match: the board's first column, never an error.
+        $shared = $this->templates()->find($this->shared->getId());
+        self::assertNotNull($shared);
+        $this->templates()->update($this->owner, $shared, new TaskTemplateData('Tarea', 'Código commit', [], null, 'done'));
+        $this->send('POST', '/api/tasks/v2/list/' . $this->roadmap->getId() . '/task', ['name' => 'Look-alike', 'template_id' => $this->shared->getId()]);
+        self::assertResponseIsSuccessful();
+        self::assertSame('To do', $this->created('Look-alike')->getColumn()?->getName());
+        $this->get('/api/tasks/v2/list/' . $this->roadmap->getId() . '/taskTemplate');
+        self::assertNull($this->listOf('templates')[1]['status']);
     }
 
     public function testExplicitFieldsWinOverTheTemplate(): void

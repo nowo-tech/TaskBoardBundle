@@ -15,8 +15,10 @@ use function is_string;
  * Since 2.16.0 (Beacon spec 234, FR-061): what a template says, as {@see TaskTemplateManager} creates, changes or
  * replaces it. Plain input: the manager trims and checks it ({@see InvalidTaskTemplateException}).
  *
- * The default column is given by id (a column of the template's board) or, to carry a template to another board (a
- * configuration preset), by its exact name: the id is tried first, then the name.
+ * Board template: the default column is given by id (a column of the template's board) or, to carry a template to
+ * another board (a configuration preset), by its exact name: the id is tried first, then the name; an unknown column is
+ * refused. Tenant template: only by name, kept as given and matched exactly on the board a task is created on (no
+ * match: the board's first column).
  */
 final class TaskTemplateData
 {
@@ -30,7 +32,7 @@ final class TaskTemplateData
         public array $defaultTags = [],
         /** A column id of the template's board (board templates only); null = by name, or the board's first column. */
         public ?string $defaultColumnId = null,
-        /** The exact name of a column of the template's board (board templates only), used when no id is given. */
+        /** The exact name of the default column: of the template's board (when no id is given), or a tenant template's. */
         public ?string $defaultColumnName = null,
     ) {
     }

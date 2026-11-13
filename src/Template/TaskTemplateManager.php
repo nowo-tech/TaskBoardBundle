@@ -70,8 +70,9 @@ final readonly class TaskTemplateManager
     }
 
     /**
-     * A template of a tenant (null: of the boards without a tenant). It has no default column: the boards of a tenant
-     * do not share columns.
+     * A template of a tenant (null: of the boards without a tenant). Its default column is a name (`defaultColumnName`,
+     * kept as given): a board of the tenant uses it only when it has a column of exactly that name, else its first column
+     * (a soft default, never an error). A column id is refused: the boards of a tenant do not share columns.
      *
      * @throws AccessDeniedException when the actor may not manage the tenant's templates
      * @throws InvalidTaskTemplateException
@@ -82,12 +83,12 @@ final readonly class TaskTemplateManager
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
         $this->requireManage($actor, TaskTemplateScope::tenant($tenantKey));
-        [$name, $body, $tags, $column] = $this->checked($data, null);
+        [$name, $body, $tags, , $columnName] = $this->checked($data, null);
         if (count($this->tenantTemplates($tenantKey)) >= self::MAX_PER_SCOPE) {
             throw new InvalidTaskTemplateException('name', 'A tenant holds at most ' . self::MAX_PER_SCOPE . ' templates.');
         }
 
-        $template = new TaskTemplate(null, $tenantKey, $name, $body, $tags, $column, $this->clock->now());
+        $template = new TaskTemplate(null, $tenantKey, $name, $body, $tags, null, $this->clock->now(), $columnName);
         $this->entityManager->persist($template);
         $this->entityManager->flush();
 
@@ -101,9 +102,9 @@ final readonly class TaskTemplateManager
     public function update(object $actor, TaskTemplate $template, TaskTemplateData $data): void
     {
         $this->requireManage($actor, $this->scopeOf($template));
-        [$name, $body, $tags, $column] = $this->checked($data, $template->getBoard());
+        [$name, $body, $tags, $column, $columnName] = $this->checked($data, $template->getBoard());
 
-        $template->change($name, $body, $tags, $column, $this->clock->now());
+        $template->change($name, $body, $tags, $column, $this->clock->now(), $columnName);
         $this->entityManager->flush();
     }
 
@@ -122,7 +123,8 @@ final readonly class TaskTemplateManager
      * Every template of the board (null: of the tenant `$tenantKey`) with every field, as plain data — what a host's
      * configuration exporter (Beacon block W presets; TaskBoard 2.17 BoardConfiguration) reads. No permission is asked:
      * the caller decides who may export. {@see TaskTemplateSnapshot::toArray()} gives an array; the default column also
-     * comes by name, so {@see self::replaceAll()} can apply the data to another board.
+     * comes by name (a tenant template's only by name), so {@see self::replaceAll()} can apply the data to another board.
+     * For a board scope an unknown column is refused (explicit configuration); a tenant template keeps the name as given.
      *
      * @return list<TaskTemplateSnapshot>
      */
@@ -173,11 +175,11 @@ final readonly class TaskTemplateManager
 
                 continue;
             }
-            $template->change($values[0], $values[1], $values[2], $values[3], $now);
+            $template->change($values[0], $values[1], $values[2], $values[3], $now, $values[4]);
             unset($checked[$template->getName()]);
         }
-        foreach ($checked as [$name, $body, $tags, $column]) {
-            $this->entityManager->persist(new TaskTemplate($board, $board instanceof TaskBoard ? null : $tenantKey, $name, $body, $tags, $column, $now));
+        foreach ($checked as [$name, $body, $tags, $column, $columnName]) {
+            $this->entityManager->persist(new TaskTemplate($board, $board instanceof TaskBoard ? null : $tenantKey, $name, $body, $tags, $column, $now, $columnName));
         }
         $this->entityManager->flush();
 
@@ -279,17 +281,20 @@ final readonly class TaskTemplateManager
     }
 
     /**
-     * The template's default column on the board: a column of that board with exactly that id, else null (the board's
-     * first column, as for a task without one). Always null for a tenant template.
+     * The template's default column on the board: for a board template its column with exactly that id; for a tenant
+     * template the board's column with exactly that name (`===`: a case or whitespace look-alike does not match). Null
+     * otherwise, or for a template the board does not own or share: the board's first column, as for a task without one.
      */
     public function defaultColumn(TaskTemplate $template, TaskBoard $board): ?BoardColumn
     {
-        $id = $template->getDefaultColumnId();
-        if ($id === null || $template->getBoard()?->getId() !== $board->getId()) {
+        if (!self::belongsTo($template, $board)) {
             return null;
         }
+        $id   = $template->isBoardTemplate() ? $template->getDefaultColumnId() : null;
+        $name = $template->isBoardTemplate() ? null : $template->getDefaultColumnName();
         foreach ($board->getColumns() as $column) {
-            if ($column->getId() === $id) {
+            // REQ-SEC-006: byte for byte — `doing`, `Doing ` or a look-alike is not `Doing`.
+            if (($id !== null && $column->getId() === $id) || ($name !== null && $column->getName() === $name)) {
                 return $column;
             }
         }
@@ -299,7 +304,8 @@ final readonly class TaskTemplateManager
 
     /**
      * Fills a new task's data with the template's defaults: the description body, the default tags and the default
-     * column. Each `false` keeps what `$data` already says (a field the caller set explicitly wins over the template).
+     * column ({@see self::defaultColumn()}; when there is none, `$data` keeps its column, null = the board's first). Each
+     * `false` keeps what `$data` already says (a field the caller set explicitly wins over the template).
      *
      * Seam (Beacon spec 234): the column lands in `$data->columnId`, so it goes through `TaskManager::create()` like a
      * column the caller chose; a column transition policy applied there applies to it too.
@@ -349,12 +355,12 @@ final readonly class TaskTemplateManager
     }
 
     /**
-     * The input, trimmed and checked: name, body (null when blank), tags (trimmed, once each) and the default column (a
-     * column of `$board` with exactly that id; none for a tenant template).
+     * The input, trimmed and checked: name, body (null when blank), tags (trimmed, once each), the default column id (a
+     * column of `$board`, by id then by exact name) and, for a tenant template, the default column name as given.
      *
      * @throws InvalidTaskTemplateException
      *
-     * @return array{0: string, 1: ?string, 2: list<string>, 3: ?string}
+     * @return array{0: string, 1: ?string, 2: list<string>, 3: ?string, 4: ?string}
      */
     private function checked(TaskTemplateData $data, ?TaskBoard $board): array
     {
@@ -376,13 +382,25 @@ final readonly class TaskTemplateManager
             throw new InvalidTaskTemplateException('default_tags', 'A template has at most ' . TaskConstraints::TAGS_MAX . ' tags.');
         }
 
-        return [$name, $body, $tags, $this->checkedColumn($data->defaultColumnId, $data->defaultColumnName, $board)];
+        if ($board instanceof TaskBoard) {
+            return [$name, $body, $tags, $this->checkedColumn($data->defaultColumnId, $data->defaultColumnName, $board), null];
+        }
+        if ($data->defaultColumnId !== null && $data->defaultColumnId !== '') {
+            throw new InvalidTaskTemplateException('default_column_id', 'A tenant template names its default column by name (default_column_name).');
+        }
+        // A tenant template keeps the name as given: its boards are not known here; each uses it only on an exact match.
+        $columnName = $data->defaultColumnName === '' ? null : $data->defaultColumnName;
+        if ($columnName !== null && (preg_match('//u', $columnName) !== 1 || mb_strlen($columnName) > TaskConstraints::COLUMN_NAME_MAX)) {
+            throw new InvalidTaskTemplateException('default_column_name', 'A default column name is valid UTF-8 of at most ' . TaskConstraints::COLUMN_NAME_MAX . ' characters.');
+        }
+
+        return [$name, $body, $tags, null, $columnName];
     }
 
     /**
      * @throws InvalidTaskTemplateException
      */
-    private function checkedColumn(?string $columnId, ?string $columnName, ?TaskBoard $board): ?string
+    private function checkedColumn(?string $columnId, ?string $columnName, TaskBoard $board): ?string
     {
         $byId   = $columnId !== null && $columnId !== '';
         $byName = $columnName !== null && $columnName !== '';
@@ -390,18 +408,18 @@ final readonly class TaskTemplateManager
             return null;
         }
         // The id first; data carried from another board finds its column by name.
-        foreach ($board instanceof TaskBoard ? $board->getColumns() : [] as $column) {
+        foreach ($board->getColumns() as $column) {
             if ($byId && $column->getId() === $columnId) {
                 return $column->getId();
             }
         }
-        foreach ($board instanceof TaskBoard ? $board->getColumns() : [] as $column) {
+        foreach ($board->getColumns() as $column) {
             if ($byName && $column->getName() === $columnName) {
                 return $column->getId();
             }
         }
 
-        throw new InvalidTaskTemplateException('default_column_id', $board instanceof TaskBoard ? 'The default column must be a column of the template\'s board.' : 'A tenant template has no default column.');
+        throw new InvalidTaskTemplateException('default_column_id', 'The default column must be a column of the template\'s board.');
     }
 
     /**

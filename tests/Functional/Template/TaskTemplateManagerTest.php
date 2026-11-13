@@ -81,13 +81,14 @@ final class TaskTemplateManagerTest extends FunctionalTestCase
         $column = $other->getColumns()->first();
         self::assertNotFalse($column);
         $cases = [
-            'name'               => [$this->roadmap, new TaskTemplateData('   ')],
-            'name '              => [$this->roadmap, new TaskTemplateData(str_repeat('n', TaskTemplate::NAME_MAX + 1))],
-            'body'               => [$this->roadmap, new TaskTemplateData('Body', str_repeat('b', TaskTemplate::BODY_MAX + 1))],
-            'default_tags'       => [$this->roadmap, new TaskTemplateData('Tags', null, [str_repeat('t', 65)])],
-            'default_tags '      => [$this->roadmap, new TaskTemplateData('Tags', null, array_map(static fn (int $i): string => 'tag' . $i, range(1, 21)))],
-            'default_column_id'  => [$this->roadmap, new TaskTemplateData('Column', null, [], $column->getId())],
-            'default_column_id ' => [null, new TaskTemplateData('Column', null, [], null, 'To do')],
+            'name'                => [$this->roadmap, new TaskTemplateData('   ')],
+            'name '               => [$this->roadmap, new TaskTemplateData(str_repeat('n', TaskTemplate::NAME_MAX + 1))],
+            'body'                => [$this->roadmap, new TaskTemplateData('Body', str_repeat('b', TaskTemplate::BODY_MAX + 1))],
+            'default_tags'        => [$this->roadmap, new TaskTemplateData('Tags', null, [str_repeat('t', 65)])],
+            'default_tags '       => [$this->roadmap, new TaskTemplateData('Tags', null, array_map(static fn (int $i): string => 'tag' . $i, range(1, 21)))],
+            'default_column_id'   => [$this->roadmap, new TaskTemplateData('Column', null, [], $column->getId())],
+            'default_column_id '  => [null, new TaskTemplateData('Column', null, [], $column->getId())],
+            'default_column_name' => [null, new TaskTemplateData('Column', null, [], null, str_repeat('c', 129))],
         ];
         foreach ($cases as $field => [$board, $data]) {
             try {
@@ -170,6 +171,49 @@ final class TaskTemplateManagerTest extends FunctionalTestCase
         $this->manager()->delete($this->owner, $template);
         $this->em->clear();
         self::assertNull($this->manager()->find($id));
+    }
+
+    public function testATenantTemplateNamesItsColumnAndMatchesItExactly(): void
+    {
+        $other    = $this->board('Other', ['Backlog', 'Doing', 'Done'], tenantKey: 'acme');
+        $lookLike = $this->board('Look-alike', ['To do', 'doing', 'Doing ', "Do\u{200B}ing"], tenantKey: 'acme');
+        $template = $this->manager()->createForTenant($this->owner, 'acme', new TaskTemplateData('Shared', null, [], null, 'Doing'));
+        self::assertSame('Doing', $template->getDefaultColumnName());
+        self::assertNull($template->getDefaultColumnId());
+
+        // Exact match on each board of the tenant.
+        self::assertSame($this->roadmap->getColumns()->get(1), $this->manager()->defaultColumn($template, $this->roadmap));
+        self::assertSame($other->getColumns()->get(1), $this->manager()->defaultColumn($template, $other));
+        $data = new TaskFormData();
+        $this->manager()->prefill($template, $other, $data);
+        self::assertSame($other->getColumns()->get(1)?->getId(), $data->columnId);
+
+        // A look-alike name does not match: the board's first column (soft default, never an error).
+        self::assertNull($this->manager()->defaultColumn($template, $lookLike));
+        $data = new TaskFormData();
+        $this->manager()->prefill($template, $lookLike, $data);
+        self::assertNull($data->columnId);
+
+        // Another tenant's board never gets it, even with the same column name.
+        self::assertNull($this->manager()->defaultColumn($template, $this->board('Globex', tenantKey: 'globex')));
+
+        // Exported by name; replaced by name as given (the tenant's boards are not known), even an unknown one.
+        $exported = $this->manager()->export(null, 'acme')[0]->toArray();
+        self::assertSame([null, 'Doing'], [$exported['default_column_id'], $exported['default_column_name']]);
+        $replaced = $this->manager()->replaceAll($this->owner, null, 'acme', [TaskTemplateData::fromArray(['name' => 'Shared', 'default_column_name' => 'Nowhere'])]);
+        self::assertSame($template->getId(), $replaced[0]->getId());
+        self::assertSame('Nowhere', $replaced[0]->getDefaultColumnName());
+        self::assertNull($this->manager()->defaultColumn($replaced[0], $this->roadmap));
+        $this->manager()->update($this->owner, $replaced[0], new TaskTemplateData('Shared', null, [], null, ''));
+        self::assertNull($replaced[0]->getDefaultColumnName());
+
+        // A board scope still refuses an unknown column (explicit configuration).
+        try {
+            $this->manager()->replaceAll($this->owner, $this->roadmap, null, [new TaskTemplateData('Story', null, [], null, 'Nowhere')]);
+            self::fail('Accepted');
+        } catch (InvalidTaskTemplateException $refused) {
+            self::assertSame('default_column_id', $refused->field);
+        }
     }
 
     public function testTheDataOfAScopeIsExportedAndReplaced(): void

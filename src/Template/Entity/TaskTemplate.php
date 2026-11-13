@@ -14,8 +14,9 @@ use function array_values;
 /**
  * Since 2.16.0 (Beacon spec 234, FR-061, `task_templates.enabled`): a task template. It belongs to one board (`board`
  * set, `tenantKey` null) or to a tenant (`board` null; `tenantKey` the tenant's key, or null for the boards without a
- * tenant). A template pre-fills a new task: the Markdown description body, the default tags and, for a board template,
- * the default column (a column id of that board; a column deleted later is ignored, never followed to another board).
+ * tenant). A template pre-fills a new task: the Markdown description body, the default tags and the default column — for
+ * a board template a column id of that board (a column deleted later is ignored, never followed to another board), for a
+ * tenant template a column name matched exactly on the board the task is created on.
  *
  * Gone with its board (`ON DELETE CASCADE`). Holds no user: a host keeps its own audit.
  */
@@ -60,6 +61,12 @@ class TaskTemplate
         #[ORM\Column(name: 'default_column_id', type: 'string', length: 36, nullable: true)]
         private ?string $defaultColumnId = null,
         ?DateTimeImmutable $now = null,
+        /**
+         * Since 2.16.0 (Beacon review of FR-061): a tenant template's default column, by its exact name. A board of the
+         * tenant uses it only when it has a column of exactly that name (`===`); otherwise its first column.
+         */
+        #[ORM\Column(name: 'default_column_name', type: 'string', length: 128, nullable: true)]
+        private ?string $defaultColumnName = null,
     ) {
         $this->id          = Uuid::generate()->toString();
         $this->createdAt   = $now ?? new DateTimeImmutable();
@@ -112,6 +119,12 @@ class TaskTemplate
         return $this->defaultColumnId;
     }
 
+    /** A tenant template's default column name (exact), or null; always null for a board template. */
+    public function getDefaultColumnName(): ?string
+    {
+        return $this->defaultColumnName;
+    }
+
     public function getCreatedAt(): DateTimeImmutable
     {
         return $this->createdAt;
@@ -125,8 +138,10 @@ class TaskTemplate
     /**
      * @param list<string> $defaultTags
      */
-    public function change(string $name, ?string $body, array $defaultTags, ?string $defaultColumnId, DateTimeImmutable $now): void
+    public function change(string $name, ?string $body, array $defaultTags, ?string $defaultColumnId, DateTimeImmutable $now, ?string $defaultColumnName = null): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->defaultColumnName = $defaultColumnName;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->name = $name;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.

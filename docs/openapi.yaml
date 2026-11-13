@@ -935,7 +935,7 @@ components:
       properties: {id: {type: string}, title: {type: string}, extension: {type: string}, url: {type: string}, date: {type: integer}}
     TaskTemplates:
       type: object
-      properties: {templates: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, scope: {type: string, enum: [board, tenant]}, description: {type: string, description: 'The Markdown body'}, tags: {type: array, items: {type: object, properties: {name: {type: string}}}}, status: {type: [object, 'null'], description: 'The default column, as a task''s status; null: the board''s first column'}}}}}
+      properties: {templates: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, scope: {type: string, enum: [board, tenant]}, description: {type: string, description: 'The Markdown body'}, tags: {type: array, items: {type: object, properties: {name: {type: string}}}}, status: {type: [object, 'null'], description: 'The default column, as a task''s status (a tenant template: the board''s column with exactly its default column name); null: the board''s first column'}}}}}
     TaskCreate:
       type: object
       required: [name]
