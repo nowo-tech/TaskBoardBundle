@@ -47,6 +47,8 @@ use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
+use Nowo\TaskBoardBundle\Folder\ManageRightRestructurePolicy;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
@@ -492,6 +494,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$entityManager', $manager)
             ->setArgument('$syncEnabled', $sync);
         $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
+        // Since 2.17.0 (Beacon spec 234): the restructure policy port.
+        $container->setAlias(TaskBoardRestructurePolicyInterface::class, $this->serviceOr($config['restructure']['policy'] ?? null, ManageRightRestructurePolicy::class));
     }
 
     /**

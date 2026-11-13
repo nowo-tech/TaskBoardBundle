@@ -107,6 +107,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Folders and the restructure service (2.17.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
+  folders (`Entity\TaskBoardFolder`: name, Markdown description, order; `task_board_boards.folder_id`).
+  `Folder\TaskBoardRestructureInterface` (public, framework-free: ids in, VOs out) creates, updates, lists and deletes
+  folders (only an empty one), moves a board into or out of a folder, and moves tasks between the boards of one tenant
+  (`moveTasks()`): each task with its subtree, keeping id, number (tenant scope), comments, time entries (TimeTrack keeps
+  the task id), tags, documents, links and history; the column is mapped by an explicit map (source column id or name =>
+  target column id or name), else by name, else the target's first open column (a completed task: its last column). One
+  transaction; another tenant's folder, board or task is `not_found`; the entity manager is reset when a failure closed
+  it (worker mode, kernel reset off); `TASK_BOARD_CHANGED` after the commit. A dependency is kept when both boards are
+  in the same folder (`Folder\TaskBoardDependencyScope`), else removed with a history row.
+- **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
+  `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
+- **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`
+  (409 `FOLDER_001` while lists are in it), `GET/POST /v2/folder/{id}/list`. A list's and a task's `folder` is its real
+  folder (`hidden: false`) when it has one.
+
+### Changed
+
+- Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
+  by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`. Nothing changes until a folder is used.
+
 ### Documentation
 
 - `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).

@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.17.0](#to-2170)
+  - [Schema change for every host: folders](#schema-change-for-every-host-folders)
+  - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -185,6 +188,43 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.17.0
+
+### Schema change for every host: folders
+
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless). Generate it
+with `doctrine:migrations:diff`, or apply (table prefix `task_board_`):
+
+```sql
+-- MySQL / MariaDB
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_TASK_BOARD_BOARDS_FOLDER FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_TASK_BOARD_BOARDS_FOLDER ON task_board_boards (folder_id);
+-- PostgreSQL: TIMESTAMP(0) WITHOUT TIME ZONE for the dates, TEXT for the description; the rest is the same.
+-- rollback
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_TASK_BOARD_BOARDS_FOLDER;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+Let `doctrine:migrations:diff` name the foreign key and the index: the names above are examples.
+
+### Folders and restructure: what a host does
+
+Nothing, unless you use folders:
+
+- **Restructure service.** Inject `Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface` (public): folders,
+  `moveBoardToFolder()` and `moveTasks($actor, $taskIds, $targetBoardId, $columnMap)`. It refuses with
+  `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
+  `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
+  `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
+  (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
+  right the bundle already has.
+- **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
+  folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`.
 
 ## To 2.15.0
 

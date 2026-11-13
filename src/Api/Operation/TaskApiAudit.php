@@ -73,11 +73,11 @@ final readonly class TaskApiAudit
      * @param array<string, string> $targetIds
      * @param list<string> $changedFields
      */
-    public function written(TaskApiPrincipal $principal, string $operation, ?TaskBoard $board, ?string $taskId, array $targetIds = [], array $changedFields = []): void
+    public function written(TaskApiPrincipal $principal, string $operation, ?TaskBoard $board, ?string $taskId, array $targetIds = [], array $changedFields = [], ?string $tenantKey = null): void
     {
         $this->logger->info('TaskBoard write: {action}', ['bundle' => 'nowo_task_board', 'action' => 'api_' . $operation, 'board_id' => $board?->getId(), 'task_id' => $taskId]);
         try {
-            $this->dispatcher->dispatch(new TaskApiWriteEvent($principal, $operation, $board?->getTenantKey(), $board?->getId(), $taskId, $targetIds, $changedFields), TaskBoardEvents::API_WRITE);
+            $this->dispatcher->dispatch(new TaskApiWriteEvent($principal, $operation, $board instanceof TaskBoard ? $board->getTenantKey() : $tenantKey, $board?->getId(), $taskId, $targetIds, $changedFields), TaskBoardEvents::API_WRITE);
         } catch (Throwable $failure) {
             // The write is saved: the client gets its answer, and the host's failure is logged by class only.
             $this->logger->error('TaskBoard API: the API_WRITE listener failed.', ['bundle' => 'nowo_task_board', 'exception_class' => $failure::class]);

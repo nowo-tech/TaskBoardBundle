@@ -35,6 +35,10 @@ services:
             - '../../Copy/TaskCopyResult.php'
             - '../../Copy/TaskColumnRule.php'
             - '../../Move/TaskMovePlan.php'
+            # Since 2.17.0 (Beacon spec 234): data carriers of the restructure service.
+            - '../../Folder/TaskBoardFolderSnapshot.php'
+            - '../../Folder/TaskBoardMoveResult.php'
+            - '../../Folder/TaskBoardRestructureRefusedException.php'
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
             - '../../Recurrence/'
             - '../../Controller/TaskRecurrenceController.php'
@@ -181,6 +185,17 @@ services:
     Nowo\TaskBoardBundle\Service\TaskBoardEraserInterface:
         alias: Nowo\TaskBoardBundle\Service\TaskBoardEraser
         public: true
+
+    # Since 2.17.0 (Beacon spec 234, FR-031 / FR-045): folders and the restructure service (public for a host's command);
+    # the policy port is `restructure.policy` (default: the manage right).
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface:
+        alias: Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer
+        public: true
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface:
+        alias: Nowo\TaskBoardBundle\Folder\ManageRightRestructurePolicy
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer:
+        arguments:
+            $syncEnabled: '%nowo_task_board.sync.enabled%'
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:

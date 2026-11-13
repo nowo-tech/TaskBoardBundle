@@ -306,10 +306,105 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folders
-      summary: 'Always empty: every board is a folderless list'
-      description: 'Least level: My tasks. The person''s access and where still apply.'
+      summary: 'Since 2.17.0: the folders of a space the token reaches, each with its lists (before 2.17.0 always empty)'
+      description: 'Least level: My tasks. A where limited to boards sees only the folders holding one of them.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folders'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: folder_create
+      summary: 'Since 2.17.0: create a folder in a space'
+      description: 'Least level: Full. Where must reach the tenant as a whole; the restructure policy (default: the create-board right) decides.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/FolderBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folder'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/folder/{folder_id}':
+    parameters:
+      - {name: folder_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: folder
+      summary: 'Since 2.17.0: a folder with its lists'
+      description: 'Least level: My tasks.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folder'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    put:
+      operationId: folder_update
+      summary: 'Since 2.17.0: rename, describe or reorder a folder (what the body names changes)'
+      description: 'Least level: Full.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/FolderBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folder'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: folder_delete
+      summary: 'Since 2.17.0: delete an empty folder; 409 FOLDER_001 while lists are in it'
+      description: 'Least level: Full.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/folder/{folder_id}/list':
+    parameters:
+      - {name: folder_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: folder_lists
+      summary: 'Since 2.17.0: the lists of a folder the token may view'
+      description: 'Least level: My tasks.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: folder_list_create
+      summary: 'Since 2.17.0: create a board in a folder (as POST /v2/space/{space_id}/list, then put in the folder)'
+      description: 'Least level: Full.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/ListBody'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
@@ -322,7 +417,7 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: lists
-      summary: 'The boards of a space the token reaches'
+      summary: 'The folderless boards of a space the token reaches (since 2.17.0 a board in a folder is listed under its folder)'
       description: 'Least level: My tasks. The person''s access and where still apply.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
@@ -812,7 +907,7 @@ components:
         err: {type: string}
         ECODE:
           type: string
-          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, TASK_002, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, FOLDER_001, TASK_002, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
     Warnings:
       type: array
       description: 'Fields nothing read: unknown, or a ClickUp field with no equivalent here (not_supported). Never saved.'
@@ -837,7 +932,14 @@ components:
       properties: {spaces: {type: array, items: {$ref: '#/components/schemas/Space'}}}
     Folders:
       type: object
-      properties: {folders: {type: array, maxItems: 0}}
+      properties: {folders: {type: array, items: {$ref: '#/components/schemas/Folder'}}}
+    Folder:
+      type: object
+      description: 'Since 2.17.0 (Beacon spec 234, FR-031).'
+      properties: {id: {type: string}, name: {type: string}, orderindex: {type: integer}, content: {type: string, description: Markdown}, markdown_content: {type: string}, hidden: {type: boolean}, override_statuses: {type: boolean}, space: {type: object}, task_count: {type: string}, archived: {type: boolean}, statuses: {type: array}, lists: {type: array, items: {$ref: '#/components/schemas/List'}}, permission_level: {type: string}, warnings: {$ref: '#/components/schemas/Warnings'}}
+    FolderBody:
+      type: object
+      properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}, orderindex: {type: integer}}
     Status:
       type: object
       properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, closed]}, icon: {type: [string, 'null'], description: 'Since 2.9.0: the column icon, one emoji or an icon id such as tabler:bug'}}

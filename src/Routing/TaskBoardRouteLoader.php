@@ -78,6 +78,13 @@ final class TaskBoardRouteLoader extends Loader
         'status_order'  => ['/v2/list/{listId}/status/order', TaskApiManagementController::class, 'reorderColumns', 'PUT'],
         'status_update' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'updateColumn', 'PUT'],
         'status_delete' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'deleteColumn', 'DELETE'],
+        // Since 2.17.0 (Beacon spec 234, FR-031): folders.
+        'folder'             => ['/v2/folder/{folderId}', TaskApiReadController::class, 'folder'],
+        'folder_lists'       => ['/v2/folder/{folderId}/list', TaskApiReadController::class, 'folderLists'],
+        'folder_create'      => ['/v2/space/{spaceId}/folder', TaskApiManagementController::class, 'createFolder', 'POST'],
+        'folder_update'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'updateFolder', 'PUT'],
+        'folder_delete'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'deleteFolder', 'DELETE'],
+        'folder_list_create' => ['/v2/folder/{folderId}/list', TaskApiManagementController::class, 'createFolderList', 'POST'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -247,7 +254,7 @@ final class TaskBoardRouteLoader extends Loader
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'folderId' => '[^/]+'],
                 [],
                 '',
                 [],
