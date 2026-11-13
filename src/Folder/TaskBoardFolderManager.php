@@ -240,13 +240,15 @@ final readonly class TaskBoardFolderManager
     }
 
     /**
-     * Since 2.17.0: runs `$change` in a transaction of the manager ({@see self::write()}).
+     * Since 2.17.0: runs `$change` in a transaction of the manager ({@see self::write()}); on a failure the entity manager
+     * is closed and reset, so in-memory changes of a refused multi-step write are dropped (refusals known in advance are
+     * checked before, see {@see self::checkColumns()}).
      *
      * @param callable(): void $change
      */
     public function transactional(callable $change): void
     {
-        $this->write($change);
+        $this->write($change, true);
     }
 
     /**
@@ -287,7 +289,7 @@ final readonly class TaskBoardFolderManager
      *
      * @param callable(): void $change
      */
-    private function write(callable $change): void
+    private function write(callable $change, bool $discardOnFailure = false): void
     {
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
@@ -298,6 +300,11 @@ final readonly class TaskBoardFolderManager
         } catch (Throwable $failure) {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
+            }
+            // A multi-step write (transactional()) may have changed entities in memory before it failed: the manager is
+            // closed so no later flush writes half of it, then reset (worker mode with kernel reset off).
+            if ($discardOnFailure && $this->entityManager->isOpen()) {
+                $this->entityManager->close();
             }
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
 
