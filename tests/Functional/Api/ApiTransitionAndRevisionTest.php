@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Event\TaskStatusChangedEvent;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\RecordingTransitionPolicy;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -240,6 +241,16 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         $this->assertRefused(400, 'BULK_002');
         $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $here->getId()], ['id' => $here->getId()]]]);
         $this->assertBulkFailures([[1, 'INPUT_002', 400]]);
+
+        // Since 2.15.1 (REQ-SEC-006): a look-alike tenant is another space, so the two tasks are not one bulk update.
+        ApiTestHost::$tenants[] = 'Tenant-A';
+        // A request resets the manager: the fixtures are found again before the next one is created.
+        $this->owner = $this->em->find(AppUser::class, $this->owner->getId()) ?? $this->owner;
+        $lookAlike   = $this->task($this->board('Look-alike', tenantKey: 'Tenant-A'), 'There too');
+        $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $here->getId(), 'description' => 'x'], ['id' => $lookAlike->getId(), 'description' => 'y']]]);
+        $this->assertRefused(400, 'BULK_002');
+        $this->em->clear();
+        self::assertNull($this->em->find(Task::class, $lookAlike->getId())?->getDescription());
     }
 
     public function testATaskOfAnotherTenantIsNotFoundInABulkUpdate(): void

@@ -43,6 +43,7 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
+use function array_key_first;
 use function array_key_last;
 use function array_map;
 use function array_unique;
@@ -315,12 +316,16 @@ final readonly class TaskApiTaskOperations
         if ($failures !== []) {
             throw self::bulkRefused($failures);
         }
-        $tenants = [];
-        foreach ($tasks as $task) {
-            $tenants[(string) $task->getBoard()->getTenantKey()] = true;
-        }
-        if (count($tenants) > 1) {
-            throw new TaskApiRefusal(400, 'BULK_002', 'A bulk update stays within one space');
+        // Since 2.15.1 (REQ-SEC-006): the keys are compared byte for byte, never through PHP's array keys, so a
+        // look-alike tenant (`Acme` next to `acme`, a null next to an empty key) is a second space, not the same one.
+        $tenant = null;
+        foreach ($tasks as $position => $task) {
+            $key = $task->getBoard()->getTenantKey();
+            if ($position === array_key_first($tasks)) {
+                $tenant = $key;
+            } elseif ($key !== $tenant) {
+                throw new TaskApiRefusal(400, 'BULK_002', 'A bulk update stays within one space');
+            }
         }
 
         // 2. One transaction: lock, compare, check everything, then write.
@@ -361,7 +366,7 @@ final readonly class TaskApiTaskOperations
         foreach ($tasks as $index => $task) {
             $this->audit->written($principal, 'task.bulk_update', $task->getBoard(), $task->getId(), [], $changed[$index] ?? []);
         }
-        $this->audit->bulkWritten($principal, $tasks[0]->getBoard()->getTenantKey(), array_values(array_map(static fn (Task $task): string => $task->getId(), $tasks)));
+        $this->audit->bulkWritten($principal, $tenant, array_values(array_map(static fn (Task $task): string => $task->getId(), $tasks)));
 
         return array_values($tasks);
     }
