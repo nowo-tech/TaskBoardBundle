@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Configuration;
 
 use InvalidArgumentException;
-use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnsRefusedException;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -25,9 +25,9 @@ final class BoardColumnsApplierTest extends TestCase
 {
     public function testMergesRenamesCreatesAndRemoves(): void
     {
-        $board = $this->board(['Todo', 'Doing', 'Review', 'Empty']);
+        $board                   = $this->board(['Todo', 'Doing', 'Review', 'Empty']);
         [$todo, $doing, $review] = ColumnTypes::ordered($board);
-        $a = $this->task($board, $todo, 'A');
+        $a                       = $this->task($board, $todo, 'A');
         $this->task($board, $doing, 'Already in doing');
         $b = $this->task($board, $review, 'B');
         $b->markCompleted();

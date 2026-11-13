@@ -50,11 +50,11 @@ final readonly class BoardColumnsApplier
      * @param list<BoardColumnSpec> $specs
      * @param array<string, string> $columnMap
      *
-     * @return array<string, int|null> current column id => spec index (null: removed)
-     *
      * @throws BoardColumnsRefusedException
      * @throws InvalidArgumentException
      * @throws TaskReopenRefusedException
+     *
+     * @return array<string, int|null> current column id => spec index (null: removed)
      */
     public function check(TaskBoard $board, array $specs, array $columnMap = []): array
     {

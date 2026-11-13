@@ -211,7 +211,7 @@ final readonly class TaskBoardFolderManager
     /**
      * Since 2.17.0: every refusal of {@see self::applyColumns()}, changing nothing.
      *
-     * @param list<BoardColumnSpec>  $set
+     * @param list<BoardColumnSpec> $set
      * @param array<string, string> $columnMap
      *
      * @throws TaskBoardRestructureRefusedException
