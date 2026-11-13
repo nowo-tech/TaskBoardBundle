@@ -136,6 +136,7 @@ final class Configuration implements ConfigurationInterface
                             ->info('Board and task creates through the API are refused unless a listener answers QUOTA_CHECK. false: a host with no plan limits.')
                         ->end()
                         ->integerNode('max_body_bytes')->defaultValue(1048576)->min(1024)->info('The largest JSON body.')->end()
+                        ->booleanNode('lists_include_folders')->defaultFalse()->info('Since 2.17.0: whether GET /v2/space/{id}/list lists the boards in folders too by default (false: folderless only, as ClickUp; a request overrides it with include_folders=true|false).')->end()
                         ->arrayNode('hooks')
                             ->info('Service ids. Without them every default denies.')
                             ->addDefaultsIfNotSet()

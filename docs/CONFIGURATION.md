@@ -158,7 +158,7 @@ Route names, paths, methods and the prefix are unchanged by 1.21.
 
 ## Task API (since 2.2)
 
-Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes` and `api.hooks.*`: see [API](API.md).
+Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes`, `api.lists_include_folders` (since 2.17.0) and `api.hooks.*`: see [API](API.md).
 
 ## Security
 

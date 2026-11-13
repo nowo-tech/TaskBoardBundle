@@ -15,6 +15,8 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 use function array_column;
+use function array_keys;
+use function ksort;
 
 /**
  * Since 2.17.0 (Beacon spec 234, FR-031): folders on the Task API — `GET/POST /v2/space/{id}/folder`,
@@ -58,6 +60,14 @@ final class ApiFoldersTest extends ApiTestCase
         self::assertSame(['Story 1'], array_column($this->listOf('lists'), 'name'));
         $this->get('/api/tasks/v2/space/space-tenant-a/list');
         self::assertSame(['Roadmap'], array_column($this->listOf('lists'), 'name'), 'a list in a folder is not folderless');
+        $this->get('/api/tasks/v2/space/space-tenant-a/list?include_folders=true');
+        $all = array_column($this->listOf('lists'), 'folder', 'name');
+        ksort($all);
+        self::assertSame(['Roadmap', 'Story 1'], array_keys($all));
+        self::assertSame($id, $all['Story 1']['id']);
+        self::assertNull($all['Roadmap']['id']);
+        $this->get('/api/tasks/v2/space/space-tenant-a/list?include_folders=maybe');
+        $this->assertRefused(400, 'INPUT_002');
         $this->get('/api/tasks/v2/space/space-tenant-a/folder');
         self::assertSame(['Story 1'], array_column($this->listOf('folders')[0]['lists'], 'name'));
 

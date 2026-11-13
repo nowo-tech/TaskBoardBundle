@@ -390,6 +390,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.api.prefix', $api['prefix']);
         $container->setParameter('nowo_task_board.api.quota_listener_required', $api['quota_listener_required']);
         $container->setParameter('nowo_task_board.api.max_body_bytes', $api['max_body_bytes']);
+        $container->setParameter('nowo_task_board.api.lists_include_folders', (bool) ($api['lists_include_folders'] ?? false));
         $loader->load('services_api.yaml');
         $container->setAlias(TaskApiAuthenticatorInterface::class, $api['hooks']['authenticator']);
         $container->setAlias(TaskApiRateLimiterInterface::class, $this->serviceOr($api['hooks']['rate_limiter'], DenyingTaskApiRateLimiter::class));

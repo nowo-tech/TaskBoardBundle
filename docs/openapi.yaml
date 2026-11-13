@@ -420,6 +420,8 @@ paths:
       operationId: lists
       summary: 'The folderless boards of a space the token reaches (since 2.17.0 a board in a folder is listed under its folder)'
       description: 'Least level: My tasks. The person''s access and where still apply.'
+      parameters:
+        - {name: include_folders, in: query, description: 'Since 2.17.0: true lists every board, each with its folder (default: api.lists_include_folders, false)', schema: {type: string, enum: ['true', 'false', '1', '0']}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
         '400': {$ref: '#/components/responses/Error'}

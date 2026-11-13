@@ -17,6 +17,7 @@ final readonly class TaskBoardMoveResult
      * @param array<string, string> $columns moved task id => the target column id it landed in ('' for none)
      * @param list<string> $removedDependencyIds dependencies the target cannot keep (another board outside its folder)
      * @param list<string> $removedMemberIds members not assignable on the target
+     * @param array<string, string|null> $formerParents moved task id => its parent's id before the move, null when top-level (`parent:<id>` in the history)
      */
     public function __construct(
         public string $targetBoardId,
@@ -25,6 +26,7 @@ final readonly class TaskBoardMoveResult
         public array $columns,
         public array $removedDependencyIds,
         public array $removedMemberIds,
+        public array $formerParents = [],
     ) {
     }
 }
