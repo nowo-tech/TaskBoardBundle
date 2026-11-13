@@ -855,7 +855,7 @@ components:
       schema: {type: string, maxLength: 255}
   responses:
     Error:
-      description: 'Every refusal: {"err", "ECODE"}. 404 ACCESS_001 for anything out of reach.'
+      description: 'Every refusal: {"err", "ECODE"}, plus the detail of some codes (TASK_409: current_revision; BULK_001: failures; TASK_003: task_id and scope). 404 ACCESS_001 for anything out of reach.'
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -867,7 +867,29 @@ components:
         err: {type: string}
         ECODE:
           type: string
-          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, TASK_002, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, TASK_002, TASK_003, TASK_409, BULK_001, BULK_002, BULK_003, SEARCH_001, STATUS_HUMANS_ONLY, STATUS_REFUSED, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, TIME_003, TIME_004, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+        current_revision:
+          type: integer
+          description: 'TASK_409 only (since 2.16.0): the task''s revision now.'
+        task_id:
+          type: string
+          description: 'TASK_003 only (since 2.16.0): the task that could not be numbered.'
+        scope:
+          type: string
+          description: 'TASK_003 only (since 2.16.0): the number scope the caller''s own board asks for.'
+        failures:
+          type: array
+          description: 'BULK_001 only (since 2.16.0): every refused item; nothing was written.'
+          items:
+            type: object
+            required: [index, status, ECODE, err]
+            properties:
+              index: {type: integer}
+              id: {type: string, nullable: true}
+              status: {type: integer}
+              ECODE: {type: string}
+              err: {type: string}
+              current_revision: {type: integer}
     Warnings:
       type: array
       description: 'Fields nothing read: unknown, or a ClickUp field with no equivalent here (not_supported). Never saved.'

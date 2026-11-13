@@ -165,6 +165,13 @@ host** (three columns, one optional index): see [UPGRADING](UPGRADING.md#to-2160
 - **Comment edit**: `PUT /v2/comment/{id}` (`comment_text`, ClickUp's shape, answers `{}`), for a token that may comment
   on the comment's task, then `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`, default
   `AuthorOnlyTaskApiCommentEditPolicy`). Missing, deleted, out of reach or not editable: 404 alike.
+- **`TASK_003` names the task (Beacon spec 234).** The 409 a task that cannot be numbered answers (its scope's counter
+  belongs to a look-alike scope, 2.15.1) now carries `task_id` and `scope`, so a client that writes many tasks at once
+  does not bisect its batch to find the offending one. `scope` is the key the caller's **own** board asks for, never the
+  look-alike key stored for another tenant, and nothing else of the task is exposed. It stays a request-level refusal,
+  never an entry of a bulk update's `failures`: the write is all or none.
+  `Exception\TaskNumberScopeConflictException` carries `$scopeKey` and `$taskId` (no number: the conflict is raised
+  before one is reserved).
 - **`TaskBoardEvents::TASK_STATUS_CHANGED`** (`TaskStatusChangedEvent`): after every column change of a task, whatever
   the channel: task and column snapshots, actor id, channel / operation, and `$toType` (always null until column types
   arrive in 2.17).

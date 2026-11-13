@@ -207,7 +207,7 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 
 ## Errors
 
-Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds `current_revision` and `BULK_001` adds `failures`); `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
+Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds `current_revision`, `BULK_001` adds `failures`, and `TASK_003` adds `task_id` and `scope`); `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
 
 | ECODE | HTTP | When |
 |---|---|---|
@@ -225,6 +225,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `LIST_001` | 409 | The last column of a board |
 | `LIST_002` | 409 | Deleting a board that follows a provider |
 | `TASK_002` | 409 | Deleting a task that follows a provider |
+| `TASK_003` | 409 | Since 2.15.1: the task cannot be numbered — its scope's counter belongs to a look-alike scope (`scope_key` still folding, see [UPGRADING](UPGRADING.md#to-2151)). Since 2.16.0 the answer adds `task_id` (the task that could not be numbered; for a create, the id it would have had) and `scope` (the scope **the caller's own board asks for**, never the look-alike key stored for someone else). It stays a **request-level** refusal, never an entry of a bulk update's `failures`: the write is all or none, so nothing may read as "the other items landed" |
 | `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
 | `FIELD_001` | 409 | Setting a custom field |
 | `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
