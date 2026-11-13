@@ -127,10 +127,15 @@ class TaskTemplate
      */
     public function change(string $name, ?string $body, array $defaultTags, ?string $defaultColumnId, DateTimeImmutable $now): void
     {
-        $this->name            = $name;
-        $this->body            = $body;
-        $this->defaultTags     = array_values($defaultTags);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->name = $name;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->body = $body;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->defaultTags = array_values($defaultTags);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->defaultColumnId = $defaultColumnId;
-        $this->updatedAt       = $now;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = $now;
     }
 }
