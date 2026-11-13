@@ -167,8 +167,10 @@ final readonly class BoardColumnsApplier
         }
         foreach ($removed as $column) {
             foreach (ColumnTasks::of($this->entityManager, $column) as $task) {
-                // Archived tasks of a removed column go with the first column, never orphaned.
-                $task->setColumn($columns[0]);
+                // What is still there (archived tasks) goes with the first column, never orphaned.
+                if ($task->getColumn() === $column) {
+                    $task->setColumn($columns[0]);
+                }
             }
             $board->removeColumn($column);
         }

@@ -28,6 +28,7 @@ final class BoardColumnsApplierTest extends TestCase
         $board = $this->board(['Todo', 'Doing', 'Review', 'Empty']);
         [$todo, $doing, $review] = ColumnTypes::ordered($board);
         $a = $this->task($board, $todo, 'A');
+        $this->task($board, $doing, 'Already in doing');
         $b = $this->task($board, $review, 'B');
         $b->markCompleted();
         $archived = $this->task($board, ColumnTypes::ordered($board)[3], 'Old');

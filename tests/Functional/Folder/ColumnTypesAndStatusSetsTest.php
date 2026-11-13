@@ -84,6 +84,11 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         $this->columnManager()->update($columns[1], new BoardColumnFormData('B', null, null, ColumnType::Done), $this->owner);
         $this->clear();
         self::assertTrue($this->reload($task)->isCompleted());
+        $fresh = $this->em->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $fresh);
+        $this->columnManager()->update(ColumnTypes::ordered($fresh)[1], new BoardColumnFormData('B', null, null, ColumnType::Custom), $this->owner);
+        $this->clear();
+        self::assertFalse($this->reload($task)->isCompleted(), 'custom again: reopened');
     }
 
     public function testDependenciesJoinBoardsOfOneFolderOnly(): void
@@ -207,7 +212,11 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         // A sibling that would orphan a task is left as it is (and logged).
         $two = $this->em->find(TaskBoard::class, $two->getId());
         self::assertInstanceOf(TaskBoard::class, $two);
-        $extra = $this->columnManager()->add($two, new BoardColumnFormData('Extra'), $this->owner);
+        // Added without the column events, so it stays on this board only.
+        $extra = new BoardColumn($two, 'Extra', 9);
+        $two->addColumn($extra);
+        $this->em->persist($extra);
+        $this->em->flush();
         $this->task($two, 'In extra', 2);
         $this->clear();
         $fresh = $this->em->find(TaskBoard::class, $one->getId());
@@ -216,6 +225,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         $this->clear();
         self::assertNotNull($this->em->find(BoardColumn::class, $extra->getId()), 'kept: it holds a task');
 
+        $this->assertRefusal(TaskBoardRestructureRefusedException::INVALID, fn () => $this->statusSets()->setStatusSet($this->owner, $folder->id, [new BoardColumnSpec('Same'), new BoardColumnSpec('same')]));
         $this->statusSets()->setStatusSet($this->owner, $folder->id, null);
         self::assertNull($this->statusSets()->statusSet($folder->id));
     }
