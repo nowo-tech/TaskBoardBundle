@@ -299,6 +299,22 @@ final class ApiManagementTest extends ApiTestCase
         self::assertSame([], $this->audit()->events);
     }
 
+    /** Since 2.17.0 (FR-033): column types on the status paths. */
+    public function testColumnTypes(): void
+    {
+        $base = '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status';
+        $this->send('POST', $base, ['status' => 'Cancelled', 'type' => 'closed']);
+        self::assertSame(['open', 'custom', 'closed', 'closed'], array_column($this->json()['statuses'], 'type'));
+        $this->send('POST', $base, ['status' => 'Third', 'type' => 'closed']);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->send('POST', $base, ['status' => 'Odd', 'type' => 'weird']);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->get('/api/tasks/v2/list/' . $this->roadmap->getId());
+        $doing = $this->json()['statuses'][1]['id'];
+        $this->send('PUT', $base . '/' . $doing, ['type' => 'done']);
+        self::assertSame('done', $this->json()['statuses'][1]['type']);
+    }
+
     /** Since 2.5.0 (TB-13): a host that denies `manage_columns` refuses the four status paths, not the board ones. */
     public function testTheColumnDecisionGuardsTheStatusPaths(): void
     {

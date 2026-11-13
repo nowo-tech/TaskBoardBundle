@@ -173,6 +173,72 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         self::assertTrue($task->isCompleted(), 'a closed column completes it');
     }
 
+    public function testShareFromABoardRefusalsAndPropagationEdges(): void
+    {
+        $service = $this->restructurer();
+        $folder  = $service->createFolder($this->owner, 'acme', 'Epic');
+        $one     = $this->board('One', ['Todo', 'Doing', 'Done'], tenantKey: 'acme');
+        $two     = $this->board('Two', ['Todo', 'Doing', 'Done'], tenantKey: 'acme');
+        $loose   = $this->board('Loose', tenantKey: 'acme');
+        $service->moveBoardToFolder($this->owner, $one->getId(), $folder->id);
+        $service->moveBoardToFolder($this->owner, $two->getId(), $folder->id);
+
+        $this->assertRefusal(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $this->statusSets()->shareFrom($this->owner, $folder->id, $loose->getId()));
+        $this->assertRefusal(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $this->statusSets()->setStatusSet($this->owner, 'unknown', null));
+        $stranger = $this->user('stranger@example.com', []);
+        $this->signIn($stranger);
+        $this->assertRefusal(TaskBoardRestructureRefusedException::NOT_ALLOWED, fn () => $this->statusSets()->setStatusSet($stranger, $folder->id, null));
+        $member = $this->user('member@example.com');
+        $this->signIn($member);
+        $this->assertRefusal(TaskBoardRestructureRefusedException::NOT_ALLOWED, fn () => $this->statusSets()->setStatusSet($member, $folder->id, null), 'the folder right, but not the boards\'');
+        $this->signIn($this->owner);
+
+        $this->statusSets()->shareFrom($this->owner, $folder->id, $one->getId());
+        self::assertSame(['Todo', 'Doing', 'Done'], array_map(static fn (BoardColumnSpec $spec): string => $spec->name, $this->statusSets()->statusSet($folder->id) ?? []));
+
+        // A column deleted on one board: the other's tasks there go where the first board sent its own.
+        $task  = $this->task($two, 'In doing', 1);
+        $fresh = $this->em->find(TaskBoard::class, $one->getId());
+        self::assertInstanceOf(TaskBoard::class, $fresh);
+        $this->columnManager()->delete(ColumnTypes::ordered($fresh)[1], $this->owner);
+        $this->clear();
+        self::assertSame('Todo', $this->reload($task)->getColumn()?->getName());
+
+        // A sibling that would orphan a task is left as it is (and logged).
+        $two = $this->em->find(TaskBoard::class, $two->getId());
+        self::assertInstanceOf(TaskBoard::class, $two);
+        $extra = $this->columnManager()->add($two, new BoardColumnFormData('Extra'), $this->owner);
+        $this->task($two, 'In extra', 2);
+        $this->clear();
+        $fresh = $this->em->find(TaskBoard::class, $one->getId());
+        self::assertInstanceOf(TaskBoard::class, $fresh);
+        $this->columnManager()->update(ColumnTypes::ordered($fresh)[0], new BoardColumnFormData('Backlog'), $this->owner);
+        $this->clear();
+        self::assertNotNull($this->em->find(BoardColumn::class, $extra->getId()), 'kept: it holds a task');
+
+        $this->statusSets()->setStatusSet($this->owner, $folder->id, null);
+        self::assertNull($this->statusSets()->statusSet($folder->id));
+    }
+
+    private function signIn(object $user): void
+    {
+        $tokens = static::getContainer()->get('security.token_storage');
+        self::assertInstanceOf(TokenStorageInterface::class, $tokens);
+        $tokens->setToken(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+    }
+
+    private function assertRefusal(string $reason, callable $call, string $message = ''): void
+    {
+        try {
+            $call();
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame($reason, $refused->reason, $message);
+
+            return;
+        }
+        self::fail('Expected ' . $reason . ' ' . $message);
+    }
+
     private function restructurer(): TaskBoardRestructureInterface
     {
         $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
