@@ -249,10 +249,18 @@ hold the task-number scope (a tenant key, or a board id): fold their rows the sa
 these keys still fold, and the bundle refuses (or skips) the look-alike's row instead of writing it:
 
 - `task_board_boards` (unique `tenant_key, slug`): the board creator gives a look-alike tenant's board a suffixed slug.
+  This needs the board repository to implement the optional `Repository\BoardSlugTakenInterface` (the bundle's own
+  `DoctrineOrmTaskBoardRepository` does). A host with a custom board repository that does not implement it falls back to
+  the now-exact `findBySlug()` / `findBySlugInTenant()`, which no longer sees the look-alike's row, so creating the
+  board can still fail on the unique key until the ALTER is run.
 - `task_board_number_counters` (primary key `scope_key`) and `task_board_task_numbers` (primary key `scope_key, number`):
   creating a task in `acme` while `Acme` has a counter is refused (409) instead of sharing `Acme`'s sequence.
-- `task_board_sync_items` (unique `board_id, external_id`): a provider task whose id differs from a synced one only by
-  case, accents or trailing spaces is skipped and reported (`external_id_look_alike`).
+- `task_board_sync_items` (unique `board_id, external_id`): a provider task whose id differs from an **already synced**
+  one only by case, accents or trailing spaces is skipped and reported (`external_id_look_alike`). This covers the
+  look-alike a page meets against the rows already in the table. It does **not** cover two ids that fold against each
+  other **inside the same page** (the page brings `T1` and `t1` together, whether or not one of them is stored): the
+  second write then hits the unique key and the run ends as `status: failed` with `errors: [{code: "internal"}]`, no
+  `external_id_look_alike` warning. Run the ALTER and that case disappears too.
 - `task_board_sync_directories` (unique `provider, scope_key, workspace_id`): a look-alike workspace's people
   directory is refused (`workspace_look_alike`).
 
