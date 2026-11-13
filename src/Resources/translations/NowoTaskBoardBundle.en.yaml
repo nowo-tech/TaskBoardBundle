@@ -921,3 +921,7 @@ task_board.multi.partial: "The label filter read the first tasks only: the resul
 task_board.multi.overdue: "overdue"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "An assignee is off on %date%: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Template"
+task_board.template.none: "No template"
+task_board.template.apply: "Apply template"

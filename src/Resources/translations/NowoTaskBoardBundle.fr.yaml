@@ -921,3 +921,7 @@ task_board.multi.partial: "Le filtre d'étiquette n'a lu que les premières tâc
 task_board.multi.overdue: "en retard"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Une personne assignée est absente le %date% : %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Modèle"
+task_board.template.none: "Aucun modèle"
+task_board.template.apply: "Appliquer le modèle"

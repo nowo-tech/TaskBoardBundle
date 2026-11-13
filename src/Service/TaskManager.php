@@ -118,8 +118,9 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
      * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
-     * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change:
-     *                                          nothing changes
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change, or
+     *                                          (audit PC-L2) the new tags of a task that stays in its column (operation
+     *                                          `retag`): nothing changes
      */
     public function update(Task $task, TaskFormData $data, object $user, ?ColumnTransitionVia $via = null): void
     {
@@ -144,6 +145,10 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         $moves   = $oldColumn?->getId() !== $newColumn?->getId();
         $columns = $this->orderedColumns($task->getBoard());
+        // Since 2.16.0 (audit PC-L2): new tags on a task that stays in its column are asked too (operation `retag`).
+        if (!$moves && $newColumn instanceof BoardColumn && $data->tags !== $oldTags) {
+            $this->assertTransition($task->getBoard(), $task, $newColumn, $user, self::retag($via), $data->tags);
+        }
         if ($moves) {
             if ($newColumn instanceof BoardColumn) {
                 $this->assertTransition($task->getBoard(), $task, $newColumn, $user, $via ?? ColumnTransitionVia::web(), $data->tags);
@@ -265,10 +270,14 @@ final readonly class TaskManager implements TaskManagerInterface
      * Since 2.3.0 (spec 216, FR-013): adds one tag, with the history and the TASK_UPDATED of the task form (its old tags in
      * the event). False when the tag is empty or already there.
      *
+     * @param ColumnTransitionVia|null $via since 2.16.0: who tags it, for the column transition policy (operation `retag`);
+     *                                      null: a person in the board UI (`web`)
+     *
      * @throws InvalidArgumentException since audit IC-L3, the task form's rules: a tag over {@see TaskConstraints::TAG_MAX}
      *                                  characters, or a task that already has {@see TaskConstraints::TAGS_MAX} tags
+     * @throws ColumnTransitionRefusedException since 2.16.0 (audit PC-L2), when the policy refuses the new tags: nothing changes
      */
-    public function addTag(Task $task, string $tag, object $user): bool
+    public function addTag(Task $task, string $tag, object $user, ?ColumnTransitionVia $via = null): bool
     {
         $tag     = trim($tag);
         $oldTags = $task->getTags();
@@ -280,6 +289,11 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         if (count($oldTags) >= TaskConstraints::TAGS_MAX) {
             throw new InvalidArgumentException(sprintf('A task has at most %d tags.', TaskConstraints::TAGS_MAX));
+        }
+        $column = $task->getColumn();
+        if ($column instanceof BoardColumn) {
+            // Since 2.16.0 (audit PC-L2): the column transition policy is asked about the new tags (operation `retag`).
+            $this->assertTransition($task->getBoard(), $task, $column, $user, self::retag($via), [...$oldTags, $tag]);
         }
         $task->setTags([...$oldTags, $tag]);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
@@ -386,6 +400,14 @@ final readonly class TaskManager implements TaskManagerInterface
         if (!$decision->allowed) {
             throw new ColumnTransitionRefusedException($transition, $decision);
         }
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-L2): the caller's channel, as operation `retag` (`web` without a caller's).
+     */
+    private static function retag(?ColumnTransitionVia $via): ColumnTransitionVia
+    {
+        return new ColumnTransitionVia($via->channel ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_RETAG);
     }
 
     /**

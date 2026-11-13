@@ -37,6 +37,19 @@ final readonly class ColumnTransitionVia
     public const OP_CHECKLIST = 'checklist';
 
     /**
+     * Since 2.16.0 (audit PC-M1): a task moved into the first remaining column because its own column is being deleted
+     * (`BoardColumnManager::delete()`); a refusal keeps the column and every task where they are.
+     */
+    public const OP_COLUMN_DELETE = 'column_delete';
+
+    /**
+     * Since 2.16.0 (audit PC-L2): the tags of a task change while it stays in its column (`from` and `to` are the same
+     * column), so a rule keyed on tags (a WIP limit per `repo:` tag) is asked about the tags the task will have. A rule
+     * that only cares about entering a column allows it.
+     */
+    public const OP_RETAG = 'retag';
+
+    /**
      * @param string $channel `[a-z][a-z0-9_]{0,31}`
      * @param string $operation `[a-z][a-z0-9_]{0,31}`
      */

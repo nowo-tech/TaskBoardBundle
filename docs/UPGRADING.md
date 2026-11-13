@@ -7,6 +7,7 @@
 - [To 2.16.0](#to-2160)
   - [Schema change for every host: humans-only columns and task revisions](#schema-change-for-every-host-humans-only-columns-and-task-revisions)
   - [AI Flow features: what a host does](#ai-flow-features-what-a-host-does)
+  - [Task templates: what a host does](#task-templates-what-a-host-does)
 - [To 2.15.1](#to-2151)
   - [Keys the bundle refuses](#keys-the-bundle-refuses)
   - [Schema change on MySQL / MariaDB: key columns compare byte for byte](#schema-change-on-mysql--mariadb-key-columns-compare-byte-for-byte)
@@ -202,8 +203,9 @@ statuses. One schema change for every host.
 ### Schema change for every host: humans-only columns and task revisions
 
 Run `php bin/console doctrine:migrations:diff` and compare it with the statements below (replace the table names if you
-use `table_prefix`); both columns have a default, so existing rows need nothing and the migration can run before or
-after the deploy:
+use `table_prefix`); both columns have a default, so existing rows need nothing. Run the migration **before** the
+deploy (audit PC-L4): both columns are mapped, so once the 2.16 code runs every query on tasks and columns selects them
+and fails until they exist:
 
 ```sql
 -- MySQL / MariaDB
@@ -253,8 +255,60 @@ punctuation (`C-12`) are matched with `LIKE` either way.
    `api.hooks.comment_edit_policy` to widen or narrow it.
 7. **Events.** `TASK_STATUS_CHANGED` follows every column change; its `toType` stays null until 2.17.
 
+8. **Column administration and the *humans only* gate (audit PC-M1).** An `api` / `mcp` caller may not lift the gate
+   through the column endpoints: changing a column's `humans_only`, deleting a humans-only column, adding a column
+   while the last one is humans-only (a new column goes last and would become the completion column) or reordering so
+   that a humans-only last column is no longer last answers 403 `STATUS_HUMANS_ONLY` (the same body as a refused
+   `status`). People do it in the board UI; a host's own channel label (e.g. `cli`) is not refused. Deleting a column
+   (UI or API) now asks your policy for every task it moves (operation `column_delete`, all or none); a refusal keeps
+   the column and the board UI shows the policy's message. A policy that only cares about entering a column needs
+   nothing.
+9. **Tag changes (audit PC-L2).** Your policy is now also asked when the tags of a task that stays in its column change:
+   operation `retag` (`ColumnTransitionVia::OP_RETAG`), `from` and `to` the same column, `tags` the new ones. A WIP
+   rule keyed on tags should count the task's new tags there; any other rule allows `retag` (the bundled humans-only
+   rule does). A refusal answers 403 with your code on `POST` / `DELETE /v2/task/{id}/tag/{name}`, `BULK_001` in a bulk
+   update, and the board shows the message on the task form.
+10. **Bulk refusals at write time (audit PC-L1).** A rule that reads the database (counting the tasks already in the
+    column) may refuse an item only after the previous ones were written in the same transaction; the answer is still
+    409 `BULK_001` with that item in `failures`, and nothing is kept.
+11. **Revisions and writers without `If-Match` (audit PC-L4).** The revision is computed in PHP (`Task::bumpRevision()`)
+    and written as a value. A writer that does not lock the row (the board UI, `PUT /v2/task/{id}` without `If-Match` or
+    `base_revision`, a sync, a recurrence) and loaded the task before a locked write committed may save the same
+    revision number for different content. The window is one request; clients that rely on FR-018 (parallel
+    verifiers) send `If-Match` on **every** write so they always take the row lock.
+12. **Tenant templates (audit PC-L3).** With the default `task_templates.permission`, a host whose
+    `security.access_checker` implements `TenantAwareTaskBoardAccessCheckerInterface` now also decides through its
+    `canListBoards($user, $tenantKey)` who manages a tenant's templates. With the bundled checkers (which ignore the
+    tenant) a `security.manage_roles` holder still manages every tenant's templates: a multi-tenant host that builds
+    its settings screen on `createForTenant($user, $tenantFromRequest)` sets its own `task_templates.permission` or a
+    tenant-aware access checker.
+
 Custom `TaskManagerInterface` implementations need nothing: the new `?ColumnTransitionVia $via` parameters are on
 `TaskManager` only (the interface gains them in 3.0).
+
+**A host that changes nothing** gets no new table, route, service or output either: task templates are opt-in.
+
+### Task templates: what a host does
+
+Beacon spec 234, FR-061.
+
+1. `task_templates.enabled: true`. Optional `task_templates.permission`: a `Template\TaskTemplatePermissionInterface` service (`canManage(user, TaskTemplateScope)`, `canUse(user, TaskBoardSnapshot, TaskTemplateSnapshot)`). Without it, a board's templates are managed with the right to manage the board, a tenant's with `security.manage_roles`, and a template is used with the right to add tasks.
+2. **Schema** (additive, only with the option): one table. Generate it with `doctrine:migrations:diff`, or by hand:
+
+   ```sql
+   -- PostgreSQL
+   CREATE TABLE task_board_task_templates (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, name VARCHAR(120) NOT NULL, body TEXT DEFAULT NULL, default_tags JSON NOT NULL, default_column_id VARCHAR(36) DEFAULT NULL, default_column_name VARCHAR(128) DEFAULT NULL, PRIMARY KEY(id));
+   CREATE INDEX idx_task_board_task_templates_tenant ON task_board_task_templates (tenant_key);
+   CREATE INDEX IDX_DA1B12A8E7EC5785 ON task_board_task_templates (board_id);
+   ALTER TABLE task_board_task_templates ADD CONSTRAINT FK_DA1B12A8E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE;
+   -- MySQL / MariaDB: DATETIME, LONGTEXT and JSON (see demo/symfony8/migrations/Version20261113130000.php); SQLite: DATETIME, CLOB.
+   ```
+
+   `default_column_name` is a tenant template's default column, by exact name (a board template keeps `default_column_id`). Since 2.15.1 the mapping listener gives `tenant_key` the same binary NO PAD collation as the boards' (`utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL), so `doctrine:migrations:diff` writes it into the `CREATE TABLE`; a host that writes the SQL by hand adds `COLLATE` to that column as it did for the boards' `tenant_key` (REQ-SEC-006). The bundle compares every key it reads back byte for byte anyway, so a folding collation never mixes two tenants' templates.
+3. **Settings screen.** Build it on `TaskTemplateManager` (FR-062): it has no page of its own. See [USAGE "Task templates"](USAGE.md#task-templates-since-216).
+4. **API / MCP.** With `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on `POST …/list/{id}/task` ([API](API.md#task-templates-since-216)). In process: `TaskApiTemplateOperations::snapshots()`. A `column_transition_policy` applies to a template's default column as it does to an explicit `status`: with the bundled humans-only rule, a template pointing at such a column is refused for `api` / `mcp` callers.
+5. **Presets.** `TaskTemplateManager::export()` and `replaceAll()` read and write a scope's templates as plain data (`TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`), for a configuration exporter.
+6. **Assets.** The add-task dialog's controller gained the picker's `applyTemplate` action and the `open-on-connect` value: a host that builds its own copy of the bundle's assets rebuilds them; one that overrides `_add_task_modal.html.twig` adds the picker block (`taskTemplatePicker`) to offer templates.
 ## To 2.15.1
 
 Patch (REQ-SEC-006, audit F5). Tenant keys, board slugs, import external ids and task-number scopes are now matched

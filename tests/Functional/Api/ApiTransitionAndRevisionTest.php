@@ -59,7 +59,11 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         $this->get('/api/tasks/v2/list/' . $this->roadmap->getId());
         self::assertSame([false, false, true, true], array_map(static fn (array $status): bool => $status['humans_only'], $this->json()['statuses']));
 
+        // Audit PC-M1: an `api` / `mcp` caller may not change the flag; a host's own channel may.
         $this->send('PUT', '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status/' . $this->column('Doing')->getId(), ['humans_only' => true]);
+        $this->assertRefused(403, 'STATUS_HUMANS_ONLY');
+        ApiTestHost::$tokens['bt_cli'] = ['channel' => 'cli'] + ApiTestHost::$tokens[self::TOKEN];
+        $this->send('PUT', '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status/' . $this->column('Doing')->getId(), ['humans_only' => true], [], 'bt_cli');
         self::assertResponseIsSuccessful();
         $this->em->clear();
         self::assertTrue($this->em->find(BoardColumn::class, $this->column('Doing')->getId())?->isHumansOnly());

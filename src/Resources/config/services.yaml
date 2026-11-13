@@ -38,6 +38,8 @@ services:
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
             - '../../Recurrence/'
             - '../../Controller/TaskRecurrenceController.php'
+            # Since 2.16.0 (Beacon spec 234): loaded only with `task_templates.enabled` (services_templates.yaml).
+            - '../../Template/'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'

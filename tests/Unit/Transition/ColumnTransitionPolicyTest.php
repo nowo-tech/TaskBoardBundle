@@ -31,6 +31,10 @@ final class ColumnTransitionPolicyTest extends TestCase
         yield 'a host label' => [true, 'cron', ColumnTransitionVia::OP_MOVE, true];
         yield 'checklist item by the api' => [true, ColumnTransitionVia::API, ColumnTransitionVia::OP_CHECKLIST, false];
         yield 'api into a plain column' => [false, ColumnTransitionVia::API, ColumnTransitionVia::OP_MOVE, true];
+        // Audit PC-L2: a retag of a task already in a humans-only column does not enter it.
+        yield 'mcp retags a task in a humans only column' => [true, ColumnTransitionVia::MCP, ColumnTransitionVia::OP_RETAG, true];
+        // Audit PC-M1: a column deletion moving tasks into a humans-only column is a machine move like any other.
+        yield 'mcp deletes a column into a humans only one' => [true, ColumnTransitionVia::MCP, ColumnTransitionVia::OP_COLUMN_DELETE, false];
     }
 
     #[DataProvider('cases')]

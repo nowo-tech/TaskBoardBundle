@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Routing;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
@@ -86,6 +87,11 @@ final class TaskBoardRouteLoader extends Loader
         'status_delete' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'deleteColumn', 'DELETE'],
     ];
 
+    /** Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled` only. */
+    private const API_TEMPLATE_ROUTES = [
+        'task_templates' => ['/v2/list/{listId}/taskTemplate', TaskApiTemplateController::class, 'templates'],
+    ];
+
     /** Default base path of the manage routes (routes.index.path). */
     private const DEFAULT_BASE = '/tools/task-board';
 
@@ -111,6 +117,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $recurrenceEnabled = false,
         // Since 2.13.0 (Beacon D-20261112-01): `multi_board.path` with `multi_board.enabled`; null: no multi-board route.
         private readonly ?string $multiBoardPath = null,
+        // Since 2.16.0 (Beacon spec 234): the API's template list exists only with `task_templates.enabled`.
+        private readonly bool $templatesEnabled = false,
     ) {
     }
 
@@ -248,7 +256,7 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        foreach (self::API_ROUTES as $name => $route) {
+        foreach ($this->templatesEnabled ? self::API_ROUTES + self::API_TEMPLATE_ROUTES : self::API_ROUTES as $name => $route) {
             [$path, $controller, $action] = $route;
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,

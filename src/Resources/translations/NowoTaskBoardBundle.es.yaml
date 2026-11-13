@@ -921,3 +921,7 @@ task_board.multi.partial: "El filtro de etiqueta solo leyó las primeras tareas:
 task_board.multi.overdue: "vencida"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Una persona asignada no trabaja el %date%: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Plantilla"
+task_board.template.none: "Sin plantilla"
+task_board.template.apply: "Aplicar plantilla"

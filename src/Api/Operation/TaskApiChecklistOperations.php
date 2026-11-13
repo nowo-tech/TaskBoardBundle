@@ -58,6 +58,8 @@ final readonly class TaskApiChecklistOperations
         private TaskMemberAssigner $members,
         private TaskApiQueryRepository $queries,
         private ValidatorInterface $validator,
+        // Since 2.16.0 (audit PC-L2): a rename retags every item, all or none, now that a tag change can be refused.
+        private ?TaskApiTransaction $transaction = null,
     ) {
     }
 
@@ -116,11 +118,16 @@ final readonly class TaskApiChecklistOperations
             return [$task, $name];
         }
         $renamed = $this->name($input->string('name', true));
-        foreach ($this->items($task, $name) as $item) {
-            $data       = TaskFormData::fromTask($item);
-            $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
-            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
-        }
+        $items   = $this->items($task, $name);
+        $rename  = function () use ($principal, $items, $name, $renamed): void {
+            foreach ($items as $item) {
+                $data       = TaskFormData::fromTask($item);
+                $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
+                $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+            }
+        };
+        // @igor-ignore - The closure runs once, now; the stateless transaction keeps no reference to it.
+        $this->transaction instanceof TaskApiTransaction ? $this->transaction->run($rename, $items) : $rename();
         $this->audit->written($principal, 'checklist.update', $task->getBoard(), $task->getId(), [], ['name']);
 
         return [$task, $renamed];
@@ -173,7 +180,7 @@ final readonly class TaskApiChecklistOperations
         }
         $data->columnId = $item->getColumn()?->getId();
         if ($data->title !== $item->getTitle()) {
-            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
         }
         if ($assignee !== null) {
             $this->members->assign($item, new TaskMemberFormData($assignee, TaskMemberRole::Assignee), $principal->user);

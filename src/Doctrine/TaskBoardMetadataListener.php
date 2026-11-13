@@ -29,6 +29,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
+use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use Psr\Log\LoggerInterface;
@@ -54,6 +55,8 @@ final readonly class TaskBoardMetadataListener
         ColumnSet::class         => ['scopeKey'],
         TaskSyncDirectory::class => ['scopeKey', 'workspaceId'],
         TaskSyncItem::class      => ['externalId'],
+        // Since 2.16.0 (spec 234, FR-061): a template's tenant, mapped only with `task_templates.enabled`.
+        TaskTemplate::class => ['tenantKey'],
     ];
 
     public function __construct(

@@ -13,18 +13,24 @@ use Nowo\TaskBoardBundle\Event\ColumnDeletedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnsReorderedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnUpdatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_column;
 use function array_filter;
 use function array_keys;
 use function array_map;
+use function array_values;
 use function count;
 use function is_string;
 use function max;
@@ -49,6 +55,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         // Since 2.10.0 (spec 216): the column events; none without a dispatcher.
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ?TaskChangeContext $changeContext = null,
+        // Since 2.16.0 (audit PC-M1): asked for every task a column deletion moves; none: every move is allowed.
+        private ?ColumnTransitionPolicyInterface $transitions = null,
     ) {
     }
 
@@ -162,9 +170,16 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      * Deletes a column (since 1.11): its tasks move to the end of the board's first remaining column (completed when
      * that column is the last one, reopened otherwise); the last column of a board is never deleted (false).
      *
+     * Since 2.16.0 (audit PC-M1) the column transition policy is asked, before anything changes, for every task that moves
+     * (operation `column_delete`, from the deleted column to the one its tasks go to), all or none: one refusal keeps the
+     * column and every task. Without an actor (a worker) the policy is not asked, as for an import.
+     *
+     * @param ColumnTransitionVia|null $via since 2.16.0: how the tasks move; null: a person in the board UI (`web`)
+     *
      * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses a task: nothing changes
      */
-    public function delete(BoardColumn $column, ?object $actor = null): bool
+    public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {
         $board     = $column->getBoard();
         $remaining = [];
@@ -194,6 +209,9 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             if ($refusal instanceof LimitRefusal) {
                 throw new TaskReopenRefusedException($refusal);
             }
+        }
+        if ($actor !== null) {
+            $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
         }
 
         $position = 0;
@@ -228,6 +246,39 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         $this->dispatch(new ColumnDeletedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $target->getId(), $moved, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_DELETED);
 
         return true;
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-M1): every task of the deleted column, asked as it enters `$target` (the last column once the
+     * deletion is done when `$targetIsLast`). The first refusal stops the deletion before anything changes.
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, object $actor, ColumnTransitionVia $via): void
+    {
+        if (!$this->transitions instanceof ColumnTransitionPolicyInterface) {
+            return;
+        }
+        $board = $column->getBoard();
+        foreach ($board->getTasks() as $task) {
+            if ($task->getColumn() !== $column) {
+                continue;
+            }
+            $transition = new ColumnTransition(
+                Snapshots::board($board),
+                Snapshots::task($task),
+                Snapshots::column($column, $columnIsLast),
+                Snapshots::column($target, $targetIsLast),
+                $actor,
+                ActorId::of($actor),
+                $via,
+                array_values($task->getTags()),
+            );
+            $decision = $this->transitions->decide($transition);
+            if (!$decision->allowed) {
+                throw new ColumnTransitionRefusedException($transition, $decision);
+            }
+        }
     }
 
     private function cause(): ?string

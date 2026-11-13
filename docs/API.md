@@ -11,6 +11,7 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Read endpoints](#read-endpoints)
 - [Write endpoints](#write-endpoints)
 - [Management endpoints (Full)](#management-endpoints-full)
+- [Task templates (since 2.16)](#task-templates-since-216)
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
@@ -156,6 +157,10 @@ principal's channel (`api`, or `mcp` for an in-process caller) and the operation
 `checklist`). A refusal is 403 with the policy's code and message, e.g. `{"err": "Only people can move tasks into this
 status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written. The bundled `HumansOnlyColumnTransitionPolicy` is
 strict: ticking a checklist item into a humans-only column is refused too, unless `humans_only_policy.allow_checklist`.
+Since audit PC the policy is also asked when the tags of a task that stays in its column change (operation `retag`:
+`POST` / `DELETE /v2/task/{id}/tag/{name}`, a bulk item's `tags`, a checklist rename) and for every task a column
+deletion moves (operation `column_delete`, all or none). A refusal decided while a bulk update writes is still 409
+`BULK_001` with that item in `failures`.
 
 | Endpoint | Level | Notes |
 |---|---|---|
@@ -168,7 +173,11 @@ strict: ticking a checklist item into a humans-only column is refused too, unles
 
 `GET /v2/team` lists each team's `members` the same way (`[{"user": {…, "service_account": bool}}]`; `[]` without
 `api.hooks.members`). Status objects carry `humans_only`; `POST` / `PUT /v2/list/{id}/status…` accept `humans_only`
-(boolean).
+(boolean). Audit PC-M1: an `api` / `mcp` principal may not lift the gate through the statuses: another `humans_only`
+value on `PUT …/status/{status_id}`, `humans_only: true` on `POST …/status`, a new status while the last one is
+humans-only (it would become the completion column), `DELETE` of a humans-only status, or `PUT …/status/order` that
+moves a humans-only last status away from the end answer 403 `{"err": "Only people can move tasks into this status",
+"ECODE": "STATUS_HUMANS_ONLY"}` and change nothing. Sending a status's current `humans_only` value is accepted.
 
 ## Management endpoints (Full)
 
@@ -191,6 +200,15 @@ Tags exist on tasks only: there is no space tag to create, rename or delete. Boa
 **Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.
 
 **Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept. **Known narrow race:** the limit is asked once before the first save, and the restore and the move ask it again as they save; if another write fills the limit in between, the restore is saved and the move then answers 500. Retrying the same request completes it.
+
+## Task templates (since 2.16)
+
+With `task_templates.enabled` (Beacon spec 234, FR-061):
+
+- `GET /v2/list/{list_id}/taskTemplate` — the templates the board offers the token's person: the board's own, then its tenant's, each by name, each allowed by `TaskTemplatePermissionInterface::canUse()`. The board is reached as for creating a task in it (level Full, else 403; a board the token does not reach is 404). Answer: `{"templates": [{"id", "name", "scope": "board"|"tenant", "description" (the Markdown body), "tags": [{"name"}], "status" (the default column as a task's status, or null: for a tenant template, the board's column with exactly the template's `default_column_name`; no such column means the board's first column)}]}`.
+- `POST /v2/list/{list_id}/task` accepts `template_id`. The template fills only what the body leaves out: `markdown_content` / `description`, `tags` and `status` set in the body win (an explicit `""` or `[]` too). Any id the board does not offer — unknown, of another board or tenant, a look-alike, or not allowed — is the same `400 INPUT_002 "Invalid template_id"`, before anything is written. The audit's `API_WRITE` names it in `targetIds['template']`. The default column takes the same create path as a `status`, so the [column transition policy](#column-transitions-revisions-and-bulk-updates-since-216) decides on it too: a template pointing at a *humans only* column is refused for an `api` / `mcp` caller with that policy's code and message, byte for byte the answer the same `status` would give.
+
+Without the option the route does not exist and `template_id` is an unknown field (warned).
 
 ## Idempotency
 

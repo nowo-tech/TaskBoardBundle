@@ -36,6 +36,7 @@ use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -101,6 +102,8 @@ final readonly class TaskApiTaskOperations
         // Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`.
         private TaskCommentRepositoryInterface $commentRepository,
         private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
+        // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
+        private ?TaskTemplateManager $templates = null,
     ) {
     }
 
@@ -114,7 +117,11 @@ final readonly class TaskApiTaskOperations
     }
 
     /**
-     * `POST /v2/list/{id}/task`: a task, or a subtask with `parent`.
+     * `POST /v2/list/{id}/task`: a task, or a subtask with `parent`. Since 2.16.0 (`task_templates.enabled`), `template_id`
+     * pre-fills the description, the tags and the status from a template the board offers the token's person; a field
+     * the body sets wins over the template's ({@see self::applyTemplate()}). The column it leaves in `TaskFormData` goes
+     * through the same seam an explicit `status` does, so the column transition policy decides on it too (a template
+     * whose column is *humans only* is refused with that policy's code, as any other status would be).
      *
      * @throws TaskApiRefusal
      */
@@ -135,6 +142,7 @@ final readonly class TaskApiTaskOperations
         $data->columnId = $this->columnOf($board, $input->string('status'))?->getId();
         $this->applyFields($data, $input);
         $data->tags = $this->tags($input->strings('tags'));
+        $template   = $this->applyTemplate($principal, $board, $data, $input);
         $assignees  = $this->assignable($board, $input->strings('assignees'));
         $this->audit->requireTaskQuota($board, 1, $principal->user);
 
@@ -142,7 +150,11 @@ final readonly class TaskApiTaskOperations
         foreach ($assignees as $user) {
             $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
         }
-        $this->audit->written($principal, 'task.create', $board, $task->getId(), $parent !== null ? ['parent' => $parent->getId()] : []);
+        $targets = $parent !== null ? ['parent' => $parent->getId()] : [];
+        if ($template !== null) {
+            $targets['template'] = $template;
+        }
+        $this->audit->written($principal, 'task.create', $board, $task->getId(), $targets);
 
         return $task;
     }
@@ -273,7 +285,9 @@ final readonly class TaskApiTaskOperations
      * policy with operation `bulk`, the host's limit) and, inside one transaction, its row is locked (in id order) and its
      * `base_revision` compared. Any refusal writes nothing and answers `BULK_001` with every failing item (`failures`:
      * index, id, status, ECODE, err, and `current_revision` for `TASK_409`), always with HTTP 409 (Beacon review 2026-11-13):
-     * each item's own status and ECODE stay in `failures`.
+     * each item's own status and ECODE stay in `failures`. Since audit PC-L1 a refusal that only appears while writing (a
+     * stateful host rule refusing an item once the previous ones are written) answers the same way, with that one item,
+     * and every write of the request is rolled back.
      * After the commit: one `API_WRITE` (`task.bulk_update`) per task and one `API_BULK_WRITE` with the count.
      *
      * @throws TaskApiRefusal
@@ -357,7 +371,13 @@ final readonly class TaskApiTaskOperations
             }
             $changed = [];
             foreach ($plans as $index => $plan) {
-                $changed[$index] = $this->bulkWrite($principal, $tasks[$index], $plan);
+                try {
+                    $changed[$index] = $this->bulkWrite($principal, $tasks[$index], $plan);
+                } catch (TaskApiRefusal $refusal) {
+                    // Audit PC-L1: a refusal decided while writing (a host rule that counts the items written before
+                    // this one) is still `BULK_001` with its item in `failures`; run() rolls every write back.
+                    throw self::bulkRefused([$index => self::failure($index, $tasks[$index]->getId(), $refusal)]);
+                }
             }
 
             return $changed;
@@ -717,6 +737,42 @@ final readonly class TaskApiTaskOperations
         if (TaskConstraints::startsAfterDue($data->startAt, $data->dueAt)) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid start_date: after the due date');
         }
+    }
+
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): `template_id`, read only with `task_templates.enabled` (else it is an
+     * unknown field, warned). The template must be one the board offers the person ({@see TaskTemplateManager::usable()});
+     * any other id — unknown, of another board or tenant, or not allowed — is the same 400, so nothing about it leaks.
+     * Its description, tags and default column fill only what the body does not set (`markdown_content` / `description`,
+     * `tags`, `status`). The column goes through the same create path as a `status` (seam for a transition policy).
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return string|null the template's id
+     */
+    private function applyTemplate(TaskApiPrincipal $principal, TaskBoard $board, TaskFormData $data, TaskApiInput $input): ?string
+    {
+        if (!$this->templates instanceof TaskTemplateManager) {
+            return null;
+        }
+        $id = $input->string('template_id');
+        if ($id === null) {
+            return null;
+        }
+        $template = $this->templates->usable($principal->user, $board, $id);
+        if ($template === null) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid template_id');
+        }
+        $this->templates->prefill(
+            $template,
+            $board,
+            $data,
+            description: !$input->hasAny('markdown_content', 'description'),
+            tags: !$input->has('tags'),
+            column: !$input->has('status'),
+        );
+
+        return $template->getId();
     }
 
     /**

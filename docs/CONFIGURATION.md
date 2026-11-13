@@ -33,6 +33,7 @@
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
+- [Task templates (since 2.16)](#task-templates-since-216)
 - [New board (since 1.30)](#new-board-since-130)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
@@ -789,6 +790,17 @@ pnpm install && pnpm run build
 | `routes.task_recurrence` | `/tools/task-board/task/{taskId}/recurrence` | GET, POST |
 | `routes.task_recurrence_action` | `/tools/task-board/task/{taskId}/recurrence/{action}` | POST; `pause`, `resume`, `stop`, `skip`, `unskip` |
 | `web_ui.templates.task_recurrence` | `@NowoTaskBoardBundle/manage/task_recurrence.html.twig` | The Repeat page |
+
+## Task templates (since 2.16)
+
+Beacon spec 234, FR-061. Opt-in: with `enabled: false` nothing is mapped, registered or rendered.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `task_templates.enabled` | `false` | The table `task_board_task_templates`, `Template\TaskTemplateManager`, the *Template* picker of the add-task dialog and, with `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on a new task |
+| `task_templates.permission` | `null` | Service id of a `Template\TaskTemplatePermissionInterface` (`canManage`, `canUse`). null: `DefaultTaskTemplatePermission` — a board's templates are managed with the right to manage the board (`canManageBoard`), a tenant's with `security.manage_roles` (anyone with `security.resource_scoping: false`), and a template is used with the right to add tasks to the board (`canEditBoard`) |
+
+The schema change is additive (one new table): see [UPGRADING "To 2.16.0"](UPGRADING.md#to-2160). Both mapping types are shipped (`database.mapping_type: attribute` or `xml`, group `template`), and the private entity manager (`database.private_entity_manager: true`) covers the table too.
 
 ## Task numbers and calendar (since 2.1)
 
