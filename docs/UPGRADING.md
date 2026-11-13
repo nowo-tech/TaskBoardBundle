@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.16.0](#to-2160)
+  - [Task templates: what a host does](#task-templates-what-a-host-does)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -185,6 +187,34 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.16.0
+
+Not released yet.
+
+**A host that changes nothing** gets no new table, route, service or output: task templates are opt-in.
+
+### Task templates: what a host does
+
+Beacon spec 234, FR-061.
+
+1. `task_templates.enabled: true`. Optional `task_templates.permission`: a `Template\TaskTemplatePermissionInterface` service (`canManage(user, TaskTemplateScope)`, `canUse(user, TaskBoardSnapshot, TaskTemplateSnapshot)`). Without it, a board's templates are managed with the right to manage the board, a tenant's with `security.manage_roles`, and a template is used with the right to add tasks.
+2. **Schema** (additive, only with the option): one table. Generate it with `doctrine:migrations:diff`, or by hand:
+
+   ```sql
+   -- PostgreSQL
+   CREATE TABLE task_board_task_templates (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, name VARCHAR(120) NOT NULL, body TEXT DEFAULT NULL, default_tags JSON NOT NULL, default_column_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY(id));
+   CREATE INDEX idx_task_board_task_templates_tenant ON task_board_task_templates (tenant_key);
+   CREATE INDEX IDX_DA1B12A8E7EC5785 ON task_board_task_templates (board_id);
+   ALTER TABLE task_board_task_templates ADD CONSTRAINT FK_DA1B12A8E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE;
+   -- MySQL / MariaDB: DATETIME, LONGTEXT and JSON (see demo/symfony8/migrations/Version20261113120000.php); SQLite: DATETIME, CLOB.
+   ```
+
+   On MySQL / MariaDB give `tenant_key` a binary NO PAD collation (`utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB), as for the boards' `tenant_key` (REQ-SEC-006). The bundle compares every key it reads back byte for byte anyway, so a folding collation never mixes two tenants' templates.
+3. **Settings screen.** Build it on `TaskTemplateManager` (FR-062): it has no page of its own. See [USAGE "Task templates"](USAGE.md#task-templates-since-216).
+4. **API / MCP.** With `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on `POST …/list/{id}/task` ([API](API.md#task-templates-since-216)). In process: `TaskApiTemplateOperations::snapshots()`.
+5. **Presets.** `TaskTemplateManager::export()` and `replaceAll()` read and write a scope's templates as plain data (`TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`), for a configuration exporter.
+6. **Assets.** The add-task dialog's controller gained the picker's `applyTemplate` action and the `open-on-connect` value: a host that builds its own copy of the bundle's assets rebuilds them; one that overrides `_add_task_modal.html.twig` adds the picker block (`taskTemplatePicker`) to offer templates.
 
 ## To 2.15.0
 

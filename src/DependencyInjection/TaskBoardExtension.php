@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
@@ -23,6 +24,7 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -130,6 +132,9 @@ use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
+use Nowo\TaskBoardBundle\Template\DefaultTaskTemplatePermission;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
+use Nowo\TaskBoardBundle\Template\TaskTemplatePermissionInterface;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
@@ -299,6 +304,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerRecurrence($container, $loader, $config, $emName);
+        $this->registerTaskTemplates($container, $loader, $config, $emName);
         $this->registerMultiBoard($container, $loader, $config, $emName);
         // Since 2.3.0 (spec 216): the host's label of a history row's cause.
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
@@ -457,6 +463,32 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskRecurrenceBoardListener::class)->setArgument('$entityManager', $manager);
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$recurrenceEnabled', true);
         $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$recurrence', new Reference(TaskRecurrenceView::class));
+    }
+
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.*`. With `enabled: false` nothing is registered: no route,
+     * service, mapping or output change.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerTaskTemplates(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $templates = $config['task_templates'];
+        $container->setParameter('nowo_task_board.task_templates.enabled', (bool) $templates['enabled']);
+        if (!$templates['enabled']) {
+            return;
+        }
+        $loader->load('services_templates.yaml');
+        $container->setAlias(TaskTemplatePermissionInterface::class, $this->serviceOr($templates['permission'], DefaultTaskTemplatePermission::class));
+        $container->getDefinition(TaskTemplateManager::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$templatesEnabled', true);
+        $container->getDefinition(TaskBoardManageController::class)->setArgument('$taskTemplates', new Reference(TaskTemplateManager::class));
+        if ($config['api']['enabled']) {
+            // The API's template list and the in-process (MCP) operations; `template_id` is read by TaskApiTaskOperations.
+            $container->register(TaskApiTemplateOperations::class, TaskApiTemplateOperations::class)->setAutowired(true)->setPublic(true);
+            $container->register(TaskApiTemplateController::class, TaskApiTemplateController::class)->setAutowired(true)->setPublic(true)
+                ->addTag('controller.service_arguments');
+        }
     }
 
     /**
@@ -1021,6 +1053,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                             'is_bundle' => false,
                             'dir'       => __DIR__ . '/../Recurrence/Entity',
                             'prefix'    => 'Nowo\\TaskBoardBundle\\Recurrence\\Entity',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        // Since 2.16.0 (Beacon spec 234, FR-061): the template table, only with task_templates.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_templates')) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardTemplate' => $this->xmlMapping($container) ? $this->xmlMappingOf('template', 'Nowo\\TaskBoardBundle\\Template\\Entity') : [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Template/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Template\\Entity',
                         ],
                     ],
                 ],

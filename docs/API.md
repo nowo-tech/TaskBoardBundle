@@ -11,6 +11,7 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Read endpoints](#read-endpoints)
 - [Write endpoints](#write-endpoints)
 - [Management endpoints (Full)](#management-endpoints-full)
+- [Task templates (since 2.16)](#task-templates-since-216)
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
@@ -170,6 +171,15 @@ Tags exist on tasks only: there is no space tag to create, rename or delete. Boa
 **Before any write.** A host must listen to `TaskBoardEvents::API_WRITE` (else 503 `AUDIT_001`), and, with `api.quota_listener_required` (the default), to `QUOTA_CHECK` for creates (else 403 `PLAN_002`). A refused limit is 403 `PLAN_002` with the host's reason.
 
 **Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept. **Known narrow race:** the limit is asked once before the first save, and the restore and the move ask it again as they save; if another write fills the limit in between, the restore is saved and the move then answers 500. Retrying the same request completes it.
+
+## Task templates (since 2.16)
+
+With `task_templates.enabled` (Beacon spec 234, FR-061):
+
+- `GET /v2/list/{list_id}/taskTemplate` — the templates the board offers the token's person: the board's own, then its tenant's, each by name, each allowed by `TaskTemplatePermissionInterface::canUse()`. The board is reached as for creating a task in it (level Full, else 403; a board the token does not reach is 404). Answer: `{"templates": [{"id", "name", "scope": "board"|"tenant", "description" (the Markdown body), "tags": [{"name"}], "status" (the default column as a task's status, or null)}]}`.
+- `POST /v2/list/{list_id}/task` accepts `template_id`. The template fills only what the body leaves out: `markdown_content` / `description`, `tags` and `status` set in the body win (an explicit `""` or `[]` too). Any id the board does not offer — unknown, of another board or tenant, a look-alike, or not allowed — is the same `400 INPUT_002 "Invalid template_id"`, before anything is written. The audit's `API_WRITE` names it in `targetIds['template']`. The default column takes the same create path as a `status`.
+
+Without the option the route does not exist and `template_id` is an unknown field (warned).
 
 ## Idempotency
 

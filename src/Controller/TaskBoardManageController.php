@@ -63,6 +63,7 @@ use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Form\TaskScheduleFormType;
+use Nowo\TaskBoardBundle\Form\TaskTemplatePickerType;
 use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
@@ -102,6 +103,7 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -152,11 +154,13 @@ use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
+use function mb_substr;
 use function parse_url;
 use function preg_match;
 use function reset;
 use function sprintf;
 use function str_starts_with;
+use function trim;
 
 use const ARRAY_FILTER_USE_KEY;
 use const PHP_QUERY_RFC3986;
@@ -251,6 +255,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly bool $skipNonWorkingDays = false,
         // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
         private readonly string $userReference = 'entity',
+        // Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.enabled` (null when off).
+        private readonly ?TaskTemplateManager $taskTemplates = null,
     ) {
     }
 
@@ -377,10 +383,13 @@ final class TaskBoardManageController extends AbstractController
         $columnForm       = $this->createColumnForm(new BoardColumnFormData());
         $columnChoices    = $this->buildColumnChoices($board);
 
-        $taskForm = $this->createForm(TaskFormType::class, new TaskFormData(
+        $taskData = new TaskFormData(
             // Choices are label => id: the default column is the first *value* (id), not the label.
             columnId: $columnChoices === [] ? null : reset($columnChoices),
-        ), ['column_choices' => $columnChoices]);
+        );
+        // Since 2.16.0 (FR-061): the Template picker; a chosen template pre-fills the form and opens the dialog.
+        $templateView = $canEditBoard ? $this->templatePicker($user, $board, $taskData) : [];
+        $taskForm     = $this->createForm(TaskFormType::class, $taskData, ['column_choices' => $columnChoices]);
 
         [$allTasks, $taskWindow] = $this->boardTasks($board);
         $taskTree                = TaskTree::fromTasks($allTasks);
@@ -409,7 +418,45 @@ final class TaskBoardManageController extends AbstractController
             'commentCounts' => $this->commentCounts($allTasks),
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
-        ] + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+        ] + $templateView + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+    }
+
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): the add-task dialog's Template picker (`taskTemplatePicker`) when the board
+     * offers the user templates. `?taskTemplate=<id>` pre-fills `$data` from a template the board offers (any other id
+     * is ignored, as if none were chosen) and opens the dialog (`openAddTask`); `?taskTitle=` keeps the title typed.
+     *
+     * @return array<string, mixed>
+     */
+    private function templatePicker(object $user, TaskBoard $board, TaskFormData $data): array
+    {
+        if (!$this->taskTemplates instanceof TaskTemplateManager) {
+            return [];
+        }
+        $choices = [];
+        foreach ($this->taskTemplates->usableOn($user, $board) as $template) {
+            $choices[$template->getName()] ??= $template->getId();
+        }
+        if ($choices === []) {
+            return [];
+        }
+        $query    = $this->currentRequest()?->query;
+        $asked    = $query?->get(TaskTemplatePickerType::FIELD_TEMPLATE);
+        $template = is_string($asked) && $asked !== '' ? $this->taskTemplates->usable($user, $board, $asked) : null;
+        if ($template !== null) {
+            $this->taskTemplates->prefill($template, $board, $data);
+            $title = $query?->get(TaskTemplatePickerType::FIELD_TITLE);
+            if (is_string($title)) {
+                $data->title = mb_substr(trim($title), 0, TaskFormType::TITLE_MAX);
+            }
+        }
+        $picker = $this->container->get('form.factory')->createNamed('', TaskTemplatePickerType::class, null, [
+            'action'    => $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]),
+            'templates' => $choices,
+            'selected'  => $template?->getId(),
+        ]);
+
+        return ['taskTemplatePicker' => $picker->createView(), 'openAddTask' => $template !== null];
     }
 
     /**

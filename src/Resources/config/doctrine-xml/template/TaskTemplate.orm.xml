@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Template\Entity\TaskTemplate" table="task_board_task_templates">
+        <indexes>
+            <index name="idx_task_board_task_templates_tenant" columns="tenant_key"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
+        <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
+        <field name="name" type="string" length="120"/>
+        <field name="body" type="text" nullable="true"/>
+        <field name="defaultTags" type="json" column="default_tags"/>
+        <field name="defaultColumnId" type="string" column="default_column_id" length="36" nullable="true"/>
+        <many-to-one field="board" target-entity="Nowo\TaskBoardBundle\Entity\TaskBoard">
+            <join-column name="board_id" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

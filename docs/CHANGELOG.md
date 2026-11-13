@@ -107,6 +107,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Task templates** (Beacon spec 234, FR-061; opt-in `task_templates.enabled`). A template belongs to one board or one tenant and holds a name, a Markdown description body, default tags and (board templates) a default column.
+  - Table `task_board_task_templates` (attribute and XML mapping, additive), `Template\TaskTemplateManager` (create, update, delete, list, `usableOn()`, `usable()`, `prefill()`).
+  - Host port `Template\TaskTemplatePermissionInterface` (`canManage` / `canUse`, framework-free VOs `TaskTemplateScope` and `TaskTemplateSnapshot`), option `task_templates.permission`; the default `DefaultTaskTemplatePermission` falls back to the existing rights (manage board / `security.manage_roles` / add tasks).
+  - Add-task dialog: a *Template* picker (`TaskTemplatePickerType`) that pre-fills the description, the tags and the column, all still editable.
+  - Task API: `GET /v2/list/{id}/taskTemplate`, and `template_id` on `POST /v2/list/{id}/task` (body fields win over the template; any template the board does not offer is the same 400). `TaskApiTemplateOperations` for in-process (MCP) callers.
+  - Templates as data for configuration presets (Beacon block W, TaskBoard 2.17 board configuration): `TaskTemplateManager::export()` / `replaceAll()`, `TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`.
+  - `TaskBoardResourceAccessChecker::canManageTenantTemplates()`.
+- REQ-SEC-006: template ids and tenant keys are matched exactly (`===` on every row read back, before any cap); a tenant key with edge whitespace, control or format characters is refused.
+
 ### Documentation
 
 - `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).

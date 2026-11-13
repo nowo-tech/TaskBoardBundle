@@ -55,7 +55,7 @@ internal gate (`Port\*Gate`, built by `Port\Ports`). `TaskBoardPortsPass` stops 
 service implements neither (a factory service, whose class the build cannot know, fails closed when it is built).
 
 The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInterface`, `TaskObjectLinkResolverInterface`,
-`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, the API users / workspace / plan gate /
+`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, `Template\TaskTemplatePermissionInterface` (2.16: `TaskTemplateScope`, `TaskBoardSnapshot`, `TaskTemplateSnapshot`), the API users / workspace / plan gate /
 rate limiter / idempotency store, the providers, ...) already take values only.
 
 ## Events
@@ -95,7 +95,7 @@ build time; your services keep your manager.
 
 | | Standard host (default) | DDD host (opt-in) |
 |---|---|---|
-| Mapping of the 28 bundle entities | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
+| Mapping of the 29 bundle entities (2.16: `TaskTemplate`, group `template`) | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
 | Host users on TaskBoard rows | `ManyToOne` to `user_class` (a Doctrine entity in the same manager) | `database.user_reference: id`: the id in a string column (`TaskBoardUserRef`), found again through `user_directory` |
 | Bundle base classes / traits for host entities | none (the bundle owns its entities; the host references them by id) | none |
 

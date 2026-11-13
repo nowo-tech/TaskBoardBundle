@@ -234,6 +234,21 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/taskTemplate':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: task_templates
+      summary: 'Task templates the board offers (since 2.16.0, with task_templates.enabled)'
+      description: 'Least level: Full (the right to add tasks to the board). The board''s own templates, then its tenant''s, each allowed by the host''s TaskTemplatePermissionInterface::canUse(). A template of another board or tenant is never listed.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskTemplates'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/list/{list_id}/task':
     parameters:
       - {name: list_id, in: path, required: true, schema: {type: string}}
@@ -918,10 +933,13 @@ components:
     Attachment:
       type: object
       properties: {id: {type: string}, title: {type: string}, extension: {type: string}, url: {type: string}, date: {type: integer}}
+    TaskTemplates:
+      type: object
+      properties: {templates: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, scope: {type: string, enum: [board, tenant]}, description: {type: string, description: 'The Markdown body'}, tags: {type: array, items: {type: object, properties: {name: {type: string}}}}, status: {type: [object, 'null'], description: 'The default column, as a task''s status; null: the board''s first column'}}}}}
     TaskCreate:
       type: object
       required: [name]
-      properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}}
+      properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}, template_id: {type: string, description: 'Since 2.16.0 (task_templates.enabled): a template the board offers (GET /v2/list/{list_id}/taskTemplate). Its description, tags and status fill only what the body does not set. Any other id is 400 INPUT_002 "Invalid template_id".'}}
     TaskUpdate:
       type: object
       properties: {name: {type: string}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null']}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, archived: {type: boolean}, assignees: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, watchers: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}}

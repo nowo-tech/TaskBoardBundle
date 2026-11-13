@@ -144,6 +144,19 @@ export of each (1,800 requests). Each response must hold its own user's tasks an
 e-mail; memory after a cycle collection grows less than **4 MiB** after a 30-iteration warm-up. The test host clears its
 entity manager at each boundary (REQ-RUNTIME-002 rule 7).
 
+## Task templates (2.16.0)
+
+| Service | State | Notes |
+|---------|-------|-------|
+| `Template\TaskTemplateManager` | none (`final readonly`) | Reads the templates per call; nothing memoised. Writes flush the bundle's manager (the private one with `database.private_entity_manager: true`) |
+| `Template\DefaultTaskTemplatePermission` | none (`final readonly`) | Reads the board again per call (identity map) |
+| `Api\Operation\TaskApiTemplateOperations`, `Api\Controller\TaskApiTemplateController` | none | Per call |
+| `Form\TaskTemplatePickerType` | none | Options per form |
+
+The host's `TaskTemplatePermissionInterface` must decide per call too (stated on the interface). **Worker test:**
+`tests/Functional/Api/ApiTaskTemplateWorkerTest.php` alternates two tenants' tokens through `http_kernel` without the
+services resetter; each answer holds only its own tenant's templates.
+
 ## Findings
 
 ### W-01 — Unique-constraint violations close the EntityManager (Medium)

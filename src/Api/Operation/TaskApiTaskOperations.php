@@ -31,6 +31,7 @@ use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
@@ -82,11 +83,15 @@ final readonly class TaskApiTaskOperations
         private TaskCommentManager $comments,
         private TaskMentionCandidatesResolverInterface $mentionCandidates,
         private TaskApiAttachmentsInterface $attachments,
+        // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
+        private ?TaskTemplateManager $templates = null,
     ) {
     }
 
     /**
-     * `POST /v2/list/{id}/task`: a task, or a subtask with `parent`.
+     * `POST /v2/list/{id}/task`: a task, or a subtask with `parent`. Since 2.16.0 (`task_templates.enabled`), `template_id`
+     * pre-fills the description, the tags and the status from a template the board offers the token's person; a field
+     * the body sets wins over the template's ({@see self::applyTemplate()}).
      *
      * @throws TaskApiRefusal
      */
@@ -107,6 +112,7 @@ final readonly class TaskApiTaskOperations
         $data->columnId = $this->columnOf($board, $input->string('status'))?->getId();
         $this->applyFields($data, $input);
         $data->tags = $this->tags($input->strings('tags'));
+        $template   = $this->applyTemplate($principal, $board, $data, $input);
         $assignees  = $this->assignable($board, $input->strings('assignees'));
         $this->audit->requireTaskQuota($board, 1, $principal->user);
 
@@ -114,7 +120,11 @@ final readonly class TaskApiTaskOperations
         foreach ($assignees as $user) {
             $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
         }
-        $this->audit->written($principal, 'task.create', $board, $task->getId(), $parent !== null ? ['parent' => $parent->getId()] : []);
+        $targets = $parent !== null ? ['parent' => $parent->getId()] : [];
+        if ($template !== null) {
+            $targets['template'] = $template;
+        }
+        $this->audit->written($principal, 'task.create', $board, $task->getId(), $targets);
 
         return $task;
     }
@@ -380,6 +390,42 @@ final readonly class TaskApiTaskOperations
         if (TaskConstraints::startsAfterDue($data->startAt, $data->dueAt)) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid start_date: after the due date');
         }
+    }
+
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): `template_id`, read only with `task_templates.enabled` (else it is an
+     * unknown field, warned). The template must be one the board offers the person ({@see TaskTemplateManager::usable()});
+     * any other id — unknown, of another board or tenant, or not allowed — is the same 400, so nothing about it leaks.
+     * Its description, tags and default column fill only what the body does not set (`markdown_content` / `description`,
+     * `tags`, `status`). The column goes through the same create path as a `status` (seam for a transition policy).
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return string|null the template's id
+     */
+    private function applyTemplate(TaskApiPrincipal $principal, TaskBoard $board, TaskFormData $data, TaskApiInput $input): ?string
+    {
+        if (!$this->templates instanceof TaskTemplateManager) {
+            return null;
+        }
+        $id = $input->string('template_id');
+        if ($id === null) {
+            return null;
+        }
+        $template = $this->templates->usable($principal->user, $board, $id);
+        if ($template === null) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid template_id');
+        }
+        $this->templates->prefill(
+            $template,
+            $board,
+            $data,
+            description: !$input->hasAny('markdown_content', 'description'),
+            tags: !$input->has('tags'),
+            column: !$input->has('status'),
+        );
+
+        return $template->getId();
     }
 
     /**
