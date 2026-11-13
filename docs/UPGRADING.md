@@ -255,6 +255,7 @@ these keys still fold, and the bundle refuses (or skips) the look-alike's row in
   case, accents or trailing spaces is skipped and reported (`external_id_look_alike`).
 - `task_board_sync_directories` (unique `provider, scope_key, workspace_id`): a look-alike workspace's people
   directory is refused (`workspace_look_alike`).
+
 MySQL 8.0.17+ (use `utf8mb4_nopad_bin` on MariaDB):
 
 ```sql
@@ -291,8 +292,18 @@ $actor = $this->actors->actorFor($board, $actorId);
 ```
 
 The answer is the same as through the deprecated interface (named actor, else the user who linked the board; disabled
-or refused users never act). The alias is always the bundle's default resolver, whatever `sync.actor_resolver` names;
-the bundle itself keeps asking the service `sync.actor_resolver` names, as before.
+or refused users never act).
+
+Which service the alias points at follows `sync.actor_resolver`: the configured service when its class implements
+`SyncActorProviderInterface`, the bundle's default resolver otherwise (no `sync.actor_resolver`, a service implementing
+only the deprecated interface, or a service whose class is built by a factory and so is not known before compilation).
+So a host that configured a stricter resolver autowires its own, never the laxer default. The bundle itself keeps
+asking the service `sync.actor_resolver` names, as before. Set the alias yourself if you need another service:
+
+```yaml
+services:
+    Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface: '@app.sync.actor_resolver'
+```
 
 ## To 2.15.0
 

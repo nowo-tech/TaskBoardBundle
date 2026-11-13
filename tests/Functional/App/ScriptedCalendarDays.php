@@ -29,6 +29,14 @@ final class ScriptedCalendarDays implements CalendarDayAnnotationProviderInterfa
     /** Since 2.14.1: thrown by the next viewerDays() call when set (a failing host provider). */
     public ?RuntimeException $failure = null;
 
+    /**
+     * Since 2.15.1 (REQ-SEC-006): asked id => the key assigneeDays() answers it under, so a test can answer with a
+     * look-alike or a differently-typed key (a host that does not key its answer by the exact ids asked).
+     *
+     * @var array<string, array-key>
+     */
+    public array $answerKeys = [];
+
     public function viewerDays(CalendarViewer $viewer, CalendarDateRange $range): CalendarDayAnnotations
     {
         $this->calls[] = ['viewer', $viewer, $range, []];
@@ -45,7 +53,7 @@ final class ScriptedCalendarDays implements CalendarDayAnnotationProviderInterfa
         $days          = [];
         foreach ($assigneeIds as $id) {
             if (isset($this->people[$id])) {
-                $days[$id] = new CalendarDayAnnotations($this->people[$id]);
+                $days[$this->answerKeys[$id] ?? $id] = new CalendarDayAnnotations($this->people[$id]);
             }
         }
 

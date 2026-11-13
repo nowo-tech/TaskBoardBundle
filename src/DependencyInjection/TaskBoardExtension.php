@@ -652,9 +652,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias('nowo_task_board.sync.api_client', is_string($client) && $client !== '' ? $client : 'nowo_task_board.sync.http_client');
         $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
         $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
-        // Since 2.15.1 (Beacon request): the default resolver under its framework-free twin, so a host (e.g. a queued
-        // sync handler) autowires it without the deprecated interface. Whatever `sync.actor_resolver` names, this is the
-        // bundle's default; the port the bundle asks stays the alias above.
+        // Since 2.15.1 (Beacon request): the resolver under its framework-free twin, so a host (e.g. a queued sync
+        // handler) autowires it without the deprecated interface. Since 2.15.1 (audit OM TB-I1) this alias follows
+        // `sync.actor_resolver` when that service implements the twin ({@see TaskBoardPortsPass}): a host that
+        // configured a stricter resolver autowires its own, never the bundle's default. It stays on the default below
+        // whenever the configured service is not a twin (it is asked through the deprecated interface instead).
+        $container->setParameter('nowo_task_board.sync.actor_resolver', $this->serviceOr($sync['actor_resolver'], ''));
         $container->setAlias(SyncActorProviderInterface::class, ConnectionCreatorActorResolver::class)->setPublic(true);
         // Since 1.24: the host's account checks for the default actor resolver (disabled / erased users never act).
         if (is_string($sync['actor_checker']) && $sync['actor_checker'] !== '') {

@@ -138,6 +138,11 @@ columns.
     `TASK_003` on the API). A sync run that still fails reopens the closed manager.
   - The request's tenant (`TaskBoardTenantContext`) answers 404 for a `{tenantSlug}` that cannot be matched exactly, for
     a resolver that refuses the tenant's key, and for a tenant whose slug is not exactly the one in the URL.
+  - The calendar day annotations a host returns (`calendar.day_annotation_provider`, `assigneeDays()`) are read by the
+    exact assignee id asked: the answer is re-keyed in PHP and a key that is not byte for byte one of the ids the bundle
+    asked for annotates nobody, instead of being reached through PHP's array-key juggling. Hardening, in line with the
+    other id lookups; the ids asked are the bundle's own (`TaskMember` of the page's tasks) and the viewer and tenant
+    are passed to the provider, so no annotation crossed a tenant before.
 
 ### Fixed
 
@@ -154,7 +159,9 @@ columns.
 - **`SyncActorProviderInterface` is autowirable (Beacon request).** The default `ConnectionCreatorActorResolver` also
   implements the framework-free twin (same answers for a `TaskBoardSnapshot` as for the entity) and is aliased, public,
   under `Sync\Hook\SyncActorProviderInterface`, so a host moves off the deprecated `SyncActorResolverInterface` without
-  copying its logic. The deprecated path is unchanged. See [UPGRADING](UPGRADING.md#sync-actor-resolver-the-framework-free-twin-is-autowirable).
+  copying its logic. The deprecated path is unchanged. When `sync.actor_resolver` names a service that implements the
+  twin, that service takes the alias instead (audit OM TB-I1), so autowiring never hands out the bundle's default in
+  place of a host's stricter resolver. See [UPGRADING](UPGRADING.md#sync-actor-resolver-the-framework-free-twin-is-autowirable).
 
 ### Tests
 
@@ -162,7 +169,8 @@ columns.
   (MySQL / MariaDB NO PAD, SQLite, PostgreSQL), and on key columns recreated with a folding collation (SQLite NOCASE,
   MySQL / MariaDB `utf8mb4_general_ci`) every lookup, the import lookup, the ledger, `purgeScope()` and the counter
   drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`,
-  `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows).
+  `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows). `TaskBoardPortsPassTest` also covers which service the
+  public `SyncActorProviderInterface` alias ends up on.
 
 ### Documentation
 
