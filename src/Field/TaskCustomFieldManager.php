@@ -314,9 +314,6 @@ final readonly class TaskCustomFieldManager
         foreach (array_values($conditions) as $index => $condition) {
             $field = $fields[$condition->fieldId] ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
             $op    = $condition->operator;
-            if ($op->needsValue() && $condition->values === []) {
-                throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::INVALID, ['field' => 'value']);
-            }
             if (($op === CustomFieldOperator::LessThan || $op === CustomFieldOperator::GreaterThan) && $field->getType() !== CustomFieldType::Number) {
                 throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::INVALID, ['field' => 'operator']);
             }
@@ -328,10 +325,10 @@ final readonly class TaskCustomFieldManager
             match ($op) {
                 CustomFieldOperator::IsSet       => $qb->andWhere('EXISTS (' . $sub . ')'),
                 CustomFieldOperator::IsNotSet    => $qb->andWhere('NOT EXISTS (' . $sub . ')'),
-                CustomFieldOperator::Equals      => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' = :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0]),
-                CustomFieldOperator::NotEquals   => $qb->andWhere('NOT EXISTS (' . $sub . ' AND ' . $column . ' = :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0]),
-                CustomFieldOperator::LessThan    => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' < :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0]),
-                CustomFieldOperator::GreaterThan => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' > :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0]),
+                CustomFieldOperator::Equals      => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' = :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0] ?? ''),
+                CustomFieldOperator::NotEquals   => $qb->andWhere('NOT EXISTS (' . $sub . ' AND ' . $column . ' = :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0] ?? ''),
+                CustomFieldOperator::LessThan    => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' < :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0] ?? ''),
+                CustomFieldOperator::GreaterThan => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' > :cfx' . $index . ')')->setParameter('cfx' . $index, $values[0] ?? ''),
                 CustomFieldOperator::In          => $qb->andWhere('EXISTS (' . $sub . ' AND ' . $column . ' IN (:cfx' . $index . '))')->setParameter('cfx' . $index, $values),
             };
         }
