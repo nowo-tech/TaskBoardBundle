@@ -24,6 +24,7 @@ use Throwable;
 use function array_filter;
 use function array_map;
 use function abs;
+use function array_keys;
 use function array_values;
 use function in_array;
 use function is_finite;
@@ -68,14 +69,52 @@ final readonly class TaskCustomFieldManager
      */
     public function fieldsFor(TaskBoard $board): array
     {
+        return $this->fieldsForBoards([$board])[$board->getId()];
+    }
+
+    /**
+     * The fields of several boards in one query (a page of tasks across boards), by board id, as {@see self::fieldsFor()}.
+     *
+     * @param list<TaskBoard> $boards
+     *
+     * @return array<string, list<TaskCustomField>>
+     */
+    public function fieldsForBoards(array $boards): array
+    {
+        $byBoard = [];
+        $tenants = [];
+        $none    = false;
+        foreach ($boards as $board) {
+            $byBoard[$board->getId()] = [];
+            $board->getTenantKey() === null ? $none = true : $tenants[$board->getTenantKey()] = true;
+        }
+        if ($byBoard === []) {
+            return [];
+        }
         $query = $this->entityManager->createQueryBuilder()->select('f')->from(TaskCustomField::class, 'f')
-            ->where('IDENTITY(f.board) = :board')->setParameter('board', $board->getId());
-        $board->getTenantKey() === null
-            ? $query->orWhere('f.board IS NULL AND f.tenantKey IS NULL')
-            : $query->orWhere('f.board IS NULL AND f.tenantKey = :tenant')->setParameter('tenant', $board->getTenantKey());
+            ->where('IDENTITY(f.board) IN (:boards)')->setParameter('boards', array_keys($byBoard));
+        if ($tenants !== []) {
+            $query->orWhere('f.board IS NULL AND f.tenantKey IN (:tenants)')->setParameter('tenants', array_map('strval', array_keys($tenants)));
+        }
+        if ($none) {
+            $query->orWhere('f.board IS NULL AND f.tenantKey IS NULL');
+        }
         /** @var list<TaskCustomField> $fields */
         $fields = $query->getQuery()->getResult();
-        $fields = array_values(array_filter($fields, static fn (TaskCustomField $field): bool => $field->getTenantKey() === $board->getTenantKey() && ($field->getBoardId() === null || $field->getBoardId() === $board->getId())));
+        foreach ($boards as $board) {
+            $byBoard[$board->getId()] = self::sorted(array_values(array_filter($fields, static fn (TaskCustomField $field): bool => $field->getTenantKey() === $board->getTenantKey() && ($field->getBoardId() === null || $field->getBoardId() === $board->getId()))));
+        }
+
+        return $byBoard;
+    }
+
+    /**
+     * @param list<TaskCustomField> $fields
+     *
+     * @return list<TaskCustomField>
+     */
+    private static function sorted(array $fields): array
+    {
         usort($fields, static fn (TaskCustomField $a, TaskCustomField $b): int => [$a->getBoardId() !== null, $a->getPosition(), $a->getName(), $a->getId()] <=> [$b->getBoardId() !== null, $b->getPosition(), $b->getName(), $b->getId()]);
 
         return $fields;

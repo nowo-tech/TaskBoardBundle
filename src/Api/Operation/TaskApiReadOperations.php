@@ -295,16 +295,12 @@ final readonly class TaskApiReadOperations
      */
     private function nativeFields(array $tasks): array
     {
-        $fields = [];
-        if (!$this->customFields instanceof TaskCustomFieldManager) {
-            return $fields;
-        }
+        $boards = [];
         foreach ($tasks as $task) {
-            $board = $task->getBoard();
-            $fields[$board->getId()] ??= $this->customFields->fieldsFor($board);
+            $boards[$task->getBoard()->getId()] = $task->getBoard();
         }
 
-        return $fields;
+        return $this->customFields?->fieldsForBoards(array_values($boards)) ?? [];
     }
 
     /**
@@ -337,11 +333,9 @@ final readonly class TaskApiReadOperations
             }
         }
         $fields = [];
-        if ($filter->customFields !== [] && $this->customFields instanceof TaskCustomFieldManager) {
-            foreach ($boards as $board) {
-                foreach ($this->customFields->fieldsFor($board) as $field) {
-                    $fields[$field->getId()] = $field;
-                }
+        foreach ($filter->customFields === [] ? [] : $this->customFields?->fieldsForBoards($boards) ?? [] as $ofBoard) {
+            foreach ($ofBoard as $field) {
+                $fields[$field->getId()] = $field;
             }
         }
         $result = $this->queries->taskPage($this->ids($boards), $filter, $assignees, $this->owner($principal), $fields);

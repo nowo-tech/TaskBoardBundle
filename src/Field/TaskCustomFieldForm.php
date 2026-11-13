@@ -72,10 +72,7 @@ final readonly class TaskCustomFieldForm
     {
         $refused = [];
         foreach ($this->options($task->getBoard(), $task) as $row) {
-            if (!$form->has($row['name_attr'])) {
-                continue;
-            }
-            $posted = $form->get($row['name_attr'])->getData();
+            $posted = $form->has($row['name_attr']) ? $form->get($row['name_attr'])->getData() : $row['value'];
             $posted = is_float($posted) || is_int($posted) ? (string) $posted : $posted;
             $before = is_float($row['value']) ? (string) $row['value'] : $row['value'];
             if ($posted === $before || (($posted === null || $posted === '') && $before === null)) {

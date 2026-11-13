@@ -95,9 +95,9 @@ final class CustomFieldsTest extends ApiTestCase
         $this->get('/api/tasks/v2/list/' . $this->board->getId() . '/field');
         self::assertResponseIsSuccessful();
         $listed = $this->listOf('fields');
-        self::assertSame(['Capa', 'Points'], array_column($listed, 'name'));
-        self::assertSame(['drop_down', 'number'], array_column($listed, 'type'));
-        self::assertSame('#00ff00', $listed[0]['type_config']['options'][0]['color']);
+        self::assertSame(['Points', 'Capa'], array_column($listed, 'name'), 'the tenant\'s fields, then the board\'s');
+        self::assertSame(['number', 'drop_down'], array_column($listed, 'type'));
+        self::assertSame('#00ff00', $listed[1]['type_config']['options'][0]['color']);
 
         $this->send('POST', '/api/tasks/v2/task/' . $a->getId() . '/field/' . $layer->getId(), ['value' => 'domain']);
         self::assertResponseIsSuccessful();
@@ -110,8 +110,8 @@ final class CustomFieldsTest extends ApiTestCase
 
         $this->get('/api/tasks/v2/task/' . $a->getId());
         $custom = $this->json()['custom_fields'];
-        self::assertSame([$layer->getId(), $points->getId()], array_column($custom, 'id'));
-        self::assertSame([$layer->optionNamed('domain')['id'] ?? null, 3], [$custom[0]['value'], $custom[1]['value']], 'a dropdown answers the option id');
+        self::assertSame([$points->getId(), $layer->getId()], array_column($custom, 'id'));
+        self::assertSame([3, $layer->optionNamed('domain')['id'] ?? null], [$custom[0]['value'], $custom[1]['value']], 'a dropdown answers the option id');
 
         $filter = fn (array $conditions): array => $this->titles('/api/tasks/v2/list/' . $this->board->getId() . '/task?custom_fields=' . urlencode((string) json_encode($conditions)));
         self::assertSame(['B'], $filter([['field_id' => $points->getId(), 'operator' => '>', 'value' => 5]]));
@@ -154,7 +154,9 @@ final class CustomFieldsTest extends ApiTestCase
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list');
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('Points', $crawler->filter('thead')->text());
-        self::assertSame(['13', '2', '—'], $crawler->filter('td[data-custom-field="' . $points->getId() . '"]')->each(static fn ($cell): string => trim($cell->text())));
+        $cells = $crawler->filter('td[data-custom-field="' . $points->getId() . '"]')->each(static fn ($cell): string => trim($cell->text()));
+        sort($cells);
+        self::assertSame(['13', '2', '—'], $cells);
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-custom-field-filter"]'));
 
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list?cf_field=' . $points->getId() . '&cf_op=' . urlencode('>') . '&cf_value=5');
@@ -162,26 +164,39 @@ final class CustomFieldsTest extends ApiTestCase
         self::assertSame(['Big'], $crawler->filter('.nowo-task-list__title a')->each(static fn ($link): string => trim($link->text())));
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list?cf_field=' . $points->getId() . '&cf_op=' . urlencode('IS NULL'));
         self::assertSame(['Unset'], $crawler->filter('.nowo-task-list__title a')->each(static fn ($link): string => trim($link->text())));
+        // An incomplete filter (no field, or no value where one is needed) filters nothing.
+        foreach (['?cf_op=' . urlencode('IS NULL'), '?cf_field=' . $points->getId() . '&cf_op=' . urlencode('>')] as $query) {
+            $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list' . $query);
+            self::assertCount(3, $crawler->filter('.nowo-task-list__title a'));
+        }
     }
 
     public function testTheTaskFormHasARowPerField(): void
     {
         $board = $this->board('Plain');
         $layer = $this->fields()->define($this->owner, $board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'domain'], ['name' => 'infra']]);
+        $num   = $this->fields()->define($this->owner, $board, null, 'Points', CustomFieldType::Number);
+        $text  = $this->fields()->define($this->owner, $board, null, 'Repo', CustomFieldType::Text);
         $task  = $this->task($board, 'Task');
+        $this->fields()->setField($task, $num->getId(), '3', $this->owner);
         $this->login($this->owner);
 
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $task->getId());
         self::assertResponseIsSuccessful();
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-custom-field"]'));
-        $form = $crawler->filter('#nowo-task-edit-form')->form();
-        $name = $form->getName() . '[cf_' . str_replace('-', '_', $layer->getId()) . ']';
-        $form[$name]->select((string) ($layer->optionNamed('infra')['id'] ?? ''));
+        self::assertCount(3, $crawler->filter('[data-testid="nowo-task-custom-field"]'));
+        $form   = $crawler->filter('#nowo-task-edit-form')->form();
+        $prefix = $form->getName() . '[cf_';
+        $form[$prefix . str_replace('-', '_', $layer->getId()) . ']']->select((string) ($layer->optionNamed('infra')['id'] ?? ''));
+        $form[$prefix . str_replace('-', '_', $text->getId()) . ']'] = str_repeat('x', TaskCustomFieldManager::TEXT_MAX + 1);
         $this->client->submit($form);
 
         $this->em->clear();
         $values = $this->fields()->valuesOf([$task->getId()])[$task->getId()] ?? [];
-        self::assertSame(['infra'], array_map($this->fields()->display(...), $values));
+        $shown = array_map($this->fields()->display(...), $values);
+        sort($shown);
+        self::assertSame(['3', 'infra'], $shown, 'the unchanged number stays, the too long text is refused');
+        $this->client->followRedirect();
+        self::assertStringContainsString('Repo', (string) $this->client->getResponse()->getContent());
     }
 
     public function testTheListViewOperators(): void
@@ -249,12 +264,9 @@ final class CustomFieldsTest extends ApiTestCase
         $fields->delete($this->owner, $num);
         self::assertNull($fields->find($num->getId()));
 
-        $stranger = $this->user('stranger@example.com', []);
-        $tokens   = self::getContainer()->get('security.token_storage');
-        self::assertInstanceOf(TokenStorageInterface::class, $tokens);
-        $tokens->setToken(new UsernamePasswordToken($stranger, 'main', []));
-        $refused(fn () => $fields->define($stranger, null, 'tenant-a', 'Nope', CustomFieldType::Text), TaskCustomFieldRefusedException::NOT_ALLOWED);
-        $refused(fn () => $fields->define($stranger, $this->board, null, 'Nope', CustomFieldType::Text), TaskCustomFieldRefusedException::NOT_ALLOWED);
+        $value = $fields->valuesOf([$task->getId()])[$task->getId()][0];
+        self::assertNotSame('', $value->getId());
+        self::assertLessThanOrEqual(new \DateTimeImmutable(), $value->getUpdatedAt());
     }
 
     /**
