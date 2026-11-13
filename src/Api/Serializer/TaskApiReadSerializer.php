@@ -19,6 +19,9 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 
 use function array_map;
 use function array_slice;
@@ -30,6 +33,7 @@ use function mb_strtoupper;
 use function mb_substr;
 use function preg_split;
 use function rtrim;
+use function str_contains;
 use function str_starts_with;
 use function strtr;
 use function substr;
@@ -428,12 +432,67 @@ final class TaskApiReadSerializer
      */
     private function fieldValues(Task $task, TaskApiTaskPage $page): array
     {
-        return array_map(static fn ($value): array => [
+        // Since 2.17.0 (FR-028): every native field of the board first, with its value (null when not set).
+        $native = [];
+        $values = [];
+        foreach ($page->customFieldValues[$task->getId()] ?? [] as $value) {
+            $values[$value->getField()->getId()] = $value;
+        }
+        foreach ($page->customFields[$task->getBoard()->getId()] ?? [] as $field) {
+            $native[] = $this->nativeField($field) + ['value' => isset($values[$field->getId()]) ? self::nativeValue($values[$field->getId()]) : null];
+        }
+
+        return [...$native, ...array_map(static fn ($value): array => [
             'id'    => $value->getField()->getId(),
             'name'  => $value->getField()->getName(),
             'type'  => $value->getField()->getRemoteType(),
             'value' => $value->getValue(),
-        ], $page->fieldValues[$task->getId()] ?? []);
+        ], $page->fieldValues[$task->getId()] ?? [])];
+    }
+
+    /**
+     * Since 2.17.0 (FR-028): a native custom field in ClickUp's shape (`short_text`, `number`, `drop_down` with its
+     * options and their colours); `writable` true (synced fields are not).
+     *
+     * @return array<string, mixed>
+     */
+    public function nativeField(TaskCustomField $field): array
+    {
+        $options = [];
+        foreach ($field->getOptions() as $index => $option) {
+            $options[] = ['id' => $option['id'], 'name' => $option['name'], 'color' => $option['color'], 'orderindex' => $index];
+        }
+
+        return [
+            'id'               => $field->getId(),
+            'name'             => $field->getName(),
+            'type'             => $field->getType()->apiType(),
+            'type_config'      => $field->getType() === CustomFieldType::Dropdown ? ['options' => $options] : (object) [],
+            'date_created'     => $this->ms($field->getCreatedAt()),
+            'hide_from_guests' => false,
+            'required'         => false,
+            'scope'            => $field->getBoardId() === null ? 'space' : 'list',
+            'writable'         => true,
+        ];
+    }
+
+    /**
+     * A native value: the text, the number (a JSON number when exact), or the dropdown option's id.
+     */
+    public static function nativeValue(TaskCustomFieldValue $value): string|int|float|null
+    {
+        return match ($value->getField()->getType()) {
+            CustomFieldType::Text     => $value->getTextValue(),
+            CustomFieldType::Dropdown => $value->getTextValue(),
+            CustomFieldType::Number   => self::number((string) $value->getNumberValue()),
+        };
+    }
+
+    private static function number(string $decimal): int|float
+    {
+        $trimmed = str_contains($decimal, '.') ? rtrim(rtrim($decimal, '0'), '.') : $decimal;
+
+        return str_contains($trimmed, '.') ? (float) $trimmed : (int) $trimmed;
     }
 
     /**

@@ -142,10 +142,13 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, false), $input);
     }
 
-    public function setField(Request $request, string $taskId): JsonResponse
+    /** Since 2.17.0 (FR-028): `{"value": …}` on a native field; a provider's field stays 409 `FIELD_001`. */
+    public function setField(Request $request, string $taskId, string $fieldId = ''): JsonResponse
     {
+        $input = $this->input($request);
+
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
-        $this->tasks->setField($this->principal($request), $taskId);
+        return $this->empty($request, $this->tasks->setField($this->principal($request), $taskId, $fieldId, $input), $input);
     }
 
     public function addDependency(Request $request, string $taskId): JsonResponse

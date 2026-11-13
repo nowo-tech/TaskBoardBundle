@@ -41,6 +41,8 @@ services:
             - '../../Folder/TaskBoardRestructureRefusedException.php'
             - '../../Configuration/BoardColumnSpec.php'
             - '../../Configuration/BoardColumnsRefusedException.php'
+            - '../../Field/TaskCustomFieldCondition.php'
+            - '../../Field/TaskCustomFieldRefusedException.php'
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
             - '../../Recurrence/'
             - '../../Controller/TaskRecurrenceController.php'

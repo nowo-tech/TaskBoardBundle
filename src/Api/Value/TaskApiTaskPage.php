@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Api\Value;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 
 /**
  * Since 2.2.0 (spec 213): tasks a token may read, with everything needed to show them, loaded in a fixed number of queries.
@@ -22,6 +24,8 @@ final readonly class TaskApiTaskPage
      * @param array<string, list<Task>> $subtasks by parent id
      * @param array<string, int> $manualMinutes by task id
      * @param array<string, list<TaskSyncFieldValue>> $fieldValues by task id
+     * @param array<string, list<TaskCustomField>> $customFields since 2.17.0: the native fields of each board, by board id
+     * @param array<string, list<TaskCustomFieldValue>> $customFieldValues since 2.17.0: native values, by task id
      */
     public function __construct(
         public array $tasks,
@@ -34,6 +38,8 @@ final readonly class TaskApiTaskPage
         public array $manualMinutes,
         public array $fieldValues,
         public bool $markdown,
+        public array $customFields = [],
+        public array $customFieldValues = [],
     ) {
     }
 

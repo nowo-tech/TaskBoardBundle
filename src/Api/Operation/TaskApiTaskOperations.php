@@ -32,6 +32,8 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -82,6 +84,8 @@ final readonly class TaskApiTaskOperations
         private TaskCommentManager $comments,
         private TaskMentionCandidatesResolverInterface $mentionCandidates,
         private TaskApiAttachmentsInterface $attachments,
+        // Since 2.17.0 (Beacon spec 234, FR-028): native custom fields.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -283,12 +287,26 @@ final readonly class TaskApiTaskOperations
      *
      * @throws TaskApiRefusal
      */
-    public function setField(TaskApiPrincipal $principal, string $taskId): never
+    public function setField(TaskApiPrincipal $principal, string $taskId, string $fieldId = '', ?TaskApiInput $input = null): Task
     {
         $this->audit->requireListener();
-        $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        // Since 2.17.0 (FR-028): a native field of the task's board is writable; any other (a provider's) stays 409.
+        $field = $this->customFields?->fieldOfBoard($task->getBoard(), $fieldId);
+        if ($field === null || !$input instanceof TaskApiInput) {
+            throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');
+        }
+        if (!$input->has('value')) {
+            throw new TaskApiRefusal(400, 'INPUT_001', 'Missing value');
+        }
+        try {
+            $this->customFields?->setField($task, $field->getId(), $input->raw('value'), $principal->user);
+        } catch (TaskCustomFieldRefusedException) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid value');
+        }
+        $this->audit->written($principal, 'field.set', $task->getBoard(), $taskId, ['field' => $field->getId()], ['custom_fields']);
 
-        throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');
+        return $task;
     }
 
     /**

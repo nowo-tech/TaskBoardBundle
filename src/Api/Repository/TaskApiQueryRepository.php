@@ -22,6 +22,10 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
+use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 
 use function array_keys;
 use function array_map;
@@ -51,6 +55,8 @@ final readonly class TaskApiQueryRepository
         private bool $syncEnabled = false,
         // Since 2.15.0 (database.user_reference).
         private ?TaskBoardUsers $users = null,
+        // Since 2.17.0 (FR-028): the custom field filters.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -60,15 +66,26 @@ final readonly class TaskApiQueryRepository
      * @param list<string> $boardIds boards already checked
      * @param list<object> $assignees users the `assignees[]` filter names
      * @param object|null $owner My tasks: only the tasks it created or is assigned
+     * @param array<string, TaskCustomField> $fields since 2.17.0: the native fields `custom_fields` may name, by id
      *
      * @return array{tasks: list<Task>, lastPage: bool}
+     *
+     * @throws TaskApiRefusal
      */
-    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner): array
+    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner, array $fields = []): array
     {
         if ($boardIds === [] || ($filter->assigneeIds !== [] && $assignees === [])) {
             return ['tasks' => [], 'lastPage' => true];
         }
-        $qb        = $this->filtered($boardIds, $filter, $assignees, $owner);
+        $qb = $this->filtered($boardIds, $filter, $assignees, $owner);
+        // Since 2.17.0 (FR-028): `custom_fields`, on the native fields of these boards.
+        if ($filter->customFields !== []) {
+            try {
+                ($this->customFields ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND))->filter($qb, 't', $filter->customFields, $fields);
+            } catch (TaskCustomFieldRefusedException) {
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid custom_fields');
+            }
+        }
         $direction = $filter->reverse ? 'DESC' : 'ASC';
         // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
         $qb->orderBy(self::ORDER_FIELDS[$filter->orderBy], $direction)->addOrderBy('t.id', $direction);

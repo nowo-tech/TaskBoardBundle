@@ -1,5 +1,5 @@
 {#
-    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts.
+    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts; since 2.17.0 customFields, customValues.
     The row's attributes (filter, sort, totals, panel) come from nowo_task_board_list_table().
 #}
 {% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
@@ -34,6 +34,8 @@
     <span class="nowo-task-priority nowo-task-priority--{{ task.priority.value }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ ('task_board.priority.' ~ task.priority.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
 </td>
 <td class="{{ _cell }}">{{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags}) }}</td>
+{# Since 2.17.0 (Beacon spec 234, FR-028): one cell per custom field of the board (customFields, customValues). #}
+{% for field in customFields|default([]) %}<td class="{{ _cell }} nowo-task-list__custom-field" data-custom-field="{{ field.id }}">{% set _value = (customValues|default({}))[task.id][field.id] ?? null %}{% if _value is not null and _value != '' %}{{ _value }}{% else %}<span class="nowo-task-list__none">—</span>{% endif %}</td>{% endfor %}
 <td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">{{ _deviation.hasEstimate ? _deviation.estimatedMinutes|nowo_task_board_duration : '—' }}</td>
 <td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">{{ _deviation.spentMinutes|nowo_task_board_duration }}</td>
 <td class="{{ _cell }} nowo-task-list__time-col nowo-task-list__num">

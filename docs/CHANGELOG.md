@@ -134,6 +134,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
   tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
   applier.
+- **Native custom fields (FR-028).** `Entity\TaskCustomField` (text, number, dropdown with coloured options; per tenant or
+  per board) and `TaskCustomFieldValue` (one per task and field). `Field\TaskCustomFieldManager`: `define()`,
+  `update()`, `delete()` (under the restructure policy), `setField()` (history row `custom_field`), `valuesOf()` and the
+  operator filters (`=`, `≠`, `<`, `>`, is set, is not set, in). Task API: `GET /v2/list/{id}/field` lists the native
+  fields first, `POST /v2/task/{id}/field/{field_id}` writes a native field (a provider's keeps 409 `FIELD_001`), task
+  lists take `custom_fields`, and a task's `custom_fields` carries the native values. UI: a row per field on the task
+  form and a column per field plus an operator filter on the list view.
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`

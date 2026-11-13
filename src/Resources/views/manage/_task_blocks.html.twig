@@ -245,6 +245,22 @@
                     </dd>
                 </div>
                 {% endif %}
+
+                {# Since 2.17.0 (Beacon spec 234, FR-028): a row per native custom field (unmapped cf_* fields of the form). #}
+                {% for child in taskForm %}
+                    {% if child.vars.name starts with 'cf_' and not child.rendered %}
+                    <div class="nowo-task-detail__field nowo-task-detail__attr" data-testid="nowo-task-custom-field">
+                        <dt class="nowo-task-detail__field-label">
+                            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'notes'}) }}
+                            {{ form_label(child) }}
+                        </dt>
+                        <dd class="nowo-task-detail__field-value">
+                            {{ form_widget(child) }}
+                            {{ form_errors(child) }}
+                        </dd>
+                    </div>
+                    {% endif %}
+                {% endfor %}
             </dl>
 
             {# Since 1.27.0 (TB-SYNC-3): the provider's typed custom fields (read-only). #}

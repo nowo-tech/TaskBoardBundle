@@ -8,6 +8,7 @@
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
+  - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -256,6 +257,24 @@ WHERE NOT EXISTS (SELECT 1 FROM task_board_columns t WHERE t.board_id = c.board_
 (MySQL refuses a subquery on the updated table: run it through a temporary copy, or let the bundle write the types the
 first time a type is set on the board.) **Behaviour to know:** a board with types no longer treats "the last column" as
 done; *Done* goes to its first `done`/`closed` column.
+
+### Schema change for every host: native custom fields
+
+Two new tables (MySQL shown; let `doctrine:migrations:diff` write your platform's):
+
+```sql
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_CF_BOARD (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_CF_BOARD FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_CFV_TASK FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_CFV_FIELD FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
+a native field instead of always answering 409; a provider's field still answers 409 `FIELD_001`.
 
 ## To 2.15.0
 

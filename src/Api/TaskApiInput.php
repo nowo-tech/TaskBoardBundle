@@ -103,6 +103,14 @@ final class TaskApiInput
     }
 
     /**
+     * Since 2.17.0: the value as decoded (a string, a number, null…), for a field whose type decides (a custom field).
+     */
+    public function raw(string $name): mixed
+    {
+        return $this->take($name);
+    }
+
+    /**
      * @throws TaskApiRefusal
      */
     public function bool(string $name): ?bool

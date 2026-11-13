@@ -100,12 +100,12 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 | `GET /v2/space/{id}/folder` | My tasks | Since 2.17.0: the space's folders, each with its `lists` (the boards in it the token may view) and a Markdown `content`; a where limited to boards sees only the folders that hold one of them (before 2.17.0 always empty) |
 | `GET /v2/folder/{id}`, `GET /v2/folder/{id}/list` | My tasks | Since 2.17.0: one folder, or its lists. Another tenant's folder is 404 `ACCESS_001` |
 | `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | Since 2.17.0 the space lists only its folderless boards, as ClickUp; a board's `folder` is its folder (`hidden: false`) or ClickUp's hidden folder. `task_count` counts only what the token may read; columns are `statuses`; `type` is the column's type since 2.17.0 (`open`, `custom`, `done`, `closed`; a board without types: first `open`, last `closed`, the rest `custom`) |
-| `GET /v2/list/{id}/task`, `GET /v2/team/{team_id}/task` | My tasks (its own) | 100 per page from `page=0`, `last_page`; `archived`, `subtasks`, `include_closed`, `statuses[]`, `assignees[]`, `tags[]`, `due_date_gt`/`_lt`, `date_created_*`, `date_updated_*`, `date_done_*`, `order_by` (`id`, `created`, `updated`, `due_date`), `reverse`, `include_markdown_description`; on a team also `space_ids[]`, `list_ids[]` |
+| `GET /v2/list/{id}/task`, `GET /v2/team/{team_id}/task` | My tasks (its own) | 100 per page from `page=0`, `last_page`; `archived`, `subtasks`, `include_closed`, `statuses[]`, `assignees[]`, `tags[]`, `due_date_gt`/`_lt`, `date_created_*`, `date_updated_*`, `date_done_*`, `order_by` (`id`, `created`, `updated`, `due_date`), `reverse`, `include_markdown_description`, since 2.17.0 `custom_fields` (ClickUp's JSON list of `{field_id, operator, value}`; operators `=`, `!=`, `<`, `>` (numbers), `IS NOT NULL`, `IS NULL`, `ANY` (a list); native fields only; a task's `custom_fields` lists every native field of its board, a dropdown's value being the option id); on a team also `space_ids[]`, `list_ids[]` |
 | `GET /v2/task/{id}` | My tasks (its own) | `include_subtasks`, `include_markdown_description`. Since 2.10.0, `custom_task_ids=true` with `space_id` or `list_id`: `{id}` is the task's number (see [Task numbers](#task-numbers)) |
 | `GET /v2/task/{id}/comment` | My tasks (its own) | 25 per page, newest first; `start` and `start_id` of the oldest one shown give the next page |
 | `GET /v2/task/{id}/member` | Read | Everyone attached to the task |
 | `GET /v2/space/{id}/tag` | Read | Tags of the open tasks the token reaches |
-| `GET /v2/list/{id}/field` | Read | Custom fields a provider sync imported; none otherwise |
+| `GET /v2/list/{id}/field` | Read | Since 2.17.0 the board's native fields first (its tenant's, then its own: `short_text`, `number`, `drop_down` with coloured options, `writable: true`), then the fields a provider sync imported (read-only) |
 | `GET /v2/team/{team_id}/time_entries` | My tasks | The host's time store answers; `start_date`, `end_date`, `assignee`, `task_id` |
 
 A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignored on reads. Each list answers in the same number of queries whatever the page holds (8 for a list's tasks, measured at 25 and 100 tasks), the tag filter included.
@@ -140,7 +140,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
 | `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`. Mentions work as in the UI's comment box: each candidate written `@Label` in the text is mentioned, so `TASK_COMMENT`, `TASK_MENTION` and the host's notifications follow |
 | `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | The task form's rules: a name of 1 to 64 characters, at most 20 tags. `PUT /v2/task/{id}` does not take `tags` (a warning) |
-| `POST /v2/task/{id}/field/{field_id}` | Tasks | Always 409 `FIELD_001`: custom fields are a provider's, read-only |
+| `POST /v2/task/{id}/field/{field_id}` | Tasks | Since 2.17.0 a native field of the task's board: `{"value": …}` (text; number; dropdown option id or name; `null` clears), 400 `INPUT_002` when it does not fit. Any other field (a provider's) stays 409 `FIELD_001` |
 | `POST /v2/task/{id}/dependency`, `DELETE` with `?depends_on=` or `?dependency_of=` | Tasks | Within a board (`LINK_002`); no cycle or duplicate (`LINK_001`) |
 | `POST`, `DELETE /v2/task/{id}/link/{links_to}` | Tasks | A `Related` relation |
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
@@ -220,7 +220,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `FOLDER_001` | 409 | Since 2.17.0: deleting a folder that still holds boards |
 | `TASK_002` | 409 | Deleting a task that follows a provider |
 | `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
-| `FIELD_001` | 409 | Setting a custom field |
+| `FIELD_001` | 409 | Setting a provider's custom field (native fields are writable since 2.17.0) |
 | `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
 | `TIME_001` | 403 | No time store; the host's store may answer its own `TIME_*` |
 | `TIME_002` | 403 | Deleting a time entry |

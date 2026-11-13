@@ -31,6 +31,8 @@ use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 
 use function array_filter;
 use function array_map;
@@ -60,6 +62,8 @@ final readonly class TaskApiReadOperations
         // Since 2.10.0 (spec 214): `task_numbers.enabled` (null when off): a task looked up by its number.
         private ?TaskNumberLedger $numbers = null,
         private ?TaskNumberScope $numberScope = null,
+        // Since 2.17.0 (Beacon spec 234, FR-028): native custom fields.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -271,6 +275,39 @@ final readonly class TaskApiReadOperations
     }
 
     /**
+     * Since 2.17.0 (FR-028): the board's native custom fields (its tenant's and its own) and its synced ones.
+     *
+     * @return array{native: list<TaskCustomField>, synced: list<TaskSyncField>}
+     *
+     * @throws TaskApiRefusal
+     */
+    public function allBoardFields(TaskApiPrincipal $principal, string $boardId): array
+    {
+        $board = $this->guard->board($principal, $boardId, TaskApiCapability::ReadEverything);
+
+        return ['native' => $this->customFields?->fieldsFor($board) ?? [], 'synced' => $this->queries->fieldsOf($board->getId())];
+    }
+
+    /**
+     * @param list<Task> $tasks
+     *
+     * @return array<string, list<TaskCustomField>>
+     */
+    private function nativeFields(array $tasks): array
+    {
+        $fields = [];
+        if (!$this->customFields instanceof TaskCustomFieldManager) {
+            return $fields;
+        }
+        foreach ($tasks as $task) {
+            $board = $task->getBoard();
+            $fields[$board->getId()] ??= $this->customFields->fieldsFor($board);
+        }
+
+        return $fields;
+    }
+
+    /**
      * The host's time store decides whose time the token sees; a named task must be within reach first.
      *
      * @throws TaskApiRefusal
@@ -299,7 +336,15 @@ final readonly class TaskApiReadOperations
                 $assignees[] = $user;
             }
         }
-        $result = $this->queries->taskPage($this->ids($boards), $filter, $assignees, $this->owner($principal));
+        $fields = [];
+        if ($filter->customFields !== [] && $this->customFields instanceof TaskCustomFieldManager) {
+            foreach ($boards as $board) {
+                foreach ($this->customFields->fieldsFor($board) as $field) {
+                    $fields[$field->getId()] = $field;
+                }
+            }
+        }
+        $result = $this->queries->taskPage($this->ids($boards), $filter, $assignees, $this->owner($principal), $fields);
 
         return $this->context($principal, $result['tasks'], $result['lastPage'], $filter->markdown);
     }
@@ -358,6 +403,8 @@ final readonly class TaskApiReadOperations
             manualMinutes: $this->queries->manualMinutesOf($ids),
             fieldValues: $this->queries->fieldValuesOf($ids),
             markdown: $markdown,
+            customFields: $this->nativeFields($tasks),
+            customFieldValues: $this->customFields?->valuesOf($ids) ?? [],
         );
     }
 
