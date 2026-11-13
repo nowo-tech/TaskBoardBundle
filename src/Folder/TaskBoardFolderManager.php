@@ -205,6 +205,10 @@ final readonly class TaskBoardFolderManager
             foreach ($this->columnsApplier->apply($board, $set, $columnMap) as $removed) {
                 $this->entityManager->remove($removed);
             }
+            // The columns the set adds: persisted before a task points at them.
+            foreach ($board->getColumns() as $column) {
+                $this->entityManager->persist($column);
+            }
         });
     }
 
