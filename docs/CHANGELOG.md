@@ -186,6 +186,41 @@ host** (three columns, one optional index) and one more table with the opt-in ta
   - Task API: `GET /v2/list/{id}/taskTemplate`, and `template_id` on `POST /v2/list/{id}/task` (body fields win over the template; any template the board does not offer is the same 400). `TaskApiTemplateOperations` for in-process (MCP) callers.
   - Templates as data for configuration presets (Beacon block W, TaskBoard 2.17 board configuration): `TaskTemplateManager::export()` / `replaceAll()`, `TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`.
   - `TaskBoardResourceAccessChecker::canManageTenantTemplates()`.
+
+### Security (audit PC, before the 2.16.0 tag)
+
+- **PC-M1 — the *humans only* gate can no longer be lifted through the column endpoints.** An `api` / `mcp` caller
+  (`HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS`) with a Full token and the manage-columns right could clear a
+  column's `humans_only`, move a task in and set it back; delete a column so that its tasks landed in a humans-only one
+  (the policy was never asked); or reorder / add columns so that a humans-only last column (the completion column) was
+  no longer last. Now, before anything changes, `PUT /v2/list/{id}/status/{status_id}` with another `humans_only`
+  value, `POST /v2/list/{id}/status` with `humans_only: true` or while the last column is humans-only,
+  `DELETE /v2/list/{id}/status/{status_id}` of a humans-only column and `PUT /v2/list/{id}/status/order` that moves a
+  humans-only last column away from the end answer **403 `STATUS_HUMANS_ONLY`**, byte for byte the answer a refused
+  `status` gets (`TaskApiRefusal::humansOnly()`, `HumansOnlyColumnTransitionPolicy::MESSAGE`). Sending a column's
+  current `humans_only` value is accepted; a host's own channel label and the board UI are not affected.
+  `BoardColumnManager::delete()` now asks the column transition policy for **every task it moves** (new operation
+  `ColumnTransitionVia::OP_COLUMN_DELETE`), all or none: one refusal keeps the column and every task
+  (`ColumnTransitionRefusedException`; the API answers the policy's 403, the board UI shows its message). It gains an
+  optional trailing `?ColumnTransitionVia $via` (null: `web`) and an optional `?ColumnTransitionPolicyInterface`
+  constructor argument (autowired); without an actor (a worker) the policy is not asked, as for an import.
+- **PC-L1 — a refusal decided while a bulk update writes is `BULK_001`.** A stateful host rule (a WIP limit that counts
+  the items already written in the same transaction) refusing the second item used to answer a plain 403; it now
+  answers 409 `BULK_001` with that item in `failures` (its own status and ECODE), and every write of the request is
+  still rolled back.
+- **PC-L2 — tag changes are asked to the column transition policy.** When the tags of a task that stays in its column
+  change (`TaskManager::update()`, `TaskManager::addTag()`, `POST` / `DELETE /v2/task/{id}/tag/{name}`, a bulk item's
+  `tags`, a checklist rename), the policy is asked with the new operation `ColumnTransitionVia::OP_RETAG` (`from` and
+  `to` are the same column, `tags` the new ones), so a rule keyed on `repo:` tags cannot be bypassed by moving a task
+  untagged and tagging it afterwards. The bundled humans-only rule allows a retag (it is not an entry).
+  `TaskManager::addTag()` gains an optional trailing `?ColumnTransitionVia $via`. A checklist rename retags every item
+  in one transaction (all or none); `TaskApiChecklistOperations` gains an optional trailing `?TaskApiTransaction`.
+- **PC-L3 — tenant templates and the tenant.** `DefaultTaskTemplatePermission` also asks the host's own tenant-aware
+  access checker (`security.access_checker` implementing `TenantAwareTaskBoardAccessCheckerInterface`) whether the
+  person may list the boards of the template's tenant before letting them manage that tenant's templates. The bundled
+  checkers ignore the tenant and change nothing.
+- **PC-L4 — docs.** UPGRADING now says the schema change runs **before** the deploy, and documents that a writer without
+  `If-Match` / `base_revision` racing a locked write may produce the same revision number (see UPGRADING).
 - REQ-SEC-006: template ids and tenant keys are matched exactly (`Support\ExactKey` on every row read back, before any cap); a tenant key with edge whitespace, control or format characters is refused on entry, and `task_board_task_templates.tenant_key` gets the binary NO PAD collation of the other key columns (2.15.1).
 
 ## [2.15.1] - 2026-11-13

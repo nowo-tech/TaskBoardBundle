@@ -203,8 +203,9 @@ statuses. One schema change for every host.
 ### Schema change for every host: humans-only columns and task revisions
 
 Run `php bin/console doctrine:migrations:diff` and compare it with the statements below (replace the table names if you
-use `table_prefix`); both columns have a default, so existing rows need nothing and the migration can run before or
-after the deploy:
+use `table_prefix`); both columns have a default, so existing rows need nothing. Run the migration **before** the
+deploy (audit PC-L4): both columns are mapped, so once the 2.16 code runs every query on tasks and columns selects them
+and fails until they exist:
 
 ```sql
 -- MySQL / MariaDB
@@ -253,6 +254,34 @@ punctuation (`C-12`) are matched with `LIKE` either way.
 6. **Comment edit.** `PUT /v2/comment/{id}` works out of the box for the comment's author; set
    `api.hooks.comment_edit_policy` to widen or narrow it.
 7. **Events.** `TASK_STATUS_CHANGED` follows every column change; its `toType` stays null until 2.17.
+
+8. **Column administration and the *humans only* gate (audit PC-M1).** An `api` / `mcp` caller may not lift the gate
+   through the column endpoints: changing a column's `humans_only`, deleting a humans-only column, adding a column
+   while the last one is humans-only (a new column goes last and would become the completion column) or reordering so
+   that a humans-only last column is no longer last answers 403 `STATUS_HUMANS_ONLY` (the same body as a refused
+   `status`). People do it in the board UI; a host's own channel label (e.g. `cli`) is not refused. Deleting a column
+   (UI or API) now asks your policy for every task it moves (operation `column_delete`, all or none); a refusal keeps
+   the column and the board UI shows the policy's message. A policy that only cares about entering a column needs
+   nothing.
+9. **Tag changes (audit PC-L2).** Your policy is now also asked when the tags of a task that stays in its column change:
+   operation `retag` (`ColumnTransitionVia::OP_RETAG`), `from` and `to` the same column, `tags` the new ones. A WIP
+   rule keyed on tags should count the task's new tags there; any other rule allows `retag` (the bundled humans-only
+   rule does). A refusal answers 403 with your code on `POST` / `DELETE /v2/task/{id}/tag/{name}`, `BULK_001` in a bulk
+   update, and the board shows the message on the task form.
+10. **Bulk refusals at write time (audit PC-L1).** A rule that reads the database (counting the tasks already in the
+    column) may refuse an item only after the previous ones were written in the same transaction; the answer is still
+    409 `BULK_001` with that item in `failures`, and nothing is kept.
+11. **Revisions and writers without `If-Match` (audit PC-L4).** The revision is computed in PHP (`Task::bumpRevision()`)
+    and written as a value. A writer that does not lock the row (the board UI, `PUT /v2/task/{id}` without `If-Match` or
+    `base_revision`, a sync, a recurrence) and loaded the task before a locked write committed may save the same
+    revision number for different content. The window is one request; clients that rely on FR-018 (parallel
+    verifiers) send `If-Match` on **every** write so they always take the row lock.
+12. **Tenant templates (audit PC-L3).** With the default `task_templates.permission`, a host whose
+    `security.access_checker` implements `TenantAwareTaskBoardAccessCheckerInterface` now also decides through its
+    `canListBoards($user, $tenantKey)` who manages a tenant's templates. With the bundled checkers (which ignore the
+    tenant) a `security.manage_roles` holder still manages every tenant's templates: a multi-tenant host that builds
+    its settings screen on `createForTenant($user, $tenantFromRequest)` sets its own `task_templates.permission` or a
+    tenant-aware access checker.
 
 Custom `TaskManagerInterface` implementations need nothing: the new `?ColumnTransitionVia $via` parameters are on
 `TaskManager` only (the interface gains them in 3.0).

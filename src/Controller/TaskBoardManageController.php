@@ -498,6 +498,12 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('error', 'task_board.flash.column_delete_refused');
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (audit PC-M1): the column transition policy refused a task the deletion would move; nothing changed.
+            $this->logRefused('column_delete_transition_policy');
+            $this->addFlash('error', $this->transitionMessage($refused));
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
         }
         if ($deleted) {
             $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);

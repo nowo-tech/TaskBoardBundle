@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api;
 
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use RuntimeException;
 
 /**
@@ -40,6 +41,15 @@ final class TaskApiRefusal extends RuntimeException
         $decision = $refused->decision;
 
         return new self(403, $decision->code, $decision->message !== '' ? $decision->message : 'This status may not be set this way');
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-M1): 403 `STATUS_HUMANS_ONLY`, byte for byte the answer of a status the bundled *humans only*
+     * policy refuses, for a column change an `api` / `mcp` caller may not make (it would lift the gate).
+     */
+    public static function humansOnly(): self
+    {
+        return new self(403, self::STATUS_HUMANS_ONLY, HumansOnlyColumnTransitionPolicy::MESSAGE);
     }
 
     /** Since 2.16.0 (spec 234, FR-018): 409 `TASK_409` with the task's current revision. */

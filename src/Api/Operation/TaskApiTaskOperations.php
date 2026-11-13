@@ -285,7 +285,9 @@ final readonly class TaskApiTaskOperations
      * policy with operation `bulk`, the host's limit) and, inside one transaction, its row is locked (in id order) and its
      * `base_revision` compared. Any refusal writes nothing and answers `BULK_001` with every failing item (`failures`:
      * index, id, status, ECODE, err, and `current_revision` for `TASK_409`), always with HTTP 409 (Beacon review 2026-11-13):
-     * each item's own status and ECODE stay in `failures`.
+     * each item's own status and ECODE stay in `failures`. Since audit PC-L1 a refusal that only appears while writing (a
+     * stateful host rule refusing an item once the previous ones are written) answers the same way, with that one item,
+     * and every write of the request is rolled back.
      * After the commit: one `API_WRITE` (`task.bulk_update`) per task and one `API_BULK_WRITE` with the count.
      *
      * @throws TaskApiRefusal
@@ -369,7 +371,13 @@ final readonly class TaskApiTaskOperations
             }
             $changed = [];
             foreach ($plans as $index => $plan) {
-                $changed[$index] = $this->bulkWrite($principal, $tasks[$index], $plan);
+                try {
+                    $changed[$index] = $this->bulkWrite($principal, $tasks[$index], $plan);
+                } catch (TaskApiRefusal $refusal) {
+                    // Audit PC-L1: a refusal decided while writing (a host rule that counts the items written before
+                    // this one) is still `BULK_001` with its item in `failures`; run() rolls every write back.
+                    throw self::bulkRefused([$index => self::failure($index, $tasks[$index]->getId(), $refusal)]);
+                }
             }
 
             return $changed;

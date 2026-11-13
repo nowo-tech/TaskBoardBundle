@@ -157,6 +157,10 @@ principal's channel (`api`, or `mcp` for an in-process caller) and the operation
 `checklist`). A refusal is 403 with the policy's code and message, e.g. `{"err": "Only people can move tasks into this
 status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written. The bundled `HumansOnlyColumnTransitionPolicy` is
 strict: ticking a checklist item into a humans-only column is refused too, unless `humans_only_policy.allow_checklist`.
+Since audit PC the policy is also asked when the tags of a task that stays in its column change (operation `retag`:
+`POST` / `DELETE /v2/task/{id}/tag/{name}`, a bulk item's `tags`, a checklist rename) and for every task a column
+deletion moves (operation `column_delete`, all or none). A refusal decided while a bulk update writes is still 409
+`BULK_001` with that item in `failures`.
 
 | Endpoint | Level | Notes |
 |---|---|---|
@@ -169,7 +173,11 @@ strict: ticking a checklist item into a humans-only column is refused too, unles
 
 `GET /v2/team` lists each team's `members` the same way (`[{"user": {…, "service_account": bool}}]`; `[]` without
 `api.hooks.members`). Status objects carry `humans_only`; `POST` / `PUT /v2/list/{id}/status…` accept `humans_only`
-(boolean).
+(boolean). Audit PC-M1: an `api` / `mcp` principal may not lift the gate through the statuses: another `humans_only`
+value on `PUT …/status/{status_id}`, `humans_only: true` on `POST …/status`, a new status while the last one is
+humans-only (it would become the completion column), `DELETE` of a humans-only status, or `PUT …/status/order` that
+moves a humans-only last status away from the end answer 403 `{"err": "Only people can move tasks into this status",
+"ECODE": "STATUS_HUMANS_ONLY"}` and change nothing. Sending a status's current `humans_only` value is accepted.
 
 ## Management endpoints (Full)
 
