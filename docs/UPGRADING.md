@@ -9,6 +9,7 @@
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
   - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
+  - [Schema change for every host: numbering prefix; board configuration](#schema-change-for-every-host-numbering-prefix-board-configuration)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -275,6 +276,24 @@ DROP TABLE task_board_custom_fields;
 
 Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
 a native field instead of always answering 409; a provider's field still answers 409 `FIELD_001`.
+
+### Schema change for every host: numbering prefix; board configuration
+
+```sql
+ALTER TABLE task_board_boards ADD number_prefix VARCHAR(16) DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_boards DROP number_prefix;
+```
+
+**Board configuration (presets).** A host that stores presets reads a board with
+`Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter::export($board)` (or `exportById($id, $tenantKey)`),
+keeps `$configuration->toArray()` / `toJson()` as it likes, and copies it onto a board with
+`BoardConfigurationApplier::apply($actor, $board, BoardConfiguration::fromArray($data), $columnMap)` (or
+`applyById($actor, $id, $tenantKey, …)`). The apply is all or nothing; it refuses with
+`Folder\TaskBoardRestructureRefusedException` (`not_found`, `not_allowed`, `columns_in_use` — give a column map,
+`columns_shared` — the board's folder shares its statuses, `fields_in_use` — pass `dropFieldValues: true` to drop them,
+`invalid`, `quota`). Task templates join the configuration through `BoardTemplatesConfigurationInterface` (alias it to
+your service until the bundle's own templates answer it).
 
 ## To 2.15.0
 

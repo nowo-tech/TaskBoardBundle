@@ -41,6 +41,8 @@ services:
             - '../../Folder/TaskBoardRestructureRefusedException.php'
             - '../../Configuration/BoardColumnSpec.php'
             - '../../Configuration/BoardColumnsRefusedException.php'
+            - '../../Configuration/BoardConfiguration.php'
+            - '../../Configuration/BoardFieldSpec.php'
             - '../../Field/TaskCustomFieldCondition.php'
             - '../../Field/TaskCustomFieldRefusedException.php'
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
@@ -200,6 +202,18 @@ services:
     Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer:
         arguments:
             $syncEnabled: '%nowo_task_board.sync.enabled%'
+
+    # Since 2.17.0 (Beacon block W): board configuration as data (public for a host's presets).
+    Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter:
+        public: true
+    Nowo\TaskBoardBundle\Configuration\BoardConfigurationApplier:
+        public: true
+    Nowo\TaskBoardBundle\Configuration\BoardTemplatesConfigurationInterface:
+        alias: Nowo\TaskBoardBundle\Configuration\NoBoardTemplates
+    Nowo\TaskBoardBundle\Folder\FolderStatusSets:
+        public: true
+    Nowo\TaskBoardBundle\Field\TaskCustomFieldManager:
+        public: true
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:

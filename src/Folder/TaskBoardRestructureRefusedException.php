@@ -29,6 +29,10 @@ final class TaskBoardRestructureRefusedException extends RuntimeException
     public const SYNC_RUNNING   = 'sync_running';
     public const QUOTA          = 'quota';
     public const COLUMNS_IN_USE = 'columns_in_use';
+    /** Since 2.17.0 (block W): a board whose folder shares its statuses takes its columns from the folder. */
+    public const COLUMNS_SHARED = 'columns_shared';
+    /** Since 2.17.0 (block W): a field that holds values would be removed or retyped (`fields` names it). */
+    public const FIELDS_IN_USE = 'fields_in_use';
 
     /**
      * @param array<string, int|string> $params

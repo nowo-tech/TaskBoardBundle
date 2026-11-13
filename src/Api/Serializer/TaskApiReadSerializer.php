@@ -186,7 +186,8 @@ final class TaskApiReadSerializer
 
         $data = [
             'id'        => $task->getId(),
-            'custom_id' => null,
+            // Since 2.17.0: with the board's numbering prefix and a number, ClickUp's custom task id (`AIF-12`).
+            'custom_id' => $board->getNumberPrefix() !== null && $task->getNumber() !== null ? $board->getNumberPrefix() . '-' . $task->getNumber() : null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
             'number'           => $task->getNumber(),
             'name'             => $task->getTitle(),

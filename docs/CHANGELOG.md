@@ -141,6 +141,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields first, `POST /v2/task/{id}/field/{field_id}` writes a native field (a provider's keeps 409 `FIELD_001`), task
   lists take `custom_fields`, and a task's `custom_fields` carries the native values. UI: a row per field on the task
   form and a column per field plus an operator filter on the list view.
+- **Board configuration as data (Beacon block W, work method presets).** `Configuration\BoardConfiguration` — a
+  framework-free VO, serialisable to and from an array or JSON — holds a board's columns (order, name, type, colour,
+  icon), its own custom fields (options and colours), its task templates (through
+  `BoardTemplatesConfigurationInterface`, none until task templates exist) and its numbering prefix.
+  `BoardConfigurationExporter::export(board)` reads it; `BoardConfigurationApplier::apply(actor, board, configuration,
+  columnMap)` replaces the board's configuration in one transaction, under the restructure policy, never orphaning a
+  task (`columns_in_use` without a column map) and never dropping field values silently (`fields_in_use` unless
+  `dropFieldValues`); `applyById()` / `exportById()` are tenant-checked.
+- **Numbering prefix.** `TaskBoard::numberPrefix` (`AIF` shows task 12 as `AIF-12` instead of `#12`); the Task API's
+  `custom_id` is `AIF-12` when the board has a prefix and the task a number.
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`

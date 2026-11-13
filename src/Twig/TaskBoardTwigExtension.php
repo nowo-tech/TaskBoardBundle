@@ -290,8 +290,10 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     public function taskNumber(Task|int|null $task): ?string
     {
         $number = $task instanceof Task ? $task->getNumber() : $task;
+        // Since 2.17.0: the board's numbering prefix (`AIF-12`), else `#12`.
+        $prefix = $task instanceof Task ? $task->getBoard()->getNumberPrefix() : null;
 
-        return $this->taskNumbersEnabled && $number !== null ? '#' . $number : null;
+        return $this->taskNumbersEnabled && $number !== null ? ($prefix !== null ? $prefix . '-' . $number : '#' . $number) : null;
     }
 
     /**

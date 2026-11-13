@@ -261,6 +261,12 @@ final readonly class TaskCustomFieldManager
         });
     }
 
+    /** Since 2.17.0: whether any task holds a value of the field. */
+    public function hasValues(TaskCustomField $field): bool
+    {
+        return $this->entityManager->getRepository(TaskCustomFieldValue::class)->count(['field' => $field]) > 0;
+    }
+
     /**
      * The values of these tasks, by task id.
      *
