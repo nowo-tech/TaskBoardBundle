@@ -166,6 +166,7 @@ final readonly class TaskApiTaskOperations
             return $this->applyUpdate($principal, $task, $input);
         }
 
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
         return $this->transaction->run(function () use ($principal, $task, $input, $base): Task {
             $current = $this->transaction->lockedRevision($task);
             if ($current !== $base) {
@@ -323,6 +324,7 @@ final readonly class TaskApiTaskOperations
         }
 
         // 2. One transaction: lock, compare, check everything, then write.
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
         $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases): array {
             $ordered = $tasks;
             uasort($ordered, static fn (Task $a, Task $b): int => strcmp($a->getId(), $b->getId()));

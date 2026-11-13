@@ -72,6 +72,7 @@ final readonly class TaskApiQueryRepository
         $qb = $this->filtered($boardIds, $filter, $assignees, $owner);
         // Since 2.16.0 (spec 234, FR-026): the text search's matches, among the boards and every other filter.
         if ($onlyIds !== null) {
+            // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
             $qb->andWhere('t.id IN (:searchMatches)')->setParameter('searchMatches', $onlyIds);
         }
         $direction = $filter->reverse ? 'DESC' : 'ASC';
