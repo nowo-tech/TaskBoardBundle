@@ -16,6 +16,8 @@ final class BoardColumnFormData
         public string $name = '',
         public ?string $color = null,
         public ?string $icon = null,
+        // Since 2.16.0 (spec 234): only people may move tasks into the column (see BoardColumn::isHumansOnly()).
+        public bool $humansOnly = false,
     ) {
     }
 }

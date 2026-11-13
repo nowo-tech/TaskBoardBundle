@@ -5,6 +5,8 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 2.16.0](#to-2160)
+  - [Schema change for every host: humans-only columns and task revisions](#schema-change-for-every-host-humans-only-columns-and-task-revisions)
+  - [AI Flow features: what a host does](#ai-flow-features-what-a-host-does)
   - [Task templates: what a host does](#task-templates-what-a-host-does)
 - [To 2.15.1](#to-2151)
   - [Keys the bundle refuses](#keys-the-bundle-refuses)
@@ -194,9 +196,68 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.16.0
 
-Not released yet.
+Additive (Beacon spec 234). With an unchanged configuration every move is allowed as before, `/v2/team` still lists no
+members and no search index is mapped; the Task API answers gain `revision` (and `ETag`) on tasks and `humans_only` on
+statuses. One schema change for every host.
 
-**A host that changes nothing** gets no new table, route, service or output: task templates are opt-in.
+### Schema change for every host: humans-only columns and task revisions
+
+Run `php bin/console doctrine:migrations:diff` and compare it with the statements below (replace the table names if you
+use `table_prefix`); both columns have a default, so existing rows need nothing and the migration can run before or
+after the deploy:
+
+```sql
+-- MySQL / MariaDB
+ALTER TABLE task_board_columns ADD humans_only TINYINT(1) DEFAULT 0 NOT NULL;
+ALTER TABLE task_board_tasks ADD revision INT DEFAULT 1 NOT NULL;
+-- PostgreSQL / SQLite
+ALTER TABLE task_board_columns ADD humans_only BOOLEAN DEFAULT false NOT NULL;
+ALTER TABLE task_board_tasks ADD revision INT DEFAULT 1 NOT NULL;
+```
+
+The demo ships it as `demo/symfony8/migrations/Version20261113120000.php`.
+
+**Optional, MySQL / MariaDB only (`search.fulltext: true`):** the FULLTEXT indexes of the text search. With the option
+the bundle maps them (so `doctrine:migrations:diff` creates them and never drops them); on other platforms nothing is
+mapped and the search uses `LIKE`:
+
+```sql
+CREATE FULLTEXT INDEX task_board_tasks_text_idx ON task_board_tasks (title, description);
+-- with search.comments: true as well
+CREATE FULLTEXT INDEX task_board_comments_text_idx ON task_board_task_comments (body);
+```
+
+Building a FULLTEXT index on a large table takes time (InnoDB rebuilds it online); create it before turning the option
+on. Words shorter than the server's `innodb_ft_min_token_size` (3 by default; `search.min_token_length`) and words with
+punctuation (`C-12`) are matched with `LIKE` either way.
+
+### AI Flow features: what a host does
+
+1. **Column transition policy.** Set `column_transition_policy` to a service implementing
+   `Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface` (e.g. the bundled
+   `Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy`, or your own that decorates it to add WIP limits
+   or "blocked needs a reason"). The bundled one is strict: `api` and `mcp` may not enter a humans-only column by any
+   operation, checklist ticks included (`humans_only_policy.allow_checklist: true` relaxes that). It is asked for **every** move, the board UI's included (channel `web`); return
+   `ColumnTransitionDecision::refuse('WIP_LIMIT', $translatedMessage)` to refuse: the Task API answers 403 with that
+   `ECODE` and message, the board shows the message. An in-process caller (MCP) builds its `TaskApiPrincipal` with
+   `channel: 'mcp'`; the policy then sees `mcp`. Imports are not asked.
+2. **Humans-only toggle.** Shown in the column dialogs when a policy is set (`board.column_humans_only_field: true|false`
+   forces it). A board configuration copier uses `BoardColumnManager::setHumansOnly()`.
+3. **Revisions.** Nothing to do. A client sends `If-Match: "<revision>"` (or `base_revision`) on `PUT /v2/task/{id}` to
+   get 409 `TASK_409` instead of overwriting a newer write.
+4. **Bulk update.** Listen to `TaskBoardEvents::API_BULK_WRITE` to count `$event->count` writes against a budget; each
+   task also gets its usual `API_WRITE`.
+5. **Members.** Set `api.hooks.members` to a `TaskApiMembersInterface` returning `TaskApiMember` rows (with
+   `serviceAccount: true` for agents). The bundle asks it only for teams your workspace hook lists for the viewer and
+   drops every e-mail but the viewer's own.
+6. **Comment edit.** `PUT /v2/comment/{id}` works out of the box for the comment's author; set
+   `api.hooks.comment_edit_policy` to widen or narrow it.
+7. **Events.** `TASK_STATUS_CHANGED` follows every column change; its `toType` stays null until 2.17.
+
+Custom `TaskManagerInterface` implementations need nothing: the new `?ColumnTransitionVia $via` parameters are on
+`TaskManager` only (the interface gains them in 3.0).
+
+**A host that changes nothing** gets no new table, route, service or output either: task templates are opt-in.
 
 ### Task templates: what a host does
 
@@ -219,7 +280,6 @@ Beacon spec 234, FR-061.
 4. **API / MCP.** With `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on `POST …/list/{id}/task` ([API](API.md#task-templates-since-216)). In process: `TaskApiTemplateOperations::snapshots()`.
 5. **Presets.** `TaskTemplateManager::export()` and `replaceAll()` read and write a scope's templates as plain data (`TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`), for a configuration exporter.
 6. **Assets.** The add-task dialog's controller gained the picker's `applyTemplate` action and the `open-on-connect` value: a host that builds its own copy of the bundle's assets rebuilds them; one that overrides `_add_task_modal.html.twig` adds the picker block (`taskTemplatePicker`) to offer templates.
-
 ## To 2.15.1
 
 Patch (REQ-SEC-006, audit F5). Tenant keys, board slugs, import external ids and task-number scopes are now matched

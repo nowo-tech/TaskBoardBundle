@@ -149,7 +149,7 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
-        $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())), $principal->user);
+        $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon(), $column->isHumansOnly())), $principal->user);
         $this->audit->written($principal, 'column.update', $board, null, ['column' => $columnId]);
 
         return $board;
@@ -237,6 +237,10 @@ final readonly class TaskApiBoardOperations
                 throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid icon');
             }
             $data->icon = $icon;
+        }
+        // Since 2.16.0 (spec 234, FR-014): only people may move tasks into the column.
+        if ($input->has('humans_only')) {
+            $data->humansOnly = $input->bool('humans_only') ?? throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid humans_only');
         }
 
         return $data;

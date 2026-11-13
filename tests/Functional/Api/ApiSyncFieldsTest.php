@@ -104,6 +104,29 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertTrue($this->em->find(Task::class, $item->getId())?->isCompleted());
     }
 
+    /** Since 2.16.0 (spec 234): a bulk update that reopens completed tasks asks the limit for all of them first. */
+    public function testTheHostsLimitRefusesABulkReopeningAndNothingChanges(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = new Task(board: $board, title: 'Done', creator: $this->owner, column: $board->getColumns()->last() ?: null);
+        $this->em->persist($done->markCompleted());
+        $open = $this->task($board, 'Open');
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        try {
+            $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $open->getId(), 'description' => 'x'], ['id' => $done->getId(), 'status' => 'To do']]]);
+            self::assertResponseStatusCodeSame(409);
+            self::assertSame([[1, 'PLAN_002', 403]], array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE'], $failure['status']], $this->json()['failures']));
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
+        self::assertNull($this->em->find(Task::class, $open->getId())?->getDescription());
+    }
+
     /** Audit IB-L1: a write of fields never moves a task, even a done one without a column, so it asks no limit. */
     public function testFieldWritesNeverMoveATaskWithoutAColumn(): void
     {

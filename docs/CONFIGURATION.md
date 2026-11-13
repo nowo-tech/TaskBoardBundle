@@ -161,6 +161,32 @@ Route names, paths, methods and the prefix are unchanged by 1.21.
 
 Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes` and `api.hooks.*`: see [API](API.md).
 
+Since 2.16.0 (Beacon spec 234): `api.hooks.members` (`TaskApiMembersInterface`; null: teams list no members) and
+`api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`; null: a comment's author only).
+
+## Column transitions, humans-only columns and text search (since 2.16)
+
+```yaml
+nowo_task_board:
+    # Service id of a Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface: asked before every move (board UI,
+    # Task API, MCP, bulk). null = every move is allowed.
+    column_transition_policy: Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy
+    humans_only_policy:
+        allow_checklist: false # true: the Task API / MCP may still tick checklist items into a humans-only column
+    board:
+        # The "Only people can move tasks here" toggle of the column dialogs. null = shown when a policy is set.
+        column_humans_only_field: ~
+    search:
+        provider: ~            # a Nowo\TaskBoardBundle\Search\TaskTextSearchInterface; null = DoctrineTaskTextSearch
+        fulltext: false        # MySQL / MariaDB: map and use the FULLTEXT indexes (run the migration first)
+        comments: false        # also match the tasks' comments (not deleted)
+        min_token_length: 3    # the server's innodb_ft_min_token_size; shorter words use LIKE
+        max_matches: 500       # more matches answer 400 SEARCH_001; never a silently cut list
+```
+
+The policy returns a `ColumnTransitionDecision` (`allow()`, or `refuse($code, $message)`); see [API](API.md#column-transitions-revisions-and-bulk-updates-since-216)
+and [UPGRADING](UPGRADING.md#to-2160).
+
 ## Security
 
 ### Firewall

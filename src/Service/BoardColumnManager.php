@@ -67,6 +67,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             // Since 2.9.0: one emoji or an icon id; anything else is not stored (the form and the API refuse it first).
             icon: ColumnIcon::normalize($data->icon),
         );
+        $column->setHumansOnly($data->humansOnly);
 
         $board->addColumn($column);
         $this->columnRepository->save($column);
@@ -122,20 +123,39 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void
     {
-        $before = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon()];
+        $before = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
         $column
             ->setName(trim($data->name))
             ->setColor($this->normalize($data->color))
-            ->setIcon(ColumnIcon::normalize($data->icon));
+            ->setIcon(ColumnIcon::normalize($data->icon))
+            ->setHumansOnly($data->humansOnly);
 
         $this->columnRepository->save($column);
 
-        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon()];
+        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
         $changed = array_keys(array_filter($after, static fn (?string $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
         if ($changed !== []) {
             $board = $column->getBoard();
             $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $before[ColumnUpdatedEvent::FIELD_NAME], $changed, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_UPDATED);
         }
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, Beacon block W): sets only the column's *humans only* flag, with COLUMN_UPDATED (field
+     * `humansOnly`) when it changes. For a host that copies a board's configuration (no form, no API). False when it
+     * already had that value.
+     */
+    public function setHumansOnly(BoardColumn $column, bool $humansOnly, ?object $actor = null): bool
+    {
+        if ($column->isHumansOnly() === $humansOnly) {
+            return false;
+        }
+        $column->setHumansOnly($humansOnly);
+        $this->columnRepository->save($column);
+        $board = $column->getBoard();
+        $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getName(), [ColumnUpdatedEvent::FIELD_HUMANS_ONLY], ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_UPDATED);
+
+        return true;
     }
 
     /**

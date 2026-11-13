@@ -54,6 +54,9 @@ final class TaskBoardEvents
     /** {@see TaskMovedEvent}, after flush (since 1.10). */
     public const TASK_MOVED = 'nowo_task_board.task_moved';
 
+    /** Since 2.16.0 (spec 234): {@see TaskStatusChangedEvent}, after TASK_MOVED, whatever the channel. */
+    public const TASK_STATUS_CHANGED = 'nowo_task_board.task_status_changed';
+
     /** {@see TaskCompletedEvent}, after flush (since 1.10). */
     public const TASK_COMPLETED = 'nowo_task_board.task_completed';
 
@@ -140,6 +143,9 @@ final class TaskBoardEvents
 
     /** Since 2.2.0 (spec 213): {@see TaskApiWriteEvent}, one per write through the API. */
     public const API_WRITE = 'nowo_task_board.api_write';
+
+    /** Since 2.16.0 (spec 234): {@see TaskApiBulkWriteEvent}, one per atomic bulk update, after its commit, with the count. */
+    public const API_BULK_WRITE = 'nowo_task_board.api_bulk_write';
 
     /** Since 1.28.0: {@see UnmatchedColumnsResolvedEvent}. */
     public const SYNC_UNMATCHED_COLUMNS_RESOLVED = 'nowo_task_board.sync_unmatched_columns_resolved';

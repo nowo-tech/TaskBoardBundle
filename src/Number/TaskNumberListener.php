@@ -56,7 +56,8 @@ final readonly class TaskNumberListener
         $key    = $this->scope->keyOf($task->getBoard());
         $stored = $connection->fetchOne(sprintf('SELECT scope_key FROM %s WHERE scope_key = ?', TaskNumberCounter::TABLE), [$key]);
         if ($stored !== false && $stored !== $key) {
-            throw TaskNumberScopeConflictException::forScope($key);
+            // Since 2.16.0 (spec 234): the task is named, so a bulk write knows which of its items conflicts.
+            throw TaskNumberScopeConflictException::forScope($key, $task->getId());
         }
     }
 
@@ -89,7 +90,20 @@ final readonly class TaskNumberListener
         foreach ($byScope as $key => $tasks) {
             $counts[$key] = count($tasks);
         }
-        $first = $this->reserver->reserve($manager->getConnection(), $counts);
+        try {
+            $first = $this->reserver->reserve($manager->getConnection(), $counts);
+        } catch (TaskNumberScopeConflictException $conflict) {
+            // Since 2.16.0 (spec 234): name the first task of the offending scope. The keys are compared byte for byte,
+            // never through PHP's array keys (REQ-SEC-006), and only the caller's own tasks are listed.
+            foreach ($byScope as $key => $tasks) {
+                if ((string) $key === $conflict->scopeKey && $tasks !== []) {
+                    throw $conflict->forTask($tasks[0]->getId());
+                }
+            }
+
+            // The reserver is called with the keys of `$byScope`, so one always matches; this is the fail-safe.
+            throw $conflict; // @codeCoverageIgnore
+        }
 
         $metadata = $manager->getClassMetadata(Task::class);
         foreach ($byScope as $key => $tasks) {
