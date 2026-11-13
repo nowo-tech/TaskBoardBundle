@@ -107,6 +107,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.15.1 (patch). See [UPGRADING](UPGRADING.md#to-2151): MySQL / MariaDB hosts change the collation of the key
+columns.
+
+### Security
+
+- **Tenant keys, board slugs, import external ids and task-number scopes are matched byte for byte (REQ-SEC-006, audit
+  F5, Info/Low).** On a MySQL / MariaDB `*_ci` or PAD SPACE collation `acme` also matched `Acme`, `acmé` and `acme `:
+  a look-alike tenant's board names showed in a tenant's board lists (`findActiveByTenant`),
+  `findOneByTenant` could pick a look-alike's older board, an import treated a look-alike tenant's links as "already
+  imported elsewhere", and `TaskNumberLedger::purgeScope('acme')` also deleted `Acme`'s ledger and counter. Serving a
+  board was never affected (`TaskBoardTenantContext::owns()` compares with `===`).
+  - The key columns get a binary NO PAD collation from the mapping listener (`tenant_key` and `slug` of the boards,
+    `external_id` / `import_source` of the task links, `scope_key` of the task numbers, counters and column sets, and
+    `external_id` / `scope_key` / `workspace_id` of the sync tables): `utf8mb4_0900_bin` on MySQL 8.0.17+,
+    `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL. The unique `(tenant_key, slug)` key no longer folds.
+  - Every lookup and list keeps only the rows whose key is `===` the one asked (`DoctrineOrmTaskBoardRepository`,
+    `DoctrineTaskImportLinkLookup`, `findImportedByExternalIds`, `TaskNumberLedger::find*()`, `findByScope`, the sync
+    item and directory lookups), and the first board of a tenant is chosen after the exact match, not before.
+  - `purgeScope()` selects the ledger and counter rows first, keeps the exact ones and deletes them by primary key; a
+    task-number reservation whose counter row turns out to be a look-alike scope's fails closed (rolled back).
+  - Keys that cannot be matched exactly (edge whitespace or NBSP, control or format characters, invalid UTF-8, more
+    than 191 characters) are refused where they enter: `TaskBoardTenant`, `TaskBoard::setTenantKey()`, `ColumnSet`,
+    the board creator, `purgeScope()`; the default tenant resolver answers 404 for such a slug.
+  - Writes on a column that still folds (before the UPGRADING ALTER) never hit a unique key and close the entity
+    manager (audit OM): a provider task whose sync item exists only as a look-alike (`T1` for `t1`) is skipped and
+    reported (`external_id_look_alike`), and so is a look-alike workspace's people directory (`workspace_look_alike`);
+    the board creator counts a look-alike tenant's slug as taken and suffixes it; a task whose number counter is a
+    look-alike scope's is refused before it is scheduled (`TaskNumberScopeConflictException`, 409 on the pages,
+    `TASK_003` on the API). A sync run that still fails reopens the closed manager.
+  - The request's tenant (`TaskBoardTenantContext`) answers 404 for a `{tenantSlug}` that cannot be matched exactly, for
+    a resolver that refuses the tenant's key, and for a tenant whose slug is not exactly the one in the URL.
+  - The calendar day annotations a host returns (`calendar.day_annotation_provider`, `assigneeDays()`) are read by the
+    exact assignee id asked: the answer is re-keyed in PHP and a key that is not byte for byte one of the ids the bundle
+    asked for annotates nobody, instead of being reached through PHP's array-key juggling. Hardening, in line with the
+    other id lookups; the ids asked are the bundle's own (`TaskMember` of the page's tasks) and the viewer and tenant
+    are passed to the provider, so no annotation crossed a tenant before.
+
+### Fixed
+
+- **`server_version` without a patch number is logged (REQ-SEC-006 item 8).** A MySQL `server_version` of `8.0` or `8`
+  cannot select `utf8mb4_0900_bin`; the key and user-id columns then fall back to the PAD SPACE `utf8mb4_bin` and the
+  bundle logs a warning. The user-id columns of `user_reference: id` also honour a MySQL older than 8.0.17 now.
+- **Id-mode erasure and filters stay under the database's parameter limit (audit OC, Low).** `detachUser()` of
+  `TaskTimeEntrySnapshotPurger` and `TaskSyncPeopleReassigner` update the exact rows 500 primary keys at a time, and
+  the API task list and the multi-board assignee filter keep their candidates in SQL and drop only the tasks matched
+  through a look-alike id, instead of binding every task id of the user (PostgreSQL accepts 65,535 parameters).
+
+### Added
+
+- **`SyncActorProviderInterface` is autowirable (Beacon request).** The default `ConnectionCreatorActorResolver` also
+  implements the framework-free twin (same answers for a `TaskBoardSnapshot` as for the entity) and is aliased, public,
+  under `Sync\Hook\SyncActorProviderInterface`, so a host moves off the deprecated `SyncActorResolverInterface` without
+  copying its logic. The deprecated path is unchanged. When `sync.actor_resolver` names a service that implements the
+  twin, that service takes the alias instead (audit OM TB-I1), so autowiring never hands out the bundle's default in
+  place of a host's stricter resolver. See [UPGRADING](UPGRADING.md#sync-actor-resolver-the-framework-free-twin-is-autowirable).
+
+### Tests
+
+- `ScopeKeyLookAlikeTest`: `Bob`, `bób`, `bob `, `bob\n`, NBSP and ZWSP tenants side by side on the bundle's mapping
+  (MySQL / MariaDB NO PAD, SQLite, PostgreSQL), and on key columns recreated with a folding collation (SQLite NOCASE,
+  MySQL / MariaDB `utf8mb4_general_ci`) every lookup, the import lookup, the ledger, `purgeScope()` and the counter
+  drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`,
+  `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows). `TaskBoardPortsPassTest` also covers which service the
+  public `SyncActorProviderInterface` alias ends up on.
+
 ### Documentation
 
 - `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).

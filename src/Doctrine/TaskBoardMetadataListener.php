@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Doctrine;
 
-use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
-use Doctrine\DBAL\Platforms\AbstractPlatform;
-use Doctrine\DBAL\Platforms\MariaDBPlatform;
-use Doctrine\DBAL\Platforms\MySQL80Platform;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Mapping\AssociationMapping;
 use Doctrine\ORM\Mapping\ClassMetadata;
@@ -20,17 +16,22 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
+use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
+use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use Psr\Log\LoggerInterface;
 
 use function array_replace_recursive;
 use function ltrim;
@@ -39,6 +40,22 @@ use function substr;
 
 final readonly class TaskBoardMetadataListener
 {
+    /**
+     * Since 2.15.1 (REQ-SEC-006, audit F5): the string keys the bundle looks rows up by, compared byte for byte
+     * ({@see KeyCollation}).
+     *
+     * @var array<class-string, list<string>>
+     */
+    public const KEY_FIELDS = [
+        TaskBoard::class         => ['tenantKey', 'slug'],
+        TaskLink::class          => ['importSource', 'externalId'],
+        TaskNumberEntry::class   => ['scopeKey'],
+        TaskNumberCounter::class => ['scopeKey'],
+        ColumnSet::class         => ['scopeKey'],
+        TaskSyncDirectory::class => ['scopeKey', 'workspaceId'],
+        TaskSyncItem::class      => ['externalId'],
+    ];
+
     public function __construct(
         private string $tasksTableName,
         private string $boardsTableName,
@@ -47,6 +64,8 @@ final readonly class TaskBoardMetadataListener
         private string $userClass,
         // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
         private string $userReference = TaskBoardUsers::ENTITY,
+        // Since 2.15.1 (REQ-SEC-006 item 8): warns about a `server_version` without its patch number.
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -83,12 +102,32 @@ final readonly class TaskBoardMetadataListener
             TaskRecurrence::class => ['author'],
         ];
 
-        foreach ($userFieldsByClass[$class] ?? [] as $field) {
+        $userFields = $userFieldsByClass[$class] ?? [];
+        $keyFields  = self::KEY_FIELDS[$class] ?? [];
+        $idMode     = $this->userReference === TaskBoardUsers::ID;
+        $collation  = null;
+        if ($keyFields !== [] || ($idMode && $userFields !== [])) {
+            $connection = $args->getObjectManager()->getConnection();
+            $collation  = KeyCollation::forConnection($connection);
+            if ($class === TaskBoard::class) {
+                KeyCollation::warnAboutPartialVersion($connection, $this->logger);
+            }
+        }
+
+        foreach ($userFields as $field) {
             if (isset($metadata->associationMappings[$field])) {
-                if ($this->userReference === TaskBoardUsers::ID) {
-                    $this->mapUserReference($metadata, $field, $args->getObjectManager()->getConnection()->getDatabasePlatform());
+                if ($idMode) {
+                    $this->mapUserReference($metadata, $field, $collation);
                 } else {
                     $this->remapUserAssociation($metadata, $field);
+                }
+            }
+        }
+        if ($collation !== null) {
+            foreach ($keyFields as $field) {
+                if (isset($metadata->fieldMappings[$field])) {
+                    $mapping          = $metadata->fieldMappings[$field];
+                    $mapping->options = ['collation' => $collation] + ($mapping->options ?? []);
                 }
             }
         }
@@ -102,7 +141,7 @@ final readonly class TaskBoardMetadataListener
      *
      * @param ClassMetadata<object> $metadata
      */
-    private function mapUserReference(ClassMetadata $metadata, string $fieldName, AbstractPlatform $platform): void
+    private function mapUserReference(ClassMetadata $metadata, string $fieldName, ?string $collation): void
     {
         $mapping = $metadata->associationMappings[$fieldName];
         $join    = $mapping instanceof ToOneOwningSideMapping ? ($mapping->joinColumns[0] ?? null) : null;
@@ -115,13 +154,8 @@ final readonly class TaskBoardMetadataListener
             'length'     => TaskBoardUserRef::MAX_LENGTH,
             'nullable'   => !$join instanceof JoinColumnMapping || $join->nullable !== false,
         ];
-        // Audit OC-M1: a binary NO PAD collation (utf8mb4_bin is PAD SPACE: "u " = "u").
-        $collation = match (true) {
-            $platform instanceof MariaDBPlatform       => 'utf8mb4_nopad_bin',
-            $platform instanceof MySQL80Platform       => 'utf8mb4_0900_bin',
-            $platform instanceof AbstractMySQLPlatform => 'utf8mb4_bin', // MySQL 5.7: no NO PAD binary collation; ids with edge spaces are refused
-            default                                    => null,
-        };
+        // Audit OC-M1: a binary NO PAD collation (utf8mb4_bin is PAD SPACE: "u " = "u"); since 2.15.1 through
+        // KeyCollation, which also honours a MySQL server_version older than 8.0.17 (REQ-SEC-006 item 8).
         if ($collation !== null) {
             $field['options'] = ['collation' => $collation];
         }

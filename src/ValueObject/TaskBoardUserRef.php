@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\ValueObject;
 
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Stringable;
-
-use function mb_strlen;
-use function preg_match;
 
 /**
  * Since 2.15.0 (REQ-ARCH-001 rule 2, `database.user_reference: id`): a host user referenced by id. With the id mode the
@@ -36,11 +34,8 @@ final readonly class TaskBoardUserRef implements Stringable
      */
     public static function isValid(string $id): bool
     {
-        if ($id === '' || preg_match('//u', $id) !== 1 || mb_strlen($id) > self::MAX_LENGTH) {
-            return false;
-        }
-
-        return preg_match('/^[\s\p{Z}]|[\s\p{Z}]$|\p{C}/u', $id) !== 1;
+        // Since 2.15.1: the same rule as every other exact key (REQ-SEC-006 item 1).
+        return ExactKey::isUsable($id, self::MAX_LENGTH);
     }
 
     /** The id, as the user's own `getId()` (the bundle reads ids through `getId()`). */

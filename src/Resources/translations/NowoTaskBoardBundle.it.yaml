@@ -495,6 +495,7 @@ task_board.sync.error.restore_refused: "Le attività tornate nel provider non so
 task_board.sync.error.relation_skipped: "Alcune relazioni padre o di dipendenza sono state saltate (l'altra attività manca o non è modificabile)."
 task_board.sync.error.parent_cycle: "Un cambio di padre è stato rifiutato: un'attività diventerebbe antenata di sé stessa."
 task_board.sync.error.assignee_unresolved: "Alcuni assegnatari non corrispondono a nessuno di questa bacheca; quelle attività mantengono i loro assegnatari."
+task_board.sync.error.external_id_look_alike: "Alcune attività del provider sono state saltate: il loro id differisce da uno già sincronizzato solo per maiuscole, accenti o spazi finali. Chiedi al tuo amministratore di applicare l'aggiornamento del database di TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alcuni stati non hanno una colonna nella bacheca; quelle attività sono andate nella colonna predefinita."
 task_board.sync.error.file_quota: "Alcuni file non sono stati copiati: è stato raggiunto il limite di spazio."
 task_board.sync.error.storage_disabled: "I file non vengono copiati: nessuno spazio di archiviazione è configurato."

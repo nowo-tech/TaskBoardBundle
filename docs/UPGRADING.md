@@ -4,6 +4,10 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.15.1](#to-2151)
+  - [Keys the bundle refuses](#keys-the-bundle-refuses)
+  - [Schema change on MySQL / MariaDB: key columns compare byte for byte](#schema-change-on-mysql--mariadb-key-columns-compare-byte-for-byte)
+  - [Sync actor resolver: the framework-free twin is autowirable](#sync-actor-resolver-the-framework-free-twin-is-autowirable)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -185,6 +189,129 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.15.1
+
+Patch (REQ-SEC-006, audit F5). Tenant keys, board slugs, import external ids and task-number scopes are now matched
+byte for byte: `acme`, `Acme`, `acmé` and `acme ` are four different tenants. Before 2.15.1 a look-alike tenant's board
+names could show in a tenant's board lists, and `TaskNumberLedger::purgeScope('acme')` also deleted `Acme`'s numbers.
+PostgreSQL and SQLite hosts have nothing to migrate (their columns already compare exactly); MySQL and MariaDB hosts
+change the collation of the key columns.
+
+### Keys the bundle refuses
+
+A tenant key, a column-set scope or a task-number scope with whitespace at an edge (NBSP included), a control or format
+character (newline, ZWSP, BOM, bidi marks), invalid UTF-8 or more than 191 characters is refused with an
+`InvalidArgumentException`: `new TaskBoardTenant()`, `TaskBoard::setTenantKey()`, `new ColumnSet()`,
+`TaskBoardCreatorInterface::create()` and `TaskNumberLedger::purgeScope()`. Lookups with such a key find nothing, and
+the default tenant resolver answers 404 for such a `{tenantSlug}`. A typed board slug that cannot be matched exactly is
+replaced by the slug of the board's name. Rows that already hold such a key stay where they are and are only reached by
+that exact key; the detection queries below list them.
+
+### Schema change on MySQL / MariaDB: key columns compare byte for byte
+
+`doctrine:migrations:diff` (or `doctrine:schema:update --dump-sql`) now shows the key columns with a binary NO PAD
+collation: `utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL. Configure
+the **full** server version (`server_version: '8.4.3'`, not `'8.0'` or `'8'`): without the patch number the bundle cannot
+tell 8.0.17+ apart, keeps the PAD SPACE `utf8mb4_bin` and logs a warning when the mapping is loaded.
+
+**1. Before the ALTER, look for look-alike keys.** On a `*_ci` collation (`utf8mb4_unicode_ci`, `utf8mb4_0900_ai_ci`,
+`utf8mb4_general_ci`, ...) these keys are one value today; after the ALTER they are different keys. Group by the column
+under its current collation and count the byte-distinct spellings (do not use `DISTINCT`, `LOWER` or `TRIM` alone:
+they fold too). Replace `task_board` with your `table_prefix` for the boards table:
+
+```sql
+-- Tenants spelled more than one way (Acme / acme / acmé / "acme ").
+SELECT MIN(tenant_key) AS tenant, COUNT(DISTINCT HEX(tenant_key)) AS spellings, GROUP_CONCAT(DISTINCT HEX(tenant_key)) AS hex
+FROM task_board_boards WHERE tenant_key IS NOT NULL GROUP BY tenant_key HAVING COUNT(DISTINCT HEX(tenant_key)) > 1;
+
+-- The same for the other key columns.
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_number_counters GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_task_numbers GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_column_sets WHERE scope_key IS NOT NULL GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(external_id), COUNT(DISTINCT HEX(external_id)) FROM task_board_task_links WHERE external_id IS NOT NULL GROUP BY import_source, external_id HAVING COUNT(DISTINCT CAST(external_id AS BINARY)) > 1;
+
+-- Keys the bundle now refuses (edge whitespace, control characters, NBSP, zero-width and bidi characters, BOM,
+-- ideographic space): reached only by that exact key. Run it for scope_key of the counters, task numbers and column
+-- sets too.
+SELECT id, HEX(tenant_key) FROM task_board_boards
+WHERE CAST(tenant_key AS BINARY) <> CAST(TRIM(tenant_key) AS BINARY)
+   OR HEX(tenant_key) REGEXP '^(..)*(0[0-9A-F]|1[0-9A-F]|7F|C2[89][0-9A-F]|C2A0|C2AD|E2808[B-F]|E280A[8-F]|E281A[0-9A-F]|EFBBBF|E38080)';
+```
+
+A tenant spelled two ways belongs, after the ALTER, to whichever host tenant has that exact key: rename the rows of the
+spelling no tenant uses (`UPDATE task_board_boards SET tenant_key = 'acme' WHERE CAST(tenant_key AS BINARY) = CAST('Acme' AS BINARY)`)
+before the ALTER if they were meant to be the same tenant. `task_board_number_counters` and `task_board_task_numbers`
+hold the task-number scope (a tenant key, or a board id): fold their rows the same way, keeping the highest
+`last_number`.
+
+**2. Run the ALTER.** It is **required for safety** wherever a unique key or primary key holds a key column: until then
+these keys still fold, and the bundle refuses (or skips) the look-alike's row instead of writing it:
+
+- `task_board_boards` (unique `tenant_key, slug`): the board creator gives a look-alike tenant's board a suffixed slug.
+  This needs the board repository to implement the optional `Repository\BoardSlugTakenInterface` (the bundle's own
+  `DoctrineOrmTaskBoardRepository` does). A host with a custom board repository that does not implement it falls back to
+  the now-exact `findBySlug()` / `findBySlugInTenant()`, which no longer sees the look-alike's row, so creating the
+  board can still fail on the unique key until the ALTER is run.
+- `task_board_number_counters` (primary key `scope_key`) and `task_board_task_numbers` (primary key `scope_key, number`):
+  creating a task in `acme` while `Acme` has a counter is refused (409) instead of sharing `Acme`'s sequence.
+- `task_board_sync_items` (unique `board_id, external_id`): a provider task whose id differs from an **already synced**
+  one only by case, accents or trailing spaces is skipped and reported (`external_id_look_alike`). This covers the
+  look-alike a page meets against the rows already in the table. It does **not** cover two ids that fold against each
+  other **inside the same page** (the page brings `T1` and `t1` together, whether or not one of them is stored): the
+  second write then hits the unique key and the run ends as `status: failed` with `errors: [{code: "internal"}]`, no
+  `external_id_look_alike` warning. Run the ALTER and that case disappears too.
+- `task_board_sync_directories` (unique `provider, scope_key, workspace_id`): a look-alike workspace's people
+  directory is refused (`workspace_look_alike`).
+
+MySQL 8.0.17+ (use `utf8mb4_nopad_bin` on MariaDB):
+
+```sql
+ALTER TABLE task_board_boards
+    MODIFY tenant_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+    MODIFY slug VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_number_counters MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_task_numbers MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_column_sets MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL;
+ALTER TABLE task_board_task_links
+    MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+    MODIFY import_source VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL;
+-- With the sync tables mapped (sync.enabled):
+ALTER TABLE task_board_sync_items MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_sync_directories
+    MODIFY scope_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+    MODIFY workspace_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+```
+
+The repositories also keep only exact rows in PHP, so a database not yet altered never hands a look-alike's rows to a
+tenant; the ALTER is what lets look-alike tenants live side by side.
+
+### Sync actor resolver: the framework-free twin is autowirable
+
+The default `ConnectionCreatorActorResolver` now implements `Sync\Hook\SyncActorProviderInterface` as well as the
+deprecated `SyncActorResolverInterface`, and is registered as a public alias under `SyncActorProviderInterface`. A host
+service that called the default resolver (e.g. a queued sync handler) moves to the twin without copying its logic:
+
+```php
+public function __construct(private SyncActorProviderInterface $actors) {}
+
+// $board: a ValueObject\TaskBoardSnapshot (the twins' board value object; only its id is read here)
+$actor = $this->actors->actorFor($board, $actorId);
+```
+
+The answer is the same as through the deprecated interface (named actor, else the user who linked the board; disabled
+or refused users never act).
+
+Which service the alias points at follows `sync.actor_resolver`: the configured service when its class implements
+`SyncActorProviderInterface`, the bundle's default resolver otherwise (no `sync.actor_resolver`, a service implementing
+only the deprecated interface, or a service whose class is built by a factory and so is not known before compilation).
+So a host that configured a stricter resolver autowires its own, never the laxer default. The bundle itself keeps
+asking the service `sync.actor_resolver` names, as before. Set the alias yourself if you need another service:
+
+```yaml
+services:
+    Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface: '@app.sync.actor_resolver'
+```
 
 ## To 2.15.0
 
