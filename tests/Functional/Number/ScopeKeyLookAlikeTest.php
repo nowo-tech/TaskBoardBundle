@@ -77,6 +77,8 @@ final class ScopeKeyLookAlikeTest extends TaskNumberTestCase
             self::assertSame([], $repository->findActiveByTenant($refused));
             self::assertNull($repository->findOneByTenant($refused));
             self::assertNull($this->ledger()->find($refused, 1));
+            self::assertNull($repository->findBySlugInTenant('same', $refused));
+            self::assertSame([], (new DoctrineOrmColumnSetRepository($this->em))->findByScope($refused));
         }
 
         // Purging `bob` (its task gone) leaves the look-alikes' ledgers and counters alone.
