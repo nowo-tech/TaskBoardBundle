@@ -107,6 +107,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).
+
 ## [2.15.0] - 2026-11-13
 
 Target 2.15.0 (minor; REQ-ARCH-001 / REQ-RUNTIME-002). Every change is additive: with an unchanged configuration and
