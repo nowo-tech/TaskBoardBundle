@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Template;
 
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 
 /**
@@ -49,9 +50,9 @@ final readonly class TaskTemplateSnapshot
         return new self(
             id: $template->getId(),
             name: $template->getName(),
-            scope: $board !== null ? self::SCOPE_BOARD : self::SCOPE_TENANT,
+            scope: $board instanceof TaskBoard ? self::SCOPE_BOARD : self::SCOPE_TENANT,
             boardId: $board?->getId(),
-            tenantKey: $board !== null ? $board->getTenantKey() : $template->getTenantKey(),
+            tenantKey: $board instanceof TaskBoard ? $board->getTenantKey() : $template->getTenantKey(),
             body: $template->getBody(),
             defaultTags: $template->getDefaultTags(),
             defaultColumnId: $column?->getId(),

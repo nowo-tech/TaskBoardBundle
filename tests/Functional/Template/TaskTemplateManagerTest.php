@@ -116,12 +116,12 @@ final class TaskTemplateManagerTest extends FunctionalTestCase
         $template = $this->manager()->createForBoard($this->owner, $this->roadmap, new TaskTemplateData('Story'));
 
         foreach ([
-            fn () => $this->manager()->createForBoard($stranger, $this->roadmap, new TaskTemplateData('Nope')),
+            fn (): TaskTemplate => $this->manager()->createForBoard($stranger, $this->roadmap, new TaskTemplateData('Nope')),
             fn () => $this->manager()->update($stranger, $template, new TaskTemplateData('Nope')),
             fn () => $this->manager()->delete($stranger, $template),
             // A tenant's templates: security.manage_roles (nobody is signed in here).
-            fn () => $this->manager()->createForTenant($this->owner, 'acme', new TaskTemplateData('Nope')),
-            fn () => $this->manager()->replaceAll($stranger, $this->roadmap, null, []),
+            fn (): TaskTemplate => $this->manager()->createForTenant($this->owner, 'acme', new TaskTemplateData('Nope')),
+            fn (): array => $this->manager()->replaceAll($stranger, $this->roadmap, null, []),
         ] as $index => $call) {
             try {
                 $call();
@@ -147,13 +147,13 @@ final class TaskTemplateManagerTest extends FunctionalTestCase
         self::assertSame($done, $this->manager()->defaultColumn($template, $this->roadmap));
         self::assertNull($this->manager()->defaultColumn($template, $this->board('Other', tenantKey: 'acme')));
 
-        $data = new TaskFormData(title: 'New', description: 'Typed', tags: ['mine'], columnId: 'kept');
+        $data = new TaskFormData(title: 'New', description: 'Typed', columnId: 'kept', tags: ['mine']);
         $this->manager()->prefill($template, $this->roadmap, $data, description: false, tags: false, column: false);
         self::assertSame(['Typed', ['mine'], 'kept'], [$data->description, $data->tags, $data->columnId]);
         $this->manager()->prefill($template, $this->roadmap, $data);
         self::assertSame(['## Contexto', ['repo:'], $done?->getId()], [$data->description, $data->tags, $data->columnId]);
 
-        $this->manager()->update($this->owner, $template, new TaskTemplateData('Story v2', 'Body', [], null));
+        $this->manager()->update($this->owner, $template, new TaskTemplateData('Story v2', 'Body', []));
         self::assertSame('Story v2', $template->getName());
         self::assertNull($template->getDefaultColumnId());
         self::assertGreaterThanOrEqual($template->getCreatedAt(), $template->getUpdatedAt());
@@ -222,7 +222,7 @@ final class TaskTemplateManagerTest extends FunctionalTestCase
     {
         $this->manager()->replaceAll($this->owner, $this->roadmap, null, array_map(static fn (int $i): TaskTemplateData => new TaskTemplateData('T' . $i), range(1, TaskTemplateManager::MAX_PER_SCOPE)));
         $this->manager()->replaceAll($this->owner, null, 'acme', array_map(static fn (int $i): TaskTemplateData => new TaskTemplateData('T' . $i), range(1, TaskTemplateManager::MAX_PER_SCOPE)));
-        foreach ([fn () => $this->manager()->createForBoard($this->owner, $this->roadmap, new TaskTemplateData('One more')), fn () => $this->manager()->createForTenant($this->owner, 'acme', new TaskTemplateData('One more'))] as $call) {
+        foreach ([fn (): TaskTemplate => $this->manager()->createForBoard($this->owner, $this->roadmap, new TaskTemplateData('One more')), fn (): TaskTemplate => $this->manager()->createForTenant($this->owner, 'acme', new TaskTemplateData('One more'))] as $call) {
             try {
                 $call();
                 self::fail('Accepted');

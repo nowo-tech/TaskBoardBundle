@@ -23,7 +23,7 @@ final class TaskTemplatePickerTest extends FunctionalTestCase
     {
         self::$taskBoardConfig = self::$taskBoardConfig !== [] ? self::$taskBoardConfig : ['task_templates' => ['enabled' => true]];
         parent::setUp();
-        $this->roadmap = $this->board('Roadmap', tenantKey: null);
+        $this->roadmap = $this->board('Roadmap');
     }
 
     public function testThePickerPreFillsTheDialog(): void

@@ -78,7 +78,7 @@ final readonly class TaskTemplateManager
      */
     public function createForTenant(object $actor, ?string $tenantKey, TaskTemplateData $data): TaskTemplate
     {
-        if ($tenantKey !== null && !self::isExactKey($tenantKey)) {
+        if ($tenantKey !== null && !$this->isExactKey($tenantKey)) {
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
         $this->requireManage($actor, TaskTemplateScope::tenant($tenantKey));
@@ -130,7 +130,7 @@ final readonly class TaskTemplateManager
     {
         $templates = $board instanceof TaskBoard ? $this->boardTemplates($board) : $this->tenantTemplates($tenantKey);
 
-        return array_map(static fn (TaskTemplate $template): TaskTemplateSnapshot => TaskTemplateSnapshot::of($template), $templates);
+        return array_map(TaskTemplateSnapshot::of(...), $templates);
     }
 
     /**
@@ -148,7 +148,7 @@ final readonly class TaskTemplateManager
      */
     public function replaceAll(object $actor, ?TaskBoard $board, ?string $tenantKey, array $templates): array
     {
-        if (!$board instanceof TaskBoard && $tenantKey !== null && !self::isExactKey($tenantKey)) {
+        if (!$board instanceof TaskBoard && $tenantKey !== null && !$this->isExactKey($tenantKey)) {
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
         $this->requireManage($actor, $board instanceof TaskBoard ? TaskTemplateScope::board(Snapshots::board($board)) : TaskTemplateScope::tenant($tenantKey));
@@ -221,7 +221,7 @@ final readonly class TaskTemplateManager
             ->getQuery()
             ->getResult();
 
-        return self::sorted(array_filter($rows, static fn (TaskTemplate $template): bool => $template->getBoard()?->getId() === $board->getId()));
+        return $this->sorted(array_filter($rows, static fn (TaskTemplate $template): bool => $template->getBoard()?->getId() === $board->getId()));
     }
 
     /**
@@ -244,7 +244,7 @@ final readonly class TaskTemplateManager
         $rows = $query->getQuery()->getResult();
 
         // REQ-SEC-006: `Acme`, `acme` and `acme ` are three tenants, whatever the column's collation.
-        return self::sorted(array_filter($rows, static fn (TaskTemplate $template): bool => $template->getBoard() === null && $template->getTenantKey() === $tenantKey));
+        return $this->sorted(array_filter($rows, static fn (TaskTemplate $template): bool => !$template->getBoard() instanceof TaskBoard && $template->getTenantKey() === $tenantKey));
     }
 
     /**
@@ -366,7 +366,7 @@ final readonly class TaskTemplateManager
         if ($body !== null && (preg_match('//u', $body) !== 1 || mb_strlen($body) > TaskTemplate::BODY_MAX)) {
             throw new InvalidTaskTemplateException('body', 'A template body is valid UTF-8 of at most ' . TaskTemplate::BODY_MAX . ' characters.');
         }
-        $tags = array_values(array_unique(array_filter(array_map('trim', $data->defaultTags), static fn (string $tag): bool => $tag !== '')));
+        $tags = array_values(array_unique(array_filter(array_map(trim(...), $data->defaultTags), static fn (string $tag): bool => $tag !== '')));
         foreach ($tags as $tag) {
             if (mb_strlen($tag) > TaskConstraints::TAG_MAX || preg_match('//u', $tag) !== 1) {
                 throw new InvalidTaskTemplateException('default_tags', 'A tag has at most ' . TaskConstraints::TAG_MAX . ' characters.');
@@ -407,7 +407,7 @@ final readonly class TaskTemplateManager
     /**
      * REQ-SEC-006 entry refusal, as the bundle's other string keys: no edge whitespace, control or format characters.
      */
-    private static function isExactKey(string $key): bool
+    private function isExactKey(string $key): bool
     {
         if ($key === '' || preg_match('//u', $key) !== 1 || mb_strlen($key) > 191) {
             return false;
@@ -421,7 +421,7 @@ final readonly class TaskTemplateManager
      *
      * @return list<TaskTemplate>
      */
-    private static function sorted(array $templates): array
+    private function sorted(array $templates): array
     {
         $templates = array_values($templates);
         usort($templates, static fn (TaskTemplate $a, TaskTemplate $b): int => [$a->getName(), $a->getId()] <=> [$b->getName(), $b->getId()]);

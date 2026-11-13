@@ -28,8 +28,8 @@ final class ApiTaskTemplateWorkerTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        $this->debug        = getenv('TASK_BOARD_TEST_DEBUG');
-        static::$hostConfig = ['task_templates' => ['enabled' => true]];
+        $this->debug      = getenv('TASK_BOARD_TEST_DEBUG');
+        self::$hostConfig = ['task_templates' => ['enabled' => true]];
         putenv('TASK_BOARD_TEST_DEBUG=0');
         parent::setUp();
     }

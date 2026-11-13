@@ -38,7 +38,7 @@ final class ApiTaskTemplateTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$hostConfig = static::$hostConfig !== [] ? static::$hostConfig : ['task_templates' => ['enabled' => true]];
+        self::$hostConfig = self::$hostConfig !== [] ? self::$hostConfig : ['task_templates' => ['enabled' => true]];
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a', 'tenant-b'];
         $this->issueToken();
@@ -142,7 +142,7 @@ final class ApiTaskTemplateTest extends ApiTestCase
 
     public function testWithoutTheOptionTheFieldIsUnknownAndTheRouteMissing(): void
     {
-        static::$hostConfig = ['calendar' => ['enabled' => false]];
+        self::$hostConfig = ['calendar' => ['enabled' => false]];
         self::ensureKernelShutdown();
         $this->setUp();
         $board = $this->board('Plain', tenantKey: 'tenant-a');

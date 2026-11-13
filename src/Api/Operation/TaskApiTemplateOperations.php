@@ -57,6 +57,6 @@ final readonly class TaskApiTemplateOperations
      */
     public function snapshots(TaskApiPrincipal $principal, string $boardId): array
     {
-        return array_map(static fn (TaskTemplate $template): TaskTemplateSnapshot => TaskTemplateSnapshot::of($template), $this->templates($principal, $boardId)->templates);
+        return array_map(TaskTemplateSnapshot::of(...), $this->templates($principal, $boardId)->templates);
     }
 }
