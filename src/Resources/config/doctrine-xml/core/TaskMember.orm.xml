@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Entity\TaskMember" table="task_board_task_members">
+        <unique-constraints>
+            <unique-constraint name="task_board_member_unique" columns="task_id,user_id,member_role"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="memberRole" type="string" column="member_role" length="32" enum-type="Nowo\TaskBoardBundle\Enum\TaskMemberRole"/>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task" inversed-by="members">
+            <join-column nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="user" target-entity="App\Entity\User">
+            <join-column nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

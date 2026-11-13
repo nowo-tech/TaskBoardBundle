@@ -50,6 +50,9 @@
 |--------|---------|-------------|
 | `table_prefix` | `task_board_` | Prefix for Doctrine table names. |
 | `database.entity_manager` | `default` | Doctrine ORM entity manager name. |
+| `database.mapping_type` | `attribute` | Since 2.15.0 (REQ-ARCH-001 rule 2). `xml`: the TaskBoard entities are mapped from `Resources/config/doctrine-xml` (same tables) instead of the ORM attributes. |
+| `database.user_reference` | `entity` | Since 2.15.0 (REQ-ARCH-001 rule 2). `id`: the rows keep the host user's id in a string column instead of a relation to `user_class` (which then need not be a Doctrine entity); needs `user_directory`. Changes the schema of the user columns. |
+| `user_directory` | `null` | Since 2.15.0: service id of a `User\\TaskBoardUserDirectoryInterface` (finds a host user by id). Required with `database.user_reference: id`. |
 | `database.private_entity_manager` | `null` | Since 2.15.0 (REQ-ARCH-001 rule 6). `true`: the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `null` keeps the 2.14 behaviour; `false` too, deprecated: `true` becomes the only mode in 3.0. |
 
 Tables created by the bundle (with default prefix):
@@ -78,6 +81,8 @@ nowo_task_board:
     database:
         entity_manager: default
         private_entity_manager: null   # since 2.15.0; true = the bundle's own unit of work
+        mapping_type: attribute        # since 2.15.0; xml = Resources/config/doctrine-xml
+        user_reference: entity         # since 2.15.0; id = user ids in string columns (needs user_directory)
 ```
 
 ## Routes

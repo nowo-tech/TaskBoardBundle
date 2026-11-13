@@ -7,6 +7,7 @@
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
+  - [DDD host: XML mapping and user references by id (opt-in)](#ddd-host-xml-mapping-and-user-references-by-id-opt-in)
 - [To 2.14.1](#to-2141)
 - [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
@@ -188,7 +189,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 ## To 2.15.0
 
 Additive (REQ-ARCH-001 / REQ-RUNTIME-002). Nothing to do: with an unchanged configuration and unchanged host services
-2.15 behaves exactly as 2.14.1. No schema change.
+2.15 behaves exactly as 2.14.1. No schema change with the defaults (only the opt-in `database.user_reference: id` changes the user columns).
 
 ### Framework-free host ports
 
@@ -241,6 +242,36 @@ nowo_task_board:
   TaskBoard entities you keep across a boundary are detached.
 - With doctrine/dbal 3 the rollback middleware is not available: after a rolled-back transaction the private manager is
   replaced at the next boundary instead of at once.
+
+### DDD host: XML mapping and user references by id (opt-in)
+
+Nothing changes unless you set these. For a host that keeps its mapping out of PHP attributes, or whose users are not a
+Doctrine entity in the TaskBoard entity manager:
+
+```yaml
+nowo_task_board:
+    user_class: App\Identity\User          # any class; no Doctrine mapping needed with user_reference: id
+    user_directory: app.task_board_users    # a User\TaskBoardUserDirectoryInterface (find(string $id): ?object)
+    database:
+        mapping_type: xml                   # Resources/config/doctrine-xml instead of the attributes
+        user_reference: id                  # the user's id in a string column instead of a relation
+        private_entity_manager: true
+```
+
+- `mapping_type: xml` maps the same tables (no schema change). Keep DoctrineBundle's `auto_mapping` as it is: the XML
+  files are outside `Resources/config/doctrine`.
+- `user_reference: id` **changes the schema** of an existing database: each user column (`creator_id`, `user_id`,
+  `author_id`, ...) becomes a `VARCHAR(128)` with no foreign key (binary NO PAD collation on MySQL 8 / MariaDB). Ids
+  with whitespace at an edge, control or format characters or more than 128 characters are refused. Turn it on for a
+  new installation, or migrate the columns yourself (the ids you have stay valid: an integer id becomes its decimal
+  text). Without the foreign keys, deleting a user no longer removes their task and team memberships: call
+  `TaskSyncPeopleReassigner::detachUser()` and `TaskTimeEntrySnapshotPurger::detachUser()` from your erasure flow, as the
+  [DDD section of USAGE](USAGE.md#using-it-from-a-ddd--hexagonal-application) says.
+- Your directory returns your user object for an id (a Symfony security user for the web pages); the bundle ignores an
+  answer whose `getId()` differs from the asked id byte for byte. Set `assignee_provider` (a `TaskAssigneePolicyInterface`)
+  so the member picker has users to offer.
+- Templates you override that read a user's properties from a TaskBoard row (`member.user.displayName`) get a
+  `TaskBoardUserRef` in this mode: pass it through `nowo_task_board_user(user)` first, as the bundle's partials do.
 
 ## To 2.14.1
 

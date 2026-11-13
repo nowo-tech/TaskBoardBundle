@@ -169,6 +169,33 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - `Sync\Time\ImportedTimeEntryCandidate::personId()`, `personProviderUserId()`, `taskId()`, `boardId()`;
   `Api\TaskApiWhere::reachesBoardOf(string $boardId, ?string $tenantKey)`.
 
+- **XML mapping (opt-in, REQ-ARCH-001 rule 2).** `nowo_task_board.database.mapping_type: xml` maps the 28 TaskBoard
+  entities from `src/Resources/config/doctrine-xml/<group>/*.orm.xml` (core, sync, api, recurrence, number; same
+  tables, columns, indexes, constraints and enum types; the groups are still mapped only with their feature on). The files
+  are generated from the attributes by `scripts/generate-xml-mapping.php`, leave implicit names implicit (same metadata
+  under any naming strategy) and live deliberately outside `Resources/config/doctrine`, so DoctrineBundle's auto_mapping
+  keeps the attributes by default. `XmlMappingParityTest` compares every entity's metadata and the generated schema.
+- **User references by id (opt-in, REQ-ARCH-001 rule 2).** `nowo_task_board.database.user_reference: id` replaces the
+  `ManyToOne` relations of the TaskBoard rows to `user_class` (creator, author, member, time entry, history, team member,
+  column set, sync people, ... 18 fields) by the user's id in a string column of the same name
+  (`Doctrine\Type\TaskBoardUserRefType`, 128 characters, indexed; `utf8mb4_bin` on MySQL / MariaDB): `user_class` no
+  longer needs to be a Doctrine entity. A row read back holds a `ValueObject\TaskBoardUserRef` (its `getId()`); a host
+  user object written to a field is stored by its `getId()`. The host port `User\TaskBoardUserDirectoryInterface`
+  (`user_directory`, required in this mode) finds a user by id when the bundle needs more than the id (labels, avatars,
+  a queued sync run's actor, the multi-board people, a picker's choice); every answer is re-checked byte for byte in PHP.
+  `User\TaskBoardUsers` (per unit of work, cleared at every boundary) keeps the bundle's queries mode-aware (the column
+  itself instead of `IDENTITY()`, the id as the parameter). The member picker offers the assignee policy's users by id.
+  Twig: `nowo_task_board_user(user)` (the host user behind a reference; used by the member label and avatar partials).
+  Audit OC (before release): the id columns compare in binary **NO PAD** (`utf8mb4_0900_bin` on MySQL 8,
+  `utf8mb4_nopad_bin` on MariaDB; `utf8mb4_bin` is PAD SPACE, so `"u "` matched `"u"`); an id with whitespace at an
+  edge, a control or format character (ZWSP, BOM, bidi marks), invalid UTF-8 or more than 128 characters is refused by
+  `TaskBoardUserRef` and by the column type before any write (also on SQLite); every lookup by user id (trackable tasks,
+  the API's owner and assignee filters, the multi-board assignee filter, the API time entries and their billable
+  change, the people mapped to a user) keeps only the rows whose id is equal byte for byte in PHP; the erasure ports
+  (`TaskTimeEntrySnapshotPurger::detachUser()`, `TaskSyncPeopleReassigner::detachUser()`) refuse an id that cannot
+  be matched exactly, select the rows, keep the exact ones and update them by primary key, and
+  `TaskRecurrenceManager::forgetAuthor()` keeps only the exact author's series.
+
 - **Private entity manager for the TaskBoard rows (opt-in, REQ-ARCH-001 rule 6).**
   `nowo_task_board.database.private_entity_manager: true` makes every bundle service read and write through
   `Doctrine\TaskBoardEntityManager`, a private manager created on the connection, mapping, caches, proxies and event
@@ -244,6 +271,11 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   the fixtures written through the private manager (774 of the 874 functional test cases; the 13 classes left out keep entity objects across a
   request boundary, mix the application's manager with the bundle's, or assert the application's manager is closed after
   a failure, which the private manager deliberately changes).
+- `DddHostKernelTest` (REQ-ARCH-001, the DDD host): users that are plain PHP objects (no Doctrine entity, an in-memory
+  security provider), XML mapping, the private entity manager, user references by id and host ports through their twins
+  only — board, columns, tasks, comments, members and time through the ports, the board and task pages with the names the
+  directory gives, an HTTP write, a look-alike id in another case kept apart. `XmlMappingParityTest`,
+  `TaskBoardUserRefTypeTest`, `TaskBoardUsersTest`, `UserReferenceConfigTest`.
 - **Twin replay** (`TASK_BOARD_TEST_PORTS=twin`, a CI job): the whole functional suite runs with every host stub of the
   test kernels behind an adapter that implements ONLY the 2.15 twin (`tests/Support/TwinPorts`): 870 tests, same results.
 

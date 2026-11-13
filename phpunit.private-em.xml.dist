@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Since 2.15.0: the private-entity-manager replay (TASK_BOARD_TEST_PRIVATE_EM=1, CI job "private-em"): the functional
-    suite with database.private_entity_manager: true and the fixtures written through the bundle's private manager.
+    suite with database.private_entity_manager: true and database.mapping_type: xml, the fixtures written through the
+    bundle's private manager.
 
     Excluded: tests that keep entity objects across a request or a unit-of-work boundary, that mix the application's
     manager with the bundle's (a service built by hand on EntityManagerInterface, a host stub comparing user objects of
@@ -19,6 +20,8 @@
         <ini name="memory_limit" value="1G"/>
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="max[direct]=0"/>
         <env name="TASK_BOARD_TEST_PRIVATE_EM" value="1"/>
+        <!-- Since 2.15.0: and the XML mapping (database.mapping_type: xml), the DDD host's persistence. -->
+        <env name="TASK_BOARD_TEST_XML_MAPPING" value="1"/>
         <server name="KERNEL_CLASS" value="Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel"/>
     </php>
     <testsuites>

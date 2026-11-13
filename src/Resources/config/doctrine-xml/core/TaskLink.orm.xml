@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Entity\TaskLink" table="task_board_task_links">
+        <indexes>
+            <index name="idx_task_board_task_links_object" columns="object_type,object_id"/>
+            <index name="idx_task_board_task_links_import" columns="import_source,external_id"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="linkType" type="string" column="link_type" length="32" enum-type="Nowo\TaskBoardBundle\Enum\TaskLinkType"/>
+        <field name="url" type="string" length="2048"/>
+        <field name="label" type="string" length="255" nullable="true"/>
+        <field name="externalId" type="string" column="external_id" length="128" nullable="true"/>
+        <field name="objectType" type="string" column="object_type" length="64" nullable="true"/>
+        <field name="objectId" type="string" column="object_id" length="191" nullable="true"/>
+        <field name="importSource" type="string" column="import_source" length="64" nullable="true"/>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task" inversed-by="links">
+            <join-column nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Recurrence\Entity\TaskOccurrence" table="task_board_task_occurrences">
+        <indexes>
+            <index name="idx_task_board_task_occurrences_task" columns="task_id"/>
+        </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_task_occurrences_key" columns="recurrence_id,occurrence_key"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="occurrenceKey" type="string" column="occurrence_key" length="64"/>
+        <field name="missed" type="boolean">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <many-to-one field="recurrence" target-entity="Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence">
+            <join-column name="recurrence_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="task_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

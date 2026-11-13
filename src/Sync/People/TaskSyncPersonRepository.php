@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -18,9 +19,12 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use SortDirection;
 
+use function array_filter;
 use function array_map;
+use function array_values;
 use function count;
 use function in_array;
 use function is_array;
@@ -37,6 +41,8 @@ final readonly class TaskSyncPersonRepository
 
     public function __construct(
         private EntityManagerInterface $entityManager,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -188,7 +194,7 @@ final readonly class TaskSyncPersonRepository
     {
         $builder = $this->entityManager->createQueryBuilder()->select('p')->from(TaskSyncPerson::class, 'p')
             ->where('(p.mappedUser = :user AND p.mapping IN (:mapped))')
-            ->setParameter('user', $user)
+            ->setParameter('user', $this->userParameter($user))
             ->setParameter('mapped', [TaskSyncPersonMapping::Auto, TaskSyncPersonMapping::Manual])
             ->orderBy('p.id', SortDirection::Ascending);
         if ($includeSuggested) {
@@ -197,6 +203,11 @@ final readonly class TaskSyncPersonRepository
 
         /** @var list<TaskSyncPerson> $people */
         $people = $builder->getQuery()->getResult();
+        if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): exactly this user's people.
+            $id     = ActorId::of($user);
+            $people = $id === null ? [] : array_values(array_filter($people, static fn (TaskSyncPerson $person): bool => TaskBoardUsers::same($person->getMappedUser(), $id) || TaskBoardUsers::same($person->getSuggestedUser(), $id)));
+        }
 
         return $people;
     }
@@ -484,5 +495,11 @@ final readonly class TaskSyncPersonRepository
             'lastSeenAt'     => $person->getLastSeenAt()->format(DATE_ATOM),
             'anonymisedAt'   => $person->getAnonymisedAt()?->format(DATE_ATOM),
         ];
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->parameter($user) : $user;
     }
 }

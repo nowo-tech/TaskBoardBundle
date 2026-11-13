@@ -19,6 +19,8 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 /**
  * Since 2.2.0 (spec 213): a time store over the bundle's own manual entries, through {@see TaskTimeLogger} as the task page
@@ -37,6 +39,8 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
         private TaskApiUsersInterface $users,
         // Since 2.12.0: the audited billable setter.
         private TaskTimeBillableService $billable,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $userReferences = null,
     ) {
     }
 
@@ -47,7 +51,7 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
             ->from(TaskTimeEntry::class, 'e')
             ->join('e.task', 't')
             ->where('e.user = :user')
-            ->setParameter('user', $principal->user)
+            ->setParameter('user', $this->userParameter($principal->user))
             ->orderBy('e.loggedAt', 'DESC')
             ->setMaxResults(self::LIMIT);
         if ($query->taskId !== null) {
@@ -65,7 +69,8 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
         $rows = $qb->getQuery()->getResult();
         foreach ($rows as $entry) {
             $task = $entry->getTask();
-            if ($task instanceof Task && $this->guard->canSeeTask($principal, $task)) {
+            // Since 2.15.0 (user_reference: id; audit OC-M2): only the entries of exactly the token's user.
+            if (!$this->exactOwnerMismatch($entry, $principal) && $task instanceof Task && $this->guard->canSeeTask($principal, $task)) {
                 $entries[] = $this->entry($entry, $apiId);
             }
         }
@@ -88,7 +93,9 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
      */
     public function setBillable(TaskApiPrincipal $principal, string $entryId, bool $billable): TaskApiTimeEntry
     {
-        $own  = $this->entityManager->getRepository(TaskTimeEntry::class)->findOneBy(['id' => $entryId, 'user' => $principal->user]);
+        $own = $this->entityManager->getRepository(TaskTimeEntry::class)->findOneBy(['id' => $entryId, 'user' => $principal->user]);
+        // Since 2.15.0 (user_reference: id; audit OC-M2): exactly the token's user's entry.
+        $own  = $own instanceof TaskTimeEntry && !$this->exactOwnerMismatch($own, $principal) ? $own : null;
         $task = $own instanceof TaskTimeEntry ? $own->getTask() : null;
         if (!$task instanceof Task) {
             throw TaskApiRefusal::notFound();
@@ -108,5 +115,22 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
     private function entry(TaskTimeEntry $entry, string $apiId): TaskApiTimeEntry
     {
         return new TaskApiTimeEntry($entry->getId(), $apiId, $entry->getLoggedAt(), $entry->getMinutes() * 60, $entry->getTask()?->getId(), $entry->getDescription(), $entry->getBillable());
+    }
+
+    /** Since 2.15.0: a user as a DQL parameter (the object for a relation, its id with user_reference: id). */
+    private function userParameter(object $user): object|string|null
+    {
+        return $this->userReferences instanceof TaskBoardUsers ? $this->userReferences->parameter($user) : $user;
+    }
+
+    /** Since 2.15.0 (audit OC-M2): with user_reference: id, an entry whose user id is not exactly the principal's. */
+    private function exactOwnerMismatch(TaskTimeEntry $entry, TaskApiPrincipal $principal): bool
+    {
+        if (!$this->userReferences instanceof TaskBoardUsers || !$this->userReferences->idMode()) {
+            return false;
+        }
+        $id = ActorId::of($principal->user);
+
+        return $id === null || !TaskBoardUsers::same($entry->getUser(), $id);
     }
 }
