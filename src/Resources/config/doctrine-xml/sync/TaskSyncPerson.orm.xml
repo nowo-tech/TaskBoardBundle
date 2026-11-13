@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson" table="task_board_sync_people">
+        <indexes>
+            <index name="idx_task_board_sync_people_dir_mapping" columns="directory_id,mapping"/>
+            <index name="idx_task_board_sync_people_dir_email" columns="directory_id,email_normalized"/>
+            <index name="idx_task_board_sync_people_mapped" columns="mapped_user_id"/>
+        </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_sync_people_dir_remote" columns="directory_id,provider_user_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="email" type="string" length="254" nullable="true"/>
+        <field name="emailNormalized" type="string" column="email_normalized" length="254" nullable="true"/>
+        <field name="remoteRole" type="string" column="remote_role" length="16" nullable="true"/>
+        <field name="mapping" type="string" length="16" enum-type="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping"/>
+        <field name="mappedAt" type="datetime_immutable" column="mapped_at" nullable="true"/>
+        <field name="lastSeenAt" type="datetime_immutable" column="last_seen_at"/>
+        <field name="emailChangedAt" type="datetime_immutable" column="email_changed_at" nullable="true"/>
+        <field name="anonymisedAt" type="datetime_immutable" column="anonymised_at" nullable="true"/>
+        <field name="seenKinds" type="smallint" column="seen_kinds">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="reassignId" type="string" column="reassign_id" length="36" nullable="true"/>
+        <field name="reassignExternal" type="boolean" column="reassign_external">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="providerUserId" type="string" column="provider_user_id" length="64"/>
+        <field name="name" type="string" length="120"/>
+        <field name="firstSeenAt" type="datetime_immutable" column="first_seen_at"/>
+        <many-to-one field="mappedUser" target-entity="App\Entity\User">
+            <join-column name="mapped_user_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="suggestedUser" target-entity="App\Entity\User">
+            <join-column name="suggested_user_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="mappedBy" target-entity="App\Entity\User">
+            <join-column name="mapped_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="reassignToUser" target-entity="App\Entity\User">
+            <join-column name="reassign_to_user_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="directory" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory">
+            <join-column name="directory_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\Repository;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -280,6 +281,14 @@ final readonly class SyncStore
 
     /** Removes the connection and its sync state (runs, items, comment and file maps); tasks are kept. */
     public function deleteConnection(TaskBoardConnection $connection): void
+    {
+        // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+        TaskBoardSavepoint::write($this->entityManager, function () use ($connection): void {
+            $this->deleteConnectionNow($connection);
+        });
+    }
+
+    private function deleteConnectionNow(TaskBoardConnection $connection): void
     {
         $items = $this->entityManager->createQueryBuilder()->select('i.id')->from(TaskSyncItem::class, 'i')->where('i.connection = :c')->setParameter('c', $connection)->getQuery()->getSingleColumnResult();
         foreach (array_chunk($items, self::CHUNK) as $chunk) {

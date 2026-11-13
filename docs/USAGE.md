@@ -620,7 +620,10 @@ them. You still check the tenant, the plan and CSRF, as the API does.
 
 **Known limitations**
 
-- Users must be a Doctrine entity in the bundle's entity manager; an id-only user reference is not available.
+- Since 2.15 users need not be a Doctrine entity: with `database.user_reference: id` the rows keep the user's id and
+  `user_directory` finds the user again (see [ARCHITECTURE](ARCHITECTURE.md#mapping-and-user-references)); the default
+  is still the relation to a Doctrine `user_class`. `database.mapping_type: xml` and `database.private_entity_manager`
+  complete the DDD path.
 - The older write events still carry the entities and the user object beside their scalar getters (deprecated since
   2.15, removed in 3.0); use the id getters and the `get*Snapshot()` accessors and do not keep the entities.
 - The remaining services (`TaskLinkAttacher`, `TaskDependencyManager`, `TaskMemberAssigner`, `TaskCopier`, ...) are

@@ -18,17 +18,22 @@ use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\Like;
 use Nowo\TaskBoardBundle\Support\UserLabel;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use SortDirection;
 
 use function array_chunk;
+use function array_keys;
 use function array_map;
 use function array_unique;
 use function array_values;
 use function count;
 use function in_array;
 use function is_array;
+use function is_object;
 use function max;
 use function mb_strtolower;
 use function uksort;
@@ -52,6 +57,8 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
     public function __construct(
         private EntityManagerInterface $entityManager,
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -106,12 +113,12 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
         $result = $qb->getQuery()->getResult();
         if ($result !== []) {
             // Members and their users of the loaded tasks in one query (the cards show the assignees).
-            $this->entityManager->createQueryBuilder()
-                ->select('t', 'taskMember', 'memberUser')
+            $builder = $this->entityManager->createQueryBuilder()
+                ->select('t', 'taskMember')
                 ->from(Task::class, 't')
-                ->leftJoin('t.members', 'taskMember')
-                ->leftJoin('taskMember.user', 'memberUser')
-                ->where('t IN (:tasks)')
+                ->leftJoin('t.members', 'taskMember');
+            ($this->users ?? new TaskBoardUsers())->eager($builder, 'taskMember.user', 'memberUser');
+            $builder->where('t IN (:tasks)')
                 ->setParameter('tasks', $result)
                 ->getQuery()
                 ->getResult();
@@ -160,7 +167,8 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
                 ->leftJoin('t.' . $relation, 'rel')
                 ->where('t = :task')
                 ->setParameter('task', $task);
-            if ($nested !== null) {
+            // Since 2.15.0: no user to join with user_reference: id (the rows keep the id).
+            if ($nested !== null && !($nested === 'user' && $this->users instanceof TaskBoardUsers && $this->users->idMode())) {
                 $qb->addSelect('nested')->leftJoin('rel.' . $nested, 'nested');
             }
 
@@ -178,24 +186,49 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             ->select('t2.id')
             ->from(Task::class, 't2')
             ->leftJoin('t2.members', 'taskMember', 'WITH', 'taskMember.memberRole = :assigneeRole')
-            ->leftJoin('taskMember.user', 'assignee')
             ->leftJoin('t2.board', 'board')
             ->leftJoin('board.team', 'team')
-            ->leftJoin(TeamMember::class, 'tm', 'WITH', 'tm.team = team')
-            ->leftJoin('tm.user', 'tmUser')
-            ->where('assignee.id = :userId OR tmUser.id = :userId');
-
+            ->leftJoin(TeamMember::class, 'tm', 'WITH', 'tm.team = team');
         $qb = $this->entityManager->createQueryBuilder()
             ->select('t')
             ->from(Task::class, 't')
-            ->where('t.id IN (' . $ids->getDQL() . ')')
             ->andWhere('t.completedAt IS NULL')
             ->andWhere('t.archivedAt IS NULL')
-            ->setParameter('assigneeRole', TaskMemberRole::Assignee)
-            ->setParameter('userId', $userId)
             ->orderBy('t.createdAt', SortDirection::Descending)
             ->setMaxResults(max(1, $limit))
             ->setFirstResult(max(0, $offset));
+        if ($this->users instanceof TaskBoardUsers && $this->users->idMode()) {
+            // Since 2.15.0 (database.user_reference: id; audit OC-M2): the candidates the database finds through the id
+            // columns, kept only when a member's id is exactly the user's (a collation may fold case, accents or
+            // trailing spaces), then the tasks of those ids.
+            if (!TaskBoardUserRef::isValid($userId)) {
+                return [];
+            }
+            /** @var list<array{id: string, assignee: mixed, teamMember: mixed}> $rows */
+            $rows = $ids->select('t2.id AS id', 'taskMember.user AS assignee', 'tm.user AS teamMember')
+                ->where('taskMember.user = :userId OR tm.user = :userId')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('userId', $userId)
+                ->getQuery()
+                ->getArrayResult();
+            $exact = [];
+            foreach ($rows as $row) {
+                if (TaskBoardUsers::same(is_object($row['assignee']) ? $row['assignee'] : null, $userId) || TaskBoardUsers::same(is_object($row['teamMember']) ? $row['teamMember'] : null, $userId)) {
+                    $exact[$row['id']] = true;
+                }
+            }
+            if ($exact === []) {
+                return [];
+            }
+            $qb->andWhere('t.id IN (:exact)')->setParameter('exact', array_keys($exact));
+        } else {
+            $ids->leftJoin('taskMember.user', 'assignee')
+                ->leftJoin('tm.user', 'tmUser')
+                ->where('assignee.id = :userId OR tmUser.id = :userId');
+            $qb->andWhere('t.id IN (' . $ids->getDQL() . ')')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('userId', $userId);
+        }
 
         if ($search !== null && $search !== '') {
             // Since 1.25 (audit FP-I12): `%`, `_` and `!` in the search match literally (ESCAPE '!').
@@ -323,12 +356,16 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
 
     public function findCalendarAssignees(TaskBoard $board): array
     {
-        /** @var list<TaskMember> $members */
-        $members = $this->entityManager->createQueryBuilder()
-            ->select('m', 'u')
+        $idMode  = $this->users instanceof TaskBoardUsers && $this->users->idMode();
+        $builder = $this->entityManager->createQueryBuilder()
+            ->select('m')
             ->from(TaskMember::class, 'm')
-            ->innerJoin('m.task', 't')
-            ->innerJoin('m.user', 'u')
+            ->innerJoin('m.task', 't');
+        if (!$idMode) {
+            $builder->addSelect('u')->innerJoin('m.user', 'u');
+        }
+        /** @var list<TaskMember> $members */
+        $members = $builder
             ->where('t.board = :board')
             ->andWhere('t.archivedAt IS NULL')
             ->andWhere('m.memberRole = :role')
@@ -340,9 +377,10 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
         $people = [];
         foreach ($members as $member) {
             $user = $member->getUser();
-            $id   = $this->entityManager->getUnitOfWork()->getSingleIdentifierValue($user);
+            // Since 2.15.0 (user_reference: id): the reference's id, and the host user for the label.
+            $id = $idMode ? ActorId::of($user) : $this->entityManager->getUnitOfWork()->getSingleIdentifierValue($user);
             if ($id !== null) {
-                $people[(string) $id] = $user;
+                $people[(string) $id] = $idMode && $this->users instanceof TaskBoardUsers ? ($this->users->resolve($user) ?? $user) : $user;
             }
         }
 
@@ -374,7 +412,7 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
             $qb->andWhere('IDENTITY(t.column) = :columnId')->setParameter('columnId', $filter->columnId);
         }
         if ($filter->assignee !== null) {
-            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND IDENTITY(am.user) = :assignee)')
+            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND ' . $this->userValue('am.user') . ' = :assignee)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee)
                 ->setParameter('assignee', $filter->assignee);
         }
@@ -422,5 +460,11 @@ final readonly class DoctrineOrmTaskRepository implements TaskRepositoryInterfac
         }
 
         return $ids;
+    }
+
+    /** Since 2.15.0: the DQL of a user field's value (`IDENTITY()` for a relation, the column itself with user_reference: id). */
+    private function userValue(string $path): string
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->identity($path) : 'IDENTITY(' . $path . ')';
     }
 }

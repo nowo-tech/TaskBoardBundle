@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Dto\EraseCursor;
 use Nowo\TaskBoardBundle\Dto\EraseProgress;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -199,12 +200,13 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
             $refs[(string) $row['taskId']][] = (string) $row['ref'];
         }
         if ($refs !== []) {
-            $this->entityManager->createQueryBuilder()
+            // Since 2.15.0: in a savepoint inside the host's transaction with the private entity manager (no-op otherwise).
+            TaskBoardSavepoint::write($this->entityManager, fn (): mixed => $this->entityManager->createQueryBuilder()
                 ->delete(TaskSyncAttachment::class, 'a')
                 ->where('a.task IN (:tasks)')
                 ->setParameter('tasks', $tasks)
                 ->getQuery()
-                ->execute();
+                ->execute());
         }
 
         return $refs;

@@ -10,6 +10,9 @@ kept alive and not reset (REQ-RUNTIME-002, see [FRANKENPHP-WORKER-AUDIT](FRANKEN
 
 - [Host ports](#host-ports)
 - [Events](#events)
+- [Persistence](#persistence)
+- [Mapping and user references](#mapping-and-user-references)
+- [Both host kinds, tested](#both-host-kinds-tested)
 
 ## Host ports
 
@@ -61,3 +64,50 @@ Every event that carries a bundle entity also offers ids and snapshots (`getBoar
 `getTenantKey()`, `getActorId()` / `getSubjectId()`, `getBoardSnapshot()`, `getTaskSnapshot()`, `getCommentSnapshot()`,
 ...). The entity members are deprecated and removed in 3.0. Write events are dispatched after the write is saved,
 through `TaskEventDeferral` (after the commit of a deferred write, dropped on a rollback).
+
+## Persistence
+
+**Standard host (default).** TaskBoard reads and writes through `database.entity_manager` (`default`), exactly as up to
+2.14: a TaskBoard save flushes that manager, including what your application left pending in it.
+
+**Private entity manager (opt-in, `database.private_entity_manager: true`; the only mode in 3.0).** Every bundle
+service reads and writes through `Doctrine\TaskBoardEntityManager`, a private manager created on the connection,
+mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rule 6):
+
+- it never flushes, clears or closes your manager; a failed TaskBoard write closes only the private one, which is
+  created again on the next call (also when its connection changed, or when a rollback undid rows it wrote: DBAL 4
+  middleware on the source connection only);
+- it is dropped at every outermost unit-of-work boundary (main request, Messenger message, console command) and at
+  `kernel.reset`: dropped first, then its pending changes are logged (classes and counts only) and cleared;
+- the source manager's SQL filters are mirrored on every call;
+- repositories: service repositories come from your configuration's factory, every other one is built and kept per
+  manager (no growth in a kept-alive worker);
+- your security user and other host objects on TaskBoard rows are adopted as the private manager's references before
+  each flush; users read back from TaskBoard rows are the private manager's instances, so hooks and listeners compare
+  users **by id**, never with `===` (audit OC-L1);
+- TaskBoard bulk / DBAL statements inside your open transaction run in a savepoint; a failure rolls back to it and the
+  original exception is rethrown.
+
+`PrivateEntityManagerReferencesPass` moves every service of the bundle onto the private manager and its registry at
+build time; your services keep your manager.
+
+## Mapping and user references
+
+| | Standard host (default) | DDD host (opt-in) |
+|---|---|---|
+| Mapping of the 28 bundle entities | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
+| Host users on TaskBoard rows | `ManyToOne` to `user_class` (a Doctrine entity in the same manager) | `database.user_reference: id`: the id in a string column (`TaskBoardUserRef`), found again through `user_directory` |
+| Bundle base classes / traits for host entities | none (the bundle owns its entities; the host references them by id) | none |
+
+The bundle's entities are bundle-owned: a host never extends them and references them by id (`TaskSnapshot::$id`,
+`TaskBoardSnapshot::$id`, the id getters of the events). With the id mode the bundle never queries the host's user table:
+DQL compares the id column, lookups go through the directory (re-checked byte for byte), and the column compares in
+binary on MySQL / MariaDB.
+
+## Both host kinds, tested
+
+- **Standard host**: the whole unit and functional suite (`FunctionalKernel`: attribute mapping, `AppUser` Doctrine
+  entity, the deprecated ports' stubs), plus its replays: every host port through its twin only
+  (`TASK_BOARD_TEST_PORTS=twin`) and the private entity manager on (`TASK_BOARD_TEST_PRIVATE_EM=1`), each a CI job.
+- **DDD host**: `tests/Functional/DddHost` (`DddHostKernel`: plain PHP users with no mapping, XML mapping, private entity
+  manager, user references by id, twin ports only), and `XmlMappingParityTest`.

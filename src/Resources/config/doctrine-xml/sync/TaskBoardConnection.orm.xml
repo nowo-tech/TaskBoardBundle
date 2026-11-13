@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection" table="task_board_connections">
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_connections_board" columns="board_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="lastRunAt" type="datetime_immutable" column="last_run_at" nullable="true"/>
+        <field name="lastSuccessAt" type="datetime_immutable" column="last_success_at" nullable="true"/>
+        <field name="watermark" type="datetime_immutable" nullable="true"/>
+        <field name="cursor" type="json" column="sync_cursor" nullable="true"/>
+        <field name="runningRunId" type="string" column="running_run_id" length="36" nullable="true"/>
+        <field name="heartbeatAt" type="datetime_immutable" column="heartbeat_at" nullable="true"/>
+        <field name="provider" type="string" length="32"/>
+        <field name="importScope" type="string" column="import_scope" length="64"/>
+        <field name="connectionRef" type="string" column="connection_ref" length="191"/>
+        <field name="containerId" type="string" column="container_id" length="128"/>
+        <field name="containerLabel" type="string" column="container_label" length="255"/>
+        <field name="containerPath" type="json" column="container_path"/>
+        <field name="options" type="json"/>
+        <field name="sourceType" type="string" column="source_type" length="8">
+            <options>
+                <option name="default">list</option>
+            </options>
+        </field>
+        <field name="sourceId" type="string" column="source_id" length="128" nullable="true"/>
+        <field name="statusColumnMap" type="json" column="status_column_map" nullable="true"/>
+        <one-to-one field="board" target-entity="Nowo\TaskBoardBundle\Entity\TaskBoard">
+            <join-column name="board_id" nullable="false" on-delete="CASCADE"/>
+        </one-to-one>
+        <many-to-one field="createdBy" target-entity="App\Entity\User">
+            <join-column name="created_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="directory" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory">
+            <join-column name="directory_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

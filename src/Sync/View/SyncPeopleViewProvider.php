@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -49,6 +50,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         private readonly ?string $userClass = null,
         // Since 1.28.0: tells who is shown for attribution only.
         private readonly ?SyncPersonResolverInterface $resolver = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -179,7 +182,8 @@ final class SyncPeopleViewProvider implements ResetInterface
         if ($kind === 'user' && $this->userClass !== null && $id !== '') {
             /** @var class-string $class */
             $class = $this->userClass;
-            $user  = $this->entityManager->find($class, $id);
+            // Since 2.15.0: through user_directory with user_reference: id (user_class is no Doctrine entity).
+            $user = $this->users instanceof TaskBoardUsers && $this->users->idMode() ? $this->users->find($id) : $this->entityManager->find($class, $id);
 
             return $user !== null ? UserLabel::of($user) : $token;
         }

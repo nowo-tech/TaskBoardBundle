@@ -6,6 +6,8 @@
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
+  - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
+  - [DDD host: XML mapping and user references by id (opt-in)](#ddd-host-xml-mapping-and-user-references-by-id-opt-in)
 - [To 2.14.1](#to-2141)
 - [To 2.14.0](#to-2140)
 - [To 2.13.0](#to-2130)
@@ -187,7 +189,7 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 ## To 2.15.0
 
 Additive (REQ-ARCH-001 / REQ-RUNTIME-002). Nothing to do: with an unchanged configuration and unchanged host services
-2.15 behaves exactly as 2.14.1. No schema change.
+2.15 behaves exactly as 2.14.1. No schema change with the defaults (only the opt-in `database.user_reference: id` changes the user columns).
 
 ### Framework-free host ports
 
@@ -209,6 +211,67 @@ objects instead (the table is in the [CHANGELOG](CHANGELOG.md#unreleased)). The 
 
 Events: read `getBoardId()` / `getTaskId()` / `getTenantKey()` and the `get*Snapshot()` accessors instead of the
 entities; the entity getters and public entity properties are deprecated and removed in 3.0.
+
+### Private entity manager (opt-in)
+
+Up to 2.14 every TaskBoard write flushed `database.entity_manager` (your `default` manager unless configured): it also
+wrote whatever your application had left pending there, and a failed TaskBoard write closed your manager. Turn on the
+private manager (it becomes the only mode in 3.0; an explicit `false` is deprecated now):
+
+```yaml
+nowo_task_board:
+    database:
+        entity_manager: default          # the source: its connection, mapping, caches and listeners
+        private_entity_manager: true
+```
+
+- The tables do not move and no migration is needed. The connection is shared: a transaction you open includes the
+  TaskBoard rows written inside it (the bundle's own transactions and bulk statements become savepoints).
+- Read and write TaskBoard rows through the bundle's services and repository interfaces. A TaskBoard entity you load
+  through your own manager belongs to your manager: changing it and calling a TaskBoard service does not save it, and
+  your `flush()` does not save TaskBoard rows you load through the bundle.
+- Your security user (managed by your manager) can be passed to the bundle as before: before each flush the bundle
+  replaces it on its rows by its own reference to the same id. User objects you read from TaskBoard rows (creator,
+  author, member) belong to the private manager: look them up again in your manager before you write them.
+- **Compare users by id, never by object identity (audit OC-L1).** With the private manager, a user object the bundle
+  read from its rows (a creator, an author, a member) is the private manager's instance, while your security user is
+  your manager's: `$user === $board->getCreator()` is always false. A host hook or listener that denies on such an
+  identity check would never deny. Compare ids (`getId()`, the `*Id` getters of the events, `getSubjectId()`, the
+  snapshots' `creatorId`), as the bundle itself does.
+- The private manager is dropped at every request, Messenger message and console command boundary (REQ-RUNTIME-002);
+  TaskBoard entities you keep across a boundary are detached.
+- With doctrine/dbal 3 the rollback middleware is not available: after a rolled-back transaction the private manager is
+  replaced at the next boundary instead of at once.
+
+### DDD host: XML mapping and user references by id (opt-in)
+
+Nothing changes unless you set these. For a host that keeps its mapping out of PHP attributes, or whose users are not a
+Doctrine entity in the TaskBoard entity manager:
+
+```yaml
+nowo_task_board:
+    user_class: App\Identity\User          # any class; no Doctrine mapping needed with user_reference: id
+    user_directory: app.task_board_users    # a User\TaskBoardUserDirectoryInterface (find(string $id): ?object)
+    database:
+        mapping_type: xml                   # Resources/config/doctrine-xml instead of the attributes
+        user_reference: id                  # the user's id in a string column instead of a relation
+        private_entity_manager: true
+```
+
+- `mapping_type: xml` maps the same tables (no schema change). Keep DoctrineBundle's `auto_mapping` as it is: the XML
+  files are outside `Resources/config/doctrine`.
+- `user_reference: id` **changes the schema** of an existing database: each user column (`creator_id`, `user_id`,
+  `author_id`, ...) becomes a `VARCHAR(128)` with no foreign key (binary NO PAD collation on MySQL 8 / MariaDB). Ids
+  with whitespace at an edge, control or format characters or more than 128 characters are refused. Turn it on for a
+  new installation, or migrate the columns yourself (the ids you have stay valid: an integer id becomes its decimal
+  text). Without the foreign keys, deleting a user no longer removes their task and team memberships: call
+  `TaskSyncPeopleReassigner::detachUser()` and `TaskTimeEntrySnapshotPurger::detachUser()` from your erasure flow, as the
+  [DDD section of USAGE](USAGE.md#using-it-from-a-ddd--hexagonal-application) says.
+- Your directory returns your user object for an id (a Symfony security user for the web pages); the bundle ignores an
+  answer whose `getId()` differs from the asked id byte for byte. Set `assignee_provider` (a `TaskAssigneePolicyInterface`)
+  so the member picker has users to offer.
+- Templates you override that read a user's properties from a TaskBoard row (`member.user.displayName`) get a
+  `TaskBoardUserRef` in this mode: pass it through `nowo_task_board_user(user)` first, as the bundle's partials do.
 
 ## To 2.14.1
 

@@ -212,6 +212,30 @@ jobs:
           SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
         run: composer test -- --testsuite functional
 
+  private-em:
+    name: Functional suite with the private entity manager (replay)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout TaskBoardBundle
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies (Symfony 7.4)
+        run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      # Since 2.15.0 (REQ-ARCH-001 rule 6): database.private_entity_manager: true for every test kernel, fixtures
+      # written through the bundle's private manager (see phpunit.private-em.xml.dist for the excluded tests).
+      - name: Run the functional suite with the private entity manager
+        run: php -d memory_limit=1G vendor/bin/phpunit -c phpunit.private-em.xml.dist
+
   code-style:
     name: Code Style
     runs-on: ubuntu-latest

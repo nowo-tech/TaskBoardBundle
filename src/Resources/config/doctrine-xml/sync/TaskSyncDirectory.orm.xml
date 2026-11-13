@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory" table="task_board_sync_directories">
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_sync_directories" columns="provider,scope_key,workspace_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="reviewedAt" type="datetime_immutable" column="reviewed_at" nullable="true"/>
+        <field name="anonymousCounter" type="integer" column="anonymous_counter">
+            <options>
+                <option name="default">0</option>
+            </options>
+        </field>
+        <field name="provider" type="string" length="32"/>
+        <field name="scopeKey" type="string" column="scope_key" length="64"/>
+        <field name="workspaceId" type="string" column="workspace_id" length="64"/>
+        <many-to-one field="reviewedBy" target-entity="App\Entity\User">
+            <join-column name="reviewed_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

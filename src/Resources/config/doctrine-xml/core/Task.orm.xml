@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Entity\Task" table="task_board_tasks">
+        <indexes>
+            <index name="task_board_tasks_board_idx" columns="board_id"/>
+            <index name="task_board_tasks_board_archived_idx" columns="board_id,archived_at"/>
+            <index name="task_board_tasks_board_open_due_idx" columns="board_id,completed_at,due_at"/>
+            <index name="task_board_tasks_number_idx" columns="number"/>
+        </indexes>
+        <lifecycle-callbacks>
+            <lifecycle-callback type="preRemove" method="detachTimeEntries"/>
+        </lifecycle-callbacks>
+        <id name="id" type="string" length="36"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
+        <field name="completedAt" type="datetime_immutable" column="completed_at" nullable="true"/>
+        <field name="creatorName" type="string" column="creator_name" length="180" nullable="true"/>
+        <field name="totalTimeSeconds" type="integer" column="total_time_seconds"/>
+        <field name="startAt" type="datetime_immutable" column="start_at" nullable="true"/>
+        <field name="archivedAt" type="datetime_immutable" column="archived_at" nullable="true"/>
+        <field name="archiveReason" type="string" column="archive_reason" length="16" nullable="true"/>
+        <field name="color" type="string" length="7" nullable="true"/>
+        <field name="number" type="integer" nullable="true"/>
+        <field name="title" type="string" length="255"/>
+        <field name="description" type="text" nullable="true"/>
+        <field name="priority" type="string" length="16" enum-type="Nowo\TaskBoardBundle\Enum\TaskPriority"/>
+        <field name="position" type="integer"/>
+        <field name="estimatedMinutes" type="integer" column="estimated_minutes" nullable="true"/>
+        <field name="dueAt" type="datetime_immutable" column="due_at" nullable="true"/>
+        <field name="tags" type="json"/>
+        <one-to-many field="changeHistory" target-entity="Nowo\TaskBoardBundle\Entity\TaskChangeHistory" mapped-by="task" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+            <order-by>
+                <order-by-field name="createdAt" direction="ASC"/>
+            </order-by>
+        </one-to-many>
+        <one-to-many field="members" target-entity="Nowo\TaskBoardBundle\Entity\TaskMember" mapped-by="task" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+        </one-to-many>
+        <one-to-many field="links" target-entity="Nowo\TaskBoardBundle\Entity\TaskLink" mapped-by="task" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+        </one-to-many>
+        <one-to-many field="outgoingDependencies" target-entity="Nowo\TaskBoardBundle\Entity\TaskDependency" mapped-by="sourceTask" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+        </one-to-many>
+        <one-to-many field="incomingDependencies" target-entity="Nowo\TaskBoardBundle\Entity\TaskDependency" mapped-by="targetTask" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+        </one-to-many>
+        <one-to-many field="children" target-entity="Nowo\TaskBoardBundle\Entity\Task" mapped-by="parent"/>
+        <one-to-many field="documents" target-entity="Nowo\TaskBoardBundle\Entity\TaskDocument" mapped-by="task" orphan-removal="true">
+            <cascade>
+                <cascade-persist/>
+                <cascade-remove/>
+            </cascade>
+        </one-to-many>
+        <one-to-many field="timeEntries" target-entity="Nowo\TaskBoardBundle\Entity\TaskTimeEntry" mapped-by="task">
+            <cascade>
+                <cascade-persist/>
+            </cascade>
+        </one-to-many>
+        <many-to-one field="board" target-entity="Nowo\TaskBoardBundle\Entity\TaskBoard" inversed-by="tasks">
+            <join-column name="board_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="creator" target-entity="App\Entity\User">
+            <join-column on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="column" target-entity="Nowo\TaskBoardBundle\Entity\BoardColumn" inversed-by="tasks">
+            <join-column name="column_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="parent" target-entity="Nowo\TaskBoardBundle\Entity\Task" inversed-by="children">
+            <join-column name="parent_id" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

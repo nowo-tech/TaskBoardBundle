@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry" table="task_board_task_numbers">
+        <indexes>
+            <index name="idx_task_board_task_numbers_task" columns="task_id"/>
+        </indexes>
+        <id name="scopeKey" type="string" column="scope_key" length="191"/>
+        <id name="number" type="integer"/>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="task_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

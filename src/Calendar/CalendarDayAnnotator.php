@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 
 use function array_chunk;
 use function array_filter;
@@ -33,6 +34,8 @@ final readonly class CalendarDayAnnotator
     public function __construct(
         private EntityManagerInterface $entityManager,
         private ?CalendarDayAnnotationProviderInterface $provider = null,
+        // Since 2.15.0 (database.user_reference).
+        private ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -98,7 +101,7 @@ final readonly class CalendarDayAnnotator
         foreach (array_chunk(array_map(static fn (Task $task): string => $task->getId(), $tasks), self::ID_CHUNK) as $chunk) {
             /** @var list<array{taskId: mixed, userId: mixed}> $rows */
             $rows = $this->entityManager->createQueryBuilder()
-                ->select('IDENTITY(m.task) AS taskId', 'IDENTITY(m.user) AS userId')
+                ->select('IDENTITY(m.task) AS taskId', $this->userValue('m.user') . ' AS userId')
                 ->from(TaskMember::class, 'm')
                 ->where('IDENTITY(m.task) IN (:tasks)')
                 ->andWhere('m.memberRole = :role')
@@ -112,5 +115,11 @@ final readonly class CalendarDayAnnotator
         }
 
         return $assignees;
+    }
+
+    /** Since 2.15.0: the DQL of a user field's value (`IDENTITY()` for a relation, the column itself with user_reference: id). */
+    private function userValue(string $path): string
+    {
+        return $this->users instanceof TaskBoardUsers ? $this->users->identity($path) : 'IDENTITY(' . $path . ')';
     }
 }

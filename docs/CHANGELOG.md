@@ -169,6 +169,66 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - `Sync\Time\ImportedTimeEntryCandidate::personId()`, `personProviderUserId()`, `taskId()`, `boardId()`;
   `Api\TaskApiWhere::reachesBoardOf(string $boardId, ?string $tenantKey)`.
 
+- **XML mapping (opt-in, REQ-ARCH-001 rule 2).** `nowo_task_board.database.mapping_type: xml` maps the 28 TaskBoard
+  entities from `src/Resources/config/doctrine-xml/<group>/*.orm.xml` (core, sync, api, recurrence, number; same
+  tables, columns, indexes, constraints and enum types; the groups are still mapped only with their feature on). The files
+  are generated from the attributes by `scripts/generate-xml-mapping.php`, leave implicit names implicit (same metadata
+  under any naming strategy) and live deliberately outside `Resources/config/doctrine`, so DoctrineBundle's auto_mapping
+  keeps the attributes by default. `XmlMappingParityTest` compares every entity's metadata and the generated schema.
+- **User references by id (opt-in, REQ-ARCH-001 rule 2).** `nowo_task_board.database.user_reference: id` replaces the
+  `ManyToOne` relations of the TaskBoard rows to `user_class` (creator, author, member, time entry, history, team member,
+  column set, sync people, ... 18 fields) by the user's id in a string column of the same name
+  (`Doctrine\Type\TaskBoardUserRefType`, 128 characters, indexed; `utf8mb4_bin` on MySQL / MariaDB): `user_class` no
+  longer needs to be a Doctrine entity. A row read back holds a `ValueObject\TaskBoardUserRef` (its `getId()`); a host
+  user object written to a field is stored by its `getId()`. The host port `User\TaskBoardUserDirectoryInterface`
+  (`user_directory`, required in this mode) finds a user by id when the bundle needs more than the id (labels, avatars,
+  a queued sync run's actor, the multi-board people, a picker's choice); every answer is re-checked byte for byte in PHP.
+  `User\TaskBoardUsers` (per unit of work, cleared at every boundary) keeps the bundle's queries mode-aware (the column
+  itself instead of `IDENTITY()`, the id as the parameter). The member picker offers the assignee policy's users by id.
+  Twig: `nowo_task_board_user(user)` (the host user behind a reference; used by the member label and avatar partials).
+  Audit OC (before release): the id columns compare in binary **NO PAD** (`utf8mb4_0900_bin` on MySQL 8,
+  `utf8mb4_nopad_bin` on MariaDB; `utf8mb4_bin` is PAD SPACE, so `"u "` matched `"u"`); an id with whitespace at an
+  edge, a control or format character (ZWSP, BOM, bidi marks), invalid UTF-8 or more than 128 characters is refused by
+  `TaskBoardUserRef` and by the column type before any write (also on SQLite); every lookup by user id (trackable tasks,
+  the API's owner and assignee filters, the multi-board assignee filter, the API time entries and their billable
+  change, the people mapped to a user) keeps only the rows whose id is equal byte for byte in PHP; the erasure ports
+  (`TaskTimeEntrySnapshotPurger::detachUser()`, `TaskSyncPeopleReassigner::detachUser()`) refuse an id that cannot
+  be matched exactly, select the rows, keep the exact ones and update them by primary key, and
+  `TaskRecurrenceManager::forgetAuthor()` keeps only the exact author's series.
+
+- **Private entity manager for the TaskBoard rows (opt-in, REQ-ARCH-001 rule 6).**
+  `nowo_task_board.database.private_entity_manager: true` makes every bundle service read and write through
+  `Doctrine\TaskBoardEntityManager`, a private manager created on the connection, mapping, caches, proxies and event
+  manager of `database.entity_manager` (where 2.14 wrote; the tables do not move, the bundle's and the host's Doctrine
+  listeners still run). A TaskBoard write then never flushes a change the application left pending in its own manager,
+  never clears it, and a failed TaskBoard write closes only the private manager (created again on the next call). Adapted
+  from AuthKitBundle 1.46.0 (audits NV, NJ-2, NJV-1, NF-2, NF2-2, NF3-2, NF-7):
+  - `PrivateEntityManagerReferencesPass` moves every bundle service (inline definitions, iterators, method calls and
+    properties included) from the source manager, the manager `EntityManagerInterface` autowires and the `doctrine`
+    registry onto the private manager and `Doctrine\TaskBoardManagerRegistry`; host services are never touched.
+  - Dropped at every outermost unit-of-work boundary (main request start and `kernel.terminate`, Messenger message
+    received / handled / failed, outermost console command; through `TaskBoardRequestBoundarySubscriber`, after the
+    request memos) and at `kernel.reset`: the manager is dropped FIRST, then its pending changes are inspected (logged as
+    a warning by entity class and count, never a value) and cleared, each step guarded.
+  - Recreated when closed, when the connection changed, or when a rollback undid rows it wrote (DBAL 4 middleware
+    `PrivateEntityManagerMiddleware`, attached only to the source manager's connection); the source manager's SQL filters
+    are mirrored on every call.
+  - Bundle-owned repository factory (audit NZ's corrected pattern, `Doctrine\PrivateManagerRepositoryFactory`): service
+    repositories (`ServiceEntityRepositoryInterface`, e.g. a host entity a host listener loads through the private
+    manager) come from the source factory; every other repository is built and kept per manager, so a replaced manager
+    is collected.
+  - Host objects on TaskBoard rows (the `user_class` creator, author, member, ...) that the private manager does not hold,
+    such as the security user, are adopted before each flush as the private manager's reference to the same id; the
+    application's instance is never written.
+  - Users read back from TaskBoard rows are the private manager's instances: host hooks and listeners compare users by
+    id, never with `===` (audit OC-L1; UPGRADING).
+  - Audit OC-I2: the worker-mode refreshes before an access decision or a time total (`TaskAccessGuard`, the time
+    aggregators) use the manager that holds the task (`Doctrine\ManagerOf`), not only the one `getManagerForClass()`
+    names (DoctrineBundle 3.4 with a dedicated `database.entity_manager` named the default one and the refresh was
+    skipped). This also applies without the option.
+  - `Doctrine\TaskBoardSavepoint`: a TaskBoard DBAL / bulk DQL write inside an open transaction runs in a savepoint
+    (`nowo_task_board_*`) with the option on; when rolling back to it fails too, the ORIGINAL exception is rethrown.
+
 ### Deprecated
 
 - The 21 port interfaces above (`@deprecated`; Symfony's DebugClassLoader reports an application class implementing
@@ -176,6 +236,8 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - The entity members of the events (`getTask()`, `getBoard()`, `getComment()`, `getMember()`, `getColumnSet()`,
   `getFromColumn()` / `getToColumn()`, the public `$board` / `$task` properties), of `ImportedTimeEntryCandidate`
   (`$person`, `$task`) and `TaskApiWhere::reachesBoard(TaskBoard)`; removed in 3.0. No runtime deprecation is triggered.
+- `nowo_task_board.database.private_entity_manager: false` (explicit) is deprecated: the private entity manager becomes
+  the only mode in 3.0. The default (`null`, not set) keeps the 2.14 behaviour without a deprecation.
 
 ### Changed
 
@@ -195,6 +257,25 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
 - `PortEquivalenceTest`: the decisions 2.15 routes through `Port\Ports` equal the LITERAL v2.14.1 code
   (`tests/Support/Legacy/Legacy2141PortDecisions.php`) for every service 2.14 could have, and a twin-only service gives
   the answer of its 2.14 equivalent.
+- Private entity manager: `PrivateEntityManagerKernelTest` (board, task, comment, time and update writes leave a pending
+  application insert unflushed; the security user is adopted; a failing write closes only the private manager),
+  `LegacyEntityManagerKernelTest` (the default flushes it, as 2.14), `PrivateEntityManagerPartsTest` (rollback
+  middleware, replacement rules, boundary drop that cannot be poisoned, logged changes by class only, filters,
+  repositories, registry, savepoints with the original exception rethrown, build pass), `PrivateEntityManagerConfigTest`
+  (the option, the deprecation, the references pass on bundle and host services).
+- `PrivateEntityManagerWorkerTest` (REQ-RUNTIME-002): one kernel driven through `http_kernel->handle()` / `terminate()`
+  (no services resetter), 300 iterations of two users writing (task moves) and reading their boards: no cross-user
+  data, the private manager dropped after every request, a pending application change never flushed, memory within
+  4 MiB after the warm-up.
+- **Private-manager replay** (`phpunit.private-em.xml.dist`, a CI job): the functional suite runs with the option on and
+  the fixtures written through the private manager (774 of the 874 functional test cases; the 13 classes left out keep entity objects across a
+  request boundary, mix the application's manager with the bundle's, or assert the application's manager is closed after
+  a failure, which the private manager deliberately changes).
+- `DddHostKernelTest` (REQ-ARCH-001, the DDD host): users that are plain PHP objects (no Doctrine entity, an in-memory
+  security provider), XML mapping, the private entity manager, user references by id and host ports through their twins
+  only — board, columns, tasks, comments, members and time through the ports, the board and task pages with the names the
+  directory gives, an HTTP write, a look-alike id in another case kept apart. `XmlMappingParityTest`,
+  `TaskBoardUserRefTypeTest`, `TaskBoardUsersTest`, `UserReferenceConfigTest`.
 - **Twin replay** (`TASK_BOARD_TEST_PORTS=twin`, a CI job): the whole functional suite runs with every host stub of the
   test kernels behind an adapter that implements ONLY the 2.15 twin (`tests/Support/TwinPorts`): 870 tests, same results.
 

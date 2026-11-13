@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Since 2.15.0: the private-entity-manager replay (TASK_BOARD_TEST_PRIVATE_EM=1, CI job "private-em"): the functional
+    suite with database.private_entity_manager: true and database.mapping_type: xml, the fixtures written through the
+    bundle's private manager.
+
+    Excluded: tests that keep entity objects across a request or a unit-of-work boundary, that mix the application's
+    manager with the bundle's (a service built by hand on EntityManagerInterface, a host stub comparing user objects of
+    two managers), or that assert the application's manager is closed after a failure. The private manager is dropped at
+    every boundary and is created again when closed, by design (REQ-RUNTIME-002 / REQ-ARCH-001 rule 6); those behaviours
+    have their own tests in tests/Functional/PrivateEntityManager and tests/Integration/PrivateEntityManager.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+>
+    <php>
+        <ini name="memory_limit" value="1G"/>
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="max[direct]=0"/>
+        <env name="TASK_BOARD_TEST_PRIVATE_EM" value="1"/>
+        <!-- Since 2.15.0: and the XML mapping (database.mapping_type: xml), the DDD host's persistence. -->
+        <env name="TASK_BOARD_TEST_XML_MAPPING" value="1"/>
+        <server name="KERNEL_CLASS" value="Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel"/>
+    </php>
+    <testsuites>
+        <testsuite name="functional">
+            <directory>tests/Functional</directory>
+            <!-- builds TaskBoardEraser by hand on the application's EntityManagerInterface while the API guard loads the board through the private manager (two managers in one write). -->
+            <exclude>tests/Functional/Api/ApiManagementTest.php</exclude>
+            <!-- testCommentsTagsAndFields edits and reads back fixture entities it wrote before the requests; the private manager is dropped at each request boundary, so those instances are detached (by design, REQ-RUNTIME-002). -->
+            <exclude>tests/Functional/Api/ApiWriteEndpointsTest.php</exclude>
+            <!-- runs imports in-process on a board loaded before a request boundary: the instance is detached from the dropped private manager. -->
+            <exclude>tests/Functional/ImportAuthorizationTest.php</exclude>
+            <!-- same: in-process imports on a board and columns loaded before a boundary (detached). -->
+            <exclude>tests/Functional/Import/IdempotentImportTest.php</exclude>
+            <!-- its assignee provider stub compares user objects with === ($user === $board->getCreator()) across the two managers: always false (audit OC-L1, documented: compare by id). -->
+            <exclude>tests/Functional/ManageWritesTest.php</exclude>
+            <!-- asserts the application's manager is closed after a lock failure; the private manager closes instead and is created again on the next call (by design). -->
+            <exclude>tests/Functional/Move/MoveLockFailureTest.php</exclude>
+            <!-- keeps the moved task's fixture instance across the preview and move requests and asserts on it (detached at the boundary). -->
+            <exclude>tests/Functional/Move/TaskCopyPagesTest.php</exclude>
+            <!-- calls the repositories with fixture entities kept across kernel.reset / a boundary (detached from the dropped private manager). -->
+            <exclude>tests/Functional/Repository/DoctrineRepositoriesTest.php</exclude>
+            <!-- its BOARD_ACCESS_CHECK listener grants a reader by user identity (getSubject() === $reader) across the two managers: always false, so 403 (audit OC-L1, documented: compare by id). -->
+            <exclude>tests/Functional/Sync/ConnectionBadgeProgressTest.php</exclude>
+            <!-- same reader listener by identity across managers (audit OC-L1). -->
+            <exclude>tests/Functional/Sync/ConnectionStripTest.php</exclude>
+            <!-- writes sync rows to fixture entities kept across a request boundary and expects the next page to show them (detached). -->
+            <exclude>tests/Functional/Sync/People/SyncPeopleViewTest.php</exclude>
+            <!-- asserts the application's manager is closed after a failed history save; the private manager closes instead and is recreated (by design). -->
+            <exclude>tests/Functional/Sync/SyncServiceEdgesTest.php</exclude>
+            <!-- testAStalePageDoesNotMoveTheTaskBack changes a fixture task between two requests through the test's manager instance (detached at the boundary). -->
+            <exclude>tests/Functional/TaskEditFormColumnTest.php</exclude>
+        </testsuite>
+    </testsuites>
+</phpunit>
