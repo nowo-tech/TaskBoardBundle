@@ -118,8 +118,9 @@ final readonly class BoardConfigurationApplier
                 } else {
                     $this->fields->define($actor, $board, null, $spec->name, $spec->type, $spec->options, $position);
                 }
-            } catch (TaskCustomFieldRefusedException $refused) {
-                throw $this->fieldRefusal($refused);
+            } catch (TaskCustomFieldRefusedException) {
+                // The right was asked by apply(): what the field manager refuses here is the data (names, options).
+                throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'fields']);
             }
             $kept[$spec->name] = true;
         }
@@ -138,19 +139,8 @@ final readonly class BoardConfigurationApplier
         if (!$dropFieldValues && $this->fields->hasValues($field)) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::FIELDS_IN_USE, ['fields' => $field->getName()]);
         }
-        try {
-            $this->fields->delete($actor, $field);
-        } catch (TaskCustomFieldRefusedException $refused) {
-            throw $this->fieldRefusal($refused);
-        }
-    }
-
-    private function fieldRefusal(TaskCustomFieldRefusedException $refused): TaskBoardRestructureRefusedException
-    {
-        return new TaskBoardRestructureRefusedException(
-            $refused->reason === TaskCustomFieldRefusedException::NOT_ALLOWED ? TaskBoardRestructureRefusedException::NOT_ALLOWED : TaskBoardRestructureRefusedException::INVALID,
-            ['field' => 'fields'],
-        );
+        // The board's right was asked by apply(): the field manager asks the same and cannot refuse here.
+        $this->fields->delete($actor, $field);
     }
 
     /**

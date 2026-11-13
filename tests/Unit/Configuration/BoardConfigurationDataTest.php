@@ -54,6 +54,7 @@ final class BoardConfigurationDataTest extends TestCase
                 $invalid();
                 self::fail('invalid #' . $index);
             } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
             }
         }
     }

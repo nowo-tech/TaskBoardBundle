@@ -11,7 +11,6 @@ use function array_is_list;
 use function array_map;
 use function array_values;
 use function is_array;
-use function is_int;
 use function is_string;
 use function json_decode;
 use function json_encode;
@@ -72,7 +71,7 @@ final readonly class BoardConfiguration
      */
     public static function fromArray(mixed $data): self
     {
-        if (!is_array($data) || ($data['version'] ?? self::VERSION) !== self::VERSION || !is_int($data['version'] ?? self::VERSION)) {
+        if (!is_array($data) || ($data['version'] ?? self::VERSION) !== self::VERSION) {
             throw new InvalidArgumentException('Not a board configuration of version ' . self::VERSION . '.');
         }
         $columns   = $data['columns'] ?? null;

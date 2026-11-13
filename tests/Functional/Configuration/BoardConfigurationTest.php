@@ -169,6 +169,22 @@ final class BoardConfigurationTest extends CopyTestCase
         $this->applier()->apply($this->owner, $board, $this->exporter()->export($board));
     }
 
+    public function testApplyByIdAndInvalidFields(): void
+    {
+        $board = $this->board('Story', ['A'], tenantKey: 'acme');
+        $this->applier()->applyById($this->owner, $board->getId(), 'acme', new BoardConfiguration([new BoardColumnSpec('A', ColumnType::Open)], [], [], 'ST'));
+        $this->clear();
+        self::assertSame('ST', $this->exporter()->exportById($board->getId(), 'acme')?->numberPrefix);
+        $board = $this->em->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $board);
+        try {
+            $this->applier()->apply($this->owner, $board, new BoardConfiguration([new BoardColumnSpec('A')], [new BoardFieldSpec('Capa', CustomFieldType::Dropdown, [['name' => 'x', 'color' => null], ['name' => 'x', 'color' => null]])]));
+            self::fail('duplicate options');
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame(TaskBoardRestructureRefusedException::INVALID, $refused->reason);
+        }
+    }
+
     public function testInvalidDataIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
