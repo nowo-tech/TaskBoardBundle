@@ -495,6 +495,7 @@ task_board.sync.error.restore_refused: "Taken die terug zijn bij de provider zij
 task_board.sync.error.relation_skipped: "Sommige ouder- of afhankelijkheidsrelaties zijn overgeslagen (de andere taak ontbreekt of is niet bewerkbaar)."
 task_board.sync.error.parent_cycle: "Een ouderwijziging is geweigerd: een taak zou haar eigen voorouder worden."
 task_board.sync.error.assignee_unresolved: "Sommige toegewezen personen komen met niemand van dit bord overeen; die taken behouden hun toewijzing."
+task_board.sync.error.external_id_look_alike: "Sommige taken van de provider zijn overgeslagen: hun id verschilt van een al gesynchroniseerde alleen in hoofdletters, accenten of spaties aan het eind. Vraag je beheerder de database-update van TaskBoard 2.15.1 toe te passen."
 task_board.sync.error.status_without_column: "Sommige statussen hebben geen kolom op het bord; die taken gingen naar de standaardkolom."
 task_board.sync.error.file_quota: "Sommige bestanden zijn niet gekopieerd: de opslaglimiet is bereikt."
 task_board.sync.error.storage_disabled: "Bestanden worden niet gekopieerd: er is geen opslag ingesteld."

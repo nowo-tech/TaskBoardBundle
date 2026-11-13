@@ -28,6 +28,8 @@ use SortDirection;
 
 use function array_diff_key;
 use function array_key_last;
+use function array_keys;
+use function array_map;
 use function count;
 use function in_array;
 use function max;
@@ -71,9 +73,21 @@ final readonly class SyncChecklistWriter
             }
         }
         $existing = $this->existing($ctx, $parentItem->getExternalId());
-        $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing)));
+        // Since 2.15.1 (REQ-SEC-006, audit OM TB-M1): a new id the database takes for a look-alike item (a column that
+        // still folds) is skipped: its item would break the unique key.
+        $lookAlikes = [];
+        $new        = array_map(strval(...), array_keys(array_diff_key($wanted, $existing)));
+        if ($new !== []) {
+            $this->store->itemsByExternalIds($ctx->connection, $new, $lookAlikes);
+        }
+        $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing, $lookAlikes)));
         $position = 0;
         foreach ($wanted as $externalId => [$entry, $tag]) {
+            if (isset($lookAlikes[$externalId])) {
+                $ctx->count('skipLookAlike');
+                $ctx->warn('external_id_look_alike');
+                continue;
+            }
             $item = $existing[$externalId] ?? null;
             $task = $item?->getTask();
             if ($item instanceof TaskSyncItem && !$task instanceof Task) {

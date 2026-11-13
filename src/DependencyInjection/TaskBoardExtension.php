@@ -534,7 +534,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
         $container->getDefinition(TaskNumberLedger::class)->setArgument('$entityManager', $manager);
         $container->getDefinition(TaskNumberBackfiller::class)->setArgument('$entityManager', $manager);
-        foreach (['onFlush', 'postPersist', 'postUpdate'] as $event) {
+        // Since 2.15.1 (audit OM TB-L2): prePersist refuses a look-alike scope's counter before the task is scheduled.
+        foreach (['prePersist', 'onFlush', 'postPersist', 'postUpdate'] as $event) {
             $container->getDefinition(TaskNumberListener::class)->addTag('doctrine.event_listener', ['event' => $event, 'entity_manager' => $emName]);
         }
     }

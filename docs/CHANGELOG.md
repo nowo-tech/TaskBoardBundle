@@ -130,6 +130,14 @@ columns.
   - Keys that cannot be matched exactly (edge whitespace or NBSP, control or format characters, invalid UTF-8, more
     than 191 characters) are refused where they enter: `TaskBoardTenant`, `TaskBoard::setTenantKey()`, `ColumnSet`,
     the board creator, `purgeScope()`; the default tenant resolver answers 404 for such a slug.
+  - Writes on a column that still folds (before the UPGRADING ALTER) never hit a unique key and close the entity
+    manager (audit OM): a provider task whose sync item exists only as a look-alike (`T1` for `t1`) is skipped and
+    reported (`external_id_look_alike`), and so is a look-alike workspace's people directory (`workspace_look_alike`);
+    the board creator counts a look-alike tenant's slug as taken and suffixes it; a task whose number counter is a
+    look-alike scope's is refused before it is scheduled (`TaskNumberScopeConflictException`, 409 on the pages,
+    `TASK_003` on the API). A sync run that still fails reopens the closed manager.
+  - The request's tenant (`TaskBoardTenantContext`) answers 404 for a `{tenantSlug}` that cannot be matched exactly, for
+    a resolver that refuses the tenant's key, and for a tenant whose slug is not exactly the one in the URL.
 
 ### Fixed
 

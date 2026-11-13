@@ -231,11 +231,12 @@ SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_task_numbe
 SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_column_sets WHERE scope_key IS NOT NULL GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
 SELECT MIN(external_id), COUNT(DISTINCT HEX(external_id)) FROM task_board_task_links WHERE external_id IS NOT NULL GROUP BY import_source, external_id HAVING COUNT(DISTINCT CAST(external_id AS BINARY)) > 1;
 
--- Keys the bundle now refuses (edge whitespace, control characters, NBSP, ZWSP, BOM): reached only by that exact key.
+-- Keys the bundle now refuses (edge whitespace, control characters, NBSP, zero-width and bidi characters, BOM,
+-- ideographic space): reached only by that exact key. Run it for scope_key of the counters, task numbers and column
+-- sets too.
 SELECT id, HEX(tenant_key) FROM task_board_boards
 WHERE CAST(tenant_key AS BINARY) <> CAST(TRIM(tenant_key) AS BINARY)
-   OR CAST(tenant_key AS BINARY) REGEXP '[[:cntrl:]]'
-   OR HEX(tenant_key) REGEXP '^(..)*(C2A0|E2808B|EFBBBF)';
+   OR HEX(tenant_key) REGEXP '^(..)*(0[0-9A-F]|1[0-9A-F]|7F|C2[89][0-9A-F]|C2A0|C2AD|E2808[B-F]|E280A[8-F]|E281A[0-9A-F]|EFBBBF|E38080)';
 ```
 
 A tenant spelled two ways belongs, after the ALTER, to whichever host tenant has that exact key: rename the rows of the
@@ -244,9 +245,16 @@ before the ALTER if they were meant to be the same tenant. `task_board_number_co
 hold the task-number scope (a tenant key, or a board id): fold their rows the same way, keeping the highest
 `last_number`.
 
-**2. Run the ALTER.** It is **required for safety** on `task_board_boards` and `task_board_number_counters`: until then
-their unique keys still fold, so a look-alike tenant cannot create a board with a slug its look-alike already uses (the
-insert fails), and reserving a task number for `acme` while `Acme` has a counter fails closed instead of sharing it.
+**2. Run the ALTER.** It is **required for safety** wherever a unique key or primary key holds a key column: until then
+these keys still fold, and the bundle refuses (or skips) the look-alike's row instead of writing it:
+
+- `task_board_boards` (unique `tenant_key, slug`): the board creator gives a look-alike tenant's board a suffixed slug.
+- `task_board_number_counters` (primary key `scope_key`) and `task_board_task_numbers` (primary key `scope_key, number`):
+  creating a task in `acme` while `Acme` has a counter is refused (409) instead of sharing `Acme`'s sequence.
+- `task_board_sync_items` (unique `board_id, external_id`): a provider task whose id differs from a synced one only by
+  case, accents or trailing spaces is skipped and reported (`external_id_look_alike`).
+- `task_board_sync_directories` (unique `provider, scope_key, workspace_id`): a look-alike workspace's people
+  directory is refused (`workspace_look_alike`).
 MySQL 8.0.17+ (use `utf8mb4_nopad_bin` on MariaDB):
 
 ```sql

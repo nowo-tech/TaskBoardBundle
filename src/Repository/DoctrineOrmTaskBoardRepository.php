@@ -17,7 +17,7 @@ use function array_values;
 /**
  * Doctrine ORM implementation for task boards.
  */
-final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardRepositoryInterface, TenantBoardSlugLookupInterface
+final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardRepositoryInterface, TenantBoardSlugLookupInterface, BoardSlugTakenInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -126,6 +126,22 @@ final readonly class DoctrineOrmTaskBoardRepository implements TaskBoardReposito
     public function findBySlug(string $slug): ?TaskBoard
     {
         return $this->exactSlug($this->entityManager->getRepository(TaskBoard::class)->findBy(['slug' => $slug]), $slug, null, false);
+    }
+
+    public function isSlugTaken(string $slug, ?string $tenantKey): bool
+    {
+        $builder = $this->entityManager->createQueryBuilder()
+            ->select('COUNT(b.id)')
+            ->from(TaskBoard::class, 'b')
+            ->where('b.slug = :slug')
+            ->setParameter('slug', $slug);
+        if ($tenantKey === null) {
+            $builder->andWhere('b.tenantKey IS NULL');
+        } else {
+            $builder->andWhere('b.tenantKey = :tenantKey')->setParameter('tenantKey', $tenantKey);
+        }
+
+        return (int) $builder->getQuery()->getSingleScalarResult() > 0;
     }
 
     /**

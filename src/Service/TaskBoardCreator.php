@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\BoardCreatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Repository\BoardSlugTakenInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TenantBoardSlugLookupInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
@@ -103,6 +104,10 @@ final readonly class TaskBoardCreator implements TaskBoardCreatorInterface
 
     private function takenSlug(string $slug, ?string $tenantKey): bool
     {
+        // Since 2.15.1 (audit OM TB-L1): any row the unique key would match, a look-alike tenant's included.
+        if ($this->boardRepository instanceof BoardSlugTakenInterface) {
+            return $this->boardRepository->isSlugTaken($slug, $tenantKey);
+        }
         $board = $this->boardRepository instanceof TenantBoardSlugLookupInterface
             ? $this->boardRepository->findBySlugInTenant($slug, $tenantKey)
             : $this->boardRepository->findBySlug($slug);

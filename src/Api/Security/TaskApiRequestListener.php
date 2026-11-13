@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiCredential;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
+use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -198,6 +199,10 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
     {
         if ($throwable instanceof TaskApiRefusal) {
             return $throwable;
+        }
+        // Since 2.15.1 (REQ-SEC-006, audit OM TB-L2): the scope's number counter is a look-alike scope's.
+        if ($throwable instanceof TaskNumberScopeConflictException) {
+            return new TaskApiRefusal(Response::HTTP_CONFLICT, 'TASK_003', 'The task cannot be numbered in this scope');
         }
         if ($throwable instanceof HttpExceptionInterface && in_array($throwable->getStatusCode(), [Response::HTTP_NOT_FOUND, Response::HTTP_METHOD_NOT_ALLOWED], true)) {
             return TaskApiRefusal::notFound();
