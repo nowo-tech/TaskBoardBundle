@@ -230,6 +230,29 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         self::assertNull($this->statusSets()->statusSet($folder->id));
     }
 
+    public function testAFailedSetDropsItsInMemoryChangesAndLeavesTheManagerOpen(): void
+    {
+        $service = $this->restructurer();
+        $folder  = $service->createFolder($this->owner, 'acme', 'Epic');
+        $board   = $this->board('One', ['Todo', 'Done'], tenantKey: 'acme');
+        $service->moveBoardToFolder($this->owner, $board->getId(), $folder->id);
+        $this->em->getEventManager()->addEventListener('onFlush', new class {
+            public function onFlush(): void
+            {
+                throw new \RuntimeException('database down');
+            }
+        });
+        try {
+            $this->statusSets()->setStatusSet($this->owner, $folder->id, [new BoardColumnSpec('Todo', ColumnType::Open), new BoardColumnSpec('Done', ColumnType::Closed)]);
+            self::fail('expected the failure');
+        } catch (\RuntimeException $failure) {
+            self::assertSame('database down', $failure->getMessage());
+        }
+        $em = static::getContainer()->get('doctrine')->getManager();
+        self::assertInstanceOf(\Doctrine\ORM\EntityManagerInterface::class, $em);
+        self::assertTrue($em->isOpen(), 'closed, then reset');
+    }
+
     private function signIn(object $user): void
     {
         $tokens = static::getContainer()->get('security.token_storage');
