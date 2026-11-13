@@ -16,7 +16,10 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Folder\FolderStatusSets;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
@@ -94,7 +97,7 @@ final class BoardConfigurationTest extends CopyTestCase
         $points = $this->fieldManager()->define($this->owner, $board, null, 'Points', CustomFieldType::Number);
         $task   = $this->task($board, 'Valued');
         $this->fieldManager()->setField($task, $points->getId(), '3', $this->owner);
-        $config = new BoardConfiguration(\Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier::specsOf($board));
+        $config = new BoardConfiguration(BoardColumnsApplier::specsOf($board));
 
         try {
             $this->applier()->apply($this->owner, $board, $config);
@@ -125,6 +128,45 @@ final class BoardConfigurationTest extends CopyTestCase
         } catch (TaskBoardRestructureRefusedException $refused) {
             self::assertSame(TaskBoardRestructureRefusedException::NOT_ALLOWED, $refused->reason);
         }
+    }
+
+    public function testSharedStatusesFieldRetypeAndPrefix(): void
+    {
+        $board = $this->board('Story', ['A', 'B'], tenantKey: 'acme');
+        $field = $this->fieldManager()->define($this->owner, $board, null, 'Kind', CustomFieldType::Text);
+        $task  = $this->task($board, 'T');
+        $this->fieldManager()->setField($task, $field->getId(), 'x', $this->owner);
+        $retyped = new BoardConfiguration(BoardColumnsApplier::specsOf($board), [new BoardFieldSpec('Kind', CustomFieldType::Number)]);
+        try {
+            $this->applier()->apply($this->owner, $board, $retyped);
+            self::fail('a retype drops values');
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame(TaskBoardRestructureRefusedException::FIELDS_IN_USE, $refused->reason);
+        }
+        $this->applier()->apply($this->owner, $board, $retyped, [], true);
+        self::assertSame(CustomFieldType::Number, $this->fieldManager()->fieldsFor($board)[0]->getType());
+
+        try {
+            $this->applier()->apply($this->owner, $board, new BoardConfiguration(BoardColumnsApplier::specsOf($board), [], [], 'bad prefix'));
+            self::fail('invalid prefix');
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame(TaskBoardRestructureRefusedException::INVALID, $refused->reason);
+        }
+
+        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
+        $folder = $service->createFolder($this->owner, 'acme', 'Epic');
+        $service->moveBoardToFolder($this->owner, $board->getId(), $folder->id);
+        $sets = static::getContainer()->get(FolderStatusSets::class);
+        self::assertInstanceOf(FolderStatusSets::class, $sets);
+        $sets->shareFrom($this->owner, $folder->id, $board->getId());
+        try {
+            $this->applier()->apply($this->owner, $board, new BoardConfiguration([new BoardColumnSpec('Other')]));
+            self::fail('the folder owns the columns');
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame(TaskBoardRestructureRefusedException::COLUMNS_SHARED, $refused->reason);
+        }
+        $this->applier()->apply($this->owner, $board, $this->exporter()->export($board));
     }
 
     public function testInvalidDataIsRefused(): void
