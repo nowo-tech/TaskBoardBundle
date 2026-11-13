@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Field;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
+use Nowo\TaskBoardBundle\Api\TaskApiLevel;
+use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
+use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -101,6 +105,10 @@ final class CustomFieldsTest extends ApiTestCase
         self::assertSame(['Points', 'Capa'], array_column($listed, 'name'), 'the tenant\'s fields, then the board\'s');
         self::assertSame(['number', 'drop_down'], array_column($listed, 'type'));
         self::assertSame('#00ff00', $listed[1]['type_config']['options'][0]['color']);
+        // The 2.2 read of the synced fields alone stays as it was.
+        $reads = self::getContainer()->get(TaskApiReadOperations::class);
+        self::assertInstanceOf(TaskApiReadOperations::class, $reads);
+        self::assertSame([], $reads->boardFields(new TaskApiPrincipal($this->owner, TaskApiLevel::Full, TaskApiWhere::everything(), 'id', 'name'), $this->board->getId()));
 
         $this->send('POST', '/api/tasks/v2/task/' . $a->getId() . '/field/' . $layer->getId(), ['value' => 'domain']);
         self::assertResponseIsSuccessful();
@@ -108,6 +116,8 @@ final class CustomFieldsTest extends ApiTestCase
         $this->send('POST', '/api/tasks/v2/task/' . $b->getId() . '/field/' . $points->getId(), ['value' => 8]);
         $this->send('POST', '/api/tasks/v2/task/' . $b->getId() . '/field/' . $points->getId(), ['value' => 'many']);
         $this->assertRefused(400, 'INPUT_002');
+        $this->send('POST', '/api/tasks/v2/task/' . $a->getId() . '/field/' . $points->getId(), ['other' => 1]);
+        $this->assertRefused(400, 'INPUT_001');
         $this->send('POST', '/api/tasks/v2/task/' . $a->getId() . '/field/not-a-native-field', ['value' => 'x']);
         $this->assertRefused(409, 'FIELD_001');
 
@@ -159,7 +169,7 @@ final class CustomFieldsTest extends ApiTestCase
         self::assertStringContainsString('Points', $crawler->filter('thead')->text());
         $cells = $crawler->filter('td[data-custom-field="' . $points->getId() . '"]')->each(static fn ($cell): string => trim($cell->text()));
         sort($cells);
-        self::assertSame(['13', '2', '—'], $cells);
+        self::assertSame(['2', '13', '—'], $cells);
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-custom-field-filter"]'));
 
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list?cf_field=' . $points->getId() . '&cf_op=' . urlencode('>') . '&cf_value=5');
@@ -267,6 +277,7 @@ final class CustomFieldsTest extends ApiTestCase
         $fields->delete($this->owner, $num);
         self::assertNull($fields->find($num->getId()));
 
+        $fields->setField($task, $tenant->getId(), 'kept', $this->owner);
         $value = $fields->valuesOf([$task->getId()])[$task->getId()][0];
         self::assertNotSame('', $value->getId());
         self::assertLessThanOrEqual(new DateTimeImmutable(), $value->getUpdatedAt());
