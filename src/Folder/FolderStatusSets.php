@@ -67,8 +67,10 @@ final readonly class FolderStatusSets
             }
         }
         // Every board's refusal first: nothing changes, in memory either, unless every board can take the set.
-        foreach ($specs === null ? [] : $boards as $board) {
-            $this->folders->checkColumns($board, $specs, $columnMaps[$board->getId()] ?? []);
+        if ($specs !== null) {
+            foreach ($boards as $board) {
+                $this->folders->checkColumns($board, $specs, $columnMaps[$board->getId()] ?? []);
+            }
         }
         $this->folders->transactional(function () use ($folder, $boards, $specs, $columnMaps): void {
             $folder->setStatusSet($specs);
