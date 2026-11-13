@@ -9,6 +9,8 @@ use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldListView;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\ApiTestCase;
@@ -20,6 +22,7 @@ use function array_column;
 use function array_map;
 use function json_encode;
 use function sort;
+use function str_repeat;
 use function str_replace;
 use function trim;
 use function urlencode;
@@ -179,6 +182,79 @@ final class CustomFieldsTest extends ApiTestCase
         $this->em->clear();
         $values = $this->fields()->valuesOf([$task->getId()])[$task->getId()] ?? [];
         self::assertSame(['infra'], array_map($this->fields()->display(...), $values));
+    }
+
+    public function testTheListViewOperators(): void
+    {
+        $view   = self::getContainer()->get(TaskCustomFieldListView::class);
+        self::assertInstanceOf(TaskCustomFieldListView::class, $view);
+        $layer  = $this->fields()->define($this->owner, $this->board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
+        $num    = $this->fields()->define($this->owner, $this->board, null, 'N', CustomFieldType::Number);
+        $text   = $this->fields()->define($this->owner, $this->board, null, 'T', CustomFieldType::Text);
+        $task   = $this->task($this->board, 'Task');
+        $this->fields()->setField($task, $layer->getId(), 'a', $this->owner);
+        $this->fields()->setField($task, $num->getId(), '4', $this->owner);
+        $this->fields()->setField($task, $text->getId(), 'x', $this->owner);
+        $values = [];
+        foreach ($this->fields()->valuesOf([$task->getId()])[$task->getId()] as $value) {
+            $values[$value->getField()->getId()] = $value;
+        }
+        self::assertTrue($view->holds($layer, $values[$layer->getId()], CustomFieldOperator::Equals, ['a']));
+        self::assertTrue($view->holds($layer, $values[$layer->getId()], CustomFieldOperator::In, ['b', 'a']));
+        self::assertTrue($view->holds($layer, $values[$layer->getId()], CustomFieldOperator::NotEquals, ['b']));
+        self::assertTrue($view->holds($num, $values[$num->getId()], CustomFieldOperator::LessThan, ['5']));
+        self::assertFalse($view->holds($num, $values[$num->getId()], CustomFieldOperator::GreaterThan, ['5']));
+        self::assertTrue($view->holds($num, $values[$num->getId()], CustomFieldOperator::Equals, ['4.0']));
+        self::assertTrue($view->holds($text, $values[$text->getId()], CustomFieldOperator::IsSet, []));
+        self::assertFalse($view->holds($text, null, CustomFieldOperator::IsSet, []));
+        self::assertFalse($view->holds($text, null, CustomFieldOperator::Equals, ['x']));
+    }
+
+    public function testManagerEdges(): void
+    {
+        $fields = $this->fields();
+        self::assertNull($fields->find(''));
+        self::assertNull($fields->find('unknown'));
+        $tenant = $fields->define($this->owner, null, 'tenant-a', 'Tenant field', CustomFieldType::Text);
+        self::assertSame([$tenant->getId()], array_map(static fn (TaskCustomField $f): string => $f->getId(), $fields->tenantFields('tenant-a')));
+        self::assertSame([], $fields->tenantFields(null));
+        self::assertSame($tenant, $fields->find($tenant->getId()));
+        $refused = static function (callable $call, string $reason): void {
+            try {
+                $call();
+                self::fail('expected ' . $reason);
+            } catch (TaskCustomFieldRefusedException $exception) {
+                self::assertSame($reason, $exception->reason);
+            }
+        };
+        $refused(fn () => $fields->define($this->owner, $this->board, null, ' ', CustomFieldType::Text), TaskCustomFieldRefusedException::INVALID);
+        $layer = $fields->define($this->owner, $this->board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
+        $num   = $fields->define($this->owner, $this->board, null, 'N', CustomFieldType::Number);
+        $task  = $this->task($this->board, 'T');
+        $fields->setField($task, $layer->getId(), 'b', $this->owner);
+        $fields->setField($task, $num->getId(), 1.25, $this->owner);
+        $fields->setField($task, $num->getId(), 7, $this->owner);
+        self::assertTrue($fields->hasValues($layer));
+        $refused(fn () => $fields->setField($task, $num->getId(), 'NaN', $this->owner), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn () => $fields->setField($task, $num->getId(), '1e5', $this->owner), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn () => $fields->setField($task, $num->getId(), INF, $this->owner), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn () => $fields->setField($task, $layer->getId(), ['b'], $this->owner), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn () => $fields->setField($task, $tenant->getId(), str_repeat('x', TaskCustomFieldManager::TEXT_MAX + 1), $this->owner), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn () => $fields->update($this->owner, $layer, ' ', null, 0), TaskCustomFieldRefusedException::INVALID);
+
+        // Dropping option b clears the value that held it.
+        $fields->update($this->owner, $layer, 'Layer', [['id' => $layer->optionNamed('a')['id'] ?? null, 'name' => 'a']], 3);
+        self::assertFalse($fields->hasValues($layer));
+        $fields->update($this->owner, $num, 'Number', null, 4);
+        $fields->delete($this->owner, $num);
+        self::assertNull($fields->find($num->getId()));
+
+        $stranger = $this->user('stranger@example.com', []);
+        $tokens   = self::getContainer()->get('security.token_storage');
+        self::assertInstanceOf(TokenStorageInterface::class, $tokens);
+        $tokens->setToken(new UsernamePasswordToken($stranger, 'main', []));
+        $refused(fn () => $fields->define($stranger, null, 'tenant-a', 'Nope', CustomFieldType::Text), TaskCustomFieldRefusedException::NOT_ALLOWED);
+        $refused(fn () => $fields->define($stranger, $this->board, null, 'Nope', CustomFieldType::Text), TaskCustomFieldRefusedException::NOT_ALLOWED);
     }
 
     /**
