@@ -186,8 +186,13 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $deps      = [];
         $members   = [];
         $events    = [];
+        $parents   = [];
         foreach ($roots as $root) {
-            $tree   = TaskMovePlanner::subtree($root);
+            $tree = TaskMovePlanner::subtree($root);
+            // Before the root becomes top-level: each task's parent as it was (the host archives the old story).
+            foreach ($tree as $node) {
+                $parents[$node->getId()] = $node->getParent()?->getId();
+            }
             $ids    = array_map(static fn (Task $node): string => $node->getId(), $tree);
             $source = $root->getBoard();
             $root->setParent(null);
@@ -219,7 +224,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
                 $node->changeBoard($target, $column, $positions[$key] ?? 0);
                 $positions[$key] = ($positions[$key] ?? 0) + 1;
                 if ($from->getId() !== $target->getId()) {
-                    $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $from->getName(), $target->getName());
+                    $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $from->getName(), $target->getName(), $parents[$node->getId()] === null ? null : 'parent:' . $parents[$node->getId()]);
                 }
                 $moved[]                 = $node->getId();
                 $columns[$node->getId()] = $key;
@@ -238,7 +243,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
             $this->events->dispatchSaved(new TaskBoardChangedEvent($root, $actor, $sourceId, $target->getId(), $ids), TaskBoardEvents::TASK_BOARD_CHANGED);
         }
 
-        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members);
+        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents);
     }
 
     /**

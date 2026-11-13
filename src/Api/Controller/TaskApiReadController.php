@@ -37,6 +37,8 @@ final readonly class TaskApiReadController
         private TaskApiReadSerializer $serializer,
         // Since 2.17.0 (Beacon spec 234): folders.
         private TaskApiFolderOperations $folderOperations,
+        // Since 2.17.0: `api.lists_include_folders`.
+        private bool $listsIncludeFolders = false,
     ) {
     }
 
@@ -78,11 +80,16 @@ final readonly class TaskApiReadController
         return new JsonResponse(['lists' => array_map(fn (TaskBoard $board): array => $this->serializer->board($board, $list->space, $list->taskCounts[$board->getId()] ?? 0), $boards)]);
     }
 
-    /** Since 2.17.0 (as ClickUp): the folderless lists only; a board in a folder is listed under its folder. */
+    /**
+     * Since 2.17.0 (as ClickUp): the folderless lists only, a board in a folder being listed under its folder; with
+     * `include_folders=true` (or `api.lists_include_folders`) every board, each with its `folder`.
+     */
     public function lists(Request $request, string $spaceId): JsonResponse
     {
+        $query  = $request->query->all();
+        $all    = isset($query['include_folders']) ? TaskApiTaskFilter::flag($query, 'include_folders') : $this->listsIncludeFolders;
         $list   = $this->operations->boards(TaskApiRequestListener::principalOf($request), $spaceId);
-        $boards = array_values(array_filter($list->boards, static fn (TaskBoard $board): bool => $board->getFolderId() === null));
+        $boards = $all ? $list->boards : array_values(array_filter($list->boards, static fn (TaskBoard $board): bool => $board->getFolderId() === null));
 
         return new JsonResponse(['lists' => array_map(fn (TaskBoard $board): array => $this->serializer->board($board, $list->space, $list->taskCounts[$board->getId()] ?? 0), $boards)]);
     }
