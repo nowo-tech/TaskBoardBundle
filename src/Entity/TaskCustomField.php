@@ -11,7 +11,6 @@ use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
-use function array_values;
 use function count;
 use function is_array;
 use function is_string;
@@ -175,7 +174,7 @@ class TaskCustomField
             $kept[]       = ['id' => $id, 'name' => $name, 'color' => $color];
         }
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->options = array_values($kept);
+        $this->options = $kept;
 
         return $this;
     }
@@ -192,7 +191,11 @@ class TaskCustomField
         return null;
     }
 
-    /** The option of that exact name, if any. */
+    /**
+     * The option of that exact name, if any.
+     *
+     * @return array{id: string, name: string, color: ?string}|null
+     */
     public function optionNamed(string $name): ?array
     {
         foreach ($this->options as $option) {
