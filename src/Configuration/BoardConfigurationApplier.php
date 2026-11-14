@@ -128,10 +128,11 @@ final readonly class BoardConfigurationApplier
                 } else {
                     $this->fields->define($actor, $board, null, $spec->name, $spec->type, $spec->options, $position);
                 }
-            } catch (TaskCustomFieldRefusedException) {
-                // The right was asked by apply(): what the field manager refuses here is the data (names, options).
+            } catch (TaskCustomFieldRefusedException) { // @codeCoverageIgnoreStart
+                // The right was asked by apply() and the data by checkFields() (audit PW-M2) before the transaction; kept for
+                // a field manager that refuses more.
                 throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'fields']);
-            }
+            } // @codeCoverageIgnoreEnd
             $kept[$spec->name] = true;
         }
         foreach ($own as $name => $field) {
