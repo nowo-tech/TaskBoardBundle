@@ -183,6 +183,10 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.calendar_days', ScriptedCalendarDays::class)->public();
         // Since 2.3.0 (audit IC-I1): a move.targets hook that offers every board (used when a test sets move.targets).
         $container->services()->set('app.all_targets', AllBoardsTargets::class)->autowire()->public();
+        // Since 2.18.0 (Beacon spec 234): member badges and write provenance (used when a test sets member_badge_provider /
+        // write_provenance_provider).
+        $container->services()->set('app.member_badges', ScriptedMemberBadges::class)->public();
+        $container->services()->set('app.write_provenance', PathWriteProvenance::class)->autowire()->public();
         // Since 2.16.0 (spec 234): a column transition policy (used when a test sets column_transition_policy).
         $container->services()->set('app.transition_policy', ScriptedTransitionPolicy::class)->public();
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {

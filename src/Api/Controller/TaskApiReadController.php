@@ -139,7 +139,7 @@ final readonly class TaskApiReadController
         $startId = is_string($query['start_id'] ?? null) ? $query['start_id'] : null;
         $page    = $this->operations->comments(TaskApiRequestListener::principalOf($request), $taskId, $start, $startId);
 
-        return new JsonResponse(['comments' => array_map(fn (TaskComment $comment): array => $this->serializer->comment($comment, $page->authors[$comment->getId()] ?? null), $page->comments)]);
+        return new JsonResponse(['comments' => array_map(fn (TaskComment $comment): array => $this->serializer->comment($comment, $page->authors[$comment->getId()] ?? null, $page->updaters[$comment->getId()] ?? null), $page->comments)]);
     }
 
     public function members(Request $request, string $taskId): JsonResponse

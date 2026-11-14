@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 
@@ -25,9 +26,13 @@ final readonly class TaskChangeRecorder
 {
     /**
      * @param TaskChangeContext|null $cause since 2.3.0 (spec 216): the cause written on every row recorded while it is set
+     * @param WriteProvenanceProviderInterface|null $provenance since 2.18.0 (Beacon spec 234): the host's provenance of the
+     *                                                          write, stored on every row and on the task as its last write
      */
-    public function __construct(private ?TaskChangeContext $cause = null)
-    {
+    public function __construct(
+        private ?TaskChangeContext $cause = null,
+        private ?WriteProvenanceProviderInterface $provenance = null,
+    ) {
     }
 
     /** Since 2.10.0: why the writes running now happen ({@see TaskChangeContext::current()}); null outside a cause. */
@@ -59,6 +64,7 @@ final readonly class TaskChangeRecorder
             return;
         }
 
+        $provenance = $this->provenance?->current();
         $task->addChangeHistory(new TaskChangeHistory(
             task: $task,
             user: $user,
@@ -67,7 +73,10 @@ final readonly class TaskChangeRecorder
             newValue: $newValue,
             context: $context,
             cause: $this->cause?->current(),
+            provenance: $provenance,
         ));
+        // Since 2.18.0 (Beacon spec 234): the task keeps who made its last recorded write and where it came from.
+        $task->recordWrite($user, $provenance);
     }
 
     public function recordIfChanged(

@@ -65,13 +65,14 @@ interface TaskBoardRestructureInterface
      * column). Names compare without case, accents or edge spaces.
      *
      * The host's column transition policy (`column_transition_policy`) is asked, before anything changes, for every task
-     * that changes board, as it enters its column there (operation `board_move`, through `$via`'s channel; null: `web`):
-     * an MCP server passes its own channel, so a *humans only* column cannot be reached through a move. The first refusal
-     * moves nothing.
+     * that changes board, as it enters its column there (operation `board_move`, through `$via`'s channel; null: the
+     * channel of the host's `write_provenance_provider`, else `web`): an MCP caller is asked as `mcp`, so a *humans only*
+     * column cannot be reached through a move. The first refusal moves nothing.
      *
      * @param list<string> $taskIds
      * @param array<string, string> $columnMap source column id or name => target column id or name
-     * @param ColumnTransitionVia|null $via since 2.19.0: who asks (its channel; the operation is always `board_move`)
+     * @param ColumnTransitionVia|null $via since 2.19.0: who asks (its channel; the operation is always `board_move`); null:
+     *                                      the write provenance's channel, else `web`
      *
      * @throws ColumnTransitionRefusedException when the column transition policy refuses a task: nothing changes
      */

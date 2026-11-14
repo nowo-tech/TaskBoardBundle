@@ -8,6 +8,8 @@ use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -26,6 +28,15 @@ class TaskChangeHistory
 
     #[ORM\Column(name: 'user_name', type: 'string', length: 180, nullable: true)]
     private ?string $userName;
+
+    /** Since 2.18.0 (Beacon spec 234): where the write came from, as the host's provenance provider told it; null: unknown. */
+    // Audit PS-I2: a plain string, read through WriteChannel::tryFrom(); a value outside the list reads as null.
+    #[ORM\Column(type: 'string', length: 8, nullable: true)]
+    private ?string $channel;
+
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (e.g. an API token's name); null: none. */
+    #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
+    private ?string $actorLabel;
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'changeHistory')]
@@ -47,10 +58,14 @@ class TaskChangeHistory
         // a person's own change. See TaskChangeContext.
         #[ORM\Column(type: 'string', length: 191, nullable: true)]
         private ?string $cause = null,
+        // Since 2.18.0 (Beacon spec 234): the write's provenance (null: the columns stay NULL).
+        ?WriteProvenance $provenance = null,
     ) {
-        $this->id        = Uuid::generate()->toString();
-        $this->createdAt = new DateTimeImmutable();
-        $this->userName  = $user === null ? null : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        $this->id         = Uuid::generate()->toString();
+        $this->createdAt  = new DateTimeImmutable();
+        $this->userName   = $user === null ? null : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        $this->channel    = $provenance?->channel->value;
+        $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
     }
 
     public function getId(): string
@@ -85,7 +100,10 @@ class TaskChangeHistory
         return $this;
     }
 
-    /** Since 1.28.0: the row stops pointing at the user; with `$forgetName` the name goes too. The fact of the change stays. */
+    /**
+     * Since 1.28.0: the row stops pointing at the user; with `$forgetName` the name goes too (since 2.18.0 the actor label
+     * as well). The fact of the change stays.
+     */
     public function detachUser(bool $forgetName = false): self
     {
         $this->backfillUserName();
@@ -94,6 +112,9 @@ class TaskChangeHistory
         if ($forgetName) {
             // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->userName = null;
+            // Since 2.18.0: the actor label may name the person too.
+            // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
+            $this->actorLabel = null;
         }
 
         return $this;
@@ -123,6 +144,18 @@ class TaskChangeHistory
     public function getCause(): ?string
     {
         return $this->cause;
+    }
+
+    /** Since 2.18.0 (Beacon spec 234): where the write came from; null when the host did not say. */
+    public function getChannel(): ?WriteChannel
+    {
+        return $this->channel === null ? null : WriteChannel::tryFrom($this->channel);
+    }
+
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (at most 120 characters). */
+    public function getActorLabel(): ?string
+    {
+        return $this->actorLabel;
     }
 
     public function getCreatedAt(): DateTimeImmutable
