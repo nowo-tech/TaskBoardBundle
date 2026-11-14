@@ -111,6 +111,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.20.0 (minor). Additive, no schema change, see [UPGRADING](UPGRADING.md#to-2200).
+
+### Added
+
+- **Changing a task's parent through the Task API** (Beacon spec 234, T004; MCP `task_update` `parent`): `PUT /v2/task/{id}`
+  takes `parent`, a task of the same board to move the task (with its subtasks) under, or `null` to detach it to the top
+  level. Tasks level and the edit right on both tasks, as `parent` on create. New refusal codes: 400 `PARENT_001`
+  (another board), 400 `PARENT_002` (the task itself), 409 `PARENT_003` (one of its subtasks, at any depth), 409
+  `PARENT_004` (a concurrent tree change held the rows). The whole update is one transaction with the parent change
+  first. See [API](API.md#changing-a-tasks-parent-since-220).
+- **`Tree\TaskReparenterInterface`**, a framework-free port (ids in, `TaskReparentResult` out,
+  `TaskReparentRefusedException` with a stable `reason`), aliased to the domain service `Tree\TaskReparenter`, which
+  the API uses and a host's application layer can call or decorate. It locks the task's row and the new parent's path to
+  the root and checks the cycle on the committed rows inside one transaction (`Tree\TaskTreeStoreInterface`, Doctrine
+  implementation `Repository\DoctrineOrmTaskTreeStore`). One history row of the new type `TaskChangeType::Parent`
+  (translated in the 7 locales) with the write provenance, a new revision, and `TASK_UPDATED` with the changed field
+  `parent` after the commit.
+
+### Changed
+
+- `PUT /v2/task/{id}` reads `parent` instead of answering it as a `not_supported` warning. A bulk update still refuses it.
+- `TaskMover`'s lock-conflict detection moved to the internal `Doctrine\LockConflict` (same behaviour), shared with the
+  parent change.
+
 ## [2.18.0] - 2026-11-14
 
 Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-2180).

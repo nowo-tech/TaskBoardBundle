@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.20.0](#to-2200)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -196,6 +197,25 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.20.0
+
+Additive (Beacon spec 234, T004), no schema change and no configuration. What changes:
+
+- `PUT /v2/task/{id}` reads `parent` (a task id, or `null` to detach). A client that sent `parent` before got a
+  `not_supported` warning and nothing changed; now the task moves (or is refused with `PARENT_001` … `PARENT_004`,
+  `ACCESS_002`, `TOKEN_001`). A *My tasks* token that sends `parent` is refused with `TOKEN_001` instead of being
+  answered with a warning. Check your clients if they echo whole task objects back with `parent`: the same parent is a
+  no-op, a different one is a move.
+- New history type `parent` (`TaskChangeType::Parent`). A host that renders history rows by type, or maps the types to
+  its own labels (`history.cause_labeler`, exports, webhooks), adds it; the bundle's pages show it with the translation
+  `task_board.history.type.parent`.
+- `TASK_UPDATED` can carry the changed field `parent` (`getPreviousValue('parent')`: the old parent task, or null). A
+  listener that switches on the changed fields and fails on unknown ones adds it.
+- `TaskApiTaskOperations` gained a constructor argument (`TaskReparenterInterface $reparenter`, autowired). Hosts that
+  build it by hand (none should: it is a container service) pass it.
+- From code, the new port `Nowo\TaskBoardBundle\Tree\TaskReparenterInterface::reparent($taskId, $parentId, $actor)`
+  (see [USAGE](USAGE.md#changing-a-tasks-parent-since-220)). It checks no access: check `canEditTask()` on both tasks first.
 
 ## To 2.18.0
 

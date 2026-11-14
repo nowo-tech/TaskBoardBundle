@@ -13,6 +13,7 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Management endpoints (Full)](#management-endpoints-full)
 - [Task templates (since 2.16)](#task-templates-since-216)
 - [Provenance fields (since 2.18)](#provenance-fields-since-218)
+- [Changing a task's parent (since 2.20)](#changing-a-tasks-parent-since-220)
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
@@ -137,7 +138,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | Endpoint | Level | Notes |
 |---|---|---|
 | `POST /v2/list/{id}/task` | Tasks | `name`, `description` / `markdown_content`, `status` (a column's name), `priority` (1 urgent to 4 low), `due_date`, `start_date`, `time_estimate`, `tags`, `assignees`, `parent` (same board). Asks the host's plan limit |
-| `PUT /v2/task/{id}` | My tasks (own: `status`, dates, `description` only) | `name`, `priority`, `time_estimate`, `assignees` and `watchers` (`add`, `rem`), `archived` need Tasks. A status change moves the task as the board does: the done column completes it, leaving it reopens it within the host's limit |
+| `PUT /v2/task/{id}` | My tasks (own: `status`, dates, `description` only) | `name`, `priority`, `time_estimate`, `assignees` and `watchers` (`add`, `rem`), `archived` need Tasks. Since 2.20.0 `parent` (an id, or null) re-parents the task, Tasks level: see [Changing a task's parent](#changing-a-tasks-parent-since-220). A status change moves the task as the board does: the done column completes it, leaving it reopens it within the host's limit |
 | `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
 | `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`. Mentions work as in the UI's comment box: each candidate written `@Label` in the text is mentioned, so `TASK_COMMENT`, `TASK_MENTION` and the host's notifications follow |
 | `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | The task form's rules: a name of 1 to 64 characters, at most 20 tags. `PUT /v2/task/{id}` does not take `tags` (a warning) |
@@ -228,6 +229,37 @@ query parameter or header sent by a client is ignored. `token_name` is a JSON st
 JSON encoding escapes `<`, `>`, `&` and quotes as `\u003C` etc., so it is safe to embed, and a client that renders it as
 HTML must escape it. The answers of `POST /v2/task/{id}/comment` and `PUT /v2/comment/{id}` stay as ClickUp's.
 
+## Changing a task's parent (since 2.20)
+
+`PUT /v2/task/{id}` with `parent` moves the task, with all its subtasks, under another task of the same board, or detaches
+it to the top level with `"parent": null` (Beacon: MCP `task_update` `parent`). The other fields of the body may come
+along; the whole update is then one transaction, and the parent change is its first write, so a refusal writes nothing.
+
+```json
+PUT /v2/task/9c1f…   {"parent": "4be0…"}       // under 4be0…
+PUT /v2/task/9c1f…   {"parent": null}          // to the top level
+```
+
+- **Access.** A *Tasks* or *Full* token (*My tasks* and *Read*: 403 `TOKEN_001`), and the edit right on the task and on
+  the new parent (403 `ACCESS_002`; in Beacon `project.tasks.manage`), exactly as `parent` on create. A parent out of
+  reach is 404 `ACCESS_001`; a value that is not a string or null is 400 `INPUT_002`.
+- **Rules**, one domain service for every caller (`Tree\TaskReparenterInterface`): the same board only; never the task
+  itself; never one of its subtasks at any depth. There is no depth limit (as on create, in the board UI and in imports).
+- **Concurrency.** The task's row and then the new parent's and each ancestor's are locked (`SELECT … FOR UPDATE`) and read
+  as committed before the check, inside the transaction; a concurrent change of the same path waits or, when the
+  database aborts one of two crossing changes (deadlock, lock wait timeout), answers `PARENT_004`. Send it again.
+- **Effects.** One history row (`parent`: old and new parent titles, `context` `task:<id>` of the new parent) with the
+  write's provenance (`channel`, `token_name`), a new `revision` (ETag), `TASK_UPDATED` with the changed field `parent`,
+  and `API_WRITE` `task.update` with `parent` among the changed fields and `{"parent": id}` as target. The same parent
+  again changes nothing. A bulk update does not take `parent` (`BULK_001`).
+
+| ECODE | HTTP | When |
+|---|---|---|
+| `PARENT_001` | 400 | The new parent is on another board |
+| `PARENT_002` | 400 | The new parent is the task itself |
+| `PARENT_003` | 409 | The new parent is one of the task's subtasks (at any depth): it would close a cycle |
+| `PARENT_004` | 409 | A concurrent change of the task tree held the rows (deadlock or lock wait timeout); nothing was written |
+
 ## Idempotency
 
 Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`):
@@ -275,6 +307,8 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`) |
 | `BULK_001`, `BULK_002`, `BULK_003` | 409, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
 | `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
+| `PARENT_001`, `PARENT_002` | 400 | Since 2.20.0: a new parent on another board; the task itself ([parent changes](#changing-a-tasks-parent-since-220)) |
+| `PARENT_003`, `PARENT_004` | 409 | Since 2.20.0: a new parent among the task's subtasks; a concurrent tree change (send it again) |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp

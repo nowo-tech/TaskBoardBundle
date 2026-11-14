@@ -458,7 +458,7 @@ paths:
     put:
       operationId: task_update
       summary: 'Update a task; My tasks: status, dates and description of its own'
-      description: 'Least level: My tasks (own). The person''s access and where still apply.'
+      description: 'Least level: My tasks (own). The person''s access and where still apply. Since 2.20.0 `parent` re-parents or detaches the task (MCP task_update parent): see TaskUpdate.parent.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/TaskUpdate'}}}}
@@ -1023,7 +1023,7 @@ components:
       properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}, template_id: {type: string, description: 'Since 2.16.0 (task_templates.enabled): a template the board offers (GET /v2/list/{list_id}/taskTemplate). Its description, tags and status fill only what the body does not set. Any other id is 400 INPUT_002 "Invalid template_id".'}}
     TaskUpdate:
       type: object
-      properties: {name: {type: string}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null']}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, archived: {type: boolean}, assignees: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, watchers: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}}
+      properties: {name: {type: string}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null']}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, archived: {type: boolean}, assignees: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, watchers: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, parent: {type: [string, 'null'], description: 'Since 2.20.0: a task of the same board to move this task (and its subtasks) under, or null to detach it to the top level. Needs Tasks and the edit right on both tasks. Refused: 400 PARENT_001 (another board), 400 PARENT_002 (the task itself), 409 PARENT_003 (one of its subtasks, at any depth), 409 PARENT_004 (a concurrent tree change held the rows: send it again). No depth limit.'}}
     CommentCreate:
       type: object
       required: [comment_text]
