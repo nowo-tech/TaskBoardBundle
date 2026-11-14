@@ -26,6 +26,8 @@ final readonly class BoardColumnSpec
         public ColumnType $type = ColumnType::Custom,
         public ?string $color = null,
         public ?string $icon = null,
+        // Since 2.18.0: the 2.16 humans-only flag of the column (BoardColumn::isHumansOnly()).
+        public bool $humansOnly = false,
     ) {
         $trimmed = trim($name);
         if ($trimmed === '' || mb_strlen($trimmed) > self::NAME_MAX || $trimmed !== $name) {
@@ -34,11 +36,11 @@ final readonly class BoardColumnSpec
     }
 
     /**
-     * @return array{name: string, type: string, color: ?string, icon: ?string}
+     * @return array{name: string, type: string, color: ?string, icon: ?string, humansOnly: bool}
      */
     public function toArray(): array
     {
-        return ['name' => $this->name, 'type' => $this->type->value, 'color' => $this->color, 'icon' => $this->icon];
+        return ['name' => $this->name, 'type' => $this->type->value, 'color' => $this->color, 'icon' => $this->icon, 'humansOnly' => $this->humansOnly];
     }
 
     /**
@@ -56,9 +58,10 @@ final readonly class BoardColumnSpec
         $color = $data['color'] ?? null;
         $icon  = $data['icon'] ?? null;
         if (($color !== null && !is_string($color)) || ($icon !== null && !is_string($icon)) || (isset($data['humansOnly']) && !is_bool($data['humansOnly']))) {
-            throw new InvalidArgumentException('Invalid column colour or icon.');
+            throw new InvalidArgumentException('Invalid column colour, icon or humans-only flag.');
         }
 
-        return new self($data['name'], $type, $color, $icon);
+        // An array written before 2.18.0 has no `humansOnly`: false.
+        return new self($data['name'], $type, $color, $icon, ($data['humansOnly'] ?? false) === true);
     }
 }

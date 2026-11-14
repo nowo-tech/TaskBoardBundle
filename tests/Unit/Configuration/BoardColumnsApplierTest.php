@@ -37,7 +37,7 @@ final class BoardColumnsApplierTest extends TestCase
         $removed = (new BoardColumnsApplier())->apply($board, [
             new BoardColumnSpec('Todo', ColumnType::Open),
             new BoardColumnSpec('In progress', ColumnType::Custom, '#123456', 'tabler:bug'),
-            new BoardColumnSpec('Done', ColumnType::Closed),
+            new BoardColumnSpec('Done', ColumnType::Closed, humansOnly: true),
         ], [$doing->getId() => 'In progress', 'Review' => 'In progress']);
 
         self::assertSame(['Todo', 'In progress', 'Done'], array_map(static fn (BoardColumn $c): string => $c->getName(), ColumnTypes::ordered($board)));
@@ -48,6 +48,7 @@ final class BoardColumnsApplierTest extends TestCase
         self::assertSame($todo, $a->getColumn());
         self::assertSame($todo, $archived->getColumn(), 'an archived task of a removed column goes to the first column');
         self::assertSame(['Todo:open', 'In progress:custom', 'Done:closed'], array_map(static fn (BoardColumnSpec $s): string => $s->name . ':' . $s->type->value, BoardColumnsApplier::specsOf($board)));
+        self::assertSame([false, false, true], array_map(static fn (BoardColumnSpec $s): bool => $s->humansOnly, BoardColumnsApplier::specsOf($board)), 'the humans-only flag is applied and read back');
     }
 
     public function testRefusals(): void
@@ -91,7 +92,9 @@ final class BoardColumnsApplierTest extends TestCase
     public function testSpecs(): void
     {
         $spec = BoardColumnSpec::fromArray(['name' => 'Hecho', 'type' => 'closed', 'color' => '#fff', 'icon' => null]);
-        self::assertSame(['name' => 'Hecho', 'type' => 'closed', 'color' => '#fff', 'icon' => null], $spec->toArray());
+        self::assertSame(['name' => 'Hecho', 'type' => 'closed', 'color' => '#fff', 'icon' => null, 'humansOnly' => false], $spec->toArray());
+        // Since 2.18.0: the humans-only flag travels with the column.
+        self::assertTrue(BoardColumnSpec::fromArray(['name' => 'Approved', 'humansOnly' => true])->humansOnly);
         self::assertSame(ColumnType::Custom, BoardColumnSpec::fromArray(['name' => 'X'])->type);
         foreach ([null, ['type' => 'open'], ['name' => 'X', 'type' => 'nope'], ['name' => 'X', 'color' => 3], ['name' => 'X', 'humansOnly' => 'yes']] as $bad) {
             try {
