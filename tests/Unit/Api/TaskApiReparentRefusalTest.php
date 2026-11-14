@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Api;
 
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
-use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -17,7 +17,7 @@ final class TaskApiReparentRefusalTest extends TestCase
     {
         $codes = [];
         foreach (['otherBoard', 'self', 'descendant', 'conflict', 'notFound'] as $factory) {
-            $refusal = TaskApiRefusal::reparentRefused(TaskReparentRefusedException::$factory());
+            $refusal = TaskApiRefusal::treeRefused(TaskTreeRefusedException::$factory());
             $codes[] = [$refusal->status, $refusal->ecode];
         }
 

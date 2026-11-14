@@ -6,6 +6,10 @@ namespace Nowo\TaskBoardBundle\Support;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 
+use function array_pop;
+use function intdiv;
+use function spl_object_id;
+
 /**
  * Done / total of a task's subtasks at any depth (since 1.10): every descendant counts once.
  */
@@ -26,12 +30,22 @@ final readonly class SubtaskProgress
      */
     public static function of(Task $task): self
     {
+        // Since 2.20.0 (DoS bound): iterative, each descendant once (a loop in the data is not followed twice).
         $done  = 0;
         $total = 0;
-        foreach ($task->getSubtasks() as $subtask) {
-            $nested = self::of($subtask);
-            $total += 1 + $nested->total;
-            $done += ($subtask->isCompleted() ? 1 : 0) + $nested->done;
+        $seen  = [spl_object_id($task) => true];
+        $stack = $task->getSubtasks()->toArray();
+        while ($stack !== []) {
+            $subtask = array_pop($stack);
+            if (isset($seen[spl_object_id($subtask)])) {
+                continue;
+            }
+            $seen[spl_object_id($subtask)] = true;
+            ++$total;
+            $done += $subtask->isCompleted() ? 1 : 0;
+            foreach ($subtask->getSubtasks() as $child) {
+                $stack[] = $child;
+            }
         }
 
         return new self($done, $total);

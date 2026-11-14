@@ -37,6 +37,9 @@ use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -98,6 +101,11 @@ final readonly class TaskImportOrchestrator
         private TaskBoardQuota $quota = new TaskBoardQuota(),
         // Since 2.10.0: holds the column events of an import until its commit (dropped on a rollback).
         private ?TaskEventDeferral $events = null,
+        // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`; a row past it goes under its deepest allowed ancestor.
+        private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
+        // Since 2.20.0 (audit PX-M2): a matched task's parent changes through the port, on locked, committed rows (the
+        // rules and the locks of the Task API); none (a hand-built orchestrator): the loaded tree is checked.
+        private ?TaskReparenterInterface $reparenter = null,
     ) {
     }
 
@@ -325,7 +333,7 @@ final readonly class TaskImportOrchestrator
 
             if ($task instanceof Task) {
                 $changed                 = $this->updater->apply($task, $row, $this->matchColumn($columnsByName, $row->status), $positionIn, $columns, $actor);
-                $changed                 = $this->reparent($task, $row, $index, $imported, $known, $find, $canEdit, $warnings) || $changed;
+                $changed                 = $this->reparent($task, $row, $index, $imported, $known, $find, $canEdit, $warnings, $actor) || $changed;
                 $changed                 = $this->updater->applyAssignees($task, $assignees->resolve($row), $actor) || $changed;
                 $matched[$task->getId()] = $changed;
                 $dirty                   = $dirty || $changed;
@@ -460,6 +468,7 @@ final readonly class TaskImportOrchestrator
             }
         }
 
+        $parent = $this->withinDepth($parent, $row, $index, $warnings);
         $column = $this->matchColumn($columnsByName, $row->status) ?? ($board->getColumns()->first() ?: null);
         $task   = new Task(
             board: $board,
@@ -507,7 +516,7 @@ final readonly class TaskImportOrchestrator
      * @param Closure(Task): bool $canEdit
      * @param list<string> $warnings
      */
-    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, Closure $find, Closure $canEdit, array &$warnings): bool
+    private function reparent(Task $task, ImportedTaskDto $row, int $index, array $imported, array $known, Closure $find, Closure $canEdit, array &$warnings, object $actor): bool
     {
         if ($row->parentExternalId === null) {
             return false;
@@ -521,6 +530,9 @@ final readonly class TaskImportOrchestrator
         if ($parent === $task->getParent()) {
             return false;
         }
+        if ($this->reparenter instanceof TaskReparenterInterface) {
+            return $this->reparentThroughPort($this->reparenter, $task, $parent, $row, $index, $warnings, $actor);
+        }
         $seen = [];
         for ($ancestor = $parent; $ancestor instanceof Task; $ancestor = $ancestor->getParent()) {
             if ($ancestor === $task || isset($seen[spl_object_id($ancestor)])) {
@@ -530,9 +542,62 @@ final readonly class TaskImportOrchestrator
             }
             $seen[spl_object_id($ancestor)] = true;
         }
+        if (!$this->treeLimits->allowsMove($task, $parent)) {
+            $warnings[] = $this->tooDeepWarning($row, $index);
+
+            return false;
+        }
         $task->setParent($parent);
 
         return true;
+    }
+
+    /**
+     * Since 2.20.0 (audit PX-M2): the parent change through {@see TaskReparenterInterface}, inside the import's
+     * transaction: the rows of the run written so far are flushed first, so the locked walk sees them. A refusal is a
+     * warning and the task keeps its parent.
+     *
+     * @param list<string> $warnings
+     */
+    private function reparentThroughPort(TaskReparenterInterface $reparenter, Task $task, Task $parent, ImportedTaskDto $row, int $index, array &$warnings, object $actor): bool
+    {
+        RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
+        try {
+            return $reparenter->reparent($task->getId(), $parent->getId(), $actor)->changed;
+        } catch (TaskTreeRefusedException $refused) {
+            // `descendant` (or `self`); `not_found` / `other_board` cannot come from findParent(), but read the same way.
+            $warnings[] = $refused->reason === TaskTreeRefusedException::TOO_DEEP
+                ? $this->tooDeepWarning($row, $index)
+                : sprintf('Row %d ("%s"): moving it under "%s" would make it its own ancestor (%s); the task keeps its parent.', $index + 1, $row->title, $row->parentExternalId, $refused->reason);
+
+            return false;
+        }
+    }
+
+    private function tooDeepWarning(ImportedTaskDto $row, int $index): string
+    {
+        return sprintf('Row %d ("%s"): moving it under "%s" would go deeper than %d levels of subtasks; the task keeps its parent.', $index + 1, $row->title, $row->parentExternalId, $this->treeLimits->maxDepth());
+    }
+
+    /**
+     * Since 2.20.0 (`max_subtask_depth`): the parent a new row may have — its own, or, when that one is already at the
+     * limit, its nearest ancestor that is not (the top level when none is), with a warning. Bounded walks.
+     *
+     * @param list<string> $warnings
+     */
+    private function withinDepth(?Task $parent, ImportedTaskDto $row, int $index, array &$warnings): ?Task
+    {
+        if (!$parent instanceof Task || $this->treeLimits->maxSubtaskDepth === null) {
+            return $parent;
+        }
+        $allowed = $this->treeLimits->allowedParent($parent);
+        if ($allowed !== $parent) {
+            $warnings[] = $allowed instanceof Task
+                ? sprintf('Row %d ("%s"): deeper than %d levels of subtasks; task created under "%s".', $index + 1, $row->title, $this->treeLimits->maxDepth(), $allowed->getTitle())
+                : sprintf('Row %d ("%s"): deeper than %d levels of subtasks; task created at root level.', $index + 1, $row->title, $this->treeLimits->maxDepth());
+        }
+
+        return $allowed;
     }
 
     /**

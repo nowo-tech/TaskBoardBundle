@@ -60,7 +60,8 @@ final readonly class TaskChangeRecorder
         ?string $newValue = null,
         ?string $context = null,
     ): void {
-        if ($oldValue === $newValue && $changeType !== TaskChangeType::Created) {
+        // Since 2.20.0 (audit PX-L2): a parent change is told by its caller, which compares ids; two parents may share a title.
+        if ($oldValue === $newValue && $changeType !== TaskChangeType::Created && $changeType !== TaskChangeType::Parent) {
             return;
         }
 

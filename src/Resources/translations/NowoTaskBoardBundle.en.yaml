@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "The subtask was not created: it would be deeper than this board allows."
+task_board.flash.subtask_conflict: "The subtask was not created: the task tree changed meanwhile. Try again."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "The provider's list stopped advancing (a 
 task_board.sync.error.restore_refused: "Tasks back in the provider were not restored: a limit refused them."
 task_board.sync.error.relation_skipped: "Some parent or dependency relations were skipped (the other task is missing or not editable)."
 task_board.sync.error.parent_cycle: "A parent change was refused: it would make a task its own ancestor."
+task_board.sync.error.parent_too_deep: "A parent change or a new subtask was skipped: it would be deeper than max_subtask_depth (placed under its deepest allowed parent where possible)."
 task_board.sync.error.assignee_unresolved: "Some assignees do not match a person of this board; those tasks keep their assignees."
 task_board.sync.error.external_id_look_alike: "Some provider tasks were skipped: their id differs from an already synced one only by case, accents or trailing spaces. Ask your administrator to apply the TaskBoard 2.15.1 database upgrade."
 task_board.sync.error.status_without_column: "Some statuses have no column on the board; those tasks went to the fallback column."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Something changed since the preview: check it ag
 task_board.copy.refusal.same_board: "The task is already on this board."
 task_board.copy.refusal.board_archived: "The target board is archived."
 task_board.copy.refusal.subtree_too_large: "Too many subtasks: %count%, at most %max%."
+task_board.copy.refusal.too_deep: "Too many levels of subtasks: the copy would be deeper than allowed (%max%)."
+task_board.copy.refusal.tree_loop: "The task tree holds a loop (a task is its own ancestor in the data): nothing was changed."
 task_board.copy.refusal.sync_running: "A sync is running on one of the boards. Try again when it ends."
 task_board.copy.refusal.quota: "The plan limits refuse it."
 task_board.history.type.board_moved: "moved the task to another board"

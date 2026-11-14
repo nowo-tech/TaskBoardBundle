@@ -33,6 +33,9 @@ use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
+use Nowo\TaskBoardBundle\Tree\TaskTreeStoreInterface;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
@@ -68,6 +71,9 @@ final readonly class TaskManager implements TaskManagerInterface
         private ?SyncLimitCheckerInterface $limits = null,
         // Since 2.16.0 (spec 234, FR-014): asked before a task enters a column; none: every move is allowed.
         private ?ColumnTransitionPolicyInterface $transitions = null,
+        // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`, checked on the parent's rows locked in the store.
+        private ?TaskTreeStoreInterface $tree = null,
+        private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
     ) {
     }
 
@@ -78,8 +84,59 @@ final readonly class TaskManager implements TaskManagerInterface
      *                                      transition policy; null: a person in the board UI (`web`, `create`)
      *
      * @throws ColumnTransitionRefusedException since 2.16.0, when the policy refuses the column: nothing is created
+     * @throws TaskTreeRefusedException since 2.20.0, `too_deep` when the new subtask would be deeper than
+     *                                  `max_subtask_depth` (`conflict` when a concurrent tree change held the parent's rows):
+     *                                  nothing is created
      */
     public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null, ?ColumnTransitionVia $via = null): Task
+    {
+        if ($parent instanceof Task && $this->treeLimits->maxSubtaskDepth !== null) {
+            if (!$this->tree instanceof TaskTreeStoreInterface) {
+                // No store (a hand-built manager): the loaded tree decides.
+                if (!$this->treeLimits->allowsChildOf($parent)) {
+                    throw TaskTreeRefusedException::tooDeep();
+                }
+
+                return $this->createTask($board, $data, $creator, $parent, $context, $via);
+            }
+
+            // The parent's path locked, as a parent change locks it: a concurrent move cannot take it deeper meanwhile.
+            // @igor-ignore - The closure runs once, now, inside transactional(); the stateless store keeps no reference to it.
+            return $this->tree->transactional(function () use ($board, $data, $creator, $parent, $context, $via): Task {
+                $this->assertSubtaskDepth($this->lockedDepth($parent->getId()) + 1);
+
+                return $this->createTask($board, $data, $creator, $parent, $context, $via);
+            });
+        }
+
+        return $this->createTask($board, $data, $creator, $parent, $context, $via);
+    }
+
+    /**
+     * Since 2.20.0: the depth of a task as committed (its ancestors, each locked), stopping one level past the limit.
+     */
+    private function lockedDepth(string $taskId): int
+    {
+        $limit = $this->treeLimits->maxDepth();
+        $depth = 0;
+        for ($node = $this->tree?->lockedNode($taskId); $node?->parentId !== null && $depth <= $limit; $node = $this->tree?->lockedNode($node->parentId)) {
+            ++$depth;
+        }
+
+        return $depth;
+    }
+
+    /**
+     * @throws TaskTreeRefusedException
+     */
+    private function assertSubtaskDepth(int $depth): void
+    {
+        if (!$this->treeLimits->allows($depth)) {
+            throw TaskTreeRefusedException::tooDeep();
+        }
+    }
+
+    private function createTask(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent, ?string $context, ?ColumnTransitionVia $via): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
         if ($column instanceof BoardColumn) {

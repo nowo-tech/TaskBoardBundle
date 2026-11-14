@@ -31,6 +31,7 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
@@ -98,6 +99,21 @@ final class TaskImportUpsertTest extends TestCase
         $created = $this->importCsv("Task ID,Task Name,Parent ID\nN,New,O\n");
         self::assertSame(1, $created->created);
         self::assertSame($other, $this->tasks[count($this->tasks) - 1]->getParent(), 'a new row hangs from a task imported before');
+    }
+
+    /** Since 2.20.0: without the port (a hand-built orchestrator) the loaded tree is checked against max_subtask_depth. */
+    public function testAMoveDeeperThanTheLimitKeepsTheParent(): void
+    {
+        $parent = $this->imported('Parent', 'P');
+        $child  = $this->imported('Child', 'C');
+        $child->setParent($parent);
+        $other = $this->imported('Other', 'O');
+
+        $result = $this->importCsv("Task ID,Task Name,Parent ID\nO,Other,C\n", maxSubtaskDepth: 1);
+
+        self::assertSame(1, $result->unchanged);
+        self::assertTrue($this->warned($result, 'would go deeper than 1 levels of subtasks; the task keeps its parent'));
+        self::assertNull($other->getParent());
     }
 
     public function testADependencyAddedOnReimportCountsAsAnUpdate(): void
@@ -277,6 +293,7 @@ final class TaskImportUpsertTest extends TestCase
         bool $createColumns = true,
         ?TaskBoardResourceAccessChecker $accessChecker = null,
         int $maxRows = 5000,
+        ?int $maxSubtaskDepth = null,
     ): TaskImportResult {
         $repository = $this->createMock(TaskRepositoryInterface::class);
         $repository->method('findByBoard')->willReturnCallback(fn (): array => $this->tasks);
@@ -301,6 +318,7 @@ final class TaskImportUpsertTest extends TestCase
             linkLookup: $lookup,
             accessChecker: $accessChecker,
             maxRows: $maxRows,
+            treeLimits: new TaskTreeLimits($maxSubtaskDepth),
         ))->import($this->board, $source, $content, 'file.csv', $this->user, new TaskImportOptions(createMissingColumns: $createColumns));
     }
 

@@ -12,8 +12,9 @@ use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Tree\TaskReparenter;
-use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
 use Nowo\TaskBoardBundle\Tree\TaskReparentResult;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -89,12 +90,12 @@ final class TaskReparenterTest extends TestCase
         $elsewhere  = new Task(new TaskBoard('Other', 'other', $this->actor), 'Elsewhere', $this->actor);
         $this->store->add($elsewhere);
 
-        $this->assertRefused(TaskReparentRefusedException::SELF, $task->getId(), $task->getId());
-        $this->assertRefused(TaskReparentRefusedException::DESCENDANT, $task->getId(), $child->getId());
-        $this->assertRefused(TaskReparentRefusedException::DESCENDANT, $task->getId(), $grandChild->getId());
-        $this->assertRefused(TaskReparentRefusedException::OTHER_BOARD, $task->getId(), $elsewhere->getId());
-        $this->assertRefused(TaskReparentRefusedException::NOT_FOUND, 'missing', null);
-        $this->assertRefused(TaskReparentRefusedException::NOT_FOUND, $task->getId(), 'missing');
+        $this->assertRefused(TaskTreeRefusedException::SELF, $task->getId(), $task->getId());
+        $this->assertRefused(TaskTreeRefusedException::DESCENDANT, $task->getId(), $child->getId());
+        $this->assertRefused(TaskTreeRefusedException::DESCENDANT, $task->getId(), $grandChild->getId());
+        $this->assertRefused(TaskTreeRefusedException::OTHER_BOARD, $task->getId(), $elsewhere->getId());
+        $this->assertRefused(TaskTreeRefusedException::NOT_FOUND, 'missing', null);
+        $this->assertRefused(TaskTreeRefusedException::NOT_FOUND, $task->getId(), 'missing');
         self::assertSame([], $this->store->saved);
         self::assertNull($task->getParent());
     }
@@ -107,7 +108,7 @@ final class TaskReparenterTest extends TestCase
         // Committed by another process: top under the task, middle under top. The objects still say otherwise.
         $this->store->rows = [$top->getId() => $task->getId(), $middle->getId() => $top->getId()];
 
-        $this->assertRefused(TaskReparentRefusedException::DESCENDANT, $task->getId(), $middle->getId());
+        $this->assertRefused(TaskTreeRefusedException::DESCENDANT, $task->getId(), $middle->getId());
         self::assertSame([$task->getId(), $middle->getId(), $top->getId()], $this->store->locked, 'the task first, then the path up');
     }
 
@@ -118,7 +119,7 @@ final class TaskReparenterTest extends TestCase
         $b                 = $this->task('B');
         $this->store->rows = [$a->getId() => $b->getId(), $b->getId() => $a->getId()];
 
-        $this->assertRefused(TaskReparentRefusedException::DESCENDANT, $task->getId(), $a->getId());
+        $this->assertRefused(TaskTreeRefusedException::DESCENDANT, $task->getId(), $a->getId());
     }
 
     public function testAMissingAncestorEndsTheWalk(): void
@@ -130,20 +131,66 @@ final class TaskReparenterTest extends TestCase
         self::assertTrue($this->reparenter()->reparent($task->getId(), $parent->getId(), $this->actor)->changed);
     }
 
-    public function testRefusalMessages(): void
+    public function testAMoveDeeperKeepsTheWholeSubtreeWithinTheLimit(): void
     {
-        foreach (['notFound', 'otherBoard', 'self', 'descendant', 'conflict'] as $factory) {
-            self::assertNotSame('', TaskReparentRefusedException::$factory()->getMessage());
-        }
-        self::assertSame(TaskReparentRefusedException::CONFLICT, TaskReparentRefusedException::conflict()->reason);
+        // max_subtask_depth 3: depths 0..3 allowed.
+        $epic    = $this->task('Epic');
+        $story   = $this->task('Story', $epic);              // depth 1
+        $subtree = $this->task('Subtree');                   // depth 0, height 2
+        $child   = $this->task('Child', $subtree);
+        $this->task('Grandchild', $child);
+
+        $this->assertRefused(TaskTreeRefusedException::TOO_DEEP, $subtree->getId(), $story->getId(), 3); // 2 + 2 = 4
+        self::assertSame([[$subtree->getId(), 1]], $this->store->heights, 'the height walk is bounded by what is left');
+        self::assertTrue($this->reparenter(limit: 3)->reparent($subtree->getId(), $epic->getId(), $this->actor)->changed); // 1 + 2 = 3
+        $this->assertRefused(TaskTreeRefusedException::TOO_DEEP, $this->task('Leaf')->getId(), $this->chainOf(4)->getId(), 3);
     }
 
-    private function assertRefused(string $reason, string $taskId, ?string $parentId): void
+    public function testATreeSavedDeeperStaysMovableUpAndDetachable(): void
+    {
+        $deepest = $this->chainOf(5);                         // depth 4, past a limit of 2
+        $middle  = $this->task('Middle', $this->chainOf(3));   // depth 3
+        $this->task('Below', $middle);
+
+        $this->assertRefused(TaskTreeRefusedException::TOO_DEEP, $middle->getId(), $deepest->getId(), 2);
+        self::assertTrue($this->reparenter(limit: 2)->reparent($middle->getId(), $this->chainOf(2)->getId(), $this->actor)->changed, 'from depth 3 to 2: no deeper, allowed past the limit');
+        $this->store->heights = [];
+        self::assertTrue($this->reparenter(limit: 2)->reparent($deepest->getId(), null, $this->actor)->changed, 'detach');
+        self::assertSame([], $this->store->heights, 'no height walk for a move that is no deeper');
+    }
+
+    public function testWithoutALimitThePathWalkStillStopsAtTheSafetyCap(): void
+    {
+        $deepest = $this->chainOf(TaskTreeLimits::SAFETY_CAP + 2);
+
+        $this->assertRefused(TaskTreeRefusedException::TOO_DEEP, $this->task('Leaf')->getId(), $deepest->getId());
+    }
+
+    public function testATaskInALoopIsInfinitelyDeepSoAnyMoveIsNoDeeper(): void
+    {
+        $a                 = $this->task('A');
+        $b                 = $this->task('B');
+        $other             = $this->task('Other');
+        $this->store->rows = [$a->getId() => $b->getId(), $b->getId() => $a->getId()];
+
+        self::assertTrue($this->reparenter(limit: 1)->reparent($a->getId(), $other->getId(), $this->actor)->changed, 'moving it out repairs the loop');
+        self::assertSame([], $this->store->heights);
+    }
+
+    public function testRefusalMessages(): void
+    {
+        foreach (['notFound', 'otherBoard', 'self', 'descendant', 'conflict', 'tooDeep'] as $factory) {
+            self::assertNotSame('', TaskTreeRefusedException::$factory()->getMessage());
+        }
+        self::assertSame(TaskTreeRefusedException::CONFLICT, TaskTreeRefusedException::conflict()->reason);
+    }
+
+    private function assertRefused(string $reason, string $taskId, ?string $parentId, ?int $limit = null): void
     {
         try {
-            $this->reparenter()->reparent($taskId, $parentId, $this->actor);
+            $this->reparenter(limit: $limit)->reparent($taskId, $parentId, $this->actor);
             self::fail('Refused expected: ' . $reason);
-        } catch (TaskReparentRefusedException $refused) {
+        } catch (TaskTreeRefusedException $refused) {
             self::assertSame($reason, $refused->reason);
         }
     }
@@ -151,12 +198,25 @@ final class TaskReparenterTest extends TestCase
     private function task(string $title, ?Task $parent = null): Task
     {
         $task = new Task($this->board, $title, $this->actor, parent: $parent);
+        $parent?->getSubtasks()->add($task); // as Doctrine loads it
         $this->store->add($task);
 
         return $task;
     }
 
-    private function reparenter(?WriteProvenance $provenance = null): TaskReparenter
+    /** The deepest task of a new chain of `$length` tasks (depth `$length - 1`). */
+    private function chainOf(int $length): Task
+    {
+        $task = null;
+        for ($i = 0; $i < $length; ++$i) {
+            $task = $this->task('Level ' . $i, $task);
+        }
+        self::assertInstanceOf(Task::class, $task);
+
+        return $task;
+    }
+
+    private function reparenter(?WriteProvenance $provenance = null, ?int $limit = null): TaskReparenter
     {
         return new TaskReparenter($this->store, new TaskChangeRecorder(null, new class($provenance) implements WriteProvenanceProviderInterface {
             public function __construct(private readonly ?WriteProvenance $provenance)
@@ -167,6 +227,6 @@ final class TaskReparenterTest extends TestCase
             {
                 return $this->provenance;
             }
-        }));
+        }), new TaskTreeLimits($limit));
     }
 }

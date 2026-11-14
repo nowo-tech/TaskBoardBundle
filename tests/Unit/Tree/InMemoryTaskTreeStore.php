@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Tree\TaskTreeNode;
 use Nowo\TaskBoardBundle\Tree\TaskTreeStoreInterface;
 
 use function array_key_exists;
+use function in_array;
 
 /**
  * A plain-PHP store over task objects: what a DDD host's double of the port looks like. `$rows` overrides a task's
@@ -34,6 +35,9 @@ final class InMemoryTaskTreeStore implements TaskTreeStoreInterface
 
     public int $transactions = 0;
 
+    /** @var list<array{0: string, 1: int}> */
+    public array $heights = [];
+
     public function add(Task ...$tasks): void
     {
         foreach ($tasks as $task) {
@@ -57,6 +61,29 @@ final class InMemoryTaskTreeStore implements TaskTreeStoreInterface
         $this->locked[] = $taskId;
 
         return new TaskTreeNode($taskId, $task->getBoard()->getId(), array_key_exists($taskId, $this->rows) ? $this->rows[$taskId] : $task->getParent()?->getId(), $task->getRevision());
+    }
+
+    public function lockedHeight(string $taskId, int $bound): int
+    {
+        $this->heights[] = [$taskId, $bound];
+        $level           = [$taskId];
+        $height          = 0;
+        while ($height <= $bound) {
+            $next = [];
+            foreach ($this->tasks as $id => $task) {
+                $parentId = array_key_exists($id, $this->rows) ? $this->rows[$id] : $task->getParent()?->getId();
+                if ($parentId !== null && in_array($parentId, $level, true)) {
+                    $next[] = $id;
+                }
+            }
+            if ($next === []) {
+                break;
+            }
+            $level = $next;
+            ++$height;
+        }
+
+        return $height;
     }
 
     public function task(TaskTreeNode $node): Task

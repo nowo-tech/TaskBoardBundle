@@ -13,19 +13,21 @@ use Nowo\TaskBoardBundle\Entity\Task;
  * double it. Plain PHP: a closure, ids, bundle entities and the bundle's value objects only.
  *
  * Implementations keep no state between calls (FrankenPHP worker mode, kernel reset false).
+ *
+ * @internal an SPI of the bundle's own domain services (audit PX-I6); a host depends on {@see TaskReparenterInterface}
  */
 interface TaskTreeStoreInterface
 {
     /**
      * Runs `$work` in one transaction: committed when it returns, rolled back when it throws, with the task events it
-     * dispatches held until the commit (dropped on a rollback). Opened inside a caller's transaction it nests (a
-     * savepoint) and the caller owns the outcome.
+     * dispatches held until the commit (dropped on a rollback). Inside a caller's transaction it joins it (no savepoint):
+     * the caller owns the outcome, and the events wait only while the caller defers them too.
      *
      * @template T
      *
      * @param Closure(): T $work
      *
-     * @throws TaskReparentRefusedException `conflict` when the outermost transaction lost a lock to a concurrent write
+     * @throws TaskTreeRefusedException `conflict` when the outermost transaction lost a lock to a concurrent write
      *
      * @return T
      */
@@ -36,6 +38,13 @@ interface TaskTreeStoreInterface
      * the platform serialises writers, as SQLite does). Null when the task does not exist. Never the identity map.
      */
     public function lockedNode(string $taskId): ?TaskTreeNode;
+
+    /**
+     * How many levels of subtasks the task has (0: none) as committed, each level's rows locked like
+     * {@see self::lockedNode()}; at most `$bound + 1` (the walk stops there), and {@see TaskTreeLimits::UNBOUNDED} when
+     * a level meets a task already seen (a loop in the data).
+     */
+    public function lockedHeight(string $taskId, int $bound): int;
 
     /**
      * The task of a node read by {@see self::lockedNode()}, as the database holds it now (a copy loaded before a

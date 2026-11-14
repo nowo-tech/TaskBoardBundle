@@ -278,6 +278,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             'humans_only_field' => $config['board']['column_humans_only_field'] ?? (is_string($config['column_transition_policy']) && $config['column_transition_policy'] !== ''),
         ]);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
+        // Since 2.20.0 (Beacon spec 234, T004).
+        $container->setParameter('nowo_task_board.max_subtask_depth', $config['max_subtask_depth'] ?? null);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
         // Since 1.30.0 (spec 211).
         $container->setParameter('nowo_task_board.board.form_options', [

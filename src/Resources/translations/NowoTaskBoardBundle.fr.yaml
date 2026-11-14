@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "La sous-tâche n'a pas été créée : elle serait plus profonde que permis."
+task_board.flash.subtask_conflict: "La sous-tâche n'a pas été créée : l'arbre des tâches a changé entre-temps. Réessayez."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "La liste du fournisseur n’avançait plu
 task_board.sync.error.restore_refused: "Des tâches revenues chez le fournisseur n'ont pas été restaurées : une limite l'a refusé."
 task_board.sync.error.relation_skipped: "Certaines relations parent ou dépendance ont été ignorées (l'autre tâche manque ou n'est pas modifiable)."
 task_board.sync.error.parent_cycle: "Un changement de parent a été refusé : une tâche deviendrait son propre ancêtre."
+task_board.sync.error.parent_too_deep: "Un changement de parent ou une nouvelle sous-tâche a été ignoré : il dépasserait max_subtask_depth (placé sous l'ancêtre autorisé le plus profond si possible)."
 task_board.sync.error.assignee_unresolved: "Certains responsables ne correspondent à personne de ce tableau ; ces tâches gardent leurs responsables."
 task_board.sync.error.external_id_look_alike: "Certaines tâches du fournisseur ont été ignorées : leur identifiant ne diffère d'une tâche déjà synchronisée que par la casse, les accents ou des espaces finaux. Demandez à votre administrateur d'appliquer la mise à jour de base de données de TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Certains statuts n'ont pas de colonne sur le tableau ; ces tâches sont allées dans la colonne par défaut."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Quelque chose a changé depuis l'aperçu : véri
 task_board.copy.refusal.same_board: "La tâche est déjà dans ce tableau."
 task_board.copy.refusal.board_archived: "Le tableau cible est archivé."
 task_board.copy.refusal.subtree_too_large: "Trop de sous-tâches : %count%, au plus %max%."
+task_board.copy.refusal.too_deep: "Trop de niveaux de sous-tâches : la copie dépasserait la profondeur permise (%max%)."
+task_board.copy.refusal.tree_loop: "L'arbre des tâches contient une boucle (une tâche est son propre ancêtre dans les données) : rien n'a été modifié."
 task_board.copy.refusal.sync_running: "Une synchronisation est en cours sur l'un des tableaux. Réessayez quand elle sera terminée."
 task_board.copy.refusal.quota: "Les limites du forfait le refusent."
 task_board.history.type.board_moved: "a déplacé la tâche vers un autre tableau"

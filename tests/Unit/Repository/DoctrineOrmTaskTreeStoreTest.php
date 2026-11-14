@@ -12,8 +12,8 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskTreeStore;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
-use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
 use Nowo\TaskBoardBundle\Tree\TaskTreeNode;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -40,8 +40,8 @@ final class DoctrineOrmTaskTreeStoreTest extends TestCase
         try {
             $this->store($connection, $events)->transactional(static fn (): never => throw self::deadlock());
             self::fail('A conflict was expected.');
-        } catch (TaskReparentRefusedException $refused) {
-            self::assertSame(TaskReparentRefusedException::CONFLICT, $refused->reason);
+        } catch (TaskTreeRefusedException $refused) {
+            self::assertSame(TaskTreeRefusedException::CONFLICT, $refused->reason);
         }
         // The deferral is balanced again (worker mode): an event now is dispatched at once, never held for a later request.
         $events->dispatchSaved(new stdClass(), 'probe');
@@ -70,7 +70,7 @@ final class DoctrineOrmTaskTreeStoreTest extends TestCase
         $manager = $this->createMock(EntityManagerInterface::class);
         $manager->method('find')->willReturn(null);
 
-        $this->expectException(TaskReparentRefusedException::class);
+        $this->expectException(TaskTreeRefusedException::class);
         (new DoctrineOrmTaskTreeStore($manager))->task(new TaskTreeNode('gone', 'board', null, 1));
     }
 

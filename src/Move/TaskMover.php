@@ -189,10 +189,14 @@ final readonly class TaskMover implements TaskMoverInterface
         $level = [$task->getId()];
         $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
             ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+        // Since 2.20.0 (audit PX-M2): bounded, and a loop in the data fails closed (the move is refused, nothing written).
+        $seen   = [$task->getId() => true];
+        $levels = 0;
         while ($level !== []) {
-            /** @var list<string> $level */
-            $level = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
+            /** @var list<string> $ids */
+            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
                 ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+            $level = TaskMovePlanner::nextLevel($ids, $seen, ++$levels);
         }
     }
 

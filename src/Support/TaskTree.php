@@ -6,6 +6,9 @@ namespace Nowo\TaskBoardBundle\Support;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 
+use function array_pop;
+use function array_reverse;
+
 /**
  * Parent / children lookup over tasks already loaded (e.g. every task of a board in one query), so a subtask tree of
  * any depth and its done / total counters render without a query per node (since 1.10).
@@ -75,11 +78,19 @@ final readonly class TaskTree
      */
     public function descendantsOf(Task $task): array
     {
+        // Since 2.20.0 (DoS bound): iterative, each task once (a loop in the data ends the branch), same order as before.
         $descendants = [];
-        foreach ($this->childrenOf($task) as $child) {
-            $descendants[] = $child;
-            foreach ($this->descendantsOf($child) as $nested) {
-                $descendants[] = $nested;
+        $seen        = [$task->getId() => true];
+        $stack       = array_reverse($this->childrenOf($task));
+        while ($stack !== []) {
+            $node = array_pop($stack);
+            if (isset($seen[$node->getId()])) {
+                continue;
+            }
+            $seen[$node->getId()] = true;
+            $descendants[]        = $node;
+            foreach (array_reverse($this->childrenOf($node)) as $child) {
+                $stack[] = $child;
             }
         }
 
@@ -93,10 +104,9 @@ final readonly class TaskTree
     {
         $done  = 0;
         $total = 0;
-        foreach ($this->childrenOf($task) as $child) {
-            $nested = $this->progress($child);
-            $total += 1 + $nested->total;
-            $done += ($child->isCompleted() ? 1 : 0) + $nested->done;
+        foreach ($this->descendantsOf($task) as $descendant) {
+            ++$total;
+            $done += $descendant->isCompleted() ? 1 : 0;
         }
 
         return new SubtaskProgress($done, $total);

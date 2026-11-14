@@ -94,6 +94,8 @@ task_board.flash.task_updated: Tarea actualizada.
 task_board.flash.link_added: Enlace añadido.
 task_board.flash.member_added: Implicado añadido.
 task_board.flash.subtask_created: Subtarea creada.
+task_board.flash.subtask_too_deep: "No se ha creado la subtarea: quedaría a más niveles de los permitidos."
+task_board.flash.subtask_conflict: "No se ha creado la subtarea: el árbol de tareas cambió mientras tanto. Inténtalo de nuevo."
 task_board.form.board.name: Nombre del tablero
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Déjalo vacío para generarlo desde el nombre.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "La lista del proveedor dejó de avanzar (
 task_board.sync.error.restore_refused: "No se han restaurado tareas que vuelven a estar en el proveedor: un límite lo ha impedido."
 task_board.sync.error.relation_skipped: "Se han omitido algunas relaciones de tarea padre o dependencia (falta la otra tarea o no se puede editar)."
 task_board.sync.error.parent_cycle: "Se ha rechazado un cambio de tarea padre: haría que una tarea fuese su propio antecesor."
+task_board.sync.error.parent_too_deep: "Se ha omitido un cambio de tarea padre o una subtarea nueva: superaría max_subtask_depth (se coloca bajo el antecesor permitido más profundo cuando es posible)."
 task_board.sync.error.assignee_unresolved: "Algunos asignados no coinciden con nadie de este tablero; esas tareas mantienen sus asignados."
 task_board.sync.error.external_id_look_alike: "Se omitieron algunas tareas del proveedor: su id solo difiere de una ya sincronizada en mayúsculas, acentos o espacios finales. Pide a tu administrador que aplique la actualización de base de datos de TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Algunos estados no tienen columna en el tablero; esas tareas han ido a la columna por defecto."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Algo ha cambiado desde la vista previa: revísal
 task_board.copy.refusal.same_board: "La tarea ya está en este tablero."
 task_board.copy.refusal.board_archived: "El tablero de destino está archivado."
 task_board.copy.refusal.subtree_too_large: "Demasiadas subtareas: %count%, como máximo %max%."
+task_board.copy.refusal.too_deep: "Demasiados niveles de subtareas: la copia superaría la profundidad permitida (%max%)."
+task_board.copy.refusal.tree_loop: "El árbol de tareas contiene un bucle (una tarea es antecesora de sí misma en los datos): no se ha cambiado nada."
 task_board.copy.refusal.sync_running: "Hay una sincronización en curso en uno de los tableros. Vuelve a intentarlo cuando termine."
 task_board.copy.refusal.quota: "Los límites del plan no lo permiten."
 task_board.history.type.board_moved: "movió la tarea a otro tablero"

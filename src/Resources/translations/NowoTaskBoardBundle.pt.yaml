@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "A subtarefa não foi criada: ficaria mais profunda do que o permitido."
+task_board.flash.subtask_conflict: "A subtarefa não foi criada: a árvore de tarefas mudou entretanto. Tente novamente."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "A lista do fornecedor deixou de avançar 
 task_board.sync.error.restore_refused: "Tarefas que voltaram ao fornecedor não foram restauradas: um limite recusou-o."
 task_board.sync.error.relation_skipped: "Algumas relações de tarefa principal ou dependência foram ignoradas (a outra tarefa falta ou não é editável)."
 task_board.sync.error.parent_cycle: "Uma alteração de tarefa principal foi recusada: uma tarefa seria o seu próprio antecessor."
+task_board.sync.error.parent_too_deep: "Uma alteração de tarefa principal ou uma nova subtarefa foi ignorada: excederia max_subtask_depth (colocada sob o antecessor permitido mais profundo quando possível)."
 task_board.sync.error.assignee_unresolved: "Alguns responsáveis não correspondem a ninguém deste quadro; essas tarefas mantêm os seus responsáveis."
 task_board.sync.error.external_id_look_alike: "Algumas tarefas do fornecedor foram ignoradas: o seu id só difere de uma já sincronizada em maiúsculas, acentos ou espaços finais. Peça ao seu administrador que aplique a atualização da base de dados do TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alguns estados não têm coluna no quadro; essas tarefas foram para a coluna por omissão."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Algo mudou desde a pré-visualização: verifiqu
 task_board.copy.refusal.same_board: "A tarefa já está neste quadro."
 task_board.copy.refusal.board_archived: "O quadro de destino está arquivado."
 task_board.copy.refusal.subtree_too_large: "Demasiadas subtarefas: %count%, no máximo %max%."
+task_board.copy.refusal.too_deep: "Demasiados níveis de subtarefas: a cópia excederia a profundidade permitida (%max%)."
+task_board.copy.refusal.tree_loop: "A árvore de tarefas contém um ciclo (uma tarefa é o seu próprio antecessor nos dados): nada foi alterado."
 task_board.copy.refusal.sync_running: "Está a decorrer uma sincronização num dos quadros. Tente de novo quando terminar."
 task_board.copy.refusal.quota: "Os limites do plano não o permitem."
 task_board.history.type.board_moved: "moveu a tarefa para outro quadro"

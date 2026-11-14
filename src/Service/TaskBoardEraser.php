@@ -129,7 +129,9 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
             throw new AccessDeniedException('The task may not be erased.');
         }
         $levels = [[$task]];
-        while (($next = $this->subtasksOf($levels[array_key_last($levels)])) !== []) {
+        // Since 2.20.0 (DoS bound): a task met again (a loop in the data) is not taken twice, so the walk ends.
+        $seen = [$task->getId() => true];
+        while (($next = $this->unseen($this->subtasksOf($levels[array_key_last($levels)]), $seen)) !== []) {
             $levels[] = $next;
         }
         foreach ($levels as $level) {
@@ -153,6 +155,27 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
         $this->logger->info('TaskBoard task erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $deleted]);
 
         return $deleted;
+    }
+
+    /**
+     * Since 2.20.0: the tasks not seen yet, now marked as seen.
+     *
+     * @param list<Task> $tasks
+     * @param array<string, true> $seen
+     *
+     * @return list<Task>
+     */
+    private function unseen(array $tasks, array &$seen): array
+    {
+        $unseen = [];
+        foreach ($tasks as $task) {
+            if (!isset($seen[$task->getId()])) {
+                $seen[$task->getId()] = true;
+                $unseen[]             = $task;
+            }
+        }
+
+        return $unseen;
     }
 
     /**

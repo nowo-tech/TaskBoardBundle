@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteChecklistItem;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTask;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use SortDirection;
 
 use function array_diff_key;
@@ -56,6 +57,8 @@ final readonly class SyncChecklistWriter
         // Since 1.25 (audit FP-L1): new checklist subtasks go through the host's quota and a per-run cap.
         private SyncLimitCheckerInterface $limitChecker = new NullSyncLimitChecker(),
         private int $maxItemsPerRun = 2000,
+        // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`; items of a task already at the limit are not created.
+        private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
     ) {
     }
 
@@ -82,6 +85,8 @@ final readonly class SyncChecklistWriter
         }
         $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing, $lookAlikes)));
         $position = 0;
+        // Since 2.20.0: an item is a subtask; under a task already at `max_subtask_depth` none is created (warned).
+        $tooDeep = $this->treeLimits->maxSubtaskDepth !== null && !$this->treeLimits->allowsChildOf($parent);
         foreach ($wanted as $externalId => [$entry, $tag]) {
             if (isset($lookAlikes[$externalId])) {
                 $ctx->count('skipLookAlike');
@@ -95,6 +100,11 @@ final readonly class SyncChecklistWriter
             }
             if (!$task instanceof Task && $allowed <= 0) {
                 continue; // over the run cap or the host's quota (warned once); a later run creates it
+            }
+            if (!$task instanceof Task && $tooDeep) {
+                $ctx->warn('parent_too_deep');
+
+                continue;
             }
             if (!$task instanceof Task) {
                 --$allowed;

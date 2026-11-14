@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "Die Unteraufgabe wurde nicht angelegt: Sie läge tiefer als erlaubt."
+task_board.flash.subtask_conflict: "Die Unteraufgabe wurde nicht angelegt: Der Aufgabenbaum hat sich inzwischen geändert. Bitte erneut versuchen."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "Die Liste des Anbieters kam nicht weiter 
 task_board.sync.error.restore_refused: "Wieder vorhandene Aufgaben wurden nicht wiederhergestellt: Ein Limit hat es verhindert."
 task_board.sync.error.relation_skipped: "Einige Eltern- oder Abhängigkeitsbeziehungen wurden übersprungen (die andere Aufgabe fehlt oder ist nicht bearbeitbar)."
 task_board.sync.error.parent_cycle: "Eine Elternänderung wurde abgelehnt: Eine Aufgabe wäre ihr eigener Vorfahre."
+task_board.sync.error.parent_too_deep: "Eine Elternänderung oder neue Unteraufgabe wurde übersprungen: Sie läge tiefer als max_subtask_depth (wo möglich unter dem tiefsten erlaubten Vorfahren platziert)."
 task_board.sync.error.assignee_unresolved: "Einige Zuständige passen zu niemandem dieses Boards; diese Aufgaben behalten ihre Zuständigen."
 task_board.sync.error.external_id_look_alike: "Einige Aufgaben des Anbieters wurden übersprungen: Ihre ID unterscheidet sich von einer bereits synchronisierten nur durch Groß-/Kleinschreibung, Akzente oder Leerzeichen am Ende. Bitten Sie Ihre Administration, das Datenbank-Update von TaskBoard 2.15.1 anzuwenden."
 task_board.sync.error.status_without_column: "Einige Status haben keine Spalte auf dem Board; diese Aufgaben kamen in die Ersatzspalte."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Seit der Vorschau hat sich etwas geändert: prü
 task_board.copy.refusal.same_board: "Die Aufgabe ist bereits in diesem Board."
 task_board.copy.refusal.board_archived: "Das Ziel-Board ist archiviert."
 task_board.copy.refusal.subtree_too_large: "Zu viele Unteraufgaben: %count%, höchstens %max%."
+task_board.copy.refusal.too_deep: "Zu viele Ebenen von Unteraufgaben: Die Kopie wäre tiefer als erlaubt (%max%)."
+task_board.copy.refusal.tree_loop: "Der Aufgabenbaum enthält eine Schleife (eine Aufgabe ist in den Daten ihr eigener Vorfahre): Es wurde nichts geändert."
 task_board.copy.refusal.sync_running: "In einem der Boards läuft eine Synchronisierung. Versuchen Sie es danach erneut."
 task_board.copy.refusal.quota: "Die Planlimits lassen es nicht zu."
 task_board.history.type.board_moved: "hat die Aufgabe in ein anderes Board verschoben"

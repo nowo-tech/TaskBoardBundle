@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 
 /**
@@ -32,6 +33,9 @@ interface TaskManagerInterface
     /**
      * @param string|null $context since 2.3.0 (spec 215): why the task is created, kept on its "created" history row (e.g.
      *                             "recurring"), for a host's history label
+     *
+     * @throws TaskTreeRefusedException since 2.20.0, `too_deep` when `$parent` is already at
+     *                                  `max_subtask_depth`: nothing is created
      */
     public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null): Task;
 

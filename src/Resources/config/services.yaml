@@ -61,7 +61,7 @@ services:
             # Since 2.20.0 (Beacon spec 234, T004): value objects and the refusal of the re-parent port.
             - '../../Tree/TaskTreeNode.php'
             - '../../Tree/TaskReparentResult.php'
-            - '../../Tree/TaskReparentRefusedException.php'
+            - '../../Tree/TaskTreeRefusedException.php'
             - '../../Routing/TenantPathUrlGenerator.php'
             - '../../Assignee/'
             # Since 1.23: the sync services are registered by services_sync.yaml (sync.enabled) and the avatar
@@ -119,13 +119,20 @@ services:
             $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
 
     # Since 2.3.0 (audit IC-I3): task events of a copy or an occurrence are dispatched after its commit.
+    # Since 2.20.0 (audit PX-L3): public, so a host that calls a port inside its own transaction holds the events until its commit.
     Nowo\TaskBoardBundle\Service\TaskEventDeferral:
+        public: true
         arguments:
             $dispatcher: '@event_dispatcher'
 
     Nowo\TaskBoardBundle\Service\TaskManager:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    # Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth` for every write that changes the task tree.
+    Nowo\TaskBoardBundle\Tree\TaskTreeLimits:
+        arguments:
+            $maxSubtaskDepth: '%nowo_task_board.max_subtask_depth%'
 
     # Since 2.20.0 (Beacon spec 234, T004): the re-parent port (public for hosts); its store is registered with the repositories.
     Nowo\TaskBoardBundle\Tree\TaskReparenterInterface:

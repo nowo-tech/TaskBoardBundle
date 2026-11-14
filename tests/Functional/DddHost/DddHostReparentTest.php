@@ -16,8 +16,8 @@ use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
 use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
 use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
-use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
 use Nowo\TaskBoardBundle\Tree\TaskReparentResult;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpKernel\KernelInterface;
 
@@ -89,11 +89,11 @@ final class DddHostReparentTest extends KernelTestCase
         $historyTable = $this->em->getClassMetadata(TaskChangeHistory::class)->getTableName();
         self::assertSame('u-ana', $connection->fetchOne('SELECT user_id FROM ' . $historyTable . ' WHERE change_type = ?', ['parent']));
 
-        foreach ([[$ids[1], $ids[2], TaskReparentRefusedException::DESCENDANT], [$ids[1], $ids[1], TaskReparentRefusedException::SELF], [$ids[1], $ids[3], TaskReparentRefusedException::OTHER_BOARD], ['missing', null, TaskReparentRefusedException::NOT_FOUND], [$ids[1], 'missing', TaskReparentRefusedException::NOT_FOUND]] as [$taskId, $parentId, $reason]) {
+        foreach ([[$ids[1], $ids[2], TaskTreeRefusedException::DESCENDANT], [$ids[1], $ids[1], TaskTreeRefusedException::SELF], [$ids[1], $ids[3], TaskTreeRefusedException::OTHER_BOARD], ['missing', null, TaskTreeRefusedException::NOT_FOUND], [$ids[1], 'missing', TaskTreeRefusedException::NOT_FOUND]] as [$taskId, $parentId, $reason]) {
             try {
                 $reparenter->reparent($taskId, $parentId, $ana);
                 self::fail('Refused expected: ' . $reason);
-            } catch (TaskReparentRefusedException $refused) {
+            } catch (TaskTreeRefusedException $refused) {
                 self::assertSame($reason, $refused->reason);
             }
         }

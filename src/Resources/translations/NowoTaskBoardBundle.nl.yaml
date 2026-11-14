@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "De subtaak is niet aangemaakt: die zou dieper liggen dan toegestaan."
+task_board.flash.subtask_conflict: "De subtaak is niet aangemaakt: de takenboom is intussen gewijzigd. Probeer het opnieuw."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "De lijst van de provider kwam niet verder
 task_board.sync.error.restore_refused: "Taken die terug zijn bij de provider zijn niet hersteld: een limiet weigerde dat."
 task_board.sync.error.relation_skipped: "Sommige ouder- of afhankelijkheidsrelaties zijn overgeslagen (de andere taak ontbreekt of is niet bewerkbaar)."
 task_board.sync.error.parent_cycle: "Een ouderwijziging is geweigerd: een taak zou haar eigen voorouder worden."
+task_board.sync.error.parent_too_deep: "Een ouderwijziging of nieuwe subtaak is overgeslagen: die zou dieper liggen dan max_subtask_depth (waar mogelijk onder de diepste toegestane voorouder geplaatst)."
 task_board.sync.error.assignee_unresolved: "Sommige toegewezen personen komen met niemand van dit bord overeen; die taken behouden hun toewijzing."
 task_board.sync.error.external_id_look_alike: "Sommige taken van de provider zijn overgeslagen: hun id verschilt van een al gesynchroniseerde alleen in hoofdletters, accenten of spaties aan het eind. Vraag je beheerder de database-update van TaskBoard 2.15.1 toe te passen."
 task_board.sync.error.status_without_column: "Sommige statussen hebben geen kolom op het bord; die taken gingen naar de standaardkolom."
@@ -762,6 +765,8 @@ task_board.copy.refusal.stale: "Er is iets veranderd sinds het voorbeeld: contro
 task_board.copy.refusal.same_board: "De taak staat al op dit bord."
 task_board.copy.refusal.board_archived: "Het doelbord is gearchiveerd."
 task_board.copy.refusal.subtree_too_large: "Te veel subtaken: %count%, hoogstens %max%."
+task_board.copy.refusal.too_deep: "Te veel niveaus subtaken: de kopie zou dieper zijn dan toegestaan (%max%)."
+task_board.copy.refusal.tree_loop: "De takenboom bevat een lus (een taak is in de gegevens haar eigen voorouder): er is niets gewijzigd."
 task_board.copy.refusal.sync_running: "Er loopt een synchronisatie op een van de borden. Probeer het opnieuw als die klaar is."
 task_board.copy.refusal.quota: "De limieten van het abonnement staan het niet toe."
 task_board.history.type.board_moved: "heeft de taak naar een ander bord verplaatst"

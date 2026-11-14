@@ -270,14 +270,14 @@ final class ApiTaskReparentTest extends ApiTestCase
         self::assertSame('TASK_409', $this->json()['ECODE']);
         $this->assertNothingWritten($task, 'Story');
 
-        $this->send('PUT', '/api/tasks/v2/task/' . $task->getId(), ['parent' => $parent->getId(), 'name' => 'Renamed', 'base_revision' => 1]);
+        $this->send('PUT', '/api/tasks/v2/task/' . $task->getId(), ['parent' => $parent->getId(), 'name' => 'Renamed', 'status' => 'Doing', 'base_revision' => 1]);
         self::assertResponseIsSuccessful();
-        self::assertSame([$parent->getId(), 'Renamed'], [$this->json()['parent'], $this->json()['name']]);
+        self::assertSame([$parent->getId(), 'Renamed', 'Doing'], [$this->json()['parent'], $this->json()['name'], $this->json()['status']['status']]);
         $event = end($this->audit()->events);
         self::assertNotFalse($event);
         $changed = $event->changedFields;
         sort($changed);
-        self::assertSame(['fields', 'parent'], $changed);
+        self::assertSame(['fields', 'parent', 'status'], $changed);
     }
 
     /** A deadlock or a lock wait timeout against a concurrent tree change: 409 `PARENT_004`, nothing written. */

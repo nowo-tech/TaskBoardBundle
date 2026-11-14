@@ -19,6 +19,8 @@ use Symfony\Component\Clock\NativeClock;
 
 use function abs;
 use function array_map;
+use function array_pop;
+use function array_reverse;
 use function count;
 use function intdiv;
 use function max;
@@ -272,24 +274,25 @@ final readonly class TaskGanttBuilder
 
         /** @var list<array{task: Task, depth: int}> $flat */
         $flat = [];
-        foreach ($roots as $root) {
-            $this->walkTree($root, $childrenByParent, $flat, 0);
+        // Since 2.20.0 (DoS bound): an iterative depth-first walk, same order as before, each task once.
+        $seen  = [];
+        $stack = [];
+        foreach (array_reverse($roots) as $root) {
+            $stack[] = [$root, 0];
+        }
+        while ($stack !== []) {
+            [$task, $depth] = array_pop($stack);
+            if (isset($seen[$task->getId()])) {
+                continue;
+            }
+            $seen[$task->getId()] = true;
+            $flat[]               = ['task' => $task, 'depth' => $depth];
+            foreach (array_reverse($childrenByParent[$task->getId()] ?? []) as $child) {
+                $stack[] = [$child, $depth + 1];
+            }
         }
 
         return $flat;
-    }
-
-    /**
-     * @param list<array{task: Task, depth: int}> $flat
-     * @param array<string, list<Task>> $childrenByParent
-     */
-    private function walkTree(Task $task, array $childrenByParent, array &$flat, int $depth): void
-    {
-        $flat[] = ['task' => $task, 'depth' => $depth];
-
-        foreach ($childrenByParent[$task->getId()] ?? [] as $child) {
-            $this->walkTree($child, $childrenByParent, $flat, $depth + 1);
-        }
     }
 
     /**
