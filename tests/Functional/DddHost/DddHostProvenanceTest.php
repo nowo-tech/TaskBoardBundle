@@ -131,4 +131,72 @@ final class DddHostProvenanceTest extends WebTestCase
             }
         }
     }
+
+    /**
+     * Audit PS-D1-M1: with user references by id, the same writer through a new channel (same object, after a reload,
+     * and on a comment) is saved, with the three last-write columns together.
+     */
+    public function testTheSameWriterThroughANewChannelIsSavedById(): void
+    {
+        $container = self::getContainer();
+        $ana       = DddUsers::all()['u-ana'];
+        $tasks     = $container->get(TaskManagerInterface::class);
+        $comments  = $container->get(TaskCommentManagerInterface::class);
+        $creator   = $container->get(TaskBoardCreatorInterface::class);
+        self::assertInstanceOf(TaskManagerInterface::class, $tasks);
+        self::assertInstanceOf(TaskCommentManagerInterface::class, $comments);
+        self::assertInstanceOf(TaskBoardCreatorInterface::class, $creator);
+        $board   = $creator->create(new TaskBoardFormData('Domain board', 'domain-board'), $ana);
+        $task    = $tasks->create($board, new TaskFormData('Domain task'), $ana);
+        $comment = $comments->add($task, $ana, 'Hi');
+        $tasks->updatePriority($task, TaskPriority::Low, $ana);
+        $this->em->flush();
+        $connection = $this->em->getConnection();
+        $row        = fn (string $class, string $id): array => (array) $connection->fetchAssociative('SELECT updated_by_id, channel, actor_label FROM ' . $this->em->getClassMetadata($class)->getTableName() . ' WHERE id = ?', [$id]);
+
+        // Same object.
+        DddProvenance::$current = new WriteProvenance(WriteChannel::Mcp, 'ana-mcp');
+        $tasks->updatePriority($task, TaskPriority::High, $ana);
+        $comments->edit($comment, $ana, 'Hi again');
+        $this->em->flush();
+        self::assertSame(['updated_by_id' => 'u-ana', 'channel' => 'mcp', 'actor_label' => 'ana-mcp'], $row(Task::class, $task->getId()));
+        self::assertSame(['updated_by_id' => 'u-ana', 'channel' => 'mcp', 'actor_label' => 'ana-mcp'], $row(TaskComment::class, $comment->getId()));
+
+        // After a reload (the writer is a TaskBoardUserRef in the row, a host user in the write).
+        $taskId    = $task->getId();
+        $commentId = $comment->getId();
+        $this->em->clear();
+        $task    = $this->em->find(Task::class, $taskId);
+        $comment = $this->em->find(TaskComment::class, $commentId);
+        self::assertInstanceOf(Task::class, $task);
+        self::assertInstanceOf(TaskComment::class, $comment);
+        DddProvenance::$current = new WriteProvenance(WriteChannel::Api, 'ana-api');
+        $tasks->updatePriority($task, TaskPriority::Low, $ana);
+        $comments->edit($comment, $ana, 'Hi once more');
+        $this->em->flush();
+        self::assertSame(['updated_by_id' => 'u-ana', 'channel' => 'api', 'actor_label' => 'ana-api'], $row(Task::class, $taskId));
+        self::assertSame(['updated_by_id' => 'u-ana', 'channel' => 'api', 'actor_label' => 'ana-api'], $row(TaskComment::class, $commentId));
+    }
+
+    /** Audit PS-L1 in id mode: Bruno's write commits while Ana holds an older snapshot; her flush writes the whole triple. */
+    public function testOverlappingWritesNeverMixTwoPeopleById(): void
+    {
+        $container = self::getContainer();
+        $ana       = DddUsers::all()['u-ana'];
+        $tasks     = $container->get(TaskManagerInterface::class);
+        $creator   = $container->get(TaskBoardCreatorInterface::class);
+        self::assertInstanceOf(TaskManagerInterface::class, $tasks);
+        self::assertInstanceOf(TaskBoardCreatorInterface::class, $creator);
+        DddProvenance::$current = new WriteProvenance(WriteChannel::Api, 'ana-laptop');
+        $task                   = $tasks->create($creator->create(new TaskBoardFormData('Domain board', 'domain-board'), $ana), new TaskFormData('Domain task'), $ana);
+        $this->em->flush();
+        $connection = $this->em->getConnection();
+        $table      = $this->em->getClassMetadata(Task::class)->getTableName();
+        $connection->executeStatement('UPDATE ' . $table . ' SET updated_by_id = ?, actor_label = ? WHERE id = ?', ['u-bruno', 'bruno-ci', $task->getId()]);
+
+        DddProvenance::$current = new WriteProvenance(WriteChannel::Mcp, 'ana-mcp');
+        $tasks->updatePriority($task, TaskPriority::High, $ana);
+        $this->em->flush();
+        self::assertSame(['updated_by_id' => 'u-ana', 'channel' => 'mcp', 'actor_label' => 'ana-mcp'], $connection->fetchAssociative('SELECT updated_by_id, channel, actor_label FROM ' . $table . ' WHERE id = ?', [$task->getId()]));
+    }
 }

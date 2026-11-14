@@ -9,16 +9,18 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
+use Doctrine\ORM\Mapping\JoinColumnMapping;
+use Doctrine\ORM\Mapping\ToOneOwningSideMapping;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
-use stdClass;
 
-use function array_diff;
 use function array_diff_key;
 use function array_flip;
+use function array_intersect;
 use function array_keys;
 use function count;
+use function implode;
 use function spl_object_id;
 
 /**
@@ -34,8 +36,8 @@ use function spl_object_id;
  * two writers never save the same number, and a write that rolls back takes its 1 with it. The column is
  * `updatable: false`, so no flush ever writes a revision computed in PHP.
  *
- * Since 2.18.0 (audit PS-L1) it also makes the provenance of a task's or comment's last write ({@see self::PROVENANCE_FIELDS})
- * one UPDATE.
+ * Since 2.18.0 (audits PS-L1, PS-D1-M1) it also writes the provenance of a task's or comment's last write
+ * ({@see self::PROVENANCE_FIELDS}) together, in `postUpdate`, inside the flush's transaction.
  *
  * Stateless: everything it reads is the flushing unit of work and the task objects (worker mode).
  *
@@ -59,9 +61,6 @@ final readonly class TaskRevisionListener
         $work    = $manager->getUnitOfWork();
         $ignored = array_flip(self::IGNORED_FIELDS);
         foreach ($work->getScheduledEntityUpdates() as $entity) {
-            if ($entity instanceof Task || $entity instanceof TaskComment) {
-                $this->writeProvenanceTogether($manager, $entity);
-            }
             if (!$entity instanceof Task) {
                 continue;
             }
@@ -83,27 +82,56 @@ final readonly class TaskRevisionListener
     }
 
     /**
-     * Since 2.18.0 (audit PS-L1): the last write's provenance is one fact. When a flush changes any of `updatedBy`,
-     * `channel` and `actorLabel`, the UPDATE carries all three, so two overlapping writes (each loaded before the other
-     * committed) never leave one person's id next to another's token name.
+     * Since 2.18.0 (audits PS-L1, PS-D1-M1): the last write's provenance is one fact. When a flush's UPDATE of a task or
+     * comment carries some but not all of `updatedBy`, `channel` and `actorLabel`, one more statement in the same
+     * transaction writes the three together, each converted through its own mapping (the user's id through the
+     * association in entity mode, `task_board_user_ref` with user references by id, strings). Two overlapping writes
+     * (each loaded before the other committed) then never leave one person's id next to another's token name. The
+     * change set the flush and other listeners see is left as Doctrine computed it.
      */
     private function writeProvenanceTogether(EntityManagerInterface $manager, Task|TaskComment $entity): void
     {
-        $work    = $manager->getUnitOfWork();
-        $missing = array_diff(self::PROVENANCE_FIELDS, array_keys($work->getEntityChangeSet($entity)));
-        if ($missing === [] || count($missing) === count(self::PROVENANCE_FIELDS)) {
+        $changed = array_intersect(self::PROVENANCE_FIELDS, array_keys($manager->getUnitOfWork()->getEntityChangeSet($entity)));
+        if ($changed === [] || count($changed) === count(self::PROVENANCE_FIELDS)) {
             return;
         }
-        foreach ($missing as $field) {
-            // A value no property can hold: the recomputed change set has the field, its UPDATE the current value.
-            $work->setOriginalEntityProperty(spl_object_id($entity), $field, new stdClass());
+        $metadata   = $manager->getClassMetadata($entity::class);
+        $connection = $manager->getConnection();
+        $platform   = $connection->getDatabasePlatform();
+        $quotes     = $manager->getConfiguration()->getQuoteStrategy();
+        $sets       = [];
+        $values     = [];
+        $types      = [];
+        foreach (self::PROVENANCE_FIELDS as $field) {
+            $value = $metadata->getFieldValue($entity, $field);
+            if ($metadata->hasAssociation($field)) {
+                $mapping = $metadata->getAssociationMapping($field);
+                $join    = $mapping instanceof ToOneOwningSideMapping ? ($mapping->joinColumns[0] ?? null) : null;
+                if (!$join instanceof JoinColumnMapping) {
+                    return;
+                }
+                $target   = $manager->getClassMetadata($mapping->targetEntity);
+                $idField  = $target->getSingleIdentifierFieldName();
+                $sets[]   = $quotes->getJoinColumnName($join, $metadata, $platform) . ' = ?';
+                $values[] = $value === null ? null : $target->getFieldValue($value, $idField);
+                $types[]  = $target->getTypeOfField($idField) ?? 'string';
+            } else {
+                $sets[]   = $quotes->getColumnName($field, $metadata, $platform) . ' = ?';
+                $values[] = $value;
+                $types[]  = $metadata->getTypeOfField($field) ?? 'string';
+            }
         }
-        $work->recomputeSingleEntityChangeSet($manager->getClassMetadata($entity::class), $entity);
+        $values[] = $metadata->getFieldValue($entity, $metadata->getSingleIdentifierFieldName());
+        $types[]  = $metadata->getTypeOfField($metadata->getSingleIdentifierFieldName()) ?? 'string';
+        $connection->executeStatement('UPDATE ' . $quotes->getTableName($metadata, $platform) . ' SET ' . implode(', ', $sets) . ' WHERE ' . $quotes->getColumnName($metadata->getSingleIdentifierFieldName(), $metadata, $platform) . ' = ?', $values, $types);
     }
 
     public function postUpdate(PostUpdateEventArgs $args): void
     {
         $entity = $args->getObject();
+        if ($entity instanceof Task || $entity instanceof TaskComment) {
+            $this->writeProvenanceTogether($args->getObjectManager(), $entity);
+        }
         if ($entity instanceof Task) {
             $this->increment($args->getObjectManager(), $entity);
         }
