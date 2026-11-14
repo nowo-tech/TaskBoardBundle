@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
 use Closure;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
@@ -43,18 +44,22 @@ final readonly class TaskApiTransaction
     public function run(Closure $write, array $touched = []): mixed
     {
         $connection = $this->entityManager->getConnection();
+        $depth      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
         try {
             $result = $write();
             $connection->commit();
         } catch (Throwable $exception) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
+            // Audit PX-M1 (2.20.0; since 2.16.0): a failed rollback (MySQL ended the transaction on a deadlock, so the
+            // savepoint is gone) never skips the clean-up, and never leaves the connection's nesting level behind.
+            try {
+                $this->rollBack($connection, $depth);
+            } finally {
+                $this->events?->rollBack();
+                RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
+                $this->reload($touched);
             }
-            $this->events?->rollBack();
-            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
-            $this->reload($touched);
 
             throw $exception;
         }
@@ -70,16 +75,37 @@ final readonly class TaskApiTransaction
      */
     public function lockedRevision(Task $task): int
     {
-        /** @var int|string $revision */
-        $revision = $this->entityManager->createQuery('SELECT t.revision FROM ' . Task::class . ' t WHERE t.id = :id')
+        /** @var array{revision: int|string, parent: int|string|null} $row */
+        $row = $this->entityManager->createQuery('SELECT t.revision AS revision, IDENTITY(t.parent) AS parent FROM ' . Task::class . ' t WHERE t.id = :id')
             ->setParameter('id', $task->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-            ->getSingleScalarResult();
-        if ((int) $revision !== $task->getRevision()) {
+            ->getSingleResult();
+        $revision = $row['revision'];
+        // Since 2.20.0: also when only the parent differs (a write that bumped no revision), so `parent` compares as committed.
+        if ((int) $revision !== $task->getRevision() || ($row['parent'] === null ? null : (string) $row['parent']) !== $task->getParent()?->getId()) {
             $this->entityManager->refresh($task);
         }
 
         return (int) $revision;
+    }
+
+    /**
+     * Audit PX-M1: rolls back the levels this call opened, as `TaskMover` does. When the server already ended the
+     * transaction, rolling back to a savepoint fails and DBAL keeps its nesting level: at the outermost level the
+     * connection is closed (the level goes back to 0, the next query reconnects); inside a caller's transaction the
+     * caller owns it.
+     */
+    private function rollBack(Connection $connection, int $depth): void
+    {
+        try {
+            while ($connection->getTransactionNestingLevel() > $depth) {
+                $connection->rollBack();
+            }
+        } catch (Throwable) {
+            if ($depth === 0) {
+                $connection->close();
+            }
+        }
     }
 
     /**
