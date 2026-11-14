@@ -9,7 +9,6 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
-use Doctrine\ORM\Mapping\JoinColumnMapping;
 use Doctrine\ORM\Mapping\ToOneOwningSideMapping;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -19,6 +18,7 @@ use function array_diff_key;
 use function array_flip;
 use function array_intersect;
 use function array_keys;
+use function assert;
 use function count;
 use function implode;
 use function spl_object_id;
@@ -106,10 +106,9 @@ final readonly class TaskRevisionListener
             $value = $metadata->getFieldValue($entity, $field);
             if ($metadata->hasAssociation($field)) {
                 $mapping = $metadata->getAssociationMapping($field);
-                $join    = $mapping instanceof ToOneOwningSideMapping ? ($mapping->joinColumns[0] ?? null) : null;
-                if (!$join instanceof JoinColumnMapping) {
-                    return;
-                }
+                // `updatedBy` is a ManyToOne with one join column (entity mode); in id mode it is a field.
+                assert($mapping instanceof ToOneOwningSideMapping);
+                $join     = $mapping->joinColumns[0];
                 $target   = $manager->getClassMetadata($mapping->targetEntity);
                 $idField  = $target->getSingleIdentifierFieldName();
                 $sets[]   = $quotes->getJoinColumnName($join, $metadata, $platform) . ' = ?';
