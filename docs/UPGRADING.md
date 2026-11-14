@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.17.0](#to-2170)
 - [To 2.16.0](#to-2160)
   - [Schema change for every host: humans-only columns and task revisions](#schema-change-for-every-host-humans-only-columns-and-task-revisions)
   - [AI Flow features: what a host does](#ai-flow-features-what-a-host-does)
@@ -194,6 +195,24 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
+## To 2.17.0
+
+No schema change, no migration, no configuration change.
+
+- **Task revisions (audit PC-L4; replaces [2.16.0 item 11](#ai-flow-features-what-a-host-does)).** The revision is now
+  incremented by the database inside the transaction of the write (`revision = revision + 1`), never written from PHP.
+  Every write that changes a task gets a revision no other write has, whether or not it locked the row, so `If-Match`
+  catches a write by the board UI, a sync, a recurrence or a `PUT` without `If-Match` that happened in between. Clients
+  that rely on FR-018 no longer need `If-Match` on every write to be safe from another writer; they still send it on
+  their own writes to be told when they would overwrite someone else's change (409 `TASK_409`).
+- The value a write produced is read back into the `Task` object at the flush, as before: `getRevision()` after a flush
+  is the saved revision. If your own code changed `revision` with SQL, keep doing it with `revision = revision + 1`;
+  the column is mapped `updatable: false` now, so setting the property through reflection is no longer saved.
+- Isolation: with the defaults (PostgreSQL `READ COMMITTED`, MySQL / MariaDB InnoDB `REPEATABLE READ`) a second
+  writer of the same task waits for the first commit and gets the next number. A PostgreSQL host that runs
+  `REPEATABLE READ` / `SERIALIZABLE` by default gets a serialization error for the second writer instead (as its own
+  row update already did in 2.16 when it changed a field; now also when it only changed assignees or watchers).
+
 ## To 2.16.0
 
 Additive (Beacon spec 234). With an unchanged configuration every move is allowed as before, `/v2/team` still lists no
@@ -271,7 +290,7 @@ punctuation (`C-12`) are matched with `LIKE` either way.
 10. **Bulk refusals at write time (audit PC-L1).** A rule that reads the database (counting the tasks already in the
     column) may refuse an item only after the previous ones were written in the same transaction; the answer is still
     409 `BULK_001` with that item in `failures`, and nothing is kept.
-11. **Revisions and writers without `If-Match` (audit PC-L4).** The revision is computed in PHP (`Task::bumpRevision()`)
+11. **Revisions and writers without `If-Match` (audit PC-L4). Fixed in 2.17.0, see [To 2.17.0](#to-2170).** The revision is computed in PHP (`Task::bumpRevision()`)
     and written as a value. A writer that does not lock the row (the board UI, `PUT /v2/task/{id}` without `If-Match` or
     `base_revision`, a sync, a recurrence) and loaded the task before a locked write committed may save the same
     revision number for different content. The window is one request; clients that rely on FR-018 (parallel

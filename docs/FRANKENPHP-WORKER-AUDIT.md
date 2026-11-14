@@ -149,7 +149,7 @@ entity manager at each boundary (REQ-RUNTIME-002 rule 7).
 | Service | State | Notes |
 |---------|-------|-------|
 | `Transition\*ColumnTransitionPolicy`, `ValueObject\ColumnTransition*` | none (`final readonly`) | Snapshots copied per call; a host policy must keep no state between calls (stated on the interface) |
-| `Doctrine\TaskRevisionListener` | none | Reads only the flushing unit of work |
+| `Doctrine\TaskRevisionListener` | none | Reads only the flushing unit of work; since 2.17.0 the "to increment" mark lives on the `Task` object (not mapped, cleared once the database added the 1), never in the listener |
 | `Api\Operation\TaskApiTransaction` | none | Every refusal of an update with a base revision or of a bulk update is checked before the first write; a failed write rolls back, drops the held events, resets a manager the flush closed (`RecoveringFlusher::resetIfClosed`) and reloads the touched tasks, so the next request never sees a closed manager or a rolled-back value (audit OG-1 lesson) |
 | `Search\DoctrineTaskTextSearch`, `Search\TaskTextSearchMetadataListener` | none | One DBAL query per search; scalar ids only, nothing enters the identity map |
 | `Support\TextFold` | none (static) | |
