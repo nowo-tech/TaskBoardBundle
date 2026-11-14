@@ -169,8 +169,23 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   its old board's field values to the target's field of the same name and type, or loses them with a history row
   (`TaskBoardMoveResult::$droppedFieldValues`), and `hasValues()` of a board's field counts only tasks still on it (PW-L6).
 - A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
-- Demo: migrations `Version20261115100000` (folders), `Version20261115110000` (column types, status sets) and
-  `Version20261115120000` (custom fields).
+- Demo: migrations `Version20261115100000` (folders), `Version20261115110000` (column types, status sets),
+  `Version20261115120000` (custom fields), `Version20261115130000` (numbering prefix).
+- **Board configuration as data (Beacon block W, work method presets).** `Configuration\BoardConfiguration` — a
+  framework-free VO, serialisable to and from an array or JSON — holds a board's columns (order, name, type, colour,
+  icon), its own custom fields (options and colours), its task templates (through
+  `BoardTemplatesConfigurationInterface`; the default `NoBoardTemplates` has none: the bundle's 2.16 task templates
+  are not wired to it yet, so a host aliases its own) and its numbering prefix.
+  `BoardConfigurationExporter::export(board)` reads it; `BoardConfigurationApplier::apply(actor, board, configuration,
+  columnMap)` replaces the board's configuration in one transaction, under the restructure policy, never orphaning a
+  task (`columns_in_use` without a column map) and never dropping field values silently (`fields_in_use` unless
+  `dropFieldValues`); `applyById()` / `exportById()` are tenant-checked. Every refusal known in advance (columns in use,
+  fields with values, an invalid prefix and, since audit PW-M2, field definitions: two fields of one name, more than 200
+  options, a duplicate or empty option name, a colour that is not hex) is checked before the transaction opens, so a
+  refused apply leaves the entity manager and the caller's board as they were (worker mode, kernel reset off). The
+  tasks an apply moves or completes get their history rows and events (audit PW-L5).
+- **Numbering prefix.** `TaskBoard::numberPrefix` (`AIF` shows task 12 as `AIF-12` instead of `#12`); the Task API's
+  `custom_id` is `AIF-12` when the board has a prefix and the task a number.
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`

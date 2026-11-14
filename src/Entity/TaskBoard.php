@@ -19,6 +19,8 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
+use function preg_match;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_boards')]
 #[ORM\Index(name: 'idx_task_board_boards_tenant', columns: ['tenant_key'])]
@@ -64,6 +66,13 @@ class TaskBoard
     #[ORM\ManyToOne(targetEntity: TaskBoardFolder::class)]
     #[ORM\JoinColumn(name: 'folder_id', nullable: true, onDelete: 'SET NULL')]
     private ?TaskBoardFolder $folder = null;
+
+    /**
+     * Since 2.19.0 (Beacon block W): the board's numbering prefix (`AIF` shows task 12 as `AIF-12` instead of `#12`, and
+     * the Task API's `custom_id`); null: `#12`. Up to 16 capital letters, digits, `_` or `-`, starting with a letter.
+     */
+    #[ORM\Column(name: 'number_prefix', type: 'string', length: 16, nullable: true)]
+    private ?string $numberPrefix = null;
 
     /** @var Collection<int, BoardColumn> */
     #[ORM\OneToMany(targetEntity: BoardColumn::class, mappedBy: 'board', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -247,6 +256,31 @@ class TaskBoard
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->tenantKey = ExactKey::assertUsable($tenantKey, 'tenant key');
+
+        return $this;
+    }
+
+    public const NUMBER_PREFIX_PATTERN = '/^[A-Z][A-Z0-9_-]{0,15}$/D';
+
+    public function getNumberPrefix(): ?string
+    {
+        return $this->numberPrefix;
+    }
+
+    /**
+     * Since 2.19.0: the numbering prefix, null for `#12`.
+     *
+     * @throws InvalidArgumentException when it is not 1 to 16 capital letters, digits, `_` or `-` starting with a letter
+     */
+    public function setNumberPrefix(?string $prefix): self
+    {
+        if ($prefix !== null && preg_match(self::NUMBER_PREFIX_PATTERN, $prefix) !== 1) {
+            throw new InvalidArgumentException('A numbering prefix is 1 to 16 capital letters, digits, _ or -, starting with a letter.');
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->numberPrefix = $prefix;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedAt = new DateTimeImmutable();
 
         return $this;
     }

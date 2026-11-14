@@ -186,8 +186,9 @@ final class TaskApiReadSerializer
         $updatedBy   = $page->profileOf($task->getUpdatedBy());
 
         $data = [
-            'id'        => $task->getId(),
-            'custom_id' => null,
+            'id' => $task->getId(),
+            // Since 2.19.0: with the board's numbering prefix and a number, ClickUp's custom task id (`AIF-12`).
+            'custom_id' => $board->getNumberPrefix() !== null && $task->getNumber() !== null ? $board->getNumberPrefix() . '-' . $task->getNumber() : null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
             'number' => $task->getNumber(),
             // Since 2.16.0 (spec 234, FR-018): the optimistic-lock revision (`If-Match` / `base_revision` on update).

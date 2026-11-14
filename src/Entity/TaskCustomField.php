@@ -148,17 +148,41 @@ class TaskCustomField
      */
     public function setOptions(array $options): self
     {
-        if ($this->type !== CustomFieldType::Dropdown && $options !== []) {
+        self::assertOptions($this->type, $options);
+        $known = [];
+        foreach ($this->options as $option) {
+            $known[$option['id']] = true;
+        }
+        $kept = [];
+        foreach ($options as $option) {
+            $id     = is_string($option['id'] ?? null) && isset($known[$option['id']]) ? $option['id'] : Uuid::generate()->toString();
+            $kept[] = ['id' => $id, 'name' => Text::cut(trim($option['name']), self::NAME_MAX), 'color' => $option['color'] ?? null];
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->options = $kept;
+
+        return $this;
+    }
+
+    /**
+     * Since 2.19.0 (audit PW-M2): the checks of {@see self::setOptions()}, without a field (a caller checks its data before
+     * it opens a transaction): only a dropdown has options, at most {@see self::OPTIONS_MAX}, each with a name (unique,
+     * trimmed, not empty) and a hex colour or none.
+     *
+     * @param array<mixed> $options
+     *
+     * @throws InvalidArgumentException
+     *
+     * @phpstan-assert list<array{id?: ?string, name: string, color?: ?string}> $options
+     */
+    public static function assertOptions(CustomFieldType $type, array $options): void
+    {
+        if ($type !== CustomFieldType::Dropdown && $options !== []) {
             throw new InvalidArgumentException('Only a dropdown field has options.');
         }
         if (count($options) > self::OPTIONS_MAX) {
             throw new InvalidArgumentException('Too many options.');
         }
-        $known = [];
-        foreach ($this->options as $option) {
-            $known[$option['id']] = true;
-        }
-        $kept  = [];
         $names = [];
         foreach ($options as $option) {
             if (!is_array($option) || !is_string($option['name'] ?? null)) {
@@ -169,14 +193,8 @@ class TaskCustomField
             if ($name === '' || isset($names[$name]) || ($color !== null && (!is_string($color) || preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/D', $color) !== 1))) {
                 throw new InvalidArgumentException('Invalid option.');
             }
-            $id           = is_string($option['id'] ?? null) && isset($known[$option['id']]) ? $option['id'] : Uuid::generate()->toString();
             $names[$name] = true;
-            $kept[]       = ['id' => $id, 'name' => $name, 'color' => $color];
         }
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->options = $kept;
-
-        return $this;
     }
 
     /** @return array{id: string, name: string, color: ?string}|null */

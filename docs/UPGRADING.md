@@ -9,6 +9,7 @@
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
   - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
+  - [Schema change for every host: numbering prefix; board configuration](#schema-change-for-every-host-numbering-prefix-board-configuration)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -204,6 +205,22 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ## To 2.19.0
 
+Additive (Beacon spec 234 parts A–C, block W). **One schema change for every host**, in four parts that one
+`doctrine:migrations:diff` writes together; run it **before** the deploy (every part is mapped):
+
+| Part | Tables and columns | Demo migration |
+|---|---|---|
+| Folders | new `task_board_folders`; `task_board_boards.folder_id` (FK, `ON DELETE SET NULL`) | `Version20261115100000` |
+| Column types, status sets | `task_board_columns.column_type`; `task_board_folders.status_set` | `Version20261115110000` |
+| Native custom fields | new `task_board_custom_fields`, `task_board_custom_field_values` | `Version20261115120000` |
+| Numbering prefix | `task_board_boards.number_prefix` | `Version20261115130000` |
+
+From 2.17 or earlier, apply [To 2.18.0](#to-2180) first (the provenance columns, demo `Version20261114120000`).
+Every new column is nullable and every new table starts empty: nothing is rewritten and no data step is needed. The
+sections below give the SQL for MySQL / MariaDB and PostgreSQL as Doctrine generates it, and what SQLite needs; the two
+new `tenant_key` columns are key columns (REQ-SEC-006) with the binary NO PAD collation on MySQL / MariaDB. The XML
+mapping (`database.mapping: xml`) maps the same columns as the attributes.
+
 ### Schema change for every host: folders
 
 A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
@@ -348,6 +365,31 @@ calls it from its infrastructure layer (audit PW-L7, no id-based twin in 2.19.0)
 Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
 a native field instead of always answering 409; a provider's (synced) field still answers 409 `FIELD_001` (owner
 decision Q-O3 of spec 213 stands for them).
+
+### Schema change for every host: numbering prefix; board configuration
+
+One nullable column, after the parts above (the demo's `Version20261115130000`); the same statement on MySQL, MariaDB
+and PostgreSQL (SQLite: `ADD COLUMN`):
+
+```sql
+ALTER TABLE task_board_boards ADD number_prefix VARCHAR(16) DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_boards DROP number_prefix;
+```
+
+With every part of 2.19.0 the board table gains `folder_id` and `number_prefix`: a `doctrine:migrations:diff` run once
+writes them in one `ALTER TABLE` (one table copy on SQLite).
+
+**Board configuration (presets).** A host that stores presets reads a board with
+`Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter::export($board)` (or `exportById($id, $tenantKey)`),
+keeps `$configuration->toArray()` / `toJson()` as it likes, and copies it onto a board with
+`BoardConfigurationApplier::apply($actor, $board, BoardConfiguration::fromArray($data), $columnMap)` (or
+`applyById($actor, $id, $tenantKey, …)`). The apply is all or nothing; it refuses with
+`Folder\TaskBoardRestructureRefusedException` (`not_found`, `not_allowed`, `columns_in_use` — give a column map,
+`columns_shared` — the board's folder shares its statuses, `fields_in_use` — pass `dropFieldValues: true` to drop them,
+`invalid`, `quota`). Task templates join the configuration through `BoardTemplatesConfigurationInterface`: the default (`NoBoardTemplates`)
+has none, and the bundle's own task templates (2.16, `task_templates.enabled`) are not wired to it in 2.19.0, so a host
+that wants them in its presets aliases the interface to its own service.
 
 ## To 2.18.0
 
