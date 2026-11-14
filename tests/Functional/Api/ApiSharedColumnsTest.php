@@ -25,7 +25,7 @@ final class ApiSharedColumnsTest extends ApiTestCase
     protected function setUp(): void
     {
         // Folders are the admins' (the default lets anyone who may create a board manage folders).
-        static::$hostConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
+        self::$hostConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
         parent::setUp();
     }
 
