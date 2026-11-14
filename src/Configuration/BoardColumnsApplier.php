@@ -132,7 +132,7 @@ final readonly class BoardColumnsApplier
         foreach ($specs as $index => $spec) {
             $column = $kept[$index] ?? new BoardColumn($board, $spec->name, $index);
             // @igor-ignore - A BoardColumn entity of the board being written (instance-scoped), not a shared service.
-            $column->setName($spec->name)->setPosition($index)->setColor($spec->color)->setIcon(ColumnIcon::normalize($spec->icon))->setType($spec->type);
+            $column->setName($spec->name)->setPosition($index)->setColor($spec->color)->setIcon(ColumnIcon::normalize($spec->icon))->setType($spec->type)->setHumansOnly($spec->humansOnly);
             if (!isset($kept[$index])) {
                 $board->addColumn($column);
             }
@@ -211,7 +211,7 @@ final readonly class BoardColumnsApplier
     {
         $columns = ColumnTypes::ordered($board);
 
-        return array_map(static fn (BoardColumn $column): BoardColumnSpec => new BoardColumnSpec($column->getName(), ColumnTypes::of($column, $columns), $column->getColor(), $column->getIcon()), $columns);
+        return array_map(static fn (BoardColumn $column): BoardColumnSpec => new BoardColumnSpec($column->getName(), ColumnTypes::of($column, $columns), $column->getColor(), $column->getIcon(), $column->isHumansOnly()), $columns);
     }
 
     /**
