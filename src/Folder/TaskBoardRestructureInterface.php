@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Folder;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
+ * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
  * moved between the boards of one tenant. A host's restructure command depends on it (public alias of
  * {@see TaskBoardRestructurer}). Framework-free: ids in, VOs out (REQ-ARCH-001 rules 1 and 3).
  *
@@ -45,7 +45,7 @@ interface TaskBoardRestructureInterface
 
     /**
      * Puts a board in a folder of its own tenant, or out of any (`$folderId` null). Into a folder with a shared status set
-     * (since 2.17.0, FR-034) the board takes the set's columns: `$columnMap` (current column id or name => a column name of
+     * (since 2.18.0, FR-034) the board takes the set's columns: `$columnMap` (current column id or name => a column name of
      * the set) moves the tasks of a column the set does not have; without it such a column is `columns_in_use`.
      *
      * @param array<string, string> $columnMap

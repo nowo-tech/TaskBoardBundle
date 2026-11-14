@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% de %total% subtareas hechas'
 task_board.form.column.icon: "Icono"
 task_board.form.column.no_icon: "Sin icono"
 task_board.form.column.icon_help: "Un emoji, opcional."
+task_board.form.column.humans_only: "Solo las personas pueden mover tareas aquí"
+task_board.form.column.humans_only_help: "Se rechazan los movimientos a esta columna por la API o por un agente."
+task_board.board.column_humans_only: "Solo personas"
+task_board.board.column_humans_only_help: "Solo las personas pueden mover tareas a esta columna."
 task_board.form.column.icon_invalid: "El icono de una columna es un emoji (16 bytes como máximo) o uno de los iconos ofrecidos."
 task_board.form.column.custom_color: 'Color personalizado'
 task_board.form.board.column_set: "Columnas"
@@ -495,6 +499,7 @@ task_board.sync.error.restore_refused: "No se han restaurado tareas que vuelven 
 task_board.sync.error.relation_skipped: "Se han omitido algunas relaciones de tarea padre o dependencia (falta la otra tarea o no se puede editar)."
 task_board.sync.error.parent_cycle: "Se ha rechazado un cambio de tarea padre: haría que una tarea fuese su propio antecesor."
 task_board.sync.error.assignee_unresolved: "Algunos asignados no coinciden con nadie de este tablero; esas tareas mantienen sus asignados."
+task_board.sync.error.external_id_look_alike: "Se omitieron algunas tareas del proveedor: su id solo difiere de una ya sincronizada en mayúsculas, acentos o espacios finales. Pide a tu administrador que aplique la actualización de base de datos de TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Algunos estados no tienen columna en el tablero; esas tareas han ido a la columna por defecto."
 task_board.sync.error.file_quota: "No se han copiado algunos archivos: se ha alcanzado el límite de almacenamiento."
 task_board.sync.error.storage_disabled: "No se copian archivos: no hay almacenamiento configurado."
@@ -642,6 +647,7 @@ task_board.sync.completeness.status.not_exposed: "La API del proveedor no lo ofr
 task_board.sync.error.source_details_unavailable: "No se pudo leer la descripción del origen."
 task_board.history.former_user: "Antigua persona"
 task_board.flash.task_reopen_refused: "La tarea no se ha movido: reabrirla superaría el límite de tareas activas."
+task_board.flash.task_move_refused: "La tarea no se ha movido: esta columna no la acepta desde aquí."
 task_board.flash.column_delete_refused: "La columna no se ha eliminado: tiene tareas completadas y reabrirlas superaría el límite de tareas activas."
 task_board.flash.column_icon_invalid: "La columna no se ha guardado: su icono debe ser un emoji o uno de los iconos ofrecidos."
 task_board.form.board.icon: "Icono"
@@ -915,3 +921,7 @@ task_board.multi.partial: "El filtro de etiqueta solo leyó las primeras tareas:
 task_board.multi.overdue: "vencida"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Una persona asignada no trabaja el %date%: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Plantilla"
+task_board.template.none: "Sin plantilla"
+task_board.template.apply: "Aplicar plantilla"

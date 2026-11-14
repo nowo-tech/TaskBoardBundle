@@ -17,12 +17,14 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
+use function array_chunk;
 use function array_keys;
 use function array_map;
 use function array_slice;
@@ -60,15 +62,21 @@ final readonly class TaskApiQueryRepository
      * @param list<string> $boardIds boards already checked
      * @param list<object> $assignees users the `assignees[]` filter names
      * @param object|null $owner My tasks: only the tasks it created or is assigned
+     * @param list<string>|null $onlyIds since 2.16.0: only these tasks (the text search's matches); null: no such filter
      *
      * @return array{tasks: list<Task>, lastPage: bool}
      */
-    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner): array
+    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner, ?array $onlyIds = null): array
     {
-        if ($boardIds === [] || ($filter->assigneeIds !== [] && $assignees === [])) {
+        if ($boardIds === [] || ($filter->assigneeIds !== [] && $assignees === []) || $onlyIds === []) {
             return ['tasks' => [], 'lastPage' => true];
         }
-        $qb        = $this->filtered($boardIds, $filter, $assignees, $owner);
+        $qb = $this->filtered($boardIds, $filter, $assignees, $owner);
+        // Since 2.16.0 (spec 234, FR-026): the text search's matches, among the boards and every other filter.
+        if ($onlyIds !== null) {
+            // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
+            $qb->andWhere('t.id IN (:searchMatches)')->setParameter('searchMatches', $onlyIds);
+        }
         $direction = $filter->reverse ? 'DESC' : 'ASC';
         // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
         $qb->orderBy(self::ORDER_FIELDS[$filter->orderBy], $direction)->addOrderBy('t.id', $direction);
@@ -422,8 +430,14 @@ final readonly class TaskApiQueryRepository
             $qb->join('t.column', 'statusColumn')->andWhere('LOWER(statusColumn.name) IN (:statuses)')->setParameter('statuses', $filter->statuses);
         }
         if ($assignees !== [] && $this->idMode()) {
-            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly one of them.
-            $qb->andWhere('t.id IN (:exactAssigneeTasks)')->setParameter('exactAssigneeTasks', $this->exactTaskIds($assignees, false));
+            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly one of them. Since
+            // 2.15.1 (audit OC Low) the candidates stay in SQL and only the look-alike-only tasks are listed (none on
+            // PostgreSQL or a NO PAD binary column), so no IN list grows with the user's tasks.
+            $ids = $this->exactIds($assignees);
+            $qb->andWhere('EXISTS (SELECT am.id FROM ' . TaskMember::class . ' am WHERE am.task = t AND am.memberRole = :assigneeRole AND am.user IN (:assignees))')
+                ->setParameter('assignees', $ids === [] ? [''] : array_map('strval', array_keys($ids)))
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee);
+            $this->dropTasks($qb, 'lookAlikeAssigneeTasks', $this->lookAlikeTasks($ids, false));
         } elseif ($assignees !== []) {
             $qb->andWhere('EXISTS (SELECT am.id FROM ' . TaskMember::class . ' am WHERE am.task = t AND am.memberRole = :assigneeRole AND am.user IN (:assignees))')
                 ->setParameter('assignees', array_map($this->userParameter(...), $assignees))
@@ -446,8 +460,13 @@ final readonly class TaskApiQueryRepository
             return;
         }
         if ($this->idMode()) {
-            // Since 2.15.0 (user_reference: id; audit OC-M2): created by or assigned to exactly this id.
-            $qb->andWhere('t.id IN (:exactOwnTasks)')->setParameter('exactOwnTasks', $this->exactTaskIds([$owner], true));
+            // Since 2.15.0 (user_reference: id; audit OC-M2): created by or assigned to exactly this id; since 2.15.1
+            // (audit OC Low) without an IN list of the user's tasks.
+            $ids = $this->exactIds([$owner]);
+            $qb->andWhere('t.creator IN (:owners) OR EXISTS (SELECT om.id FROM ' . TaskMember::class . ' om WHERE om.task = t AND om.memberRole = :ownerRole AND om.user IN (:owners))')
+                ->setParameter('owners', $ids === [] ? [''] : array_map('strval', array_keys($ids)))
+                ->setParameter('ownerRole', TaskMemberRole::Assignee);
+            $this->dropTasks($qb, 'lookAlikeOwnTasks', $this->lookAlikeTasks($ids, true));
 
             return;
         }
@@ -474,15 +493,13 @@ final readonly class TaskApiQueryRepository
     }
 
     /**
-     * Since 2.15.0 (audit OC-M2): the tasks a user is the assignee (and, with `$creator`, the creator) of, by exact id.
-     * The database finds the candidates; PHP keeps the rows whose id is byte for byte one asked. Never empty (a match on
-     * no task is an impossible id), so the IN list stays valid.
+     * The ids of `$users` that can be matched exactly ({@see TaskBoardUserRef::isValid()}).
      *
      * @param list<object> $users
      *
-     * @return list<string>
+     * @return array<string, true>
      */
-    private function exactTaskIds(array $users, bool $creator): array
+    private function exactIds(array $users): array
     {
         $ids = [];
         foreach ($users as $user) {
@@ -491,37 +508,60 @@ final readonly class TaskApiQueryRepository
                 $ids[$id] = true;
             }
         }
-        $tasks = [];
-        if ($ids !== []) {
-            /** @var list<array{taskId: mixed, ref: mixed}> $rows */
-            $rows = $this->entityManager->createQueryBuilder()
-                ->select('IDENTITY(m.task) AS taskId', 'm.user AS ref')
-                ->from(TaskMember::class, 'm')
-                ->where('m.memberRole = :role')
-                ->andWhere('m.user IN (:ids)')
-                ->setParameter('role', TaskMemberRole::Assignee)
-                ->setParameter('ids', array_keys($ids))
+
+        return $ids;
+    }
+
+    /**
+     * Since 2.15.0 (audit OC-M2), reworked in 2.15.1 (audit OC Low): of the tasks the database matches for these ids as
+     * assignee (and, with `$creator`, as creator), the ones matched only through a look-alike id (its collation may fold
+     * case, accents or trailing spaces). The query drops them; the list is empty on PostgreSQL and on a NO PAD binary
+     * column, so it does not grow with the user's tasks.
+     *
+     * @param array<string, true> $ids
+     *
+     * @return list<string>
+     */
+    private function lookAlikeTasks(array $ids, bool $creator): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $keys = array_map('strval', array_keys($ids));
+        /** @var list<array{taskId: mixed, ref: mixed}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(m.task) AS taskId', 'm.user AS ref')
+            ->from(TaskMember::class, 'm')
+            ->where('m.memberRole = :role')
+            ->andWhere('m.user IN (:ids)')
+            ->setParameter('role', TaskMemberRole::Assignee)
+            ->setParameter('ids', $keys)
+            ->getQuery()
+            ->getArrayResult();
+        if ($creator) {
+            /** @var list<array{taskId: mixed, ref: mixed}> $created */
+            $created = $this->entityManager->createQueryBuilder()
+                ->select('t.id AS taskId', 't.creator AS ref')
+                ->from(Task::class, 't')
+                ->where('t.creator IN (:ids)')
+                ->setParameter('ids', $keys)
                 ->getQuery()
                 ->getArrayResult();
-            if ($creator) {
-                /** @var list<array{taskId: mixed, ref: mixed}> $created */
-                $created = $this->entityManager->createQueryBuilder()
-                    ->select('t.id AS taskId', 't.creator AS ref')
-                    ->from(Task::class, 't')
-                    ->where('t.creator IN (:ids)')
-                    ->setParameter('ids', array_keys($ids))
-                    ->getQuery()
-                    ->getArrayResult();
-                $rows = [...$rows, ...$created];
-            }
-            foreach ($rows as $row) {
-                $ref = $row['ref'] instanceof TaskBoardUserRef ? $row['ref']->id : null;
-                if ($ref !== null && isset($ids[$ref])) {
-                    $tasks[(string) $row['taskId']] = true;
-                }
-            }
+            $rows = [...$rows, ...$created];
         }
 
-        return $tasks === [] ? [''] : array_keys($tasks);
+        return TaskBoardUsers::lookAlikeOnlyTasks($rows, $ids);
+    }
+
+    /**
+     * Drops `$tasks` from the query, 500 ids per `NOT IN` list.
+     *
+     * @param list<string> $tasks
+     */
+    private function dropTasks(QueryBuilder $qb, string $parameter, array $tasks): void
+    {
+        foreach (array_chunk($tasks, ExactKey::CHUNK) as $index => $chunk) {
+            $qb->andWhere('t.id NOT IN (:' . $parameter . $index . ')')->setParameter($parameter . $index, $chunk);
+        }
     }
 }

@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% de %total% subtarefas concluídas'
 task_board.form.column.icon: "Ícone"
 task_board.form.column.no_icon: "Sem ícone"
 task_board.form.column.icon_help: "Um emoji, opcional."
+task_board.form.column.humans_only: "Só as pessoas podem mover tarefas para aqui"
+task_board.form.column.humans_only_help: "Os movimentos para esta coluna pela API ou por um agente são recusados."
+task_board.board.column_humans_only: "Só pessoas"
+task_board.board.column_humans_only_help: "Só as pessoas podem mover tarefas para esta coluna."
 task_board.form.column.icon_invalid: "O ícone de uma coluna é um emoji (no máximo 16 bytes) ou um dos ícones disponíveis."
 task_board.form.column.custom_color: 'Cor personalizada'
 task_board.form.board.column_set: "Colunas"
@@ -495,6 +499,7 @@ task_board.sync.error.restore_refused: "Tarefas que voltaram ao fornecedor não 
 task_board.sync.error.relation_skipped: "Algumas relações de tarefa principal ou dependência foram ignoradas (a outra tarefa falta ou não é editável)."
 task_board.sync.error.parent_cycle: "Uma alteração de tarefa principal foi recusada: uma tarefa seria o seu próprio antecessor."
 task_board.sync.error.assignee_unresolved: "Alguns responsáveis não correspondem a ninguém deste quadro; essas tarefas mantêm os seus responsáveis."
+task_board.sync.error.external_id_look_alike: "Algumas tarefas do fornecedor foram ignoradas: o seu id só difere de uma já sincronizada em maiúsculas, acentos ou espaços finais. Peça ao seu administrador que aplique a atualização da base de dados do TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alguns estados não têm coluna no quadro; essas tarefas foram para a coluna por omissão."
 task_board.sync.error.file_quota: "Alguns ficheiros não foram copiados: o limite de armazenamento foi atingido."
 task_board.sync.error.storage_disabled: "Os ficheiros não são copiados: não há armazenamento configurado."
@@ -642,6 +647,7 @@ task_board.sync.completeness.status.not_exposed: "Não disponibilizado pela API 
 task_board.sync.error.source_details_unavailable: "Não foi possível ler a descrição da origem."
 task_board.history.former_user: "Antiga pessoa"
 task_board.flash.task_reopen_refused: "A tarefa não foi movida: reabri-la ultrapassaria o limite de tarefas ativas."
+task_board.flash.task_move_refused: "A tarefa não foi movida: esta coluna não a aceita a partir daqui."
 task_board.flash.column_delete_refused: "A coluna não foi eliminada: tem tarefas concluídas e reabri-las ultrapassaria o limite de tarefas ativas."
 task_board.flash.column_icon_invalid: "A coluna não foi guardada: o ícone deve ser um emoji ou um dos ícones disponíveis."
 task_board.form.board.icon: "Ícone"
@@ -915,3 +921,7 @@ task_board.multi.partial: "O filtro de etiqueta só leu as primeiras tarefas: o 
 task_board.multi.overdue: "em atraso"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Um responsável não trabalha a %date%: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Modelo"
+task_board.template.none: "Sem modelo"
+task_board.template.apply: "Aplicar modelo"

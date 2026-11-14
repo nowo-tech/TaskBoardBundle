@@ -17,10 +17,12 @@ use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -56,6 +58,8 @@ final readonly class TaskApiChecklistOperations
         private TaskMemberAssigner $members,
         private TaskApiQueryRepository $queries,
         private ValidatorInterface $validator,
+        // Since 2.16.0 (audit PC-L2): a rename retags every item, all or none, now that a tag change can be refused.
+        private ?TaskApiTransaction $transaction = null,
     ) {
     }
 
@@ -90,7 +94,7 @@ final readonly class TaskApiChecklistOperations
         $assignee = $this->assignee($principal, $task, $input);
         $this->audit->requireTaskQuota($task->getBoard(), 1, $principal->user);
 
-        $item = $this->tasks->create($task->getBoard(), new TaskFormData(title: $title, tags: [self::TAG_PREFIX . $name]), $principal->user, $task);
+        $item = $this->withinPlan(fn (): Task => $this->tasks->create($task->getBoard(), new TaskFormData(title: $title, tags: [self::TAG_PREFIX . $name]), $principal->user, $task, null, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
         if ($assignee !== null) {
             $this->members->assign($item, new TaskMemberFormData($assignee, TaskMemberRole::Assignee), $principal->user);
         }
@@ -114,11 +118,16 @@ final readonly class TaskApiChecklistOperations
             return [$task, $name];
         }
         $renamed = $this->name($input->string('name', true));
-        foreach ($this->items($task, $name) as $item) {
-            $data       = TaskFormData::fromTask($item);
-            $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
-            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
-        }
+        $items   = $this->items($task, $name);
+        $rename  = function () use ($principal, $items, $name, $renamed): void {
+            foreach ($items as $item) {
+                $data       = TaskFormData::fromTask($item);
+                $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
+                $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+            }
+        };
+        // @igor-ignore - The closure runs once, now; the stateless transaction keeps no reference to it.
+        $this->transaction instanceof TaskApiTransaction ? $this->transaction->run($rename, $items) : $rename();
         $this->audit->written($principal, 'checklist.update', $task->getBoard(), $task->getId(), [], ['name']);
 
         return [$task, $renamed];
@@ -162,16 +171,16 @@ final readonly class TaskApiChecklistOperations
         $assignee = $input->has('assignee') ? $this->assignee($principal, $task, $input) : null;
 
         if ($resolved === true && !$item->isCompleted()) {
-            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user));
+            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
         } elseif ($resolved === false && $item->isCompleted()) {
             $first = $item->getBoard()->getColumns()->first();
             if ($first instanceof BoardColumn) {
-                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user));
+                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
             }
         }
         $data->columnId = $item->getColumn()?->getId();
         if ($data->title !== $item->getTitle()) {
-            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user));
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
         }
         if ($assignee !== null) {
             $this->members->assign($item, new TaskMemberFormData($assignee, TaskMemberRole::Assignee), $principal->user);
@@ -305,6 +314,9 @@ final readonly class TaskApiChecklistOperations
             return $write();
         } catch (TaskReopenRefusedException) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (spec 234).
+            throw TaskApiRefusal::transitionRefused($refused);
         }
     }
 }

@@ -112,7 +112,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.17.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
+     * Since 2.18.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
      * view). `content` / `markdown_content`: its Markdown description.
      *
      * @param list<TaskBoard> $boards
@@ -145,7 +145,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.17.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
+     * Since 2.18.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
      *
      * @return array<string, mixed>
      */
@@ -184,7 +184,9 @@ final class TaskApiReadSerializer
             'id'        => $task->getId(),
             'custom_id' => null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
-            'number'           => $task->getNumber(),
+            'number' => $task->getNumber(),
+            // Since 2.16.0 (spec 234, FR-018): the optimistic-lock revision (`If-Match` / `base_revision` on update).
+            'revision'         => $task->getRevision(),
             'name'             => $task->getTitle(),
             'text_content'     => $description,
             'description'      => $description,
@@ -329,10 +331,11 @@ final class TaskApiReadSerializer
                 $index = $position;
             }
         }
-        // Since 2.17.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
+        // Since 2.18.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
         $type = ColumnTypes::of($column, $columns)->value;
 
-        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon()];
+        // Since 2.16.0 (spec 234, FR-001 / FR-014): `humans_only`.
+        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon(), 'humans_only' => $column->isHumansOnly()];
     }
 
     /**

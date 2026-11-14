@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Number;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
+use Doctrine\ORM\Event\PrePersistEventArgs;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
+use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 
 use function count;
+use function sprintf;
 
 /**
  * Since 2.1.0 (spec 214, FR-003, FR-006, FR-008): numbers a task when it is persisted, so every creation path gets one without
@@ -29,6 +34,31 @@ final readonly class TaskNumberListener
         private TaskNumberScope $scope,
         private TaskNumberReserver $reserver,
     ) {
+    }
+
+    /**
+     * Since 2.15.1 (REQ-SEC-006, audit OM TB-L2): refuses a new task whose scope's counter, as the database finds it, is
+     * a look-alike scope's (`scope_key` still folding, before the UPGRADING ALTER). Thrown here, before the task is
+     * scheduled, the manager keeps no pending insert; `onFlush` would be too late. PostgreSQL compares exactly.
+     *
+     * @throws TaskNumberScopeConflictException
+     */
+    public function prePersist(PrePersistEventArgs $args): void
+    {
+        $task = $args->getObject();
+        if (!$task instanceof Task || $task->getNumber() !== null) {
+            return;
+        }
+        $connection = $args->getObjectManager()->getConnection();
+        if ($connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            return;
+        }
+        $key    = $this->scope->keyOf($task->getBoard());
+        $stored = $connection->fetchOne(sprintf('SELECT scope_key FROM %s WHERE scope_key = ?', TaskNumberCounter::TABLE), [$key]);
+        if ($stored !== false && $stored !== $key) {
+            // Since 2.16.0 (spec 234): the task is named, so a bulk write knows which of its items conflicts.
+            throw TaskNumberScopeConflictException::forScope($key, $task->getId());
+        }
     }
 
     public function onFlush(OnFlushEventArgs $args): void
@@ -60,7 +90,20 @@ final readonly class TaskNumberListener
         foreach ($byScope as $key => $tasks) {
             $counts[$key] = count($tasks);
         }
-        $first = $this->reserver->reserve($manager->getConnection(), $counts);
+        try {
+            $first = $this->reserver->reserve($manager->getConnection(), $counts);
+        } catch (TaskNumberScopeConflictException $conflict) {
+            // Since 2.16.0 (spec 234): name the first task of the offending scope. The keys are compared byte for byte,
+            // never through PHP's array keys (REQ-SEC-006), and only the caller's own tasks are listed.
+            foreach ($byScope as $key => $tasks) {
+                if ((string) $key === $conflict->scopeKey && $tasks !== []) {
+                    throw $conflict->forTask($tasks[0]->getId());
+                }
+            }
+
+            // The reserver is called with the keys of `$byScope`, so one always matches; this is the fail-safe.
+            throw $conflict; // @codeCoverageIgnore
+        }
 
         $metadata = $manager->getClassMetadata(Task::class);
         foreach ($byScope as $key => $tasks) {

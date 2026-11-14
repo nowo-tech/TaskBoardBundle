@@ -10,14 +10,19 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRequestContext;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Port\TaskApiRequestAuthenticatorGate;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisioningInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -133,6 +138,53 @@ final class TaskBoardPortsPassTest extends TestCase
 
         self::assertEquals($before, $container->getDefinitions());
     }
+
+    /**
+     * Audit OM TB-I1: a host resolver implementing the twin takes the public twin alias, so autowiring never hands out
+     * the bundle's laxer default instead of the configured one.
+     */
+    public function testTheConfiguredTwinActorResolverTakesTheTwinAlias(): void
+    {
+        $container = $this->actorContainer(TwinActorResolver::class);
+
+        (new TaskBoardPortsPass())->process($container);
+
+        self::assertTrue($container->hasAlias(SyncActorProviderInterface::class));
+        self::assertSame('app.actor', (string) $container->getAlias(SyncActorProviderInterface::class));
+        self::assertTrue($container->getAlias(SyncActorProviderInterface::class)->isPublic());
+    }
+
+    public function testADeprecatedOnlyActorResolverLeavesTheTwinAliasOnTheDefault(): void
+    {
+        $container = $this->actorContainer(LegacyActorResolver::class);
+
+        (new TaskBoardPortsPass())->process($container);
+
+        self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorProviderInterface::class));
+    }
+
+    public function testNoConfiguredActorResolverLeavesTheTwinAliasOnTheDefault(): void
+    {
+        $container = $this->actorContainer(TwinActorResolver::class);
+        $container->setParameter(TaskBoardPortsPass::ACTOR_RESOLVER_PARAMETER, '');
+
+        (new TaskBoardPortsPass())->process($container);
+
+        self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorProviderInterface::class));
+    }
+
+    /** @param class-string $resolver */
+    private function actorContainer(string $resolver): ContainerBuilder
+    {
+        $container = new ContainerBuilder();
+        $container->register('app.actor', $resolver);
+        $container->register(ConnectionCreatorActorResolver::class, ConnectionCreatorActorResolver::class);
+        $container->setAlias(SyncActorResolverInterface::class, 'app.actor');
+        $container->setAlias(SyncActorProviderInterface::class, ConnectionCreatorActorResolver::class)->setPublic(true);
+        $container->setParameter(TaskBoardPortsPass::ACTOR_RESOLVER_PARAMETER, 'app.actor');
+
+        return $container;
+    }
 }
 
 final class LegacyAuthenticator implements TaskApiAuthenticatorInterface
@@ -167,6 +219,22 @@ final class TwinTargets implements TaskBoardTargetIdsInterface
 final class TwinProvisioning implements FirstBoardProvisioningInterface
 {
     public function provision(TaskBoardTenant $tenant, object $user): ?string
+    {
+        return null;
+    }
+}
+
+final class TwinActorResolver implements SyncActorProviderInterface
+{
+    public function actorFor(TaskBoardSnapshot $board, ?string $actorId = null): ?object
+    {
+        return null;
+    }
+}
+
+final class LegacyActorResolver implements SyncActorResolverInterface
+{
+    public function actorFor(TaskBoard $board, ?string $actorId = null): ?object
     {
         return null;
     }

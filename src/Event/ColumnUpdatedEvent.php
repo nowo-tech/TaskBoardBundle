@@ -16,8 +16,10 @@ final class ColumnUpdatedEvent extends AbstractColumnEvent
     public const FIELD_COLOR = 'color';
     public const FIELD_ICON  = 'icon';
 
-    /** Since 2.17.0 (FR-033). */
+    /** Since 2.18.0 (FR-033). */
     public const FIELD_TYPE = 'type';
+    /** Since 2.16.0 (spec 234): the column's humans-only flag. */
+    public const FIELD_HUMANS_ONLY = 'humansOnly';
 
     /**
      * @param list<string> $changedFields of `name`, `color`, `icon`

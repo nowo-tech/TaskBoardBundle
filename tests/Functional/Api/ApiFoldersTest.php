@@ -19,7 +19,7 @@ use function array_keys;
 use function ksort;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031): folders on the Task API — `GET/POST /v2/space/{id}/folder`,
+ * Since 2.18.0 (Beacon spec 234, FR-031): folders on the Task API — `GET/POST /v2/space/{id}/folder`,
  * `GET/PUT/DELETE /v2/folder/{id}`, `GET/POST /v2/folder/{id}/list`.
  */
 final class ApiFoldersTest extends ApiTestCase

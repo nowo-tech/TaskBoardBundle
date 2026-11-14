@@ -25,7 +25,14 @@ use function substr;
 final class ApiOpenApiTest extends ApiTestCase
 {
     /** Route variables as the routes name them => as ClickUp and the document name them. */
-    private const NAMES = ['{teamId}' => '{team_id}', '{spaceId}' => '{space_id}', '{listId}' => '{list_id}', '{taskId}' => '{task_id}', '{tagName}' => '{tag_name}', '{fieldId}' => '{field_id}', '{linksTo}' => '{links_to}', '{checklistId}' => '{checklist_id}', '{itemId}' => '{checklist_item_id}', '{timerId}' => '{timer_id}', '{statusId}' => '{status_id}', '{folderId}' => '{folder_id}'];
+    private const NAMES = ['{teamId}' => '{team_id}', '{spaceId}' => '{space_id}', '{listId}' => '{list_id}', '{taskId}' => '{task_id}', '{tagName}' => '{tag_name}', '{fieldId}' => '{field_id}', '{linksTo}' => '{links_to}', '{checklistId}' => '{checklist_id}', '{itemId}' => '{checklist_item_id}', '{timerId}' => '{timer_id}', '{statusId}' => '{status_id}', '{commentId}' => '{comment_id}', '{folderId}' => '{folder_id}'];
+
+    protected function setUp(): void
+    {
+        // Since 2.16.0: the optional routes too (task_templates.enabled adds GET /v2/list/{list_id}/taskTemplate).
+        static::$hostConfig = ['task_templates' => ['enabled' => true]];
+        parent::setUp();
+    }
 
     public function testTheDocumentHasEveryRouteAndNothingElse(): void
     {

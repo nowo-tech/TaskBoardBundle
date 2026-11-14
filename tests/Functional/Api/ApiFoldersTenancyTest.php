@@ -12,7 +12,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.17.0: with tenancy, the default restructure policy also needs a tenant the person opens, as the UI does.
+ * Since 2.18.0: with tenancy, the default restructure policy also needs a tenant the person opens, as the UI does.
  */
 final class ApiFoldersTenancyTest extends ApiTestCase
 {

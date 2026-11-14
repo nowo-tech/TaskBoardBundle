@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Folder;
 use DateTimeImmutable;
 
 /**
- * Since 2.17.0 (FR-031): a folder as {@see TaskBoardRestructureInterface} answers it, copied when asked. `boardIds`: the
+ * Since 2.18.0 (FR-031): a folder as {@see TaskBoardRestructureInterface} answers it, copied when asked. `boardIds`: the
  * boards in it (archived ones included), by name.
  */
 final readonly class TaskBoardFolderSnapshot

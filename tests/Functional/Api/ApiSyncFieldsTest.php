@@ -78,7 +78,7 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertCount(1, $this->em->getRepository(TaskSyncFieldValue::class)->findAll(), 'kept');
     }
 
-    /** Since 2.17.0 (FR-033): a done column retyped as custom reopens its tasks, so the limit is asked first. */
+    /** Since 2.18.0 (FR-033): a done column retyped as custom reopens its tasks, so the limit is asked first. */
     public function testRetypingADoneColumnAsksTheLimit(): void
     {
         ApiTestHost::$tenants = ['tenant-a'];
@@ -121,6 +121,29 @@ final class ApiSyncFieldsTest extends ApiTestCase
         $this->em->clear();
         self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
         self::assertTrue($this->em->find(Task::class, $item->getId())?->isCompleted());
+    }
+
+    /** Since 2.16.0 (spec 234): a bulk update that reopens completed tasks asks the limit for all of them first. */
+    public function testTheHostsLimitRefusesABulkReopeningAndNothingChanges(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $done                 = new Task(board: $board, title: 'Done', creator: $this->owner, column: $board->getColumns()->last() ?: null);
+        $this->em->persist($done->markCompleted());
+        $open = $this->task($board, 'Open');
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+
+        try {
+            $this->send('POST', '/api/tasks/v2/task/bulk', ['tasks' => [['id' => $open->getId(), 'description' => 'x'], ['id' => $done->getId(), 'status' => 'To do']]]);
+            self::assertResponseStatusCodeSame(409);
+            self::assertSame([[1, 'PLAN_002', 403]], array_map(static fn (array $failure): array => [$failure['index'], $failure['ECODE'], $failure['status']], $this->json()['failures']));
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+        $this->em->clear();
+        self::assertTrue($this->em->find(Task::class, $done->getId())?->isCompleted());
+        self::assertNull($this->em->find(Task::class, $open->getId())?->getDescription());
     }
 
     /** Audit IB-L1: a write of fields never moves a task, even a done one without a column, so it asks no limit. */

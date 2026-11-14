@@ -10,7 +10,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.17.0: folder writes need the restructure policy's folder right (by default the create-board roles,
+ * Since 2.18.0: folder writes need the restructure policy's folder right (by default the create-board roles,
  * `security.create_roles`), else 403 `ACCESS_002`.
  */
 final class ApiFoldersPolicyTest extends ApiTestCase

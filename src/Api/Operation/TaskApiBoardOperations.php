@@ -16,7 +16,9 @@ use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\ColumnType;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
@@ -24,20 +26,31 @@ use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskBoardEditor;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_map;
 use function array_unique;
 use function count;
+use function in_array;
 use function sort;
 use function trim;
+use function usort;
 
 /**
  * Since 2.2.0 (spec 213, Full management): boards and their columns, through the services the UI uses. Columns are not in
  * ClickUp's API: they are statuses here, with four documented paths of their own (owner, Q-O2). Every operation needs the
  * board's manage decision (`canManageBoard`), or the create check for a new board, and a `Full` token.
+ *
+ * Since 2.16.0 (audit PC-M1): an `api` / `mcp` caller ({@see HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS}) may not
+ * lift a *humans only* gate through the columns: changing a column's `humans_only`, deleting a flagged column, or adding
+ * or reordering columns so that a flagged last column (the completion column) is no longer last (since 2.18.0, on a
+ * typed board: adding a done or closed column, or retyping a column into or out of the done columns, while a done column
+ * is flagged) is refused with the policy's own answer (403 `STATUS_HUMANS_ONLY`), before anything changes. A deletion also asks the column transition
+ * policy for every task it moves (operation `column_delete`), all or none.
  */
 final readonly class TaskApiBoardOperations
 {
@@ -134,8 +147,15 @@ final readonly class TaskApiBoardOperations
     {
         $this->audit->requireListener();
         $board = $this->guard->boardColumns($principal, $boardId);
+        $data  = $this->columnData($input, new BoardColumnFormData());
+        // Audit PC-M1: a new column goes last; on an untyped board it would take the completion away from a flagged last
+        // column. Since 2.18.0 (FR-033): on a typed board only a new done or closed column changes the done columns.
+        $changesDone = $data->type instanceof ColumnType ? $data->type->isDone() : !ColumnTypes::typed(ColumnTypes::ordered($board));
+        if ($this->machine($principal) && ($data->humansOnly || ($changesDone && $this->flaggedDone($board)))) {
+            throw TaskApiRefusal::humansOnly();
+        }
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
-        $column = $this->columnWrite(fn (): BoardColumn => $this->columns->add($board, $this->columnData($input, new BoardColumnFormData()), $principal->user));
+        $column = $this->columnWrite(fn (): BoardColumn => $this->columns->add($board, $data, $principal->user));
         $this->audit->written($principal, 'column.create', $board, null, ['column' => $column->getId()]);
 
         return $board;
@@ -151,8 +171,18 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
-        $this->columnWrite(function () use ($column, $input, $principal): BoardColumn {
-            $this->columns->update($column, $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon())), $principal->user);
+        $data   = $this->columnData($input, new BoardColumnFormData($column->getName(), $column->getColor(), $column->getIcon(), humansOnly: $column->isHumansOnly()));
+        // Audit PC-M1: the flag is the people's setting; sending its current value changes nothing and is accepted.
+        if ($this->machine($principal) && $data->humansOnly !== $column->isHumansOnly()) {
+            throw TaskApiRefusal::humansOnly();
+        }
+        // Since 2.18.0 (FR-033): a retype into or out of the done columns moves the completion, as a reorder does.
+        $retyped = $data->type instanceof ColumnType && $data->type !== ColumnTypes::of($column);
+        if ($retyped && $this->machine($principal) && ($data->type->isDone() || ColumnTypes::isDone($column)) && $this->flaggedDone($board)) {
+            throw TaskApiRefusal::humansOnly();
+        }
+        $this->columnWrite(function () use ($column, $data, $principal): BoardColumn {
+            $this->columns->update($column, $data, $principal->user);
 
             return $column;
         });
@@ -171,12 +201,19 @@ final readonly class TaskApiBoardOperations
         $this->audit->requireListener();
         $board  = $this->guard->boardColumns($principal, $boardId);
         $column = $this->column($board, $columnId);
+        // Audit PC-M1: deleting a flagged column lifts its gate, as clearing the flag would.
+        if ($this->machine($principal) && $column->isHumansOnly()) {
+            throw TaskApiRefusal::humansOnly();
+        }
         try {
-            if (!$this->columns->delete($column, $principal->user)) {
+            if (!$this->columns->delete($column, $principal->user, new ColumnTransitionVia($principal->channel, ColumnTransitionVia::OP_COLUMN_DELETE))) {
                 throw new TaskApiRefusal(409, 'LIST_001', 'A board keeps at least one column');
             }
         } catch (TaskReopenRefusedException) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Audit PC-M1: a task the deletion would move is refused; nothing changed.
+            throw TaskApiRefusal::transitionRefused($refused);
         }
         $this->audit->written($principal, 'column.delete', $board, null, ['column' => $columnId]);
 
@@ -200,10 +237,52 @@ final readonly class TaskApiBoardOperations
         if (count($given) !== count($order) || $given !== $known) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid order: list every column once');
         }
+        // Audit PC-M1: on an untyped board the completion follows the last column; a flagged last column stays last for
+        // api / mcp callers. Since 2.18.0 (FR-033) a typed board's done columns are its done and closed ones, whatever
+        // their order.
+        $last = $this->lastColumn($board);
+        if ($this->machine($principal) && !ColumnTypes::typed(ColumnTypes::ordered($board)) && $last?->isHumansOnly() === true && $order[count($order) - 1] !== $last->getId()) {
+            throw TaskApiRefusal::humansOnly();
+        }
         $this->columns->reorder($board, $order, $principal->user);
         $this->audit->written($principal, 'column.reorder', $board, null);
 
         return $board;
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-M1): a caller the bundled *humans only* policy refuses (`api`, `mcp`).
+     */
+    private function machine(TaskApiPrincipal $principal): bool
+    {
+        return in_array($principal->channel, HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS, true);
+    }
+
+    /**
+     * Since 2.18.0 (FR-033): whether one of the board's done columns (column type; the last column on an untyped board) is
+     * flagged humans only.
+     */
+    private function flaggedDone(TaskBoard $board): bool
+    {
+        $columns = ColumnTypes::ordered($board);
+        foreach ($columns as $column) {
+            if ($column->isHumansOnly() && ColumnTypes::isDone($column, $columns)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Since 2.16.0: the board's last column by position (the completion column), none without columns.
+     */
+    private function lastColumn(TaskBoard $board): ?BoardColumn
+    {
+        $columns = $board->getColumns()->toArray();
+        usort($columns, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
+
+        return $columns === [] ? null : $columns[count($columns) - 1];
     }
 
     /**
@@ -235,7 +314,7 @@ final readonly class TaskApiBoardOperations
             }
             $data->color = $color;
         }
-        // Since 2.17.0 (FR-033): `open`, `custom`, `done` or `closed` (at most two closed columns per board).
+        // Since 2.18.0 (FR-033): `open`, `custom`, `done` or `closed` (at most two closed columns per board).
         if ($input->has('type')) {
             $type = ColumnType::tryFrom((string) $input->string('type'));
             if (!$type instanceof ColumnType) {
@@ -251,6 +330,10 @@ final readonly class TaskApiBoardOperations
                 throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid icon');
             }
             $data->icon = $icon;
+        }
+        // Since 2.16.0 (spec 234, FR-014): only people may move tasks into the column.
+        if ($input->has('humans_only')) {
+            $data->humansOnly = $input->bool('humans_only') ?? throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid humans_only');
         }
 
         return $data;
@@ -280,7 +363,7 @@ final readonly class TaskApiBoardOperations
     }
 
     /**
-     * Since 2.17.0: a column write, with the refusals of a column type.
+     * Since 2.18.0: a column write, with the refusals of a column type.
      *
      * @param callable(): BoardColumn $write
      *

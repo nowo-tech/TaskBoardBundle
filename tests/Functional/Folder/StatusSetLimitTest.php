@@ -16,7 +16,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.17.0 (FR-034): a status set that would reopen completed tasks asks the host's limit first.
+ * Since 2.18.0 (FR-034): a status set that would reopen completed tasks asks the host's limit first.
  */
 final class StatusSetLimitTest extends SyncFunctionalTestCase
 {

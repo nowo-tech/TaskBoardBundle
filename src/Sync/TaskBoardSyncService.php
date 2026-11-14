@@ -7,7 +7,9 @@ namespace Nowo\TaskBoardBundle\Sync;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -109,6 +111,8 @@ final readonly class TaskBoardSyncService
         private ?UnmatchedColumnsCleaner $unmatchedColumns = null,
         // Since 1.28.0 (TB-SYNC-4): colour, order and the source's description at the end of the first import.
         private ?FirstImportFinisher $createdColumns = null,
+        // Since 2.15.1 (audit OM TB-M1): reopens the manager a failed run closed (worker mode).
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
@@ -347,6 +351,7 @@ final readonly class TaskBoardSyncService
             } catch (Throwable) {
                 // The history row stays as it was; the lock is still released.
             }
+            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
             $this->eventDispatcher?->dispatch(new SyncFailedEvent($board, $report->errors[0], $report), TaskBoardEvents::SYNC_FAILED);
 
             return $report;

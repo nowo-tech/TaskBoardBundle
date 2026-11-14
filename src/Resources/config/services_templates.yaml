@@ -1,0 +1,12 @@
+# Since 2.16.0 (Beacon spec 234, FR-061): loaded only with `task_templates.enabled`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Template\DefaultTaskTemplatePermission: ~
+
+    # Public: a host's settings screen, its MCP tools and a configuration applier call it in process.
+    Nowo\TaskBoardBundle\Template\TaskTemplateManager:
+        public: true

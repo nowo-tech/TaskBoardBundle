@@ -37,7 +37,7 @@ use function is_string;
 use function max;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
+ * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
  * {@see TaskBoardFolderManager}, and tasks moved between the boards of one tenant.
  *
  * A task move is one transaction: the rows of every moved tree are locked first, then each task changes board in place

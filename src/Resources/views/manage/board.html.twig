@@ -51,6 +51,7 @@
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        {% if openAddTask|default(false) %}data-nowo-task-board-add-task-modal-open-on-connect-value="true"{% endif %}
         data-nowo-task-board-edit-column-modal-update-url-template-value="{{ path(nowo_task_board_route('column_update'), {boardId: board.id, columnId: 'COLUMN_ID'})|e('html_attr') }}"
         data-nowo-task-board-edit-column-modal-title-template-value="{{ 'task_board.board.edit_column_title'|trans({'%column%': '%column%'}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-edit-column-modal-delete-url-template-value="{{ path(nowo_task_board_route('column_delete'), {boardId: board.id, columnId: 'COLUMN_ID'})|e('html_attr') }}"

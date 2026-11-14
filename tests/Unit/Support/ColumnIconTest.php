@@ -132,6 +132,7 @@ final class ColumnIconTest extends TestCase
             'icon_form_type'    => 'App\\Form\\EmojiType',
             'icon_form_options' => ['max_bytes' => 16],
             'icon_known_ids'    => ['tabler:bug', 'tabler:x', 'lucide:star'],
+            'humans_only_field' => false,
         ], $container->getParameter('nowo_task_board.board.column_icon_form'));
     }
 
