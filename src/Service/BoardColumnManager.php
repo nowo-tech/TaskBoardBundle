@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\AbstractColumnEvent;
 use Nowo\TaskBoardBundle\Event\ColumnCreatedEvent;
@@ -222,11 +223,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
 
         $moved = [];
-        foreach ($board->getTasks() as $task) {
-            if ($task->getColumn() !== $column) {
-                continue;
-            }
-
+        foreach (self::tasksOf($column) as $task) {
             $moved[] = $task->getId();
             $task->setColumn($target)->setPosition($position++);
             if ($target === $lastOne && !$task->isCompleted()) {
@@ -260,10 +257,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             return;
         }
         $board = $column->getBoard();
-        foreach ($board->getTasks() as $task) {
-            if ($task->getColumn() !== $column) {
-                continue;
-            }
+        foreach (self::tasksOf($column) as $task) {
             $transition = new ColumnTransition(
                 Snapshots::board($board),
                 Snapshots::task($task),
@@ -279,6 +273,25 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 throw new ColumnTransitionRefusedException($transition, $decision);
             }
         }
+    }
+
+    /**
+     * Since 2.17.0 (audit PG-L2): the tasks of a column in its order (position, then id). The board's collection has no
+     * defined order (MySQL loads it in the primary key's), so the policy and the moves follow this one.
+     *
+     * @return list<Task>
+     */
+    private static function tasksOf(BoardColumn $column): array
+    {
+        $tasks = [];
+        foreach ($column->getBoard()->getTasks() as $task) {
+            if ($task->getColumn() === $column) {
+                $tasks[] = $task;
+            }
+        }
+        usort($tasks, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
+
+        return $tasks;
     }
 
     private function cause(): ?string

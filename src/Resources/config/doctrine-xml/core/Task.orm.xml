@@ -24,7 +24,7 @@
         <field name="archiveReason" type="string" column="archive_reason" length="16" nullable="true"/>
         <field name="color" type="string" length="7" nullable="true"/>
         <field name="number" type="integer" nullable="true"/>
-        <field name="revision" type="integer">
+        <field name="revision" type="integer" updatable="false">
             <options>
                 <option name="default">1</option>
             </options>

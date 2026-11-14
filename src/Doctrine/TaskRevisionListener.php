@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Doctrine;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
+use Doctrine\ORM\Event\PostPersistEventArgs;
+use Doctrine\ORM\Event\PostRemoveEventArgs;
+use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 
@@ -17,7 +21,15 @@ use function spl_object_id;
  * changed (its position, total time and `updatedAt` aside: a drag of another card renumbers its siblings, a timer adds
  * time, neither is an edit), and for every task that gained or lost an assignee or watcher. A new task keeps 1.
  *
- * Stateless: everything it reads is the flushing unit of work (worker mode).
+ * Since 2.17.0 (audit PC-L4): the database adds the 1. `onFlush` only marks the tasks this flush changes; the first
+ * post-write event of a marked task inside the flush's transaction (its own `postUpdate`, or the `postPersist` /
+ * `postRemove` of a member) runs `UPDATE … SET revision = revision + 1 WHERE id = ?` ({@see TaskRevisionIncrement}) and puts the value
+ * written into the object and the unit of work's original data. The row is locked by that UPDATE (if the flush's own UPDATE did not lock
+ * it already) until the commit, so the increment starts from the last committed revision whatever the writer loaded:
+ * two writers never save the same number, and a write that rolls back takes its 1 with it. The column is
+ * `updatable: false`, so no flush ever writes a revision computed in PHP.
+ *
+ * Stateless: everything it reads is the flushing unit of work and the task objects (worker mode).
  *
  * @internal
  */
@@ -28,13 +40,16 @@ final readonly class TaskRevisionListener
 
     public function onFlush(OnFlushEventArgs $args): void
     {
-        $manager = $args->getObjectManager();
-        $work    = $manager->getUnitOfWork();
+        $work    = $args->getObjectManager()->getUnitOfWork();
         $ignored = array_flip(self::IGNORED_FIELDS);
-        $tasks   = [];
         foreach ($work->getScheduledEntityUpdates() as $entity) {
-            if ($entity instanceof Task && array_diff_key($work->getEntityChangeSet($entity), $ignored) !== []) {
-                $tasks[spl_object_id($entity)] = $entity;
+            if (!$entity instanceof Task) {
+                continue;
+            }
+            // Audit PG-I1: a mark a failed flush left behind never counts in this one.
+            $entity->takeRevisionPending();
+            if (array_diff_key($work->getEntityChangeSet($entity), $ignored) !== []) {
+                $entity->markRevisionPending();
             }
         }
         foreach ([...$work->getScheduledEntityInsertions(), ...$work->getScheduledEntityDeletions()] as $entity) {
@@ -43,16 +58,54 @@ final readonly class TaskRevisionListener
             }
             $task = $entity->getTask();
             if (!$work->isScheduledForInsert($task) && !$work->isScheduledForDelete($task) && $work->isInIdentityMap($task)) {
-                $tasks[spl_object_id($task)] = $task;
+                $task->markRevisionPending();
             }
         }
-        if ($tasks === []) {
+    }
+
+    public function postUpdate(PostUpdateEventArgs $args): void
+    {
+        $entity = $args->getObject();
+        if ($entity instanceof Task) {
+            $this->increment($args->getObjectManager(), $entity);
+        }
+    }
+
+    public function postPersist(PostPersistEventArgs $args): void
+    {
+        $entity = $args->getObject();
+        if ($entity instanceof TaskMember) {
+            $this->increment($args->getObjectManager(), $entity->getTask());
+        }
+    }
+
+    public function postRemove(PostRemoveEventArgs $args): void
+    {
+        $entity = $args->getObject();
+        if ($entity instanceof TaskMember) {
+            $this->increment($args->getObjectManager(), $entity->getTask());
+        }
+    }
+
+    private function increment(EntityManagerInterface $manager, Task $task): void
+    {
+        if (!$task->takeRevisionPending()) {
             return;
         }
-        $metadata = $manager->getClassMetadata(Task::class);
-        foreach ($tasks as $task) {
-            $task->bumpRevision();
-            $work->recomputeSingleEntityChangeSet($metadata, $task);
+        $metadata   = $manager->getClassMetadata(Task::class);
+        $connection = $manager->getConnection();
+        $platform   = $connection->getDatabasePlatform();
+        $quotes     = $manager->getConfiguration()->getQuoteStrategy();
+        $table      = $quotes->getTableName($metadata, $platform);
+        $revision   = $quotes->getColumnName('revision', $metadata, $platform);
+        $id         = $quotes->getColumnName($metadata->getSingleIdentifierFieldName(), $metadata, $platform);
+        $current    = TaskRevisionIncrement::next($connection, $table, $revision, $id, $task->getId());
+        if ($current === null) {
+            // Audit PG-L1: another request deleted the task meanwhile. As in 2.16.0 the flush goes on (the UPDATE of a
+            // missing row changed nothing); the object keeps the revision it had.
+            return;
         }
+        $metadata->setFieldValue($task, 'revision', $current);
+        $manager->getUnitOfWork()->setOriginalEntityProperty(spl_object_id($task), 'revision', $current);
     }
 }
