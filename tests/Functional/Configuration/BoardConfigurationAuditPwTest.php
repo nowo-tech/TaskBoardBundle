@@ -79,7 +79,7 @@ final class BoardConfigurationAuditPwTest extends CopyTestCase
 
         $this->clear();
         self::assertTrue($this->reload($task)->isCompleted());
-        $rows = $this->em->getRepository(TaskChangeHistory::class)->findBy(['task' => $task->getId()]);
+        $rows  = $this->em->getRepository(TaskChangeHistory::class)->findBy(['task' => $task->getId()]);
         $kinds = array_map(static fn (TaskChangeHistory $row): string => $row->getChangeType()->value, $rows);
         self::assertContains('column', $kinds);
         self::assertContains('completed', $kinds);
