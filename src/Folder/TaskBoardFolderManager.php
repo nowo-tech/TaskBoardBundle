@@ -15,6 +15,9 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Service\TaskColumnFollow;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Throwable;
 
 use function array_filter;
@@ -46,6 +49,9 @@ final readonly class TaskBoardFolderManager
         private ?ManagerRegistry $managerRegistry = null,
         // Since 2.19.0 (FR-034): a board moved into a folder with a shared status set takes its columns.
         private BoardColumnsApplier $columnsApplier = new BoardColumnsApplier(),
+        // Since 2.19.0 (audit PW-H1 / PW-L5): history rows and events for the tasks a column change moves or completes.
+        private TaskColumnFollow $follow = new TaskColumnFollow(),
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -154,8 +160,10 @@ final readonly class TaskBoardFolderManager
 
     /**
      * Puts the board in the folder, or out of any (null). Needs the policy on the board, and on the folders' tenant when a
-     * folder is named. Into a folder with a shared status set the board takes its columns (FR-034): `$columnMap` (current
-     * column id or name => a column name of the set) moves the tasks of a column the set does not have.
+     * folder is named (`mayManageFolders()`, since 2.19.0 audit PW-H1). Leaving a folder keeps the board's dependencies
+     * on the folder's other boards (audit PW-I4): {@see TaskBoardDependencyScope} only decides which new ones are allowed.
+     * Into a folder with a shared status set the board takes its columns (FR-034): `$columnMap` (current column id or
+     * name => a column name of the set) moves the tasks of a column the set does not have.
      *
      * @param array<string, string> $columnMap
      *
@@ -169,14 +177,18 @@ final readonly class TaskBoardFolderManager
         if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($board))) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
         }
+        // Audit PW-H1: joining a folder needs the folder right of its tenant too, as the docblock always said.
+        if ($folder instanceof TaskBoardFolder && !$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
+        }
         if ($board->getFolderId() === $folder?->getId()) {
             return;
         }
-        $this->write(function () use ($board, $folder, $columnMap): void {
+        $this->write(function () use ($board, $folder, $columnMap, $actor): void {
             // The columns first: a refusal there leaves the board, in memory too, where it was.
             $set = $folder?->getStatusSet();
             if ($set !== null) {
-                $this->applyColumns($board, $set, $columnMap);
+                $this->applyColumns($board, $set, $columnMap, $actor);
             }
             $board->changeFolder($folder);
         });
@@ -199,15 +211,21 @@ final readonly class TaskBoardFolderManager
      * @throws TaskBoardRestructureRefusedException `columns_in_use` (`board`, `columns`), `invalid` (`field` columns),
      *                                              `quota` (reopened tasks over the host's limit)
      */
-    public function applyColumns(TaskBoard $board, array $set, array $columnMap = []): void
+    public function applyColumns(TaskBoard $board, array $set, array $columnMap = [], ?object $actor = null): void
     {
-        $this->columns(function () use ($board, $set, $columnMap): void {
+        $this->columns(function () use ($board, $set, $columnMap, $actor): void {
+            $before = $this->follow->snapshot($board);
             foreach ($this->columnsApplier->apply($board, $set, $columnMap) as $removed) {
                 $this->entityManager->remove($removed);
             }
             // The columns the set adds: persisted before a task points at them.
             foreach ($board->getColumns() as $column) {
                 $this->entityManager->persist($column);
+            }
+            // Audit PW-H1 / PW-L5: the moved or completed tasks get their history rows (this flush) and events (after the
+            // commit of the caller's write; dropped on a rollback).
+            foreach ($this->follow->record($board, $before, $actor, ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMNS)) as [$event, $name]) {
+                $this->events?->dispatchSaved($event, $name);
             }
         });
     }
@@ -297,11 +315,13 @@ final readonly class TaskBoardFolderManager
     {
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
+        $this->events?->begin();
         try {
             $change();
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
             $connection->commit();
         } catch (Throwable $failure) {
+            $this->events?->rollBack();
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
@@ -314,5 +334,6 @@ final readonly class TaskBoardFolderManager
 
             throw $failure;
         }
+        $this->events?->commit(false);
     }
 }

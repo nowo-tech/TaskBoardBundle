@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 
 /**
  * Since 2.10.0 (DDD audit G4): the port of {@see BoardColumnManager}, which adds, edits, reorders and deletes columns.
@@ -19,6 +20,11 @@ use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
  * controllers check: `TaskBoardResourceAccessChecker` (`canEditTask` / `canEditBoard` / `canManageBoard` /
  * `canManageColumns` / `canTrackTime`), tenant ownership and plan, comment rights (`comments.readers_can_comment`), the
  * active-task quota (`TaskManager::activeTaskRefusal()` before a create or restore) and CSRF.
+ *
+ * Since 2.19.0 (audit PW-H1) one right is checked here: on a board whose folder shares its statuses, a column edit with an
+ * actor (add, update, reorder, delete) changes every board of the folder, so it needs the folder right and the restructure
+ * right on each of them (`Folder\FolderStatusSets::assertMayChangeColumns()`); otherwise it throws
+ * `Folder\TaskBoardRestructureRefusedException` (`not_allowed`, `folder`) before anything changes.
  */
 interface BoardColumnManagerInterface
 {
@@ -40,6 +46,7 @@ interface BoardColumnManagerInterface
      * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
      * @throws ColumnTransitionRefusedException since 2.16.0 ({@see BoardColumnManager::delete()}), when the column transition
      *                                          policy refuses a task the deletion would move: nothing changes
+     * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-H1): see above
      */
     public function delete(BoardColumn $column, ?object $actor = null): bool;
 }

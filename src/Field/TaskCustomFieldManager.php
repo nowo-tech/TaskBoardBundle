@@ -26,20 +26,26 @@ use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function explode;
 use function in_array;
 use function is_finite;
 use function is_float;
 use function is_int;
 use function is_numeric;
 use function is_string;
+use function ltrim;
 use function max;
 use function mb_strlen;
 use function number_format;
 use function rtrim;
 use function str_contains;
+use function strcmp;
+use function strlen;
 use function strtolower;
 use function trim;
 use function usort;
+
+use const PHP_INT_MAX;
 
 /**
  * Since 2.19.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or per board, values per task
@@ -271,10 +277,64 @@ final readonly class TaskCustomFieldManager
         });
     }
 
-    /** Since 2.19.0: whether any task holds a value of the field. */
+    /**
+     * Since 2.19.0: whether any task holds a value of the field; for a board's field, a task still on that board (audit
+     * PW-L6: a value a move left elsewhere is not the board's).
+     */
     public function hasValues(TaskCustomField $field): bool
     {
-        return $this->entityManager->getRepository(TaskCustomFieldValue::class)->count(['field' => $field]) > 0;
+        $query = $this->entityManager->createQueryBuilder()->select('COUNT(v.id)')->from(TaskCustomFieldValue::class, 'v')
+            ->join('v.task', 't')->where('v.field = :field')->setParameter('field', $field->getId());
+        if ($field->getBoardId() !== null) {
+            $query->andWhere('IDENTITY(t.board) = :board')->setParameter('board', $field->getBoardId());
+        }
+
+        return (int) $query->getQuery()->getSingleScalarResult() > 0;
+    }
+
+    /**
+     * Since 2.19.0 (audit PW-L6): after `$task` moved from `$from` to another board (its board now), the values of `$from`'s own fields go
+     * to the new board's own field of the same name and type (a dropdown value to the option of the same name), else they
+     * are dropped with a `custom_field` history row. Values of tenant fields stay as they are. In the caller's transaction
+     * (no flush).
+     *
+     * @return list<string> the names of the fields whose value was dropped
+     */
+    public function followBoardMove(Task $task, TaskBoard $from, object $actor): array
+    {
+        $target = $task->getBoard();
+        $theirs = [];
+        foreach ($this->fieldsFor($target) as $field) {
+            if ($field->getBoardId() === $target->getId()) {
+                $theirs[$field->getName() . "\n" . $field->getType()->value] = $field;
+            }
+        }
+        $dropped = [];
+        /** @var list<TaskCustomFieldValue> $values */
+        $values = $this->entityManager->getRepository(TaskCustomFieldValue::class)->findBy(['task' => $task]);
+        foreach ($values as $value) {
+            $field = $value->getField();
+            if ($field->getBoardId() !== $from->getId()) {
+                continue;
+            }
+            $match = $theirs[$field->getName() . "\n" . $field->getType()->value] ?? null;
+            $text  = $value->getTextValue();
+            if ($match instanceof TaskCustomField && $field->getType() === CustomFieldType::Dropdown) {
+                $text = $match->optionNamed((string) ($field->option((string) $text)['name'] ?? ''))['id'] ?? null;
+            }
+            $carried = $match instanceof TaskCustomField && ($field->getType() !== CustomFieldType::Dropdown || $text !== null);
+            if ($carried) {
+                $copy = new TaskCustomFieldValue($task, $match);
+                $copy->change($text, $value->getNumberValue());
+                $this->entityManager->persist($copy);
+            } else {
+                $dropped[] = $field->getName();
+                $this->changeRecorder->record($task, $actor, TaskChangeType::CustomField, $this->display($value), null, 'field:' . $field->getId() . ' ' . $field->getName());
+            }
+            $this->entityManager->remove($value);
+        }
+
+        return $dropped;
     }
 
     /**
@@ -378,19 +438,34 @@ final readonly class TaskCustomFieldManager
         };
     }
 
+    /**
+     * A number as the decimal string stored, null when it is not one. Since 2.19.0 (audit PW-L1) its integer part is at most
+     * PHP_INT_MAX in absolute value, so the Task API answers exactly the integer written (a larger one is refused, never
+     * saturated).
+     */
     private function number(mixed $value): ?string
     {
         if (is_int($value)) {
             return (string) $value;
         }
         if (is_float($value)) {
-            return is_finite($value) && abs($value) < 1e19 ? number_format($value, 10, '.', '') : null;
+            $value = is_finite($value) && abs($value) < 1e19 ? number_format($value, 10, '.', '') : null;
         }
-        if (!is_string($value) || !is_numeric(trim($value)) || str_contains(strtolower($value), 'e') || abs((float) $value) >= 1e19) {
+        if (!is_string($value) || !is_numeric(trim($value)) || str_contains(strtolower($value), 'e')) {
             return null;
         }
+        $value = trim($value);
 
-        return trim($value);
+        return $this->fitsAnInt($value) ? $value : null;
+    }
+
+    /** Whether the integer part of a plain decimal string is at most PHP_INT_MAX in absolute value. */
+    private function fitsAnInt(string $decimal): bool
+    {
+        $integer = ltrim(explode('.', ltrim($decimal, '+-'))[0], '0');
+        $max     = (string) PHP_INT_MAX;
+
+        return strlen($integer) < strlen($max) || (strlen($integer) === strlen($max) && strcmp($integer, $max) <= 0);
     }
 
     private function optionId(TaskCustomField $field, string $value): ?string

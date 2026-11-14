@@ -31,7 +31,10 @@ interface TaskBoardRestructureInterface
      */
     public function folders(?string $tenantKey): array;
 
-    /** One folder, or null when unknown; the caller compares its `tenantKey` with the tenant it works in. */
+    /**
+     * One folder, or null when unknown; the caller compares its `tenantKey` with the tenant it works in. Like
+     * {@see self::folders()} it checks no right and no tenant (audit PW-I3): the host passes ids it has scoped.
+     */
     public function folder(string $folderId): ?TaskBoardFolderSnapshot;
 
     /**

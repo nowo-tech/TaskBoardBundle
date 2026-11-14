@@ -38,6 +38,7 @@ final readonly class FolderStatusSetListener implements EventSubscriberInterface
         if ($event instanceof ColumnUpdatedEvent && $event->previousName !== $event->name) {
             $renames[$event->previousName] = $event->name;
         }
-        $this->statusSets->propagateFrom($event->boardId, $renames, $event instanceof ColumnDeletedEvent ? [$event->name => $event->targetColumnId] : []);
+        // Since 2.19.0 (audit PW-H1): the actor's rights decide whether the edit is carried to the other boards.
+        $this->statusSets->propagateFrom($event->boardId, $renames, $event instanceof ColumnDeletedEvent ? [$event->name => $event->targetColumnId] : [], $event->actor);
     }
 }

@@ -137,7 +137,8 @@ final class TaskBoardRestructurerTest extends CopyTestCase
         self::assertNull($moved->getParent(), 'a subtask asked for becomes a top-level task');
         self::assertSame($moved->getId(), $this->reload($grandchild)->getParent()?->getId(), 'its own subtask stays under it');
         self::assertTrue($moved->isCompleted());
-        self::assertSame('En ejecución', $moved->getColumn()?->getName(), 'column by name');
+        // Audit PW-M1: the same name is an open column; a completed task goes to the done column (the last, untyped).
+        self::assertSame('Cancelada', $moved->getColumn()?->getName(), 'a completed task never lands in an open column');
         self::assertSame('Pendiente', $this->reload($grandchild)->getColumn()?->getName());
         self::assertSame($before['number'], $moved->getNumber());
         self::assertSame(1, $this->em->getRepository(TaskComment::class)->count(['task' => $moved->getId()]));

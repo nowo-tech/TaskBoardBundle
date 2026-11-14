@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Port\Snapshots;
@@ -40,9 +41,11 @@ use Throwable;
 
 use function array_map;
 use function array_values;
+use function count;
 use function in_array;
 use function is_string;
 use function max;
+use function sort;
 
 /**
  * Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
@@ -79,6 +82,8 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
         // Since 2.19.0: without a `$via`, the channel of the host's write provenance (2.18.0), else `web`.
         private ?WriteProvenanceProviderInterface $provenance = null,
+        // Since 2.19.0 (audit PW-L6): the values of the old board's own custom fields follow a moved task.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -164,7 +169,11 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->events->begin();
         $applying = false;
         try {
-            $this->lock($moving);
+            // Audit PW-L2: the trees were read before the lock; a subtask another request added (or moved) meanwhile would
+            // be left behind on the source board under a moved parent. Nothing has changed yet: refuse, the caller retries.
+            if ($this->lock($moving) !== $this->treeIds($moving)) {
+                throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::STALE);
+            }
             $applying = true;
             $result   = $this->apply($moving, $target, $map, $actor, $unchanged);
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
@@ -200,6 +209,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $members   = [];
         $events    = [];
         $parents   = [];
+        $dropped   = [];
         foreach ($roots as $root) {
             $tree = TaskMovePlanner::subtree($root);
             // Before the root becomes top-level: each task's parent as it was (the host archives the old story).
@@ -238,6 +248,11 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
                 $positions[$key] = ($positions[$key] ?? 0) + 1;
                 if ($from->getId() !== $target->getId()) {
                     $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $from->getName(), $target->getName(), $parents[$node->getId()] === null ? null : 'parent:' . $parents[$node->getId()]);
+                    // Audit PW-L6: the old board's field values follow the task, or are dropped with a history row.
+                    $lost = $this->customFields?->followBoardMove($node, $from, $actor) ?? [];
+                    if ($lost !== []) {
+                        $dropped[$node->getId()] = $lost;
+                    }
                 }
                 $moved[]                 = $node->getId();
                 $columns[$node->getId()] = $key;
@@ -256,7 +271,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
             $this->events->dispatchSaved(new TaskBoardChangedEvent($root, $actor, $sourceId, $target->getId(), $ids), TaskBoardEvents::TASK_BOARD_CHANGED);
         }
 
-        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents);
+        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents, $dropped);
     }
 
     /**
@@ -312,26 +327,42 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
 
     /**
      * The column of a moved task: the map by its column's id, then by its name; else the target's column of the same
-     * name; else the rule of a move ({@see TaskColumnRule}: a completed task to the last column, an open one to the first).
+     * name; else the rule of a move ({@see TaskColumnRule}: a completed task to the done column, an open one to the first).
+     * Since 2.19.0 (audit PW-M1) a map or a name match is used only when the column fits the task's completion (an open
+     * task never lands in a done column, a completed one never in an open column); else the rule decides, so a move never
+     * changes whether a task is completed.
      *
      * @param array<string, BoardColumn> $map
      */
     private function targetColumn(Task $task, TaskBoard $target, array $map): ?BoardColumn
     {
-        $source = $task->getColumn();
+        $source    = $task->getColumn();
+        $completed = $task->isCompleted();
         if ($source instanceof BoardColumn) {
             $mapped = $map['id:' . $source->getId()] ?? $map['name:' . StatusColumns::normalize($source->getName())] ?? null;
-            if ($mapped instanceof BoardColumn) {
+            if ($mapped instanceof BoardColumn && $this->fits($mapped, $target, $completed)) {
                 return $mapped;
             }
             foreach ($target->getColumns() as $column) {
-                if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($source->getName())) {
+                if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($source->getName()) && $this->fits($column, $target, $completed)) {
                     return $column;
                 }
             }
         }
 
-        return TaskColumnRule::target($target, null, $task->isCompleted());
+        return TaskColumnRule::target($target, $source, $completed);
+    }
+
+    /**
+     * Audit PW-M1: whether a task of that completion may sit in the column, by the rule of a move ({@see TaskColumnRule}):
+     * an open task in an open column only, a completed one in a done column only (a board of one column takes both).
+     */
+    private function fits(BoardColumn $column, TaskBoard $target, bool $completed): bool
+    {
+        $open   = TaskColumnRule::openColumns($target);
+        $isOpen = in_array($column, $open, true);
+
+        return $completed ? !$isOpen || count($open) === $target->getColumns()->count() : $isOpen;
     }
 
     /**
@@ -417,20 +448,48 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
     }
 
     /**
-     * `SELECT … FOR UPDATE` on every task of the moved trees, a level at a time (no-op on SQLite).
+     * `SELECT … FOR UPDATE` on every task of the moved trees, a level at a time (no lock on SQLite, the rows are read all the
+     * same).
      *
      * @param list<Task> $roots
+     *
+     * @return list<string> the ids of every task of the trees in the database now (sorted)
      */
-    private function lock(array $roots): void
+    private function lock(array $roots): array
     {
         $level = array_map(static fn (Task $task): string => $task->getId(), $roots);
-        $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
+        /** @var list<string> $locked */
+        $locked = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
             ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
         while ($level !== []) {
             /** @var list<string> $level */
             $level = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
                 ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+            $locked = [...$locked, ...$level];
         }
+        sort($locked);
+
+        return $locked;
+    }
+
+    /**
+     * The ids of every task of the trees as they were read (sorted), to compare with the rows {@see self::lock()} found.
+     *
+     * @param list<Task> $roots
+     *
+     * @return list<string>
+     */
+    private function treeIds(array $roots): array
+    {
+        $ids = [];
+        foreach ($roots as $root) {
+            foreach (TaskMovePlanner::subtree($root) as $node) {
+                $ids[] = $node->getId();
+            }
+        }
+        sort($ids);
+
+        return $ids;
     }
 
     /**

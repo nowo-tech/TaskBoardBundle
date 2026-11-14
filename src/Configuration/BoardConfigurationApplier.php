@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Configuration;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -17,7 +18,9 @@ use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 
 use function array_map;
 use function implode;
+use function mb_strtolower;
 use function preg_match;
+use function trim;
 
 /**
  * Since 2.19.0 (Beacon block W): makes a board's configuration exactly a {@see BoardConfiguration}, atomically (one
@@ -73,7 +76,7 @@ final readonly class BoardConfigurationApplier
         // @igor-ignore - The closure runs at once inside transactional() and is never stored.
         $this->folders->transactional(function () use ($actor, $board, $configuration, $columnMap, $dropFieldValues, $shared): void {
             if ($shared === null) {
-                $this->folders->applyColumns($board, $configuration->columns, $columnMap);
+                $this->folders->applyColumns($board, $configuration->columns, $columnMap, $actor);
             }
             $this->applyFields($actor, $board, $configuration->fields, $dropFieldValues);
             $this->templates->apply(Snapshots::board($board), $configuration->templates);
@@ -140,7 +143,9 @@ final readonly class BoardConfigurationApplier
 
     /**
      * The fields {@see self::applyFields()} would drop (gone from the configuration, or retyped) must hold no value unless
-     * `$dropFieldValues`: `fields_in_use` (`fields`: their names) before anything changes.
+     * `$dropFieldValues`: `fields_in_use` (`fields`: their names) before anything changes. Since 2.19.0 (audit PW-M2) the
+     * specs themselves are checked first: `invalid` (`field`: fields) for two fields of one name (case and edge spaces
+     * aside) or options a field would refuse (more than 200, a duplicate or empty name, a colour that is not hex).
      *
      * @param list<BoardFieldSpec> $specs
      *
@@ -148,6 +153,20 @@ final readonly class BoardConfigurationApplier
      */
     private function checkFields(TaskBoard $board, array $specs, bool $dropFieldValues): void
     {
+        // Audit PW-M2: the fields' own data too (unique names, options), so no refusal is left to the transaction.
+        $names = [];
+        foreach ($specs as $spec) {
+            $name = mb_strtolower(trim($spec->name));
+            try {
+                if (isset($names[$name])) {
+                    throw new InvalidArgumentException('Two fields of one name.');
+                }
+                TaskCustomField::assertOptions($spec->type, $spec->options);
+            } catch (InvalidArgumentException) {
+                throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'fields']);
+            }
+            $names[$name] = true;
+        }
         if ($dropFieldValues) {
             return;
         }

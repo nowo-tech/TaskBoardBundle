@@ -228,8 +228,11 @@ rewritten. `doctrine:migrations:diff` writes it (the demo's `Version202611151000
 prefix `task_board_` and the names Doctrine gives the foreign key and its index:
 
 ```sql
--- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
-CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- The table takes the database's default charset and collation: they must be those of task_board_boards, or the
+-- foreign key below fails (MySQL error 3780). Check with SHOW CREATE TABLE task_board_boards and add the same
+-- DEFAULT CHARACTER SET … COLLATE … to the CREATE TABLE if the database default differs.
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id));
 ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
 ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
 CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
@@ -272,7 +275,8 @@ Nothing, unless you use folders:
   `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
 - **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
   (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
-  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked as `web` (a person).
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked through the channel of your
+  `write_provenance_provider` (2.18.0), else as `web` (a person).
 - **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.
@@ -314,9 +318,11 @@ types of its other columns. **Behaviour to know:** a board with types no longer 
 Two new tables, after the parts above (the demo's `Version20261115120000`); nothing existing changes:
 
 ```sql
--- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
-CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
-CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- As for the folders: the tables take the database's default charset and collation, which must be those of
+-- task_board_boards and task_board_tasks for the foreign keys (audit PW-L4).
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id));
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id));
 ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
 ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
 ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
@@ -345,6 +351,16 @@ DROP TABLE task_board_custom_fields;
 SQLite: the same two `CREATE TABLE` as PostgreSQL with `CLOB` for `text_value` and `options`, and the foreign keys inside
 the `CREATE TABLE` (SQLite cannot add them afterwards); let `doctrine:migrations:diff` write it. A tenant field's
 `tenant_key` is a key column (REQ-SEC-006), with the boards' collation on MySQL / MariaDB.
+
+A number is a `DECIMAL(30, 10)`; its integer part is at most PHP_INT_MAX (`9223372036854775807`), so the Task API
+answers exactly the integer written (a larger one is refused, audit PW-L1). SQLite keeps a `DECIMAL` as a floating-point
+value: about 15 significant digits there.
+
+A task moved to another board (`moveTasks()`, the board UI's *Move*) takes its old board's field values to the new
+board's field of the same name and type, or loses them with a `custom_field` history row (audit PW-L6).
+
+`Field\TaskCustomFieldManager` takes and returns bundle entities (`TaskBoard`, `Task`, `TaskCustomField`): a DDD host
+calls it from its infrastructure layer (audit PW-L7, no id-based twin in 2.19.0).
 
 Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
 a native field instead of always answering 409; a provider's (synced) field still answers 409 `FIELD_001` (owner

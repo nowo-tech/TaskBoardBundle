@@ -35,6 +35,12 @@ final class TaskBoardRestructureRefusedException extends RuntimeException
     public const FIELDS_IN_USE = 'fields_in_use';
 
     /**
+     * Since 2.19.0 (audit PW-L2): a moved tree changed (a subtask added, moved or deleted by another request) between the
+     * read and the lock; nothing was changed, retry.
+     */
+    public const STALE = 'stale';
+
+    /**
      * @param array<string, int|string> $params
      */
     public function __construct(
