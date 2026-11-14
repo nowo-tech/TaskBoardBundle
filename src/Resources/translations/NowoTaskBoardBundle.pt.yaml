@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Demasiadas subtarefas: %count%, no m
 task_board.copy.refusal.sync_running: "Está a decorrer uma sincronização num dos quadros. Tente de novo quando terminar."
 task_board.copy.refusal.quota: "Os limites do plano não o permitem."
 task_board.history.type.board_moved: "moveu a tarefa para outro quadro"
+task_board.history.type.parent: "moveu a tarefa para outra tarefa principal"
 task_board.history.type.duplicated: "duplicou a tarefa a partir de"
 task_board.history.type.member_not_copied: "deixou um membro fora da cópia"
 # Since 2.3.0 (spec 215): recurring tasks.

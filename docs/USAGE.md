@@ -110,6 +110,45 @@ From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $
 | Number | Kept in the scope; a new one with the old as alias across scopes | A new one |
 | Events | `TASK_BOARD_CHANGED` after the commit, no `TASK_MOVED` | `TASK_CREATED` per task, `TASK_MEMBER_ADDED` |
 
+### Changing a task's parent (since 2.20)
+
+`Nowo\TaskBoardBundle\Tree\TaskReparenterInterface` (public service) moves a task, with its subtasks, under another task
+of the same board, or to the top level with a null parent. It is the one domain service for every caller: the Task API's
+`parent` on `PUT /v2/task/{id}` (MCP `task_update`) goes through it, and so can a host's own code. Plain PHP, ids only:
+
+```php
+use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
+use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
+
+// Standard Symfony host: check access as the API does, then call the port.
+if (!$access->canEditTask($user, $task) || ($parent !== null && !$access->canEditTask($user, $parent))) {
+    throw $this->createAccessDeniedException();
+}
+try {
+    $result = $reparenter->reparent($task->getId(), $parent?->getId(), $user); // TaskReparentResult
+} catch (TaskReparentRefusedException $refused) {
+    // $refused->reason: other_board, self, descendant, not_found, conflict (try again)
+}
+```
+
+On a DDD host the application service depends on the same interface and passes its own user object (with
+`database.user_reference: id` the history row stores its id); the private entity manager carries the write.
+
+- **Rules:** the same board; never the task itself nor one of its descendants. No depth limit, as on create, in the
+  board UI and in imports.
+- **Transaction and locks:** the task's row, then the new parent's and every ancestor's up to the root, are locked and read
+  as committed (never the identity map, so a kept-alive worker with a stale copy is safe) before the cycle check. Two
+  changes on the same path run one after the other; two crossing changes (A under B, B under A) lock in opposite orders
+  and the database aborts one, which is refused as `conflict` with nothing written. Called inside your own transaction,
+  it nests (a savepoint) and a lock error reaches you as the driver raised it, since your transaction owns the outcome.
+- **Effects:** one history row `parent` (old and new parent titles, `context` `task:<id>` of the new parent) with your
+  `write_provenance_provider`'s channel and label, a new revision, and `TASK_UPDATED` (changed field `parent`) after the
+  commit. The same parent again writes nothing (`$result->changed` false).
+- **Worker mode:** the service and its store keep no state between calls (FrankenPHP, kernel reset false).
+
+The board UI has no re-parent action (*Move to another board* detaches the moved task, see above); a host page that
+offers one calls this port.
+
 ### Why a change happens (since 2.3)
 
 ```php

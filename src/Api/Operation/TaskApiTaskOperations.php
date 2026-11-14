@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\Doctrine\LockConflict;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -37,11 +38,15 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
+use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
+use Nowo\TaskBoardBundle\Tree\TaskReparentRefusedException;
+use Nowo\TaskBoardBundle\Tree\TaskReparentResult;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Throwable;
 
 use function array_filter;
 use function array_key_first;
@@ -101,6 +106,8 @@ final readonly class TaskApiTaskOperations
         private TaskApiTransaction $transaction,
         // Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`.
         private TaskCommentRepositoryInterface $commentRepository,
+        // Since 2.20.0 (Beacon spec 234, T004): `parent` on `PUT /v2/task/{id}` (MCP `task_update`).
+        private TaskReparenterInterface $reparenter,
         private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
         // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
         private ?TaskTemplateManager $templates = null,
@@ -166,27 +173,73 @@ final readonly class TaskApiTaskOperations
      * body) the task's row is locked and compared first: another revision is 409 `TASK_409` with `current_revision`, and
      * nothing is written. The whole update is then one transaction.
      *
+     * Since 2.20.0 (Beacon spec 234, T004): `parent` (a task id, or null to detach the task to the top level) changes the
+     * parent through {@see TaskReparenterInterface}, the domain service every caller shares: an *Edit tasks* level, the
+     * edit right on the task and on the new parent (as on create; in Beacon `project.tasks.manage`), the same board
+     * (`PARENT_001`), never the task itself (`PARENT_002`) nor one of its subtasks (`PARENT_003`, checked on the rows
+     * locked inside the transaction); a concurrent tree change that deadlocks is `PARENT_004`. It is the first write of
+     * the update, and the whole update is one transaction, so a refusal writes nothing.
+     *
      * @throws TaskApiRefusal
      */
     public function updateTask(TaskApiPrincipal $principal, string $taskId, TaskApiInput $input, ?int $ifMatch = null): Task
     {
         $this->audit->requireListener();
-        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived');
+        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived', 'parent');
         $base          = $ifMatch ?? self::baseRevision($input);
         $task          = $this->guard->task($principal, $taskId, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
-        if ($base === null) {
+        $reparent      = $input->has('parent');
+        $parentId      = $reparent ? $this->newParentId($principal, $input) : null;
+        if ($base === null && !$reparent) {
             return $this->applyUpdate($principal, $task, $input);
         }
 
-        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        return $this->transaction->run(function () use ($principal, $task, $input, $base): Task {
-            $current = $this->transaction->lockedRevision($task);
-            if ($current !== $base) {
-                throw TaskApiRefusal::stale($current);
+        try {
+            // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId): Task {
+                if ($base !== null) {
+                    $current = $this->transaction->lockedRevision($task);
+                    if ($current !== $base) {
+                        throw TaskApiRefusal::stale($current);
+                    }
+                }
+
+                return $this->applyUpdate($principal, $task, $input, $reparent ? $this->reparent($principal, $task, $parentId) : null);
+            }, [$task]);
+        } catch (Throwable $failure) {
+            // Inside this transaction a lost lock reaches here as the driver raised it (the store leaves it to its caller).
+            if ($reparent && LockConflict::is($failure)) {
+                throw TaskApiRefusal::reparentRefused(TaskReparentRefusedException::conflict());
             }
 
-            return $this->applyUpdate($principal, $task, $input);
-        }, [$task]);
+            throw $failure;
+        }
+    }
+
+    /**
+     * Since 2.20.0: the new parent `parent` names (null: the top level), reachable and editable by the token, as on create.
+     *
+     * @throws TaskApiRefusal
+     */
+    private function newParentId(TaskApiPrincipal $principal, TaskApiInput $input): ?string
+    {
+        $parentId = $input->string('parent');
+
+        return $parentId === null ? null : $this->guard->task($principal, $parentId, TaskApiCapability::EditTasks)->getId();
+    }
+
+    /**
+     * Since 2.20.0: the parent change, through the shared domain service.
+     *
+     * @throws TaskApiRefusal
+     */
+    private function reparent(TaskApiPrincipal $principal, Task $task, ?string $parentId): TaskReparentResult
+    {
+        try {
+            return $this->reparenter->reparent($task->getId(), $parentId, $principal->user);
+        } catch (TaskReparentRefusedException $refused) {
+            throw TaskApiRefusal::reparentRefused($refused);
+        }
     }
 
     /**
@@ -210,7 +263,7 @@ final readonly class TaskApiTaskOperations
     /**
      * @throws TaskApiRefusal
      */
-    private function applyUpdate(TaskApiPrincipal $principal, Task $task, TaskApiInput $input): Task
+    private function applyUpdate(TaskApiPrincipal $principal, Task $task, TaskApiInput $input, ?TaskReparentResult $reparented = null): Task
     {
         $board = $task->getBoard();
 
@@ -271,7 +324,10 @@ final readonly class TaskApiTaskOperations
         if ($archived === true && $this->tasks->archive($task, $principal->user)) {
             $changed[] = 'archived';
         }
-        $this->audit->written($principal, 'task.update', $board, $task->getId(), [], array_values(array_unique($changed)));
+        if ($reparented?->changed === true) {
+            $changed[] = 'parent';
+        }
+        $this->audit->written($principal, 'task.update', $board, $task->getId(), $reparented?->parentId !== null ? ['parent' => $reparented->parentId] : [], array_values(array_unique($changed)));
 
         return $task;
     }

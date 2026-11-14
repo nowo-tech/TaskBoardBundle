@@ -58,6 +58,10 @@ services:
             - '../../Tenancy/TaskBoardTenant.php'
             - '../../Tenancy/TaskBoardTenantResolverInterface.php'
             - '../../Tenancy/SlugTaskBoardTenantResolver.php'
+            # Since 2.20.0 (Beacon spec 234, T004): value objects and the refusal of the re-parent port.
+            - '../../Tree/TaskTreeNode.php'
+            - '../../Tree/TaskReparentResult.php'
+            - '../../Tree/TaskReparentRefusedException.php'
             - '../../Routing/TenantPathUrlGenerator.php'
             - '../../Assignee/'
             # Since 1.23: the sync services are registered by services_sync.yaml (sync.enabled) and the avatar
@@ -122,6 +126,11 @@ services:
     Nowo\TaskBoardBundle\Service\TaskManager:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+
+    # Since 2.20.0 (Beacon spec 234, T004): the re-parent port (public for hosts); its store is registered with the repositories.
+    Nowo\TaskBoardBundle\Tree\TaskReparenterInterface:
+        alias: Nowo\TaskBoardBundle\Tree\TaskReparenter
+        public: true
 
     Nowo\TaskBoardBundle\Service\TaskMemberAssigner:
         arguments:

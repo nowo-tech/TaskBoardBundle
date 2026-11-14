@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Zu viele Unteraufgaben: %count%, hö
 task_board.copy.refusal.sync_running: "In einem der Boards läuft eine Synchronisierung. Versuchen Sie es danach erneut."
 task_board.copy.refusal.quota: "Die Planlimits lassen es nicht zu."
 task_board.history.type.board_moved: "hat die Aufgabe in ein anderes Board verschoben"
+task_board.history.type.parent: "hat die Aufgabe unter eine andere übergeordnete Aufgabe verschoben"
 task_board.history.type.duplicated: "hat die Aufgabe dupliziert aus"
 task_board.history.type.member_not_copied: "hat ein Mitglied nicht übernommen"
 # Since 2.3.0 (spec 215): recurring tasks.

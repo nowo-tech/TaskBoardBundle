@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Move;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception\DeadlockException;
-use Doctrine\DBAL\Exception\DriverException;
-use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\LockConflict;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -28,7 +26,6 @@ use Throwable;
 
 use function in_array;
 use function max;
-use function str_contains;
 
 /**
  * Since 2.3.0 (spec 217, FR-006): moves a task and its subtasks to another board, in one transaction, exactly as its
@@ -101,7 +98,7 @@ final readonly class TaskMover implements TaskMoverInterface
             // since", as a stale plan is: nothing was written, and the user sees the new preview. Audit IG-L1: only when the
             // move owns the whole transaction. Inside a caller's transaction a MySQL deadlock has also rolled back the
             // caller's earlier writes, so the driver error goes to the caller, which owns that transaction.
-            if ($depth === 0 && $this->isLockConflict($failure)) {
+            if ($depth === 0 && LockConflict::is($failure)) {
                 throw new TaskCopyRefusedException('stale');
             }
 
@@ -111,28 +108,6 @@ final readonly class TaskMover implements TaskMoverInterface
         $this->eventDispatcher?->dispatch(new TaskBoardChangedEvent($task, $actor, $plan->sourceBoard->getId(), $target->getId(), $plan->taskIds), TaskBoardEvents::TASK_BOARD_CHANGED);
 
         return $plan;
-    }
-
-    /**
-     * Audit IC-I9 / IC-I9r (a, b): whether a failure is a lock conflict with a concurrent write, so the database wrote
-     * nothing and the move can be offered again:
-     *  - Doctrine's deadlock and lock-wait-timeout exceptions (MySQL 1213 / 1205, PostgreSQL 40001 / 40P01, SQLite "locked");
-     *  - PostgreSQL `lock_not_available` (SQLSTATE 55P03, raised by `lock_timeout`), which Doctrine DBAL does not map;
-     *  - MySQL 1305 on a savepoint: InnoDB rolls back the whole transaction on a deadlock (and on a lock wait timeout with
-     *    `innodb_rollback_on_timeout`), so the flush's `ROLLBACK TO SAVEPOINT` fails and its error replaces the deadlock.
-     *    The savepoint is gone because the server ended the transaction, normally by rolling it back (audit IG-I1: host
-     *    code that commits implicitly inside the flush, such as DDL, would also end it).
-     */
-    private function isLockConflict(Throwable $failure): bool
-    {
-        if ($failure instanceof DeadlockException || $failure instanceof LockWaitTimeoutException) {
-            return true;
-        }
-        if (!$failure instanceof DriverException) {
-            return false;
-        }
-
-        return $failure->getSQLState() === '55P03' || ($failure->getCode() === 1305 && str_contains($failure->getMessage(), 'SAVEPOINT'));
     }
 
     /**
