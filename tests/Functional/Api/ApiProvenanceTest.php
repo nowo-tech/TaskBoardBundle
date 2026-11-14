@@ -14,7 +14,7 @@ use function array_key_exists;
 use function str_starts_with;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
+ * Since 2.18.0 (Beacon spec 234): the Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
  * tasks and comments (additive: every other field unchanged); null without a provenance provider. The channel is the
  * host's (from the path it serves), never the client's; the label is plain text in the JSON.
  */

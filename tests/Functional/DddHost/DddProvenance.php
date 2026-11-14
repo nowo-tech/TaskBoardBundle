@@ -13,7 +13,7 @@ use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use function str_starts_with;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the DDD host's member badges and write provenance — plain PHP, the bundle's values
+ * Since 2.18.0 (Beacon spec 234): the DDD host's member badges and write provenance — plain PHP, the bundle's values
  * only: the ids starting with "bot-" are agents; the provenance is what the test's application layer set.
  */
 final class DddProvenance implements MemberBadgeProviderInterface, WriteProvenanceProviderInterface

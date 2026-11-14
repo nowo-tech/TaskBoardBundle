@@ -136,13 +136,13 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskCommentCauseLabelerInterface $commentCauseLabeler = null,
         // Since 2.15.0 (database.user_reference): the host user behind a user reference.
         private readonly ?TaskBoardUsers $users = null,
-        // Since 2.19.0 (Beacon spec 234): `member_badge_provider`, memoised per request.
+        // Since 2.18.0 (Beacon spec 234): `member_badge_provider`, memoised per request.
         private readonly ?MemberBadges $memberBadges = null,
     ) {
     }
 
     /**
-     * Since 2.19.0 (Beacon spec 234): the host's badges of a member (none without `member_badge_provider`). Values, never
+     * Since 2.18.0 (Beacon spec 234): the host's badges of a member (none without `member_badge_provider`). Values, never
      * HTML: the templates print them escaped.
      *
      * @return list<MemberBadge>
@@ -375,7 +375,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_column_icon_name', IconNames::columnIcon(...)),
             // Since 2.9.1 (audit JM-I7): whether an update would keep the column's stored icon (false: it is dropped).
             new TwigFunction('nowo_task_board_column_icon_storable', static fn (string $icon): bool => ColumnIcon::normalize($icon) !== null),
-            // Since 2.19.0 (Beacon spec 234): the host's member badges (values; printed escaped).
+            // Since 2.18.0 (Beacon spec 234): the host's member badges (values; printed escaped).
             new TwigFunction('nowo_task_board_member_badges', $this->memberBadges(...)),
         ];
     }

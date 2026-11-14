@@ -12,7 +12,7 @@ use function preg_match;
 use function trim;
 
 /**
- * Since 2.19.0 (Beacon spec 234): a pill the host shows next to a member's name (e.g. "Agent" for a service account), as
+ * Since 2.18.0 (Beacon spec 234): a pill the host shows next to a member's name (e.g. "Agent" for a service account), as
  * {@see MemberBadgeProviderInterface} gives it. Plain text only: the templates print `label` and `title` escaped, so a
  * host never hands the bundle HTML. `variant` is an allow-list ({@see MemberBadgeVariant}).
  *

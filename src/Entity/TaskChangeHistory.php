@@ -29,11 +29,11 @@ class TaskChangeHistory
     #[ORM\Column(name: 'user_name', type: 'string', length: 180, nullable: true)]
     private ?string $userName;
 
-    /** Since 2.19.0 (Beacon spec 234): where the write came from, as the host's provenance provider told it; null: unknown. */
+    /** Since 2.18.0 (Beacon spec 234): where the write came from, as the host's provenance provider told it; null: unknown. */
     #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
     private ?WriteChannel $channel;
 
-    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the actor (e.g. an API token's name); null: none. */
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (e.g. an API token's name); null: none. */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
     private ?string $actorLabel;
 
@@ -57,7 +57,7 @@ class TaskChangeHistory
         // a person's own change. See TaskChangeContext.
         #[ORM\Column(type: 'string', length: 191, nullable: true)]
         private ?string $cause = null,
-        // Since 2.19.0 (Beacon spec 234): the write's provenance (null: the columns stay NULL).
+        // Since 2.18.0 (Beacon spec 234): the write's provenance (null: the columns stay NULL).
         ?WriteProvenance $provenance = null,
     ) {
         $this->id         = Uuid::generate()->toString();
@@ -100,7 +100,7 @@ class TaskChangeHistory
     }
 
     /**
-     * Since 1.28.0: the row stops pointing at the user; with `$forgetName` the name goes too (since 2.19.0 the actor label
+     * Since 1.28.0: the row stops pointing at the user; with `$forgetName` the name goes too (since 2.18.0 the actor label
      * as well). The fact of the change stays.
      */
     public function detachUser(bool $forgetName = false): self
@@ -111,7 +111,7 @@ class TaskChangeHistory
         if ($forgetName) {
             // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->userName = null;
-            // Since 2.19.0: the actor label may name the person too.
+            // Since 2.18.0: the actor label may name the person too.
             // @igor-ignore - Doctrine entity field: a row of one request, not a shared service.
             $this->actorLabel = null;
         }
@@ -145,13 +145,13 @@ class TaskChangeHistory
         return $this->cause;
     }
 
-    /** Since 2.19.0 (Beacon spec 234): where the write came from; null when the host did not say. */
+    /** Since 2.18.0 (Beacon spec 234): where the write came from; null when the host did not say. */
     public function getChannel(): ?WriteChannel
     {
         return $this->channel;
     }
 
-    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the actor (at most 120 characters). */
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (at most 120 characters). */
     public function getActorLabel(): ?string
     {
         return $this->actorLabel;

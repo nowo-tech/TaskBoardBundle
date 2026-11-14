@@ -818,7 +818,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Since 2.19.0 (Beacon spec 234): `member_badge_provider` (default: none, nothing is asked) and
+     * Since 2.18.0 (Beacon spec 234): `member_badge_provider` (default: none, nothing is asked) and
      * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL).
      *
      * @param array<string, mixed> $config

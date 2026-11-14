@@ -110,8 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: next minor after the 2.18 stack (written 2.19.0 in the code; the number is settled at release). Additive; one
-schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-the-next-minor-after-218-member-badges-and-write-provenance).
+Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-2180).
 
 ### Added
 

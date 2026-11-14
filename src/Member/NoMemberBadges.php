@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Member;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
 /**
- * Since 2.19.0: the default {@see MemberBadgeProviderInterface}: no badge for anyone. Stateless.
+ * Since 2.18.0: the default {@see MemberBadgeProviderInterface}: no badge for anyone. Stateless.
  */
 final readonly class NoMemberBadges implements MemberBadgeProviderInterface
 {

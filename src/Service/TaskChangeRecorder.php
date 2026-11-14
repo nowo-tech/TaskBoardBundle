@@ -26,7 +26,7 @@ final readonly class TaskChangeRecorder
 {
     /**
      * @param TaskChangeContext|null $cause since 2.3.0 (spec 216): the cause written on every row recorded while it is set
-     * @param WriteProvenanceProviderInterface|null $provenance since 2.19.0 (Beacon spec 234): the host's provenance of the
+     * @param WriteProvenanceProviderInterface|null $provenance since 2.18.0 (Beacon spec 234): the host's provenance of the
      *                                                          write, stored on every row and on the task as its last write
      */
     public function __construct(
@@ -75,7 +75,7 @@ final readonly class TaskChangeRecorder
             cause: $this->cause?->current(),
             provenance: $provenance,
         ));
-        // Since 2.19.0 (Beacon spec 234): the task keeps who made its last recorded write and where it came from.
+        // Since 2.18.0 (Beacon spec 234): the task keeps who made its last recorded write and where it came from.
         $task->recordWrite($user, $provenance);
     }
 

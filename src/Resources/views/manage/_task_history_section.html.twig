@@ -34,7 +34,7 @@
                             <span class="nowo-task-activity__action">
                                 {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
                             {# Since 2.3.0 (spec 216): why, through history.cause_labeler; nothing without one. #}{% set _cause = nowo_task_board_change_cause(entry) %}{% if _cause is not null %}<span class="nowo-task-activity__cause" data-testid="nowo-task-history-cause">({{ _cause }})</span>{% endif %}</span>
-                            {#- Since 2.19.0 (Beacon spec 234): where the write came from and the host's label of its actor, escaped; nothing without a provenance provider. #}{% if entry.channel or entry.actorLabel %} <span class="nowo-task-activity__via" data-testid="nowo-task-history-via">{% if entry.channel %}{{ ('task_board.history.channel.' ~ entry.channel.value)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}{% if entry.channel and entry.actorLabel %} · {% endif %}{{ entry.actorLabel }}</span>{% endif %}
+                            {#- Since 2.18.0 (Beacon spec 234): where the write came from and the host's label of its actor, escaped; nothing without a provenance provider. #}{% if entry.channel or entry.actorLabel %} <span class="nowo-task-activity__via" data-testid="nowo-task-history-via">{% if entry.channel %}{{ ('task_board.history.channel.' ~ entry.channel.value)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}{% if entry.channel and entry.actorLabel %} · {% endif %}{{ entry.actorLabel }}</span>{% endif %}
                         </div>
                         {% if entry.oldValue is not null or entry.newValue is not null %}
                             <div class="nowo-task-detail__history-values nowo-task-activity__values">

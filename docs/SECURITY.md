@@ -18,7 +18,7 @@
 - [Beacon override reduction (2.6)](#beacon-override-reduction-26)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
-- [Member badges and write provenance (since 2.19)](#member-badges-and-write-provenance-since-219)
+- [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -278,7 +278,7 @@ Since 1.27.0 `task_board_sync_items.remote_meta` and `people` custom fields keep
 exports `exportFor()` / `exportDirectory()` list the people, not their estimates per task. There is
 no `dump()`, `var_dump()` or `error_log()` in `src/`.
 
-## Member badges and write provenance (since 2.19)
+## Member badges and write provenance (since 2.18)
 
 - **No HTML from the host.** `MemberBadge` takes plain text (control and format characters refused) and an allow-listed
   variant, never a CSS class; the templates print label and title escaped. The actor label of a write is plain text, cut

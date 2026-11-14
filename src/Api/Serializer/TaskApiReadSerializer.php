@@ -174,7 +174,7 @@ final class TaskApiReadSerializer
             'project'          => self::HIDDEN_FOLDER,
             'folder'           => self::HIDDEN_FOLDER,
             'space'            => ['id' => $space->id],
-            // Since 2.19.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
+            // Since 2.18.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
             // not shown to this viewer), where the last write came from and the host's label of its actor (a token's name).
             'created_by' => $page->profileOf($task->getCreator())?->id,
             'updated_by' => $page->profileOf($task->getUpdatedBy())?->id,
@@ -199,7 +199,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * @param TaskApiUser|null $updatedBy since 2.19.0: who wrote or last edited it, as the viewer may see them
+     * @param TaskApiUser|null $updatedBy since 2.18.0: who wrote or last edited it, as the viewer may see them
      *
      * @return array<string, mixed>
      */
@@ -216,7 +216,7 @@ final class TaskApiReadSerializer
             'reactions'    => [],
             'date'         => $this->ms($comment->getCreatedAt()),
             'reply_count'  => 0,
-            // Since 2.19.0 (Beacon spec 234): as on a task.
+            // Since 2.18.0 (Beacon spec 234): as on a task.
             'created_by' => $author?->id,
             'updated_by' => $updatedBy?->id,
             'channel'    => $comment->getChannel()?->value,

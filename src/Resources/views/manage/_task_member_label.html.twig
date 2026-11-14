@@ -14,7 +14,7 @@
     {% else %}
         {{ 'task_board.task.unknown_member'|trans({}, 'NowoTaskBoardBundle') }}
     {% endif %}
-    {#- Since 2.19.0 (Beacon spec 234): with badges = true, the host's member badges (member_badge_provider) after the name,
+    {#- Since 2.18.0 (Beacon spec 234): with badges = true, the host's member badges (member_badge_provider) after the name,
         through the member_label_suffix block of _member_label_suffix.html.twig. Without badges the output is unchanged. -#}
     {%- if badges -%}{%- set _badges = nowo_task_board_member_badges(user) -%}{%- if _badges is not empty -%}{{ include('@NowoTaskBoardBundle/manage/_member_label_suffix.html.twig', {badges: _badges}, with_context: false) }}{%- endif -%}{%- endif %}
 {% endmacro %}

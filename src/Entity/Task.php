@@ -66,19 +66,19 @@ class Task
     private ?string $creatorName;
 
     /**
-     * Since 2.19.0 (Beacon spec 234): who made the task's last recorded write (the user of its newest history row; null
-     * for rows written before 2.19, or once the account was erased). With {@see self::$channel} and
+     * Since 2.18.0 (Beacon spec 234): who made the task's last recorded write (the user of its newest history row; null
+     * for rows written before 2.18, or once the account was erased). With {@see self::$channel} and
      * {@see self::$actorLabel} it is the provenance of that write; the history keeps each one.
      */
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'updated_by_id', nullable: true, onDelete: 'SET NULL')]
     private ?object $updatedBy = null;
 
-    /** Since 2.19.0 (Beacon spec 234): where the last recorded write came from; null: the host did not say. */
+    /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from; null: the host did not say. */
     #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
     private ?WriteChannel $channel = null;
 
-    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
     private ?string $actorLabel = null;
 
@@ -310,7 +310,7 @@ class Task
     }
 
     /**
-     * Since 2.19.0 (Beacon spec 234): who made the last recorded write and its provenance (null: none, the columns are
+     * Since 2.18.0 (Beacon spec 234): who made the last recorded write and its provenance (null: none, the columns are
      * cleared). Changing these fields alone is no new revision.
      *
      * @internal called by {@see TaskChangeRecorder} at every history row
@@ -327,26 +327,26 @@ class Task
         return $this;
     }
 
-    /** Since 2.19.0 (Beacon spec 234): who made the last recorded write; null before 2.19 or once the account was erased. */
+    /** Since 2.18.0 (Beacon spec 234): who made the last recorded write; null before 2.18 or once the account was erased. */
     public function getUpdatedBy(): ?object
     {
         return $this->updatedBy;
     }
 
-    /** Since 2.19.0 (Beacon spec 234): where the last recorded write came from. */
+    /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from. */
     public function getChannel(): ?WriteChannel
     {
         return $this->channel;
     }
 
-    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */
     public function getActorLabel(): ?string
     {
         return $this->actorLabel;
     }
 
     /**
-     * Since 2.19.0: the account of the last writer is being erased — the task stops pointing at it; with `$forgetName` the
+     * Since 2.18.0: the account of the last writer is being erased — the task stops pointing at it; with `$forgetName` the
      * actor label goes too.
      *
      * @internal used by the account erasure helper ({@see TaskSyncPeopleReassigner::detachUser()})

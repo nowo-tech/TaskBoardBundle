@@ -153,7 +153,7 @@ task_board.gantt.empty: "Nessuna attività da mostrare nella cronologia."
 task_board.view.gantt: "Vista Gantt"
 task_board.history.completed_yes: "Completata"
 task_board.history.completed_no: "Non completata"
-# Since 2.19.0 (Beacon spec 234): the channel of a write, next to the actor in the history and comments.
+# Since 2.18.0 (Beacon spec 234): the channel of a write, next to the actor in the history and comments.
 task_board.history.channel.web: "via web"
 task_board.history.channel.app: "via app"
 task_board.history.channel.api: "via API"

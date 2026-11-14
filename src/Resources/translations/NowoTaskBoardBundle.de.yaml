@@ -153,7 +153,7 @@ task_board.gantt.empty: "Noch keine Aufgaben in der Zeitleiste."
 task_board.view.gantt: "Gantt-Ansicht"
 task_board.history.completed_yes: "Erledigt"
 task_board.history.completed_no: "Nicht erledigt"
-# Since 2.19.0 (Beacon spec 234): the channel of a write, next to the actor in the history and comments.
+# Since 2.18.0 (Beacon spec 234): the channel of a write, next to the actor in the history and comments.
 task_board.history.channel.web: "über Web"
 task_board.history.channel.app: "über App"
 task_board.history.channel.api: "über API"

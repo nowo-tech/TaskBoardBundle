@@ -27,7 +27,7 @@ use function array_unique;
 use function array_values;
 
 /**
- * Since 2.19.0 (Beacon spec 234, REQ-ARCH-001 both host kinds): on the DDD host (plain PHP users, XML mapping, private
+ * Since 2.18.0 (Beacon spec 234, REQ-ARCH-001 both host kinds): on the DDD host (plain PHP users, XML mapping, private
  * entity manager, user references by id) the provenance is stored with the last writer as an id, the badges come from
  * a framework-free provider, and the account erasure clears the last writer and, when anonymising, the actor label.
  */

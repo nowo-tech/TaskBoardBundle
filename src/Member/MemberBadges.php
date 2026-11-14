@@ -17,7 +17,7 @@ use function array_values;
 use function is_array;
 
 /**
- * @internal since 2.19.0 (Beacon spec 234): the member badges of one request. {@see self::prime()} asks the host's
+ * @internal since 2.18.0 (Beacon spec 234): the member badges of one request. {@see self::prime()} asks the host's
  * provider once for the people a page shows ({@see MemberBadgeProviderInterface::badgesForMany()}),
  * {@see self::of()} answers from the memo (a miss primes that one member). Anything but a {@see MemberBadge} in an
  * answer is dropped; a failing provider gives no badge and a warning. Without a provider nothing is asked or kept.

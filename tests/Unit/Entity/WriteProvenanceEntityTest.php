@@ -17,7 +17,7 @@ use stdClass;
 use function str_repeat;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the last write's provenance on tasks, comments and history rows — set, cut to 120
+ * Since 2.18.0 (Beacon spec 234): the last write's provenance on tasks, comments and history rows — set, cut to 120
  * characters, cleared, and dropped by the account erasure helpers (the label only when anonymising).
  */
 final class WriteProvenanceEntityTest extends TestCase

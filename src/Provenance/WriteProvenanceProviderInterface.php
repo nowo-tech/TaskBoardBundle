@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Provenance;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the provenance of the write running now. The bundle asks it at every task write that
+ * Since 2.18.0 (Beacon spec 234): the provenance of the write running now. The bundle asks it at every task write that
  * leaves a history row (create, update, move, members, ...) and at every comment it creates or edits, and stores the
  * answer on that row: `channel` and `actor_label` (nullable columns). Configure it with `write_provenance_provider`.
  *

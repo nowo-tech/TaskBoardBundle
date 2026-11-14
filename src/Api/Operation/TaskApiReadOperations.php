@@ -314,7 +314,7 @@ final readonly class TaskApiReadOperations
         $updaters = [];
         $people   = [];
         foreach ($comments as $comment) {
-            // Since 2.19.0 (Beacon spec 234): the last writer too, in the same profile call.
+            // Since 2.18.0 (Beacon spec 234): the last writer too, in the same profile call.
             foreach ([$comment->getAuthor(), $comment->getUpdatedBy()] as $person) {
                 if ($person !== null) {
                     $people[spl_object_id($person)] = $person;
@@ -462,7 +462,7 @@ final readonly class TaskApiReadOperations
         foreach ($tasks as $task) {
             $board = $task->getBoard();
             $spaces[$board->getId()] ??= $this->spaceOf($principal, $board);
-            // Since 2.19.0 (Beacon spec 234): the last writer too (`updated_by`).
+            // Since 2.18.0 (Beacon spec 234): the last writer too (`updated_by`).
             foreach ([$task->getCreator(), $task->getUpdatedBy()] as $person) {
                 if ($person !== null) {
                     $users[spl_object_id($person)] = $person;

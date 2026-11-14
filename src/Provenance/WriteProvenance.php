@@ -10,7 +10,7 @@ use function preg_replace;
 use function trim;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the provenance of the write running now, as the host tells it through
+ * Since 2.18.0 (Beacon spec 234): the provenance of the write running now, as the host tells it through
  * {@see WriteProvenanceProviderInterface::current()}: its channel and a plain-text label of the actor (an API token's
  * name, "Claude via MCP", ...). Never a secret: the bundle stores the label and shows it.
  *

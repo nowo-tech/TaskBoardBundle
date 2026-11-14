@@ -23,7 +23,7 @@ use function array_map;
 use function str_repeat;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the badge value (plain text, allow-listed variant) and the request memo (one batch,
+ * Since 2.18.0 (Beacon spec 234): the badge value (plain text, allow-listed variant) and the request memo (one batch,
  * misses one by one, nothing without a provider, a failing provider gives nothing, reset between requests).
  */
 #[CoversClass(MemberBadge::class)]

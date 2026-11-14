@@ -11,7 +11,7 @@ use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use function array_map;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the host's member badges in the functional kernels — the badges a test maps to a
+ * Since 2.18.0 (Beacon spec 234): the host's member badges in the functional kernels — the badges a test maps to a
  * user id; records every call (to prove one call per page and no state across requests).
  */
 final class ScriptedMemberBadges implements MemberBadgeProviderInterface

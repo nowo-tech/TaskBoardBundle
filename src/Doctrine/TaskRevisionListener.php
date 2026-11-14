@@ -36,7 +36,7 @@ use function spl_object_id;
 final readonly class TaskRevisionListener
 {
     /**
-     * Fields whose change alone is no new revision. Since 2.19.0 the last write's provenance (`updatedBy`, `channel`,
+     * Fields whose change alone is no new revision. Since 2.18.0 the last write's provenance (`updatedBy`, `channel`,
      * `actorLabel`): it changes with every history row, also for a dependency, a link or logged time, which were no
      * new revision in 2.16.
      */

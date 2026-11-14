@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Member;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the badges a host shows next to a member's name — in the history, the comments, the
+ * Since 2.18.0 (Beacon spec 234): the badges a host shows next to a member's name — in the history, the comments, the
  * task's assignees and watchers. Configure it with `member_badge_provider`; without one no badge is shown and the pages
  * render exactly as before.
  *

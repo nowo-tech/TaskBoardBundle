@@ -8,7 +8,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * TaskBoardBundle 2.19 (Beacon spec 234): write provenance. Nullable columns only: the channel and actor label of every
+ * TaskBoardBundle 2.18 (Beacon spec 234): write provenance. Nullable columns only: the channel and actor label of every
  * history row, and the last writer, channel and actor label of tasks and comments. Existing rows keep NULL; nothing is
  * rewritten or dropped. MySQL / MariaDB (the demo's database); see UPGRADING for PostgreSQL, SQLite and user_reference: id.
  */
@@ -16,7 +16,7 @@ final class Version20261114120000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'TaskBoardBundle 2.19: channel, actor_label (history, tasks, comments), updated_by_id (tasks, comments)';
+        return 'TaskBoardBundle 2.18: channel, actor_label (history, tasks, comments), updated_by_id (tasks, comments)';
     }
 
     public function up(Schema $schema): void

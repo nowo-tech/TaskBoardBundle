@@ -31,7 +31,7 @@ use function str_repeat;
 use function str_starts_with;
 
 /**
- * Since 2.19.0 (Beacon spec 234): member badges (one provider call per page, escaped values, unchanged output without
+ * Since 2.18.0 (Beacon spec 234): member badges (one provider call per page, escaped values, unchanged output without
  * a provider, nothing kept across the requests of one kernel) and write provenance (stored on history rows, tasks and
  * comments; shown escaped; NULL without a provider).
  */

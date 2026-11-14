@@ -115,7 +115,7 @@ final class ApiKernel extends Kernel
         $services->set('app.api_audit', ApiAuditRecorder::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_WRITE])
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_BULK_WRITE, 'method' => 'onBulk']);
-        // Since 2.19.0 (Beacon spec 234): member badges and write provenance (used when a test sets member_badge_provider /
+        // Since 2.18.0 (Beacon spec 234): member badges and write provenance (used when a test sets member_badge_provider /
         // write_provenance_provider).
         $container->services()->set('app.member_badges', ScriptedMemberBadges::class)->public();
         $container->services()->set('app.write_provenance', PathWriteProvenance::class)->autowire()->public();

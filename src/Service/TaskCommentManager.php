@@ -41,7 +41,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.10.0 (spec 216, FR-014): the cause of the comments added inside TaskChangeContext::run().
         private ?TaskChangeContext $changeContext = null,
-        // Since 2.19.0 (Beacon spec 234): the host's provenance of the comments added and edited.
+        // Since 2.18.0 (Beacon spec 234): the host's provenance of the comments added and edited.
         private ?WriteProvenanceProviderInterface $provenance = null,
     ) {
     }

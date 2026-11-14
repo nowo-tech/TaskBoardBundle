@@ -52,7 +52,7 @@
   - [Calendar annotations: Standard Symfony host](#calendar-annotations-standard-symfony-host)
   - [Calendar annotations: DDD / hexagonal host](#calendar-annotations-ddd--hexagonal-host)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
-- [Member badges and write provenance (since 2.19)](#member-badges-and-write-provenance-since-219)
+- [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
   - [Standard Symfony host](#standard-symfony-host)
   - [DDD / hexagonal host](#ddd--hexagonal-host)
   - [Filters, sort, workload and export](#filters-sort-workload-and-export)
@@ -1398,12 +1398,12 @@ grouped query. An export reads 500 tasks per query. The label filter is the exce
 query searches, so the matching tasks are read in batches and compared in PHP, at most `multi_board.scan_max_rows`
 (the page then says the result may be incomplete).
 
-## Member badges and write provenance (since 2.19)
+## Member badges and write provenance (since 2.18)
 
 Beacon spec 234 (D-20261114-05): a host-decided pill next to a member's name (Beacon: an **Agent** pill for service
 accounts), and where each write came from (`web`, `app`, `api`, `mcp`) with a plain-text label of its actor (an API
 token's name). Both are opt-in ports; without them nothing is asked, the columns stay `NULL` and every page renders
-exactly as in 2.18. The schema change is in [UPGRADING](UPGRADING.md#to-the-next-minor-after-218-member-badges-and-write-provenance).
+exactly as in 2.17. The schema change is in [UPGRADING](UPGRADING.md#to-2180).
 
 ```yaml
 nowo_task_board:
@@ -1445,7 +1445,7 @@ describe the latest one.
 
 The history and the comments show `via API · <label>` next to the actor (translations
 `task_board.history.channel.*`). The Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
-tasks and comments ([API](API.md#provenance-fields-since-219)).
+tasks and comments ([API](API.md#provenance-fields-since-218)).
 
 **Personal data.** The actor label may name a person. `TaskSyncPeopleReassigner::detachUser()` drops the person from
 `updated_by_id` of tasks and comments; with `$anonymise` it also clears `actor_label` on the history rows, tasks and

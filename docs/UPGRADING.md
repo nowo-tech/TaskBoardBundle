@@ -4,7 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [To the next minor after 2.18: member badges and write provenance](#to-the-next-minor-after-218-member-badges-and-write-provenance)
+- [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
 - [To 2.16.0](#to-2160)
@@ -197,10 +197,10 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## To the next minor after 2.18: member badges and write provenance
+## To 2.18.0
 
-Additive (Beacon spec 234, D-20261114-05; the version number is settled at release, written 2.19 in the code). Two new
-opt-in ports, `member_badge_provider` and `write_provenance_provider` ([USAGE](USAGE.md#member-badges-and-write-provenance-since-219)).
+Additive (Beacon spec 234, D-20261114-05): member badges and write provenance. Two new
+opt-in ports, `member_badge_provider` and `write_provenance_provider` ([USAGE](USAGE.md#member-badges-and-write-provenance-since-218)).
 With an unchanged configuration no badge is shown, the pages render as before, and the provenance columns stay `NULL`.
 What changes for every host:
 
@@ -209,7 +209,7 @@ What changes for every host:
   receives (the user of the task's newest history row; the comment's author or last editor). Rows written before keep
   `NULL`. A change of these columns alone is no new task revision.
 - The Task API answers of tasks and comments gain `created_by`, `updated_by`, `channel` and `token_name`
-  ([API](API.md#provenance-fields-since-219)); every other field is unchanged.
+  ([API](API.md#provenance-fields-since-218)); every other field is unchanged.
 - `TaskSyncPeopleReassigner::detachUser()` also drops the erased person from `updated_by_id`, and with `$anonymise` clears
   the actor label of the rows they wrote.
 - The `member_label` macro takes an optional second argument (`badges`, default `false`); a host template that calls it

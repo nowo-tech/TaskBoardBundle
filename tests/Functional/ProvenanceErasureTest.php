@@ -16,7 +16,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\PathWriteProvenance;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the actor label is personal data. The account erasure (`detachUser()`) drops the
+ * Since 2.18.0 (Beacon spec 234): the actor label is personal data. The account erasure (`detachUser()`) drops the
  * last-writer reference of tasks and comments (loaded or not) and, when anonymising, the actor label of the rows that
  * person wrote; without anonymising the label stays, as the name snapshots do.
  */

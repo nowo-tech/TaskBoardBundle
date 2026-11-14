@@ -219,14 +219,14 @@ final readonly class TaskSyncPeopleReassigner
                 // Rows written before 1.25 have no snapshot yet: they get the current name first.
                 $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE ' . $where . ' AND x.' . $name . ' IS NULL')
                     ->setParameter('label', $forgetName ? null : $label)->setParameter('match', $match)->execute();
-                // Since 2.19.0: a forgotten history row loses its actor label too (it may name the person).
+                // Since 2.18.0: a forgotten history row loses its actor label too (it may name the person).
                 $forget = $forgetName ? ', x.' . $name . ' = NULL' . ($class === TaskChangeHistory::class ? ', x.actorLabel = NULL' : '') : '';
                 $count += (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . $forget . ' WHERE ' . $where)
                     ->setParameter('match', $match)->execute();
             }
             $counts[] = $count;
         }
-        // Since 2.19.0 (Beacon spec 234): the last writer of tasks and comments, and with `$forgetName` that write's actor label.
+        // Since 2.18.0 (Beacon spec 234): the last writer of tasks and comments, and with `$forgetName` that write's actor label.
         foreach ([Task::class, TaskComment::class] as $class) {
             [$where, $batches] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
                 ? ['x.id IN (:match)', array_chunk(TaskBoardUsers::exactRowIds($this->entityManager, $class, 'updatedBy', TaskBoardUsers::exactId($user)), ExactKey::CHUNK)]

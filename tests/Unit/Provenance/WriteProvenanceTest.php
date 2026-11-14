@@ -15,7 +15,7 @@ use function mb_strlen;
 use function str_repeat;
 
 /**
- * Since 2.19.0 (Beacon spec 234): the channel allow-list and the actor label as the bundle stores it — plain text,
+ * Since 2.18.0 (Beacon spec 234): the channel allow-list and the actor label as the bundle stores it — plain text,
  * cut to 120 characters (never refused), empty is null.
  */
 #[CoversClass(WriteProvenance::class)]

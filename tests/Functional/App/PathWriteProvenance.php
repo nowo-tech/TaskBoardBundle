@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use function str_starts_with;
 
 /**
- * Since 2.19.0 (Beacon spec 234): a host's write provenance as Beacon builds it — the channel from the path it serves
+ * Since 2.18.0 (Beacon spec 234): a host's write provenance as Beacon builds it — the channel from the path it serves
  * (`/api/` is the Task API, `/mcp/` its MCP server, anything else its web UI), never from a header or field the client
  * sends; the actor label from what the host knows (here {@see self::$label}, the token's name). Outside a request
  * {@see self::$console} (null by default). Stateless apart from the scripted values the tests set.

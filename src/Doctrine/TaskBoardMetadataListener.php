@@ -86,7 +86,7 @@ final readonly class TaskBoardMetadataListener
         };
 
         $userFieldsByClass = [
-            // Since 2.19.0 (Beacon spec 234): `updatedBy`, the last writer, on tasks and comments.
+            // Since 2.18.0 (Beacon spec 234): `updatedBy`, the last writer, on tasks and comments.
             Task::class              => ['creator', 'updatedBy'],
             TaskBoard::class         => ['creator'],
             TeamMember::class        => ['user'],
