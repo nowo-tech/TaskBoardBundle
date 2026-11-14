@@ -15,7 +15,7 @@ use Psr\Log\NullLogger;
 use Throwable;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-034): a folder's shared status set. Every board in the folder has the set's columns
+ * Since 2.18.0 (Beacon spec 234, FR-034): a folder's shared status set. Every board in the folder has the set's columns
  * (name, order, type), and a change of the set is applied to every board in one transaction; a board whose tasks sit in a
  * column the set drops needs a column map for it (`columns_in_use` otherwise, and nothing is written).
  *
@@ -72,6 +72,7 @@ final readonly class FolderStatusSets
                 $this->folders->checkColumns($board, $specs, $columnMaps[$board->getId()] ?? []);
             }
         }
+        // @igor-ignore - The closure runs at once inside transactional() and is never stored.
         $this->folders->transactional(function () use ($folder, $boards, $specs, $columnMaps): void {
             $folder->setStatusSet($specs);
             if ($specs !== null) {
@@ -127,6 +128,7 @@ final readonly class FolderStatusSets
                     $this->folders->checkColumns($sibling, $specs, $renames);
                 }
             }
+            // @igor-ignore - The closure runs at once inside transactional() and is never stored.
             $this->folders->transactional(function () use ($folder, $board, $specs, $renames): void {
                 $folder->setStatusSet($specs);
                 foreach ($this->folders->boardsIn($folder, true) as $sibling) {

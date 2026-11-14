@@ -46,6 +46,6 @@ enum TaskChangeType: string
     case Duplicated = 'duplicated';
     /** Since 2.3.0 (specs 215, 217): a member of the source left out of a copy (no longer assignable); new value: the label. */
     case MemberNotCopied = 'member_not_copied';
-    /** Since 2.17.0 (FR-028): a native custom field's value; old and new values are as read, `context` "field:<id> <name>". */
+    /** Since 2.18.0 (FR-028): a native custom field's value; old and new values are as read, `context` "field:<id> <name>". */
     case CustomField = 'custom_field';
 }

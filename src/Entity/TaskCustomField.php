@@ -19,7 +19,7 @@ use function preg_match;
 use function trim;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): a native custom field — defined for a tenant (every board of it) or for one
+ * Since 2.18.0 (Beacon spec 234, FR-028): a native custom field — defined for a tenant (every board of it) or for one
  * board; text, number or dropdown (options with colours). Its values live on {@see TaskCustomFieldValue}, one per task.
  * Not to be confused with a provider's synced fields (`Sync\Entity\TaskSyncField`, read-only).
  */

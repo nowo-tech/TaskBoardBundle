@@ -8,7 +8,11 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use SortDirection;
+
+use function array_filter;
+use function array_values;
 
 /**
  * Doctrine ORM implementation for column sets (since 1.11).
@@ -49,6 +53,8 @@ final readonly class DoctrineOrmColumnSetRepository implements ColumnSetReposito
 
         if ($scopeKey === null) {
             $builder->where('s.scopeKey IS NULL');
+        } elseif (!ExactKey::isUsable($scopeKey)) {
+            return [];
         } else {
             $builder->where('s.scopeKey = :scopeKey')->setParameter('scopeKey', $scopeKey);
         }
@@ -56,6 +62,7 @@ final readonly class DoctrineOrmColumnSetRepository implements ColumnSetReposito
         /** @var list<ColumnSet> $sets */
         $sets = $builder->getQuery()->getResult();
 
-        return $sets;
+        // Since 2.15.1 (REQ-SEC-006): the database may fold the scope (`Acme` for `acme`); only exact sets count.
+        return array_values(array_filter($sets, static fn (ColumnSet $set): bool => $set->getScopeKey() === $scopeKey));
     }
 }

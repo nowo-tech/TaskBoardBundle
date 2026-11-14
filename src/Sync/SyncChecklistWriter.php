@@ -28,11 +28,14 @@ use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use SortDirection;
 
 use function array_diff_key;
+use function array_keys;
+use function array_map;
 use function count;
 use function in_array;
 use function max;
 use function min;
 use function sprintf;
+use function str_starts_with;
 
 /**
  * Since 1.25: ClickUp checklists as subtasks — one subtask per item, under the task, in checklist order, tagged
@@ -59,7 +62,7 @@ final readonly class SyncChecklistWriter
     public function sync(SyncRunContext $ctx, ?PeopleSession $session, TaskSyncItem $parentItem, Task $parent, RemoteTask $remote): void
     {
         // Done items: the column the status map gives the first closed / done status, else the last one (1.23 rule).
-        // Since 2.17.0 (FR-033): else the board's first done or closed column (the last one on an untyped board).
+        // Since 2.18.0 (FR-033): else the board's first done or closed column (the last one on an untyped board).
         $done   = StatusColumns::doneColumn($ctx->connection->getStatusColumnMap(), $ctx->board) ?? ColumnTypes::doneColumn($ctx->board);
         $open   = $parent->getColumn();
         $wanted = [];
@@ -70,9 +73,21 @@ final readonly class SyncChecklistWriter
             }
         }
         $existing = $this->existing($ctx, $parentItem->getExternalId());
-        $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing)));
+        // Since 2.15.1 (REQ-SEC-006, audit OM TB-M1): a new id the database takes for a look-alike item (a column that
+        // still folds) is skipped: its item would break the unique key.
+        $lookAlikes = [];
+        $new        = array_map(strval(...), array_keys(array_diff_key($wanted, $existing)));
+        if ($new !== []) {
+            $this->store->itemsByExternalIds($ctx->connection, $new, $lookAlikes);
+        }
+        $allowed  = $this->allowedNew($ctx, count(array_diff_key($wanted, $existing, $lookAlikes)));
         $position = 0;
         foreach ($wanted as $externalId => [$entry, $tag]) {
+            if (isset($lookAlikes[$externalId])) {
+                $ctx->count('skipLookAlike');
+                $ctx->warn('external_id_look_alike');
+                continue;
+            }
             $item = $existing[$externalId] ?? null;
             $task = $item?->getTask();
             if ($item instanceof TaskSyncItem && !$task instanceof Task) {
@@ -184,7 +199,10 @@ final readonly class SyncChecklistWriter
             ->orderBy('i.externalId', SortDirection::Ascending)->getQuery()->getResult();
         $byId = [];
         foreach ($items as $item) {
-            $byId[$item->getExternalId()] = $item;
+            // Since 2.15.1 (REQ-SEC-006): LIKE may fold the prefix; only the exact parent's items count.
+            if (str_starts_with($item->getExternalId(), $parentExternalId . '#')) {
+                $byId[$item->getExternalId()] = $item;
+            }
         }
 
         return $byId;

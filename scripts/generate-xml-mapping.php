@@ -21,6 +21,7 @@ $groups = [
     'api'        => ['dir' => $root . '/src/Api/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Api\\Entity'],
     'recurrence' => ['dir' => $root . '/src/Recurrence/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Recurrence\\Entity'],
     'number'     => ['dir' => $root . '/src/Number/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Number\\Entity'],
+    'template'   => ['dir' => $root . '/src/Template/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Template\\Entity'],
 ];
 
 /** @return list<object> */

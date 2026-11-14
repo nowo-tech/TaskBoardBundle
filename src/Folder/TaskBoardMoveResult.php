@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Folder;
 
 /**
- * Since 2.17.0 (FR-045): what {@see TaskBoardRestructureInterface::moveTasks()} did. Every id is kept: a moved task has
+ * Since 2.18.0 (FR-045): what {@see TaskBoardRestructureInterface::moveTasks()} did. Every id is kept: a moved task has
  * the same id, number (with `task_numbers.scope: tenant`), comments, time entries, tags and history as before, plus a
  * "moved to another board" history row.
  */

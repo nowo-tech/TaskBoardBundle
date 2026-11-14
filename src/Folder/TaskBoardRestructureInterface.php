@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Folder;
 
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
+
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
+ * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
  * moved between the boards of one tenant. A host's restructure command depends on it (public alias of
  * {@see TaskBoardRestructurer}). Framework-free: ids in, VOs out (REQ-ARCH-001 rules 1 and 3).
  *
@@ -45,7 +48,7 @@ interface TaskBoardRestructureInterface
 
     /**
      * Puts a board in a folder of its own tenant, or out of any (`$folderId` null). Into a folder with a shared status set
-     * (since 2.17.0, FR-034) the board takes the set's columns: `$columnMap` (current column id or name => a column name of
+     * (since 2.18.0, FR-034) the board takes the set's columns: `$columnMap` (current column id or name => a column name of
      * the set) moves the tasks of a column the set does not have; without it such a column is `columns_in_use`.
      *
      * @param array<string, string> $columnMap
@@ -61,8 +64,16 @@ interface TaskBoardRestructureInterface
      * name; else the target's column of the same name; else the target's first open column (a completed task: its last
      * column). Names compare without case, accents or edge spaces.
      *
+     * The host's column transition policy (`column_transition_policy`) is asked, before anything changes, for every task
+     * that changes board, as it enters its column there (operation `board_move`, through `$via`'s channel; null: `web`):
+     * an MCP server passes its own channel, so a *humans only* column cannot be reached through a move. The first refusal
+     * moves nothing.
+     *
      * @param list<string> $taskIds
      * @param array<string, string> $columnMap source column id or name => target column id or name
+     * @param ColumnTransitionVia|null $via since 2.18.0: who asks (its channel; the operation is always `board_move`)
+     *
+     * @throws ColumnTransitionRefusedException when the column transition policy refuses a task: nothing changes
      */
-    public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = []): TaskBoardMoveResult;
+    public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = [], ?ColumnTransitionVia $via = null): TaskBoardMoveResult;
 }

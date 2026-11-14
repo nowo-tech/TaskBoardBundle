@@ -24,7 +24,7 @@ final class TaskColumnRule
             return null;
         }
         if ($completed) {
-            // Since 2.17.0 (FR-033): the first done or closed column (the last one on an untyped board).
+            // Since 2.18.0 (FR-033): the first done or closed column (the last one on an untyped board).
             return ColumnTypes::doneColumn($target, $columns);
         }
         $open = self::openColumns($target);
@@ -48,12 +48,12 @@ final class TaskColumnRule
             }
         }
 
-        // Since 2.17.0 (FR-033): the first open column.
+        // Since 2.18.0 (FR-033): the first open column.
         return ColumnTypes::firstOpen($target, $columns) ?? $columns[0];
     }
 
     /**
-     * The columns an open task may be put in on `$target`: since 2.17.0 every column that is not done (column type);
+     * The columns an open task may be put in on `$target`: since 2.18.0 every column that is not done (column type);
      * on an untyped board every column but the last, or the only one, as before.
      *
      * @return list<BoardColumn>

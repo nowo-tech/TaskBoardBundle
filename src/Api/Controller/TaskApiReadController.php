@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\TaskApiRevision;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
@@ -36,9 +37,9 @@ final readonly class TaskApiReadController
     public function __construct(
         private TaskApiReadOperations $operations,
         private TaskApiReadSerializer $serializer,
-        // Since 2.17.0 (Beacon spec 234): folders.
+        // Since 2.18.0 (Beacon spec 234): folders.
         private TaskApiFolderOperations $folderOperations,
-        // Since 2.17.0: `api.lists_include_folders`.
+        // Since 2.18.0: `api.lists_include_folders`.
         private bool $listsIncludeFolders = false,
     ) {
     }
@@ -55,7 +56,7 @@ final readonly class TaskApiReadController
         return new JsonResponse($this->serializer->space($this->operations->space(TaskApiRequestListener::principalOf($request), $spaceId)));
     }
 
-    /** Since 2.17.0 (Beacon spec 234, FR-031): the space's folders, each with its lists (before: always empty). */
+    /** Since 2.18.0 (Beacon spec 234, FR-031): the space's folders, each with its lists (before: always empty). */
     public function folders(Request $request, string $spaceId): JsonResponse
     {
         $list = $this->folderOperations->folders(TaskApiRequestListener::principalOf($request), $spaceId);
@@ -63,7 +64,7 @@ final readonly class TaskApiReadController
         return new JsonResponse(['folders' => array_map(fn (TaskBoardFolder $folder): array => $this->serializer->folder($folder, $list->space, $list->boards[$folder->getId()] ?? [], $list->taskCounts), $list->folders)]);
     }
 
-    /** Since 2.17.0: `GET /v2/folder/{id}`. */
+    /** Since 2.18.0: `GET /v2/folder/{id}`. */
     public function folder(Request $request, string $folderId): JsonResponse
     {
         $list   = $this->folderOperations->folder(TaskApiRequestListener::principalOf($request), $folderId);
@@ -72,7 +73,7 @@ final readonly class TaskApiReadController
         return new JsonResponse($this->serializer->folder($folder, $list->space, $list->boards[$folder->getId()] ?? [], $list->taskCounts));
     }
 
-    /** Since 2.17.0: `GET /v2/folder/{id}/list`: the lists of the folder. */
+    /** Since 2.18.0: `GET /v2/folder/{id}/list`: the lists of the folder. */
     public function folderLists(Request $request, string $folderId): JsonResponse
     {
         $list   = $this->folderOperations->folder(TaskApiRequestListener::principalOf($request), $folderId);
@@ -82,7 +83,7 @@ final readonly class TaskApiReadController
     }
 
     /**
-     * Since 2.17.0 (as ClickUp): the folderless lists only, a board in a folder being listed under its folder; with
+     * Since 2.18.0 (as ClickUp): the folderless lists only, a board in a folder being listed under its folder; with
      * `include_folders=true` (or `api.lists_include_folders`) every board, each with its `folder`.
      */
     public function lists(Request $request, string $spaceId): JsonResponse
@@ -127,7 +128,8 @@ final readonly class TaskApiReadController
             $task['subtasks'] = array_map(static fn ($subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$found->getId()] ?? []);
         }
 
-        return new JsonResponse($task);
+        // Since 2.16.0 (spec 234, FR-018): the revision as an ETag, for `If-Match` on the update.
+        return TaskApiRevision::etag(new JsonResponse($task), $found);
     }
 
     public function comments(Request $request, string $taskId): JsonResponse
@@ -156,7 +158,7 @@ final readonly class TaskApiReadController
 
     public function fields(Request $request, string $listId): JsonResponse
     {
-        // Since 2.17.0 (FR-028): the native fields first (writable), then the synced ones (read-only).
+        // Since 2.18.0 (FR-028): the native fields first (writable), then the synced ones (read-only).
         $fields = $this->operations->allBoardFields(TaskApiRequestListener::principalOf($request), $listId);
 
         return new JsonResponse(['fields' => [

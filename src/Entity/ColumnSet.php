@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_values;
@@ -44,6 +45,8 @@ class ColumnSet
         #[ORM\Column(name: 'scope_key', type: 'string', length: 191, nullable: true)]
         private ?string $scopeKey = null,
     ) {
+        // Since 2.15.1 (REQ-SEC-006 item 1): a scope that cannot be matched exactly is refused.
+        ExactKey::assertUsable($scopeKey, 'column set scope key');
         $this->id        = Uuid::generate()->toString();
         $this->createdAt = new DateTimeImmutable();
     }

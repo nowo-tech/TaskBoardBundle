@@ -1,13 +1,41 @@
 import { Controller } from '@hotwired/stimulus';
 import { openKitDialog } from './dialog-utils';
 
-/** Opens the add-task dialog with the selected column pre-filled. */
+/**
+ * Opens the add-task dialog with the selected column pre-filled. Since 2.16.0 (task templates): choosing a template in the
+ * dialog's picker reloads the page with the template's fields pre-filled (the typed title carried over), and the dialog
+ * opens again on its own (`open-on-connect`).
+ */
 export default class AddTaskModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'title', 'columnField', 'titleInput', 'dueField'];
+    static targets = ['modal', 'title', 'columnField', 'titleInput', 'dueField', 'templateTitle'];
 
     static values = {
         titleFormat: { type: String, default: 'Add task to %column%' },
+        openOnConnect: { type: Boolean, default: false },
     };
+
+    declare readonly templateTitleTarget: HTMLInputElement;
+
+    declare readonly hasTemplateTitleTarget: boolean;
+
+    declare readonly hasModalTarget: boolean;
+
+    declare readonly openOnConnectValue: boolean;
+
+    connect(): void {
+        if (this.openOnConnectValue && this.hasModalTarget) {
+            openKitDialog(this.modalTarget, null, this.hasTitleInputTarget ? this.titleInputTarget : null);
+        }
+    }
+
+    /** The template picker changed: carry the typed title over and load the dialog with the template applied. */
+    applyTemplate(event: Event): void {
+        const select = event.currentTarget as HTMLSelectElement;
+        if (this.hasTemplateTitleTarget && this.hasTitleInputTarget) {
+            this.templateTitleTarget.value = this.titleInputTarget.value;
+        }
+        select.form?.requestSubmit();
+    }
 
     declare readonly modalTarget: HTMLDialogElement;
 

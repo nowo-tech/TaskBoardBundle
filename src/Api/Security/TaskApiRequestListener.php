@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiCredential;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
+use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -30,6 +31,7 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Throwable;
 
+use function array_filter;
 use function in_array;
 use function is_scalar;
 use function method_exists;
@@ -199,6 +201,12 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         if ($throwable instanceof TaskApiRefusal) {
             return $throwable;
         }
+        // Since 2.15.1 (REQ-SEC-006, audit OM TB-L2): the scope's number counter is a look-alike scope's.
+        if ($throwable instanceof TaskNumberScopeConflictException) {
+            // Since 2.16.0 (spec 234): which task, and the scope its own board asks for; never the look-alike key
+            // stored for someone else, and nothing else of the task (a client knows its own ids already).
+            return new TaskApiRefusal(Response::HTTP_CONFLICT, 'TASK_003', 'The task cannot be numbered in this scope', array_filter(['task_id' => $throwable->taskId, 'scope' => $throwable->scopeKey], static fn (?string $value): bool => $value !== null));
+        }
         if ($throwable instanceof HttpExceptionInterface && in_array($throwable->getStatusCode(), [Response::HTTP_NOT_FOUND, Response::HTTP_METHOD_NOT_ALLOWED], true)) {
             return TaskApiRefusal::notFound();
         }
@@ -226,6 +234,6 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
 
     private function answer(TaskApiRefusal $refusal): JsonResponse
     {
-        return new JsonResponse(['err' => $refusal->getMessage(), 'ECODE' => $refusal->ecode], $refusal->status);
+        return new JsonResponse($refusal->body(), $refusal->status);
     }
 }

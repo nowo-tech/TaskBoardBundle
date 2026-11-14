@@ -14,7 +14,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.17.0 (FR-045): a synced task moved by the restructure service is detached for good, and no move runs while a
+ * Since 2.18.0 (FR-045): a synced task moved by the restructure service is detached for good, and no move runs while a
  * provider run is in progress on a board it touches.
  */
 final class RestructureSyncTest extends SyncFunctionalTestCase
@@ -26,10 +26,10 @@ final class RestructureSyncTest extends SyncFunctionalTestCase
         $this->put($this->remote('a1', 'Design'));
         $this->put($this->remote('a2', 'Build'));
         $this->sync($board);
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
-        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        $service = self::getContainer()->get(TaskBoardRestructureInterface::class);
         self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
 
         $service->moveTasks($this->owner, [$this->taskTitled('Design')->getId()], $target->getId(), ['To do' => $target->getColumns()->first()->getId()]);

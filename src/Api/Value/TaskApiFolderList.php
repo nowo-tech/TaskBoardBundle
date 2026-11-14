@@ -8,7 +8,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031): folders of a space, each with the boards in it the token may view, and the
+ * Since 2.18.0 (Beacon spec 234, FR-031): folders of a space, each with the boards in it the token may view, and the
  * tasks the token may count in each board.
  */
 final readonly class TaskApiFolderList

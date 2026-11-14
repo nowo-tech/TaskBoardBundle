@@ -175,7 +175,8 @@ final class SyncServiceEdgesTest extends SyncFunctionalTestCase
 
         $report = $this->sync($board);
         self::assertSame(SyncStatus::Failed, $report->status);
-        self::assertFalse($em->isOpen());
+        // Since 2.15.1 (audit OM TB-M1): the failed run reopens the manager it closed (worker mode, kernel not reset).
+        self::assertTrue(self::getContainer()->get('doctrine')->getManager()->isOpen());
     }
 
     private function smallProvider(): InMemoryTaskProvider

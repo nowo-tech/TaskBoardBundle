@@ -4,11 +4,20 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [To 2.17.0](#to-2170)
+- [To 2.18.0](#to-2180)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
   - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
+- [To 2.17.0](#to-2170)
+- [To 2.16.0](#to-2160)
+  - [Schema change for every host: humans-only columns and task revisions](#schema-change-for-every-host-humans-only-columns-and-task-revisions)
+  - [AI Flow features: what a host does](#ai-flow-features-what-a-host-does)
+  - [Task templates: what a host does](#task-templates-what-a-host-does)
+- [To 2.15.1](#to-2151)
+  - [Keys the bundle refuses](#keys-the-bundle-refuses)
+  - [Schema change on MySQL / MariaDB: key columns compare byte for byte](#schema-change-on-mysql--mariadb-key-columns-compare-byte-for-byte)
+  - [Sync actor resolver: the framework-free twin is autowirable](#sync-actor-resolver-the-framework-free-twin-is-autowirable)
 - [To 2.15.0](#to-2150)
   - [Framework-free host ports](#framework-free-host-ports)
   - [Private entity manager (opt-in)](#private-entity-manager-opt-in)
@@ -191,27 +200,47 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## To 2.17.0
+## To 2.18.0
 
 ### Schema change for every host: folders
 
-A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless). Generate it
-with `doctrine:migrations:diff`, or apply (table prefix `task_board_`):
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
+rewritten. `doctrine:migrations:diff` writes it (the demo's `Version20261114100000`). By hand, with the default table
+prefix `task_board_` and the names Doctrine gives the foreign key and its index:
 
 ```sql
--- MySQL / MariaDB
-CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
 ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
-ALTER TABLE task_board_boards ADD CONSTRAINT FK_TASK_BOARD_BOARDS_FOLDER FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
-CREATE INDEX IDX_TASK_BOARD_BOARDS_FOLDER ON task_board_boards (folder_id);
--- PostgreSQL: TIMESTAMP(0) WITHOUT TIME ZONE for the dates, TEXT for the description; the rest is the same.
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
 -- rollback
-ALTER TABLE task_board_boards DROP FOREIGN KEY FK_TASK_BOARD_BOARDS_FOLDER;
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942 ON task_board_boards;
 ALTER TABLE task_board_boards DROP folder_id;
 DROP TABLE task_board_folders;
 ```
 
-Let `doctrine:migrations:diff` name the foreign key and the index: the names above are examples.
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description TEXT DEFAULT NULL, position INT NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_folders_tenant ON task_board_folders (tenant_key);
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+SQLite cannot add a foreign key to an existing table: `doctrine:migrations:diff` copies `task_board_boards` into a new
+table with `folder_id` and the foreign key (`CREATE TEMPORARY TABLE … AS SELECT`, `DROP`, `CREATE`, `INSERT … SELECT`,
+then its indexes again). Let it generate that migration rather than writing it by hand.
+
+The folder's `tenant_key` is a key column (REQ-SEC-006): the mapping listener gives it the binary NO PAD collation on
+MySQL / MariaDB, as the boards' `tenant_key`.
 
 ### Folders and restructure: what a host does
 
@@ -222,6 +251,9 @@ Nothing, unless you use folders:
   `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
   `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
   `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
+  (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked as `web` (a person).
 - **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.
@@ -231,51 +263,345 @@ Nothing, unless you use folders:
 
 ### Schema change for every host: column types and status sets
 
-Two nullable columns; nothing is rewritten:
+Two nullable columns, after the folders above; nothing is rewritten (the demo's `Version20261114110000`):
 
 ```sql
+-- MySQL / MariaDB
 ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
-ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL; -- LONGTEXT on MariaDB < 10.2, TEXT on SQLite
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
 -- rollback
 ALTER TABLE task_board_columns DROP column_type;
 ALTER TABLE task_board_folders DROP status_set;
 ```
 
-A column without a type follows its position (first `open`, last `closed`, the rest `custom`), which is what the spec's
-migration writes, so no data step is needed. A host that wants the types stored (for its own SQL reports) may run, per
-board, the equivalent of:
-
 ```sql
--- MySQL 8 / MariaDB 10.2+ / PostgreSQL: first column open, last closed, the rest custom, for boards with no type yet
-UPDATE task_board_columns c SET column_type = CASE
-  WHEN c.position = (SELECT MIN(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 AND c.position <> (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) THEN 'open'
-  WHEN c.position = (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 THEN 'closed'
-  WHEN (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) = 1 THEN 'closed'
-  ELSE 'custom' END
-WHERE NOT EXISTS (SELECT 1 FROM task_board_columns t WHERE t.board_id = c.board_id AND t.column_type IS NOT NULL);
+-- PostgreSQL (SQLite: ALTER TABLE … ADD COLUMN, with CLOB for status_set; DROP COLUMN to roll back)
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
 ```
 
-(MySQL refuses a subquery on the updated table: run it through a temporary copy, or let the bundle write the types the
-first time a type is set on the board.) **Behaviour to know:** a board with types no longer treats "the last column" as
-done; *Done* goes to its first `done`/`closed` column.
+No data step: a column without a type keeps its meaning by position (first `open`, last `closed`, the rest `custom`;
+a board of one column: `closed`), exactly as before. The first type set on one column of a board writes the position
+types of its other columns. **Behaviour to know:** a board with types no longer treats "the last column" as done;
+*Done* goes to its first `done`/`closed` column, and a task in any `done` or `closed` column is completed. A
+`column_transition_policy` reads the type in `BoardColumnSnapshot::$type` (and `TaskStatusChangedEvent::$toType`);
+`$last` stays "the last column by position".
 
 ### Schema change for every host: native custom fields
 
-Two new tables (MySQL shown; let `doctrine:migrations:diff` write your platform's):
+Two new tables, after the parts above (the demo's `Version20261114120000`); nothing existing changes:
 
 ```sql
-CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_CF_BOARD (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
-CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
-ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_CF_BOARD FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
-ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_CFV_TASK FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
-ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_CFV_FIELD FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
 -- rollback
 DROP TABLE task_board_custom_field_values;
 DROP TABLE task_board_custom_fields;
 ```
 
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_fields_tenant ON task_board_custom_fields (tenant_key);
+CREATE INDEX IDX_E928CA7DE7EC5785 ON task_board_custom_fields (board_id);
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, text_value TEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_field_values_field ON task_board_custom_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_custom_field_values ON task_board_custom_field_values (task_id, field_id);
+CREATE INDEX IDX_E5169D958DB60186 ON task_board_custom_field_values (task_id);
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE NOT DEFERRABLE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+SQLite: the same two `CREATE TABLE` as PostgreSQL with `CLOB` for `text_value` and `options`, and the foreign keys inside
+the `CREATE TABLE` (SQLite cannot add them afterwards); let `doctrine:migrations:diff` write it. A tenant field's
+`tenant_key` is a key column (REQ-SEC-006), with the boards' collation on MySQL / MariaDB.
+
 Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
-a native field instead of always answering 409; a provider's field still answers 409 `FIELD_001`.
+a native field instead of always answering 409; a provider's (synced) field still answers 409 `FIELD_001` (owner
+decision Q-O3 of spec 213 stands for them).
+
+## To 2.17.0
+
+No schema change, no migration, no configuration change.
+
+- **Task revisions (audit PC-L4; replaces [2.16.0 item 11](#ai-flow-features-what-a-host-does)).** The revision is now
+  incremented by the database inside the transaction of the write (`revision = revision + 1`), never written from PHP.
+  Every write that changes a task gets a revision no other write has, whether or not it locked the row, so `If-Match`
+  catches a write by the board UI, a sync, a recurrence or a `PUT` without `If-Match` that happened in between. Clients
+  that rely on FR-018 no longer need `If-Match` on every write to be safe from another writer; they still send it on
+  their own writes to be told when they would overwrite someone else's change (409 `TASK_409`).
+- The value a write produced is read back into the `Task` object at the flush, as before: `getRevision()` after a flush
+  is the saved revision. If your own code changed `revision` with SQL, keep doing it with `revision = revision + 1`;
+  the column is mapped `updatable: false` now, so setting the property through reflection is no longer saved.
+- Isolation: with the defaults (PostgreSQL `READ COMMITTED`, MySQL / MariaDB InnoDB `REPEATABLE READ`) a second
+  writer of the same task waits for the first commit and gets the next number. A PostgreSQL host that runs
+  `REPEATABLE READ` / `SERIALIZABLE` by default gets a serialization error (SQLSTATE `40001`) for the second writer
+  instead. This is not new: 2.16 already updated the task row on every revision, member-only changes included, and
+  that update failed the same way.
+- MariaDB 11.6+ with `innodb_snapshot_isolation=ON`: a writer whose transaction read the task before another writer
+  committed it gets error 1020 ("Record has changed since last read") on its update, the same class of error as
+  PostgreSQL's `40001` above. The flush fails and nothing is saved; retry the request. 2.16 had the same behaviour
+  for the same writes. MariaDB 11.4 (and earlier) defaults the option to OFF.
+- MySQL / MariaDB (audit PG-I2): the increment is `SET revision = LAST_INSERT_ID(revision + 1)`, so after a task
+  write `SELECT LAST_INSERT_ID()` (or `PDO::lastInsertId()`) on that connection returns the revision until the next
+  insert with an auto-increment id. Code that reads the insert id must read it right after its own insert, as the
+  driver documents. Behind ProxySQL, `LAST_INSERT_ID(expr)` disables multiplexing for that client session (ProxySQL
+  keeps it on the same backend connection).
+- A task another request deletes while this one writes it (audit PG-L1): the flush succeeds as in 2.16 (the UPDATE of
+  a missing row changes nothing), the revision is not incremented and the object keeps the one it had, on every
+  database.
+- Column deletion (audit PG-L2): the policy is asked, and the tasks are moved, in the column's order (position, then
+  id). Until 2.16 the order was the board collection's, which MySQL does not define: the first refusal reported and
+  the order of the moved cards in the target column could change from one call to the next.
+
+## To 2.16.0
+
+Additive (Beacon spec 234). With an unchanged configuration every move is allowed as before, `/v2/team` still lists no
+members and no search index is mapped; the Task API answers gain `revision` (and `ETag`) on tasks and `humans_only` on
+statuses. One schema change for every host.
+
+### Schema change for every host: humans-only columns and task revisions
+
+Run `php bin/console doctrine:migrations:diff` and compare it with the statements below (replace the table names if you
+use `table_prefix`); both columns have a default, so existing rows need nothing. Run the migration **before** the
+deploy (audit PC-L4): both columns are mapped, so once the 2.16 code runs every query on tasks and columns selects them
+and fails until they exist:
+
+```sql
+-- MySQL / MariaDB
+ALTER TABLE task_board_columns ADD humans_only TINYINT(1) DEFAULT 0 NOT NULL;
+ALTER TABLE task_board_tasks ADD revision INT DEFAULT 1 NOT NULL;
+-- PostgreSQL / SQLite
+ALTER TABLE task_board_columns ADD humans_only BOOLEAN DEFAULT false NOT NULL;
+ALTER TABLE task_board_tasks ADD revision INT DEFAULT 1 NOT NULL;
+```
+
+The demo ships it as `demo/symfony8/migrations/Version20261113120000.php`.
+
+**Optional, MySQL / MariaDB only (`search.fulltext: true`):** the FULLTEXT indexes of the text search. With the option
+the bundle maps them (so `doctrine:migrations:diff` creates them and never drops them); on other platforms nothing is
+mapped and the search uses `LIKE`:
+
+```sql
+CREATE FULLTEXT INDEX task_board_tasks_text_idx ON task_board_tasks (title, description);
+-- with search.comments: true as well
+CREATE FULLTEXT INDEX task_board_comments_text_idx ON task_board_task_comments (body);
+```
+
+Building a FULLTEXT index on a large table takes time (InnoDB rebuilds it online); create it before turning the option
+on. Words shorter than the server's `innodb_ft_min_token_size` (3 by default; `search.min_token_length`) and words with
+punctuation (`C-12`) are matched with `LIKE` either way.
+
+### AI Flow features: what a host does
+
+1. **Column transition policy.** Set `column_transition_policy` to a service implementing
+   `Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface` (e.g. the bundled
+   `Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy`, or your own that decorates it to add WIP limits
+   or "blocked needs a reason"). The bundled one is strict: `api` and `mcp` may not enter a humans-only column by any
+   operation, checklist ticks included (`humans_only_policy.allow_checklist: true` relaxes that). It is asked for **every** move, the board UI's included (channel `web`); return
+   `ColumnTransitionDecision::refuse('WIP_LIMIT', $translatedMessage)` to refuse: the Task API answers 403 with that
+   `ECODE` and message, the board shows the message. An in-process caller (MCP) builds its `TaskApiPrincipal` with
+   `channel: 'mcp'`; the policy then sees `mcp`. Imports are not asked.
+2. **Humans-only toggle.** Shown in the column dialogs when a policy is set (`board.column_humans_only_field: true|false`
+   forces it). A board configuration copier uses `BoardColumnManager::setHumansOnly()`.
+3. **Revisions.** Nothing to do. A client sends `If-Match: "<revision>"` (or `base_revision`) on `PUT /v2/task/{id}` to
+   get 409 `TASK_409` instead of overwriting a newer write.
+4. **Bulk update.** Listen to `TaskBoardEvents::API_BULK_WRITE` to count `$event->count` writes against a budget; each
+   task also gets its usual `API_WRITE`.
+5. **Members.** Set `api.hooks.members` to a `TaskApiMembersInterface` returning `TaskApiMember` rows (with
+   `serviceAccount: true` for agents). The bundle asks it only for teams your workspace hook lists for the viewer and
+   drops every e-mail but the viewer's own.
+6. **Comment edit.** `PUT /v2/comment/{id}` works out of the box for the comment's author; set
+   `api.hooks.comment_edit_policy` to widen or narrow it.
+7. **Events.** `TASK_STATUS_CHANGED` follows every column change; its `toType` stays null until 2.17.
+
+8. **Column administration and the *humans only* gate (audit PC-M1).** An `api` / `mcp` caller may not lift the gate
+   through the column endpoints: changing a column's `humans_only`, deleting a humans-only column, adding a column
+   while the last one is humans-only (a new column goes last and would become the completion column) or reordering so
+   that a humans-only last column is no longer last answers 403 `STATUS_HUMANS_ONLY` (the same body as a refused
+   `status`). People do it in the board UI; a host's own channel label (e.g. `cli`) is not refused. Deleting a column
+   (UI or API) now asks your policy for every task it moves (operation `column_delete`, all or none); a refusal keeps
+   the column and the board UI shows the policy's message. A policy that only cares about entering a column needs
+   nothing.
+9. **Tag changes (audit PC-L2).** Your policy is now also asked when the tags of a task that stays in its column change:
+   operation `retag` (`ColumnTransitionVia::OP_RETAG`), `from` and `to` the same column, `tags` the new ones. A WIP
+   rule keyed on tags should count the task's new tags there; any other rule allows `retag` (the bundled humans-only
+   rule does). A refusal answers 403 with your code on `POST` / `DELETE /v2/task/{id}/tag/{name}`, `BULK_001` in a bulk
+   update, and the board shows the message on the task form.
+10. **Bulk refusals at write time (audit PC-L1).** A rule that reads the database (counting the tasks already in the
+    column) may refuse an item only after the previous ones were written in the same transaction; the answer is still
+    409 `BULK_001` with that item in `failures`, and nothing is kept.
+11. **Revisions and writers without `If-Match` (audit PC-L4). Fixed in 2.17.0, see [To 2.17.0](#to-2170).** The revision is computed in PHP (`Task::bumpRevision()`)
+    and written as a value. A writer that does not lock the row (the board UI, `PUT /v2/task/{id}` without `If-Match` or
+    `base_revision`, a sync, a recurrence) and loaded the task before a locked write committed may save the same
+    revision number for different content. The window is one request; clients that rely on FR-018 (parallel
+    verifiers) send `If-Match` on **every** write so they always take the row lock.
+12. **Tenant templates (audit PC-L3).** With the default `task_templates.permission`, a host whose
+    `security.access_checker` implements `TenantAwareTaskBoardAccessCheckerInterface` now also decides through its
+    `canListBoards($user, $tenantKey)` who manages a tenant's templates. With the bundled checkers (which ignore the
+    tenant) a `security.manage_roles` holder still manages every tenant's templates: a multi-tenant host that builds
+    its settings screen on `createForTenant($user, $tenantFromRequest)` sets its own `task_templates.permission` or a
+    tenant-aware access checker.
+
+Custom `TaskManagerInterface` implementations need nothing: the new `?ColumnTransitionVia $via` parameters are on
+`TaskManager` only (the interface gains them in 3.0).
+
+**A host that changes nothing** gets no new table, route, service or output either: task templates are opt-in.
+
+### Task templates: what a host does
+
+Beacon spec 234, FR-061.
+
+1. `task_templates.enabled: true`. Optional `task_templates.permission`: a `Template\TaskTemplatePermissionInterface` service (`canManage(user, TaskTemplateScope)`, `canUse(user, TaskBoardSnapshot, TaskTemplateSnapshot)`). Without it, a board's templates are managed with the right to manage the board, a tenant's with `security.manage_roles`, and a template is used with the right to add tasks.
+2. **Schema** (additive, only with the option): one table. Generate it with `doctrine:migrations:diff`, or by hand:
+
+   ```sql
+   -- PostgreSQL
+   CREATE TABLE task_board_task_templates (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, name VARCHAR(120) NOT NULL, body TEXT DEFAULT NULL, default_tags JSON NOT NULL, default_column_id VARCHAR(36) DEFAULT NULL, default_column_name VARCHAR(128) DEFAULT NULL, PRIMARY KEY(id));
+   CREATE INDEX idx_task_board_task_templates_tenant ON task_board_task_templates (tenant_key);
+   CREATE INDEX IDX_DA1B12A8E7EC5785 ON task_board_task_templates (board_id);
+   ALTER TABLE task_board_task_templates ADD CONSTRAINT FK_DA1B12A8E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE;
+   -- MySQL / MariaDB: DATETIME, LONGTEXT and JSON (see demo/symfony8/migrations/Version20261113130000.php); SQLite: DATETIME, CLOB.
+   ```
+
+   `default_column_name` is a tenant template's default column, by exact name (a board template keeps `default_column_id`). Since 2.15.1 the mapping listener gives `tenant_key` the same binary NO PAD collation as the boards' (`utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL), so `doctrine:migrations:diff` writes it into the `CREATE TABLE`; a host that writes the SQL by hand adds `COLLATE` to that column as it did for the boards' `tenant_key` (REQ-SEC-006). The bundle compares every key it reads back byte for byte anyway, so a folding collation never mixes two tenants' templates.
+3. **Settings screen.** Build it on `TaskTemplateManager` (FR-062): it has no page of its own. See [USAGE "Task templates"](USAGE.md#task-templates-since-216).
+4. **API / MCP.** With `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on `POST …/list/{id}/task` ([API](API.md#task-templates-since-216)). In process: `TaskApiTemplateOperations::snapshots()`. A `column_transition_policy` applies to a template's default column as it does to an explicit `status`: with the bundled humans-only rule, a template pointing at such a column is refused for `api` / `mcp` callers.
+5. **Presets.** `TaskTemplateManager::export()` and `replaceAll()` read and write a scope's templates as plain data (`TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`), for a configuration exporter.
+6. **Assets.** The add-task dialog's controller gained the picker's `applyTemplate` action and the `open-on-connect` value: a host that builds its own copy of the bundle's assets rebuilds them; one that overrides `_add_task_modal.html.twig` adds the picker block (`taskTemplatePicker`) to offer templates.
+## To 2.15.1
+
+Patch (REQ-SEC-006, audit F5). Tenant keys, board slugs, import external ids and task-number scopes are now matched
+byte for byte: `acme`, `Acme`, `acmé` and `acme ` are four different tenants. Before 2.15.1 a look-alike tenant's board
+names could show in a tenant's board lists, and `TaskNumberLedger::purgeScope('acme')` also deleted `Acme`'s numbers.
+PostgreSQL and SQLite hosts have nothing to migrate (their columns already compare exactly); MySQL and MariaDB hosts
+change the collation of the key columns.
+
+### Keys the bundle refuses
+
+A tenant key, a column-set scope or a task-number scope with whitespace at an edge (NBSP included), a control or format
+character (newline, ZWSP, BOM, bidi marks), invalid UTF-8 or more than 191 characters is refused with an
+`InvalidArgumentException`: `new TaskBoardTenant()`, `TaskBoard::setTenantKey()`, `new ColumnSet()`,
+`TaskBoardCreatorInterface::create()` and `TaskNumberLedger::purgeScope()`. Lookups with such a key find nothing, and
+the default tenant resolver answers 404 for such a `{tenantSlug}`. A typed board slug that cannot be matched exactly is
+replaced by the slug of the board's name. Rows that already hold such a key stay where they are and are only reached by
+that exact key; the detection queries below list them.
+
+### Schema change on MySQL / MariaDB: key columns compare byte for byte
+
+`doctrine:migrations:diff` (or `doctrine:schema:update --dump-sql`) now shows the key columns with a binary NO PAD
+collation: `utf8mb4_0900_bin` on MySQL 8.0.17+, `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL. Configure
+the **full** server version (`server_version: '8.4.3'`, not `'8.0'` or `'8'`): without the patch number the bundle cannot
+tell 8.0.17+ apart, keeps the PAD SPACE `utf8mb4_bin` and logs a warning when the mapping is loaded.
+
+**1. Before the ALTER, look for look-alike keys.** On a `*_ci` collation (`utf8mb4_unicode_ci`, `utf8mb4_0900_ai_ci`,
+`utf8mb4_general_ci`, ...) these keys are one value today; after the ALTER they are different keys. Group by the column
+under its current collation and count the byte-distinct spellings (do not use `DISTINCT`, `LOWER` or `TRIM` alone:
+they fold too). Replace `task_board` with your `table_prefix` for the boards table:
+
+```sql
+-- Tenants spelled more than one way (Acme / acme / acmé / "acme ").
+SELECT MIN(tenant_key) AS tenant, COUNT(DISTINCT HEX(tenant_key)) AS spellings, GROUP_CONCAT(DISTINCT HEX(tenant_key)) AS hex
+FROM task_board_boards WHERE tenant_key IS NOT NULL GROUP BY tenant_key HAVING COUNT(DISTINCT HEX(tenant_key)) > 1;
+
+-- The same for the other key columns.
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_number_counters GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_task_numbers GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(scope_key), COUNT(DISTINCT HEX(scope_key)) FROM task_board_column_sets WHERE scope_key IS NOT NULL GROUP BY scope_key HAVING COUNT(DISTINCT HEX(scope_key)) > 1;
+SELECT MIN(external_id), COUNT(DISTINCT HEX(external_id)) FROM task_board_task_links WHERE external_id IS NOT NULL GROUP BY import_source, external_id HAVING COUNT(DISTINCT CAST(external_id AS BINARY)) > 1;
+
+-- Keys the bundle now refuses (edge whitespace, control characters, NBSP, zero-width and bidi characters, BOM,
+-- ideographic space): reached only by that exact key. Run it for scope_key of the counters, task numbers and column
+-- sets too.
+SELECT id, HEX(tenant_key) FROM task_board_boards
+WHERE CAST(tenant_key AS BINARY) <> CAST(TRIM(tenant_key) AS BINARY)
+   OR HEX(tenant_key) REGEXP '^(..)*(0[0-9A-F]|1[0-9A-F]|7F|C2[89][0-9A-F]|C2A0|C2AD|E2808[B-F]|E280A[8-F]|E281A[0-9A-F]|EFBBBF|E38080)';
+```
+
+A tenant spelled two ways belongs, after the ALTER, to whichever host tenant has that exact key: rename the rows of the
+spelling no tenant uses (`UPDATE task_board_boards SET tenant_key = 'acme' WHERE CAST(tenant_key AS BINARY) = CAST('Acme' AS BINARY)`)
+before the ALTER if they were meant to be the same tenant. `task_board_number_counters` and `task_board_task_numbers`
+hold the task-number scope (a tenant key, or a board id): fold their rows the same way, keeping the highest
+`last_number`.
+
+**2. Run the ALTER.** It is **required for safety** wherever a unique key or primary key holds a key column: until then
+these keys still fold, and the bundle refuses (or skips) the look-alike's row instead of writing it:
+
+- `task_board_boards` (unique `tenant_key, slug`): the board creator gives a look-alike tenant's board a suffixed slug.
+  This needs the board repository to implement the optional `Repository\BoardSlugTakenInterface` (the bundle's own
+  `DoctrineOrmTaskBoardRepository` does). A host with a custom board repository that does not implement it falls back to
+  the now-exact `findBySlug()` / `findBySlugInTenant()`, which no longer sees the look-alike's row, so creating the
+  board can still fail on the unique key until the ALTER is run.
+- `task_board_number_counters` (primary key `scope_key`) and `task_board_task_numbers` (primary key `scope_key, number`):
+  creating a task in `acme` while `Acme` has a counter is refused (409) instead of sharing `Acme`'s sequence.
+- `task_board_sync_items` (unique `board_id, external_id`): a provider task whose id differs from an **already synced**
+  one only by case, accents or trailing spaces is skipped and reported (`external_id_look_alike`). This covers the
+  look-alike a page meets against the rows already in the table. It does **not** cover two ids that fold against each
+  other **inside the same page** (the page brings `T1` and `t1` together, whether or not one of them is stored): the
+  second write then hits the unique key and the run ends as `status: failed` with `errors: [{code: "internal"}]`, no
+  `external_id_look_alike` warning. Run the ALTER and that case disappears too.
+- `task_board_sync_directories` (unique `provider, scope_key, workspace_id`): a look-alike workspace's people
+  directory is refused (`workspace_look_alike`).
+
+MySQL 8.0.17+ (use `utf8mb4_nopad_bin` on MariaDB):
+
+```sql
+ALTER TABLE task_board_boards
+    MODIFY tenant_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+    MODIFY slug VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_number_counters MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_task_numbers MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_column_sets MODIFY scope_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL;
+ALTER TABLE task_board_task_links
+    MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+    MODIFY import_source VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL;
+-- With the sync tables mapped (sync.enabled):
+ALTER TABLE task_board_sync_items MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+ALTER TABLE task_board_sync_directories
+    MODIFY scope_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+    MODIFY workspace_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+```
+
+The repositories also keep only exact rows in PHP, so a database not yet altered never hands a look-alike's rows to a
+tenant; the ALTER is what lets look-alike tenants live side by side.
+
+### Sync actor resolver: the framework-free twin is autowirable
+
+The default `ConnectionCreatorActorResolver` now implements `Sync\Hook\SyncActorProviderInterface` as well as the
+deprecated `SyncActorResolverInterface`, and is registered as a public alias under `SyncActorProviderInterface`. A host
+service that called the default resolver (e.g. a queued sync handler) moves to the twin without copying its logic:
+
+```php
+public function __construct(private SyncActorProviderInterface $actors) {}
+
+// $board: a ValueObject\TaskBoardSnapshot (the twins' board value object; only its id is read here)
+$actor = $this->actors->actorFor($board, $actorId);
+```
+
+The answer is the same as through the deprecated interface (named actor, else the user who linked the board; disabled
+or refused users never act).
+
+Which service the alias points at follows `sync.actor_resolver`: the configured service when its class implements
+`SyncActorProviderInterface`, the bundle's default resolver otherwise (no `sync.actor_resolver`, a service implementing
+only the deprecated interface, or a service whose class is built by a factory and so is not known before compilation).
+So a host that configured a stricter resolver autowires its own, never the laxer default. The bundle itself keeps
+asking the service `sync.actor_resolver` names, as before. Set the alias yourself if you need another service:
+
+```yaml
+services:
+    Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface: '@app.sync.actor_resolver'
+```
 
 ## To 2.15.0
 

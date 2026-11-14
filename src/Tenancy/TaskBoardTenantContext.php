@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tenancy;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -70,11 +72,30 @@ final readonly class TaskBoardTenantContext
         }
 
         $slug   = $request->attributes->get('tenantSlug');
-        $tenant = is_string($slug) && $slug !== '' ? $this->resolver->resolve($slug, $user) : null;
+        $tenant = is_string($slug) ? $this->resolveExactly($slug, $user) : null;
         // @igor-ignore - Request attribute: request-scoped memo, not worker state.
         $request->attributes->set(self::ATTRIBUTE, $tenant ?? false);
 
         return $tenant;
+    }
+
+    /**
+     * Since 2.15.1 (REQ-SEC-006, audit OM TB-L4): a slug that cannot be matched exactly names no tenant, a resolver that
+     * refuses (a tenant whose key the bundle refuses) answers none instead of an error, and a tenant whose slug is not
+     * exactly the one asked (a resolver that folds `Acme` to `acme`) is not this request's: all answer 404.
+     */
+    private function resolveExactly(string $slug, object $user): ?TaskBoardTenant
+    {
+        if (!ExactKey::isUsable($slug)) {
+            return null;
+        }
+        try {
+            $tenant = $this->resolver->resolve($slug, $user);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        return $tenant instanceof TaskBoardTenant && $tenant->slug === $slug ? $tenant : null;
     }
 
     /**
@@ -102,7 +123,7 @@ final readonly class TaskBoardTenantContext
      */
     public function tenantOfKey(string $key, object $user): ?TaskBoardTenant
     {
-        if (!$this->enabled || $key === '') {
+        if (!$this->enabled || !ExactKey::isUsable($key)) {
             return null;
         }
         $tenant = $this->resolver->resolve($key, $user);

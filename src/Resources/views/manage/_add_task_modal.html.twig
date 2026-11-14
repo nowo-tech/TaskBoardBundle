@@ -4,6 +4,14 @@
     rule v2) Cancel and Add task sit in the footer, outside the scrolling form (form="nowo-task-board-add-task-form").
 #}
 {% set _body %}
+    {# Since 2.16.0 (FR-061): the Template picker, a GET form of its own (before the task form, never inside it). #}
+    {% if taskTemplatePicker|default(null) %}
+        {{ form_start(taskTemplatePicker, {attr: {class: 'nowo-task-dialog__body nowo-task-template-picker', 'data-testid': 'nowo-task-template-form'}}) }}
+            <div class="nowo-task-field">{{ form_row(taskTemplatePicker.taskTemplate) }}</div>
+            {{ form_rest(taskTemplatePicker) }}
+            <noscript><button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.template.apply'|trans({}, 'NowoTaskBoardBundle') }}</button></noscript>
+        {{ form_end(taskTemplatePicker) }}
+    {% endif %}
     {{ form_start(taskForm, {
         action: path(nowo_task_board_route('task_create'), {boardId: board.id}|merge(addTaskQuery|default({}))),
         method: 'POST',

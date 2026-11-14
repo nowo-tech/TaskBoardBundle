@@ -431,7 +431,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * totals read; the cells come from `_list_row_cells.html.twig`.
      *
      * @param iterable<Task> $tasks
-     * @param list<TaskCustomField> $customFields since 2.17.0 (FR-028): a column per field, after the tags
+     * @param list<TaskCustomField> $customFields since 2.18.0 (FR-028): a column per field, after the tags
      */
     public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = []): Table
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Folder;
 
+use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -22,13 +23,14 @@ use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
+use RuntimeException;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 use function array_map;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-032 / FR-033 / FR-034): column types, dependencies across the boards of a folder and
+ * Since 2.18.0 (Beacon spec 234, FR-032 / FR-033 / FR-034): column types, dependencies across the boards of a folder and
  * shared status sets.
  */
 final class ColumnTypesAndStatusSetsTest extends CopyTestCase
@@ -36,7 +38,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
     }
@@ -48,7 +50,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         self::assertSame(['open', 'custom', 'closed'], array_map(static fn (BoardColumn $c): string => ColumnTypes::of($c, $columns)->value, $columns));
         self::assertSame('Done', ColumnTypes::doneColumn($board)?->getName());
         $single = $this->board('One', ['Only']);
-        self::assertTrue(ColumnTypes::isDone(ColumnTypes::ordered($single)[0]), 'a single untyped column completes, as before 2.17.0');
+        self::assertTrue(ColumnTypes::isDone(ColumnTypes::ordered($single)[0]), 'a single untyped column completes, as before 2.18.0');
     }
 
     public function testTwoClosedColumnsCompleteTheirTasksAndAThirdIsRefused(): void
@@ -237,25 +239,25 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         $board   = $this->board('One', ['Todo', 'Done'], tenantKey: 'acme');
         $service->moveBoardToFolder($this->owner, $board->getId(), $folder->id);
         $this->em->getEventManager()->addEventListener('onFlush', new class {
-            public function onFlush(): void
+            public function onFlush(): never
             {
-                throw new \RuntimeException('database down');
+                throw new RuntimeException('database down');
             }
         });
         try {
             $this->statusSets()->setStatusSet($this->owner, $folder->id, [new BoardColumnSpec('Todo', ColumnType::Open), new BoardColumnSpec('Done', ColumnType::Closed)]);
             self::fail('expected the failure');
-        } catch (\RuntimeException $failure) {
+        } catch (RuntimeException $failure) {
             self::assertSame('database down', $failure->getMessage());
         }
-        $em = static::getContainer()->get('doctrine')->getManager();
-        self::assertInstanceOf(\Doctrine\ORM\EntityManagerInterface::class, $em);
+        $em = self::getContainer()->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
         self::assertTrue($em->isOpen(), 'closed, then reset');
     }
 
     private function signIn(object $user): void
     {
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($user, 'main', $user->getRoles()));
     }
@@ -274,7 +276,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
 
     private function restructurer(): TaskBoardRestructureInterface
     {
-        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        $service = self::getContainer()->get(TaskBoardRestructureInterface::class);
         self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
 
         return $service;
@@ -282,7 +284,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
 
     private function statusSets(): FolderStatusSets
     {
-        $service = static::getContainer()->get(FolderStatusSets::class);
+        $service = self::getContainer()->get(FolderStatusSets::class);
         self::assertInstanceOf(FolderStatusSets::class, $service);
 
         return $service;
@@ -290,7 +292,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
 
     private function columnManager(): BoardColumnManager
     {
-        $service = static::getContainer()->get(BoardColumnManager::class);
+        $service = self::getContainer()->get(BoardColumnManager::class);
         self::assertInstanceOf(BoardColumnManager::class, $service);
 
         return $service;
@@ -298,7 +300,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
 
     private function taskManager(): TaskManager
     {
-        $service = static::getContainer()->get(TaskManager::class);
+        $service = self::getContainer()->get(TaskManager::class);
         self::assertInstanceOf(TaskManager::class, $service);
 
         return $service;
@@ -306,7 +308,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
 
     private function dependencies(): TaskDependencyManager
     {
-        $service = static::getContainer()->get(TaskDependencyManager::class);
+        $service = self::getContainer()->get(TaskDependencyManager::class);
         self::assertInstanceOf(TaskDependencyManager::class, $service);
 
         return $service;

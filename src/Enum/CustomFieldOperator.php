@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Enum;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): the operators of a custom field filter, in the Task API's (ClickUp's) spelling.
+ * Since 2.18.0 (Beacon spec 234, FR-028): the operators of a custom field filter, in the Task API's (ClickUp's) spelling.
  * `<` and `>` are for number fields; `IS NOT NULL` is "is set", `ANY` is "in".
  */
 enum CustomFieldOperator: string

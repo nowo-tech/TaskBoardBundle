@@ -14,7 +14,7 @@ use function mb_strlen;
 use function trim;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-033 / FR-034): one column of a board configuration or of a folder's shared status set,
+ * Since 2.18.0 (Beacon spec 234, FR-033 / FR-034): one column of a board configuration or of a folder's shared status set,
  * as data: name, colour, icon and type. Framework-free and serialisable ({@see self::toArray()} / {@see self::fromArray()}).
  */
 final readonly class BoardColumnSpec

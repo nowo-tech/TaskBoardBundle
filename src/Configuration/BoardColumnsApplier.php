@@ -25,7 +25,7 @@ use function in_array;
 use function max;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-034 and block W): makes a board's columns exactly a list of {@see BoardColumnSpec}, in
+ * Since 2.18.0 (Beacon spec 234, FR-034 and block W): makes a board's columns exactly a list of {@see BoardColumnSpec}, in
  * memory, never orphaning a task. The caller flushes inside its own transaction.
  *
  * Each current column is matched to a spec by the column map (its id, then its name => a spec name), else by name
@@ -131,6 +131,7 @@ final readonly class BoardColumnsApplier
         $columns = [];
         foreach ($specs as $index => $spec) {
             $column = $kept[$index] ?? new BoardColumn($board, $spec->name, $index);
+            // @igor-ignore - A BoardColumn entity of the board being written (instance-scoped), not a shared service.
             $column->setName($spec->name)->setPosition($index)->setColor($spec->color)->setIcon(ColumnIcon::normalize($spec->icon))->setType($spec->type);
             if (!isset($kept[$index])) {
                 $board->addColumn($column);

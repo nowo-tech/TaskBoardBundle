@@ -169,7 +169,7 @@ final class TaskFormType extends AbstractType
             ]);
         }
 
-        // Since 2.17.0 (Beacon spec 234, FR-028): one row per native custom field (`custom_fields`, from TaskCustomFieldForm),
+        // Since 2.18.0 (Beacon spec 234, FR-028): one row per native custom field (`custom_fields`, from TaskCustomFieldForm),
         // unmapped; TaskCustomFieldForm::save() writes them through TaskCustomFieldManager::setField().
         foreach ($options['custom_fields'] as $definition) {
             $common = ['label' => $definition['name'], 'translation_domain' => false, 'mapped' => false, 'required' => false, 'data' => $definition['value']];
@@ -193,7 +193,7 @@ final class TaskFormType extends AbstractType
             'rich_description'   => class_exists(TiptapEditorType::class),
             'tag_input'          => class_exists(TagType::class),
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
-            // Since 2.17.0: the board's native custom fields (TaskCustomFieldForm::options()).
+            // Since 2.18.0: the board's native custom fields (TaskCustomFieldForm::options()).
             'custom_fields' => [],
         ]);
         $resolver->setAllowedTypes('custom_fields', 'array');

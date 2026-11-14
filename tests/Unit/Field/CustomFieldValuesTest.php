@@ -50,14 +50,14 @@ final class CustomFieldValuesTest extends TestCase
         self::assertSame(2, $field->setPosition(2)->getPosition());
 
         foreach ([
-            static fn () => new TaskCustomField('X', CustomFieldType::Text, 'other', $board),
-            static fn () => new TaskCustomField(' ', CustomFieldType::Text),
-            static fn () => (new TaskCustomField('T', CustomFieldType::Text))->setOptions([['name' => 'a']]),
-            static fn () => $field->setOptions([['name' => 'a'], ['name' => 'a']]),
-            static fn () => $field->setOptions([['name' => 'a', 'color' => 'red']]),
-            static fn () => $field->setOptions([['color' => '#fff']]),
-            static fn () => $field->setOptions(array_fill(0, TaskCustomField::OPTIONS_MAX + 1, ['name' => 'x'])),
-            static fn () => $field->setName(str_repeat('x', TaskCustomField::NAME_MAX + 1)),
+            static fn (): TaskCustomField => new TaskCustomField('X', CustomFieldType::Text, 'other', $board),
+            static fn (): TaskCustomField => new TaskCustomField(' ', CustomFieldType::Text),
+            static fn (): TaskCustomField => (new TaskCustomField('T', CustomFieldType::Text))->setOptions([['name' => 'a']]),
+            static fn (): TaskCustomField => $field->setOptions([['name' => 'a'], ['name' => 'a']]),
+            static fn (): TaskCustomField => $field->setOptions([['name' => 'a', 'color' => 'red']]),
+            static fn (): TaskCustomField => $field->setOptions([['color' => '#fff']]),
+            static fn (): TaskCustomField => $field->setOptions(array_fill(0, TaskCustomField::OPTIONS_MAX + 1, ['name' => 'x'])),
+            static fn (): TaskCustomField => $field->setName(str_repeat('x', TaskCustomField::NAME_MAX + 1)),
         ] as $index => $invalid) {
             try {
                 $invalid();

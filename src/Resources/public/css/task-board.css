@@ -46,6 +46,20 @@
     white-space: nowrap;
 }
 
+/* Since 2.16.0 (spec 234, FR-016): the humans-only tag of a column header. */
+.nowo-task-column__humans-only {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--nowo-task-border, var(--nowo-ui-border));
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.35rem;
+    white-space: nowrap;
+    color: var(--nowo-task-muted, var(--nowo-ui-muted));
+}
+
 .nowo-task-board__column-count {
     display: inline-flex;
     align-items: center;

@@ -16,11 +16,11 @@ use function count;
 use function usort;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-033): the type of a board's columns, and the columns that make a task done.
+ * Since 2.18.0 (Beacon spec 234, FR-033): the type of a board's columns, and the columns that make a task done.
  *
- * - A board none of whose columns carries a type (every board before 2.17.0) keeps its meaning by position: the first
+ * - A board none of whose columns carries a type (every board before 2.18.0) keeps its meaning by position: the first
  *   column is `open`, the last `closed` (its tasks are done; a single column is `closed`), the rest `custom` — what the
- *   2.17.0 migration writes.
+ *   2.18.0 migration writes.
  * - Once one column carries a type, every column without one is `custom`. Setting a type through
  *   {@see BoardColumnManager} writes the position types of the others first
  *   ({@see self::materialize()}), so a board is never half typed by accident.
@@ -70,7 +70,7 @@ final class ColumnTypes
     }
 
     /**
-     * Whether a task in this column is done. A board of one untyped column: its only column (the last), as before 2.17.0.
+     * Whether a task in this column is done. A board of one untyped column: its only column (the last), as before 2.18.0.
      *
      * @param list<BoardColumn>|null $columns
      */

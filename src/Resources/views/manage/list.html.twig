@@ -61,7 +61,7 @@
             {% endfor %}
         {{ form_end(filterForm) }}
 
-        {# Since 2.17.0 (Beacon spec 234, FR-028): the custom field filter (field, operator, value), sent as GET. #}
+        {# Since 2.18.0 (Beacon spec 234, FR-028): the custom field filter (field, operator, value), sent as GET. #}
         {% if customFieldFilter|default(null) is not null %}
             {{ form_start(customFieldFilter, {attr: {class: 'nowo-ui-filter-bar nowo-task-list__custom-filter', 'data-testid': 'nowo-task-custom-field-filter'}}) }}
                 {{ form_widget(customFieldFilter) }}

@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
@@ -78,17 +79,21 @@ final readonly class TaskTimeEntrySnapshotPurger
         $label = Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         // Since 2.15.0 (audit OC-M2, user_reference: id): the rows of exactly this id (refused when it cannot be matched
         // exactly), selected first and updated by primary key; a relation (the default) is matched as 2.14 did.
-        [$where, $match] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
-            ? ['e.id IN (:match)', TaskBoardUsers::exactRowIds($this->entityManager, TaskTimeEntry::class, 'user', TaskBoardUsers::exactId($user))]
-            : ['e.user = :match', $user];
-        if ($match === []) {
+        // Since 2.15.1 (audit OC Low): the primary keys go 500 per statement, far below PostgreSQL's 65,535 parameters.
+        [$where, $batches] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+            ? ['e.id IN (:match)', array_chunk(TaskBoardUsers::exactRowIds($this->entityManager, TaskTimeEntry::class, 'user', TaskBoardUsers::exactId($user)), ExactKey::CHUNK)]
+            : ['e.user = :match', [$user]];
+        $count = 0;
+        foreach ($batches as $match) {
+            // Rows written before 1.27 have no name yet: they get the current one first.
+            $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE ' . $where . ' AND e.userName IS NULL')
+                ->setParameter('label', $label)->setParameter('match', $match)->execute();
+            $count += (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE ' . $where)
+                ->setParameter('match', $match)->execute();
+        }
+        if ($batches === []) {
             return 0;
         }
-        // Rows written before 1.27 have no name yet: they get the current one first.
-        $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.userName = :label WHERE ' . $where . ' AND e.userName IS NULL')
-            ->setParameter('label', $label)->setParameter('match', $match)->execute();
-        $count = (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.user = NULL' . ($forgetName ? ', e.userName = NULL' : '') . ' WHERE ' . $where)
-            ->setParameter('match', $match)->execute();
         // The bulk updates bypass the identity map: loaded entries follow.
         foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[TaskTimeEntry::class] ?? [] as $entry) {
             if ($entry instanceof TaskTimeEntry && SyncUser::same($entry->getUser(), $user)) {

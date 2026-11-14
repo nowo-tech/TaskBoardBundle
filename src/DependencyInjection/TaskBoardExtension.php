@@ -6,23 +6,30 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
+use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiAttachments;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiPlanGate;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
+use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiMembers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
 use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -44,6 +51,7 @@ use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
+use Nowo\TaskBoardBundle\Doctrine\TaskRevisionListener;
 use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
@@ -84,6 +92,7 @@ use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDependencyRepositoryInterface;
+use Nowo\TaskBoardBundle\Repository\TaskDependentsLookupInterface;
 use Nowo\TaskBoardBundle\Repository\TaskDocumentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskLinkRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskMemberRepositoryInterface;
@@ -93,6 +102,9 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Routing\TenantPaths;
 use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
+use Nowo\TaskBoardBundle\Search\DoctrineTaskTextSearch;
+use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
+use Nowo\TaskBoardBundle\Search\TaskTextSearchMetadataListener;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\ConfigurableTaskBoardAccessChecker;
 use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
@@ -115,6 +127,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
 use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
@@ -132,8 +145,14 @@ use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
+use Nowo\TaskBoardBundle\Template\DefaultTaskTemplatePermission;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
+use Nowo\TaskBoardBundle\Template\TaskTemplatePermissionInterface;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
+use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -249,6 +268,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             'icon_form_type'    => $config['board']['column_icon_form_type'],
             'icon_form_options' => $config['board']['column_icon_form_options'],
             'icon_known_ids'    => $this->columnIconIds($config['board']),
+            // Since 2.16.0 (spec 234): the humans-only toggle; by default only with a column transition policy.
+            'humans_only_field' => $config['board']['column_humans_only_field'] ?? (is_string($config['column_transition_policy']) && $config['column_transition_policy'] !== ''),
         ]);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
@@ -291,6 +312,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTimeTrackIntegration($container, $loader);
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
+        $this->registerTextSearch($container, $config['search'], $emName);
+        $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
+        // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
+        $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         // Since 1.24: the host's default board view per user, else the board view.
@@ -301,6 +326,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTaskNumbersAndCalendar($container, $loader, $config, $emName);
         $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerRecurrence($container, $loader, $config, $emName);
+        $this->registerTaskTemplates($container, $loader, $config, $emName);
         $this->registerMultiBoard($container, $loader, $config, $emName);
         // Since 2.3.0 (spec 216): the host's label of a history row's cause.
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
@@ -397,6 +423,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias(TaskApiPlanGateInterface::class, $this->serviceOr($api['hooks']['plan_gate'], DenyingTaskApiPlanGate::class));
         $container->setAlias(TaskApiWorkspaceInterface::class, $this->serviceOr($api['hooks']['workspace'], EmptyTaskApiWorkspace::class));
         $container->setAlias(TaskApiUsersInterface::class, $this->serviceOr($api['hooks']['users'], EmptyTaskApiUsers::class));
+        // Since 2.16.0 (spec 234, FR-025).
+        $container->setAlias(TaskApiMembersInterface::class, $this->serviceOr($api['hooks']['members'], EmptyTaskApiMembers::class));
+        $container->setAlias(TaskApiCommentEditPolicyInterface::class, $this->serviceOr($api['hooks']['comment_edit_policy'], AuthorOnlyTaskApiCommentEditPolicy::class));
         $container->setAlias(TaskApiTimeEntriesInterface::class, $this->serviceOr($api['hooks']['time_entries'], DenyingTaskApiTimeEntries::class));
         $container->setAlias(TaskApiAttachmentsInterface::class, $this->serviceOr($api['hooks']['attachments'], DenyingTaskApiAttachments::class));
         if (is_string($api['hooks']['idempotency_store']) && $api['hooks']['idempotency_store'] !== '') {
@@ -411,6 +440,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$apiPrefix', $api['prefix']);
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(TaskApiTransaction::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
     }
 
     /**
@@ -463,6 +493,32 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.*`. With `enabled: false` nothing is registered: no route,
+     * service, mapping or output change.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerTaskTemplates(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $templates = $config['task_templates'];
+        $container->setParameter('nowo_task_board.task_templates.enabled', (bool) $templates['enabled']);
+        if (!$templates['enabled']) {
+            return;
+        }
+        $loader->load('services_templates.yaml');
+        $container->setAlias(TaskTemplatePermissionInterface::class, $this->serviceOr($templates['permission'], DefaultTaskTemplatePermission::class));
+        $container->getDefinition(TaskTemplateManager::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$templatesEnabled', true);
+        $container->getDefinition(TaskBoardManageController::class)->setArgument('$taskTemplates', new Reference(TaskTemplateManager::class));
+        if ($config['api']['enabled']) {
+            // The API's template list and the in-process (MCP) operations; `template_id` is read by TaskApiTaskOperations.
+            $container->register(TaskApiTemplateOperations::class, TaskApiTemplateOperations::class)->setAutowired(true)->setPublic(true);
+            $container->register(TaskApiTemplateController::class, TaskApiTemplateController::class)->setAutowired(true)->setPublic(true)
+                ->addTag('controller.service_arguments');
+        }
+    }
+
+    /**
      * Since 2.3.0 (spec 217): `move.*`. The copier, the planner and the mover are services either way (a host or a worker may
      * call them); with `enabled: false` there is no route and no panel action, so nothing changes for a host.
      *
@@ -495,7 +551,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$entityManager', $manager)
             ->setArgument('$syncEnabled', $sync);
         $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
-        // Since 2.17.0 (Beacon spec 234): the restructure policy port.
+        // Since 2.18.0 (Beacon spec 234): the restructure policy port.
         $container->setAlias(TaskBoardRestructurePolicyInterface::class, $this->serviceOr($config['restructure']['policy'] ?? null, ManageRightRestructurePolicy::class));
     }
 
@@ -538,7 +594,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
         $container->getDefinition(TaskNumberLedger::class)->setArgument('$entityManager', $manager);
         $container->getDefinition(TaskNumberBackfiller::class)->setArgument('$entityManager', $manager);
-        foreach (['onFlush', 'postPersist', 'postUpdate'] as $event) {
+        // Since 2.15.1 (audit OM TB-L2): prePersist refuses a look-alike scope's counter before the task is scheduled.
+        foreach (['prePersist', 'onFlush', 'postPersist', 'postUpdate'] as $event) {
             $container->getDefinition(TaskNumberListener::class)->addTag('doctrine.event_listener', ['event' => $event, 'entity_manager' => $emName]);
         }
     }
@@ -655,6 +712,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias('nowo_task_board.sync.api_client', is_string($client) && $client !== '' ? $client : 'nowo_task_board.sync.http_client');
         $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
         $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
+        // Since 2.15.1 (Beacon request): the resolver under its framework-free twin, so a host (e.g. a queued sync
+        // handler) autowires it without the deprecated interface. Since 2.15.1 (audit OM TB-I1) this alias follows
+        // `sync.actor_resolver` when that service implements the twin ({@see TaskBoardPortsPass}): a host that
+        // configured a stricter resolver autowires its own, never the bundle's default. It stays on the default below
+        // whenever the configured service is not a twin (it is asked through the deprecated interface instead).
+        $container->setParameter('nowo_task_board.sync.actor_resolver', $this->serviceOr($sync['actor_resolver'], ''));
+        $container->setAlias(SyncActorProviderInterface::class, ConnectionCreatorActorResolver::class)->setPublic(true);
         // Since 1.24: the host's account checks for the default actor resolver (disabled / erased users never act).
         if (is_string($sync['actor_checker']) && $sync['actor_checker'] !== '') {
             $container->getDefinition(ConnectionCreatorActorResolver::class)->setArgument('$userChecker', new Reference($sync['actor_checker']));
@@ -772,6 +836,28 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$inner', new Reference(TenantPathUrlGenerator::class . '.inner'))
             ->setArgument('$tenantPaths', new Reference(TenantPaths::class))
             ->setArgument('$requestStack', new Reference('request_stack')));
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-026): {@see TaskTextSearchInterface} is `search.provider` or {@see DoctrineTaskTextSearch}
+     * on the bundle's manager; with `search.fulltext` the FULLTEXT indexes are mapped on MySQL.
+     *
+     * @param array{provider: string|null, fulltext: bool, comments: bool, min_token_length: int, max_matches: int} $search
+     */
+    private function registerTextSearch(ContainerBuilder $container, array $search, string $emName): void
+    {
+        $container->setParameter('nowo_task_board.search.max_matches', $search['max_matches']);
+        $container->setDefinition(DoctrineTaskTextSearch::class, (new Definition(DoctrineTaskTextSearch::class))
+            ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+            ->setArgument('$fulltext', $search['fulltext'])
+            ->setArgument('$comments', $search['comments'])
+            ->setArgument('$minTokenLength', $search['min_token_length']));
+        $container->setAlias(TaskTextSearchInterface::class, $this->serviceOr($search['provider'], DoctrineTaskTextSearch::class));
+        if ($search['fulltext']) {
+            $container->setDefinition(TaskTextSearchMetadataListener::class, (new Definition(TaskTextSearchMetadataListener::class))
+                ->setArgument('$comments', $search['comments'])
+                ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
+        }
     }
 
     /**
@@ -1032,6 +1118,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ]);
         }
 
+        // Since 2.16.0 (Beacon spec 234, FR-061): the template table, only with task_templates.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_templates')) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardTemplate' => $this->xmlMapping($container) ? $this->xmlMappingOf('template', 'Nowo\\TaskBoardBundle\\Template\\Entity') : [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Template/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Template\\Entity',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
         // Since 2.1.0 (spec 214): the counter and the ledger are mapped only with task_numbers.enabled.
         if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_numbers')) {
             $container->prependExtensionConfig('doctrine', [
@@ -1194,6 +1296,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             DoctrineOrmTaskCommentRepository::class,
         ];
 
+        // Since 2.16.0 (spec 234): the reverse lookup of blocked_by.
+        $container->setAlias(TaskDependentsLookupInterface::class, DoctrineOrmTaskDependencyRepository::class);
         foreach ($repos as $interface => $implementation) {
             $definition = (new Definition($implementation))
                 ->setAutowired(false)
@@ -1243,7 +1347,17 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$teamMembersTableName', $prefix . '_team_members')
             ->setArgument('$userClass', $userClass)
             ->setArgument('$userReference', $userReference)
+            // Since 2.15.1 (REQ-SEC-006 item 8): the server_version fallback warning.
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
+        // Since 2.16.0 (spec 234, FR-018): the task revision of the Task API's optimistic lock, on every manager.
+        $container->setDefinition(TaskRevisionListener::class, (new Definition(TaskRevisionListener::class))
+            ->setAutowired(false)
+            ->addTag('doctrine.event_listener', ['event' => 'onFlush'])
+            // Since 2.17.0 (audit PC-L4): the database adds the 1, inside the flush's transaction.
+            ->addTag('doctrine.event_listener', ['event' => 'postUpdate'])
+            ->addTag('doctrine.event_listener', ['event' => 'postPersist'])
+            ->addTag('doctrine.event_listener', ['event' => 'postRemove']));
     }
 
     /** @param array<string, mixed> $security */

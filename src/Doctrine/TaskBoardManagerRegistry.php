@@ -24,7 +24,7 @@ use function substr;
 final readonly class TaskBoardManagerRegistry implements ManagerRegistry
 {
     /** The namespaces of the bundle's entities. */
-    public const ENTITY_PATTERN = '/^Nowo\\\\TaskBoardBundle\\\\(?:(?:Sync|Recurrence|Number|Api)\\\\)?Entity\\\\/';
+    public const ENTITY_PATTERN = '/^Nowo\\\\TaskBoardBundle\\\\(?:(?:Sync|Recurrence|Number|Api|Template)\\\\)?Entity\\\\/';
 
     /**
      * @param ManagerRegistry $registry The application's Doctrine registry
@@ -122,7 +122,7 @@ final readonly class TaskBoardManagerRegistry implements ManagerRegistry
 
     /**
      * Whether a class (or a Doctrine proxy class of it, `…\__CG__\…`) is a TaskBoard entity: any class of the bundle's
-     * namespace (`Entity`, `Sync\Entity`, `Recurrence\Entity`, `Number\Entity`, `Api\Entity`).
+     * namespace (`Entity`, `Sync\Entity`, `Recurrence\Entity`, `Number\Entity`, `Api\Entity`, `Template\Entity`).
      */
     public static function isBundleEntity(string $class): bool
     {

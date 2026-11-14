@@ -13,6 +13,7 @@ use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardFolderManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Support\BoardIcon;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -57,7 +58,7 @@ class TaskBoard
     private ?string $descriptionFormat = null;
 
     /**
-     * Since 2.17.0 (Beacon spec 234, FR-031): the folder the board is in, of the same tenant; null: a folderless board.
+     * Since 2.18.0 (Beacon spec 234, FR-031): the folder the board is in, of the same tenant; null: a folderless board.
      * Deleting a folder needs it empty ({@see TaskBoardFolderManager}); SET NULL is a safety net only.
      */
     #[ORM\ManyToOne(targetEntity: TaskBoardFolder::class)]
@@ -236,28 +237,34 @@ class TaskBoard
         return $this->tenantKey;
     }
 
+    /**
+     * Since 2.15.1 (REQ-SEC-006 item 1): a key that cannot be matched exactly (edge whitespace, control or format
+     * characters, invalid UTF-8, more than 191 characters) is refused, never trimmed.
+     *
+     * @throws InvalidArgumentException
+     */
     public function setTenantKey(?string $tenantKey): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->tenantKey = $tenantKey;
+        $this->tenantKey = ExactKey::assertUsable($tenantKey, 'tenant key');
 
         return $this;
     }
 
-    /** Since 2.17.0 (FR-031): null for a folderless board. */
+    /** Since 2.18.0 (FR-031): null for a folderless board. */
     public function getFolder(): ?TaskBoardFolder
     {
         return $this->folder;
     }
 
-    /** Since 2.17.0 (FR-031): the folder's id, null for a folderless board. */
+    /** Since 2.18.0 (FR-031): the folder's id, null for a folderless board. */
     public function getFolderId(): ?string
     {
         return $this->folder?->getId();
     }
 
     /**
-     * Since 2.17.0 (FR-031): puts the board in a folder of its own tenant, or out of any (null).
+     * Since 2.18.0 (FR-031): puts the board in a folder of its own tenant, or out of any (null).
      *
      * @internal through {@see TaskBoardFolderManager::moveBoard()}, which checks the tenant and the right
      *

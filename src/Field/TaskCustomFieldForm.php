@@ -17,7 +17,7 @@ use function is_string;
 use function str_replace;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): the task form's custom field rows — the `custom_fields` option of
+ * Since 2.18.0 (Beacon spec 234, FR-028): the task form's custom field rows — the `custom_fields` option of
  * `TaskFormType` for a task (its board's fields and its values) and the save of what was posted. Stateless.
  *
  * @internal used by the bundle's task pages
@@ -79,6 +79,7 @@ final readonly class TaskCustomFieldForm
                 continue;
             }
             try {
+                // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
                 $this->fields->setField($task, $row['id'], is_string($posted) ? $posted : null, $actor);
             } catch (TaskCustomFieldRefusedException) {
                 $refused[] = $row['name'];
