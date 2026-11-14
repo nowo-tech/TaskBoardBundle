@@ -136,6 +136,42 @@ final class ApiHumansOnlyGateTest extends ApiTestCase
         self::assertSame('To do', $this->em->find(Task::class, $second->getId())?->getColumn()?->getName());
     }
 
+    /**
+     * Audit PG-L2 (2.17.0): a column deletion asks the policy and moves the tasks in the column's order (position, then
+     * id), not in the order the board's collection happens to load them: the first refusal reported and the order of the
+     * moved cards are the same on every database.
+     */
+    public function testAColumnDeletionAsksAndMovesTheTasksInTheColumnsOrder(): void
+    {
+        // Created in the reverse of their order in the column.
+        $third  = $this->task($this->roadmap, 'Third', 1, position: 2);
+        $second = $this->task($this->roadmap, 'Second', 1, position: 1);
+        $first  = $this->task($this->roadmap, 'First', 1, position: 0);
+        $this->task($this->roadmap, 'Already there', 0, position: 0);
+        $this->em->clear();
+        RecordingTransitionPolicy::$decider = static fn (ColumnTransition $transition): ?ColumnTransitionDecision => $transition->task?->title !== 'First'
+            ? ColumnTransitionDecision::refuse('WIP_LIMIT', $transition->task?->title . ' refused')
+            : null;
+
+        $this->send('DELETE', $this->statusPath('Doing'));
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame(['err' => 'Second refused', 'ECODE' => 'WIP_LIMIT'], $this->json());
+        self::assertSame(['First', 'Second'], array_map(static fn (ColumnTransition $transition): ?string => $transition->task?->title, RecordingTransitionPolicy::$asked));
+
+        RecordingTransitionPolicy::reset();
+        $this->send('DELETE', $this->statusPath('Doing'));
+        self::assertResponseIsSuccessful();
+        self::assertSame(['First', 'Second', 'Third'], array_map(static fn (ColumnTransition $transition): ?string => $transition->task?->title, RecordingTransitionPolicy::$asked));
+        $this->em->clear();
+        $positions = [];
+        foreach ([$first, $second, $third] as $task) {
+            $moved = $this->em->find(Task::class, $task->getId());
+            self::assertSame('To do', $moved?->getColumn()?->getName());
+            $positions[$moved->getTitle()] = $moved->getPosition();
+        }
+        self::assertSame(['First' => 1, 'Second' => 2, 'Third' => 3], $positions);
+    }
+
     /** A machine may not delete a flagged column: it lifts the gate as clearing the flag would. */
     public function testAMachineCannotDeleteAHumansOnlyColumn(): void
     {
