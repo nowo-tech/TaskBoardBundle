@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
@@ -447,8 +448,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * totals read; the cells come from `_list_row_cells.html.twig`.
      *
      * @param iterable<Task> $tasks
+     * @param list<TaskCustomField> $customFields since 2.19.0 (FR-028): a column per field, after the tags
      */
-    public function listTable(iterable $tasks, ?string $panelTargetPath = null): Table
+    public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = []): Table
     {
         $search = $this->syncSearchTexts($tasks);
         $label  = static fn (string $key): Label => TaskBoardPages::label($key);
@@ -463,6 +465,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
                 new Column('due', $label('task_board.form.task.due')),
                 new Column('priority', $label('task_board.form.task.priority')),
                 new Column('tags', $label('task_board.form.task.tags')),
+                ...array_map(static fn (TaskCustomField $field): Column => new Column('cf_' . $field->getId(), $field->getName()), $customFields),
                 new Column('estimate', $label('task_board.time.estimate'), class: $time),
                 new Column('spent', $label('task_board.time.spent'), class: $time),
                 new Column('deviation', $label('task_board.time.deviation'), class: $time),

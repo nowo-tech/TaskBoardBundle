@@ -17,6 +17,9 @@ final readonly class TaskBoardMoveResult
      * @param array<string, string> $columns moved task id => the target column id it landed in ('' for none)
      * @param list<string> $removedDependencyIds dependencies the target cannot keep (another board outside its folder)
      * @param list<string> $removedMemberIds members not assignable on the target
+     * @param array<string, list<string>> $droppedFieldValues since 2.19.0 (audit PW-L6): moved task id => the names of its
+     *                                                        old board's fields whose values it lost (no field of that name
+     *                                                        and type on the target); the others went to the target's field
      * @param array<string, string|null> $formerParents moved task id => its parent's id before the move, null when top-level (`parent:<id>` in the history)
      */
     public function __construct(
@@ -27,6 +30,7 @@ final readonly class TaskBoardMoveResult
         public array $removedDependencyIds,
         public array $removedMemberIds,
         public array $formerParents = [],
+        public array $droppedFieldValues = [],
     ) {
     }
 }

@@ -8,6 +8,7 @@
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
+  - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -294,6 +295,59 @@ types of its other columns. **Behaviour to know:** a board with types no longer 
 *Done* goes to its first `done`/`closed` column, and a task in any `done` or `closed` column is completed. A
 `column_transition_policy` reads the type in `BoardColumnSnapshot::$type` (and `TaskStatusChangedEvent::$toType`);
 `$last` stays "the last column by position".
+
+### Schema change for every host: native custom fields
+
+Two new tables, after the parts above (the demo's `Version20261115120000`); nothing existing changes:
+
+```sql
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- As for the folders: the tables take the database's default charset and collation, which must be those of
+-- task_board_boards and task_board_tasks for the foreign keys (audit PW-L4).
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id));
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id));
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_fields_tenant ON task_board_custom_fields (tenant_key);
+CREATE INDEX IDX_E928CA7DE7EC5785 ON task_board_custom_fields (board_id);
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, text_value TEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_field_values_field ON task_board_custom_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_custom_field_values ON task_board_custom_field_values (task_id, field_id);
+CREATE INDEX IDX_E5169D958DB60186 ON task_board_custom_field_values (task_id);
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE NOT DEFERRABLE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+SQLite: the same two `CREATE TABLE` as PostgreSQL with `CLOB` for `text_value` and `options`, and the foreign keys inside
+the `CREATE TABLE` (SQLite cannot add them afterwards); let `doctrine:migrations:diff` write it. A tenant field's
+`tenant_key` is a key column (REQ-SEC-006), with the boards' collation on MySQL / MariaDB.
+
+A number is a `DECIMAL(30, 10)`; its integer part is at most PHP_INT_MAX (`9223372036854775807`), so the Task API
+answers exactly the integer written (a larger one is refused, audit PW-L1). SQLite keeps a `DECIMAL` as a floating-point
+value: about 15 significant digits there.
+
+A task moved to another board (`moveTasks()`, the board UI's *Move*) takes its old board's field values to the new
+board's field of the same name and type, or loses them with a `custom_field` history row (audit PW-L6).
+
+`Field\TaskCustomFieldManager` takes and returns bundle entities (`TaskBoard`, `Task`, `TaskCustomField`): a DDD host
+calls it from its infrastructure layer (audit PW-L7, no id-based twin in 2.19.0).
+
+Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
+a native field instead of always answering 409; a provider's (synced) field still answers 409 `FIELD_001` (owner
+decision Q-O3 of spec 213 stands for them).
 
 ## To 2.18.0
 

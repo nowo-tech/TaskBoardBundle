@@ -49,6 +49,8 @@ use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldForm;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldListView;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
@@ -258,6 +260,9 @@ final class TaskBoardManageController extends AbstractController
         private readonly bool $skipNonWorkingDays = false,
         // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
         private readonly string $userReference = 'entity',
+        // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields on the task form and the list view.
+        private readonly ?TaskCustomFieldForm $customFieldForm = null,
+        private readonly ?TaskCustomFieldListView $customFieldList = null,
         // Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.enabled` (null when off).
         private readonly ?TaskTemplateManager $taskTemplates = null,
         // Since 2.18.0 (Beacon spec 234): the host's member badges, asked once for the task page.
@@ -864,6 +869,12 @@ final class TaskBoardManageController extends AbstractController
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         // Completed tasks (last column) stay visible so the column filter can show "Done" work.
         [$tasks, $taskWindow] = $this->boardTasks($board);
+        // Since 2.19.0 (FR-028): a column per custom field, and the operator filter of the query string.
+        $request = $this->currentRequest();
+        $custom  = $this->customFieldList instanceof TaskCustomFieldListView && $request instanceof Request
+            ? $this->customFieldList->prepare($request, $board, $tasks)
+            : ['tasks' => $tasks, 'customFields' => [], 'customValues' => [], 'customFieldFilter' => null];
+        $tasks = $custom['tasks'];
 
         $priorities = [];
         $columns    = [];
@@ -906,6 +917,10 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.23: the archived tasks of the board (most recent first) and their Restore form.
             'archivedTasks' => $archived,
             'restoreForms'  => $restoreForms,
+            // Since 2.19.0 (FR-028).
+            'customFields'      => $custom['customFields'],
+            'customValues'      => $custom['customValues'],
+            'customFieldFilter' => $custom['customFieldFilter'],
         ]);
     }
 
@@ -1188,6 +1203,10 @@ final class TaskBoardManageController extends AbstractController
             $this->keepTheColumnUnlessChanged($taskForm, $request, $data, $task);
             try {
                 $this->taskManager->update($task, $data, $user);
+                // Since 2.19.0 (FR-028): the custom field rows, each through TaskCustomFieldManager::setField().
+                foreach ($this->customFieldForm?->save($taskForm, $task, $user) ?? [] as $refusedField) {
+                    $this->addFlash('warning', $this->translator->trans('task_board.custom_field.refused', ['%field%' => $refusedField], 'NowoTaskBoardBundle'));
+                }
                 $this->logWrite('task_update', ['task_id' => $taskId]);
                 $this->addFlash('success', 'task_board.flash.task_updated');
             } catch (ColumnTransitionRefusedException $refused) {
@@ -2048,6 +2067,8 @@ final class TaskBoardManageController extends AbstractController
         ), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
             'shown_column'   => true,
+            // Since 2.19.0 (FR-028): a row per custom field of the board.
+            'custom_fields' => $this->customFieldForm?->options($task->getBoard(), $task) ?? [],
         ]);
     }
 

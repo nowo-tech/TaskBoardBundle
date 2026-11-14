@@ -156,8 +156,21 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
   tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
   applier; a spec carries the column's 2.16 *humans only* flag too (`humansOnly`, false when an older array has none).
+- **Native custom fields (FR-028).** `Entity\TaskCustomField` (text, number, dropdown with coloured options; per tenant or
+  per board) and `TaskCustomFieldValue` (one per task and field). `Field\TaskCustomFieldManager`: `define()`,
+  `update()`, `delete()` (under the restructure policy), `setField()` (history row `custom_field`), `valuesOf()` and the
+  operator filters (`=`, `≠`, `<`, `>`, is set, is not set, in). Task API: `GET /v2/list/{id}/field` lists the native
+  fields first, `POST /v2/task/{id}/field/{field_id}` writes a native field (a provider's keeps 409 `FIELD_001`), task
+  lists take `custom_fields`, and a task's `custom_fields` carries the native values. UI: a row per field on the task
+  form and a column per field plus an operator filter on the list view. `valuesOf()` gives each task's values in the
+  fields' order (the order of `fieldsFor()`) on every database; a tenant field's `tenant_key` is a key column
+  (REQ-SEC-006: binary NO PAD collation on MySQL / MariaDB). Audit PW: a number whose integer part is above PHP_INT_MAX
+  is refused (`invalid`) instead of being answered saturated by the Task API (PW-L1); a task moved to another board takes
+  its old board's field values to the target's field of the same name and type, or loses them with a history row
+  (`TaskBoardMoveResult::$droppedFieldValues`), and `hasValues()` of a board's field counts only tasks still on it (PW-L6).
 - A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
-- Demo: migrations `Version20261115100000` (folders) and `Version20261115110000` (column types, status sets).
+- Demo: migrations `Version20261115100000` (folders), `Version20261115110000` (column types, status sets) and
+  `Version20261115120000` (custom fields).
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`

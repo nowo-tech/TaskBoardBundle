@@ -9,13 +9,17 @@ use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
+use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -53,6 +57,8 @@ final readonly class TaskApiQueryRepository
         private bool $syncEnabled = false,
         // Since 2.15.0 (database.user_reference).
         private ?TaskBoardUsers $users = null,
+        // Since 2.19.0 (FR-028): the custom field filters.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -63,15 +69,26 @@ final readonly class TaskApiQueryRepository
      * @param list<object> $assignees users the `assignees[]` filter names
      * @param object|null $owner My tasks: only the tasks it created or is assigned
      * @param list<string>|null $onlyIds since 2.16.0: only these tasks (the text search's matches); null: no such filter
+     * @param array<string, TaskCustomField> $fields since 2.19.0: the native fields `custom_fields` may name, by id
+     *
+     * @throws TaskApiRefusal
      *
      * @return array{tasks: list<Task>, lastPage: bool}
      */
-    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner, ?array $onlyIds = null): array
+    public function taskPage(array $boardIds, TaskApiTaskFilter $filter, array $assignees, ?object $owner, ?array $onlyIds = null, array $fields = []): array
     {
         if ($boardIds === [] || ($filter->assigneeIds !== [] && $assignees === []) || $onlyIds === []) {
             return ['tasks' => [], 'lastPage' => true];
         }
         $qb = $this->filtered($boardIds, $filter, $assignees, $owner);
+        // Since 2.19.0 (FR-028): `custom_fields`, on the native fields of these boards.
+        if ($filter->customFields !== []) {
+            try {
+                ($this->customFields ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND))->filter($qb, 't', $filter->customFields, $fields);
+            } catch (TaskCustomFieldRefusedException) {
+                throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid custom_fields');
+            }
+        }
         // Since 2.16.0 (spec 234, FR-026): the text search's matches, among the boards and every other filter.
         if ($onlyIds !== null) {
             // @igor-ignore - QueryBuilder created per call by filtered(); not shared.

@@ -285,6 +285,7 @@ paths:
         - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'custom_fields', in: query, description: 'Since 2.19.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
         - {name: 'due_date_gt', in: query, schema: {type: string}}
         - {name: 'due_date_lt', in: query, schema: {type: string}}
         - {name: 'date_created_gt', in: query, schema: {type: string}}
@@ -683,10 +684,11 @@ paths:
       - {name: field_id, in: path, required: true, schema: {type: string}}
     post:
       operationId: field_set
-      summary: 'Always 409 FIELD_001: custom fields are read-only'
+      summary: 'Since 2.19.0: sets a native custom field (`value`: text, number, or a dropdown option id or name; null clears it); a provider''s field is 409 FIELD_001'
       description: 'Least level: Tasks. The person''s access and where still apply.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {type: object, properties: {value: {type: [string, number, 'null']}}}}}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Empty'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -844,6 +846,7 @@ paths:
         - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
+        - {name: 'custom_fields', in: query, description: 'Since 2.19.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
         - {name: 'due_date_gt', in: query, schema: {type: string}}
         - {name: 'due_date_lt', in: query, schema: {type: string}}
         - {name: 'date_created_gt', in: query, schema: {type: string}}
@@ -1105,7 +1108,7 @@ components:
       properties: {tags: {type: array, items: {type: object, properties: {name: {type: string}}}}}
     Fields:
       type: object
-      properties: {fields: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, type: {type: string}, type_config: {type: object}}}}}
+      properties: {fields: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, type: {type: string, description: 'Since 2.19.0 native fields: short_text, number or drop_down (type_config.options with id, name, color, orderindex)'}, type_config: {type: object}, scope: {enum: [space, list], description: 'Since 2.19.0, native fields only'}, writable: {type: boolean, description: 'Since 2.19.0: true for native fields'}}}}}
     TimeEntry:
       type: object
       properties: {id: {type: string}, task: {type: [object, 'null']}, wid: {type: string}, user: {type: object, properties: {id: {type: string}}}, billable: {type: boolean, description: 'Since 2.12.0 the entry''s flag (false when not set)'}, start: {type: string}, end: {type: string}, duration: {type: string}, description: {type: string}}

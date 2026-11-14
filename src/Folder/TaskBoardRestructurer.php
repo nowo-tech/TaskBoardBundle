@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Port\Snapshots;
@@ -81,6 +82,8 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
         // Since 2.19.0: without a `$via`, the channel of the host's write provenance (2.18.0), else `web`.
         private ?WriteProvenanceProviderInterface $provenance = null,
+        // Since 2.19.0 (audit PW-L6): the values of the old board's own custom fields follow a moved task.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -206,6 +209,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $members   = [];
         $events    = [];
         $parents   = [];
+        $dropped   = [];
         foreach ($roots as $root) {
             $tree = TaskMovePlanner::subtree($root);
             // Before the root becomes top-level: each task's parent as it was (the host archives the old story).
@@ -244,6 +248,11 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
                 $positions[$key] = ($positions[$key] ?? 0) + 1;
                 if ($from->getId() !== $target->getId()) {
                     $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $from->getName(), $target->getName(), $parents[$node->getId()] === null ? null : 'parent:' . $parents[$node->getId()]);
+                    // Audit PW-L6: the old board's field values follow the task, or are dropped with a history row.
+                    $lost = $this->customFields?->followBoardMove($node, $from, $actor) ?? [];
+                    if ($lost !== []) {
+                        $dropped[$node->getId()] = $lost;
+                    }
                 }
                 $moved[]                 = $node->getId();
                 $columns[$node->getId()] = $key;
@@ -262,7 +271,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
             $this->events->dispatchSaved(new TaskBoardChangedEvent($root, $actor, $sourceId, $target->getId(), $ids), TaskBoardEvents::TASK_BOARD_CHANGED);
         }
 
-        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents);
+        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents, $dropped);
     }
 
     /**

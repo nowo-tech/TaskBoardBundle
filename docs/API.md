@@ -107,7 +107,7 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 | `GET /v2/task/{id}/comment` | My tasks (its own) | 25 per page, newest first; `start` and `start_id` of the oldest one shown give the next page |
 | `GET /v2/task/{id}/member` | Read | Everyone attached to the task |
 | `GET /v2/space/{id}/tag` | Read | Tags of the open tasks the token reaches |
-| `GET /v2/list/{id}/field` | Read | Custom fields a provider sync imported; none otherwise |
+| `GET /v2/list/{id}/field` | Read | Since 2.19.0 the board's native fields first (its tenant's, then its own: `short_text`, `number`, `drop_down` with coloured options, `writable: true`), then the fields a provider sync imported (read-only) |
 | `GET /v2/team/{team_id}/time_entries` | My tasks | The host's time store answers; `start_date`, `end_date`, `assignee`, `task_id` |
 
 A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignored on reads. Each list answers in the same number of queries whatever the page holds (8 for a list's tasks, measured at 25 and 100 tasks), the tag filter included.
@@ -142,7 +142,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
 | `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`. Mentions work as in the UI's comment box: each candidate written `@Label` in the text is mentioned, so `TASK_COMMENT`, `TASK_MENTION` and the host's notifications follow |
 | `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | The task form's rules: a name of 1 to 64 characters, at most 20 tags. `PUT /v2/task/{id}` does not take `tags` (a warning) |
-| `POST /v2/task/{id}/field/{field_id}` | Tasks | Always 409 `FIELD_001`: custom fields are a provider's, read-only |
+| `POST /v2/task/{id}/field/{field_id}` | Tasks | Since 2.19.0 a native field of the task's board: `{"value": …}` (text; number; dropdown option id or name; `null` clears), 400 `INPUT_002` when it does not fit. Any other field (a provider's) stays 409 `FIELD_001` |
 | `POST /v2/task/{id}/dependency`, `DELETE` with `?depends_on=` or `?dependency_of=` | Tasks | Within a board (`LINK_002`); no cycle or duplicate (`LINK_001`) |
 | `POST`, `DELETE /v2/task/{id}/link/{links_to}` | Tasks | A `Related` relation |
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
@@ -278,7 +278,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `TASK_002` | 409 | Deleting a task that follows a provider |
 | `TASK_003` | 409 | Since 2.15.1: the task cannot be numbered — its scope's counter belongs to a look-alike scope (`scope_key` still folding, see [UPGRADING](UPGRADING.md#to-2151)). Since 2.16.0 the answer adds `task_id` (the task that could not be numbered; for a create, the id it would have had) and `scope` (the scope **the caller's own board asks for**, never the look-alike key stored for someone else). It stays a **request-level** refusal, never an entry of a bulk update's `failures`: the write is all or none, so nothing may read as "the other items landed" |
 | `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
-| `FIELD_001` | 409 | Setting a custom field |
+| `FIELD_001` | 409 | Setting a provider's custom field (native fields are writable since 2.19.0) |
 | `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
 | `TIME_001` | 403 | No time store; the host's store may answer its own `TIME_*` |
 | `TIME_002` | 403 | Deleting a time entry |

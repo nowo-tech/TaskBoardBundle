@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -157,9 +158,13 @@ final readonly class TaskApiReadController
 
     public function fields(Request $request, string $listId): JsonResponse
     {
-        $fields = $this->operations->boardFields(TaskApiRequestListener::principalOf($request), $listId);
+        // Since 2.19.0 (FR-028): the native fields first (writable), then the synced ones (read-only).
+        $fields = $this->operations->allBoardFields(TaskApiRequestListener::principalOf($request), $listId);
 
-        return new JsonResponse(['fields' => array_map(fn (TaskSyncField $field): array => $this->serializer->field($field), $fields)]);
+        return new JsonResponse(['fields' => [
+            ...array_map(fn (TaskCustomField $field): array => $this->serializer->nativeField($field), $fields['native']),
+            ...array_map(fn (TaskSyncField $field): array => $this->serializer->field($field), $fields['synced']),
+        ]]);
     }
 
     /**
