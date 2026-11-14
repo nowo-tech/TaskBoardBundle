@@ -654,6 +654,8 @@ task_board.history.former_user: "Voormalig persoon"
 task_board.flash.task_reopen_refused: "De taak is niet verplaatst: heropenen zou de limiet van actieve taken overschrijden."
 task_board.flash.task_move_refused: "De taak is niet verplaatst: deze kolom accepteert haar niet vanaf hier."
 task_board.flash.column_delete_refused: "De kolom is niet verwijderd: er staan voltooide taken in, en die heropenen zou de limiet van actieve taken overschrijden."
+# Since 2.19.0 (audit PW-H1).
+task_board.flash.column_shared_refused: "De kolommen zijn niet gewijzigd: de map van dit bord deelt zijn statussen met borden die je niet mag beheren."
 task_board.flash.column_icon_invalid: "De kolom is niet opgeslagen: het pictogram moet één emoji of een van de aangeboden pictogrammen zijn."
 task_board.form.board.icon: "Pictogram"
 task_board.form.board.icon_help: "Eén emoji, optioneel."

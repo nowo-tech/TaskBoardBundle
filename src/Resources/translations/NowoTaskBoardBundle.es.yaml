@@ -654,6 +654,8 @@ task_board.history.former_user: "Antigua persona"
 task_board.flash.task_reopen_refused: "La tarea no se ha movido: reabrirla superaría el límite de tareas activas."
 task_board.flash.task_move_refused: "La tarea no se ha movido: esta columna no la acepta desde aquí."
 task_board.flash.column_delete_refused: "La columna no se ha eliminado: tiene tareas completadas y reabrirlas superaría el límite de tareas activas."
+# Since 2.19.0 (audit PW-H1).
+task_board.flash.column_shared_refused: "Las columnas no se han cambiado: la carpeta de este tablero comparte sus estados con tableros que no puedes gestionar."
 task_board.flash.column_icon_invalid: "La columna no se ha guardado: su icono debe ser un emoji o uno de los iconos ofrecidos."
 task_board.form.board.icon: "Icono"
 task_board.form.board.icon_help: "Un emoji, opcional."

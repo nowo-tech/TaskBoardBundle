@@ -263,11 +263,14 @@ final readonly class TaskDependencyManager
      */
     private function scopeTasks(Task $task, Task $other): array
     {
-        $board = $task->getBoard();
-        if ($board->getId() === $other->getBoard()->getId()) {
+        $board  = $task->getBoard();
+        $folder = $board->getFolder();
+        $inside = $folder instanceof TaskBoardFolder && $this->folders instanceof TaskBoardFolderManager;
+        // Audit PW-L3: a same-board pair of a board in a folder may close a cycle through another board of the folder, so
+        // the whole folder is read then too.
+        if ($board->getId() === $other->getBoard()->getId() && !$inside) {
             return $this->taskRepository->findByBoard($board, true);
         }
-        $folder = $board->getFolder();
         $boards = $folder instanceof TaskBoardFolder && $this->folders instanceof TaskBoardFolderManager ? $this->folders->boardsIn($folder, true) : [$board, $other->getBoard()];
         $tasks  = [];
         foreach ($boards as $member) {

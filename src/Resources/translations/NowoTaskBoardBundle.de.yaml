@@ -654,6 +654,8 @@ task_board.history.former_user: "Ehemalige Person"
 task_board.flash.task_reopen_refused: "Die Aufgabe wurde nicht verschoben: Ihre Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
 task_board.flash.task_move_refused: "Die Aufgabe wurde nicht verschoben: Diese Spalte nimmt sie von hier nicht an."
 task_board.flash.column_delete_refused: "Die Spalte wurde nicht gelöscht: Sie enthält erledigte Aufgaben, und deren Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
+# Since 2.19.0 (audit PW-H1).
+task_board.flash.column_shared_refused: "Die Spalten wurden nicht geändert: Der Ordner dieses Boards teilt seine Status mit Boards, die du nicht verwalten darfst."
 task_board.flash.column_icon_invalid: "Die Spalte wurde nicht gespeichert: Ihr Symbol muss ein Emoji oder eines der angebotenen Symbole sein."
 task_board.form.board.icon: "Symbol"
 task_board.form.board.icon_help: "Ein Emoji, optional."

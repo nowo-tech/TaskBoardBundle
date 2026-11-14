@@ -40,8 +40,9 @@ final class RestructureTransitionPolicyTest extends CopyTestCase
 
     public function testARefusedTaskMovesNothing(): void
     {
-        $source = $this->board('Pilot', ['To do', 'Blocked'], tenantKey: 'acme');
-        $target = $this->board('Story', ['To do', 'Blocked'], tenantKey: 'acme');
+        // Blocked is an open column (not the last): an open task may land in it (audit PW-M1).
+        $source = $this->board('Pilot', ['To do', 'Blocked', 'Done'], tenantKey: 'acme');
+        $target = $this->board('Story', ['To do', 'Blocked', 'Done'], tenantKey: 'acme');
         $free   = $this->task($source, 'Free');
         $parent = $this->task($source, 'Parent');
         $this->task($source, 'Stuck', 1, $parent);
@@ -58,7 +59,7 @@ final class RestructureTransitionPolicyTest extends CopyTestCase
         self::assertSame($target->getId(), $asked[0]->board->id);
         self::assertSame(['To do', 'To do', 'Blocked'], array_map(static fn (ColumnTransition $transition): string => $transition->to->name, $asked), 'the subtask enters its column of the same name');
         self::assertSame('Blocked', $asked[2]->from?->name);
-        self::assertTrue($asked[2]->to->last);
+        self::assertFalse($asked[2]->to->last);
         $this->clear();
         self::assertSame($source->getId(), $this->reload($free)->getBoard()->getId(), 'nothing moved');
         self::assertTrue($this->em->isOpen());

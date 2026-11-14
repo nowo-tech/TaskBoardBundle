@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -214,6 +215,9 @@ final readonly class TaskApiBoardOperations
         } catch (ColumnTransitionRefusedException $refused) {
             // Audit PC-M1: a task the deletion would move is refused; nothing changed.
             throw TaskApiRefusal::transitionRefused($refused);
+        } catch (TaskBoardRestructureRefusedException) {
+            // Audit PW-H1: the board's folder shares its statuses with boards the caller may not restructure.
+            throw TaskApiRefusal::permissionRefused();
         }
         $this->audit->written($principal, 'column.delete', $board, null, ['column' => $columnId]);
 
@@ -244,7 +248,12 @@ final readonly class TaskApiBoardOperations
         if ($this->machine($principal) && !ColumnTypes::typed(ColumnTypes::ordered($board)) && $last?->isHumansOnly() === true && $order[count($order) - 1] !== $last->getId()) {
             throw TaskApiRefusal::humansOnly();
         }
-        $this->columns->reorder($board, $order, $principal->user);
+        try {
+            $this->columns->reorder($board, $order, $principal->user);
+        } catch (TaskBoardRestructureRefusedException) {
+            // Audit PW-H1: the board's folder shares its statuses with boards the caller may not restructure.
+            throw TaskApiRefusal::permissionRefused();
+        }
         $this->audit->written($principal, 'column.reorder', $board, null);
 
         return $board;
@@ -377,6 +386,9 @@ final readonly class TaskApiBoardOperations
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid type: a board has at most ' . ColumnType::MAX_CLOSED . ' closed columns');
         } catch (TaskReopenRefusedException) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        } catch (TaskBoardRestructureRefusedException) {
+            // Audit PW-H1: the board's folder shares its statuses with boards the caller may not restructure.
+            throw TaskApiRefusal::permissionRefused();
         }
     }
 }

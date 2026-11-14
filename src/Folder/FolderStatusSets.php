@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\TaskColumnFollow;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -73,14 +74,43 @@ final readonly class FolderStatusSets
             }
         }
         // @igor-ignore - The closure runs at once inside transactional() and is never stored.
-        $this->folders->transactional(function () use ($folder, $boards, $specs, $columnMaps): void {
+        $this->folders->transactional(function () use ($folder, $boards, $specs, $columnMaps, $actor): void {
             $folder->setStatusSet($specs);
             if ($specs !== null) {
                 foreach ($boards as $board) {
-                    $this->folders->applyColumns($board, $specs, $columnMaps[$board->getId()] ?? []);
+                    $this->folders->applyColumns($board, $specs, $columnMaps[$board->getId()] ?? [], $actor);
                 }
             }
         });
+    }
+
+    /**
+     * Since 2.19.0 (audit PW-H1): a column edit on a board whose folder shares its statuses changes every board of the
+     * folder, so it needs what {@see self::setStatusSet()} needs: the folder right and the restructure right on every
+     * board in the folder. Refuses `not_allowed` (`folder`: its id) otherwise; nothing to ask on any other board.
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    public function assertMayChangeColumns(object $actor, TaskBoard $board): void
+    {
+        $folder = $board->getFolder();
+        if ($folder instanceof TaskBoardFolder && $folder->getStatusSet() !== null && !$this->mayChangeSharedColumns($actor, $folder)) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED, ['folder' => $folder->getId()]);
+        }
+    }
+
+    private function mayChangeSharedColumns(object $actor, TaskBoardFolder $folder): bool
+    {
+        if (!$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
+            return false;
+        }
+        foreach ($this->folders->boardsIn($folder, true) as $board) {
+            if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($board))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -102,16 +132,25 @@ final readonly class FolderStatusSets
     /**
      * After a column edit saved on `$boardId`: when the board's folder shares its statuses, the set becomes the board's
      * columns and is applied to the other boards (`$renames`: old name => new name, so their tasks follow). Its own
-     * transaction; a refusal is logged and changes nothing. No right is asked: the edit itself was allowed.
+     * transaction; a refusal is logged and changes nothing. Since 2.19.0 (audit PW-H1), with an actor, nothing is carried
+     * unless it has the folder right and the restructure right on every board of the folder (logged otherwise); the tasks
+     * the change moves or completes get their history rows and events ({@see TaskColumnFollow}).
      *
      * @param array<string, string> $renames old name => new name
      * @param array<string, string> $deleted deleted column name => the id of the column its tasks went to on `$boardId`
      */
-    public function propagateFrom(string $boardId, array $renames = [], array $deleted = []): void
+    public function propagateFrom(string $boardId, array $renames = [], array $deleted = [], ?object $actor = null): void
     {
         $board  = $this->boards->findById($boardId);
         $folder = $board?->getFolder();
         if (!$board instanceof TaskBoard || !$folder instanceof TaskBoardFolder || $folder->getStatusSet() === null) {
+            return;
+        }
+        // Audit PW-H1: never rewrite a board the actor may not restructure. BoardColumnManager refuses such an edit before
+        // it is saved; this is the second line, for a caller that edits columns another way.
+        if ($actor !== null && !$this->mayChangeSharedColumns($actor, $folder)) {
+            $this->logger->warning('TaskBoard: a column edit was not carried to the other boards of the folder', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'folder_id' => $folder->getId(), 'reason' => TaskBoardRestructureRefusedException::NOT_ALLOWED]);
+
             return;
         }
         $specs = BoardColumnsApplier::specsOf($board);
@@ -129,11 +168,11 @@ final readonly class FolderStatusSets
                 }
             }
             // @igor-ignore - The closure runs at once inside transactional() and is never stored.
-            $this->folders->transactional(function () use ($folder, $board, $specs, $renames): void {
+            $this->folders->transactional(function () use ($folder, $board, $specs, $renames, $actor): void {
                 $folder->setStatusSet($specs);
                 foreach ($this->folders->boardsIn($folder, true) as $sibling) {
                     if ($sibling->getId() !== $board->getId()) {
-                        $this->folders->applyColumns($sibling, $specs, $renames);
+                        $this->folders->applyColumns($sibling, $specs, $renames, $actor);
                     }
                 }
             });

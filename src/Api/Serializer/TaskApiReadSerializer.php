@@ -511,7 +511,9 @@ final class TaskApiReadSerializer
     {
         $trimmed = str_contains($decimal, '.') ? rtrim(rtrim($decimal, '0'), '.') : $decimal;
 
-        return str_contains($trimmed, '.') ? (float) $trimmed : (int) $trimmed;
+        // Audit PW-L1: an integer is answered as one only when it fits (the manager refuses larger ones; an older row is
+        // answered as a float rather than saturated).
+        return str_contains($trimmed, '.') || (float) $trimmed !== (float) (int) $trimmed ? (float) $trimmed : (int) $trimmed;
     }
 
     /**
