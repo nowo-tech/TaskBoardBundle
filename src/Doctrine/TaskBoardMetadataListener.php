@@ -86,7 +86,8 @@ final readonly class TaskBoardMetadataListener
         };
 
         $userFieldsByClass = [
-            Task::class              => ['creator'],
+            // Since 2.19.0 (Beacon spec 234): `updatedBy`, the last writer, on tasks and comments.
+            Task::class              => ['creator', 'updatedBy'],
             TaskBoard::class         => ['creator'],
             TeamMember::class        => ['user'],
             TaskMember::class        => ['user'],
@@ -94,7 +95,7 @@ final readonly class TaskBoardMetadataListener
             TaskDocument::class      => ['creator'],
             TaskTimeEntry::class     => ['user'],
             ColumnSet::class         => ['createdBy'],
-            TaskComment::class       => ['author'],
+            TaskComment::class       => ['author', 'updatedBy'],
             // Since 1.23 (sync tables, mapped with sync.enabled).
             TaskBoardConnection::class => ['createdBy'],
             TaskSyncRun::class         => ['actor'],

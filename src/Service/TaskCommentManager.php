@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCommentDeletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskCommentEvent;
 use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -40,6 +41,8 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.10.0 (spec 216, FR-014): the cause of the comments added inside TaskChangeContext::run().
         private ?TaskChangeContext $changeContext = null,
+        // Since 2.19.0 (Beacon spec 234): the host's provenance of the comments added and edited.
+        private ?WriteProvenanceProviderInterface $provenance = null,
     ) {
     }
 
@@ -53,7 +56,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
         $body                   = $this->normalize($body);
         [$mentions, $mentioned] = $this->resolveMentions($task, $body, $mentionIds);
 
-        $comment = new TaskComment($task, $author, $body, $mentions, cause: $this->changeContext?->current());
+        $comment = new TaskComment($task, $author, $body, $mentions, cause: $this->changeContext?->current(), provenance: $this->provenance?->current());
         $this->comments->save($comment);
         $this->dispatch(new TaskCommentEvent($author, $comment, TaskCommentEvent::CREATED), TaskBoardEvents::TASK_COMMENT);
         $this->dispatchMentions($author, $comment, $mentioned, []);
@@ -72,7 +75,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
         $before                 = $comment->getMentionedIds();
         [$mentions, $mentioned] = $this->resolveMentions($comment->getTask(), $body, $mentionIds);
 
-        $comment->edit($body, $mentions);
+        $comment->edit($body, $mentions, $editor, $this->provenance?->current());
         $this->comments->save($comment);
         $this->dispatch(new TaskCommentEvent($editor, $comment, TaskCommentEvent::EDITED), TaskBoardEvents::TASK_COMMENT);
         $this->dispatchMentions($editor, $comment, $mentioned, $before);

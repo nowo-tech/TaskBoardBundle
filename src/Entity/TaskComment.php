@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Entity;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -45,6 +47,22 @@ class TaskComment
     private ?string $authorName;
 
     /**
+     * Since 2.19.0 (Beacon spec 234): who wrote or last edited the comment (null for rows written before 2.19, or once
+     * the account was erased). With {@see self::$channel} and {@see self::$actorLabel} it is that write's provenance.
+     */
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'updated_by_id', nullable: true, onDelete: 'SET NULL')]
+    private ?object $updatedBy;
+
+    /** Since 2.19.0 (Beacon spec 234): where the comment's last write came from; null: the host did not say. */
+    #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
+    private ?WriteChannel $channel;
+
+    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
+    #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
+    private ?string $actorLabel;
+
+    /**
      * @param list<array{id: string, label: string}> $mentions
      */
     public function __construct(
@@ -64,10 +82,15 @@ class TaskComment
         // Since 2.10.0 (spec 216, FR-014): why it was written, e.g. "rule:42" (TaskChangeContext); null for a person's own.
         #[ORM\Column(name: 'cause', type: 'string', length: 191, nullable: true)]
         private ?string $cause = null,
+        // Since 2.19.0 (Beacon spec 234): the write's provenance (null: the columns stay NULL).
+        ?WriteProvenance $provenance = null,
     ) {
         $this->id         = Uuid::generate()->toString();
         $this->createdAt  = $createdAt ?? new DateTimeImmutable();
         $this->authorName = $author === null ? null : Text::cut(UserLabel::of($author), Task::USER_NAME_MAX);
+        $this->updatedBy  = $author;
+        $this->channel    = $provenance?->channel;
+        $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
     }
 
     /**
@@ -101,6 +124,42 @@ class TaskComment
         }
 
         return $this;
+    }
+
+    /**
+     * Since 2.19.0: the account of the comment's last writer is being erased — the comment stops pointing at it; with
+     * `$forgetName` the actor label goes too.
+     *
+     * @internal used by the account erasure helper
+     */
+    public function detachUpdatedBy(bool $forgetName = false): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedBy = null;
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->actorLabel = null;
+        }
+
+        return $this;
+    }
+
+    /** Since 2.19.0 (Beacon spec 234): who wrote or last edited the comment; null before 2.19 or once the account was erased. */
+    public function getUpdatedBy(): ?object
+    {
+        return $this->updatedBy;
+    }
+
+    /** Since 2.19.0 (Beacon spec 234): where the comment's last write came from. */
+    public function getChannel(): ?WriteChannel
+    {
+        return $this->channel;
+    }
+
+    /** Since 2.19.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */
+    public function getActorLabel(): ?string
+    {
+        return $this->actorLabel;
     }
 
     public function getId(): string
@@ -184,9 +243,19 @@ class TaskComment
 
     /**
      * @param list<array{id: string, label: string}> $mentions
+     * @param object|null $editor since 2.19.0: who edits it (stored as the comment's last writer with `$provenance`)
      */
-    public function edit(string $body, array $mentions): self
+    public function edit(string $body, array $mentions, ?object $editor = null, ?WriteProvenance $provenance = null): self
     {
+        // Since 2.19.0 (Beacon spec 234): the editor and the edit's provenance (a call without an editor keeps the last writer).
+        if ($editor !== null) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->updatedBy = $editor;
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->channel = $provenance?->channel;
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
+        }
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->body = $body;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.

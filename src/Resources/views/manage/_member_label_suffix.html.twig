@@ -1,0 +1,13 @@
+{#-
+    Since 2.19.0 (Beacon spec 234): what follows a member's name where the bundle shows badges (history, comments,
+    assignees): the host's MemberBadge values from member_badge_provider, each printed escaped (never HTML from the host),
+    with a class per allow-listed variant. To draw them differently, override this template in
+    templates/bundles/NowoTaskBoardBundle/manage/_member_label_suffix.html.twig, extend
+    '@!NowoTaskBoardBundle/manage/_member_label_suffix.html.twig' and redefine the block member_label_suffix (see USAGE).
+
+    Included with with_context = false. Variables: badges (non-empty list of MemberBadge: label, variant, title).
+-#}
+{%- block member_label_suffix -%}
+    {%- set _ui = {neutral: 'badge_neutral', info: 'badge_info', success: 'badge_success', warning: 'badge_warning', agent: 'badge_info'} -%}
+    {%- for badge in badges %} <span class="{{ nowo_ui_class(_ui[badge.variant.value], 'NowoTaskBoardBundle') }} nowo-task-badge nowo-task-member-badge nowo-task-member-badge--{{ badge.variant.value }}" data-testid="nowo-task-member-badge"{% if badge.title %} title="{{ badge.title }}"{% endif %}>{{ badge.label }}</span>{% endfor -%}
+{%- endblock -%}

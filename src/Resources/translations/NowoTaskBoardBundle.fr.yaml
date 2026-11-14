@@ -153,6 +153,11 @@ task_board.gantt.empty: "Aucune tâche à afficher dans la chronologie pour le m
 task_board.view.gantt: "Vue Gantt"
 task_board.history.completed_yes: "Terminée"
 task_board.history.completed_no: "Non terminée"
+# Since 2.19.0 (Beacon spec 234): the channel of a write, next to the actor in the history and comments.
+task_board.history.channel.web: "via le web"
+task_board.history.channel.app: "via l’app"
+task_board.history.channel.api: "via l’API"
+task_board.history.channel.mcp: "via MCP"
 task_board.task.add_member: "Ajouter un membre"
 task_board.task.current_members: "Membres actuels"
 task_board.task.members_modal_title: "Gérer les personnes"

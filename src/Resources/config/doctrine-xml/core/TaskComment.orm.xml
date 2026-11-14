@@ -12,9 +12,14 @@
         <field name="editedAt" type="datetime_immutable" column="edited_at" nullable="true"/>
         <field name="deletedAt" type="datetime_immutable" column="deleted_at" nullable="true"/>
         <field name="authorName" type="string" column="author_name" length="180" nullable="true"/>
+        <field name="channel" type="string" length="8" nullable="true" enum-type="Nowo\TaskBoardBundle\Provenance\WriteChannel"/>
+        <field name="actorLabel" type="string" column="actor_label" length="120" nullable="true"/>
         <field name="body" type="text"/>
         <field name="mentions" type="json"/>
         <field name="cause" type="string" column="cause" length="191" nullable="true"/>
+        <many-to-one field="updatedBy" target-entity="App\Entity\User">
+            <join-column name="updated_by_id" on-delete="SET NULL"/>
+        </many-to-one>
         <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
             <join-column name="task_id" nullable="false" on-delete="CASCADE"/>
         </many-to-one>

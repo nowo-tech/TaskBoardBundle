@@ -19,9 +19,10 @@
                 {# Since 1.25 (audit FP-M1): the account is gone; the comment keeps the name it was written with. #}
                 <strong>{{ comment.authorName }}</strong>
             {% else %}
-                <strong>{{ memberUi.member_label(comment.author)|trim }}</strong>
+                <strong>{{ memberUi.member_label(comment.author, true)|trim }}</strong>
             {% endif %}
             {# Since 2.10.0 (spec 216, FR-014): why it was written (e.g. an automation rule), through comments.cause_labeler; nothing without one. #}{% set _cause = nowo_task_board_comment_cause(comment) %}{% if _cause is not null %}<span class="nowo-task-activity__cause" data-testid="nowo-task-comment-cause">({{ _cause }})</span>{% endif %}
+            {#- Since 2.19.0 (Beacon spec 234): where the write came from and the host's label of its actor, escaped; nothing without a provenance provider. #}{% if comment.channel or comment.actorLabel %} <span class="nowo-task-activity__via" data-testid="nowo-task-comment-via">{% if comment.channel %}{{ ('task_board.history.channel.' ~ comment.channel.value)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}{% if comment.channel and comment.actorLabel %} · {% endif %}{{ comment.actorLabel }}</span>{% endif %}
             <time class="nowo-task-activity__time" datetime="{{ comment.createdAt|date('c') }}">{{ comment.createdAt|date('Y-m-d H:i') }}</time>
             {% if comment.editedAt and not comment.deleted %}<span class="nowo-task-comment__edited">{{ 'task_board.comment.edited'|trans({}, 'NowoTaskBoardBundle') }}</span>{% endif %}
             {# Since 1.27.0 (TB-SYNC-3): an imported reply, assigned comment (action item) and its resolved state. #}

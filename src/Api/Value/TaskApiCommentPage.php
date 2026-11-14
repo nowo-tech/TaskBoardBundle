@@ -14,10 +14,12 @@ final readonly class TaskApiCommentPage
     /**
      * @param list<TaskComment> $comments
      * @param array<string, TaskApiUser> $authors by comment id
+     * @param array<string, TaskApiUser> $updaters since 2.19.0: who wrote or last edited each comment, by comment id
      */
     public function __construct(
         public array $comments,
         public array $authors,
+        public array $updaters = [],
     ) {
     }
 }
