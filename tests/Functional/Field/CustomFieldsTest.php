@@ -35,7 +35,7 @@ use function urlencode;
 use const INF;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or board, values, the Task API
+ * Since 2.19.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or board, values, the Task API
  * (`GET /v2/list/{id}/field`, `POST /v2/task/{id}/field/{field_id}`, `custom_fields` filters) and tenant isolation.
  */
 final class CustomFieldsTest extends ApiTestCase

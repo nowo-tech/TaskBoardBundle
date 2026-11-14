@@ -186,7 +186,7 @@ final class ApiManagementTest extends ApiTestCase
         $statuses = $this->json()['statuses'];
         self::assertSame(['To do', 'Doing', 'Done', 'Review'], array_column($statuses, 'status'));
         self::assertSame('#3b82f6', $statuses[3]['color']);
-        // Since 2.18.0 (FR-033): `type` is read; the first type set writes the position types of the other columns.
+        // Since 2.19.0 (FR-033): `type` is read; the first type set writes the position types of the other columns.
         self::assertArrayNotHasKey('warnings', $this->json());
         self::assertSame(['open', 'custom', 'closed', 'custom'], array_column($statuses, 'type'));
         $review = $statuses[3]['id'];
@@ -299,7 +299,7 @@ final class ApiManagementTest extends ApiTestCase
         self::assertSame([], $this->audit()->events);
     }
 
-    /** Since 2.18.0 (FR-033): column types on the status paths. */
+    /** Since 2.19.0 (FR-033): column types on the status paths. */
     public function testColumnTypes(): void
     {
         $base = '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status';

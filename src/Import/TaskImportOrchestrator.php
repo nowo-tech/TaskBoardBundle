@@ -824,7 +824,7 @@ final readonly class TaskImportOrchestrator
             return;
         }
 
-        // Since 2.18.0 (FR-033): a done or closed column (the last one on an untyped board).
+        // Since 2.19.0 (FR-033): a done or closed column (the last one on an untyped board).
         if (ColumnTypes::isDone($column, ColumnTypes::ordered($board))) {
             $task->markCompleted();
         }

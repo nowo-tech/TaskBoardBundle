@@ -217,7 +217,7 @@ final class ApiHumansOnlyGateTest extends ApiTestCase
     }
 
     /**
-     * Since 2.18.0 (FR-033): on a typed board the done columns are its done and closed ones, whatever their order; a
+     * Since 2.19.0 (FR-033): on a typed board the done columns are its done and closed ones, whatever their order; a
      * machine may not change them while one is flagged (a new done or closed column, a retype into or out of them).
      */
     public function testOnATypedBoardAMachineCannotChangeFlaggedDoneColumns(): void

@@ -14,7 +14,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.18.0 (FR-045): a synced task moved by the restructure service is detached for good, and no move runs while a
+ * Since 2.19.0 (FR-045): a synced task moved by the restructure service is detached for good, and no move runs while a
  * provider run is in progress on a board it touches.
  */
 final class RestructureSyncTest extends SyncFunctionalTestCase

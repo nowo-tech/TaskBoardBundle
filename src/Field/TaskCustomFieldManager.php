@@ -42,7 +42,7 @@ use function trim;
 use function usort;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or per board, values per task
+ * Since 2.19.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or per board, values per task
  * ({@see self::setField()}), and the operator filters of the Task API and the list view ({@see self::filter()}).
  *
  * Definitions are written under {@see TaskBoardRestructurePolicyInterface} (a tenant's: `mayManageFolders()`; a board's:
@@ -271,7 +271,7 @@ final readonly class TaskCustomFieldManager
         });
     }
 
-    /** Since 2.18.0: whether any task holds a value of the field. */
+    /** Since 2.19.0: whether any task holds a value of the field. */
     public function hasValues(TaskCustomField $field): bool
     {
         return $this->entityManager->getRepository(TaskCustomFieldValue::class)->count(['field' => $field]) > 0;

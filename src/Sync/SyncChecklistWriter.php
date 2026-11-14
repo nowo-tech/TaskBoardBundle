@@ -62,7 +62,7 @@ final readonly class SyncChecklistWriter
     public function sync(SyncRunContext $ctx, ?PeopleSession $session, TaskSyncItem $parentItem, Task $parent, RemoteTask $remote): void
     {
         // Done items: the column the status map gives the first closed / done status, else the last one (1.23 rule).
-        // Since 2.18.0 (FR-033): else the board's first done or closed column (the last one on an untyped board).
+        // Since 2.19.0 (FR-033): else the board's first done or closed column (the last one on an untyped board).
         $done   = StatusColumns::doneColumn($ctx->connection->getStatusColumnMap(), $ctx->board) ?? ColumnTypes::doneColumn($ctx->board);
         $open   = $parent->getColumn();
         $wanted = [];

@@ -24,7 +24,7 @@ class BoardColumn
     private string $id;
 
     /**
-     * Since 2.18.0 (Beacon spec 234, FR-033): `open`, `custom`, `done` or `closed`; null: by position
+     * Since 2.19.0 (Beacon spec 234, FR-033): `open`, `custom`, `done` or `closed`; null: by position
      * ({@see ColumnTypes::of()}).
      */
     #[ORM\Column(name: 'column_type', type: 'string', length: 16, nullable: true, enumType: ColumnType::class)]
@@ -136,7 +136,7 @@ class BoardColumn
     }
 
     /**
-     * Since 2.18.0: the type written on the column, null when it follows its position. Read the effective type with
+     * Since 2.19.0: the type written on the column, null when it follows its position. Read the effective type with
      * {@see ColumnTypes::of()}.
      */
     public function getStoredType(): ?ColumnType
@@ -144,7 +144,7 @@ class BoardColumn
         return $this->type;
     }
 
-    /** Since 2.18.0: through {@see BoardColumnManager}, which keeps the board's types coherent. */
+    /** Since 2.19.0: through {@see BoardColumnManager}, which keeps the board's types coherent. */
     public function setType(?ColumnType $type): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.

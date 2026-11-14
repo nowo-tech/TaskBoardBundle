@@ -926,7 +926,7 @@ task_board.calendar.off_day: "Un assegnatario non lavora il %date%: %label%"
 task_board.template.picker: "Modello"
 task_board.template.none: "Nessun modello"
 task_board.template.apply: "Applica modello"
-# Since 2.18.0 (Beacon spec 234, FR-028): native custom fields.
+# Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
 task_board.custom_field.filter.field: "Campo"
 task_board.custom_field.filter.any: "Qualsiasi campo"
 task_board.custom_field.filter.operator: "Condizione"

@@ -74,7 +74,7 @@ final readonly class TaskApiReadOperations
         // Since 2.10.0 (spec 214): `task_numbers.enabled` (null when off): a task looked up by its number.
         private ?TaskNumberLedger $numbers = null,
         private ?TaskNumberScope $numberScope = null,
-        // Since 2.18.0 (Beacon spec 234, FR-028): native custom fields.
+        // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
         private ?TaskCustomFieldManager $customFields = null,
         // Since 2.16.0 (spec 234, FR-025): the members of a team.
         private TaskApiMembersInterface $members = new EmptyTaskApiMembers(),
@@ -371,7 +371,7 @@ final readonly class TaskApiReadOperations
     }
 
     /**
-     * Since 2.18.0 (FR-028): the board's native custom fields (its tenant's and its own) and its synced ones.
+     * Since 2.19.0 (FR-028): the board's native custom fields (its tenant's and its own) and its synced ones.
      *
      * @throws TaskApiRefusal
      *

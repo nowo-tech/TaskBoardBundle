@@ -420,7 +420,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     private function assertReopenAllowed(Task $task, ?BoardColumn $column, array $columns): void
     {
-        // Since 2.18.0 (FR-033): any column that is not done (column type), not only "not the last".
+        // Since 2.19.0 (FR-033): any column that is not done (column type), not only "not the last".
         if ($task->isCompleted() && !$task->isArchived() && $column instanceof BoardColumn && $columns !== [] && !ColumnTypes::isDone($column, $columns)) {
             $refusal = $this->limits?->check($task->getBoard(), 1, 0);
             if ($refusal instanceof LimitRefusal) {
@@ -439,7 +439,7 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
-     * Since 2.16.0 (spec 234): TASK_STATUS_CHANGED, snapshots only; since 2.18.0 with the new column's type.
+     * Since 2.16.0 (spec 234): TASK_STATUS_CHANGED, snapshots only; since 2.19.0 with the new column's type.
      */
     private function dispatchStatusChanged(Task $task, ?BoardColumn $from, ?BoardColumn $to, object $user, ColumnTransitionVia $via): void
     {
@@ -455,7 +455,7 @@ final readonly class TaskManager implements TaskManagerInterface
             $target,
             ActorId::of($user),
             $via,
-            // Since 2.18.0 (FR-033): the new column's type.
+            // Since 2.19.0 (FR-033): the new column's type.
             $target->type,
         ), TaskBoardEvents::TASK_STATUS_CHANGED);
     }
@@ -477,7 +477,7 @@ final readonly class TaskManager implements TaskManagerInterface
         $current  = $index >= 0 ? $columns[$index] : null;
         $previous = $index > 0 ? $columns[$index - 1] : null;
         $next     = $index >= 0 && $index < $last ? $columns[$index + 1] : ($index < 0 && $columns !== [] ? $columns[0] : null);
-        // Since 2.18.0 (FR-033): the first done or closed column (the last one on an untyped board).
+        // Since 2.19.0 (FR-033): the first done or closed column (the last one on an untyped board).
         $done      = ColumnTypes::doneColumn($task->getBoard(), $columns);
         $isDoneNow = $current instanceof BoardColumn && ColumnTypes::isDone($current, $columns);
 
@@ -548,7 +548,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        // Since 2.18.0 (FR-033): the first done or closed column (the last one on an untyped board).
+        // Since 2.19.0 (FR-033): the first done or closed column (the last one on an untyped board).
         $done = ColumnTypes::doneColumn($task->getBoard(), $columns) ?? $columns[array_key_last($columns)];
         $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false, $via);
 
@@ -613,7 +613,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return;
         }
 
-        // Since 2.18.0 (FR-033): a done or closed column completes the task (the last one on an untyped board).
+        // Since 2.19.0 (FR-033): a done or closed column completes the task (the last one on an untyped board).
         if (ColumnTypes::isDone($column, $columns)) {
             $task->markCompleted();
 

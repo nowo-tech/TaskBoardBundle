@@ -926,7 +926,7 @@ task_board.calendar.off_day: "Een toegewezen persoon is vrij op %date%: %label%"
 task_board.template.picker: "Sjabloon"
 task_board.template.none: "Geen sjabloon"
 task_board.template.apply: "Sjabloon toepassen"
-# Since 2.18.0 (Beacon spec 234, FR-028): native custom fields.
+# Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
 task_board.custom_field.filter.field: "Veld"
 task_board.custom_field.filter.any: "Elk veld"
 task_board.custom_field.filter.operator: "Voorwaarde"

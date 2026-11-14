@@ -57,7 +57,7 @@ final readonly class TaskApiQueryRepository
         private bool $syncEnabled = false,
         // Since 2.15.0 (database.user_reference).
         private ?TaskBoardUsers $users = null,
-        // Since 2.18.0 (FR-028): the custom field filters.
+        // Since 2.19.0 (FR-028): the custom field filters.
         private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
@@ -69,7 +69,7 @@ final readonly class TaskApiQueryRepository
      * @param list<object> $assignees users the `assignees[]` filter names
      * @param object|null $owner My tasks: only the tasks it created or is assigned
      * @param list<string>|null $onlyIds since 2.16.0: only these tasks (the text search's matches); null: no such filter
-     * @param array<string, TaskCustomField> $fields since 2.18.0: the native fields `custom_fields` may name, by id
+     * @param array<string, TaskCustomField> $fields since 2.19.0: the native fields `custom_fields` may name, by id
      *
      * @throws TaskApiRefusal
      *
@@ -81,7 +81,7 @@ final readonly class TaskApiQueryRepository
             return ['tasks' => [], 'lastPage' => true];
         }
         $qb = $this->filtered($boardIds, $filter, $assignees, $owner);
-        // Since 2.18.0 (FR-028): `custom_fields`, on the native fields of these boards.
+        // Since 2.19.0 (FR-028): `custom_fields`, on the native fields of these boards.
         if ($filter->customFields !== []) {
             try {
                 ($this->customFields ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND))->filter($qb, 't', $filter->customFields, $fields);

@@ -25,7 +25,7 @@ use function in_array;
 use function max;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-034 and block W): makes a board's columns exactly a list of {@see BoardColumnSpec}, in
+ * Since 2.19.0 (Beacon spec 234, FR-034 and block W): makes a board's columns exactly a list of {@see BoardColumnSpec}, in
  * memory, never orphaning a task. The caller flushes inside its own transaction.
  *
  * Each current column is matched to a spec by the column map (its id, then its name => a spec name), else by name

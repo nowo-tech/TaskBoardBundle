@@ -926,7 +926,7 @@ task_board.calendar.off_day: "An assignee is off on %date%: %label%"
 task_board.template.picker: "Template"
 task_board.template.none: "No template"
 task_board.template.apply: "Apply template"
-# Since 2.18.0 (Beacon spec 234, FR-028): native custom fields.
+# Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
 task_board.custom_field.filter.field: "Field"
 task_board.custom_field.filter.any: "Any field"
 task_board.custom_field.filter.operator: "Condition"

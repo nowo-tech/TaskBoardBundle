@@ -12,7 +12,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.18.0 (FR-028): field definitions follow the restructure policy (the manage right by default).
+ * Since 2.19.0 (FR-028): field definitions follow the restructure policy (the manage right by default).
  */
 final class CustomFieldsPolicyTest extends FunctionalTestCase
 {

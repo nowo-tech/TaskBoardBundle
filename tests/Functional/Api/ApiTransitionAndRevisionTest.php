@@ -99,7 +99,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(1, $this->statusEvents);
         $event = $this->statusEvents[0];
-        // Since 2.18.0 (FR-033): the column types, by position on an untyped board.
+        // Since 2.19.0 (FR-033): the column types, by position on an untyped board.
         self::assertSame(['Approved', 'Doing', 'mcp', 'custom'], [$event->from?->name, $event->to->name, $event->via->channel, $event->toType]);
         self::assertSame(['custom', 'custom'], [$event->from?->type, $event->to->type]);
         self::assertSame($task->getId(), $event->task->id);

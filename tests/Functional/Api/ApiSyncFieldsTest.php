@@ -78,7 +78,7 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertCount(1, $this->em->getRepository(TaskSyncFieldValue::class)->findAll(), 'kept');
     }
 
-    /** Since 2.18.0 (FR-033): a done column retyped as custom reopens its tasks, so the limit is asked first. */
+    /** Since 2.19.0 (FR-033): a done column retyped as custom reopens its tasks, so the limit is asked first. */
     public function testRetypingADoneColumnAsksTheLimit(): void
     {
         ApiTestHost::$tenants = ['tenant-a'];

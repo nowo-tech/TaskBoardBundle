@@ -61,7 +61,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         // Since 2.10.0 (spec 216): the column events; none without a dispatcher.
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ?TaskChangeContext $changeContext = null,
-        // Since 2.18.0: reads a column's tasks when its type changes.
+        // Since 2.19.0: reads a column's tasks when its type changes.
         private ?EntityManagerInterface $entityManager = null,
         // Since 2.16.0 (audit PC-M1): asked for every task a column deletion moves; none: every move is allowed.
         private ?ColumnTransitionPolicyInterface $transitions = null,
@@ -85,7 +85,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         );
         $column->setHumansOnly($data->humansOnly);
 
-        // Since 2.18.0 (FR-033): a typed column types the whole board first (its other columns keep their meaning).
+        // Since 2.19.0 (FR-033): a typed column types the whole board first (its other columns keep their meaning).
         if ($data->type instanceof ColumnType) {
             $this->assertTypes($board, $column, $data->type);
             ColumnTypes::materialize($board);
@@ -157,7 +157,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             ->setIcon(ColumnIcon::normalize($data->icon))
             ->setHumansOnly($data->humansOnly);
         if ($retyped instanceof ColumnType) {
-            // Since 2.18.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
+            // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
             // (the flush of the columns saves them).
             ColumnTypes::materialize($column->getBoard());
             $column->setType($retyped);
@@ -221,7 +221,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
 
         usort($remaining, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
-        // Since 2.18.0 (FR-033): the first open column takes them; it completes them when it is done (column type,
+        // Since 2.19.0 (FR-033): the first open column takes them; it completes them when it is done (column type,
         // the last column on an untyped board).
         $target     = ColumnTypes::firstOpen($board, $remaining) ?? $remaining[0];
         $targetDone = ColumnTypes::isDone($target, $remaining);
@@ -278,7 +278,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      * Since 2.16.0 (audit PC-M1): every task of the deleted column, asked as it enters `$target` (the last column once the
      * deletion is done when `$targetIsLast`). The first refusal stops the deletion before anything changes.
      *
-     * @param list<BoardColumn> $remaining the board's columns once the deletion is done, by position (since 2.18.0: the
+     * @param list<BoardColumn> $remaining the board's columns once the deletion is done, by position (since 2.19.0: the
      *                                     target's type is read among them)
      *
      * @throws ColumnTransitionRefusedException
@@ -349,7 +349,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
     }
 
     /**
-     * Since 2.18.0 (FR-033): at most two closed columns on a board.
+     * Since 2.19.0 (FR-033): at most two closed columns on a board.
      *
      * @throws InvalidArgumentException
      */
@@ -369,7 +369,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
     }
 
     /**
-     * Since 2.18.0: a column that stops being done reopens its completed tasks, so the host's limit is asked first.
+     * Since 2.19.0: a column that stops being done reopens its completed tasks, so the host's limit is asked first.
      *
      * @throws TaskReopenRefusedException
      */
@@ -388,7 +388,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
     }
 
-    /** Since 2.18.0: the tasks of the column are completed when it is done, reopened otherwise. */
+    /** Since 2.19.0: the tasks of the column are completed when it is done, reopened otherwise. */
     private function followType(BoardColumn $column, ColumnType $type): void
     {
         foreach (ColumnTasks::of($this->entityManager, $column) as $task) {

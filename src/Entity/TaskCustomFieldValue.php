@@ -10,7 +10,7 @@ use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): a task's value of a native custom field — the text, the number (exact decimal,
+ * Since 2.19.0 (Beacon spec 234, FR-028): a task's value of a native custom field — the text, the number (exact decimal,
  * kept as a string) or the dropdown option's id. A task has at most one value per field; no row is "not set".
  */
 #[ORM\Entity]

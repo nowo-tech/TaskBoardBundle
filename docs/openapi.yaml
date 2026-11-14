@@ -285,7 +285,7 @@ paths:
         - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
-        - {name: 'custom_fields', in: query, description: 'Since 2.18.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
+        - {name: 'custom_fields', in: query, description: 'Since 2.19.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
         - {name: 'due_date_gt', in: query, schema: {type: string}}
         - {name: 'due_date_lt', in: query, schema: {type: string}}
         - {name: 'date_created_gt', in: query, schema: {type: string}}
@@ -342,7 +342,7 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folders
-      summary: 'Since 2.18.0: the folders of a space the token reaches, each with its lists (before 2.18.0 always empty)'
+      summary: 'Since 2.19.0: the folders of a space the token reaches, each with its lists (before 2.19.0 always empty)'
       description: 'Least level: My tasks. A where limited to boards sees only the folders holding one of them.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folders'}}}}
@@ -355,7 +355,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     post:
       operationId: folder_create
-      summary: 'Since 2.18.0: create a folder in a space'
+      summary: 'Since 2.19.0: create a folder in a space'
       description: 'Least level: Full. Where must reach the tenant as a whole; the restructure policy (default: the create-board right) decides.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -374,7 +374,7 @@ paths:
       - {name: folder_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folder
-      summary: 'Since 2.18.0: a folder with its lists'
+      summary: 'Since 2.19.0: a folder with its lists'
       description: 'Least level: My tasks.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folder'}}}}
@@ -387,7 +387,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     put:
       operationId: folder_update
-      summary: 'Since 2.18.0: rename, describe or reorder a folder (what the body names changes)'
+      summary: 'Since 2.19.0: rename, describe or reorder a folder (what the body names changes)'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -403,7 +403,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     delete:
       operationId: folder_delete
-      summary: 'Since 2.18.0: delete an empty folder; 409 FOLDER_001 while lists are in it'
+      summary: 'Since 2.19.0: delete an empty folder; 409 FOLDER_001 while lists are in it'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -421,7 +421,7 @@ paths:
       - {name: folder_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folder_lists
-      summary: 'Since 2.18.0: the lists of a folder the token may view'
+      summary: 'Since 2.19.0: the lists of a folder the token may view'
       description: 'Least level: My tasks.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
@@ -434,7 +434,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     post:
       operationId: folder_list_create
-      summary: 'Since 2.18.0: create a board in a folder (as POST /v2/space/{space_id}/list, then put in the folder)'
+      summary: 'Since 2.19.0: create a board in a folder (as POST /v2/space/{space_id}/list, then put in the folder)'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -453,10 +453,10 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: lists
-      summary: 'The folderless boards of a space the token reaches (since 2.18.0 a board in a folder is listed under its folder)'
+      summary: 'The folderless boards of a space the token reaches (since 2.19.0 a board in a folder is listed under its folder)'
       description: 'Least level: My tasks. The person''s access and where still apply.'
       parameters:
-        - {name: include_folders, in: query, description: 'Since 2.18.0: true lists every board, each with its folder (default: api.lists_include_folders, false)', schema: {type: string, enum: ['true', 'false', '1', '0']}}
+        - {name: include_folders, in: query, description: 'Since 2.19.0: true lists every board, each with its folder (default: api.lists_include_folders, false)', schema: {type: string, enum: ['true', 'false', '1', '0']}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -684,7 +684,7 @@ paths:
       - {name: field_id, in: path, required: true, schema: {type: string}}
     post:
       operationId: field_set
-      summary: 'Since 2.18.0: sets a native custom field (`value`: text, number, or a dropdown option id or name; null clears it); a provider''s field is 409 FIELD_001'
+      summary: 'Since 2.19.0: sets a native custom field (`value`: text, number, or a dropdown option id or name; null clears it); a provider''s field is 409 FIELD_001'
       description: 'Least level: Tasks. The person''s access and where still apply.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -846,7 +846,7 @@ paths:
         - {name: 'statuses[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'assignees[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'tags[]', in: query, schema: {type: array, items: {type: string}}}
-        - {name: 'custom_fields', in: query, description: 'Since 2.18.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
+        - {name: 'custom_fields', in: query, description: 'Since 2.19.0: JSON list of {field_id, operator (=, !=, <, >, IS NOT NULL, IS NULL, ANY), value}, at most 10, on native fields', schema: {type: string}}
         - {name: 'due_date_gt', in: query, schema: {type: string}}
         - {name: 'due_date_lt', in: query, schema: {type: string}}
         - {name: 'date_created_gt', in: query, schema: {type: string}}
@@ -1032,14 +1032,14 @@ components:
       properties: {folders: {type: array, items: {$ref: '#/components/schemas/Folder'}}}
     Folder:
       type: object
-      description: 'Since 2.18.0 (Beacon spec 234, FR-031).'
+      description: 'Since 2.19.0 (Beacon spec 234, FR-031).'
       properties: {id: {type: string}, name: {type: string}, orderindex: {type: integer}, content: {type: string, description: Markdown}, markdown_content: {type: string}, hidden: {type: boolean}, override_statuses: {type: boolean}, space: {type: object}, task_count: {type: string}, archived: {type: boolean}, statuses: {type: array}, lists: {type: array, items: {$ref: '#/components/schemas/List'}}, permission_level: {type: string}, warnings: {$ref: '#/components/schemas/Warnings'}}
     FolderBody:
       type: object
       properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}, orderindex: {type: integer}}
     Status:
       type: object
-      properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, done, closed], description: 'Since 2.18.0 the column type (a task in a done or closed column is completed; at most two closed); a board without types: first open, last closed, the rest custom'}, icon: {type: [string, 'null'], description: 'Since 2.9.0: the column icon, one emoji or an icon id such as tabler:bug'}}
+      properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, done, closed], description: 'Since 2.19.0 the column type (a task in a done or closed column is completed; at most two closed); a board without types: first open, last closed, the rest custom'}, icon: {type: [string, 'null'], description: 'Since 2.9.0: the column icon, one emoji or an icon id such as tabler:bug'}}
     List:
       type: object
       properties: {id: {type: string}, name: {type: string}, content: {type: string}, task_count: {type: integer}, archived: {type: boolean}, space: {type: object}, folder: {type: object}, statuses: {type: array, items: {$ref: '#/components/schemas/Status'}}, warnings: {$ref: '#/components/schemas/Warnings'}}
@@ -1104,7 +1104,7 @@ components:
       properties: {tags: {type: array, items: {type: object, properties: {name: {type: string}}}}}
     Fields:
       type: object
-      properties: {fields: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, type: {type: string, description: 'Since 2.18.0 native fields: short_text, number or drop_down (type_config.options with id, name, color, orderindex)'}, type_config: {type: object}, scope: {enum: [space, list], description: 'Since 2.18.0, native fields only'}, writable: {type: boolean, description: 'Since 2.18.0: true for native fields'}}}}}
+      properties: {fields: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, type: {type: string, description: 'Since 2.19.0 native fields: short_text, number or drop_down (type_config.options with id, name, color, orderindex)'}, type_config: {type: object}, scope: {enum: [space, list], description: 'Since 2.19.0, native fields only'}, writable: {type: boolean, description: 'Since 2.19.0: true for native fields'}}}}}
     TimeEntry:
       type: object
       properties: {id: {type: string}, task: {type: [object, 'null']}, wid: {type: string}, user: {type: object, properties: {id: {type: string}}}, billable: {type: boolean, description: 'Since 2.12.0 the entry''s flag (false when not set)'}, start: {type: string}, end: {type: string}, duration: {type: string}, description: {type: string}}
@@ -1158,7 +1158,7 @@ components:
       properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}}
     StatusBody:
       type: object
-      properties: {status: {type: string, maxLength: 128}, color: {type: [string, 'null'], pattern: '^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$'}, icon: {type: [string, 'null'], maxLength: 64, description: 'Since 2.9.0: one emoji (at most 16 bytes) or an offered icon id such as tabler:bug; null or "" removes it'}, type: {enum: [open, custom, done, closed], description: 'Since 2.18.0: the column type; the first type set on a board writes the position types of its other columns; at most two closed (400 INPUT_002)'}}
+      properties: {status: {type: string, maxLength: 128}, color: {type: [string, 'null'], pattern: '^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$'}, icon: {type: [string, 'null'], maxLength: 64, description: 'Since 2.9.0: one emoji (at most 16 bytes) or an offered icon id such as tabler:bug; null or "" removes it'}, type: {enum: [open, custom, done, closed], description: 'Since 2.19.0: the column type; the first type set on a board writes the position types of its other columns; at most two closed (400 INPUT_002)'}}
     StatusOrder:
       type: object
       required: [order]

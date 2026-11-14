@@ -8,14 +8,14 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * TaskBoardBundle 2.18 (Beacon spec 234, FR-028): native custom fields and their values. Two new tables; a tenant
+ * TaskBoardBundle 2.19 (Beacon spec 234, FR-028): native custom fields and their values. Two new tables; a tenant
  * field's tenant key compares byte for byte (REQ-SEC-006).
  */
 final class Version20261114120000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'TaskBoardBundle 2.18: task_board_custom_fields, task_board_custom_field_values';
+        return 'TaskBoardBundle 2.19: task_board_custom_fields, task_board_custom_field_values';
     }
 
     public function up(Schema $schema): void

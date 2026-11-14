@@ -13,7 +13,7 @@ final class BoardColumnFormData
 {
     /**
      * @param string|null $icon Icon name such as `tabler:bug` (since 1.11)
-     * @param ColumnType|null $type since 2.18.0 (FR-033): the column's type; null keeps it (a new column: by position)
+     * @param ColumnType|null $type since 2.19.0 (FR-033): the column's type; null keeps it (a new column: by position)
      */
     public function __construct(
         public string $name = '',

@@ -11,7 +11,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use function array_values;
 
 /**
- * Since 2.18.0: every task in a column (archived ones included), read from the database when a manager is given (the
+ * Since 2.19.0: every task in a column (archived ones included), read from the database when a manager is given (the
  * column's own collection is the inverse side and misses tasks put in the column in the same request; the callers work
  * on saved tasks). Stateless.
  *

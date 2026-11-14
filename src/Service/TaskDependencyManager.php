@@ -37,7 +37,7 @@ final readonly class TaskDependencyManager
         private TaskChangeRecorder $changeRecorder,
         // Since 2.11.0 (DDD audit G3): dispatches TASK_DEPENDENCY_ADDED / TASK_DEPENDENCY_REMOVED (none: no event).
         private ?EventDispatcherInterface $eventDispatcher = null,
-        // Since 2.18.0 (Beacon spec 234, FR-032): two boards of one folder may be joined.
+        // Since 2.19.0 (Beacon spec 234, FR-032): two boards of one folder may be joined.
         private TaskBoardDependencyScope $scope = new TaskBoardDependencyScope(),
         private ?TaskBoardFolderManager $folders = null,
         // Since 2.16.0 (spec 234): the reverse lookup of blocked_by (none: the task's loaded relations).
@@ -79,7 +79,7 @@ final readonly class TaskDependencyManager
             throw InvalidTaskDependencyException::self();
         }
 
-        // Since 2.18.0 (FR-032): the same board, or two boards of the same folder; any other pair stays refused.
+        // Since 2.19.0 (FR-032): the same board, or two boards of the same folder; any other pair stays refused.
         if (!$this->scope->allows($task->getBoard(), $other->getBoard())) {
             throw InvalidTaskDependencyException::otherBoard();
         }
@@ -256,7 +256,7 @@ final readonly class TaskDependencyManager
     }
 
     /**
-     * Since 2.18.0 (FR-032): the tasks a cycle may run through — the board's, or every board's of the folder when the two
+     * Since 2.19.0 (FR-032): the tasks a cycle may run through — the board's, or every board's of the folder when the two
      * tasks are on different boards of it.
      *
      * @return list<Task>

@@ -30,7 +30,7 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use function array_map;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-032 / FR-033 / FR-034): column types, dependencies across the boards of a folder and
+ * Since 2.19.0 (Beacon spec 234, FR-032 / FR-033 / FR-034): column types, dependencies across the boards of a folder and
  * shared status sets.
  */
 final class ColumnTypesAndStatusSetsTest extends CopyTestCase
@@ -50,7 +50,7 @@ final class ColumnTypesAndStatusSetsTest extends CopyTestCase
         self::assertSame(['open', 'custom', 'closed'], array_map(static fn (BoardColumn $c): string => ColumnTypes::of($c, $columns)->value, $columns));
         self::assertSame('Done', ColumnTypes::doneColumn($board)?->getName());
         $single = $this->board('One', ['Only']);
-        self::assertTrue(ColumnTypes::isDone(ColumnTypes::ordered($single)[0]), 'a single untyped column completes, as before 2.18.0');
+        self::assertTrue(ColumnTypes::isDone(ColumnTypes::ordered($single)[0]), 'a single untyped column completes, as before 2.19.0');
     }
 
     public function testTwoClosedColumnsCompleteTheirTasksAndAThirdIsRefused(): void

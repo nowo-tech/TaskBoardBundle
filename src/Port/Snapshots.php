@@ -47,7 +47,7 @@ final class Snapshots
      * Since 2.16.0 (spec 234): `$last` is whether it is the board's last ("done") column.
      */
     /**
-     * @param list<BoardColumn>|null $columns since 2.18.0: the board's columns by position the type is read among
+     * @param list<BoardColumn>|null $columns since 2.19.0: the board's columns by position the type is read among
      *                                        (default: the column's board's)
      */
     public static function column(BoardColumn $column, bool $last, ?array $columns = null): BoardColumnSnapshot

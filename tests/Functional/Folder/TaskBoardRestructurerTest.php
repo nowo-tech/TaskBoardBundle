@@ -23,7 +23,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): folders and task moves through the restructure service.
+ * Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): folders and task moves through the restructure service.
  */
 final class TaskBoardRestructurerTest extends CopyTestCase
 {
