@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskDependencyAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskDependencyRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
+use Nowo\TaskBoardBundle\Repository\TaskDependentsLookupInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -33,7 +34,32 @@ final readonly class TaskDependencyManager
         private TaskChangeRecorder $changeRecorder,
         // Since 2.11.0 (DDD audit G3): dispatches TASK_DEPENDENCY_ADDED / TASK_DEPENDENCY_REMOVED (none: no event).
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.16.0 (spec 234): the reverse lookup of blocked_by (none: the task's loaded relations).
+        private ?TaskDependentsLookupInterface $dependents = null,
     ) {
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): the tasks that wait on `$task` (blocked by it), of its tenant only.
+     *
+     * @return list<Task>
+     */
+    public function dependentsOf(Task $task): array
+    {
+        if ($this->dependents instanceof TaskDependentsLookupInterface) {
+            return $this->dependents->dependentsOf($task);
+        }
+        $tenant = $task->getBoard()->getTenantKey();
+        $found  = [];
+        foreach ([...$task->getIncomingDependencies(), ...$task->getOutgoingDependencies()] as $dependency) {
+            $waits = $dependency->getTargetTask() === $task ? $dependency->getDependencyType() === TaskDependencyType::BlockedBy : $dependency->getDependencyType() === TaskDependencyType::Blocks;
+            $other = $dependency->getTargetTask() === $task ? $dependency->getSourceTask() : $dependency->getTargetTask();
+            if ($waits && $other !== $task && $other->getBoard()->getTenantKey() === $tenant) {
+                $found[$other->getId()] = $other;
+            }
+        }
+
+        return array_values($found);
     }
 
     /**

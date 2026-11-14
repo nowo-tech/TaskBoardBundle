@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\TaskApiRevision;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
@@ -126,7 +127,8 @@ final readonly class TaskApiReadController
             $task['subtasks'] = array_map(static fn ($subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$found->getId()] ?? []);
         }
 
-        return new JsonResponse($task);
+        // Since 2.16.0 (spec 234, FR-018): the revision as an ETag, for `If-Match` on the update.
+        return TaskApiRevision::etag(new JsonResponse($task), $found);
     }
 
     public function comments(Request $request, string $taskId): JsonResponse

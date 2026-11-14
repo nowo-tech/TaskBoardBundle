@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% von %total% Unteraufgaben erledigt'
 task_board.form.column.icon: "Symbol"
 task_board.form.column.no_icon: "Kein Symbol"
 task_board.form.column.icon_help: "Ein Emoji, optional."
+task_board.form.column.humans_only: "Nur Personen können Aufgaben hierher verschieben"
+task_board.form.column.humans_only_help: "Verschiebungen in diese Spalte über die API oder durch einen Agenten werden abgelehnt."
+task_board.board.column_humans_only: "Nur Personen"
+task_board.board.column_humans_only_help: "Nur Personen können Aufgaben in diese Spalte verschieben."
 task_board.form.column.icon_invalid: "Ein Spaltensymbol ist ein Emoji (höchstens 16 Bytes) oder eines der angebotenen Symbole."
 task_board.form.column.custom_color: 'Eigene Farbe'
 task_board.form.board.column_set: "Spalten"
@@ -495,6 +499,7 @@ task_board.sync.error.restore_refused: "Wieder vorhandene Aufgaben wurden nicht 
 task_board.sync.error.relation_skipped: "Einige Eltern- oder Abhängigkeitsbeziehungen wurden übersprungen (die andere Aufgabe fehlt oder ist nicht bearbeitbar)."
 task_board.sync.error.parent_cycle: "Eine Elternänderung wurde abgelehnt: Eine Aufgabe wäre ihr eigener Vorfahre."
 task_board.sync.error.assignee_unresolved: "Einige Zuständige passen zu niemandem dieses Boards; diese Aufgaben behalten ihre Zuständigen."
+task_board.sync.error.external_id_look_alike: "Einige Aufgaben des Anbieters wurden übersprungen: Ihre ID unterscheidet sich von einer bereits synchronisierten nur durch Groß-/Kleinschreibung, Akzente oder Leerzeichen am Ende. Bitten Sie Ihre Administration, das Datenbank-Update von TaskBoard 2.15.1 anzuwenden."
 task_board.sync.error.status_without_column: "Einige Status haben keine Spalte auf dem Board; diese Aufgaben kamen in die Ersatzspalte."
 task_board.sync.error.file_quota: "Einige Dateien wurden nicht kopiert: Das Speicherlimit ist erreicht."
 task_board.sync.error.storage_disabled: "Dateien werden nicht kopiert: Es ist kein Speicher konfiguriert."
@@ -642,6 +647,7 @@ task_board.sync.completeness.status.not_exposed: "Von der API des Anbieters nich
 task_board.sync.error.source_details_unavailable: "Die Beschreibung der Quelle konnte nicht gelesen werden."
 task_board.history.former_user: "Ehemalige Person"
 task_board.flash.task_reopen_refused: "Die Aufgabe wurde nicht verschoben: Ihre Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
+task_board.flash.task_move_refused: "Die Aufgabe wurde nicht verschoben: Diese Spalte nimmt sie von hier nicht an."
 task_board.flash.column_delete_refused: "Die Spalte wurde nicht gelöscht: Sie enthält erledigte Aufgaben, und deren Wiedereröffnung würde das Limit aktiver Aufgaben überschreiten."
 task_board.flash.column_icon_invalid: "Die Spalte wurde nicht gespeichert: Ihr Symbol muss ein Emoji oder eines der angebotenen Symbole sein."
 task_board.form.board.icon: "Symbol"
@@ -915,3 +921,7 @@ task_board.multi.partial: "Der Label-Filter hat nur die ersten Aufgaben gelesen:
 task_board.multi.overdue: "überfällig"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Eine zugewiesene Person ist am %date% nicht da: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Vorlage"
+task_board.template.none: "Keine Vorlage"
+task_board.template.apply: "Vorlage anwenden"

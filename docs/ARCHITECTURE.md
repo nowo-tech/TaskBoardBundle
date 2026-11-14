@@ -55,8 +55,21 @@ internal gate (`Port\*Gate`, built by `Port\Ports`). `TaskBoardPortsPass` stops 
 service implements neither (a factory service, whose class the build cannot know, fails closed when it is built).
 
 The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInterface`, `TaskObjectLinkResolverInterface`,
-`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, the API users / workspace / plan gate /
+`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, `Template\TaskTemplatePermissionInterface` (2.16: `TaskTemplateScope`, `TaskBoardSnapshot`, `TaskTemplateSnapshot`), the API users / workspace / plan gate /
 rate limiter / idempotency store, the providers, ...) already take values only.
+
+**Since 2.16 (Beacon spec 234), new ports are framework-free from the start** (no deprecated twin):
+
+| Configuration key | Interface | Value objects |
+|---|---|---|
+| `column_transition_policy` | `Transition\ColumnTransitionPolicyInterface` (default `AllowAllColumnTransitionPolicy`; opt-in `HumansOnlyColumnTransitionPolicy`) | `ValueObject\ColumnTransition` (board, task and column snapshots, tags, actor, `ColumnTransitionVia`), `ColumnTransitionDecision` |
+| `api.hooks.members` | `Api\Hook\TaskApiMembersInterface` (default `EmptyTaskApiMembers`) | `Api\Value\TaskApiMember` |
+| `api.hooks.comment_edit_policy` | `Api\Hook\TaskApiCommentEditPolicyInterface` (default `AuthorOnlyTaskApiCommentEditPolicy`) | `ValueObject\TaskCommentSnapshot` |
+| `search.provider` | `Search\TaskTextSearchInterface` (default `DoctrineTaskTextSearch`) | `ValueObject\TaskTextQuery` |
+
+The policy is a domain rule: `TaskManager` asks it before every move, whatever the channel, and the Task API passes its
+principal's channel through `ColumnTransitionVia`, so a host writes its rules once for the board UI, the API and MCP.
+`TaskBoardEvents::TASK_STATUS_CHANGED` (`TaskStatusChangedEvent`, snapshots only) follows every column change.
 
 **Since 2.17.0 (Beacon spec 234).** New ports are framework-free from the start (no deprecated twin):
 `restructure.policy` → `Folder\TaskBoardRestructurePolicyInterface` (`mayManageFolders($user, ?$tenantKey)`,
@@ -102,7 +115,7 @@ build time; your services keep your manager.
 
 | | Standard host (default) | DDD host (opt-in) |
 |---|---|---|
-| Mapping of the 28 bundle entities | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
+| Mapping of the 29 bundle entities (2.16: `TaskTemplate`, group `template`) | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
 | Host users on TaskBoard rows | `ManyToOne` to `user_class` (a Doctrine entity in the same manager) | `database.user_reference: id`: the id in a string column (`TaskBoardUserRef`), found again through `user_directory` |
 | Bundle base classes / traits for host entities | none (the bundle owns its entities; the host references them by id) | none |
 

@@ -43,6 +43,7 @@ use Nowo\TaskBoardBundle\Event\ColumnDeleteCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
@@ -63,6 +64,7 @@ use Nowo\TaskBoardBundle\Form\TaskListFilterType;
 use Nowo\TaskBoardBundle\Form\TaskMemberFormType;
 use Nowo\TaskBoardBundle\Form\TaskPriorityFormType;
 use Nowo\TaskBoardBundle\Form\TaskScheduleFormType;
+use Nowo\TaskBoardBundle\Form\TaskTemplatePickerType;
 use Nowo\TaskBoardBundle\Form\TaskTimeEntryFormType;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
@@ -102,6 +104,7 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -152,11 +155,13 @@ use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
+use function mb_substr;
 use function parse_url;
 use function preg_match;
 use function reset;
 use function sprintf;
 use function str_starts_with;
+use function trim;
 
 use const ARRAY_FILTER_USE_KEY;
 use const PHP_QUERY_RFC3986;
@@ -251,6 +256,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly bool $skipNonWorkingDays = false,
         // Since 2.15.0 (REQ-ARCH-001 rule 2): `database.user_reference`.
         private readonly string $userReference = 'entity',
+        // Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.enabled` (null when off).
+        private readonly ?TaskTemplateManager $taskTemplates = null,
     ) {
     }
 
@@ -377,10 +384,13 @@ final class TaskBoardManageController extends AbstractController
         $columnForm       = $this->createColumnForm(new BoardColumnFormData());
         $columnChoices    = $this->buildColumnChoices($board);
 
-        $taskForm = $this->createForm(TaskFormType::class, new TaskFormData(
+        $taskData = new TaskFormData(
             // Choices are label => id: the default column is the first *value* (id), not the label.
             columnId: $columnChoices === [] ? null : reset($columnChoices),
-        ), ['column_choices' => $columnChoices]);
+        );
+        // Since 2.16.0 (FR-061): the Template picker; a chosen template pre-fills the form and opens the dialog.
+        $templateView = $canEditBoard ? $this->templatePicker($user, $board, $taskData) : [];
+        $taskForm     = $this->createForm(TaskFormType::class, $taskData, ['column_choices' => $columnChoices]);
 
         [$allTasks, $taskWindow] = $this->boardTasks($board);
         $taskTree                = TaskTree::fromTasks($allTasks);
@@ -409,7 +419,45 @@ final class TaskBoardManageController extends AbstractController
             'commentCounts' => $this->commentCounts($allTasks),
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
-        ] + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+        ] + $templateView + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+    }
+
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): the add-task dialog's Template picker (`taskTemplatePicker`) when the board
+     * offers the user templates. `?taskTemplate=<id>` pre-fills `$data` from a template the board offers (any other id
+     * is ignored, as if none were chosen) and opens the dialog (`openAddTask`); `?taskTitle=` keeps the title typed.
+     *
+     * @return array<string, mixed>
+     */
+    private function templatePicker(object $user, TaskBoard $board, TaskFormData $data): array
+    {
+        if (!$this->taskTemplates instanceof TaskTemplateManager) {
+            return [];
+        }
+        $choices = [];
+        foreach ($this->taskTemplates->usableOn($user, $board) as $template) {
+            $choices[$template->getName()] ??= $template->getId();
+        }
+        if ($choices === []) {
+            return [];
+        }
+        $query    = $this->currentRequest()?->query;
+        $asked    = $query?->get(TaskTemplatePickerType::FIELD_TEMPLATE);
+        $template = is_string($asked) && $asked !== '' ? $this->taskTemplates->usable($user, $board, $asked) : null;
+        if ($template !== null) {
+            $this->taskTemplates->prefill($template, $board, $data);
+            $title = $query?->get(TaskTemplatePickerType::FIELD_TITLE);
+            if (is_string($title)) {
+                $data->title = mb_substr(trim($title), 0, TaskFormType::TITLE_MAX);
+            }
+        }
+        $picker = $this->container->get('form.factory')->createNamed('', TaskTemplatePickerType::class, null, [
+            'action'    => $this->generateUrl($this->routes['board']['name'], ['boardId' => $board->getId()]),
+            'templates' => $choices,
+            'selected'  => $template?->getId(),
+        ]);
+
+        return ['taskTemplatePicker' => $picker->createView(), 'openAddTask' => $template !== null];
     }
 
     /**
@@ -448,6 +496,12 @@ final class TaskBoardManageController extends AbstractController
         } catch (TaskReopenRefusedException) {
             $this->logRefused('column_delete_limit');
             $this->addFlash('error', 'task_board.flash.column_delete_refused');
+
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (audit PC-M1): the column transition policy refused a task the deletion would move; nothing changed.
+            $this->logRefused('column_delete_transition_policy');
+            $this->addFlash('error', $this->transitionMessage($refused));
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
         }
@@ -565,6 +619,7 @@ final class TaskBoardManageController extends AbstractController
             name: $column->getName(),
             color: $column->getColor(),
             icon: $column->getIcon(),
+            humansOnly: $column->isHumansOnly(),
         ), $column->getIcon());
         $form->handleRequest($request);
 
@@ -627,8 +682,14 @@ final class TaskBoardManageController extends AbstractController
             if ($refusal !== null) {
                 $this->addFlash('error', $refusal);
             } else {
-                $created = $this->taskManager->create($board, $data, $user);
-                $this->logWrite('task_create', ['board_id' => $boardId, 'task_id' => $created->getId()]);
+                try {
+                    $created = $this->taskManager->create($board, $data, $user);
+                    $this->logWrite('task_create', ['board_id' => $boardId, 'task_id' => $created->getId()]);
+                } catch (ColumnTransitionRefusedException $refused) {
+                    // Since 2.16.0 (spec 234): the host's column transition policy refused the column.
+                    $this->logRefused('task_transition_policy');
+                    $this->addFlash('error', $this->transitionMessage($refused));
+                }
             }
         } elseif ($form->isSubmitted()) {
             // Since 1.15: a refused task (e.g. a title over 255 characters) says why instead of vanishing.
@@ -1099,6 +1160,10 @@ final class TaskBoardManageController extends AbstractController
                 $this->taskManager->update($task, $data, $user);
                 $this->logWrite('task_update', ['task_id' => $taskId]);
                 $this->addFlash('success', 'task_board.flash.task_updated');
+            } catch (ColumnTransitionRefusedException $refused) {
+                // Since 2.16.0 (spec 234): the host's column transition policy refused the column; nothing is saved.
+                $this->logRefused('task_transition_policy');
+                $this->addFlash('error', $this->transitionMessage($refused));
             } catch (TaskReopenRefusedException) {
                 // Since 2.2.1: a column change in the form is a move, so the host's limit refuses it as on the board; nothing is saved.
                 $this->logRefused('task_reopen_limit');
@@ -1150,6 +1215,11 @@ final class TaskBoardManageController extends AbstractController
             $this->logRefused('task_reopen_limit');
             $this->addFlash('error', 'task_board.flash.task_reopen_refused');
             $success = false;
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (spec 234).
+            $this->logRefused('task_transition_policy');
+            $this->addFlash('error', $this->transitionMessage($refused));
+            $success = false;
         }
 
         if ($success) {
@@ -1185,6 +1255,13 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('error', 'task_board.flash.task_reopen_refused');
             if ($this->isPanelRequest($request)) {
                 return new JsonResponse(['refused' => $exception->refusal->code, 'message' => $this->translator->trans('task_board.flash.task_reopen_refused', [], 'NowoTaskBoardBundle')], Response::HTTP_CONFLICT);
+            }
+        } catch (ColumnTransitionRefusedException $refused) {
+            // Since 2.16.0 (spec 234): the task stays; the board's drag reloads on 409, so the flash shows on that page.
+            $this->logRefused('task_transition_policy');
+            $this->addFlash('error', $this->transitionMessage($refused));
+            if ($this->isPanelRequest($request)) {
+                return new JsonResponse(['refused' => $refused->decision->code, 'message' => $this->translator->trans($this->transitionMessage($refused), [], 'NowoTaskBoardBundle')], Response::HTTP_CONFLICT);
             }
         }
 
@@ -1324,9 +1401,14 @@ final class TaskBoardManageController extends AbstractController
             if ($refusal !== null) {
                 $this->addFlash('error', $refusal);
             } else {
-                $subtask = $this->taskManager->create($task->getBoard(), $data, $user, $task);
-                $this->logWrite('task_subtask', ['task_id' => $taskId, 'subtask_id' => $subtask->getId()]);
-                $this->addFlash('success', 'task_board.flash.subtask_created');
+                try {
+                    $subtask = $this->taskManager->create($task->getBoard(), $data, $user, $task);
+                    $this->logWrite('task_subtask', ['task_id' => $taskId, 'subtask_id' => $subtask->getId()]);
+                    $this->addFlash('success', 'task_board.flash.subtask_created');
+                } catch (ColumnTransitionRefusedException $refused) {
+                    $this->logRefused('task_transition_policy');
+                    $this->addFlash('error', $this->transitionMessage($refused));
+                }
             }
         } elseif ($form->isSubmitted()) {
             $this->flashFormErrors($form);
@@ -2054,6 +2136,17 @@ final class TaskBoardManageController extends AbstractController
     /**
      * The add / edit column form; `board.column_icons` adds the icon field (since 1.11).
      *
+     * @return FormInterface<BoardColumnFormData>
+     */
+    /**
+     * Since 2.16.0 (spec 234): the message of a refused move: the host policy's own, else the bundle's.
+     */
+    private function transitionMessage(ColumnTransitionRefusedException $refused): string
+    {
+        return $refused->decision->message !== '' ? $refused->decision->message : 'task_board.flash.task_move_refused';
+    }
+
+    /**
      * @return FormInterface<BoardColumnFormData>
      */
     private function createColumnForm(BoardColumnFormData $data, ?string $currentIcon = null): FormInterface

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\AbstractColumnEvent;
 use Nowo\TaskBoardBundle\Event\ColumnCreatedEvent;
@@ -13,18 +14,24 @@ use Nowo\TaskBoardBundle\Event\ColumnDeletedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnsReorderedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnUpdatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_column;
 use function array_filter;
 use function array_keys;
 use function array_map;
+use function array_values;
 use function count;
 use function is_string;
 use function max;
@@ -49,6 +56,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         // Since 2.10.0 (spec 216): the column events; none without a dispatcher.
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ?TaskChangeContext $changeContext = null,
+        // Since 2.16.0 (audit PC-M1): asked for every task a column deletion moves; none: every move is allowed.
+        private ?ColumnTransitionPolicyInterface $transitions = null,
     ) {
     }
 
@@ -67,6 +76,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             // Since 2.9.0: one emoji or an icon id; anything else is not stored (the form and the API refuse it first).
             icon: ColumnIcon::normalize($data->icon),
         );
+        $column->setHumansOnly($data->humansOnly);
 
         $board->addColumn($column);
         $this->columnRepository->save($column);
@@ -122,15 +132,16 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void
     {
-        $before = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon()];
+        $before = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
         $column
             ->setName(trim($data->name))
             ->setColor($this->normalize($data->color))
-            ->setIcon(ColumnIcon::normalize($data->icon));
+            ->setIcon(ColumnIcon::normalize($data->icon))
+            ->setHumansOnly($data->humansOnly);
 
         $this->columnRepository->save($column);
 
-        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon()];
+        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
         $changed = array_keys(array_filter($after, static fn (?string $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
         if ($changed !== []) {
             $board = $column->getBoard();
@@ -139,12 +150,37 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
     }
 
     /**
+     * Since 2.16.0 (spec 234, Beacon block W): sets only the column's *humans only* flag, with COLUMN_UPDATED (field
+     * `humansOnly`) when it changes. For a host that copies a board's configuration (no form, no API). False when it
+     * already had that value.
+     */
+    public function setHumansOnly(BoardColumn $column, bool $humansOnly, ?object $actor = null): bool
+    {
+        if ($column->isHumansOnly() === $humansOnly) {
+            return false;
+        }
+        $column->setHumansOnly($humansOnly);
+        $this->columnRepository->save($column);
+        $board = $column->getBoard();
+        $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getName(), [ColumnUpdatedEvent::FIELD_HUMANS_ONLY], ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_UPDATED);
+
+        return true;
+    }
+
+    /**
      * Deletes a column (since 1.11): its tasks move to the end of the board's first remaining column (completed when
      * that column is the last one, reopened otherwise); the last column of a board is never deleted (false).
      *
+     * Since 2.16.0 (audit PC-M1) the column transition policy is asked, before anything changes, for every task that moves
+     * (operation `column_delete`, from the deleted column to the one its tasks go to), all or none: one refusal keeps the
+     * column and every task. Without an actor (a worker) the policy is not asked, as for an import.
+     *
+     * @param ColumnTransitionVia|null $via since 2.16.0: how the tasks move; null: a person in the board UI (`web`)
+     *
      * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses a task: nothing changes
      */
-    public function delete(BoardColumn $column, ?object $actor = null): bool
+    public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {
         $board     = $column->getBoard();
         $remaining = [];
@@ -175,6 +211,9 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 throw new TaskReopenRefusedException($refusal);
             }
         }
+        if ($actor !== null) {
+            $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
+        }
 
         $position = 0;
         foreach ($board->getTasks() as $task) {
@@ -184,11 +223,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
 
         $moved = [];
-        foreach ($board->getTasks() as $task) {
-            if ($task->getColumn() !== $column) {
-                continue;
-            }
-
+        foreach (self::tasksOf($column) as $task) {
             $moved[] = $task->getId();
             $task->setColumn($target)->setPosition($position++);
             if ($target === $lastOne && !$task->isCompleted()) {
@@ -208,6 +243,55 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         $this->dispatch(new ColumnDeletedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $target->getId(), $moved, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_DELETED);
 
         return true;
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-M1): every task of the deleted column, asked as it enters `$target` (the last column once the
+     * deletion is done when `$targetIsLast`). The first refusal stops the deletion before anything changes.
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, object $actor, ColumnTransitionVia $via): void
+    {
+        if (!$this->transitions instanceof ColumnTransitionPolicyInterface) {
+            return;
+        }
+        $board = $column->getBoard();
+        foreach (self::tasksOf($column) as $task) {
+            $transition = new ColumnTransition(
+                Snapshots::board($board),
+                Snapshots::task($task),
+                Snapshots::column($column, $columnIsLast),
+                Snapshots::column($target, $targetIsLast),
+                $actor,
+                ActorId::of($actor),
+                $via,
+                array_values($task->getTags()),
+            );
+            $decision = $this->transitions->decide($transition);
+            if (!$decision->allowed) {
+                throw new ColumnTransitionRefusedException($transition, $decision);
+            }
+        }
+    }
+
+    /**
+     * Since 2.17.0 (audit PG-L2): the tasks of a column in its order (position, then id). The board's collection has no
+     * defined order (MySQL loads it in the primary key's), so the policy and the moves follow this one.
+     *
+     * @return list<Task>
+     */
+    private static function tasksOf(BoardColumn $column): array
+    {
+        $tasks = [];
+        foreach ($column->getBoard()->getTasks() as $task) {
+            if ($task->getColumn() === $column) {
+                $tasks[] = $task;
+            }
+        }
+        usort($tasks, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
+
+        return $tasks;
     }
 
     private function cause(): ?string

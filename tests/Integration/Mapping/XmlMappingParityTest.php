@@ -51,6 +51,7 @@ final class XmlMappingParityTest extends TestCase
         'sync'       => ['Sync/Entity', 'Nowo\\TaskBoardBundle\\Sync\\Entity'],
         'api'        => ['Api/Entity', 'Nowo\\TaskBoardBundle\\Api\\Entity'],
         'recurrence' => ['Recurrence/Entity', 'Nowo\\TaskBoardBundle\\Recurrence\\Entity'],
+        'template'   => ['Template/Entity', 'Nowo\\TaskBoardBundle\\Template\\Entity'],
         'number'     => ['Number/Entity', 'Nowo\\TaskBoardBundle\\Number\\Entity'],
     ];
 

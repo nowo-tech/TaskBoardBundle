@@ -20,6 +20,15 @@
     defaultColor: defaultColor|default(null),
 }) }}
 
+{# Since 2.16.0 (spec 234, FR-016): only people may move tasks into the column (`board.column_humans_only_field`). #}
+{% if form.humansOnly is defined %}
+    <div class="nowo-task-field nowo-task-field--humans-only">
+        {{ form_widget(form.humansOnly, {attr: {(_target): 'humansOnlyInput'}}) }}
+        {{ form_help(form.humansOnly) }}
+        {{ form_errors(form.humansOnly) }}
+    </div>
+{% endif %}
+
 {% if form.icon is defined and form.icon.vars.choices is not defined %}
     {# Since 2.9.0: board.column_icon_form_type (e.g. an emoji picker) is the host's widget, shown as it renders. #}
     <div class="nowo-task-field nowo-task-field--column-icon">

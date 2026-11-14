@@ -189,6 +189,10 @@ task_board.board.subtasks_count: '%done% di %total% sottoattività completate'
 task_board.form.column.icon: "Icona"
 task_board.form.column.no_icon: "Nessuna icona"
 task_board.form.column.icon_help: "Un emoji, facoltativo."
+task_board.form.column.humans_only: "Solo le persone possono spostare attività qui"
+task_board.form.column.humans_only_help: "Gli spostamenti in questa colonna tramite l’API o un agente sono rifiutati."
+task_board.board.column_humans_only: "Solo persone"
+task_board.board.column_humans_only_help: "Solo le persone possono spostare attività in questa colonna."
 task_board.form.column.icon_invalid: "L’icona di una colonna è un emoji (al massimo 16 byte) o una delle icone proposte."
 task_board.form.column.custom_color: 'Colore personalizzato'
 task_board.form.board.column_set: "Colonne"
@@ -495,6 +499,7 @@ task_board.sync.error.restore_refused: "Le attività tornate nel provider non so
 task_board.sync.error.relation_skipped: "Alcune relazioni padre o di dipendenza sono state saltate (l'altra attività manca o non è modificabile)."
 task_board.sync.error.parent_cycle: "Un cambio di padre è stato rifiutato: un'attività diventerebbe antenata di sé stessa."
 task_board.sync.error.assignee_unresolved: "Alcuni assegnatari non corrispondono a nessuno di questa bacheca; quelle attività mantengono i loro assegnatari."
+task_board.sync.error.external_id_look_alike: "Alcune attività del provider sono state saltate: il loro id differisce da uno già sincronizzato solo per maiuscole, accenti o spazi finali. Chiedi al tuo amministratore di applicare l'aggiornamento del database di TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alcuni stati non hanno una colonna nella bacheca; quelle attività sono andate nella colonna predefinita."
 task_board.sync.error.file_quota: "Alcuni file non sono stati copiati: è stato raggiunto il limite di spazio."
 task_board.sync.error.storage_disabled: "I file non vengono copiati: nessuno spazio di archiviazione è configurato."
@@ -642,6 +647,7 @@ task_board.sync.completeness.status.not_exposed: "Non esposto dall’API del pro
 task_board.sync.error.source_details_unavailable: "Non è stato possibile leggere la descrizione della fonte."
 task_board.history.former_user: "Ex persona"
 task_board.flash.task_reopen_refused: "L’attività non è stata spostata: riaprirla supererebbe il limite di attività attive."
+task_board.flash.task_move_refused: "L’attività non è stata spostata: questa colonna non la accetta da qui."
 task_board.flash.column_delete_refused: "La colonna non è stata eliminata: contiene attività completate e riaprirle supererebbe il limite di attività attive."
 task_board.flash.column_icon_invalid: "La colonna non è stata salvata: la sua icona deve essere un emoji o una delle icone proposte."
 task_board.form.board.icon: "Icona"
@@ -915,3 +921,7 @@ task_board.multi.partial: "Il filtro etichetta ha letto solo le prime attività:
 task_board.multi.overdue: "in ritardo"
 # Since 2.14.0: calendar day annotations (calendar.day_annotation_provider).
 task_board.calendar.off_day: "Un assegnatario non lavora il %date%: %label%"
+# Since 2.16.0 (Beacon spec 234, FR-061): the Template picker of the add-task dialog.
+task_board.template.picker: "Modello"
+task_board.template.none: "Nessun modello"
+task_board.template.apply: "Applica modello"

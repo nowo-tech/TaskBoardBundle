@@ -114,7 +114,7 @@ final class ApiReadEndpointsTest extends ApiTestCase
         self::assertSame('Ship the API', $json['name']);
         self::assertSame('**Bold** text', $json['description']);
         self::assertSame('**Bold** text', $json['markdown_description']);
-        self::assertSame(['id' => $this->roadmap->getColumns()->get(1)?->getId(), 'status' => 'Doing', 'color' => null, 'orderindex' => 1, 'type' => 'custom', 'icon' => null], $json['status']);
+        self::assertSame(['id' => $this->roadmap->getColumns()->get(1)?->getId(), 'status' => 'Doing', 'color' => null, 'orderindex' => 1, 'type' => 'custom', 'icon' => null, 'humans_only' => false], $json['status']);
         self::assertSame(['id' => '2', 'priority' => 'high', 'color' => '#f8ae00', 'orderindex' => '2'], $json['priority']);
         self::assertSame('1790000000000', $json['due_date']);
         self::assertSame('5400000', $json['time_estimate']);

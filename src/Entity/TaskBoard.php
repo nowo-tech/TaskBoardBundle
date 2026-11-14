@@ -13,6 +13,7 @@ use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardFolderManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Support\BoardIcon;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
@@ -236,10 +237,16 @@ class TaskBoard
         return $this->tenantKey;
     }
 
+    /**
+     * Since 2.15.1 (REQ-SEC-006 item 1): a key that cannot be matched exactly (edge whitespace, control or format
+     * characters, invalid UTF-8, more than 191 characters) is refused, never trimmed.
+     *
+     * @throws InvalidArgumentException
+     */
     public function setTenantKey(?string $tenantKey): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->tenantKey = $tenantKey;
+        $this->tenantKey = ExactKey::assertUsable($tenantKey, 'tenant key');
 
         return $this;
     }

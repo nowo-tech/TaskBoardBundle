@@ -33,6 +33,7 @@
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
+- [Task templates (since 2.16)](#task-templates-since-216)
 - [New board (since 1.30)](#new-board-since-130)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
@@ -159,6 +160,32 @@ Route names, paths, methods and the prefix are unchanged by 1.21.
 ## Task API (since 2.2)
 
 Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes`, `api.lists_include_folders` (since 2.17.0) and `api.hooks.*`: see [API](API.md).
+
+Since 2.16.0 (Beacon spec 234): `api.hooks.members` (`TaskApiMembersInterface`; null: teams list no members) and
+`api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`; null: a comment's author only).
+
+## Column transitions, humans-only columns and text search (since 2.16)
+
+```yaml
+nowo_task_board:
+    # Service id of a Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface: asked before every move (board UI,
+    # Task API, MCP, bulk). null = every move is allowed.
+    column_transition_policy: Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy
+    humans_only_policy:
+        allow_checklist: false # true: the Task API / MCP may still tick checklist items into a humans-only column
+    board:
+        # The "Only people can move tasks here" toggle of the column dialogs. null = shown when a policy is set.
+        column_humans_only_field: ~
+    search:
+        provider: ~            # a Nowo\TaskBoardBundle\Search\TaskTextSearchInterface; null = DoctrineTaskTextSearch
+        fulltext: false        # MySQL / MariaDB: map and use the FULLTEXT indexes (run the migration first)
+        comments: false        # also match the tasks' comments (not deleted)
+        min_token_length: 3    # the server's innodb_ft_min_token_size; shorter words use LIKE
+        max_matches: 500       # more matches answer 400 SEARCH_001; never a silently cut list
+```
+
+The policy returns a `ColumnTransitionDecision` (`allow()`, or `refuse($code, $message)`); see [API](API.md#column-transitions-revisions-and-bulk-updates-since-216)
+and [UPGRADING](UPGRADING.md#to-2160).
 
 ## Security
 
@@ -763,6 +790,17 @@ pnpm install && pnpm run build
 | `routes.task_recurrence` | `/tools/task-board/task/{taskId}/recurrence` | GET, POST |
 | `routes.task_recurrence_action` | `/tools/task-board/task/{taskId}/recurrence/{action}` | POST; `pause`, `resume`, `stop`, `skip`, `unskip` |
 | `web_ui.templates.task_recurrence` | `@NowoTaskBoardBundle/manage/task_recurrence.html.twig` | The Repeat page |
+
+## Task templates (since 2.16)
+
+Beacon spec 234, FR-061. Opt-in: with `enabled: false` nothing is mapped, registered or rendered.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `task_templates.enabled` | `false` | The table `task_board_task_templates`, `Template\TaskTemplateManager`, the *Template* picker of the add-task dialog and, with `api.enabled`, `GET {api.prefix}/v2/list/{id}/taskTemplate` and `template_id` on a new task |
+| `task_templates.permission` | `null` | Service id of a `Template\TaskTemplatePermissionInterface` (`canManage`, `canUse`). null: `DefaultTaskTemplatePermission` — a board's templates are managed with the right to manage the board (`canManageBoard`), a tenant's with `security.manage_roles` (anyone with `security.resource_scoping: false`), and a template is used with the right to add tasks to the board (`canEditBoard`) |
+
+The schema change is additive (one new table): see [UPGRADING "To 2.16.0"](UPGRADING.md#to-2160). Both mapping types are shipped (`database.mapping_type: attribute` or `xml`, group `template`), and the private entity manager (`database.private_entity_manager: true`) covers the table too.
 
 ## Task numbers and calendar (since 2.1)
 

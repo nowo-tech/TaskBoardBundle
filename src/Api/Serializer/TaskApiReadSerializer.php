@@ -184,7 +184,9 @@ final class TaskApiReadSerializer
             'id'        => $task->getId(),
             'custom_id' => null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
-            'number'           => $task->getNumber(),
+            'number' => $task->getNumber(),
+            // Since 2.16.0 (spec 234, FR-018): the optimistic-lock revision (`If-Match` / `base_revision` on update).
+            'revision'         => $task->getRevision(),
             'name'             => $task->getTitle(),
             'text_content'     => $description,
             'description'      => $description,
@@ -335,7 +337,8 @@ final class TaskApiReadSerializer
             default                             => 'custom',
         };
 
-        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon()];
+        // Since 2.16.0 (spec 234, FR-001 / FR-014): `humans_only`.
+        return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon(), 'humans_only' => $column->isHumansOnly()];
     }
 
     /**

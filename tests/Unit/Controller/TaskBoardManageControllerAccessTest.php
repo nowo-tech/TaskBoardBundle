@@ -64,6 +64,9 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\GitLabMergeRequestLinkParser;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -504,6 +507,31 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $this->expectException(NotFoundHttpException::class);
         $controller->deleteColumn($this->board->getId(), 'missing', Request::create('/', 'POST', ['_token' => 'ok']));
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-M1): the column transition policy refuses a task the deletion would move: the column stays and
+     * the board shows the policy's message.
+     */
+    public function testDeletingAColumnTheTransitionPolicyRefusesKeepsItAndFlashesItsMessage(): void
+    {
+        $done = new BoardColumn($this->board, 'Done', 1);
+        $this->board->addColumn($done);
+        $this->board->getTasks()->add($this->task);
+        $policy = new class implements ColumnTransitionPolicyInterface {
+            public function decide(ColumnTransition $transition): ColumnTransitionDecision
+            {
+                return ColumnTransitionDecision::refuse('WIP_LIMIT', 'Done is full');
+            }
+        };
+        $request  = Request::create('/', 'POST', ['_token' => 'ok']);
+        $response = $this->controller($this->owner, realFormFactory: $this->realFormFactory(), currentRequest: $request, transitions: $policy)
+            ->deleteColumn($this->board->getId(), $this->column->getId(), $request);
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(['Done is full'], $request->getSession()->getFlashBag()->get('error'));
+        self::assertTrue($this->board->getColumns()->contains($this->column));
+        self::assertSame($this->column, $this->task->getColumn());
     }
 
     public function testDeletingAColumnNeedsAValidToken(): void
@@ -1134,7 +1162,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null, ?TaskBoardDefaultViewResolverInterface $defaultView = null, bool $routerThrows = false): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null, ?TaskBoardDefaultViewResolverInterface $defaultView = null, bool $routerThrows = false, ?ColumnTransitionPolicyInterface $transitions = null): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -1163,7 +1191,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $authorization->method('isGranted')->willReturnCallback(static fn (mixed $role): bool => $role === 'ROLE_USER');
 
         $recorder      = new TaskChangeRecorder();
-        $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class));
+        $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class), transitions: $transitions);
 
         $controller = new TaskBoardManageController(
             accessChecker: $accessChecker ?? new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),

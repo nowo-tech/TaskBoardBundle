@@ -15,6 +15,7 @@ use function array_chunk;
 use function array_filter;
 use function array_keys;
 use function array_map;
+use function in_array;
 use function max;
 use function min;
 use function strval;
@@ -30,6 +31,13 @@ final readonly class CalendarDayAnnotator
 {
     /** Task ids per query of the assignee lookup. */
     private const ID_CHUNK = 500;
+
+    /**
+     * Since 2.15.1 (REQ-SEC-006): prefix of the keys of the provider's answer. A PHP array casts a canonical integer
+     * string key to an int (`'1'` and `1` are one key), so a map keyed by a host's user ids is not compared byte for
+     * byte; a key that cannot be an integer never is.
+     */
+    private const KEY_PREFIX = "user\0";
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -61,7 +69,8 @@ final readonly class CalendarDayAnnotator
                 $userIds[$id] = true;
             }
         }
-        $people = $userIds === [] ? [] : $this->provider->assigneeDays($viewer, array_map(strval(...), array_keys($userIds)), $range);
+        $asked  = array_map(strval(...), array_keys($userIds));
+        $people = $this->exactly($userIds === [] ? [] : $this->provider->assigneeDays($viewer, $asked, $range), $asked);
 
         $warnings = [];
         // Only dated tasks are on a calendar.
@@ -72,7 +81,7 @@ final readonly class CalendarDayAnnotator
             $from = max($first, $range->from);
             $to   = min(max($first, $last), $range->to);
             foreach ($assignees[$task->getId()] ?? [] as $userId) {
-                $personal = $people[$userId] ?? null;
+                $personal = $people[self::KEY_PREFIX . $userId] ?? null;
                 if (!$personal instanceof CalendarDayAnnotations) {
                     continue;
                 }
@@ -86,6 +95,29 @@ final readonly class CalendarDayAnnotator
         }
 
         return new CalendarAnnotations($days, $warnings);
+    }
+
+    /**
+     * Since 2.15.1 (REQ-SEC-006): the provider's answer keyed by the asked ids, byte for byte. A host that answers with
+     * a key that is not exactly one of the ids asked (another spelling, another type, a look-alike) annotates nobody,
+     * instead of being matched by PHP's array-key juggling. The ids asked are the bundle's own
+     * (`TaskMember` of the page's tasks), so a key the bundle did not ask for is dropped whatever it holds.
+     *
+     * @param array<array-key, CalendarDayAnnotations> $people
+     * @param list<string> $asked
+     *
+     * @return array<string, CalendarDayAnnotations>
+     */
+    private function exactly(array $people, array $asked): array
+    {
+        $exact = [];
+        foreach ($people as $id => $annotations) {
+            if (in_array((string) $id, $asked, true)) {
+                $exact[self::KEY_PREFIX . $id] = $annotations;
+            }
+        }
+
+        return $exact;
     }
 
     /**

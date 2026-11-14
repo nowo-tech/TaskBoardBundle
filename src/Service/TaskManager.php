@@ -21,14 +21,21 @@ use Nowo\TaskBoardBundle\Event\TaskCreatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMovedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskRestoredEvent;
+use Nowo\TaskBoardBundle\Event\TaskStatusChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_filter;
@@ -59,16 +66,25 @@ final readonly class TaskManager implements TaskManagerInterface
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 1.29.0 (audit HN-M1): the host's limit, asked when a move reopens a completed task.
         private ?SyncLimitCheckerInterface $limits = null,
+        // Since 2.16.0 (spec 234, FR-014): asked before a task enters a column; none: every move is allowed.
+        private ?ColumnTransitionPolicyInterface $transitions = null,
     ) {
     }
 
     /**
      * @param string|null $context since 2.3.0 (spec 215): why the task is created, kept on its "created" history row (e.g.
      *                             "recurring"), for a host's history label
+     * @param ColumnTransitionVia|null $via since 2.16.0 (spec 234): how the task enters its first column, for the column
+     *                                      transition policy; null: a person in the board UI (`web`, `create`)
+     *
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the policy refuses the column: nothing is created
      */
-    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null): Task
+    public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null, ?ColumnTransitionVia $via = null): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
+        if ($column instanceof BoardColumn) {
+            $this->assertTransition($board, null, $column, $creator, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_CREATE), $data->tags);
+        }
 
         $task = new Task(
             board: $board,
@@ -98,10 +114,15 @@ final readonly class TaskManager implements TaskManagerInterface
      * the task goes to the end of its new column, the completion follows the column and TASK_COMPLETED / TASK_REOPENED fire
      * once. A caller that already moved the task passes its current column, so nothing moves twice.
      *
+     * @param ColumnTransitionVia|null $via since 2.16.0: how a column change happens; null: a person in the board UI (`web`)
+     *
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
      * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change, or
+     *                                          (audit PC-L2) the new tags of a task that stays in its column (operation
+     *                                          `retag`): nothing changes
      */
-    public function update(Task $task, TaskFormData $data, object $user): void
+    public function update(Task $task, TaskFormData $data, object $user, ?ColumnTransitionVia $via = null): void
     {
         $oldTitle            = $task->getTitle();
         $oldDescription      = $task->getDescription();
@@ -124,7 +145,14 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         $moves   = $oldColumn?->getId() !== $newColumn?->getId();
         $columns = $this->orderedColumns($task->getBoard());
+        // Since 2.16.0 (audit PC-L2): new tags on a task that stays in its column are asked too (operation `retag`).
+        if (!$moves && $newColumn instanceof BoardColumn && $data->tags !== $oldTags) {
+            $this->assertTransition($task->getBoard(), $task, $newColumn, $user, self::retag($via), $data->tags);
+        }
         if ($moves) {
+            if ($newColumn instanceof BoardColumn) {
+                $this->assertTransition($task->getBoard(), $task, $newColumn, $user, $via ?? ColumnTransitionVia::web(), $data->tags);
+            }
             $this->assertReopenAllowed($task, $newColumn, $columns);
             if ($newColumn instanceof BoardColumn) {
                 $task->setPosition($this->nextPosition($task->getBoard(), $newColumn));
@@ -177,6 +205,7 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         if ($moves) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $newColumn), TaskBoardEvents::TASK_MOVED);
+            $this->dispatchStatusChanged($task, $oldColumn, $newColumn, $user, $via ?? ColumnTransitionVia::web());
         }
         $this->dispatchCompletion($task, $user, $wasCompleted);
     }
@@ -241,10 +270,14 @@ final readonly class TaskManager implements TaskManagerInterface
      * Since 2.3.0 (spec 216, FR-013): adds one tag, with the history and the TASK_UPDATED of the task form (its old tags in
      * the event). False when the tag is empty or already there.
      *
+     * @param ColumnTransitionVia|null $via since 2.16.0: who tags it, for the column transition policy (operation `retag`);
+     *                                      null: a person in the board UI (`web`)
+     *
      * @throws InvalidArgumentException since audit IC-L3, the task form's rules: a tag over {@see TaskConstraints::TAG_MAX}
      *                                  characters, or a task that already has {@see TaskConstraints::TAGS_MAX} tags
+     * @throws ColumnTransitionRefusedException since 2.16.0 (audit PC-L2), when the policy refuses the new tags: nothing changes
      */
-    public function addTag(Task $task, string $tag, object $user): bool
+    public function addTag(Task $task, string $tag, object $user, ?ColumnTransitionVia $via = null): bool
     {
         $tag     = trim($tag);
         $oldTags = $task->getTags();
@@ -256,6 +289,11 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         if (count($oldTags) >= TaskConstraints::TAGS_MAX) {
             throw new InvalidArgumentException(sprintf('A task has at most %d tags.', TaskConstraints::TAGS_MAX));
+        }
+        $column = $task->getColumn();
+        if ($column instanceof BoardColumn) {
+            // Since 2.16.0 (audit PC-L2): the column transition policy is asked about the new tags (operation `retag`).
+            $this->assertTransition($task->getBoard(), $task, $column, $user, self::retag($via), [...$oldTags, $tag]);
         }
         $task->setTags([...$oldTags, $tag]);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
@@ -273,12 +311,12 @@ final readonly class TaskManager implements TaskManagerInterface
      * Moves a task to a column at the given index and renumbers the target column (0..n-1) so
      * client-computed positions (e.g. drag & drop card counts) never collide with existing ones.
      */
-    public function move(Task $task, ?string $columnId, int $position, object $user): void
+    public function move(Task $task, ?string $columnId, int $position, object $user, ?ColumnTransitionVia $via = null): void
     {
-        $this->applyMove($task, $columnId, $position, $user, true);
+        $this->applyMove($task, $columnId, $position, $user, true, $via);
     }
 
-    private function applyMove(Task $task, ?string $columnId, int $position, object $user, bool $renumberSiblings): void
+    private function applyMove(Task $task, ?string $columnId, int $position, object $user, bool $renumberSiblings, ?ColumnTransitionVia $via): void
     {
         $columns      = $this->orderedColumns($task->getBoard());
         $oldColumn    = $task->getColumn();
@@ -287,6 +325,9 @@ final readonly class TaskManager implements TaskManagerInterface
 
         if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
             throw ColumnNotFoundException::forBoard($columnId, $task->getBoard()->getId());
+        }
+        if ($column instanceof BoardColumn && $oldColumn?->getId() !== $column->getId()) {
+            $this->assertTransition($task->getBoard(), $task, $column, $user, $via ?? ColumnTransitionVia::web());
         }
         $this->assertReopenAllowed($task, $column, $columns);
 
@@ -309,8 +350,64 @@ final readonly class TaskManager implements TaskManagerInterface
 
         if ($oldColumn?->getId() !== $column?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
+            $this->dispatchStatusChanged($task, $oldColumn, $column, $user, $via ?? ColumnTransitionVia::web());
         }
         $this->dispatchCompletion($task, $user, $wasCompleted);
+    }
+
+    /**
+     * Since 2.16.0 (spec 234): asks the column transition policy whether the task may enter `$to`, without changing
+     * anything, for a caller that checks every item of a write before the first save (the Task API's bulk update). Staying
+     * in its column is always allowed. `$tags`: the tags the write gives the task (null: its current ones).
+     *
+     * @param list<string>|null $tags
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    public function assertCanEnter(Task $task, BoardColumn $to, object $actor, ColumnTransitionVia $via, ?array $tags = null): void
+    {
+        if ($task->getColumn()?->getId() !== $to->getId()) {
+            $this->assertTransition($task->getBoard(), $task, $to, $actor, $via, $tags);
+        }
+    }
+
+    /**
+     * Since 2.16.0 (spec 234, FR-014): asks the column transition policy before anything changes.
+     *
+     * @param list<string>|null $tags the tags the task will have (null: its current ones)
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    private function assertTransition(TaskBoard $board, ?Task $task, BoardColumn $to, object $actor, ColumnTransitionVia $via, ?array $tags = null): void
+    {
+        if (!$this->transitions instanceof ColumnTransitionPolicyInterface) {
+            return;
+        }
+        $columns    = $this->orderedColumns($board);
+        $last       = $columns === [] ? null : $columns[array_key_last($columns)];
+        $from       = $task?->getColumn();
+        $transition = new ColumnTransition(
+            Snapshots::board($board),
+            $task instanceof Task ? Snapshots::task($task) : null,
+            $from instanceof BoardColumn ? Snapshots::column($from, $from->getId() === $last?->getId()) : null,
+            Snapshots::column($to, $to->getId() === $last?->getId()),
+            $actor,
+            ActorId::of($actor),
+            $via,
+            array_values($tags ?? $task?->getTags() ?? []),
+        );
+        $decision = $this->transitions->decide($transition);
+        if (!$decision->allowed) {
+            throw new ColumnTransitionRefusedException($transition, $decision);
+        }
+    }
+
+    /**
+     * Since 2.16.0 (audit PC-L2): the caller's channel, as operation `retag` (`web` without a caller's).
+     */
+    private static function retag(?ColumnTransitionVia $via): ColumnTransitionVia
+    {
+        return new ColumnTransitionVia($via->channel ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_RETAG);
     }
 
     /**
@@ -341,9 +438,28 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
+     * Since 2.16.0 (spec 234): TASK_STATUS_CHANGED, snapshots only (the column type arrives in 2.17: null).
+     */
+    private function dispatchStatusChanged(Task $task, ?BoardColumn $from, ?BoardColumn $to, object $user, ColumnTransitionVia $via): void
+    {
+        if (!$to instanceof BoardColumn || !$this->eventDispatcher instanceof EventDispatcherInterface) {
+            return;
+        }
+        $columns = $this->orderedColumns($task->getBoard());
+        $last    = $columns === [] ? null : $columns[array_key_last($columns)];
+        $this->dispatch(new TaskStatusChangedEvent(
+            Snapshots::task($task),
+            $from instanceof BoardColumn ? Snapshots::column($from, $from->getId() === $last?->getId()) : null,
+            Snapshots::column($to, $to->getId() === $last?->getId()),
+            ActorId::of($user),
+            $via,
+        ), TaskBoardEvents::TASK_STATUS_CHANGED);
+    }
+
+    /**
      * Dispatches a task event (after the write was saved) when a dispatcher is wired.
      */
-    private function dispatch(AbstractTaskEvent|TaskArchivedEvent|TaskRestoredEvent $event, string $eventName): void
+    private function dispatch(AbstractTaskEvent|TaskArchivedEvent|TaskRestoredEvent|TaskStatusChangedEvent $event, string $eventName): void
     {
         $this->eventDispatcher?->dispatch($event, $eventName);
     }
@@ -371,7 +487,13 @@ final readonly class TaskManager implements TaskManagerInterface
         );
     }
 
-    public function moveToPreviousColumn(Task $task, object $user): bool
+    /**
+     * @param ColumnTransitionVia|null $via since 2.16.0: null is a person in the board UI (`web`)
+     *
+     * @throws ColumnTransitionRefusedException since 2.16.0
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     */
+    public function moveToPreviousColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
         $columns = $this->orderedColumns($task->getBoard());
         $index   = $this->currentColumnIndex($task, $columns);
@@ -381,12 +503,18 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         $target = $columns[$index - 1];
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false);
+        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
 
         return true;
     }
 
-    public function moveToNextColumn(Task $task, object $user): bool
+    /**
+     * @param ColumnTransitionVia|null $via since 2.16.0: null is a person in the board UI (`web`)
+     *
+     * @throws ColumnTransitionRefusedException since 2.16.0
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     */
+    public function moveToNextColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
         $columns = $this->orderedColumns($task->getBoard());
         $index   = $this->currentColumnIndex($task, $columns);
@@ -396,12 +524,18 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false);
+        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
 
         return true;
     }
 
-    public function moveToDone(Task $task, object $user): bool
+    /**
+     * @param ColumnTransitionVia|null $via since 2.16.0: null is a person in the board UI (`web`)
+     *
+     * @throws ColumnTransitionRefusedException since 2.16.0
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     */
+    public function moveToDone(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
         $columns = $this->orderedColumns($task->getBoard());
         if ($columns === []) {
@@ -409,12 +543,20 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         $done = $columns[array_key_last($columns)];
-        $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false);
+        $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false, $via);
 
         return true;
     }
 
-    public function moveToColumn(Task $task, string $columnId, object $user): bool
+    /**
+     * @param ColumnTransitionVia|null $via since 2.16.0 (spec 234): how the move happens, for the column transition policy;
+     *                                      null: a person in the board UI (`web`). The Task API always passes its
+     *                                      principal's channel.
+     *
+     * @throws ColumnTransitionRefusedException since 2.16.0, when the policy refuses: nothing changes
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     */
+    public function moveToColumn(Task $task, string $columnId, object $user, ?ColumnTransitionVia $via = null): bool
     {
         if ($columnId === '') {
             return false;
@@ -425,7 +567,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user, false);
+        $this->applyMove($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user, false, $via);
 
         return true;
     }

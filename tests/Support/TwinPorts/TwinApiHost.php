@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentStoreInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
@@ -32,7 +33,7 @@ use Symfony\Component\HttpFoundation\Request;
  * (a request rebuilt from the {@see TaskApiRequestContext}, the task found again by id, the upload as an `UploadedFile`);
  * the other hooks (no twin) delegate as they are.
  */
-final readonly class TwinApiHost implements TaskApiRequestAuthenticatorInterface, TaskApiTimeStoreInterface, TaskApiAttachmentStoreInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface
+final readonly class TwinApiHost implements TaskApiRequestAuthenticatorInterface, TaskApiTimeStoreInterface, TaskApiAttachmentStoreInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiMembersInterface
 {
     public function __construct(private ApiTestHost $legacy, private TwinLookup $lookup)
     {
@@ -116,5 +117,11 @@ final readonly class TwinApiHost implements TaskApiRequestAuthenticatorInterface
     public function profiles(array $users, TaskApiPrincipal $viewer): array
     {
         return $this->legacy->profiles($users, $viewer);
+    }
+
+    /** Since 2.16.0: already framework-free; asked as the host asks it. */
+    public function members(TaskApiPrincipal $viewer, string $teamId): array
+    {
+        return $this->legacy->members($viewer, $teamId);
     }
 }

@@ -97,6 +97,25 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/comment/{comment_id}':
+    parameters:
+      - {name: comment_id, in: path, required: true, schema: {type: string}}
+    put:
+      operationId: comment_update
+      summary: 'Edit a comment (since 2.16.0); its author by default (api.hooks.comment_edit_policy)'
+      description: 'Least level: My tasks (own). Missing, deleted, out of reach or not editable: 404 alike.'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/CommentCreate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/list/{list_id}':
     parameters:
       - {name: list_id, in: path, required: true, schema: {type: string}}
@@ -234,6 +253,21 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/list/{list_id}/taskTemplate':
+    parameters:
+      - {name: list_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: task_templates
+      summary: 'Task templates the board offers (since 2.16.0, with task_templates.enabled)'
+      description: 'Least level: Full (the right to add tasks to the board). The board''s own templates, then its tenant''s, each allowed by the host''s TaskTemplatePermissionInterface::canUse(). A template of another board or tenant is never listed.'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskTemplates'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/list/{list_id}/task':
     parameters:
       - {name: list_id, in: path, required: true, schema: {type: string}}
@@ -260,6 +294,7 @@ paths:
         - {name: 'date_done_gt', in: query, schema: {type: string}}
         - {name: 'date_done_lt', in: query, schema: {type: string}}
         - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'query', in: query, schema: {type: string, maxLength: 200}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TaskPage'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -455,6 +490,23 @@ paths:
       description: 'Least level: Read. The person''s access and where still apply.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Tags'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  '/v2/task/bulk':
+    post:
+      operationId: task_bulk
+      summary: 'Atomic bulk update of 1 to 50 tasks of one space (since 2.16.0)'
+      description: 'Least level: My tasks (own fields). Any item refused writes nothing: 409 BULK_001 with failures[] (each item''s own status and ECODE).'
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: {content: {application/json: {schema: {type: object, required: [tasks], properties: {tasks: {type: array, maxItems: 50, items: {type: object, required: [id], properties: {id: {type: string}, base_revision: {type: integer}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, tags: {type: array, items: {type: string}}, priority: {type: integer, nullable: true}, due_date: {type: integer, nullable: true}, start_date: {type: integer, nullable: true}, assignees: {type: object}}}}}}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {tasks: {type: array, items: {$ref: '#/components/schemas/Task'}}}}}}}
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
@@ -742,6 +794,23 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  '/v2/team/{team_id}/member':
+    parameters:
+      - {name: team_id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: team_members
+      summary: 'Members of one of the viewer''s teams; ?name= looks one up (since 2.16.0)'
+      description: 'Any level. A team the viewer is not in: 404. The e-mail only on the viewer''s own row; a name lookup answers id, username and service_account only.'
+      parameters:
+        - {name: 'name', in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {members: {type: array, items: {type: object}}}}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   '/v2/team/{team_id}/space':
     parameters:
       - {name: team_id, in: path, required: true, schema: {type: string}}
@@ -784,6 +853,7 @@ paths:
         - {name: 'date_done_gt', in: query, schema: {type: string}}
         - {name: 'date_done_lt', in: query, schema: {type: string}}
         - {name: 'include_markdown_description', in: query, schema: {type: string}}
+        - {name: 'query', in: query, schema: {type: string, maxLength: 200}}
         - {name: 'space_ids[]', in: query, schema: {type: array, items: {type: string}}}
         - {name: 'list_ids[]', in: query, schema: {type: array, items: {type: string}}}
       responses:
@@ -897,7 +967,7 @@ components:
       schema: {type: string, maxLength: 255}
   responses:
     Error:
-      description: 'Every refusal: {"err", "ECODE"}. 404 ACCESS_001 for anything out of reach.'
+      description: 'Every refusal: {"err", "ECODE"}, plus the detail of some codes (TASK_409: current_revision; BULK_001: failures; TASK_003: task_id and scope). 404 ACCESS_001 for anything out of reach.'
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -909,7 +979,29 @@ components:
         err: {type: string}
         ECODE:
           type: string
-          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, FOLDER_001, TASK_002, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, FOLDER_001, TASK_002, TASK_003, TASK_409, BULK_001, BULK_002, BULK_003, SEARCH_001, STATUS_HUMANS_ONLY, STATUS_REFUSED, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, TIME_003, TIME_004, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+        current_revision:
+          type: integer
+          description: 'TASK_409 only (since 2.16.0): the task''s revision now.'
+        task_id:
+          type: string
+          description: 'TASK_003 only (since 2.16.0): the task that could not be numbered.'
+        scope:
+          type: string
+          description: 'TASK_003 only (since 2.16.0): the number scope the caller''s own board asks for.'
+        failures:
+          type: array
+          description: 'BULK_001 only (since 2.16.0): every refused item; nothing was written.'
+          items:
+            type: object
+            required: [index, status, ECODE, err]
+            properties:
+              index: {type: integer}
+              id: {type: string, nullable: true}
+              status: {type: integer}
+              ECODE: {type: string}
+              err: {type: string}
+              current_revision: {type: integer}
     Warnings:
       type: array
       description: 'Fields nothing read: unknown, or a ClickUp field with no equivalent here (not_supported). Never saved.'
@@ -1022,10 +1114,13 @@ components:
     Attachment:
       type: object
       properties: {id: {type: string}, title: {type: string}, extension: {type: string}, url: {type: string}, date: {type: integer}}
+    TaskTemplates:
+      type: object
+      properties: {templates: {type: array, items: {type: object, properties: {id: {type: string}, name: {type: string}, scope: {type: string, enum: [board, tenant]}, description: {type: string, description: 'The Markdown body'}, tags: {type: array, items: {type: object, properties: {name: {type: string}}}}, status: {type: [object, 'null'], description: 'The default column, as a task''s status (a tenant template: the board''s column with exactly its default column name); null: the board''s first column'}}}}}
     TaskCreate:
       type: object
       required: [name]
-      properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}}
+      properties: {name: {type: string, maxLength: 255}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null'], minimum: 1, maximum: 4}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, tags: {type: array, maxItems: 20, items: {type: string, maxLength: 64}}, assignees: {type: array, items: {type: string}}, parent: {type: string}, template_id: {type: string, description: 'Since 2.16.0 (task_templates.enabled): a template the board offers (GET /v2/list/{list_id}/taskTemplate). Its description, tags and status fill only what the body does not set. Any other id is 400 INPUT_002 "Invalid template_id".'}}
     TaskUpdate:
       type: object
       properties: {name: {type: string}, description: {type: string}, markdown_content: {type: string}, status: {type: string}, priority: {type: [integer, 'null']}, due_date: {type: [integer, 'null']}, start_date: {type: [integer, 'null']}, time_estimate: {type: [integer, 'null']}, archived: {type: boolean}, assignees: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}, watchers: {type: object, properties: {add: {type: array, items: {type: string}}, rem: {type: array, items: {type: string}}}}}

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.17.0] - 2026-11-14](#2170---2026-11-14)
+- [[2.16.0] - 2026-11-13](#2160---2026-11-13)
+- [[2.15.1] - 2026-11-13](#2151---2026-11-13)
 - [[2.15.0] - 2026-11-13](#2150---2026-11-13)
 - [[2.14.1] - 2026-11-12](#2141---2026-11-12)
 - [[2.14.0] - 2026-11-12](#2140---2026-11-12)
@@ -107,9 +110,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
+
 ### Added
 
-- **Folders and the restructure service (2.17.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
+- **Folders and the restructure service (2.18.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
   folders (`Entity\TaskBoardFolder`: name, Markdown description, order; `task_board_boards.folder_id`).
   `Folder\TaskBoardRestructureInterface` (public, framework-free: ids in, VOs out) creates, updates, lists and deletes
   folders (only an empty one), moves a board into or out of a folder, and moves tasks between the boards of one tenant
@@ -132,6 +137,224 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `api.lists_include_folders`, false). Nothing changes until a folder is used.
 - `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
   context of the `board_moved` history row, so a host can archive the emptied story.
+
+
+## [2.17.0] - 2026-11-14
+
+Target 2.17.0 (minor). No schema change, no migration, no configuration change.
+
+### Fixed
+
+- **Task revisions are incremented by the database (audit PC-L4, spec 234 FR-018).** Until 2.16.0 the revision was
+  computed in PHP and written as a value, so a writer that does not lock the row (the board UI, `PUT /v2/task/{id}`
+  without `If-Match` / `base_revision`, a sync, a recurrence) and loaded the task before a locked write committed saved
+  the same number for different content, and a later `If-Match` passed on stale data. `Doctrine\TaskRevisionListener`
+  now only marks the changed tasks in `onFlush`; inside the flush's own transaction, after the task's (or its member's)
+  row is written, it runs `UPDATE … SET revision = revision + 1 WHERE id = ?` and puts the value written into the
+  object (`Doctrine\TaskRevisionIncrement`: `RETURNING` on PostgreSQL / SQLite, `LAST_INSERT_ID(revision + 1)` and the
+  connection's insert id on MySQL / MariaDB, so no read is added; UPDATE then SELECT on any other platform).
+  The row stays locked by that transaction until the commit, so every write gets the next number after the last
+  committed one; a rolled-back write takes its 1 with it. The column is mapped `updatable: false` (attributes and XML),
+  so no flush writes a revision from PHP any more. What counts as a revision is unchanged: once per flush, never for a
+  position, total time or `updatedAt` change alone, also for an assignee or watcher added or removed. Tested with two
+  entity managers on two connections (one in-memory SQLite connection by default; MySQL 8.4 and PostgreSQL 16 in CI).
+- **A task deleted during a write (audit PG-L1).** The increment answers "row gone" the same way on every platform
+  (no row from `RETURNING`, 0 affected rows on MySQL / MariaDB and elsewhere): the flush succeeds as in 2.16 and the
+  object keeps its revision, instead of a 500 (`NoIdentityValue`) on MySQL / MariaDB or revision 0 on PostgreSQL /
+  SQLite. A mark a failed flush left on a task is dropped by its next flush (audit PG-I1).
+- **Column deletion order (audit PG-L2).** `BoardColumnManager::delete()` asks the column transition policy and moves
+  the tasks in the column's order (position, then id) instead of the board collection's undefined order: the refusal
+  reported and the order of the moved cards no longer depend on the database (MySQL loaded them by primary key).
+
+### Changed
+
+- `Task::bumpRevision()` (`@internal`, called only by the bundle's listener) is replaced by the `@internal`
+  `markRevisionPending()` / `takeRevisionPending()`. `TaskRevisionListener` (`@internal`) also listens to
+  `postUpdate`, `postPersist` and `postRemove`.
+
+## [2.16.0] - 2026-11-13
+
+Target 2.16.0 (minor; Symfony Beacon spec 234 "AI Flow on Beacon tasks", steps 2–6). Additive: with an unchanged
+configuration every existing answer and behaviour stays, except that the Task API answers gain `revision`,
+`humans_only` and an `ETag`, and `/v2/team` lists members once `api.hooks.members` is set. **Schema change for every
+host** (three columns, one optional index) and one more table with the opt-in task templates: see
+[UPGRADING](UPGRADING.md#to-2160).
+
+### Added
+
+- **Column transition policy** (FR-014 – FR-017). `Transition\ColumnTransitionPolicyInterface::decide(ColumnTransition):
+  ColumnTransitionDecision` (framework-free: board, task and column snapshots, the task's tags, the actor and a
+  `ColumnTransitionVia` channel `web` / `api` / `mcp` / host label and operation `create` / `move` / `bulk` /
+  `checklist`). Asked before anything changes by every move of `TaskManager` (`move()`, previous / next / done,
+  `moveToColumn()`, a column change in `update()`, a create in a column), board UI included, and by every Task API
+  operation that sets a status (create, update, bulk, checklist items) with the principal's own channel (an MCP
+  call reads `mcp`, never `web`). A refusal carries a code and a message: the Task API answers 403 with that code
+  (`STATUS_HUMANS_ONLY`, a host's `WIP_LIMIT`, `BLOCK_REASON_REQUIRED`, …; `STATUS_REFUSED` by default) and message;
+  the board shows the message as a flash and the dragged card goes back (409 on the drag). Option
+  `column_transition_policy` (default `AllowAllColumnTransitionPolicy`); the bundled opt-in
+  `HumansOnlyColumnTransitionPolicy` refuses `api` and `mcp` into a *humans only* column, checklist items included
+  (strict; `humans_only_policy.allow_checklist: true` lets them tick checklist items).
+  `TaskManager` methods gain an optional trailing `?ColumnTransitionVia $via` (null = `web`) and
+  `assertCanEnter()`; `ColumnTransitionRefusedException` (with the decision) is new.
+- **`humansOnly` column flag** (`task_board_columns.humans_only`, default false): `BoardColumn::isHumansOnly()` /
+  `setHumansOnly()`, `BoardColumnFormData::$humansOnly`, `BoardColumnManager::setHumansOnly()` (the domain setter a
+  board configuration copier uses; COLUMN_UPDATED with field `humansOnly`), a toggle in the add / edit column dialogs
+  (`board.column_humans_only_field`, shown by default only with a `column_transition_policy`), a tag in the column
+  header, and `humans_only` on every API status (read, and written by `POST` / `PUT /v2/list/{id}/status…`).
+- **Optimistic locking** (FR-018). `Task::getRevision()` (`task_board_tasks.revision`, 1 for a new task) is bumped once
+  per flush that changes the task (its position, total time and `updatedAt` aside) or its assignees / watchers
+  (`Doctrine\TaskRevisionListener`). The Task API returns `revision` on every task and `ETag: "n"` on
+  `GET` / `PUT /v2/task/{id}`; `PUT /v2/task/{id}` honours `If-Match` (`"n"`, `n`, `W/"n"`, `*`) or `base_revision`: the
+  row is locked, a stale value answers 409 `TASK_409` with `current_revision` and nothing is written.
+- **Atomic bulk update** (FR-021): `POST /v2/task/bulk` with `{"tasks": [{"id", "base_revision"?, "description" |
+  "markdown_content", "status", "tags", "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`, at most
+  50 tasks of one space (`BULK_003`, `BULK_002`), one transaction (rows locked in id order). Any refusal writes nothing
+  and answers 409 `BULK_001` with every failing item in `failures` (index, id, its own status and ECODE, err,
+  `current_revision`); a
+  field a bulk item does not take is refused. After the commit, one `API_WRITE` per task (`task.bulk_update`) and one
+  `TaskBoardEvents::API_BULK_WRITE` (`TaskApiBulkWriteEvent`, with `$count`), so a host counts N writes. Worker mode:
+  refusals are checked before the first write; a failed write rolls back, resets a closed manager and reloads the
+  touched tasks (`Api\Operation\TaskApiTransaction`). The one-space rule compares the tenant keys byte for byte
+  (2.15.1, REQ-SEC-006): a look-alike tenant is another space.
+- **Text search** (FR-026): `query` on `GET /v2/team/{id}/task` and `GET /v2/list/{id}/task`, through
+  `Search\TaskTextSearchInterface` (option `search.provider`), default `DoctrineTaskTextSearch`: every word in the title
+  or description (and, with `search.comments`, a comment that is not deleted); MySQL FULLTEXT with `search.fulltext`
+  (index mapped on MySQL only, `search.min_token_length`), `LIKE` with escaping elsewhere and for short words; user text
+  never reaches the server as boolean-mode operators. Matches are taken only within the boards the token reaches,
+  before any page or limit, then every other filter and *My tasks* apply in SQL; more than `search.max_matches`
+  (default 500) answers 400 `SEARCH_001`.
+- **Team members** (FR-025): `Api\Hook\TaskApiMembersInterface` (`api.hooks.members`, default empty) with
+  `Api\Value\TaskApiMember` (id, name, `isServiceAccount()`, e-mail, colour, picture). `/v2/team` lists them as
+  ClickUp's `members[].user` plus `service_account`; the e-mail is kept only on the viewer's own row whatever the host
+  returns. `GET /v2/team/{id}/member` (all) and `?name=` (prefix of the name or a word of it, case and accents aside;
+  id, username and service-account flag only; at most 20). A team the viewer's workspace hook does not list is 404
+  before the host is asked.
+- **Comment edit**: `PUT /v2/comment/{id}` (`comment_text`, ClickUp's shape, answers `{}`), for a token that may comment
+  on the comment's task, then `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`, default
+  `AuthorOnlyTaskApiCommentEditPolicy`). Missing, deleted, out of reach or not editable: 404 alike.
+- **`TASK_003` names the task (Beacon spec 234).** The 409 a task that cannot be numbered answers (its scope's counter
+  belongs to a look-alike scope, 2.15.1) now carries `task_id` and `scope`, so a client that writes many tasks at once
+  does not bisect its batch to find the offending one. `scope` is the key the caller's **own** board asks for, never the
+  look-alike key stored for another tenant, and nothing else of the task is exposed. It stays a request-level refusal,
+  never an entry of a bulk update's `failures`: the write is all or none.
+  `Exception\TaskNumberScopeConflictException` carries `$scopeKey` and `$taskId` (no number: the conflict is raised
+  before one is reserved).
+- **`TaskBoardEvents::TASK_STATUS_CHANGED`** (`TaskStatusChangedEvent`): after every column change of a task, whatever
+  the channel: task and column snapshots, actor id, channel / operation, and `$toType` (always null until column types
+  arrive in 2.17).
+- **Dependents**: `TaskDependencyManager::dependentsOf(Task)` and `Repository\TaskDependentsLookupInterface`
+  (implemented by `DoctrineOrmTaskDependencyRepository`): the tasks blocked by a task, of its tenant only.
+- **Task templates** (Beacon spec 234, FR-061; opt-in `task_templates.enabled`). A template belongs to one board or one tenant and holds a name, a Markdown description body, default tags and a default column (board templates: a column id of the board; tenant templates: `default_column_name`, applied only on an exact `===` match on the board, else the board's first column).
+  - Table `task_board_task_templates` (attribute and XML mapping, additive), `Template\TaskTemplateManager` (create, update, delete, list, `usableOn()`, `usable()`, `prefill()`).
+  - Host port `Template\TaskTemplatePermissionInterface` (`canManage` / `canUse`, framework-free VOs `TaskTemplateScope` and `TaskTemplateSnapshot`), option `task_templates.permission`; the default `DefaultTaskTemplatePermission` falls back to the existing rights (manage board / `security.manage_roles` / add tasks).
+  - Add-task dialog: a *Template* picker (`TaskTemplatePickerType`) that pre-fills the description, the tags and the column, all still editable.
+  - A template's default column reaches `TaskManager::create()` through the same `TaskFormData::columnId` an explicit `status` uses, so the column transition policy decides on it too: a template pointing at a *humans only* column is refused with that policy's code and message, byte for byte the answer that `status` would give (`ApiTemplateTransitionPolicyTest`).
+  - Task API: `GET /v2/list/{id}/taskTemplate`, and `template_id` on `POST /v2/list/{id}/task` (body fields win over the template; any template the board does not offer is the same 400). `TaskApiTemplateOperations` for in-process (MCP) callers.
+  - Templates as data for configuration presets (Beacon block W, TaskBoard 2.17 board configuration): `TaskTemplateManager::export()` / `replaceAll()`, `TaskTemplateSnapshot::toArray()`, `TaskTemplateData::fromArray()`.
+  - `TaskBoardResourceAccessChecker::canManageTenantTemplates()`.
+
+### Security (audit PC, before the 2.16.0 tag)
+
+- **PC-M1 — the *humans only* gate can no longer be lifted through the column endpoints.** An `api` / `mcp` caller
+  (`HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS`) with a Full token and the manage-columns right could clear a
+  column's `humans_only`, move a task in and set it back; delete a column so that its tasks landed in a humans-only one
+  (the policy was never asked); or reorder / add columns so that a humans-only last column (the completion column) was
+  no longer last. Now, before anything changes, `PUT /v2/list/{id}/status/{status_id}` with another `humans_only`
+  value, `POST /v2/list/{id}/status` with `humans_only: true` or while the last column is humans-only,
+  `DELETE /v2/list/{id}/status/{status_id}` of a humans-only column and `PUT /v2/list/{id}/status/order` that moves a
+  humans-only last column away from the end answer **403 `STATUS_HUMANS_ONLY`**, byte for byte the answer a refused
+  `status` gets (`TaskApiRefusal::humansOnly()`, `HumansOnlyColumnTransitionPolicy::MESSAGE`). Sending a column's
+  current `humans_only` value is accepted; a host's own channel label and the board UI are not affected.
+  `BoardColumnManager::delete()` now asks the column transition policy for **every task it moves** (new operation
+  `ColumnTransitionVia::OP_COLUMN_DELETE`), all or none: one refusal keeps the column and every task
+  (`ColumnTransitionRefusedException`; the API answers the policy's 403, the board UI shows its message). It gains an
+  optional trailing `?ColumnTransitionVia $via` (null: `web`) and an optional `?ColumnTransitionPolicyInterface`
+  constructor argument (autowired); without an actor (a worker) the policy is not asked, as for an import.
+- **PC-L1 — a refusal decided while a bulk update writes is `BULK_001`.** A stateful host rule (a WIP limit that counts
+  the items already written in the same transaction) refusing the second item used to answer a plain 403; it now
+  answers 409 `BULK_001` with that item in `failures` (its own status and ECODE), and every write of the request is
+  still rolled back.
+- **PC-L2 — tag changes are asked to the column transition policy.** When the tags of a task that stays in its column
+  change (`TaskManager::update()`, `TaskManager::addTag()`, `POST` / `DELETE /v2/task/{id}/tag/{name}`, a bulk item's
+  `tags`, a checklist rename), the policy is asked with the new operation `ColumnTransitionVia::OP_RETAG` (`from` and
+  `to` are the same column, `tags` the new ones), so a rule keyed on `repo:` tags cannot be bypassed by moving a task
+  untagged and tagging it afterwards. The bundled humans-only rule allows a retag (it is not an entry).
+  `TaskManager::addTag()` gains an optional trailing `?ColumnTransitionVia $via`. A checklist rename retags every item
+  in one transaction (all or none); `TaskApiChecklistOperations` gains an optional trailing `?TaskApiTransaction`.
+- **PC-L3 — tenant templates and the tenant.** `DefaultTaskTemplatePermission` also asks the host's own tenant-aware
+  access checker (`security.access_checker` implementing `TenantAwareTaskBoardAccessCheckerInterface`) whether the
+  person may list the boards of the template's tenant before letting them manage that tenant's templates. The bundled
+  checkers ignore the tenant and change nothing.
+- **PC-L4 — docs.** UPGRADING now says the schema change runs **before** the deploy, and documents that a writer without
+  `If-Match` / `base_revision` racing a locked write may produce the same revision number (see UPGRADING).
+- REQ-SEC-006: template ids and tenant keys are matched exactly (`Support\ExactKey` on every row read back, before any cap); a tenant key with edge whitespace, control or format characters is refused on entry, and `task_board_task_templates.tenant_key` gets the binary NO PAD collation of the other key columns (2.15.1).
+
+## [2.15.1] - 2026-11-13
+
+Target 2.15.1 (patch). See [UPGRADING](UPGRADING.md#to-2151): MySQL / MariaDB hosts change the collation of the key
+columns.
+
+### Security
+
+- **Tenant keys, board slugs, import external ids and task-number scopes are matched byte for byte (REQ-SEC-006, audit
+  F5, Info/Low).** On a MySQL / MariaDB `*_ci` or PAD SPACE collation `acme` also matched `Acme`, `acmé` and `acme `:
+  a look-alike tenant's board names showed in a tenant's board lists (`findActiveByTenant`),
+  `findOneByTenant` could pick a look-alike's older board, an import treated a look-alike tenant's links as "already
+  imported elsewhere", and `TaskNumberLedger::purgeScope('acme')` also deleted `Acme`'s ledger and counter. Serving a
+  board was never affected (`TaskBoardTenantContext::owns()` compares with `===`).
+  - The key columns get a binary NO PAD collation from the mapping listener (`tenant_key` and `slug` of the boards,
+    `external_id` / `import_source` of the task links, `scope_key` of the task numbers, counters and column sets, and
+    `external_id` / `scope_key` / `workspace_id` of the sync tables): `utf8mb4_0900_bin` on MySQL 8.0.17+,
+    `utf8mb4_nopad_bin` on MariaDB, `utf8mb4_bin` on older MySQL. The unique `(tenant_key, slug)` key no longer folds.
+  - Every lookup and list keeps only the rows whose key is `===` the one asked (`DoctrineOrmTaskBoardRepository`,
+    `DoctrineTaskImportLinkLookup`, `findImportedByExternalIds`, `TaskNumberLedger::find*()`, `findByScope`, the sync
+    item and directory lookups), and the first board of a tenant is chosen after the exact match, not before.
+  - `purgeScope()` selects the ledger and counter rows first, keeps the exact ones and deletes them by primary key; a
+    task-number reservation whose counter row turns out to be a look-alike scope's fails closed (rolled back).
+  - Keys that cannot be matched exactly (edge whitespace or NBSP, control or format characters, invalid UTF-8, more
+    than 191 characters) are refused where they enter: `TaskBoardTenant`, `TaskBoard::setTenantKey()`, `ColumnSet`,
+    the board creator, `purgeScope()`; the default tenant resolver answers 404 for such a slug.
+  - Writes on a column that still folds (before the UPGRADING ALTER) never hit a unique key and close the entity
+    manager (audit OM): a provider task whose sync item exists only as a look-alike (`T1` for `t1`) is skipped and
+    reported (`external_id_look_alike`), and so is a look-alike workspace's people directory (`workspace_look_alike`);
+    the board creator counts a look-alike tenant's slug as taken and suffixes it; a task whose number counter is a
+    look-alike scope's is refused before it is scheduled (`TaskNumberScopeConflictException`, 409 on the pages,
+    `TASK_003` on the API). A sync run that still fails reopens the closed manager.
+  - The request's tenant (`TaskBoardTenantContext`) answers 404 for a `{tenantSlug}` that cannot be matched exactly, for
+    a resolver that refuses the tenant's key, and for a tenant whose slug is not exactly the one in the URL.
+  - The calendar day annotations a host returns (`calendar.day_annotation_provider`, `assigneeDays()`) are read by the
+    exact assignee id asked: the answer is re-keyed in PHP and a key that is not byte for byte one of the ids the bundle
+    asked for annotates nobody, instead of being reached through PHP's array-key juggling. Hardening, in line with the
+    other id lookups; the ids asked are the bundle's own (`TaskMember` of the page's tasks) and the viewer and tenant
+    are passed to the provider, so no annotation crossed a tenant before.
+
+### Fixed
+
+- **`server_version` without a patch number is logged (REQ-SEC-006 item 8).** A MySQL `server_version` of `8.0` or `8`
+  cannot select `utf8mb4_0900_bin`; the key and user-id columns then fall back to the PAD SPACE `utf8mb4_bin` and the
+  bundle logs a warning. The user-id columns of `user_reference: id` also honour a MySQL older than 8.0.17 now.
+- **Id-mode erasure and filters stay under the database's parameter limit (audit OC, Low).** `detachUser()` of
+  `TaskTimeEntrySnapshotPurger` and `TaskSyncPeopleReassigner` update the exact rows 500 primary keys at a time, and
+  the API task list and the multi-board assignee filter keep their candidates in SQL and drop only the tasks matched
+  through a look-alike id, instead of binding every task id of the user (PostgreSQL accepts 65,535 parameters).
+
+### Added
+
+- **`SyncActorProviderInterface` is autowirable (Beacon request).** The default `ConnectionCreatorActorResolver` also
+  implements the framework-free twin (same answers for a `TaskBoardSnapshot` as for the entity) and is aliased, public,
+  under `Sync\Hook\SyncActorProviderInterface`, so a host moves off the deprecated `SyncActorResolverInterface` without
+  copying its logic. The deprecated path is unchanged. When `sync.actor_resolver` names a service that implements the
+  twin, that service takes the alias instead (audit OM TB-I1), so autowiring never hands out the bundle's default in
+  place of a host's stricter resolver. See [UPGRADING](UPGRADING.md#sync-actor-resolver-the-framework-free-twin-is-autowirable).
+
+### Tests
+
+- `ScopeKeyLookAlikeTest`: `Bob`, `bób`, `bob `, `bob\n`, NBSP and ZWSP tenants side by side on the bundle's mapping
+  (MySQL / MariaDB NO PAD, SQLite, PostgreSQL), and on key columns recreated with a folding collation (SQLite NOCASE,
+  MySQL / MariaDB `utf8mb4_general_ci`) every lookup, the import lookup, the ledger, `purgeScope()` and the counter
+  drop the look-alikes' rows. `ExactKeyTest`, `KeyCollationTest`, `SyncActorProviderAliasTest`,
+  `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows). `TaskBoardPortsPassTest` also covers which service the
+  public `SyncActorProviderInterface` alias ends up on.
 
 ### Documentation
 
@@ -2504,7 +2727,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.15.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.17.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

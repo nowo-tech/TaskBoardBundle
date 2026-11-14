@@ -145,6 +145,34 @@ export of each (1,800 requests). Each response must hold its own user's tasks an
 e-mail; memory after a cycle collection grows less than **4 MiB** after a 30-iteration warm-up. The test host clears its
 entity manager at each boundary (REQ-RUNTIME-002 rule 7).
 
+## AI Flow features (2.16.0)
+
+| Service | State | Notes |
+|---------|-------|-------|
+| `Transition\*ColumnTransitionPolicy`, `ValueObject\ColumnTransition*` | none (`final readonly`) | Snapshots copied per call; a host policy must keep no state between calls (stated on the interface) |
+| `Doctrine\TaskRevisionListener` | none | Reads only the flushing unit of work; since 2.17.0 the "to increment" mark lives on the `Task` object (not mapped, cleared once the database added the 1), never in the listener |
+| `Api\Operation\TaskApiTransaction` | none | Every refusal of an update with a base revision or of a bulk update is checked before the first write; a failed write rolls back, drops the held events, resets a manager the flush closed (`RecoveringFlusher::resetIfClosed`) and reloads the touched tasks, so the next request never sees a closed manager or a rolled-back value (audit OG-1 lesson) |
+| `Search\DoctrineTaskTextSearch`, `Search\TaskTextSearchMetadataListener` | none | One DBAL query per search; scalar ids only, nothing enters the identity map |
+| `Support\TextFold` | none (static) | |
+
+**Worker test:** `tests/Functional/Api/ApiAiFlowWorkerTest.php` drives `http_kernel` directly (`handle()` and
+`terminate()`), no services resetter, and alternates two tokens of two tenants over 100 iterations of a refused bulk
+update (stale revision), an accepted one, a text search and a member lookup: each answer holds its own tenant's data,
+the manager stays open, and the revision goes up by one per accepted write.
+
+## Task templates (2.16.0)
+
+| Service | State | Notes |
+|---------|-------|-------|
+| `Template\TaskTemplateManager` | none (`final readonly`) | Reads the templates per call; nothing memoised. Writes flush the bundle's manager (the private one with `database.private_entity_manager: true`) |
+| `Template\DefaultTaskTemplatePermission` | none (`final readonly`) | Reads the board again per call (identity map) |
+| `Api\Operation\TaskApiTemplateOperations`, `Api\Controller\TaskApiTemplateController` | none | Per call |
+| `Form\TaskTemplatePickerType` | none | Options per form |
+
+The host's `TaskTemplatePermissionInterface` must decide per call too (stated on the interface). **Worker test:**
+`tests/Functional/Api/ApiTaskTemplateWorkerTest.php` alternates two tenants' tokens through `http_kernel` without the
+services resetter; each answer holds only its own tenant's templates.
+
 ## Findings
 
 ### W-01 — Unique-constraint violations close the EntityManager (Medium)
