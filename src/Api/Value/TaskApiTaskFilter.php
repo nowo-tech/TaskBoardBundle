@@ -48,7 +48,7 @@ final readonly class TaskApiTaskFilter
      * @param array<string, DateTimeImmutable> $dates `due_date_gt` and the like
      * @param list<string> $spaceIds team endpoint only
      * @param list<string> $listIds team endpoint only
-     * @param list<TaskCustomFieldCondition> $customFields since 2.18.0 (FR-028): `custom_fields`, ClickUp's JSON filter
+     * @param list<TaskCustomFieldCondition> $customFields since 2.19.0 (FR-028): `custom_fields`, ClickUp's JSON filter
      */
     public function __construct(
         public int $page = 0,
@@ -115,7 +115,7 @@ final readonly class TaskApiTaskFilter
     }
 
     /**
-     * Since 2.18.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
+     * Since 2.19.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
      * `=`, `!=`, `<`, `>`, `IS NOT NULL`, `IS NULL`, `ANY` (value: a list). At most 10 conditions; anything else is 400.
      *
      * @throws TaskApiRefusal

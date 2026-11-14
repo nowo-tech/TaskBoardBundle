@@ -17,7 +17,7 @@ use function is_string;
 use function str_replace;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): the task form's custom field rows — the `custom_fields` option of
+ * Since 2.19.0 (Beacon spec 234, FR-028): the task form's custom field rows — the `custom_fields` option of
  * `TaskFormType` for a task (its board's fields and its values) and the save of what was posted. Stateless.
  *
  * @internal used by the bundle's task pages

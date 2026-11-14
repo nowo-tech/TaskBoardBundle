@@ -15,7 +15,7 @@ use Symfony\Contracts\EventDispatcher\Event;
  * of a write that holds its events). Framework-free: snapshots and ids only, copied when the event is built.
  *
  * `$toType` is the new column's type (`open`, `custom`, `done`, `closed`; also `$to->type`). It was always null in
- * 2.16 and 2.17; since 2.18.0 (Beacon spec 234, FR-033) the bundle fills it. A task in a `done` or `closed` column is
+ * 2.16 and 2.17; since 2.19.0 (Beacon spec 234, FR-033) the bundle fills it. A task in a `done` or `closed` column is
  * done; on a board none of whose columns carries a type the last column is `closed`. A listener built by other code
  * may still see null and must treat it as "unknown".
  */

@@ -16,7 +16,7 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): the list view's custom field filter — a field, an operator (=, ≠, <, >, is set,
+ * Since 2.19.0 (Beacon spec 234, FR-028): the list view's custom field filter — a field, an operator (=, ≠, <, >, is set,
  * is not set, in) and a value (comma-separated for "in"), sent as GET query parameters (no CSRF: it changes nothing).
  *
  * @extends AbstractType<mixed>

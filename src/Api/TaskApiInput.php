@@ -103,7 +103,7 @@ final class TaskApiInput
     }
 
     /**
-     * Since 2.18.0: the value as decoded (a string, a number, null…), for a field whose type decides (a custom field).
+     * Since 2.19.0: the value as decoded (a string, a number, null…), for a field whose type decides (a custom field).
      */
     public function raw(string $name): mixed
     {

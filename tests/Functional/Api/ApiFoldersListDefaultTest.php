@@ -13,7 +13,7 @@ use function array_column;
 use function sort;
 
 /**
- * Since 2.18.0: `api.lists_include_folders: true` makes `GET /v2/space/{id}/list` list every board by default;
+ * Since 2.19.0: `api.lists_include_folders: true` makes `GET /v2/space/{id}/list` list every board by default;
  * `include_folders=false` still asks for the folderless ones.
  */
 final class ApiFoldersListDefaultTest extends ApiTestCase

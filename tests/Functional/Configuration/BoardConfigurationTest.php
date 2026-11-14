@@ -27,7 +27,7 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use function array_map;
 
 /**
- * Since 2.18.0 (Beacon block W): a board's configuration, readable and appliable as data.
+ * Since 2.19.0 (Beacon block W): a board's configuration, readable and appliable as data.
  */
 final class BoardConfigurationTest extends CopyTestCase
 {

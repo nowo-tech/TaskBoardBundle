@@ -11,7 +11,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Since 2.18.0 (FR-034): carries a column edit of a board in a sharing folder to the set and the other boards, after the
+ * Since 2.19.0 (FR-034): carries a column edit of a board in a sharing folder to the set and the other boards, after the
  * edit is committed (the column events are dispatched after the commit). A rename moves the siblings' tasks with it; a
  * deleted column's tasks go where the edited board sent its own. Stateless.
  */

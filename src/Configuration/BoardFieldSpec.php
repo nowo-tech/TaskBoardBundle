@@ -14,7 +14,7 @@ use function mb_strlen;
 use function trim;
 
 /**
- * Since 2.18.0 (Beacon block W): one board custom field of a {@see BoardConfiguration} — name, type and, for a dropdown,
+ * Since 2.19.0 (Beacon block W): one board custom field of a {@see BoardConfiguration} — name, type and, for a dropdown,
  * its options (name and colour). Framework-free and serialisable.
  */
 final readonly class BoardFieldSpec

@@ -4,7 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [To 2.18.0](#to-2180)
+- [To 2.19.0](#to-2190)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
@@ -201,7 +201,7 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## To 2.18.0
+## To 2.19.0
 
 Additive (Beacon spec 234 parts A–C, block W). **One schema change for every host**, in four parts that one
 `doctrine:migrations:diff` writes together; run it **before** the deploy (every part is mapped):
@@ -358,7 +358,7 @@ ALTER TABLE task_board_boards ADD number_prefix VARCHAR(16) DEFAULT NULL;
 ALTER TABLE task_board_boards DROP number_prefix;
 ```
 
-With every part of 2.18.0 the board table gains `folder_id` and `number_prefix`: a `doctrine:migrations:diff` run once
+With every part of 2.19.0 the board table gains `folder_id` and `number_prefix`: a `doctrine:migrations:diff` run once
 writes them in one `ALTER TABLE` (one table copy on SQLite).
 
 **Board configuration (presets).** A host that stores presets reads a board with
@@ -369,7 +369,7 @@ keeps `$configuration->toArray()` / `toJson()` as it likes, and copies it onto a
 `Folder\TaskBoardRestructureRefusedException` (`not_found`, `not_allowed`, `columns_in_use` — give a column map,
 `columns_shared` — the board's folder shares its statuses, `fields_in_use` — pass `dropFieldValues: true` to drop them,
 `invalid`, `quota`). Task templates join the configuration through `BoardTemplatesConfigurationInterface`: the default (`NoBoardTemplates`)
-has none, and the bundle's own task templates (2.16, `task_templates.enabled`) are not wired to it in 2.18.0, so a host
+has none, and the bundle's own task templates (2.16, `task_templates.enabled`) are not wired to it in 2.19.0, so a host
 that wants them in its presets aliases the interface to its own service.
 
 ## To 2.17.0

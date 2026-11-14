@@ -116,7 +116,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.18.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
+     * Since 2.19.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
      * view). `content` / `markdown_content`: its Markdown description.
      *
      * @param list<TaskBoard> $boards
@@ -149,7 +149,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.18.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
+     * Since 2.19.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
      *
      * @return array<string, mixed>
      */
@@ -186,7 +186,7 @@ final class TaskApiReadSerializer
 
         $data = [
             'id' => $task->getId(),
-            // Since 2.18.0: with the board's numbering prefix and a number, ClickUp's custom task id (`AIF-12`).
+            // Since 2.19.0: with the board's numbering prefix and a number, ClickUp's custom task id (`AIF-12`).
             'custom_id' => $board->getNumberPrefix() !== null && $task->getNumber() !== null ? $board->getNumberPrefix() . '-' . $task->getNumber() : null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
             'number' => $task->getNumber(),
@@ -336,7 +336,7 @@ final class TaskApiReadSerializer
                 $index = $position;
             }
         }
-        // Since 2.18.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
+        // Since 2.19.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
         $type = ColumnTypes::of($column, $columns)->value;
 
         // Since 2.16.0 (spec 234, FR-001 / FR-014): `humans_only`.
@@ -436,7 +436,7 @@ final class TaskApiReadSerializer
      */
     private function fieldValues(Task $task, TaskApiTaskPage $page): array
     {
-        // Since 2.18.0 (FR-028): every native field of the board first, with its value (null when not set).
+        // Since 2.19.0 (FR-028): every native field of the board first, with its value (null when not set).
         $native = [];
         $values = [];
         foreach ($page->customFieldValues[$task->getId()] ?? [] as $value) {
@@ -455,7 +455,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.18.0 (FR-028): a native custom field in ClickUp's shape (`short_text`, `number`, `drop_down` with its
+     * Since 2.19.0 (FR-028): a native custom field in ClickUp's shape (`short_text`, `number`, `drop_down` with its
      * options and their colours); `writable` true (synced fields are not).
      *
      * @return array<string, mixed>

@@ -106,7 +106,7 @@ final readonly class TaskApiTaskOperations
         private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
         // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
         private ?TaskTemplateManager $templates = null,
-        // Since 2.18.0 (Beacon spec 234, FR-028): native custom fields.
+        // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
         private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
@@ -236,7 +236,7 @@ final readonly class TaskApiTaskOperations
         $archived = $input->bool('archived');
         // Audit IA-L6: every limit before the first save. A restored task that was open, and a done one leaving the done
         // column, each add an active task.
-        // Since 2.18.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
+        // Since 2.19.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
         $reopens  = $status instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($status);
         $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
         if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {
@@ -645,7 +645,7 @@ final readonly class TaskApiTaskOperations
     {
         $this->audit->requireListener();
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
-        // Since 2.18.0 (FR-028): a native field of the task's board is writable; any other (a provider's) stays 409.
+        // Since 2.19.0 (FR-028): a native field of the task's board is writable; any other (a provider's) stays 409.
         $field = $this->customFields?->fieldOfBoard($task->getBoard(), $fieldId);
         if ($field === null || !$input instanceof TaskApiInput) {
             throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');

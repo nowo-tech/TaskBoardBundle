@@ -20,7 +20,7 @@ use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 
 /**
- * Since 2.18.0 (Beacon block W, "work method presets"): a board's configuration as data — readable and appliable — so a
+ * Since 2.19.0 (Beacon block W, "work method presets"): a board's configuration as data — readable and appliable — so a
  * host can store presets and copy them onto boards (no versioning or inheritance: a copy). Framework-free, serialisable to
  * and from an array or JSON ({@see self::toArray()}, {@see self::fromArray()}).
  *

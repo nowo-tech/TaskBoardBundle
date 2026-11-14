@@ -44,7 +44,7 @@ use function is_string;
 use function max;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
+ * Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
  * {@see TaskBoardFolderManager}, and tasks moved between the boards of one tenant.
  *
  * A task move is one transaction: the rows of every moved tree are locked first, then each task changes board in place
@@ -74,7 +74,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         private TaskBoardQuota $quota = new TaskBoardQuota(),
         private ?ManagerRegistry $managerRegistry = null,
         private bool $syncEnabled = false,
-        // Since 2.18.0: asked for every task a move takes to another board (default: every move is allowed).
+        // Since 2.19.0: asked for every task a move takes to another board (default: every move is allowed).
         private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
     ) {
     }
@@ -257,7 +257,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
     }
 
     /**
-     * Since 2.18.0: the column transition policy, for every task that changes board, as it enters the column it will have
+     * Since 2.19.0: the column transition policy, for every task that changes board, as it enters the column it will have
      * on the target. Nothing has changed yet; the first refusal stops the move.
      *
      * @param list<Task> $roots

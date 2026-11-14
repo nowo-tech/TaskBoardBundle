@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Enum;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-028): the type of a native custom field. `apiType()` is ClickUp's name for it.
+ * Since 2.19.0 (Beacon spec 234, FR-028): the type of a native custom field. `apiType()` is ClickUp's name for it.
  */
 enum CustomFieldType: string
 {

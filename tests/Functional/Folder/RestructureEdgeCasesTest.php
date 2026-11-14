@@ -28,7 +28,7 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use function str_repeat;
 
 /**
- * Since 2.18.0: the refusals and edges of the folder manager and the restructure service.
+ * Since 2.19.0: the refusals and edges of the folder manager and the restructure service.
  */
 final class RestructureEdgeCasesTest extends CopyTestCase
 {

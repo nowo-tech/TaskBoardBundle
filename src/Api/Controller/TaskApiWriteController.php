@@ -175,7 +175,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, false), $input);
     }
 
-    /** Since 2.18.0 (FR-028): `{"value": …}` on a native field; a provider's field stays 409 `FIELD_001`. */
+    /** Since 2.19.0 (FR-028): `{"value": …}` on a native field; a provider's field stays 409 `FIELD_001`. */
     public function setField(Request $request, string $taskId, string $fieldId = ''): JsonResponse
     {
         $input = $this->input($request);

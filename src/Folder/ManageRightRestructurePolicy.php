@@ -14,7 +14,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 /**
- * Since 2.18.0: the default {@see TaskBoardRestructurePolicyInterface} — the manage right the bundle already has.
+ * Since 2.19.0: the default {@see TaskBoardRestructurePolicyInterface} — the manage right the bundle already has.
  *
  * - Folders: the create-board decision (`TenantAwareTaskBoardAccessCheckerInterface::canCreateBoard()` with the tenant),
  *   and, with tenancy, a tenant the user opens.

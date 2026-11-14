@@ -20,7 +20,7 @@ use function implode;
 use function preg_match;
 
 /**
- * Since 2.18.0 (Beacon block W): makes a board's configuration exactly a {@see BoardConfiguration}, atomically (one
+ * Since 2.19.0 (Beacon block W): makes a board's configuration exactly a {@see BoardConfiguration}, atomically (one
  * transaction: everything or nothing), under {@see TaskBoardRestructurePolicyInterface::mayRestructureBoard()} (the
  * manage right by default).
  *

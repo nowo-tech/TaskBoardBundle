@@ -35,7 +35,7 @@ services:
             - '../../Copy/TaskCopyResult.php'
             - '../../Copy/TaskColumnRule.php'
             - '../../Move/TaskMovePlan.php'
-            # Since 2.18.0 (Beacon spec 234): data carriers of the restructure service.
+            # Since 2.19.0 (Beacon spec 234): data carriers of the restructure service.
             - '../../Folder/TaskBoardFolderSnapshot.php'
             - '../../Folder/TaskBoardMoveResult.php'
             - '../../Folder/TaskBoardRestructureRefusedException.php'
@@ -194,7 +194,7 @@ services:
         alias: Nowo\TaskBoardBundle\Service\TaskBoardEraser
         public: true
 
-    # Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): folders and the restructure service (public for a host's command);
+    # Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): folders and the restructure service (public for a host's command);
     # the policy port is `restructure.policy` (default: the manage right).
     Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface:
         alias: Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer
@@ -205,7 +205,7 @@ services:
         arguments:
             $syncEnabled: '%nowo_task_board.sync.enabled%'
 
-    # Since 2.18.0 (Beacon block W): board configuration as data (public for a host's presets).
+    # Since 2.19.0 (Beacon block W): board configuration as data (public for a host's presets).
     Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter:
         public: true
     Nowo\TaskBoardBundle\Configuration\BoardConfigurationApplier:

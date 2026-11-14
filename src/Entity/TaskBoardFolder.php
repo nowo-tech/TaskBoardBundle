@@ -15,7 +15,7 @@ use function array_map;
 use function array_values;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031): a folder groups boards of one tenant — a name, a Markdown description and an
+ * Since 2.19.0 (Beacon spec 234, FR-031): a folder groups boards of one tenant — a name, a Markdown description and an
  * order among the tenant's folders. A board points at its folder ({@see TaskBoard::getFolder()}); a folder is deleted only
  * when no board is in it. `tenantKey` null: a folder outside any tenant, for boards without one.
  */
@@ -40,7 +40,7 @@ class TaskBoardFolder
     private string $name;
 
     /**
-     * Since 2.18.0 (Beacon spec 234, FR-034): the folder's shared status set — every board in it has these columns (as
+     * Since 2.19.0 (Beacon spec 234, FR-034): the folder's shared status set — every board in it has these columns (as
      * {@see BoardColumnSpec::toArray()}), kept by {@see FolderStatusSets}; null: each board has its own columns.
      *
      * @var list<array{name: string, type: string, color: ?string, icon: ?string}>|null
@@ -118,7 +118,7 @@ class TaskBoardFolder
     }
 
     /**
-     * Since 2.18.0 (FR-034): the shared status set, null when the boards keep their own columns.
+     * Since 2.19.0 (FR-034): the shared status set, null when the boards keep their own columns.
      *
      * @return list<BoardColumnSpec>|null
      */

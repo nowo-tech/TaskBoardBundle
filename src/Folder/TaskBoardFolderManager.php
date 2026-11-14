@@ -28,7 +28,7 @@ use function trim;
 use function usort;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031): the folders of a tenant and the boards in them, on entities — what the Task API
+ * Since 2.19.0 (Beacon spec 234, FR-031): the folders of a tenant and the boards in them, on entities — what the Task API
  * and {@see TaskBoardRestructurer} call. Every write asks {@see TaskBoardRestructurePolicyInterface} first, then runs in a
  * transaction it opens and closes; a failed flush leaves the entity manager open ({@see RecoveringFlusher}).
  *
@@ -44,7 +44,7 @@ final readonly class TaskBoardFolderManager
         private EntityManagerInterface $entityManager,
         private TaskBoardRestructurePolicyInterface $policy,
         private ?ManagerRegistry $managerRegistry = null,
-        // Since 2.18.0 (FR-034): a board moved into a folder with a shared status set takes its columns.
+        // Since 2.19.0 (FR-034): a board moved into a folder with a shared status set takes its columns.
         private BoardColumnsApplier $columnsApplier = new BoardColumnsApplier(),
     ) {
     }
@@ -191,7 +191,7 @@ final readonly class TaskBoardFolderManager
     }
 
     /**
-     * Since 2.18.0 (FR-034): makes the board's columns the set, inside the caller's transaction (no flush).
+     * Since 2.19.0 (FR-034): makes the board's columns the set, inside the caller's transaction (no flush).
      *
      * @param list<BoardColumnSpec> $set
      * @param array<string, string> $columnMap
@@ -213,7 +213,7 @@ final readonly class TaskBoardFolderManager
     }
 
     /**
-     * Since 2.18.0: every refusal of {@see self::applyColumns()}, changing nothing.
+     * Since 2.19.0: every refusal of {@see self::applyColumns()}, changing nothing.
      *
      * @param list<BoardColumnSpec> $set
      * @param array<string, string> $columnMap
@@ -244,7 +244,7 @@ final readonly class TaskBoardFolderManager
     }
 
     /**
-     * Since 2.18.0: runs `$change` in a transaction of the manager ({@see self::write()}); on a failure the entity manager
+     * Since 2.19.0: runs `$change` in a transaction of the manager ({@see self::write()}); on a failure the entity manager
      * is closed and reset, so in-memory changes of a refused multi-step write are dropped (refusals known in advance are
      * checked before, see {@see self::checkColumns()}).
      *

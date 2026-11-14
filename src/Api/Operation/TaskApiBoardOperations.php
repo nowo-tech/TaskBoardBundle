@@ -47,7 +47,7 @@ use function usort;
  *
  * Since 2.16.0 (audit PC-M1): an `api` / `mcp` caller ({@see HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS}) may not
  * lift a *humans only* gate through the columns: changing a column's `humans_only`, deleting a flagged column, or adding
- * or reordering columns so that a flagged last column (the completion column) is no longer last (since 2.18.0, on a
+ * or reordering columns so that a flagged last column (the completion column) is no longer last (since 2.19.0, on a
  * typed board: adding a done or closed column, or retyping a column into or out of the done columns, while a done column
  * is flagged) is refused with the policy's own answer (403 `STATUS_HUMANS_ONLY`), before anything changes. A deletion also asks the column transition
  * policy for every task it moves (operation `column_delete`), all or none.
@@ -149,7 +149,7 @@ final readonly class TaskApiBoardOperations
         $board = $this->guard->boardColumns($principal, $boardId);
         $data  = $this->columnData($input, new BoardColumnFormData());
         // Audit PC-M1: a new column goes last; on an untyped board it would take the completion away from a flagged last
-        // column. Since 2.18.0 (FR-033): on a typed board only a new done or closed column changes the done columns.
+        // column. Since 2.19.0 (FR-033): on a typed board only a new done or closed column changes the done columns.
         $changesDone = $data->type instanceof ColumnType ? $data->type->isDone() : !ColumnTypes::typed(ColumnTypes::ordered($board));
         if ($this->machine($principal) && ($data->humansOnly || ($changesDone && $this->flaggedDone($board)))) {
             throw TaskApiRefusal::humansOnly();
@@ -176,7 +176,7 @@ final readonly class TaskApiBoardOperations
         if ($this->machine($principal) && $data->humansOnly !== $column->isHumansOnly()) {
             throw TaskApiRefusal::humansOnly();
         }
-        // Since 2.18.0 (FR-033): a retype into or out of the done columns moves the completion, as a reorder does.
+        // Since 2.19.0 (FR-033): a retype into or out of the done columns moves the completion, as a reorder does.
         $retyped = $data->type instanceof ColumnType && $data->type !== ColumnTypes::of($column);
         if ($retyped && $this->machine($principal) && ($data->type->isDone() || ColumnTypes::isDone($column)) && $this->flaggedDone($board)) {
             throw TaskApiRefusal::humansOnly();
@@ -238,7 +238,7 @@ final readonly class TaskApiBoardOperations
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid order: list every column once');
         }
         // Audit PC-M1: on an untyped board the completion follows the last column; a flagged last column stays last for
-        // api / mcp callers. Since 2.18.0 (FR-033) a typed board's done columns are its done and closed ones, whatever
+        // api / mcp callers. Since 2.19.0 (FR-033) a typed board's done columns are its done and closed ones, whatever
         // their order.
         $last = $this->lastColumn($board);
         if ($this->machine($principal) && !ColumnTypes::typed(ColumnTypes::ordered($board)) && $last?->isHumansOnly() === true && $order[count($order) - 1] !== $last->getId()) {
@@ -259,7 +259,7 @@ final readonly class TaskApiBoardOperations
     }
 
     /**
-     * Since 2.18.0 (FR-033): whether one of the board's done columns (column type; the last column on an untyped board) is
+     * Since 2.19.0 (FR-033): whether one of the board's done columns (column type; the last column on an untyped board) is
      * flagged humans only.
      */
     private function flaggedDone(TaskBoard $board): bool
@@ -314,7 +314,7 @@ final readonly class TaskApiBoardOperations
             }
             $data->color = $color;
         }
-        // Since 2.18.0 (FR-033): `open`, `custom`, `done` or `closed` (at most two closed columns per board).
+        // Since 2.19.0 (FR-033): `open`, `custom`, `done` or `closed` (at most two closed columns per board).
         if ($input->has('type')) {
             $type = ColumnType::tryFrom((string) $input->string('type'));
             if (!$type instanceof ColumnType) {
@@ -363,7 +363,7 @@ final readonly class TaskApiBoardOperations
     }
 
     /**
-     * Since 2.18.0: a column write, with the refusals of a column type.
+     * Since 2.19.0: a column write, with the refusals of a column type.
      *
      * @param callable(): BoardColumn $write
      *

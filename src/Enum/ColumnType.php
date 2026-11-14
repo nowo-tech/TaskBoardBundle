@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Enum;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-033): what a column means, as ClickUp's status types. A task in a `done` or `closed`
+ * Since 2.19.0 (Beacon spec 234, FR-033): what a column means, as ClickUp's status types. A task in a `done` or `closed`
  * column is completed; a board may have up to {@see self::MAX_CLOSED} `closed` columns (*hecho*, *cancelada*).
  */
 enum ColumnType: string
