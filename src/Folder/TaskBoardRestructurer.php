@@ -340,11 +340,11 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $completed = $task->isCompleted();
         if ($source instanceof BoardColumn) {
             $mapped = $map['id:' . $source->getId()] ?? $map['name:' . StatusColumns::normalize($source->getName())] ?? null;
-            if ($mapped instanceof BoardColumn && self::fits($mapped, $target, $completed)) {
+            if ($mapped instanceof BoardColumn && $this->fits($mapped, $target, $completed)) {
                 return $mapped;
             }
             foreach ($target->getColumns() as $column) {
-                if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($source->getName()) && self::fits($column, $target, $completed)) {
+                if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($source->getName()) && $this->fits($column, $target, $completed)) {
                     return $column;
                 }
             }
@@ -357,7 +357,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
      * Audit PW-M1: whether a task of that completion may sit in the column, by the rule of a move ({@see TaskColumnRule}):
      * an open task in an open column only, a completed one in a done column only (a board of one column takes both).
      */
-    private static function fits(BoardColumn $column, TaskBoard $target, bool $completed): bool
+    private function fits(BoardColumn $column, TaskBoard $target, bool $completed): bool
     {
         $open   = TaskColumnRule::openColumns($target);
         $isOpen = in_array($column, $open, true);

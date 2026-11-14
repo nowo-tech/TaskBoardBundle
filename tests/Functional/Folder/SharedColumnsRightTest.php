@@ -66,10 +66,10 @@ final class SharedColumnsRightTest extends CopyTestCase
         self::assertInstanceOf(TaskBoard::class, $fresh);
         foreach ([
             'update'  => static fn () => $columns->update(ColumnTypes::ordered($fresh)[0], new BoardColumnFormData('Pwned'), $member),
-            'delete'  => static fn () => $columns->delete(ColumnTypes::ordered($fresh)[1], $member),
-            'add'     => static fn () => $columns->add($fresh, new BoardColumnFormData('Extra'), $member),
+            'delete'  => static fn (): bool => $columns->delete(ColumnTypes::ordered($fresh)[1], $member),
+            'add'     => static fn (): BoardColumn => $columns->add($fresh, new BoardColumnFormData('Extra'), $member),
             'reorder' => static fn () => $columns->reorder($fresh, array_map(static fn (BoardColumn $c): string => $c->getId(), array_reverse(ColumnTypes::ordered($fresh))), $member),
-            'flag'    => static fn () => $columns->setHumansOnly(ColumnTypes::ordered($fresh)[0], true, $member),
+            'flag'    => static fn (): bool => $columns->setHumansOnly(ColumnTypes::ordered($fresh)[0], true, $member),
         ] as $what => $call) {
             try {
                 $call();
