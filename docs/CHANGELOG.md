@@ -124,6 +124,8 @@ Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
   transaction; another tenant's folder, board or task is `not_found`; the entity manager is reset when a failure closed
   it (worker mode, kernel reset off); `TASK_BOARD_CHANGED` after the commit. A dependency is kept when both boards are
   in the same folder (`Folder\TaskBoardDependencyScope`), else removed with a history row.
+- A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
+- Demo: migration `Version20261114100000` (folders).
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`

@@ -202,23 +202,43 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ### Schema change for every host: folders
 
-A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless). Generate it
-with `doctrine:migrations:diff`, or apply (table prefix `task_board_`):
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
+rewritten. `doctrine:migrations:diff` writes it (the demo's `Version20261114100000`). By hand, with the default table
+prefix `task_board_` and the names Doctrine gives the foreign key and its index:
 
 ```sql
--- MySQL / MariaDB
-CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
 ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
-ALTER TABLE task_board_boards ADD CONSTRAINT FK_TASK_BOARD_BOARDS_FOLDER FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
-CREATE INDEX IDX_TASK_BOARD_BOARDS_FOLDER ON task_board_boards (folder_id);
--- PostgreSQL: TIMESTAMP(0) WITHOUT TIME ZONE for the dates, TEXT for the description; the rest is the same.
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
 -- rollback
-ALTER TABLE task_board_boards DROP FOREIGN KEY FK_TASK_BOARD_BOARDS_FOLDER;
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942 ON task_board_boards;
 ALTER TABLE task_board_boards DROP folder_id;
 DROP TABLE task_board_folders;
 ```
 
-Let `doctrine:migrations:diff` name the foreign key and the index: the names above are examples.
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description TEXT DEFAULT NULL, position INT NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_folders_tenant ON task_board_folders (tenant_key);
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+SQLite cannot add a foreign key to an existing table: `doctrine:migrations:diff` copies `task_board_boards` into a new
+table with `folder_id` and the foreign key (`CREATE TEMPORARY TABLE … AS SELECT`, `DROP`, `CREATE`, `INSERT … SELECT`,
+then its indexes again). Let it generate that migration rather than writing it by hand.
+
+The folder's `tenant_key` is a key column (REQ-SEC-006): the mapping listener gives it the binary NO PAD collation on
+MySQL / MariaDB, as the boards' `tenant_key`.
 
 ### Folders and restructure: what a host does
 
