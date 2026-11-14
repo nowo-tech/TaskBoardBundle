@@ -42,6 +42,11 @@ services:
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
             - '../../Recurrence/'
             - '../../Controller/TaskRecurrenceController.php'
+            # Since 2.18.0 (Beacon spec 234): value objects of the member badge and write provenance ports.
+            - '../../Member/MemberBadge.php'
+            - '../../Member/MemberBadgeVariant.php'
+            - '../../Provenance/WriteChannel.php'
+            - '../../Provenance/WriteProvenance.php'
             # Since 2.16.0 (Beacon spec 234): loaded only with `task_templates.enabled` (services_templates.yaml).
             - '../../Template/'
             - '../../EventListener/TimeSpentAggregatorListener.php'
@@ -338,6 +343,13 @@ services:
             $logger: '@?logger'
         tags: [{ name: kernel.reset, method: reset }]
 
+    # Since 2.18.0 (Beacon spec 234): the member badges of a request (TaskBoardExtension sets the provider, or none).
+    Nowo\TaskBoardBundle\Member\MemberBadges:
+        arguments:
+            $provider: ~
+            $logger: '@?logger'
+        tags: [{ name: kernel.reset, method: reset }]
+
     # Since 2.11.1 (REQ-RUNTIME-002): clears the request memos at the request, Messenger and console boundaries, also
     # where the services resetter does not run. Lazy iterator of IGNORE_ON_UNINITIALIZED references ('@!'): a boundary
     # never builds a service. TaskBoardExtension adds TaskRecurrenceView / SyncPeopleViewProvider when they are loaded.
@@ -346,6 +358,7 @@ services:
         arguments:
             $state: !iterator
                 - '@!Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
+                - '@!Nowo\TaskBoardBundle\Member\MemberBadges'
                 - '@!Nowo\TaskBoardBundle\Service\TaskChangeContext'
                 - '@!Nowo\TaskBoardBundle\Service\TaskEventDeferral'
         tags:

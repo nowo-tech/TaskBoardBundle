@@ -18,6 +18,7 @@
 - [Beacon override reduction (2.6)](#beacon-override-reduction-26)
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
+- [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -276,6 +277,21 @@ and e-mails of remote people live only in `task_board_sync_people` (cleared by `
 Since 1.27.0 `task_board_sync_items.remote_meta` and `people` custom fields keep references to those rows, not names. The
 exports `exportFor()` / `exportDirectory()` list the people, not their estimates per task. There is
 no `dump()`, `var_dump()` or `error_log()` in `src/`.
+
+## Member badges and write provenance (since 2.18)
+
+- **No HTML from the host.** `MemberBadge` takes plain text (control and format characters refused) and an allow-listed
+  variant, never a CSS class; the templates print label and title escaped. The actor label of a write is plain text, cut
+  to 120 characters when stored, printed escaped in the pages and returned as a JSON string by the Task API.
+- **Channel from the host, not the client.** The bundle never reads a channel or label from the request; the host's
+  `write_provenance_provider` decides from the path it serves. A forged `channel` / `token_name` field, query or header is
+  ignored (tested).
+- **No secret.** The label is a name the host chooses (an API token's name); a host must never pass the token.
+- **Worker mode.** Badges are memoised per request in `Member\MemberBadges` (`ResetInterface`, cleared at every
+  boundary): a badge of one request never shows in another.
+- **Personal data.** The actor label may name a person: the account erasure clears it with `$anonymise` (USAGE); the
+  Task API answers it only when the host shows the writer to the viewer (audit PS-M1); there is no bundle export of it
+  (read `getActorLabel()` for an access request).
 
 ## Personal data in synced tasks (RGPD / LOPDGDD)
 

@@ -13,9 +13,11 @@ use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
+use Nowo\TaskBoardBundle\Tests\Functional\App\PathWriteProvenance;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingAttachmentStorage;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
+use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedMemberBadges;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTimeBillable;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
@@ -113,6 +115,10 @@ final class ApiKernel extends Kernel
         $services->set('app.api_audit', ApiAuditRecorder::class)->public()
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_WRITE])
             ->tag('kernel.event_listener', ['event' => TaskBoardEvents::API_BULK_WRITE, 'method' => 'onBulk']);
+        // Since 2.18.0 (Beacon spec 234): member badges and write provenance (used when a test sets member_badge_provider /
+        // write_provenance_provider).
+        $container->services()->set('app.member_badges', ScriptedMemberBadges::class)->public();
+        $container->services()->set('app.write_provenance', PathWriteProvenance::class)->autowire()->public();
         // Since 2.16.0 (spec 234): a column transition policy that records what it is asked.
         $services->set('app.transition_policy', RecordingTransitionPolicy::class)->public();
         $container->extension('doctrine', [

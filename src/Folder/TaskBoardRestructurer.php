@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
@@ -76,6 +77,8 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         private bool $syncEnabled = false,
         // Since 2.19.0: asked for every task a move takes to another board (default: every move is allowed).
         private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
+        // Since 2.19.0: without a `$via`, the channel of the host's write provenance (2.18.0), else `web`.
+        private ?WriteProvenanceProviderInterface $provenance = null,
     ) {
     }
 
@@ -154,7 +157,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         if ($refusal !== null) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::QUOTA, [], $refusal);
         }
-        $this->assertTransitions($moving, $target, $map, $actor, new ColumnTransitionVia(($via ?? ColumnTransitionVia::web())->channel, ColumnTransitionVia::OP_BOARD_MOVE));
+        $this->assertTransitions($moving, $target, $map, $actor, new ColumnTransitionVia($via->channel ?? $this->provenance?->current()?->channel->value ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_BOARD_MOVE));
 
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();

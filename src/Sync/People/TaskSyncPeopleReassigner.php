@@ -219,10 +219,22 @@ final readonly class TaskSyncPeopleReassigner
                 // Rows written before 1.25 have no snapshot yet: they get the current name first.
                 $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $name . ' = :label WHERE ' . $where . ' AND x.' . $name . ' IS NULL')
                     ->setParameter('label', $forgetName ? null : $label)->setParameter('match', $match)->execute();
-                $count += (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . ($forgetName ? ', x.' . $name . ' = NULL' : '') . ' WHERE ' . $where)
+                // Since 2.18.0: a forgotten history row loses its actor label too (it may name the person).
+                $forget = $forgetName ? ', x.' . $name . ' = NULL' . ($class === TaskChangeHistory::class ? ', x.actorLabel = NULL' : '') : '';
+                $count += (int) $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.' . $field . ' = NULL' . $forget . ' WHERE ' . $where)
                     ->setParameter('match', $match)->execute();
             }
             $counts[] = $count;
+        }
+        // Since 2.18.0 (Beacon spec 234): the last writer of tasks and comments, and with `$forgetName` that write's actor label.
+        foreach ([Task::class, TaskComment::class] as $class) {
+            [$where, $batches] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+                ? ['x.id IN (:match)', array_chunk(TaskBoardUsers::exactRowIds($this->entityManager, $class, 'updatedBy', TaskBoardUsers::exactId($user)), ExactKey::CHUNK)]
+                : ['x.updatedBy = :match', [$user]];
+            foreach ($batches as $match) {
+                $this->entityManager->createQuery('UPDATE ' . $class . ' x SET x.updatedBy = NULL' . ($forgetName ? ', x.actorLabel = NULL' : '') . ' WHERE ' . $where)
+                    ->setParameter('match', $match)->execute();
+            }
         }
         if ($forgetName) {
             $this->forgetMemberRows($user);
@@ -232,6 +244,9 @@ final readonly class TaskSyncPeopleReassigner
         foreach ($map[Task::class] ?? [] as $task) {
             if ($task instanceof Task && SyncUser::same($task->getCreator(), $user)) {
                 $task->detachCreator($forgetName);
+            }
+            if ($task instanceof Task && SyncUser::same($task->getUpdatedBy(), $user)) {
+                $task->detachUpdatedBy($forgetName);
             }
         }
         foreach ([...$map[TaskBoard::class] ?? [], ...$map[TaskDocument::class] ?? []] as $row) {
@@ -247,6 +262,9 @@ final readonly class TaskSyncPeopleReassigner
         foreach ($map[TaskComment::class] ?? [] as $comment) {
             if ($comment instanceof TaskComment && SyncUser::same($comment->getAuthor(), $user)) {
                 $comment->detachAuthor($forgetName);
+            }
+            if ($comment instanceof TaskComment && SyncUser::same($comment->getUpdatedBy(), $user)) {
+                $comment->detachUpdatedBy($forgetName);
             }
         }
         $this->entityManager->flush();
