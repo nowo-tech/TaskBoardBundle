@@ -1348,7 +1348,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.16.0 (spec 234, FR-018): the task revision of the Task API's optimistic lock, on every manager.
         $container->setDefinition(TaskRevisionListener::class, (new Definition(TaskRevisionListener::class))
             ->setAutowired(false)
-            ->addTag('doctrine.event_listener', ['event' => 'onFlush']));
+            ->addTag('doctrine.event_listener', ['event' => 'onFlush'])
+            // Since 2.17.0 (audit PC-L4): the database adds the 1, inside the flush's transaction.
+            ->addTag('doctrine.event_listener', ['event' => 'postUpdate'])
+            ->addTag('doctrine.event_listener', ['event' => 'postPersist'])
+            ->addTag('doctrine.event_listener', ['event' => 'postRemove']));
     }
 
     /** @param array<string, mixed> $security */

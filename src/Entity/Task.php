@@ -91,9 +91,18 @@ class Task
     /**
      * Since 2.16.0 (spec 234, FR-018): +1 on every flush that changes the task (any field but its position, its total time
      * and `updatedAt`) or its assignees and watchers; 1 for a new task. The Task API's optimistic lock.
+     *
+     * Since 2.17.0 (audit PC-L4): never written from PHP (`updatable: false`); the database adds the 1
+     * (`revision = revision + 1`) inside the flush's transaction, and the value is read back here.
      */
-    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    #[ORM\Column(type: 'integer', updatable: false, options: ['default' => 1])]
     private int $revision = 1;
+
+    /**
+     * Since 2.17.0 (audit PC-L4): set by the flush listener when this flush changes the task, cleared once the database
+     * added the 1. Not mapped; lives as long as this object (never in a service).
+     */
+    private bool $revisionPending = false;
 
     /** @var Collection<int, TaskChangeHistory> */
     #[ORM\OneToMany(targetEntity: TaskChangeHistory::class, mappedBy: 'task', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -840,15 +849,27 @@ class Task
     }
 
     /**
-     * Since 2.16.0: called by the bundle's flush listener only.
+     * Since 2.17.0 (audit PC-L4): this flush changes the task; called by the bundle's flush listener only.
      *
      * @internal
      */
-    public function bumpRevision(): self
+    public function markRevisionPending(): void
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        ++$this->revision;
+        $this->revisionPending = true;
+    }
 
-        return $this;
+    /**
+     * Since 2.17.0 (audit PC-L4): whether the 1 of this flush is still to add, clearing it; the bundle's flush listener only.
+     *
+     * @internal
+     */
+    public function takeRevisionPending(): bool
+    {
+        $pending = $this->revisionPending;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->revisionPending = false;
+
+        return $pending;
     }
 }
