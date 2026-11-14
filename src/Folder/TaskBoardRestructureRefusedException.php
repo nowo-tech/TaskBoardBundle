@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Folder;
 use RuntimeException;
 
 /**
- * Since 2.18.0: a folder or restructure write was refused before anything was written. `reason`:
+ * Since 2.19.0: a folder or restructure write was refused before anything was written. `reason`:
  *
  * - `not_found`: a folder, board or task that does not exist, or one of another tenant (never told apart: 404);
  * - `not_allowed`: {@see TaskBoardRestructurePolicyInterface} said no;
@@ -16,7 +16,7 @@ use RuntimeException;
  * - `board_archived`: an archived board is not a target;
  * - `sync_running`: a provider run is in progress on a board the move touches;
  * - `quota`: the host's quota on the open tasks that arrive (`hostMessage()` is the host's reason);
- * - `columns_in_use` (since 2.18.0, FR-034): applying columns would leave tasks in a column they remove (`board`, `columns`
+ * - `columns_in_use` (since 2.19.0, FR-034): applying columns would leave tasks in a column they remove (`board`, `columns`
  *   name them): give a column map.
  */
 final class TaskBoardRestructureRefusedException extends RuntimeException

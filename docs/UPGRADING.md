@@ -4,7 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [To 2.18.0](#to-2180)
+- [To 2.19.0](#to-2190)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
   - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
@@ -199,7 +199,7 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## To 2.18.0
+## To 2.19.0
 
 ### Schema change for every host: folders
 

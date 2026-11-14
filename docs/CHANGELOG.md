@@ -110,11 +110,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
+Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
 
 ### Added
 
-- **Folders and the restructure service (2.18.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
+- **Folders and the restructure service (2.19.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
   folders (`Entity\TaskBoardFolder`: name, Markdown description, order; `task_board_boards.folder_id`).
   `Folder\TaskBoardRestructureInterface` (public, framework-free: ids in, VOs out) creates, updates, lists and deletes
   folders (only an empty one), moves a board into or out of a folder, and moves tasks between the boards of one tenant

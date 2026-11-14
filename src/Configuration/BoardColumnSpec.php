@@ -14,7 +14,7 @@ use function mb_strlen;
 use function trim;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-033 / FR-034): one column of a board configuration or of a folder's shared status set,
+ * Since 2.19.0 (Beacon spec 234, FR-033 / FR-034): one column of a board configuration or of a folder's shared status set,
  * as data: name, colour, icon and type. Framework-free and serialisable ({@see self::toArray()} / {@see self::fromArray()}).
  */
 final readonly class BoardColumnSpec
@@ -26,7 +26,7 @@ final readonly class BoardColumnSpec
         public ColumnType $type = ColumnType::Custom,
         public ?string $color = null,
         public ?string $icon = null,
-        // Since 2.18.0: the 2.16 humans-only flag of the column (BoardColumn::isHumansOnly()).
+        // Since 2.19.0: the 2.16 humans-only flag of the column (BoardColumn::isHumansOnly()).
         public bool $humansOnly = false,
     ) {
         $trimmed = trim($name);
@@ -61,7 +61,7 @@ final readonly class BoardColumnSpec
             throw new InvalidArgumentException('Invalid column colour, icon or humans-only flag.');
         }
 
-        // An array written before 2.18.0 has no `humansOnly`: false.
+        // An array written before 2.19.0 has no `humansOnly`: false.
         return new self($data['name'], $type, $color, $icon, ($data['humansOnly'] ?? false) === true);
     }
 }

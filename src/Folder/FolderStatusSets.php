@@ -15,7 +15,7 @@ use Psr\Log\NullLogger;
 use Throwable;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-034): a folder's shared status set. Every board in the folder has the set's columns
+ * Since 2.19.0 (Beacon spec 234, FR-034): a folder's shared status set. Every board in the folder has the set's columns
  * (name, order, type), and a change of the set is applied to every board in one transaction; a board whose tasks sit in a
  * column the set drops needs a column map for it (`columns_in_use` otherwise, and nothing is written).
  *

@@ -8,14 +8,14 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * TaskBoardBundle 2.18 (Beacon spec 234, FR-031): board folders. A new table and a nullable folder on every board (every
+ * TaskBoardBundle 2.19 (Beacon spec 234, FR-031): board folders. A new table and a nullable folder on every board (every
  * board stays folderless). The folder's tenant key compares byte for byte, as the boards' (REQ-SEC-006).
  */
 final class Version20261114100000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'TaskBoardBundle 2.18: task_board_folders, task_board_boards.folder_id';
+        return 'TaskBoardBundle 2.19: task_board_folders, task_board_boards.folder_id';
     }
 
     public function up(Schema $schema): void

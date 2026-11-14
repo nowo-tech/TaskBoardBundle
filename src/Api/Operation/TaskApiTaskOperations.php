@@ -232,7 +232,7 @@ final readonly class TaskApiTaskOperations
         $archived = $input->bool('archived');
         // Audit IA-L6: every limit before the first save. A restored task that was open, and a done one leaving the done
         // column, each add an active task.
-        // Since 2.18.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
+        // Since 2.19.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
         $reopens  = $status instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($status);
         $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
         if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {

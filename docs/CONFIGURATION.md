@@ -159,7 +159,7 @@ Route names, paths, methods and the prefix are unchanged by 1.21.
 
 ## Task API (since 2.2)
 
-Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes`, `api.lists_include_folders` (since 2.18.0) and `api.hooks.*`: see [API](API.md).
+Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quota_listener_required`, `api.max_body_bytes`, `api.lists_include_folders` (since 2.19.0) and `api.hooks.*`: see [API](API.md).
 
 Since 2.16.0 (Beacon spec 234): `api.hooks.members` (`TaskApiMembersInterface`; null: teams list no members) and
 `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`; null: a comment's author only).

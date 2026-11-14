@@ -31,7 +31,7 @@ final class InvalidTaskDependencyException extends InvalidArgumentException
 
     public static function otherBoard(): self
     {
-        return new self(self::REASON_OTHER_BOARD, 'A task can only depend on a task of the same board, or (since 2.18.0) of a board of the same folder.');
+        return new self(self::REASON_OTHER_BOARD, 'A task can only depend on a task of the same board, or (since 2.19.0) of a board of the same folder.');
     }
 
     public static function duplicate(): self

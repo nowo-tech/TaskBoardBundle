@@ -93,7 +93,7 @@ final class BoardColumnsApplierTest extends TestCase
     {
         $spec = BoardColumnSpec::fromArray(['name' => 'Hecho', 'type' => 'closed', 'color' => '#fff', 'icon' => null]);
         self::assertSame(['name' => 'Hecho', 'type' => 'closed', 'color' => '#fff', 'icon' => null, 'humansOnly' => false], $spec->toArray());
-        // Since 2.18.0: the humans-only flag travels with the column.
+        // Since 2.19.0: the humans-only flag travels with the column.
         self::assertTrue(BoardColumnSpec::fromArray(['name' => 'Approved', 'humansOnly' => true])->humansOnly);
         self::assertSame(ColumnType::Custom, BoardColumnSpec::fromArray(['name' => 'X'])->type);
         foreach ([null, ['type' => 'open'], ['name' => 'X', 'type' => 'nope'], ['name' => 'X', 'color' => 3], ['name' => 'X', 'humansOnly' => 'yes']] as $bad) {
