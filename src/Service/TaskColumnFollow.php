@@ -41,9 +41,10 @@ final readonly class TaskColumnFollow
 
     /**
      * Every task of the board (read from the database when a manager is at hand: the board's collection may not know them
-     * all): the task, its column and whether it is completed, by task id.
+     * all): the task, its column, the column's name then (a kept column may be renamed by the change) and whether it is
+     * completed, by task id.
      *
-     * @return array<string, array{Task, ?BoardColumn, bool}>
+     * @return array<string, array{Task, ?BoardColumn, ?string, bool}>
      */
     public function snapshot(TaskBoard $board): array
     {
@@ -55,7 +56,7 @@ final readonly class TaskColumnFollow
         }
         $before = [];
         foreach ($tasks as $task) {
-            $before[$task->getId()] = [$task, $task->getColumn(), $task->isCompleted()];
+            $before[$task->getId()] = [$task, $task->getColumn(), $task->getColumn()?->getName(), $task->isCompleted()];
         }
 
         return $before;
@@ -64,7 +65,7 @@ final readonly class TaskColumnFollow
     /**
      * History rows for the tasks of `$before` whose column or completion changed (no flush).
      *
-     * @param array<string, array{Task, ?BoardColumn, bool}> $before
+     * @param array<string, array{Task, ?BoardColumn, ?string, bool}> $before
      *
      * @return list<array{object, string}> the events to dispatch after the commit, with their names
      */
@@ -73,15 +74,16 @@ final readonly class TaskColumnFollow
         $events  = [];
         $columns = ColumnTypes::ordered($board);
         $last    = $columns === [] ? null : $columns[array_key_last($columns)];
-        foreach ($before as [$task, $from, $wasCompleted]) {
-            $to         = $task->getColumn();
-            $moved      = $from?->getId() !== $to?->getId();
+        foreach ($before as [$task, $from, $fromName, $wasCompleted]) {
+            $to = $task->getColumn();
+            // A kept column renamed by the change (a merge keeps the first matched column) is a new status too.
+            $moved      = $from?->getId() !== $to?->getId() || $fromName !== $to?->getName();
             $completion = $wasCompleted !== $task->isCompleted();
             if (!$moved && !$completion) {
                 continue;
             }
             if ($actor !== null) {
-                $this->recorder?->recordIfChanged($task, $actor, TaskChangeType::Column, $from, $to);
+                $this->recorder?->recordIfChanged($task, $actor, TaskChangeType::Column, $fromName, $to?->getName());
                 $this->recorder?->recordIfChanged($task, $actor, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
             }
             if ($moved && $to instanceof BoardColumn) {
