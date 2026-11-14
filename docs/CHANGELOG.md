@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.18.0] - 2026-11-14](#2180---2026-11-14)
 - [[2.17.0] - 2026-11-14](#2170---2026-11-14)
 - [[2.16.0] - 2026-11-13](#2160---2026-11-13)
 - [[2.15.1] - 2026-11-13](#2151---2026-11-13)
@@ -156,8 +157,8 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   fields' order (the order of `fieldsFor()`) on every database; a tenant field's `tenant_key` is a key column
   (REQ-SEC-006: binary NO PAD collation on MySQL / MariaDB).
 - A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
-- Demo: migrations `Version20261114100000` (folders), `Version20261114110000` (column types, status sets),
-  `Version20261114120000` (custom fields), `Version20261114130000` (numbering prefix).
+- Demo: migrations `Version20261115100000` (folders), `Version20261115110000` (column types, status sets),
+  `Version20261115120000` (custom fields), `Version20261115130000` (numbering prefix).
 - **Board configuration as data (Beacon block W, work method presets).** `Configuration\BoardConfiguration` — a
   framework-free VO, serialisable to and from an array or JSON — holds a board's columns (order, name, type, colour,
   icon), its own custom fields (options and colours), its task templates (through
@@ -189,6 +190,39 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
 - `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
   context of the `board_moved` history row, so a host can archive the emptied story.
 
+## [2.18.0] - 2026-11-14
+
+Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-2180).
+
+### Added
+
+- **Member badges (Beacon spec 234, D-20261114-05).** `member_badge_provider`: a framework-free port
+  (`Member\MemberBadgeProviderInterface::badgesFor()` / `badgesForMany()`, `ValueObject\TaskBoardUserRef` in,
+  `Member\MemberBadge` out) for a pill next to a member's name in the history, the comments and the assignee / watcher
+  chips (Beacon: *Agent* for service accounts). Plain-text values with an allow-listed variant (`neutral`, `info`,
+  `success`, `warning`, `agent`), printed escaped; asked once per task page and memoised per request only
+  (`Member\MemberBadges`, reset at every boundary). The `member_label` macro takes `badges = true` where it shows them,
+  and `manage/_member_label_suffix.html.twig` has a `member_label_suffix` block for presentation overrides. Without a
+  provider nothing is asked and the output is byte-identical.
+- **Write provenance (Beacon spec 234).** `write_provenance_provider`: a framework-free port
+  (`Provenance\WriteProvenanceProviderInterface::current(): ?WriteProvenance`, `WriteChannel` `web|app|api|mcp`, actor
+  label) asked at every task write that records history and every comment added or edited. Stored on history rows
+  (`channel`, `actor_label`) and, as the last write, on tasks and comments (`updated_by_id`, `channel`, `actor_label`).
+  The actor label is plain text, cut to 120 characters when stored (never refused), printed escaped. The history and
+  comments show "via API · label"; the Task API answers of tasks and comments gain `created_by`, `updated_by`,
+  `channel` and `token_name`. Without a provider the provenance columns stay `NULL`.
+- The account erasure (`TaskSyncPeopleReassigner::detachUser()`) drops the person from `updated_by_id` and, with
+  `$anonymise`, clears the actor labels of the rows they wrote.
+
+- Audit PS (before the tag): `token_name` only when the host shows the writer to the viewer (PS-M1); the three
+  last-write columns are written together (PS-L1); an unknown `channel` in the database reads as null (PS-I2); the
+  task page without providers is byte-identical to 2.17 (PS-I1); UPGRADING gives SQLite `ADD COLUMN` statements
+  instead of a table rebuild (PS-M2).
+
+### Changed
+
+- `Task` and `TaskComment` keep their last writer (`updated_by_id`) from now on, with or without a provider. A change of
+  `updatedBy`, `channel` or `actorLabel` alone is no new task revision.
 
 ## [2.17.0] - 2026-11-14
 
@@ -2778,7 +2812,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.17.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.18.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

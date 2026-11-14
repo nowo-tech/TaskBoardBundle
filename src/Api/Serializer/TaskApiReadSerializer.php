@@ -183,6 +183,7 @@ final class TaskApiReadSerializer
         $column      = $task->getColumn();
         $spent       = $task->getTotalTimeSeconds() * 1000 + ($page->manualMinutes[$task->getId()] ?? 0) * 60000;
         $description = (string) $task->getDescription();
+        $updatedBy   = $page->profileOf($task->getUpdatedBy());
 
         $data = [
             'id' => $task->getId(),
@@ -225,6 +226,13 @@ final class TaskApiReadSerializer
             'project'          => self::HIDDEN_FOLDER,
             'folder'           => $this->folderRef($board),
             'space'            => ['id' => $space->id],
+            // Since 2.18.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
+            // not shown to this viewer), where the last write came from and the host's label of its actor (a token's name).
+            'created_by' => $page->profileOf($task->getCreator())?->id,
+            'updated_by' => $updatedBy?->id,
+            'channel'    => $task->getChannel()?->value,
+            // Audit PS-M1 (FR-010): the label names its writer; only when the host shows that person to this viewer.
+            'token_name' => $updatedBy instanceof TaskApiUser ? $task->getActorLabel() : null,
         ];
         if ($page->markdown) {
             $data['markdown_description'] = $description;
@@ -244,9 +252,11 @@ final class TaskApiReadSerializer
     }
 
     /**
+     * @param TaskApiUser|null $updatedBy since 2.18.0: who wrote or last edited it, as the viewer may see them
+     *
      * @return array<string, mixed>
      */
-    public function comment(TaskComment $comment, ?TaskApiUser $author): array
+    public function comment(TaskComment $comment, ?TaskApiUser $author, ?TaskApiUser $updatedBy = null): array
     {
         return [
             'id'           => $comment->getId(),
@@ -259,6 +269,12 @@ final class TaskApiReadSerializer
             'reactions'    => [],
             'date'         => $this->ms($comment->getCreatedAt()),
             'reply_count'  => 0,
+            // Since 2.18.0 (Beacon spec 234): as on a task.
+            'created_by' => $author?->id,
+            'updated_by' => $updatedBy?->id,
+            'channel'    => $comment->getChannel()?->value,
+            // Audit PS-M1 (FR-010): only when the host shows its writer to this viewer.
+            'token_name' => $updatedBy instanceof TaskApiUser ? $comment->getActorLabel() : null,
         ];
     }
 

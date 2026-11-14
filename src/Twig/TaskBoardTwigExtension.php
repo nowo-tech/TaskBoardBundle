@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Member\MemberBadge;
+use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -135,7 +137,20 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskCommentCauseLabelerInterface $commentCauseLabeler = null,
         // Since 2.15.0 (database.user_reference): the host user behind a user reference.
         private readonly ?TaskBoardUsers $users = null,
+        // Since 2.18.0 (Beacon spec 234): `member_badge_provider`, memoised per request.
+        private readonly ?MemberBadges $memberBadges = null,
     ) {
+    }
+
+    /**
+     * Since 2.18.0 (Beacon spec 234): the host's badges of a member (none without `member_badge_provider`). Values, never
+     * HTML: the templates print them escaped.
+     *
+     * @return list<MemberBadge>
+     */
+    public function memberBadges(?object $user): array
+    {
+        return $this->memberBadges?->of($user) ?? [];
     }
 
     /** Since 2.10.0 (spec 216, FR-014): the host's label of why a comment was written; null without a cause or a labeler. */
@@ -363,6 +378,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_column_icon_name', IconNames::columnIcon(...)),
             // Since 2.9.1 (audit JM-I7): whether an update would keep the column's stored icon (false: it is dropped).
             new TwigFunction('nowo_task_board_column_icon_storable', static fn (string $icon): bool => ColumnIcon::normalize($icon) !== null),
+            // Since 2.18.0 (Beacon spec 234): the host's member badges (values; printed escaped).
+            new TwigFunction('nowo_task_board_member_badges', $this->memberBadges(...)),
         ];
     }
 

@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * TaskBoardBundle 2.19 (Beacon block W): a board's numbering prefix (`AIF-12` instead of `#12`). One nullable column.
  */
-final class Version20261114130000 extends AbstractMigration
+final class Version20261115130000 extends AbstractMigration
 {
     public function getDescription(): string
     {

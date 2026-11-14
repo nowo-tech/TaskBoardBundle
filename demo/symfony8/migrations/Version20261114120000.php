@@ -8,28 +8,36 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * TaskBoardBundle 2.19 (Beacon spec 234, FR-028): native custom fields and their values. Two new tables; a tenant
- * field's tenant key compares byte for byte (REQ-SEC-006).
+ * TaskBoardBundle 2.18 (Beacon spec 234): write provenance. Nullable columns only: the channel and actor label of every
+ * history row, and the last writer, channel and actor label of tasks and comments. Existing rows keep NULL; nothing is
+ * rewritten or dropped. MySQL / MariaDB (the demo's database); see UPGRADING for PostgreSQL, SQLite and user_reference: id.
  */
 final class Version20261114120000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'TaskBoardBundle 2.19: task_board_custom_fields, task_board_custom_field_values';
+        return 'TaskBoardBundle 2.18: channel, actor_label (history, tasks, comments), updated_by_id (tasks, comments)';
     }
 
     public function up(Schema $schema): void
     {
-        $this->addSql('CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
-        $this->addSql('CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
-        $this->addSql('ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE');
-        $this->addSql('ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE');
-        $this->addSql('ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE task_board_task_change_history ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL');
+        $this->addSql('ALTER TABLE task_board_tasks ADD updated_by_id INT DEFAULT NULL, ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL');
+        $this->addSql('ALTER TABLE task_board_tasks ADD CONSTRAINT FK_B4902F8E896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL');
+        $this->addSql('CREATE INDEX IDX_B4902F8E896DBBDE ON task_board_tasks (updated_by_id)');
+        $this->addSql('ALTER TABLE task_board_task_comments ADD updated_by_id INT DEFAULT NULL, ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL');
+        $this->addSql('ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL');
+        $this->addSql('CREATE INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments (updated_by_id)');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('DROP TABLE task_board_custom_field_values');
-        $this->addSql('DROP TABLE task_board_custom_fields');
+        $this->addSql('ALTER TABLE task_board_task_comments DROP FOREIGN KEY FK_BC3E8197896DBBDE');
+        $this->addSql('DROP INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments');
+        $this->addSql('ALTER TABLE task_board_task_comments DROP updated_by_id, DROP channel, DROP actor_label');
+        $this->addSql('ALTER TABLE task_board_tasks DROP FOREIGN KEY FK_B4902F8E896DBBDE');
+        $this->addSql('DROP INDEX IDX_B4902F8E896DBBDE ON task_board_tasks');
+        $this->addSql('ALTER TABLE task_board_tasks DROP updated_by_id, DROP channel, DROP actor_label');
+        $this->addSql('ALTER TABLE task_board_task_change_history DROP channel, DROP actor_label');
     }
 }

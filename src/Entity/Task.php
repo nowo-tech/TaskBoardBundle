@@ -12,6 +12,9 @@ use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Move\TaskMover;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
+use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
@@ -61,6 +64,24 @@ class Task
     /** Since 1.25 (audit FP-M1): the creator's name, kept when the account is erased (`creator_id` SET NULL). */
     #[ORM\Column(name: 'creator_name', type: 'string', length: 180, nullable: true)]
     private ?string $creatorName;
+
+    /**
+     * Since 2.18.0 (Beacon spec 234): who made the task's last recorded write (the user of its newest history row; null
+     * for rows written before 2.18, or once the account was erased). With {@see self::$channel} and
+     * {@see self::$actorLabel} it is the provenance of that write; the history keeps each one.
+     */
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'updated_by_id', nullable: true, onDelete: 'SET NULL')]
+    private ?object $updatedBy = null;
+
+    /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from; null: the host did not say. */
+    // Audit PS-I2: a plain string, read through WriteChannel::tryFrom(); a value outside the list reads as null.
+    #[ORM\Column(type: 'string', length: 8, nullable: true)]
+    private ?string $channel = null;
+
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
+    #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
+    private ?string $actorLabel = null;
 
     #[ORM\Column(name: 'total_time_seconds', type: 'integer')]
     private int $totalTimeSeconds = 0;
@@ -284,6 +305,60 @@ class Task
         if ($forgetName) {
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->creatorName = null;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Since 2.18.0 (Beacon spec 234): who made the last recorded write and its provenance (null: none, the columns are
+     * cleared). Changing these fields alone is no new revision.
+     *
+     * @internal called by {@see TaskChangeRecorder} at every history row
+     */
+    public function recordWrite(object $actor, ?WriteProvenance $provenance): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedBy = $actor;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->channel = $provenance?->channel->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
+
+        return $this;
+    }
+
+    /** Since 2.18.0 (Beacon spec 234): who made the last recorded write; null before 2.18 or once the account was erased. */
+    public function getUpdatedBy(): ?object
+    {
+        return $this->updatedBy;
+    }
+
+    /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from. */
+    public function getChannel(): ?WriteChannel
+    {
+        return $this->channel === null ? null : WriteChannel::tryFrom($this->channel);
+    }
+
+    /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */
+    public function getActorLabel(): ?string
+    {
+        return $this->actorLabel;
+    }
+
+    /**
+     * Since 2.18.0: the account of the last writer is being erased — the task stops pointing at it; with `$forgetName` the
+     * actor label goes too.
+     *
+     * @internal used by the account erasure helper ({@see TaskSyncPeopleReassigner::detachUser()})
+     */
+    public function detachUpdatedBy(bool $forgetName = false): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->updatedBy = null;
+        if ($forgetName) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+            $this->actorLabel = null;
         }
 
         return $this;

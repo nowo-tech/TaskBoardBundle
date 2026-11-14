@@ -30,10 +30,10 @@
                     {% if entry.user %}{{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: entry.user, class: 'nowo-task-detail__history-avatar', size: 32, labelled: false}, with_context: false) }}{% endif %}
                     <div class="nowo-task-activity__body">
                         <div class="nowo-task-detail__history-summary">
-                            <strong>{% if entry.user %}{{ memberUi.member_label(entry.user) }}{% else %}{{ entry.userName ?: 'task_board.history.former_user'|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</strong>
+                            <strong>{% if entry.user %}{{ memberUi.member_label(entry.user, true) }}{% else %}{{ entry.userName ?: 'task_board.history.former_user'|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</strong>
                             <span class="nowo-task-activity__action">
                                 {{ changeKey|trans({}, 'NowoTaskBoardBundle') }}
-                            {# Since 2.3.0 (spec 216): why, through history.cause_labeler; nothing without one. #}{% set _cause = nowo_task_board_change_cause(entry) %}{% if _cause is not null %}<span class="nowo-task-activity__cause" data-testid="nowo-task-history-cause">({{ _cause }})</span>{% endif %}</span>
+                            {# Since 2.3.0 (spec 216): why, through history.cause_labeler; nothing without one. #}{% set _cause = nowo_task_board_change_cause(entry) %}{% if _cause is not null %}<span class="nowo-task-activity__cause" data-testid="nowo-task-history-cause">({{ _cause }})</span>{% endif %}{# Since 2.18.0 (Beacon spec 234): where the write came from and the host's label of its actor, escaped; nothing without a provenance provider. #}{% if entry.channel or entry.actorLabel %} <span class="nowo-task-activity__via" data-testid="nowo-task-history-via">{% if entry.channel %}{{ ('task_board.history.channel.' ~ entry.channel.value)|trans({}, 'NowoTaskBoardBundle') }}{% endif %}{% if entry.channel and entry.actorLabel %} · {% endif %}{{ entry.actorLabel }}</span>{% endif %}</span>
                         </div>
                         {% if entry.oldValue is not null or entry.newValue is not null %}
                             <div class="nowo-task-detail__history-values nowo-task-activity__values">
