@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.19.0](#to-2190)
+  - [Schema change for every host: folders](#schema-change-for-every-host-folders)
+  - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -196,6 +199,71 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.19.0
+
+### Schema change for every host: folders
+
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
+rewritten. `doctrine:migrations:diff` writes it (the demo's `Version20261115100000`). By hand, with the default table
+prefix `task_board_` and the names Doctrine gives the foreign key and its index:
+
+```sql
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- The table takes the database's default charset and collation: they must be those of task_board_boards, or the
+-- foreign key below fails (MySQL error 3780). Check with SHOW CREATE TABLE task_board_boards and add the same
+-- DEFAULT CHARACTER SET … COLLATE … to the CREATE TABLE if the database default differs.
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id));
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942 ON task_board_boards;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description TEXT DEFAULT NULL, position INT NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_folders_tenant ON task_board_folders (tenant_key);
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+SQLite cannot add a foreign key to an existing table: `doctrine:migrations:diff` copies `task_board_boards` into a new
+table with `folder_id` and the foreign key (`CREATE TEMPORARY TABLE … AS SELECT`, `DROP`, `CREATE`, `INSERT … SELECT`,
+then its indexes again). Let it generate that migration rather than writing it by hand.
+
+The folder's `tenant_key` is a key column (REQ-SEC-006): the mapping listener gives it the binary NO PAD collation on
+MySQL / MariaDB, as the boards' `tenant_key`.
+
+### Folders and restructure: what a host does
+
+Nothing, unless you use folders:
+
+- **Restructure service.** Inject `Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface` (public): folders,
+  `moveBoardToFolder()` and `moveTasks($actor, $taskIds, $targetBoardId, $columnMap)`. It refuses with
+  `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
+  `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
+  `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
+  (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked through the channel of your
+  `write_provenance_provider` (2.18.0), else as `web` (a person).
+- **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
+  (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
+  right the bundle already has.
+- **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
+  folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`, or pass `include_folders=true`. A host whose
+  clients expect every board sets `api.lists_include_folders: true`.
 
 ## To 2.18.0
 

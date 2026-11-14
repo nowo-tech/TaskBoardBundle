@@ -90,6 +90,8 @@ final class FoldingKeyWritesTest extends TaskNumberTestCase
             "ALTER TABLE task_board_task_links MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE {$c} DEFAULT NULL, MODIFY import_source VARCHAR(64) CHARACTER SET utf8mb4 COLLATE {$c} DEFAULT NULL",
             "ALTER TABLE task_board_sync_items MODIFY external_id VARCHAR(128) CHARACTER SET utf8mb4 COLLATE {$c} NOT NULL",
             "ALTER TABLE task_board_sync_directories MODIFY scope_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE {$c} NOT NULL, MODIFY workspace_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE {$c} NOT NULL",
+            // Since 2.19.0: the folders' tenant, which UPGRADING "To 2.19.0" creates with this collation.
+            "ALTER TABLE task_board_folders MODIFY tenant_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE {$c} DEFAULT NULL",
         ] as $statement) {
             $db->executeStatement($statement);
         }

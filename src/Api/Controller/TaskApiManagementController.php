@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Controller;
 
+use LogicException;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiBoardOperations;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiFolderOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
@@ -27,7 +29,58 @@ final readonly class TaskApiManagementController
         private TaskApiReadOperations $reads,
         private TaskApiReadSerializer $serializer,
         private int $maxBodyBytes,
+        // Since 2.19.0 (Beacon spec 234): folders.
+        private ?TaskApiFolderOperations $folders = null,
     ) {
+    }
+
+    /** Since 2.19.0: `POST /v2/space/{id}/folder`. */
+    public function createFolder(Request $request, string $spaceId): JsonResponse
+    {
+        $input  = $this->input($request);
+        $folder = $this->folderOperations()->createFolder($this->principal($request), $spaceId, $input);
+
+        return $this->folder($request, $folder->getId(), $folder->getTenantKey(), $input);
+    }
+
+    /** Since 2.19.0: `PUT /v2/folder/{id}`. */
+    public function updateFolder(Request $request, string $folderId): JsonResponse
+    {
+        $input  = $this->input($request);
+        $folder = $this->folderOperations()->updateFolder($this->principal($request), $folderId, $input);
+
+        return $this->folder($request, $folder->getId(), $folder->getTenantKey(), $input);
+    }
+
+    /** Since 2.19.0: `DELETE /v2/folder/{id}`: 200 `{}`; 409 `FOLDER_001` while lists are in it. */
+    public function deleteFolder(Request $request, string $folderId): JsonResponse
+    {
+        $input = $this->input($request);
+        TaskApiIdempotencyListener::targetTenant($request, $this->folderOperations()->deleteFolder($this->principal($request), $folderId));
+
+        return $this->answer([], $input);
+    }
+
+    /** Since 2.19.0: `POST /v2/folder/{id}/list`: a board created in the folder. */
+    public function createFolderList(Request $request, string $folderId): JsonResponse
+    {
+        $input = $this->input($request, TaskApiBoardOperations::NOT_SUPPORTED);
+
+        return $this->board($request, $this->folderOperations()->createList($this->principal($request), $folderId, $input), $input);
+    }
+
+    private function folder(Request $request, string $folderId, ?string $tenantKey, TaskApiInput $input): JsonResponse
+    {
+        TaskApiIdempotencyListener::targetTenant($request, $tenantKey);
+        $list   = $this->folderOperations()->folder($this->principal($request), $folderId);
+        $folder = $list->folders[0];
+
+        return $this->answer($this->serializer->folder($folder, $list->space, $list->boards[$folder->getId()] ?? [], $list->taskCounts), $input);
+    }
+
+    private function folderOperations(): TaskApiFolderOperations
+    {
+        return $this->folders ?? throw new LogicException('TaskApiFolderOperations is not wired.');
     }
 
     public function createBoard(Request $request, string $spaceId): JsonResponse

@@ -50,6 +50,13 @@ final readonly class ColumnTransitionVia
     public const OP_RETAG = 'retag';
 
     /**
+     * Since 2.19.0 (Beacon spec 234, FR-045): a task moved to another board of its tenant by
+     * `Folder\TaskBoardRestructureInterface::moveTasks()` (each task of each moved subtree, into the column it will have
+     * there); a refusal moves nothing.
+     */
+    public const OP_BOARD_MOVE = 'board_move';
+
+    /**
      * @param string $channel `[a-z][a-z0-9_]{0,31}`
      * @param string $operation `[a-z][a-z0-9_]{0,31}`
      */

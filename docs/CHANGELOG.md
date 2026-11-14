@@ -111,6 +111,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
+
+### Added
+
+- **Folders and the restructure service (2.19.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
+  folders (`Entity\TaskBoardFolder`: name, Markdown description, order; `task_board_boards.folder_id`).
+  `Folder\TaskBoardRestructureInterface` (public, framework-free: ids in, VOs out) creates, updates, lists and deletes
+  folders (only an empty one), moves a board into or out of a folder, and moves tasks between the boards of one tenant
+  (`moveTasks()`): each task with its subtree, keeping id, number (tenant scope), comments, time entries (TimeTrack keeps
+  the task id), tags, documents, links and history; the column is mapped by an explicit map (source column id or name =>
+  target column id or name), else by name, else the target's first open column (a completed task: its last column). One
+  transaction; another tenant's folder, board or task is `not_found`; the entity manager is reset when a failure closed
+  it (worker mode, kernel reset off); `TASK_BOARD_CHANGED` after the commit. A dependency is kept when both boards are
+  in the same folder (`Folder\TaskBoardDependencyScope`), else removed with a history row.
+- A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
+- Demo: migration `Version20261115100000` (folders).
+- **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
+  `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
+- **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`
+  (409 `FOLDER_001` while lists are in it), `GET/POST /v2/folder/{id}/list`. A list's and a task's `folder` is its real
+  folder (`hidden: false`) when it has one.
+
+### Changed
+
+- Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
+  by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`, or with `include_folders=true` (default:
+  `api.lists_include_folders`, false). Nothing changes until a folder is used.
+- `moveTasks()` asks the host's column transition policy (`column_transition_policy`, 2.16.0) for every task that changes
+  board, as it enters its column on the target (operation `ColumnTransitionVia::OP_BOARD_MOVE`, `board_move`), before
+  anything changes; the new optional `$via` carries the caller's channel (null: the `write_provenance_provider`'s channel, else `web`), so an MCP server that passes
+  `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
+- `moveTasks()` keeps each task's completion consistent with its column (audit PW-M1): a column map or a same-name
+  column is used only when it fits (an open task never lands in a done column, a completed one never in an open column);
+  otherwise the move rule decides, as for a move from the board UI.
+- `moveTasks()` refuses `stale` (`TaskBoardRestructureRefusedException::STALE`) when a moved tree changed between its
+  read and its row locks (audit PW-L2): nothing is changed, the caller retries.
+- `moveBoardToFolder()` with a folder needs the folder right of its tenant (`mayManageFolders()`) besides the board's
+  (audit PW-H1); leaving a folder keeps the board's existing dependencies on the folder's boards (PW-I4).
+- `folder()` / `folders()` do not check who asks: the host scopes the ids and tenants it passes (PW-I3).
+- `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
+  context of the `board_moved` history row, so a host can archive the emptied story.
+
 ## [2.18.0] - 2026-11-14
 
 Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-2180).

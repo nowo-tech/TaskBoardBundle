@@ -99,8 +99,9 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 |---|---|---|
 | `GET /v2/user`, `GET /v2/team` | My tasks | A team lists no members |
 | `GET /v2/team/{team_id}/space`, `GET /v2/space/{id}` | My tasks | Spaces where reaches and whose plan holds the module |
-| `GET /v2/space/{id}/folder` | My tasks | Always `{"folders": []}`: every board is a folderless list |
-| `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | `task_count` counts only what the token may read; columns are `statuses` (first `open`, last `closed`, the rest `custom`) |
+| `GET /v2/space/{id}/folder` | My tasks | Since 2.19.0: the space's folders, each with its `lists` (the boards in it the token may view) and a Markdown `content`; a where limited to boards sees only the folders that hold one of them (before 2.19.0 always empty) |
+| `GET /v2/folder/{id}`, `GET /v2/folder/{id}/list` | My tasks | Since 2.19.0: one folder, or its lists. Another tenant's folder is 404 `ACCESS_001` |
+| `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | Since 2.19.0 the space lists only its folderless boards, as ClickUp (`include_folders=true`, or `api.lists_include_folders: true` as the default, lists every board); a board's `folder` is its folder (`hidden: false`) or ClickUp's hidden folder. `task_count` counts only what the token may read; columns are `statuses` (first `open`, last `closed`, the rest `custom`) |
 | `GET /v2/list/{id}/task`, `GET /v2/team/{team_id}/task` | My tasks (its own) | 100 per page from `page=0`, `last_page`; `archived`, `subtasks`, `include_closed`, `statuses[]`, `assignees[]`, `tags[]`, `due_date_gt`/`_lt`, `date_created_*`, `date_updated_*`, `date_done_*`, `order_by` (`id`, `created`, `updated`, `due_date`), `reverse`, `include_markdown_description`; on a team also `space_ids[]`, `list_ids[]` |
 | `GET /v2/task/{id}` | My tasks (its own) | `include_subtasks`, `include_markdown_description`. Since 2.10.0, `custom_task_ids=true` with `space_id` or `list_id`: `{id}` is the task's number (see [Task numbers](#task-numbers)) |
 | `GET /v2/task/{id}/comment` | My tasks (its own) | 25 per page, newest first; `start` and `start_id` of the oldest one shown give the next page |
@@ -194,6 +195,19 @@ Every management write needs a *Full* token and the board's manage decision (`Bo
 | `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
 | `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`) |
 
+**Folders (since 2.19.0, Beacon spec 234 FR-031).** The token must reach the whole tenant; the restructure policy
+(`restructure.policy`, default: the host's create-board decision for the tenant) decides, else 403 `ACCESS_002`.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /v2/space/{id}/folder` | `name` (required, at most 255 characters), `content` / `markdown_content` (Markdown), `orderindex` (default: after the last folder) |
+| `PUT /v2/folder/{id}` | Same fields; what is not given stays |
+| `DELETE /v2/folder/{id}` | Only an empty folder: 409 `FOLDER_001` while a board (archived ones too) is in it |
+| `POST /v2/folder/{id}/list` | A board created as `POST /v2/space/{id}/list` does, then put in the folder |
+
+Moving a board into or out of a folder, and moving tasks between boards, go through
+`Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface` (see [UPGRADING](UPGRADING.md#to-2170)).
+
 Tags exist on tasks only: there is no space tag to create, rename or delete. Board members are not managed through the API.
 
 **Time store.** `api.hooks.time_entries` lists and logs time; it has no delete. A host without its own may use `Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries`: the bundle's manual entries, logged through `TaskTimeLogger` as the task page logs them, and listed for the token's own person on tasks the token may open (at most 500).
@@ -260,6 +274,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `INPUT_002` | 400 | A field or filter that is not valid; `err` names it |
 | `LIST_001` | 409 | The last column of a board |
 | `LIST_002` | 409 | Deleting a board that follows a provider |
+| `FOLDER_001` | 409 | Since 2.19.0: deleting a folder that still holds boards |
 | `TASK_002` | 409 | Deleting a task that follows a provider |
 | `TASK_003` | 409 | Since 2.15.1: the task cannot be numbered — its scope's counter belongs to a look-alike scope (`scope_key` still folding, see [UPGRADING](UPGRADING.md#to-2151)). Since 2.16.0 the answer adds `task_id` (the task that could not be numbered; for a create, the id it would have had) and `scope` (the scope **the caller's own board asks for**, never the look-alike key stored for someone else). It stays a **request-level** refusal, never an entry of a bulk update's `failures`: the write is all or none, so nothing may read as "the other items landed" |
 | `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
@@ -340,7 +355,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 
 - Ids are strings: the bundle's UUIDs, and the host's ids for people.
 - Dates are Unix milliseconds as strings, at the precision the database keeps (seconds).
-- No folders, group assignees, points, task URL or custom task id (`null` or empty).
+- No group assignees, points, task URL or custom task id (`null` or empty).
 - Checklists are subtasks tagged `checklist:<name>`; a checklist's id encodes its task and name.
 - Tags have no colours (`tag_fg`, `tag_bg` are null).
 - `GET /v2/task/{id}/member` lists the task's members, not everyone who can open it.
@@ -385,4 +400,4 @@ curl -X PUT -H "Authorization: bt_placeholder" -H "Content-Type: application/jso
 ```
 
 - **When something is refused.** 404 means "not there, or not yours to see"; 403 names what is missing (`TOKEN_001` the level, `ACCESS_002` the person's right, `PLAN_001` the plan); 429 means slow down. A retry with the same `Idempotency-Key` never does a write twice.
-- **Coming from ClickUp.** Change the base URL and the token. Ids are strings, folders do not exist, columns are statuses, and the rest is in *Differences from ClickUp*.
+- **Coming from ClickUp.** Change the base URL and the token. Ids are strings, folders exist since 2.19.0, columns are statuses, and the rest is in *Differences from ClickUp*.

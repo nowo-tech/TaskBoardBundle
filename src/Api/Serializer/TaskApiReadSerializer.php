@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
@@ -102,12 +103,57 @@ final class TaskApiReadSerializer
             'task_count'        => $taskCount,
             'due_date'          => null,
             'start_date'        => null,
-            'folder'            => self::HIDDEN_FOLDER,
+            'folder'            => $this->folderRef($board),
             'space'             => ['id' => $space->id, 'name' => $space->name, 'access' => true],
             'archived'          => $board->isArchived(),
             'override_statuses' => true,
             'statuses'          => $this->statuses($board),
         ];
+    }
+
+    /**
+     * Since 2.19.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
+     * view). `content` / `markdown_content`: its Markdown description.
+     *
+     * @param list<TaskBoard> $boards
+     * @param array<string, int> $taskCounts by board id
+     *
+     * @return array<string, mixed>
+     */
+    public function folder(TaskBoardFolder $folder, TaskApiSpace $space, array $boards, array $taskCounts): array
+    {
+        $count = 0;
+        foreach ($boards as $board) {
+            $count += $taskCounts[$board->getId()] ?? 0;
+        }
+
+        return [
+            'id'                => $folder->getId(),
+            'name'              => $folder->getName(),
+            'orderindex'        => $folder->getPosition(),
+            'content'           => (string) $folder->getDescription(),
+            'markdown_content'  => (string) $folder->getDescription(),
+            'override_statuses' => false,
+            'hidden'            => false,
+            'space'             => ['id' => $space->id, 'name' => $space->name, 'access' => true],
+            'task_count'        => (string) $count,
+            'archived'          => false,
+            'statuses'          => [],
+            'lists'             => array_map(fn (TaskBoard $board): array => $this->board($board, $space, $taskCounts[$board->getId()] ?? 0), $boards),
+            'permission_level'  => 'read',
+        ];
+    }
+
+    /**
+     * Since 2.19.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
+     *
+     * @return array<string, mixed>
+     */
+    private function folderRef(TaskBoard $board): array
+    {
+        $folder = $board->getFolder();
+
+        return $folder instanceof TaskBoardFolder ? ['id' => $folder->getId(), 'name' => $folder->getName(), 'hidden' => false, 'access' => true] : self::HIDDEN_FOLDER;
     }
 
     /**
@@ -173,7 +219,7 @@ final class TaskApiReadSerializer
             'url'              => null,
             'list'             => ['id' => $board->getId(), 'name' => $board->getName(), 'access' => true],
             'project'          => self::HIDDEN_FOLDER,
-            'folder'           => self::HIDDEN_FOLDER,
+            'folder'           => $this->folderRef($board),
             'space'            => ['id' => $space->id],
             // Since 2.18.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
             // not shown to this viewer), where the last write came from and the host's label of its actor (a token's name).
