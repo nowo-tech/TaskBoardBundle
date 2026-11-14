@@ -209,8 +209,11 @@ rewritten. `doctrine:migrations:diff` writes it (the demo's `Version202611151000
 prefix `task_board_` and the names Doctrine gives the foreign key and its index:
 
 ```sql
--- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
-CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- The table takes the database's default charset and collation: they must be those of task_board_boards, or the
+-- foreign key below fails (MySQL error 3780). Check with SHOW CREATE TABLE task_board_boards and add the same
+-- DEFAULT CHARACTER SET … COLLATE … to the CREATE TABLE if the database default differs.
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id));
 ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
 ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
 CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
@@ -253,7 +256,8 @@ Nothing, unless you use folders:
   `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
 - **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
   (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
-  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked as `web` (a person).
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked through the channel of your
+  `write_provenance_provider` (2.18.0), else as `web` (a person).
 - **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.

@@ -9,7 +9,8 @@ use Doctrine\Migrations\AbstractMigration;
 
 /**
  * TaskBoardBundle 2.19 (Beacon spec 234, FR-031): board folders. A new table and a nullable folder on every board (every
- * board stays folderless). The folder's tenant key compares byte for byte, as the boards' (REQ-SEC-006).
+ * board stays folderless). The folder's tenant key compares byte for byte, as the boards' (REQ-SEC-006). The table
+ * collation is the demo's task_board_boards one (utf8mb4_unicode_ci), which the foreign key needs (audit PW-L4).
  */
 final class Version20261115100000 extends AbstractMigration
 {

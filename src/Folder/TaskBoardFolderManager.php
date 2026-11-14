@@ -146,7 +146,8 @@ final readonly class TaskBoardFolderManager
 
     /**
      * Puts the board in the folder, or out of any (null). Needs the policy on the board, and on the folders' tenant when a
-     * folder is named.
+     * folder is named (`mayManageFolders()`, since 2.19.0 audit PW-H1). Leaving a folder keeps the board's dependencies
+     * on the folder's other boards (audit PW-I4): {@see TaskBoardDependencyScope} only decides which new ones are allowed.
      *
      * @throws TaskBoardRestructureRefusedException `not_found` (another tenant), `not_allowed`
      */
@@ -156,6 +157,10 @@ final readonly class TaskBoardFolderManager
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
         }
         if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($board))) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
+        }
+        // Audit PW-H1: joining a folder needs the folder right of its tenant too, as the docblock always said.
+        if ($folder instanceof TaskBoardFolder && !$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
         }
         if ($board->getFolderId() === $folder?->getId()) {
