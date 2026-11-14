@@ -66,6 +66,8 @@ rate limiter / idempotency store, the providers, ...) already take values only.
 | `api.hooks.members` | `Api\Hook\TaskApiMembersInterface` (default `EmptyTaskApiMembers`) | `Api\Value\TaskApiMember` |
 | `api.hooks.comment_edit_policy` | `Api\Hook\TaskApiCommentEditPolicyInterface` (default `AuthorOnlyTaskApiCommentEditPolicy`) | `ValueObject\TaskCommentSnapshot` |
 | `search.provider` | `Search\TaskTextSearchInterface` (default `DoctrineTaskTextSearch`) | `ValueObject\TaskTextQuery` |
+| `member_badge_provider` (2.19) | `Member\MemberBadgeProviderInterface` (default: none; `NoMemberBadges`) | `ValueObject\TaskBoardUserRef` in, `Member\MemberBadge` (`MemberBadgeVariant`) out |
+| `write_provenance_provider` (2.19) | `Provenance\WriteProvenanceProviderInterface` (default `NoWriteProvenance`) | `Provenance\WriteProvenance` (`WriteChannel`, actor label) |
 
 The policy is a domain rule: `TaskManager` asks it before every move, whatever the channel, and the Task API passes its
 principal's channel through `ColumnTransitionVia`, so a host writes its rules once for the board UI, the API and MCP.

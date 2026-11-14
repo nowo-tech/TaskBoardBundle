@@ -110,6 +110,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: next minor after the 2.18 stack (written 2.19.0 in the code; the number is settled at release). Additive; one
+schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-the-next-minor-after-218-member-badges-and-write-provenance).
+
+### Added
+
+- **Member badges (Beacon spec 234, D-20261114-05).** `member_badge_provider`: a framework-free port
+  (`Member\MemberBadgeProviderInterface::badgesFor()` / `badgesForMany()`, `ValueObject\TaskBoardUserRef` in,
+  `Member\MemberBadge` out) for a pill next to a member's name in the history, the comments and the assignee / watcher
+  chips (Beacon: *Agent* for service accounts). Plain-text values with an allow-listed variant (`neutral`, `info`,
+  `success`, `warning`, `agent`), printed escaped; asked once per task page and memoised per request only
+  (`Member\MemberBadges`, reset at every boundary). The `member_label` macro takes `badges = true` where it shows them,
+  and `manage/_member_label_suffix.html.twig` has a `member_label_suffix` block for presentation overrides. Without a
+  provider nothing is asked and the output is byte-identical.
+- **Write provenance (Beacon spec 234).** `write_provenance_provider`: a framework-free port
+  (`Provenance\WriteProvenanceProviderInterface::current(): ?WriteProvenance`, `WriteChannel` `web|app|api|mcp`, actor
+  label) asked at every task write that records history and every comment added or edited. Stored on history rows
+  (`channel`, `actor_label`) and, as the last write, on tasks and comments (`updated_by_id`, `channel`, `actor_label`).
+  The actor label is plain text, cut to 120 characters when stored (never refused), printed escaped. The history and
+  comments show "via API · label"; the Task API answers of tasks and comments gain `created_by`, `updated_by`,
+  `channel` and `token_name`. Without a provider the provenance columns stay `NULL`.
+- The account erasure (`TaskSyncPeopleReassigner::detachUser()`) drops the person from `updated_by_id` and, with
+  `$anonymise`, clears the actor labels of the rows they wrote.
+
+### Changed
+
+- `Task` and `TaskComment` keep their last writer (`updated_by_id`) from now on, with or without a provider. A change of
+  `updatedBy`, `channel` or `actorLabel` alone is no new task revision.
+
 ## [2.17.0] - 2026-11-14
 
 Target 2.17.0 (minor). No schema change, no migration, no configuration change.

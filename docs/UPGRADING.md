@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To the next minor after 2.18: member badges and write provenance](#to-the-next-minor-after-218-member-badges-and-write-provenance)
+  - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
 - [To 2.16.0](#to-2160)
   - [Schema change for every host: humans-only columns and task revisions](#schema-change-for-every-host-humans-only-columns-and-task-revisions)
@@ -194,6 +196,65 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To the next minor after 2.18: member badges and write provenance
+
+Additive (Beacon spec 234, D-20261114-05; the version number is settled at release, written 2.19 in the code). Two new
+opt-in ports, `member_badge_provider` and `write_provenance_provider` ([USAGE](USAGE.md#member-badges-and-write-provenance-since-219)).
+With an unchanged configuration no badge is shown, the pages render as before, and the provenance columns stay `NULL`.
+What changes for every host:
+
+- **One schema change** (below): nullable columns only.
+- `tasks.updated_by_id` / `task_comments.updated_by_id` are filled from now on with the actor the bundle already
+  receives (the user of the task's newest history row; the comment's author or last editor). Rows written before keep
+  `NULL`. A change of these columns alone is no new task revision.
+- The Task API answers of tasks and comments gain `created_by`, `updated_by`, `channel` and `token_name`
+  ([API](API.md#provenance-fields-since-219)); every other field is unchanged.
+- `TaskSyncPeopleReassigner::detachUser()` also drops the erased person from `updated_by_id`, and with `$anonymise` clears
+  the actor label of the rows they wrote.
+- The `member_label` macro takes an optional second argument (`badges`, default `false`); a host template that calls it
+  with one argument renders exactly as before. A host override of `manage/_task_member_label.html.twig` keeps working
+  (it shows no badge until it adds the argument and the `_member_label_suffix.html.twig` include).
+- `TaskComment::edit()` takes two optional arguments (editor, provenance); `TaskChangeHistory` and `TaskComment` take an
+  optional `provenance` constructor argument. Code that calls them as before is unchanged.
+
+### Schema change for every host: provenance columns
+
+Run `php bin/console doctrine:migrations:diff` and compare it with the statements below (replace the table names if you
+use `table_prefix`, and `users (id)` / `INT` by your `user_class` table and id type). Every column is nullable: run the
+migration **before** the deploy (the new code selects the columns).
+
+```sql
+-- MySQL / MariaDB (the demo ships it as demo/symfony8/migrations/Version20261114120000.php)
+ALTER TABLE task_board_task_change_history ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD updated_by_id INT DEFAULT NULL, ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD CONSTRAINT FK_B4902F8E896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL;
+CREATE INDEX IDX_B4902F8E896DBBDE ON task_board_tasks (updated_by_id);
+ALTER TABLE task_board_task_comments ADD updated_by_id INT DEFAULT NULL, ADD channel VARCHAR(8) DEFAULT NULL, ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL;
+CREATE INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments (updated_by_id);
+
+-- PostgreSQL
+ALTER TABLE task_board_task_change_history ADD channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD updated_by_id INT DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD CONSTRAINT FK_B4902F8E896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+CREATE INDEX IDX_B4902F8E896DBBDE ON task_board_tasks (updated_by_id);
+ALTER TABLE task_board_task_comments ADD updated_by_id INT DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197896DBBDE FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE;
+CREATE INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments (updated_by_id);
+```
+
+**SQLite:** the three `channel` / `actor_label` pairs are plain `ALTER TABLE … ADD … DEFAULT NULL`; a foreign key cannot
+be added to an existing SQLite table, so let `doctrine:migrations:diff` write the table rebuild for `updated_by_id`.
+
+**`database.user_reference: id`:** `updated_by_id` is the user's id like the other user columns: `VARCHAR(128) DEFAULT
+NULL` with an index and no foreign key, and on MySQL / MariaDB the same binary NO PAD collation as `creator_id`
+(`doctrine:migrations:diff` writes it).
 
 ## To 2.17.0
 
