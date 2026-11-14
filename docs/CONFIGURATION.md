@@ -7,6 +7,7 @@
 - [Routes](#routes)
   - [Why a route loader instead of `#[Route]` attributes (REQ-SF-004)](#why-a-route-loader-instead-of-route-attributes-req-sf-004)
 - [Task API (since 2.2)](#task-api-since-22)
+- [Subtask depth (since 2.20)](#subtask-depth-since-220)
 - [Security](#security)
   - [Firewall](#firewall)
   - [Access checker](#access-checker)
@@ -177,6 +178,21 @@ nowo_task_board:
 ```
 
 See [USAGE](USAGE.md#member-badges-and-write-provenance-since-218).
+
+## Subtask depth (since 2.20)
+
+```yaml
+nowo_task_board:
+    max_subtask_depth: ~   # int >= 1; null (default) = no limit
+```
+
+The most ancestors a task may have: a top-level task has 0, its subtasks 1 (Beacon sets `7`). A write that would put a
+task deeper is refused: the Task API answers 409 `PARENT_005` (create with `parent`, a checklist item, a parent change
+counting the moved subtree), the board UI flashes it, `TaskManager::create()` throws `Tree\TaskTreeRefusedException`
+(`too_deep`), copies and recurring occurrences throw `TaskCopyRefusedException` (`too_deep`). Imports and provider syncs
+place a too-deep row under its deepest allowed ancestor, or keep a task's parent, with a warning (`parent_too_deep`).
+Trees saved deeper before the limit stay readable and editable, and may move up. With or without it, every tree walk is
+iterative and stops at 10,000 levels (`TaskTreeLimits::SAFETY_CAP`); a loop in the data fails closed.
 
 ## Column transitions, humans-only columns and text search (since 2.16)
 
