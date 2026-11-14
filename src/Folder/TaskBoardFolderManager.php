@@ -22,7 +22,7 @@ use function trim;
 use function usort;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031): the folders of a tenant and the boards in them, on entities — what the Task API
+ * Since 2.19.0 (Beacon spec 234, FR-031): the folders of a tenant and the boards in them, on entities — what the Task API
  * and {@see TaskBoardRestructurer} call. Every write asks {@see TaskBoardRestructurePolicyInterface} first, then runs in a
  * transaction it opens and closes; a failed flush leaves the entity manager open ({@see RecoveringFlusher}).
  *

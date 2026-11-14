@@ -8,7 +8,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
+ * Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): the restructure service — folders of a tenant, boards in folders, tasks
  * moved between the boards of one tenant. A host's restructure command depends on it (public alias of
  * {@see TaskBoardRestructurer}). Framework-free: ids in, VOs out (REQ-ARCH-001 rules 1 and 3).
  *
@@ -65,7 +65,7 @@ interface TaskBoardRestructureInterface
      *
      * @param list<string> $taskIds
      * @param array<string, string> $columnMap source column id or name => target column id or name
-     * @param ColumnTransitionVia|null $via since 2.18.0: who asks (its channel; the operation is always `board_move`)
+     * @param ColumnTransitionVia|null $via since 2.19.0: who asks (its channel; the operation is always `board_move`)
      *
      * @throws ColumnTransitionRefusedException when the column transition policy refuses a task: nothing changes
      */

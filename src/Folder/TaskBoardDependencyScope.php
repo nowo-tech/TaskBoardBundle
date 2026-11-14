@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Folder;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-032): which two boards a dependency may join — the same board, or two boards of the
+ * Since 2.19.0 (Beacon spec 234, FR-032): which two boards a dependency may join — the same board, or two boards of the
  * same folder (same tenant). Any other pair is refused (`LINK_002` in the Task API). Stateless.
  */
 final class TaskBoardDependencyScope

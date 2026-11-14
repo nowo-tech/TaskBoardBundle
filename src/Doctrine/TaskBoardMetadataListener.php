@@ -58,7 +58,7 @@ final readonly class TaskBoardMetadataListener
         TaskSyncItem::class      => ['externalId'],
         // Since 2.16.0 (spec 234, FR-061): a template's tenant, mapped only with `task_templates.enabled`.
         TaskTemplate::class => ['tenantKey'],
-        // Since 2.18.0 (Beacon spec 234, FR-031): a folder's tenant.
+        // Since 2.19.0 (Beacon spec 234, FR-031): a folder's tenant.
         TaskBoardFolder::class => ['tenantKey'],
     ];
 

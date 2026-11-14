@@ -341,7 +341,7 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folders
-      summary: 'Since 2.18.0: the folders of a space the token reaches, each with its lists (before 2.18.0 always empty)'
+      summary: 'Since 2.19.0: the folders of a space the token reaches, each with its lists (before 2.19.0 always empty)'
       description: 'Least level: My tasks. A where limited to boards sees only the folders holding one of them.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folders'}}}}
@@ -354,7 +354,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     post:
       operationId: folder_create
-      summary: 'Since 2.18.0: create a folder in a space'
+      summary: 'Since 2.19.0: create a folder in a space'
       description: 'Least level: Full. Where must reach the tenant as a whole; the restructure policy (default: the create-board right) decides.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -373,7 +373,7 @@ paths:
       - {name: folder_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folder
-      summary: 'Since 2.18.0: a folder with its lists'
+      summary: 'Since 2.19.0: a folder with its lists'
       description: 'Least level: My tasks.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Folder'}}}}
@@ -386,7 +386,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     put:
       operationId: folder_update
-      summary: 'Since 2.18.0: rename, describe or reorder a folder (what the body names changes)'
+      summary: 'Since 2.19.0: rename, describe or reorder a folder (what the body names changes)'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -402,7 +402,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     delete:
       operationId: folder_delete
-      summary: 'Since 2.18.0: delete an empty folder; 409 FOLDER_001 while lists are in it'
+      summary: 'Since 2.19.0: delete an empty folder; 409 FOLDER_001 while lists are in it'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -420,7 +420,7 @@ paths:
       - {name: folder_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: folder_lists
-      summary: 'Since 2.18.0: the lists of a folder the token may view'
+      summary: 'Since 2.19.0: the lists of a folder the token may view'
       description: 'Least level: My tasks.'
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
@@ -433,7 +433,7 @@ paths:
         '503': {$ref: '#/components/responses/Error'}
     post:
       operationId: folder_list_create
-      summary: 'Since 2.18.0: create a board in a folder (as POST /v2/space/{space_id}/list, then put in the folder)'
+      summary: 'Since 2.19.0: create a board in a folder (as POST /v2/space/{space_id}/list, then put in the folder)'
       description: 'Least level: Full.'
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -452,10 +452,10 @@ paths:
       - {name: space_id, in: path, required: true, schema: {type: string}}
     get:
       operationId: lists
-      summary: 'The folderless boards of a space the token reaches (since 2.18.0 a board in a folder is listed under its folder)'
+      summary: 'The folderless boards of a space the token reaches (since 2.19.0 a board in a folder is listed under its folder)'
       description: 'Least level: My tasks. The person''s access and where still apply.'
       parameters:
-        - {name: include_folders, in: query, description: 'Since 2.18.0: true lists every board, each with its folder (default: api.lists_include_folders, false)', schema: {type: string, enum: ['true', 'false', '1', '0']}}
+        - {name: include_folders, in: query, description: 'Since 2.19.0: true lists every board, each with its folder (default: api.lists_include_folders, false)', schema: {type: string, enum: ['true', 'false', '1', '0']}}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Lists'}}}}
         '400': {$ref: '#/components/responses/Error'}
@@ -1029,7 +1029,7 @@ components:
       properties: {folders: {type: array, items: {$ref: '#/components/schemas/Folder'}}}
     Folder:
       type: object
-      description: 'Since 2.18.0 (Beacon spec 234, FR-031).'
+      description: 'Since 2.19.0 (Beacon spec 234, FR-031).'
       properties: {id: {type: string}, name: {type: string}, orderindex: {type: integer}, content: {type: string, description: Markdown}, markdown_content: {type: string}, hidden: {type: boolean}, override_statuses: {type: boolean}, space: {type: object}, task_count: {type: string}, archived: {type: boolean}, statuses: {type: array}, lists: {type: array, items: {$ref: '#/components/schemas/List'}}, permission_level: {type: string}, warnings: {$ref: '#/components/schemas/Warnings'}}
     FolderBody:
       type: object

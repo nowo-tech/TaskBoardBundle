@@ -79,7 +79,7 @@ final class KeyCollationTest extends TestCase
         // Since 2.16.0 (spec 234, FR-061): a task template's tenant is a key column too.
         self::assertSame('utf8mb4_0900_bin', $this->metadata(TaskTemplate::class, new MySQL80Platform(), '8.4.3')->getFieldMapping('tenantKey')->options['collation'] ?? null);
         self::assertNull($this->metadata(TaskTemplate::class, new SQLitePlatform())->getFieldMapping('tenantKey')->options);
-        // Since 2.18.0 (FR-031): a folder's tenant too.
+        // Since 2.19.0 (FR-031): a folder's tenant too.
         self::assertSame('utf8mb4_nopad_bin', $this->metadata(TaskBoardFolder::class, new MariaDBPlatform())->getFieldMapping('tenantKey')->options['collation'] ?? null);
         self::assertNull($this->metadata(TaskBoard::class, new SQLitePlatform())->getFieldMapping('tenantKey')->options);
         self::assertNull($this->metadata(TaskBoard::class, new MySQL80Platform())->getFieldMapping('name')->options, 'not a key');

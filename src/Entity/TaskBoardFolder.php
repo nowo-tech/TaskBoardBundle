@@ -10,7 +10,7 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 /**
- * Since 2.18.0 (Beacon spec 234, FR-031): a folder groups boards of one tenant — a name, a Markdown description and an
+ * Since 2.19.0 (Beacon spec 234, FR-031): a folder groups boards of one tenant — a name, a Markdown description and an
  * order among the tenant's folders. A board points at its folder ({@see TaskBoard::getFolder()}); a folder is deleted only
  * when no board is in it. `tenantKey` null: a folder outside any tenant, for boards without one.
  */

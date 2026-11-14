@@ -16,7 +16,7 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use function array_map;
 
 /**
- * Since 2.18.0: `moveTasks()` asks the host's column transition policy for every task that changes board (operation
+ * Since 2.19.0: `moveTasks()` asks the host's column transition policy for every task that changes board (operation
  * `board_move`, the caller's channel), before anything changes, so a move cannot reach a column the policy keeps.
  */
 final class RestructureTransitionPolicyTest extends CopyTestCase
