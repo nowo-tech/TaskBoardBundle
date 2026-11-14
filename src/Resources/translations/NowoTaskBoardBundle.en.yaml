@@ -654,6 +654,8 @@ task_board.history.former_user: "Former person"
 task_board.flash.task_reopen_refused: "The task was not moved: reopening it would go over the limit of active tasks."
 task_board.flash.task_move_refused: "The task was not moved: this column does not accept it from here."
 task_board.flash.column_delete_refused: "The column was not deleted: it holds completed tasks, and reopening them would go over the limit of active tasks."
+# Since 2.19.0 (audit PW-H1).
+task_board.flash.column_shared_refused: "The columns were not changed: this board's folder shares its statuses with boards you may not manage."
 task_board.flash.column_icon_invalid: "The column was not saved: its icon must be one emoji or one of the offered icons."
 task_board.form.board.icon: "Icon"
 task_board.form.board.icon_help: "One emoji, optional."

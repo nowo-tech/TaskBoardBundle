@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\ValueObject\BoardColumnSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
@@ -45,7 +46,11 @@ final class Snapshots
     /**
      * Since 2.16.0 (spec 234): `$last` is whether it is the board's last ("done") column.
      */
-    public static function column(BoardColumn $column, bool $last): BoardColumnSnapshot
+    /**
+     * @param list<BoardColumn>|null $columns since 2.19.0: the board's columns by position the type is read among
+     *                                        (default: the column's board's)
+     */
+    public static function column(BoardColumn $column, bool $last, ?array $columns = null): BoardColumnSnapshot
     {
         return new BoardColumnSnapshot(
             $column->getId(),
@@ -54,6 +59,7 @@ final class Snapshots
             $column->getPosition(),
             $column->isHumansOnly(),
             $last,
+            ColumnTypes::of($column, $columns)->value,
         );
     }
 

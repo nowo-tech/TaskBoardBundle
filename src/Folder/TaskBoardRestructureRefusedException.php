@@ -15,7 +15,9 @@ use RuntimeException;
  * - `invalid`: a name, position or column map the bundle cannot keep (`$params['field']` names it);
  * - `board_archived`: an archived board is not a target;
  * - `sync_running`: a provider run is in progress on a board the move touches;
- * - `quota`: the host's quota on the open tasks that arrive (`hostMessage()` is the host's reason).
+ * - `quota`: the host's quota on the open tasks that arrive (`hostMessage()` is the host's reason);
+ * - `columns_in_use` (since 2.19.0, FR-034): applying columns would leave tasks in a column they remove (`board`, `columns`
+ *   name them): give a column map.
  */
 final class TaskBoardRestructureRefusedException extends RuntimeException
 {
@@ -26,6 +28,7 @@ final class TaskBoardRestructureRefusedException extends RuntimeException
     public const BOARD_ARCHIVED = 'board_archived';
     public const SYNC_RUNNING   = 'sync_running';
     public const QUOTA          = 'quota';
+    public const COLUMNS_IN_USE = 'columns_in_use';
 
     /**
      * Since 2.19.0 (audit PW-L2): a moved tree changed (a subtask added, moved or deleted by another request) between the

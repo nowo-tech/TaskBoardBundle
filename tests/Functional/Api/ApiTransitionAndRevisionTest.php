@@ -84,6 +84,7 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         self::assertSame(['api', 'mcp'], array_map(static fn (ColumnTransition $transition): string => $transition->via->channel, RecordingTransitionPolicy::$asked));
         self::assertSame('Done', RecordingTransitionPolicy::$asked[0]->to->name);
         self::assertTrue(RecordingTransitionPolicy::$asked[0]->to->last);
+        self::assertSame('closed', RecordingTransitionPolicy::$asked[0]->to->type);
         self::assertSame('Doing', RecordingTransitionPolicy::$asked[0]->from?->name);
         self::assertSame($task->getId(), RecordingTransitionPolicy::$asked[0]->task?->id);
         $this->em->clear();
@@ -98,7 +99,9 @@ final class ApiTransitionAndRevisionTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(1, $this->statusEvents);
         $event = $this->statusEvents[0];
-        self::assertSame(['Approved', 'Doing', 'mcp', null], [$event->from?->name, $event->to->name, $event->via->channel, $event->toType]);
+        // Since 2.19.0 (FR-033): the column types, by position on an untyped board.
+        self::assertSame(['Approved', 'Doing', 'mcp', 'custom'], [$event->from?->name, $event->to->name, $event->via->channel, $event->toType]);
+        self::assertSame(['custom', 'custom'], [$event->from?->type, $event->to->type]);
         self::assertSame($task->getId(), $event->task->id);
     }
 

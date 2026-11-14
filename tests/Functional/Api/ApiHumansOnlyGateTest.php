@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
@@ -18,6 +19,8 @@ use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 
 use function array_map;
+use function array_reverse;
+use function array_values;
 use function in_array;
 use function str_starts_with;
 
@@ -210,6 +213,43 @@ final class ApiHumansOnlyGateTest extends ApiTestCase
         $this->send('POST', '/api/tasks/v2/list/' . $board->getId() . '/status', ['status' => 'Shipped', 'humans_only' => false], [], 'bt_mcp');
         self::assertResponseIsSuccessful();
         $this->send('POST', '/api/tasks/v2/list/' . $board->getId() . '/status', ['status' => 'Gate', 'humans_only' => true], [], 'bt_cli');
+        self::assertResponseIsSuccessful();
+    }
+
+    /**
+     * Since 2.19.0 (FR-033): on a typed board the done columns are its done and closed ones, whatever their order; a
+     * machine may not change them while one is flagged (a new done or closed column, a retype into or out of them).
+     */
+    public function testOnATypedBoardAMachineCannotChangeFlaggedDoneColumns(): void
+    {
+        $board = $this->board('Typed', ['To do', 'Doing', 'Done'], tenantKey: 'tenant-a');
+        $types = [ColumnType::Open, ColumnType::Custom, ColumnType::Done];
+        foreach (array_values($board->getColumns()->toArray()) as $index => $column) {
+            $column->setType($types[$index]);
+            $column->setHumansOnly($index === 2);
+        }
+        $this->em->flush();
+        $path = '/api/tasks/v2/list/' . $board->getId() . '/status';
+        $ids  = array_map(static fn (BoardColumn $column): string => $column->getId(), array_values($board->getColumns()->toArray()));
+
+        $this->send('POST', $path, ['status' => 'Review', 'type' => 'custom'], [], 'bt_mcp');
+        self::assertResponseIsSuccessful();
+        $this->send('POST', $path, ['status' => 'Cancelled', 'type' => 'closed'], [], 'bt_mcp');
+        self::assertSame(self::HUMANS_ONLY, $this->json());
+        $this->send('PUT', $path . '/' . $ids[1], ['type' => 'done'], [], 'bt_mcp');
+        self::assertSame(self::HUMANS_ONLY, $this->json());
+        $this->send('PUT', $path . '/' . $ids[2], ['type' => 'custom'], [], 'bt_mcp');
+        self::assertSame(self::HUMANS_ONLY, $this->json());
+        $this->send('PUT', $path . '/' . $ids[1], ['status' => 'Doing now'], [], 'bt_mcp');
+        self::assertResponseIsSuccessful();
+
+        $this->em->clear();
+        $fresh = $this->em->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $fresh);
+        $order = array_map(static fn (BoardColumn $column): string => $column->getId(), array_reverse(array_values($fresh->getColumns()->toArray())));
+        $this->send('PUT', $path . '/order', ['order' => $order], [], 'bt_mcp');
+        self::assertResponseIsSuccessful();
+        $this->send('PUT', $path . '/' . $ids[1], ['type' => 'done'], [], 'bt_cli');
         self::assertResponseIsSuccessful();
     }
 

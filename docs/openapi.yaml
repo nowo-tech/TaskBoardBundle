@@ -1036,7 +1036,7 @@ components:
       properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}, orderindex: {type: integer}}
     Status:
       type: object
-      properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, closed]}, icon: {type: [string, 'null'], description: 'Since 2.9.0: the column icon, one emoji or an icon id such as tabler:bug'}}
+      properties: {id: {type: string}, status: {type: string}, color: {type: [string, 'null']}, orderindex: {type: integer}, type: {enum: [open, custom, done, closed], description: 'Since 2.19.0 the column type (a task in a done or closed column is completed; at most two closed); a board without types: first open, last closed, the rest custom'}, icon: {type: [string, 'null'], description: 'Since 2.9.0: the column icon, one emoji or an icon id such as tabler:bug'}}
     List:
       type: object
       properties: {id: {type: string}, name: {type: string}, content: {type: string}, task_count: {type: integer}, archived: {type: boolean}, space: {type: object}, folder: {type: object}, statuses: {type: array, items: {$ref: '#/components/schemas/Status'}}, warnings: {$ref: '#/components/schemas/Warnings'}}
@@ -1159,7 +1159,7 @@ components:
       properties: {name: {type: string, maxLength: 255}, content: {type: string}, markdown_content: {type: string}}
     StatusBody:
       type: object
-      properties: {status: {type: string, maxLength: 128}, color: {type: [string, 'null'], pattern: '^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$'}, icon: {type: [string, 'null'], maxLength: 64, description: 'Since 2.9.0: one emoji (at most 16 bytes) or an offered icon id such as tabler:bug; null or "" removes it'}}
+      properties: {status: {type: string, maxLength: 128}, color: {type: [string, 'null'], pattern: '^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$'}, icon: {type: [string, 'null'], maxLength: 64, description: 'Since 2.9.0: one emoji (at most 16 bytes) or an offered icon id such as tabler:bug; null or "" removes it'}, type: {enum: [open, custom, done, closed], description: 'Since 2.19.0: the column type; the first type set on a board writes the position types of its other columns; at most two closed (400 INPUT_002)'}}
     StatusOrder:
       type: object
       required: [order]

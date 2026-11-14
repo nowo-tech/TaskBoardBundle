@@ -6,11 +6,8 @@ namespace Nowo\TaskBoardBundle\Copy;
 
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
-
-use function array_slice;
-use function array_values;
-use function count;
 
 /**
  * Since 2.3.0 (specs 215, 217): the column a copied or moved task lands in. A completed task goes to the last (done)
@@ -22,13 +19,13 @@ final class TaskColumnRule
 {
     public static function target(TaskBoard $target, ?BoardColumn $source, bool $completed, ?string $chosenId = null): ?BoardColumn
     {
-        $columns = array_values($target->getColumns()->toArray());
+        $columns = ColumnTypes::ordered($target);
         if ($columns === []) {
             return null;
         }
-        $last = $columns[count($columns) - 1];
         if ($completed) {
-            return $last;
+            // Since 2.19.0 (FR-033): the first done or closed column (the last one on an untyped board).
+            return ColumnTypes::doneColumn($target, $columns);
         }
         $open = self::openColumns($target);
 
@@ -51,18 +48,18 @@ final class TaskColumnRule
             }
         }
 
-        return $columns[0];
+        // Since 2.19.0 (FR-033): the first open column.
+        return ColumnTypes::firstOpen($target, $columns) ?? $columns[0];
     }
 
     /**
-     * The columns an open task may be put in on `$target` (every column but the last, or the only one).
+     * The columns an open task may be put in on `$target`: since 2.19.0 every column that is not done (column type);
+     * on an untyped board every column but the last, or the only one, as before.
      *
      * @return list<BoardColumn>
      */
     public static function openColumns(TaskBoard $target): array
     {
-        $columns = array_values($target->getColumns()->toArray());
-
-        return count($columns) <= 1 ? $columns : array_slice($columns, 0, -1);
+        return ColumnTypes::openColumns($target);
     }
 }

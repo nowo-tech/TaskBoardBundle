@@ -6,8 +6,13 @@ namespace Nowo\TaskBoardBundle\Entity;
 
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
+use Nowo\TaskBoardBundle\Folder\FolderStatusSets;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
+
+use function array_map;
+use function array_values;
 
 /**
  * Since 2.19.0 (Beacon spec 234, FR-031): a folder groups boards of one tenant — a name, a Markdown description and an
@@ -33,6 +38,15 @@ class TaskBoardFolder
 
     #[ORM\Column(type: 'string', length: 255)]
     private string $name;
+
+    /**
+     * Since 2.19.0 (Beacon spec 234, FR-034): the folder's shared status set — every board in it has these columns (as
+     * {@see BoardColumnSpec::toArray()}), kept by {@see FolderStatusSets}; null: each board has its own columns.
+     *
+     * @var list<array{name: string, type: string, color: ?string, icon: ?string}>|null
+     */
+    #[ORM\Column(name: 'status_set', type: 'json', nullable: true)]
+    private ?array $statusSet = null;
 
     public function __construct(
         string $name,
@@ -98,6 +112,30 @@ class TaskBoardFolder
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->position = $position;
+        $this->touch();
+
+        return $this;
+    }
+
+    /**
+     * Since 2.19.0 (FR-034): the shared status set, null when the boards keep their own columns.
+     *
+     * @return list<BoardColumnSpec>|null
+     */
+    public function getStatusSet(): ?array
+    {
+        return $this->statusSet === null ? null : array_map(BoardColumnSpec::fromArray(...), $this->statusSet);
+    }
+
+    /**
+     * @param list<BoardColumnSpec>|null $statusSet
+     *
+     * @internal through {@see FolderStatusSets}, which applies it to every board of the folder
+     */
+    public function setStatusSet(?array $statusSet): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->statusSet = $statusSet === null ? null : array_values(array_map(static fn (BoardColumnSpec $spec): array => $spec->toArray(), $statusSet));
         $this->touch();
 
         return $this;

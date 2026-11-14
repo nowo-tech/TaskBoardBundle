@@ -654,6 +654,8 @@ task_board.history.former_user: "Ancienne personne"
 task_board.flash.task_reopen_refused: "La tâche n’a pas été déplacée : la rouvrir dépasserait la limite de tâches actives."
 task_board.flash.task_move_refused: "La tâche n’a pas été déplacée : cette colonne ne l’accepte pas depuis ici."
 task_board.flash.column_delete_refused: "La colonne n’a pas été supprimée : elle contient des tâches terminées, et les rouvrir dépasserait la limite de tâches actives."
+# Since 2.19.0 (audit PW-H1).
+task_board.flash.column_shared_refused: "Les colonnes n’ont pas été modifiées : le dossier de ce tableau partage ses statuts avec des tableaux que vous ne pouvez pas gérer."
 task_board.flash.column_icon_invalid: "La colonne n’a pas été enregistrée : son icône doit être un emoji ou l’une des icônes proposées."
 task_board.form.board.icon: "Icône"
 task_board.form.board.icon_help: "Un émoji, facultatif."

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Doctrine\ORM\EntityManagerInterface;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Event\AbstractColumnEvent;
 use Nowo\TaskBoardBundle\Event\ColumnCreatedEvent;
 use Nowo\TaskBoardBundle\Event\ColumnDeletedEvent;
@@ -16,10 +19,14 @@ use Nowo\TaskBoardBundle\Event\ColumnUpdatedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Folder\FolderStatusSets;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
+use Nowo\TaskBoardBundle\Support\ColumnTasks;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
@@ -56,13 +63,23 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         // Since 2.10.0 (spec 216): the column events; none without a dispatcher.
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ?TaskChangeContext $changeContext = null,
+        // Since 2.19.0: reads a column's tasks when its type changes.
+        private ?EntityManagerInterface $entityManager = null,
         // Since 2.16.0 (audit PC-M1): asked for every task a column deletion moves; none: every move is allowed.
         private ?ColumnTransitionPolicyInterface $transitions = null,
+        // Since 2.19.0 (audit PW-H1): the rights a column edit on a board of a sharing folder needs; none: not asked.
+        private ?FolderStatusSets $statusSets = null,
+        // Since 2.19.0 (audit PW-L5): history rows and events for the tasks a retype completes or reopens.
+        private ?TaskColumnFollow $follow = null,
     ) {
     }
 
     public function add(TaskBoard $board, BoardColumnFormData $data, ?object $actor = null): BoardColumn
     {
+        // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
+        if ($actor !== null) {
+            $this->statusSets?->assertMayChangeColumns($actor, $board);
+        }
         $position = -1;
         foreach ($board->getColumns() as $column) {
             $position = max($position, $column->getPosition());
@@ -78,9 +95,15 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         );
         $column->setHumansOnly($data->humansOnly);
 
+        // Since 2.19.0 (FR-033): a typed column types the whole board first (its other columns keep their meaning).
+        if ($data->type instanceof ColumnType) {
+            $this->assertTypes($board, $column, $data->type);
+            ColumnTypes::materialize($board);
+            $column->setType($data->type);
+        }
         $board->addColumn($column);
         $this->columnRepository->save($column);
-        $this->dispatch(new ColumnCreatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getPosition(), ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_CREATED);
+        $this->dispatch(new ColumnCreatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getPosition(), ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_CREATED);
 
         return $column;
     }
@@ -92,6 +115,10 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function reorder(TaskBoard $board, array $orderedColumnIds, ?object $actor = null): void
     {
+        // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
+        if ($actor !== null) {
+            $this->statusSets?->assertMayChangeColumns($actor, $board);
+        }
         /** @var array<string, BoardColumn> $byId */
         $byId   = [];
         $before = [];
@@ -125,27 +152,50 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             $this->columnRepository->saveAll($updated);
             $order = array_map(static fn (BoardColumn $column): string => $column->getId(), $updated);
             if ($order !== array_column($before, 1)) {
-                $this->dispatch(new ColumnsReorderedEvent($board->getId(), $board->getTenantKey(), $order, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMNS_REORDERED);
+                $this->dispatch(new ColumnsReorderedEvent($board->getId(), $board->getTenantKey(), $order, ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMNS_REORDERED);
             }
         }
     }
 
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void
     {
-        $before = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
+        // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
+        if ($actor !== null) {
+            $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
+        }
+        $before  = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_TYPE => ColumnTypes::of($column)->value, ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
+        $retyped = $data->type instanceof ColumnType && $data->type !== ColumnTypes::of($column) ? $data->type : null;
+        if ($retyped instanceof ColumnType) {
+            $this->assertTypes($column->getBoard(), $column, $retyped);
+            $this->assertRetypeAllowed($column, $retyped);
+        }
         $column
             ->setName(trim($data->name))
             ->setColor($this->normalize($data->color))
             ->setIcon(ColumnIcon::normalize($data->icon))
             ->setHumansOnly($data->humansOnly);
+        if ($retyped instanceof ColumnType) {
+            // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
+            // (the flush of the columns saves them).
+            ColumnTypes::materialize($column->getBoard());
+            $column->setType($retyped);
+            $snapshot = $this->follow?->snapshot($column->getBoard()) ?? [];
+            $this->followType($column, $retyped);
+            // Audit PW-L5: the tasks the retype completes or reopens get their history rows (this flush) and events.
+            $followed = $this->follow?->record($column->getBoard(), $snapshot, $actor, ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMNS)) ?? [];
+            $this->columnRepository->saveAll(array_values($column->getBoard()->getColumns()->toArray()));
+            foreach ($followed as [$event, $name]) {
+                $this->eventDispatcher?->dispatch($event, $name);
+            }
+        } else {
+            $this->columnRepository->save($column);
+        }
 
-        $this->columnRepository->save($column);
-
-        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
+        $after   = [ColumnUpdatedEvent::FIELD_NAME => $column->getName(), ColumnUpdatedEvent::FIELD_COLOR => $column->getColor(), ColumnUpdatedEvent::FIELD_ICON => $column->getIcon(), ColumnUpdatedEvent::FIELD_TYPE => ColumnTypes::of($column)->value, ColumnUpdatedEvent::FIELD_HUMANS_ONLY => $column->isHumansOnly() ? '1' : '0'];
         $changed = array_keys(array_filter($after, static fn (?string $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
         if ($changed !== []) {
             $board = $column->getBoard();
-            $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $before[ColumnUpdatedEvent::FIELD_NAME], $changed, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_UPDATED);
+            $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $before[ColumnUpdatedEvent::FIELD_NAME], $changed, ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_UPDATED);
         }
     }
 
@@ -159,10 +209,13 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         if ($column->isHumansOnly() === $humansOnly) {
             return false;
         }
+        if ($actor !== null) {
+            $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
+        }
         $column->setHumansOnly($humansOnly);
         $this->columnRepository->save($column);
         $board = $column->getBoard();
-        $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getName(), [ColumnUpdatedEvent::FIELD_HUMANS_ONLY], ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_UPDATED);
+        $this->dispatch(new ColumnUpdatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getName(), [ColumnUpdatedEvent::FIELD_HUMANS_ONLY], ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_UPDATED);
 
         return true;
     }
@@ -179,9 +232,15 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      *
      * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
      * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses a task: nothing changes
+     * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-H1), `not_allowed` on a board whose folder shares
+     *                                              its statuses, without the right on every board of the folder
      */
     public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {
+        // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
+        if ($actor !== null) {
+            $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
+        }
         $board     = $column->getBoard();
         $remaining = [];
         foreach ($board->getColumns() as $candidate) {
@@ -195,11 +254,13 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
 
         usort($remaining, static fn (BoardColumn $a, BoardColumn $b): int => $a->getPosition() <=> $b->getPosition());
-        $target  = $remaining[0];
-        $lastOne = $remaining[count($remaining) - 1];
+        // Since 2.19.0 (FR-033): the first open column takes them; it completes them when it is done (column type,
+        // the last column on an untyped board).
+        $target     = ColumnTypes::firstOpen($board, $remaining) ?? $remaining[0];
+        $targetDone = ColumnTypes::isDone($target, $remaining);
 
         // Since 1.29.0 (audit HNd-L2): the completed tasks that move out of the last column are active again.
-        if ($target !== $lastOne) {
+        if (!$targetDone) {
             $reopened = 0;
             foreach ($board->getTasks() as $task) {
                 if ($task->getColumn() === $column && $task->isCompleted() && !$task->isArchived()) {
@@ -212,7 +273,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             }
         }
         if ($actor !== null) {
-            $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
+            $lastOne = $remaining[count($remaining) - 1];
+            $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $remaining, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
         }
 
         $position = 0;
@@ -226,9 +288,9 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         foreach (self::tasksOf($column) as $task) {
             $moved[] = $task->getId();
             $task->setColumn($target)->setPosition($position++);
-            if ($target === $lastOne && !$task->isCompleted()) {
+            if ($targetDone && !$task->isCompleted()) {
                 $task->markCompleted();
-            } elseif ($target !== $lastOne && $task->isCompleted()) {
+            } elseif (!$targetDone && $task->isCompleted()) {
                 $task->markIncomplete();
             }
         }
@@ -240,7 +302,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
         // The flush also deletes the removed column (orphan removal) and saves the moved tasks.
         $this->columnRepository->saveAll($remaining);
-        $this->dispatch(new ColumnDeletedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $target->getId(), $moved, ActorId::of($actor), $this->cause()), TaskBoardEvents::COLUMN_DELETED);
+        $this->dispatch(new ColumnDeletedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $target->getId(), $moved, ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_DELETED);
 
         return true;
     }
@@ -249,20 +311,24 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      * Since 2.16.0 (audit PC-M1): every task of the deleted column, asked as it enters `$target` (the last column once the
      * deletion is done when `$targetIsLast`). The first refusal stops the deletion before anything changes.
      *
+     * @param list<BoardColumn> $remaining the board's columns once the deletion is done, by position (since 2.19.0: the
+     *                                     target's type is read among them)
+     *
      * @throws ColumnTransitionRefusedException
      */
-    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, object $actor, ColumnTransitionVia $via): void
+    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, array $remaining, object $actor, ColumnTransitionVia $via): void
     {
         if (!$this->transitions instanceof ColumnTransitionPolicyInterface) {
             return;
         }
         $board = $column->getBoard();
+        $all   = ColumnTypes::ordered($board);
         foreach (self::tasksOf($column) as $task) {
             $transition = new ColumnTransition(
                 Snapshots::board($board),
                 Snapshots::task($task),
-                Snapshots::column($column, $columnIsLast),
-                Snapshots::column($target, $targetIsLast),
+                Snapshots::column($column, $columnIsLast, $all),
+                Snapshots::column($target, $targetIsLast, $remaining),
                 $actor,
                 ActorId::of($actor),
                 $via,
@@ -313,5 +379,57 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         $value = trim($value);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * Since 2.19.0 (FR-033): at most two closed columns on a board.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function assertTypes(TaskBoard $board, BoardColumn $column, ColumnType $type): void
+    {
+        $columns = ColumnTypes::ordered($board);
+        $types   = [];
+        foreach ($columns as $candidate) {
+            if ($candidate !== $column) {
+                $types[] = ColumnTypes::of($candidate, $columns);
+            }
+        }
+        $types[] = $type;
+        if (!ColumnTypes::allowed($types)) {
+            throw new InvalidArgumentException('A board has at most ' . ColumnType::MAX_CLOSED . ' closed columns.');
+        }
+    }
+
+    /**
+     * Since 2.19.0: a column that stops being done reopens its completed tasks, so the host's limit is asked first.
+     *
+     * @throws TaskReopenRefusedException
+     */
+    private function assertRetypeAllowed(BoardColumn $column, ColumnType $type): void
+    {
+        if ($type->isDone() || !ColumnTypes::isDone($column)) {
+            return;
+        }
+        $reopened = 0;
+        foreach (ColumnTasks::of($this->entityManager, $column) as $task) {
+            $reopened += (int) ($task->isCompleted() && !$task->isArchived());
+        }
+        $refusal = $reopened > 0 ? $this->limits?->check($column->getBoard(), $reopened, 0) : null;
+        if ($refusal instanceof LimitRefusal) {
+            throw new TaskReopenRefusedException($refusal);
+        }
+    }
+
+    /** Since 2.19.0: the tasks of the column are completed when it is done, reopened otherwise. */
+    private function followType(BoardColumn $column, ColumnType $type): void
+    {
+        foreach (ColumnTasks::of($this->entityManager, $column) as $task) {
+            if ($type->isDone() && !$task->isCompleted()) {
+                $task->markCompleted();
+            } elseif (!$type->isDone() && $task->isCompleted()) {
+                $task->markIncomplete();
+            }
+        }
     }
 }

@@ -35,6 +35,7 @@ use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
@@ -45,7 +46,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
 use function array_key_first;
-use function array_key_last;
 use function array_map;
 use function array_unique;
 use function array_values;
@@ -232,9 +232,8 @@ final readonly class TaskApiTaskOperations
         $archived = $input->bool('archived');
         // Audit IA-L6: every limit before the first save. A restored task that was open, and a done one leaving the done
         // column, each add an active task.
-        $columns  = $board->getColumns()->toArray();
-        $last     = $columns === [] ? null : $columns[array_key_last($columns)];
-        $reopens  = $status instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $status->getId() !== $last->getId();
+        // Since 2.19.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
+        $reopens  = $status instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($status);
         $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
         if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
@@ -436,10 +435,8 @@ final readonly class TaskApiTaskOperations
     {
         $reopens = [];
         foreach ($plans as $index => $plan) {
-            $task    = $tasks[$index];
-            $columns = $task->getBoard()->getColumns()->toArray();
-            $last    = $columns === [] ? null : $columns[array_key_last($columns)];
-            if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $plan['status']->getId() !== $last->getId()) {
+            $task = $tasks[$index];
+            if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($plan['status'])) {
                 $reopens[$task->getBoard()->getId()][] = $index;
             }
         }

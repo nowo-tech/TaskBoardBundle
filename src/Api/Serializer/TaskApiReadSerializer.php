@@ -17,9 +17,9 @@ use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 
-use function array_key_last;
 use function array_map;
 use function array_slice;
 use function array_values;
@@ -347,11 +347,8 @@ final class TaskApiReadSerializer
                 $index = $position;
             }
         }
-        $type = match (true) {
-            $index === array_key_last($columns) => 'closed',
-            $index === 0                        => 'open',
-            default                             => 'custom',
-        };
+        // Since 2.19.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
+        $type = ColumnTypes::of($column, $columns)->value;
 
         // Since 2.16.0 (spec 234, FR-001 / FR-014): `humans_only`.
         return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon(), 'humans_only' => $column->isHumansOnly()];

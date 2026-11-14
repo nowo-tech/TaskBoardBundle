@@ -57,6 +57,12 @@ final readonly class ColumnTransitionVia
     public const OP_BOARD_MOVE = 'board_move';
 
     /**
+     * Since 2.19.0 (audit PW-H1 / PW-L5): a task moved or completed because its board's columns changed (a retype, a
+     * folder's shared status set, a board configuration). Reported on TASK_STATUS_CHANGED; the policy is not asked.
+     */
+    public const OP_COLUMNS = 'columns';
+
+    /**
      * @param string $channel `[a-z][a-z0-9_]{0,31}`
      * @param string $operation `[a-z][a-z0-9_]{0,31}`
      */

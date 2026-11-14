@@ -6,15 +6,24 @@ namespace Nowo\TaskBoardBundle\Folder;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
+use Nowo\TaskBoardBundle\Configuration\BoardColumnsRefusedException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Service\TaskColumnFollow;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Throwable;
 
 use function array_filter;
 use function array_map;
 use function array_values;
+use function implode;
 use function max;
 use function mb_strlen;
 use function strcmp;
@@ -38,6 +47,11 @@ final readonly class TaskBoardFolderManager
         private EntityManagerInterface $entityManager,
         private TaskBoardRestructurePolicyInterface $policy,
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 2.19.0 (FR-034): a board moved into a folder with a shared status set takes its columns.
+        private BoardColumnsApplier $columnsApplier = new BoardColumnsApplier(),
+        // Since 2.19.0 (audit PW-H1 / PW-L5): history rows and events for the tasks a column change moves or completes.
+        private TaskColumnFollow $follow = new TaskColumnFollow(),
+        private ?TaskEventDeferral $events = null,
     ) {
     }
 
@@ -148,10 +162,14 @@ final readonly class TaskBoardFolderManager
      * Puts the board in the folder, or out of any (null). Needs the policy on the board, and on the folders' tenant when a
      * folder is named (`mayManageFolders()`, since 2.19.0 audit PW-H1). Leaving a folder keeps the board's dependencies
      * on the folder's other boards (audit PW-I4): {@see TaskBoardDependencyScope} only decides which new ones are allowed.
+     * Into a folder with a shared status set the board takes its columns (FR-034): `$columnMap` (current column id or
+     * name => a column name of the set) moves the tasks of a column the set does not have.
      *
-     * @throws TaskBoardRestructureRefusedException `not_found` (another tenant), `not_allowed`
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException `not_found` (another tenant), `not_allowed`, `columns_in_use`, `invalid`
      */
-    public function moveBoard(object $actor, TaskBoard $board, ?TaskBoardFolder $folder): void
+    public function moveBoard(object $actor, TaskBoard $board, ?TaskBoardFolder $folder, array $columnMap = []): void
     {
         if ($folder instanceof TaskBoardFolder && $folder->getTenantKey() !== $board->getTenantKey()) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
@@ -166,7 +184,12 @@ final readonly class TaskBoardFolderManager
         if ($board->getFolderId() === $folder?->getId()) {
             return;
         }
-        $this->write(static function () use ($board, $folder): void {
+        $this->write(function () use ($board, $folder, $columnMap, $actor): void {
+            // The columns first: a refusal there leaves the board, in memory too, where it was.
+            $set = $folder?->getStatusSet();
+            if ($set !== null) {
+                $this->applyColumns($board, $set, $columnMap, $actor);
+            }
             $board->changeFolder($folder);
         });
     }
@@ -177,6 +200,77 @@ final readonly class TaskBoardFolderManager
     public function boardIds(TaskBoardFolder $folder): array
     {
         return array_map(static fn (TaskBoard $board): string => $board->getId(), $this->boardsIn($folder, true));
+    }
+
+    /**
+     * Since 2.19.0 (FR-034): makes the board's columns the set, inside the caller's transaction (no flush).
+     *
+     * @param list<BoardColumnSpec> $set
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException `columns_in_use` (`board`, `columns`), `invalid` (`field` columns),
+     *                                              `quota` (reopened tasks over the host's limit)
+     */
+    public function applyColumns(TaskBoard $board, array $set, array $columnMap = [], ?object $actor = null): void
+    {
+        $this->columns(function () use ($board, $set, $columnMap, $actor): void {
+            $before = $this->follow->snapshot($board);
+            foreach ($this->columnsApplier->apply($board, $set, $columnMap) as $removed) {
+                $this->entityManager->remove($removed);
+            }
+            // The columns the set adds: persisted before a task points at them.
+            foreach ($board->getColumns() as $column) {
+                $this->entityManager->persist($column);
+            }
+            // Audit PW-H1 / PW-L5: the moved or completed tasks get their history rows (this flush) and events (after the
+            // commit of the caller's write; dropped on a rollback).
+            foreach ($this->follow->record($board, $before, $actor, ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMNS)) as [$event, $name]) {
+                $this->events?->dispatchSaved($event, $name);
+            }
+        });
+    }
+
+    /**
+     * Since 2.19.0: every refusal of {@see self::applyColumns()}, changing nothing.
+     *
+     * @param list<BoardColumnSpec> $set
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    public function checkColumns(TaskBoard $board, array $set, array $columnMap = []): void
+    {
+        $this->columns(fn (): array => $this->columnsApplier->check($board, $set, $columnMap));
+    }
+
+    /**
+     * @param callable(): mixed $call
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    private function columns(callable $call): void
+    {
+        try {
+            $call();
+        } catch (BoardColumnsRefusedException $refused) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::COLUMNS_IN_USE, ['board' => $refused->boardId, 'columns' => implode(', ', $refused->columns)]);
+        } catch (InvalidArgumentException) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'columns']);
+        } catch (TaskReopenRefusedException $refused) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::QUOTA, [], $refused->getMessage());
+        }
+    }
+
+    /**
+     * Since 2.19.0: runs `$change` in a transaction of the manager ({@see self::write()}); on a failure the entity manager
+     * is closed and reset, so in-memory changes of a refused multi-step write are dropped (refusals known in advance are
+     * checked before, see {@see self::checkColumns()}).
+     *
+     * @param callable(): void $change
+     */
+    public function transactional(callable $change): void
+    {
+        $this->write($change, true);
     }
 
     /**
@@ -217,21 +311,29 @@ final readonly class TaskBoardFolderManager
      *
      * @param callable(): void $change
      */
-    private function write(callable $change): void
+    private function write(callable $change, bool $discardOnFailure = false): void
     {
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
+        $this->events?->begin();
         try {
             $change();
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
             $connection->commit();
         } catch (Throwable $failure) {
+            $this->events?->rollBack();
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
+            }
+            // A multi-step write (transactional()) may have changed entities in memory before it failed: the manager is
+            // closed so no later flush writes half of it, then reset (worker mode with kernel reset off).
+            if ($discardOnFailure && $this->entityManager->isOpen()) {
+                $this->entityManager->close();
             }
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
 
             throw $failure;
         }
+        $this->events?->commit(false);
     }
 }

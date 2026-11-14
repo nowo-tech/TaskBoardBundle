@@ -7,6 +7,7 @@
 - [To 2.19.0](#to-2190)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
+  - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -264,6 +265,35 @@ Nothing, unless you use folders:
 - **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
   folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`, or pass `include_folders=true`. A host whose
   clients expect every board sets `api.lists_include_folders: true`.
+
+### Schema change for every host: column types and status sets
+
+Two nullable columns, after the folders above; nothing is rewritten (the demo's `Version20261115110000`):
+
+```sql
+-- MySQL / MariaDB
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
+```
+
+```sql
+-- PostgreSQL (SQLite: ALTER TABLE … ADD COLUMN, with CLOB for status_set; DROP COLUMN to roll back)
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
+```
+
+No data step: a column without a type keeps its meaning by position (first `open`, last `closed`, the rest `custom`;
+a board of one column: `closed`), exactly as before. The first type set on one column of a board writes the position
+types of its other columns. **Behaviour to know:** a board with types no longer treats "the last column" as done;
+*Done* goes to its first `done`/`closed` column, and a task in any `done` or `closed` column is completed. A
+`column_transition_policy` reads the type in `BoardColumnSnapshot::$type` (and `TaskStatusChangedEvent::$toType`);
+`$last` stays "the last column by position".
 
 ## To 2.18.0
 

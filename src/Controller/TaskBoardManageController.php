@@ -49,6 +49,7 @@ use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
@@ -507,6 +508,8 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('error', $this->transitionMessage($refused));
 
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        } catch (TaskBoardRestructureRefusedException) {
+            return $this->sharedColumnsRefused($boardId);
         }
         if ($deleted) {
             $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);
@@ -601,8 +604,12 @@ final class TaskBoardManageController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var BoardColumnFormData $data */
             $data = $form->getData();
-            // @igor-ignore - HTTP handler delegates to services; no controller worker state.
-            $column = $this->columnManager->add($board, $data, $user);
+            try {
+                // @igor-ignore - HTTP handler delegates to services; no controller worker state.
+                $column = $this->columnManager->add($board, $data, $user);
+            } catch (TaskBoardRestructureRefusedException) {
+                return $this->sharedColumnsRefused($boardId);
+            }
             $this->logWrite('column_create', ['board_id' => $boardId, 'column_id' => $column->getId()]);
             $this->addFlash('success', 'task_board.flash.column_added');
         } else {
@@ -633,12 +640,28 @@ final class TaskBoardManageController extends AbstractController
             if ($form->has('icon') && !array_key_exists('icon', $request->request->all($form->getName()))) {
                 $data->icon = $column->getIcon();
             }
-            $this->columnManager->update($column, $data, $user);
+            try {
+                $this->columnManager->update($column, $data, $user);
+            } catch (TaskBoardRestructureRefusedException) {
+                return $this->sharedColumnsRefused($boardId);
+            }
             $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
         } else {
             $this->flashColumnIconError($form);
         }
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 2.19.0 (audit PW-H1): a column edit on a board whose folder shares its statuses needs the right on every board
+     * of the folder; nothing was changed.
+     */
+    private function sharedColumnsRefused(string $boardId): RedirectResponse
+    {
+        $this->logRefused('column_shared_status_set');
+        $this->addFlash('error', 'task_board.flash.column_shared_refused');
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
@@ -657,7 +680,11 @@ final class TaskBoardManageController extends AbstractController
         }
 
         if ($order !== []) {
-            $this->columnManager->reorder($board, $order, $user);
+            try {
+                $this->columnManager->reorder($board, $order, $user);
+            } catch (TaskBoardRestructureRefusedException) {
+                return $this->sharedColumnsRefused($boardId);
+            }
             $this->logWrite('column_reorder', ['board_id' => $boardId, 'columns' => count($order)]);
         }
 

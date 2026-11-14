@@ -19,6 +19,12 @@ abstract class AbstractColumnEvent extends Event
         public readonly ?string $tenantKey,
         public readonly ?string $actorId,
         public readonly ?string $cause,
+        /**
+         * Since 2.19.0 (audit PW-H1): the person or service account that made the change (null: a worker, an import), so
+         * a listener that writes more on its behalf (the shared status set of a folder) can ask its rights. Not for
+         * serialisation: copy `actorId`.
+         */
+        public readonly ?object $actor = null,
     ) {
     }
 }

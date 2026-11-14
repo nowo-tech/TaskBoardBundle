@@ -125,8 +125,39 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   transaction; another tenant's folder, board or task is `not_found`; the entity manager is reset when a failure closed
   it (worker mode, kernel reset off); `TASK_BOARD_CHANGED` after the commit. A dependency is kept when both boards are
   in the same folder (`Folder\TaskBoardDependencyScope`), else removed with a history row.
+- **Column types (FR-033).** `BoardColumn` gains a type (`Enum\ColumnType`: `open`, `custom`, `done`, `closed`;
+  column `task_board_columns.column_type`). A task in a `done` or `closed` column is completed, so a board may have two
+  closed columns (*hecho*, *cancelada*; at most two). A board without types keeps its meaning by position (first `open`,
+  last `closed`, the rest `custom`), exactly as before; the first type set on a column writes the position types of the
+  others (`Support\ColumnTypes`). Completion, *Done*, reopening limits, column deletion, imports, moves, duplicates and the
+  sync's checklist items follow the type. Task API: `status.type` is the column's type (`done` is new); `type` is read on
+  `POST/PUT /v2/list/{id}/status…` (before: warned as not supported).
+- **Column types meet the 2.16 column transition policy.** `ValueObject\BoardColumnSnapshot` gains `type` (the column's
+  type, read among the board's columns; a new trailing constructor argument, null by default) and
+  `TaskStatusChangedEvent::$toType` is filled (it was always null in 2.16 and 2.17). The Task API's *humans only* guard
+  of the completion column (audit PC-M1) follows the types: on a typed board an `api` / `mcp` caller may not add a
+  `done` or `closed` column, or retype a column into or out of them, while one of the board's done columns is flagged;
+  reordering a typed board no longer moves the completion, so it is allowed. Reopen limits of `PUT /v2/task/{id}` and
+  the bulk update count a task leaving the done columns (before: leaving the last column, read from an unsorted list).
+- **Audit PW, column changes in a sharing folder.** A column edit (add, update, reorder, delete, humans-only flag) on a
+  board whose folder shares its statuses changes every board of the folder, so `BoardColumnManager` now asks, with an
+  actor, the folder right and the restructure right on every board of the folder (`FolderStatusSets::assertMayChangeColumns()`)
+  and refuses `TaskBoardRestructureRefusedException` (`not_allowed`) before anything changes: a flash in the board UI,
+  403 `ACCESS_002` on the Task API (PW-H1). `propagateFrom()` takes the actor (the column events carry it, new optional
+  `AbstractColumnEvent::$actor`) and never rewrites a board it may not restructure. The tasks a retype, a status set or
+  its propagation moves or completes get a `column` / `completed` history row and TASK_STATUS_CHANGED (operation
+  `columns`), TASK_COMPLETED or TASK_REOPENED after the commit (PW-L5). A dependency between two tasks of one board of a
+  folder is checked for cycles across the folder's boards (PW-L3).
+- **Dependencies across the boards of a folder (FR-032).** `TaskDependencyManager` accepts two tasks of two boards of the
+  same folder (cycles checked across the folder); any other pair is still `other_board` (`LINK_002`).
+- **Shared status sets (FR-034).** `Folder\FolderStatusSets::setStatusSet()` / `shareFrom()` give every board of a folder
+  the same columns (name, order, type; `task_board_folders.status_set`), in one transaction, never orphaning a task: a
+  column that holds tasks and is dropped needs a column map (`columns_in_use` otherwise). A board moved into the folder
+  takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
+  tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
+  applier; a spec carries the column's 2.16 *humans only* flag too (`humansOnly`, false when an older array has none).
 - A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
-- Demo: migration `Version20261115100000` (folders).
+- Demo: migrations `Version20261115100000` (folders) and `Version20261115110000` (column types, status sets).
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`
