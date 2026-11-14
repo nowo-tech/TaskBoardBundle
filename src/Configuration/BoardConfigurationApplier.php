@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Configuration;
 
-use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -78,11 +77,8 @@ final readonly class BoardConfigurationApplier
             }
             $this->applyFields($actor, $board, $configuration->fields, $dropFieldValues);
             $this->templates->apply(Snapshots::board($board), $configuration->templates);
-            try {
-                $board->setNumberPrefix($configuration->numberPrefix);
-            } catch (InvalidArgumentException) {
-                throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'number_prefix']);
-            }
+            // Checked above: the prefix is valid.
+            $board->setNumberPrefix($configuration->numberPrefix);
         });
     }
 
@@ -176,8 +172,9 @@ final readonly class BoardConfigurationApplier
      */
     private function drop(object $actor, TaskCustomField $field, bool $dropFieldValues): void
     {
+        // checkFields() refused this before the transaction; asked again for a value written in between (another request).
         if (!$dropFieldValues && $this->fields->hasValues($field)) {
-            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::FIELDS_IN_USE, ['fields' => $field->getName()]);
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::FIELDS_IN_USE, ['fields' => $field->getName()]); // @codeCoverageIgnore
         }
         // The board's right was asked by apply(): the field manager asks the same and cannot refuse here.
         $this->fields->delete($actor, $field);
