@@ -139,6 +139,15 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   `done` or `closed` column, or retype a column into or out of them, while one of the board's done columns is flagged;
   reordering a typed board no longer moves the completion, so it is allowed. Reopen limits of `PUT /v2/task/{id}` and
   the bulk update count a task leaving the done columns (before: leaving the last column, read from an unsorted list).
+- **Audit PW, column changes in a sharing folder.** A column edit (add, update, reorder, delete, humans-only flag) on a
+  board whose folder shares its statuses changes every board of the folder, so `BoardColumnManager` now asks, with an
+  actor, the folder right and the restructure right on every board of the folder (`FolderStatusSets::assertMayChangeColumns()`)
+  and refuses `TaskBoardRestructureRefusedException` (`not_allowed`) before anything changes: a flash in the board UI,
+  403 `ACCESS_002` on the Task API (PW-H1). `propagateFrom()` takes the actor (the column events carry it, new optional
+  `AbstractColumnEvent::$actor`) and never rewrites a board it may not restructure. The tasks a retype, a status set or
+  its propagation moves or completes get a `column` / `completed` history row and TASK_STATUS_CHANGED (operation
+  `columns`), TASK_COMPLETED or TASK_REOPENED after the commit (PW-L5). A dependency between two tasks of one board of a
+  folder is checked for cycles across the folder's boards (PW-L3).
 - **Dependencies across the boards of a folder (FR-032).** `TaskDependencyManager` accepts two tasks of two boards of the
   same folder (cycles checked across the folder); any other pair is still `other_board` (`LINK_002`).
 - **Shared status sets (FR-034).** `Folder\FolderStatusSets::setStatusSet()` / `shareFrom()` give every board of a folder
@@ -162,8 +171,16 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   `api.lists_include_folders`, false). Nothing changes until a folder is used.
 - `moveTasks()` asks the host's column transition policy (`column_transition_policy`, 2.16.0) for every task that changes
   board, as it enters its column on the target (operation `ColumnTransitionVia::OP_BOARD_MOVE`, `board_move`), before
-  anything changes; the new optional `$via` carries the caller's channel (null: `web`), so an MCP server that passes
+  anything changes; the new optional `$via` carries the caller's channel (null: the `write_provenance_provider`'s channel, else `web`), so an MCP server that passes
   `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
+- `moveTasks()` keeps each task's completion consistent with its column (audit PW-M1): a column map or a same-name
+  column is used only when it fits (an open task never lands in a done column, a completed one never in an open column);
+  otherwise the move rule decides, as for a move from the board UI.
+- `moveTasks()` refuses `stale` (`TaskBoardRestructureRefusedException::STALE`) when a moved tree changed between its
+  read and its row locks (audit PW-L2): nothing is changed, the caller retries.
+- `moveBoardToFolder()` with a folder needs the folder right of its tenant (`mayManageFolders()`) besides the board's
+  (audit PW-H1); leaving a folder keeps the board's existing dependencies on the folder's boards (PW-I4).
+- `folder()` / `folders()` do not check who asks: the host scopes the ids and tenants it passes (PW-I3).
 - `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
   context of the `board_moved` history row, so a host can archive the emptied story.
 
