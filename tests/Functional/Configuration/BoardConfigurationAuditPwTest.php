@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Configuration;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
 use Nowo\TaskBoardBundle\Configuration\BoardConfiguration;
@@ -55,10 +54,9 @@ final class BoardConfigurationAuditPwTest extends CopyTestCase
             } catch (TaskBoardRestructureRefusedException $refused) {
                 self::assertSame([TaskBoardRestructureRefusedException::INVALID, ['field' => 'fields']], [$refused->reason, $refused->params], $what);
             }
-            $em = self::getContainer()->get('doctrine')->getManager();
-            self::assertInstanceOf(EntityManagerInterface::class, $em);
-            self::assertTrue($em->isOpen(), $what);
-            self::assertTrue($em->contains($board), $what . ': the caller\'s board stays managed');
+            // The bundle's manager (the default one, or the private one in the private-EM replay).
+            self::assertTrue($this->em->isOpen(), $what);
+            self::assertTrue($this->em->contains($board), $what . ': the caller\'s board stays managed');
         }
 
         $this->applier()->apply($this->owner, $board, new BoardConfiguration([...$columns, new BoardColumnSpec('Extra')], [], [], 'ABC'));
