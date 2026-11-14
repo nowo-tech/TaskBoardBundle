@@ -43,7 +43,12 @@ final readonly class TaskRevisionListener
         $work    = $args->getObjectManager()->getUnitOfWork();
         $ignored = array_flip(self::IGNORED_FIELDS);
         foreach ($work->getScheduledEntityUpdates() as $entity) {
-            if ($entity instanceof Task && array_diff_key($work->getEntityChangeSet($entity), $ignored) !== []) {
+            if (!$entity instanceof Task) {
+                continue;
+            }
+            // Audit PG-I1: a mark a failed flush left behind never counts in this one.
+            $entity->takeRevisionPending();
+            if (array_diff_key($work->getEntityChangeSet($entity), $ignored) !== []) {
                 $entity->markRevisionPending();
             }
         }
@@ -95,6 +100,11 @@ final readonly class TaskRevisionListener
         $revision   = $quotes->getColumnName('revision', $metadata, $platform);
         $id         = $quotes->getColumnName($metadata->getSingleIdentifierFieldName(), $metadata, $platform);
         $current    = TaskRevisionIncrement::next($connection, $table, $revision, $id, $task->getId());
+        if ($current === null) {
+            // Audit PG-L1: another request deleted the task meanwhile. As in 2.16.0 the flush goes on (the UPDATE of a
+            // missing row changed nothing); the object keeps the revision it had.
+            return;
+        }
         $metadata->setFieldValue($task, 'revision', $current);
         $manager->getUnitOfWork()->setOriginalEntityProperty(spl_object_id($task), 'revision', $current);
     }

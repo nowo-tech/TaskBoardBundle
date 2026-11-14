@@ -134,6 +134,43 @@ final class ApiRevisionRaceTest extends ApiTestCase
         self::assertSame([5, 5], [$stale->getRevision(), $this->revisionInDatabase($task)]);
     }
 
+    /**
+     * Audit PG-L1: a task another request deleted while this one wrote it. As in 2.16.0 the flush succeeds (the UPDATE
+     * of a missing row changes nothing); the revision is not incremented and the object keeps the one it had.
+     */
+    public function testAWriteOfATaskDeletedMeanwhileSucceedsAndKeepsItsRevision(): void
+    {
+        $task  = $this->task($this->roadmap, 'Deleted meanwhile');
+        $other = $this->otherWriter();
+        $stale = $other->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $stale);
+        $task->setTitle('Second revision');
+        $this->em->flush();
+        $this->em->remove($task);
+        $this->em->flush();
+
+        $stale->setDescription('Lost');
+        $other->flush();
+
+        self::assertSame(1, $stale->getRevision());
+        self::assertFalse($this->em->getConnection()->fetchOne('SELECT revision FROM task_board_tasks WHERE id = ?', [$stale->getId()]));
+        // The marker is gone: the next flush of the same object adds nothing either.
+        $stale->setDescription('Lost again');
+        $other->flush();
+        self::assertSame(1, $stale->getRevision());
+    }
+
+    /** Audit PG-I1: a mark a failed flush left on the object is dropped by the next flush that does not change the task. */
+    public function testALeftoverMarkIsDroppedByAPositionOnlyFlush(): void
+    {
+        $task = $this->task($this->roadmap, 'Leftover');
+        $task->markRevisionPending();
+        $task->setPosition(3);
+        $this->em->flush();
+
+        self::assertSame([1, 1], [$task->getRevision(), $this->revisionInDatabase($task)]);
+    }
+
     public function testARolledBackWriteLeavesTheRevisionAsItWas(): void
     {
         $task = $this->task($this->roadmap, 'Rolled back');

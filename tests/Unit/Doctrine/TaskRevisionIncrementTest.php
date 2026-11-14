@@ -90,4 +90,51 @@ final class TaskRevisionIncrementTest extends TestCase
 
         self::assertSame(3, TaskRevisionIncrement::next($connection, 'tasks', 'revision', 'id', 't-1'));
     }
+
+    /**
+     * Audit PG-L1: the row another connection deleted during the write is null on every platform (no increment, no
+     * exception), never revision 0 or a missing insert id.
+     */
+    #[DataProvider('returningPlatforms')]
+    public function testARowGoneIsNullWithReturning(AbstractPlatform $platform): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn($platform);
+        $connection->expects(self::once())->method('fetchOne')->willReturn(false);
+
+        self::assertNull(TaskRevisionIncrement::next($connection, 'tasks', 'revision', 'id', 't-1'));
+    }
+
+    #[DataProvider('mysqlPlatforms')]
+    public function testARowGoneIsNullOnMysqlAndMariadbWithoutAskingTheInsertId(AbstractPlatform $platform): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn($platform);
+        $connection->expects(self::once())->method('executeStatement')->willReturn(0);
+        $connection->expects(self::never())->method('lastInsertId');
+
+        self::assertNull(TaskRevisionIncrement::next($connection, '`tasks`', '`revision`', '`id`', 't-1'));
+    }
+
+    #[DataProvider('otherPlatforms')]
+    public function testARowGoneIsNullOnAnyOtherPlatform(AbstractPlatform $platform): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn($platform);
+        $connection->expects(self::once())->method('executeStatement')->willReturn(0);
+        $connection->expects(self::never())->method('fetchOne');
+
+        self::assertNull(TaskRevisionIncrement::next($connection, 'tasks', 'revision', 'id', 't-1'));
+    }
+
+    #[DataProvider('otherPlatforms')]
+    public function testARowGoneBeforeTheReadIsNullOnAnyOtherPlatform(AbstractPlatform $platform): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn($platform);
+        $connection->method('executeStatement')->willReturn(1);
+        $connection->expects(self::once())->method('fetchOne')->willReturn(false);
+
+        self::assertNull(TaskRevisionIncrement::next($connection, 'tasks', 'revision', 'id', 't-1'));
+    }
 }
