@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Folder;
 
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
+use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
+use Nowo\TaskBoardBundle\Tests\Functional\App\PathWriteProvenance;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTransitionPolicy;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
@@ -23,7 +28,8 @@ final class RestructureTransitionPolicyTest extends CopyTestCase
 {
     protected function setUp(): void
     {
-        self::$taskBoardConfig             = ['column_transition_policy' => 'app.transition_policy'];
+        self::$taskBoardConfig = ['column_transition_policy' => 'app.transition_policy', 'write_provenance_provider' => 'app.write_provenance'];
+        PathWriteProvenance::reset();
         ScriptedTransitionPolicy::$asked   = [];
         ScriptedTransitionPolicy::$message = 'A blocked task needs a reason';
         parent::setUp();
@@ -73,6 +79,21 @@ final class RestructureTransitionPolicyTest extends CopyTestCase
         self::assertSame([$same->getId()], $result->unchangedTaskIds);
         self::assertCount(1, ScriptedTransitionPolicy::$asked, 'a task that stays on its board is not asked');
         self::assertSame(['web', 'board_move'], [ScriptedTransitionPolicy::$asked[0]->via->channel, ScriptedTransitionPolicy::$asked[0]->via->operation]);
+    }
+
+    public function testWithoutAViaTheWriteProvenanceChannelIsAsked(): void
+    {
+        $source                       = $this->board('Pilot', ['To do', 'Blocked'], tenantKey: 'acme');
+        $target                       = $this->board('Story', ['To do', 'Blocked'], tenantKey: 'acme');
+        $task                         = $this->task($source, 'Free');
+        PathWriteProvenance::$console = new WriteProvenance(WriteChannel::Mcp, 'Agent');
+
+        $this->restructurer()->moveTasks($this->owner, [$task->getId()], $target->getId());
+
+        self::assertSame(['mcp', 'board_move'], [ScriptedTransitionPolicy::$asked[0]->via->channel, ScriptedTransitionPolicy::$asked[0]->via->operation]);
+        $row = $this->em->getRepository(TaskChangeHistory::class)->findOneBy(['task' => $task->getId(), 'changeType' => TaskChangeType::BoardMoved]);
+        self::assertSame(WriteChannel::Mcp, $row?->getChannel(), 'the board_moved row carries the provenance too');
+        PathWriteProvenance::reset();
     }
 
     private function restructurer(): TaskBoardRestructureInterface

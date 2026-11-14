@@ -11,7 +11,7 @@ use Doctrine\Migrations\AbstractMigration;
  * TaskBoardBundle 2.19 (Beacon spec 234, FR-031): board folders. A new table and a nullable folder on every board (every
  * board stays folderless). The folder's tenant key compares byte for byte, as the boards' (REQ-SEC-006).
  */
-final class Version20261114100000 extends AbstractMigration
+final class Version20261115100000 extends AbstractMigration
 {
     public function getDescription(): string
     {

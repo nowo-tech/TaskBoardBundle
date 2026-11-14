@@ -164,6 +164,20 @@ Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quo
 Since 2.16.0 (Beacon spec 234): `api.hooks.members` (`TaskApiMembersInterface`; null: teams list no members) and
 `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`; null: a comment's author only).
 
+## Member badges and write provenance (since 2.18)
+
+```yaml
+nowo_task_board:
+    # Service id of a Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface: plain-text badges next to a member's name
+    # (history, comments, assignees), asked once per task page. null = no badge, nothing is asked.
+    member_badge_provider: ~
+    # Service id of a Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface: the channel (web, app, api, mcp)
+    # and actor label of every task history row, task and comment write. null = the columns stay NULL.
+    write_provenance_provider: ~
+```
+
+See [USAGE](USAGE.md#member-badges-and-write-provenance-since-218).
+
 ## Column transitions, humans-only columns and text search (since 2.16)
 
 ```yaml

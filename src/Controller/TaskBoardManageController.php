@@ -71,6 +71,7 @@ use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
@@ -258,6 +259,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly string $userReference = 'entity',
         // Since 2.16.0 (Beacon spec 234, FR-061): `task_templates.enabled` (null when off).
         private readonly ?TaskTemplateManager $taskTemplates = null,
+        // Since 2.18.0 (Beacon spec 234): the host's member badges, asked once for the task page.
+        private readonly ?MemberBadges $memberBadges = null,
     ) {
     }
 
@@ -1861,6 +1864,7 @@ final class TaskBoardManageController extends AbstractController
 
     /**
      * Since 1.23: one avatar call for the task page / panel — its members, the comment authors and the history users.
+     * Since 2.18.0 (Beacon spec 234): one member badge call for the same people.
      *
      * @param array<string, mixed> $commentData
      *
@@ -1868,7 +1872,7 @@ final class TaskBoardManageController extends AbstractController
      */
     private function withAvatars(Task $task, array $commentData): array
     {
-        if ($this->avatars instanceof TaskMemberAvatars) {
+        if ($this->avatars instanceof TaskMemberAvatars || $this->memberBadges instanceof MemberBadges) {
             $users = [];
             foreach ($task->getMembers() as $member) {
                 $users[] = $member->getUser();
@@ -1884,7 +1888,8 @@ final class TaskBoardManageController extends AbstractController
                     $users[] = $entry->getUser();
                 }
             }
-            $this->avatars->prime($users);
+            $this->avatars?->prime($users);
+            $this->memberBadges?->prime($users);
         }
 
         return $commentData;

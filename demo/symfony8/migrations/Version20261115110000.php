@@ -11,7 +11,7 @@ use Doctrine\Migrations\AbstractMigration;
  * TaskBoardBundle 2.19 (Beacon spec 234, FR-033 / FR-034): column types and a folder's shared status set. Two nullable
  * columns; a column without a type keeps its meaning by position, so nothing is rewritten.
  */
-final class Version20261114110000 extends AbstractMigration
+final class Version20261115110000 extends AbstractMigration
 {
     public function getDescription(): string
     {
