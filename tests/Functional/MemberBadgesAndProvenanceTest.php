@@ -243,6 +243,72 @@ final class MemberBadgesAndProvenanceTest extends FunctionalTestCase
         self::assertSame($revision, $task->getRevision());
     }
 
+    public function testOverlappingWritesNeverMixTwoPeoplesProvenance(): void
+    {
+        // Audit PS-L1: Bob's write commits while Ana holds an older snapshot; her flush writes the whole triple.
+        $ana  = $this->owner;
+        $bob  = $this->user('bob@example.com');
+        $task = $this->task($this->board(), 'Plan');
+        $task->recordWrite($ana, new WriteProvenance(WriteChannel::Api, 'ana-laptop'));
+        $comment = $this->comments()->add($task, $ana, 'Hello');
+        $this->em->flush();
+        $connection = $this->em->getConnection();
+        $tasks      = $this->em->getClassMetadata(Task::class)->getTableName();
+        $comments   = $this->em->getClassMetadata(TaskComment::class)->getTableName();
+        $connection->executeStatement('UPDATE ' . $tasks . ' SET updated_by_id = ?, actor_label = ? WHERE id = ?', [$bob->getId(), 'bob-ci', $task->getId()]);
+        $connection->executeStatement('UPDATE ' . $comments . ' SET updated_by_id = ?, channel = ?, actor_label = ? WHERE id = ?', [$bob->getId(), 'api', 'bob-ci', $comment->getId()]);
+
+        PathWriteProvenance::$console = new WriteProvenance(WriteChannel::Mcp, 'ana-mcp');
+        $this->tasks()->updatePriority($task, TaskPriority::High, $ana);
+        $this->comments()->edit($comment, $ana, 'Hello again');
+        $this->em->flush();
+
+        foreach ([[$tasks, $task->getId()], [$comments, $comment->getId()]] as [$table, $id]) {
+            $row = $connection->fetchAssociative('SELECT updated_by_id, channel, actor_label FROM ' . $table . ' WHERE id = ?', [$id]);
+            self::assertSame([(string) $ana->getId(), 'mcp', 'ana-mcp'], [(string) ($row['updated_by_id'] ?? ''), $row['channel'] ?? null, $row['actor_label'] ?? null], $table);
+        }
+    }
+
+    public function testAChannelOutsideTheListInTheDatabaseReadsAsNone(): void
+    {
+        // Audit PS-I2: another application or a manual fix wrote a value the bundle does not know; the task still loads.
+        $task = $this->task($this->board(), 'Plan');
+        $this->tasks()->updatePriority($task, TaskPriority::High, $this->owner);
+        $comment = $this->comments()->add($task, $this->owner, 'Hello');
+        $this->em->flush();
+        $connection = $this->em->getConnection();
+        foreach ([Task::class, TaskComment::class, TaskChangeHistory::class] as $class) {
+            $connection->executeStatement('UPDATE ' . $this->em->getClassMetadata($class)->getTableName() . " SET channel = 'fax'");
+        }
+        $this->em->clear();
+
+        $loaded = $this->em->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $loaded);
+        self::assertNull($loaded->getChannel());
+        foreach ($loaded->getChangeHistory() as $entry) {
+            self::assertNull($entry->getChannel());
+        }
+        self::assertNull($this->em->find(TaskComment::class, $comment->getId())?->getChannel());
+        $owner = $this->em->find(AppUser::class, $this->owner->getId());
+        self::assertInstanceOf(AppUser::class, $owner);
+        $this->login($owner);
+        $this->client->request('GET', '/tools/task-board/task/' . $task->getId());
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testWithoutProvidersTheHistoryRowsKeepTheir217Whitespace(): void
+    {
+        // Audit PS-I1: the provenance markup adds nothing, not even a newline, to the page without providers.
+        $task = $this->task($this->board(), 'Plan');
+        $this->tasks()->updatePriority($task, TaskPriority::High, $this->owner);
+        $this->login($this->owner);
+        $this->client->request('GET', '/tools/task-board/task/' . $task->getId());
+        self::assertResponseIsSuccessful();
+        $content = (string) $this->client->getResponse()->getContent();
+        self::assertStringNotContainsString('</span>                        </div>', $content);
+        self::assertMatchesRegularExpression('#nowo-task-activity__action">[^<]*</span>\n                        </div>#', $content);
+    }
+
     private function tasks(): TaskManager
     {
         $service = self::getContainer()->get(TaskManager::class);

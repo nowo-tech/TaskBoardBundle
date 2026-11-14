@@ -132,6 +132,11 @@ Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGR
 - The account erasure (`TaskSyncPeopleReassigner::detachUser()`) drops the person from `updated_by_id` and, with
   `$anonymise`, clears the actor labels of the rows they wrote.
 
+- Audit PS (before the tag): `token_name` only when the host shows the writer to the viewer (PS-M1); the three
+  last-write columns are written together (PS-L1); an unknown `channel` in the database reads as null (PS-I2); the
+  task page without providers is byte-identical to 2.17 (PS-I1); UPGRADING gives SQLite `ADD COLUMN` statements
+  instead of a table rebuild (PS-M2).
+
 ### Changed
 
 - `Task` and `TaskComment` keep their last writer (`updated_by_id`) from now on, with or without a provider. A change of

@@ -75,8 +75,9 @@ class Task
     private ?object $updatedBy = null;
 
     /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from; null: the host did not say. */
-    #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
-    private ?WriteChannel $channel = null;
+    // Audit PS-I2: a plain string, read through WriteChannel::tryFrom(); a value outside the list reads as null.
+    #[ORM\Column(type: 'string', length: 8, nullable: true)]
+    private ?string $channel = null;
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
@@ -320,7 +321,7 @@ class Task
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->updatedBy = $actor;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->channel = $provenance?->channel;
+        $this->channel = $provenance?->channel->value;
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
 
@@ -336,7 +337,7 @@ class Task
     /** Since 2.18.0 (Beacon spec 234): where the last recorded write came from. */
     public function getChannel(): ?WriteChannel
     {
-        return $this->channel;
+        return $this->channel === null ? null : WriteChannel::tryFrom($this->channel);
     }
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */

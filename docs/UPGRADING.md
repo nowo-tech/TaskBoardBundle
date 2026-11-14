@@ -249,12 +249,42 @@ ALTER TABLE task_board_task_comments ADD CONSTRAINT FK_BC3E8197896DBBDE FOREIGN 
 CREATE INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments (updated_by_id);
 ```
 
-**SQLite:** the three `channel` / `actor_label` pairs are plain `ALTER TABLE … ADD … DEFAULT NULL`; a foreign key cannot
-be added to an existing SQLite table, so let `doctrine:migrations:diff` write the table rebuild for `updated_by_id`.
+**SQLite (audit PS-M2): add the columns, never rebuild the tables.** SQLite adds a new nullable column with its
+foreign key in place (`ADD COLUMN … DEFAULT NULL REFERENCES …`, with `ON DELETE SET NULL` honoured when the connection
+runs `PRAGMA foreign_keys = ON`), so no table rebuild is needed:
+
+```sql
+ALTER TABLE task_board_task_change_history ADD COLUMN channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_task_change_history ADD COLUMN actor_label VARCHAR(120) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD COLUMN updated_by_id INTEGER DEFAULT NULL REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE task_board_tasks ADD COLUMN channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_tasks ADD COLUMN actor_label VARCHAR(120) DEFAULT NULL;
+CREATE INDEX IDX_B4902F8E896DBBDE ON task_board_tasks (updated_by_id);
+ALTER TABLE task_board_task_comments ADD COLUMN updated_by_id INTEGER DEFAULT NULL REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE task_board_task_comments ADD COLUMN channel VARCHAR(8) DEFAULT NULL;
+ALTER TABLE task_board_task_comments ADD COLUMN actor_label VARCHAR(120) DEFAULT NULL;
+CREATE INDEX IDX_BC3E8197896DBBDE ON task_board_task_comments (updated_by_id);
+```
+
+With `database.user_reference: id` the two `updated_by_id` lines are `ADD COLUMN updated_by_id VARCHAR(128) DEFAULT NULL`
+(no `REFERENCES`), each with the same `CREATE INDEX`.
+
+`doctrine:migrations:diff` on SQLite instead writes a **rebuild** of `task_board_tasks` and `task_board_task_comments`
+(copy, `DROP TABLE`, rename), in entity and in id mode. Use the statements above. If you run a rebuild anyway (a later
+diff that still wants one), **back up the database first and run it with foreign keys off, outside a transaction**
+(audit FP-L6): with `PRAGMA foreign_keys = ON` (e.g. DBAL's `EnableForeignKeys` middleware) the `DROP TABLE` fires the
+foreign-key actions and **deletes every comment, history row, member, dependency, link and document of the tasks and
+detaches all their time**. A `PRAGMA` inside a transaction is ignored, so make that migration non-transactional
+(`isTransactional(): false`), wrap it in `PRAGMA foreign_keys = OFF;` … `PRAGMA foreign_keys = ON;`, and check
+`PRAGMA foreign_key_check;` returns no row.
 
 **`database.user_reference: id`:** `updated_by_id` is the user's id like the other user columns: `VARCHAR(128) DEFAULT
 NULL` with an index and no foreign key, and on MySQL / MariaDB the same binary NO PAD collation as `creator_id`
-(`doctrine:migrations:diff` writes it).
+(`doctrine:migrations:diff` writes it on MySQL, MariaDB and PostgreSQL).
+
+**Other notes.** The `channel` columns are plain strings: a value outside `web`, `app`, `api`, `mcp` (written by another
+application or by hand) reads as `null` instead of failing to load the row (audit PS-I2). The three last-write columns of
+a task or comment are always written together, so overlapping writes never mix two people's provenance (audit PS-L1).
 
 ## To 2.17.0
 

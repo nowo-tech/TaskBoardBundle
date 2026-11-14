@@ -55,8 +55,9 @@ class TaskComment
     private ?object $updatedBy;
 
     /** Since 2.18.0 (Beacon spec 234): where the comment's last write came from; null: the host did not say. */
-    #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
-    private ?WriteChannel $channel;
+    // Audit PS-I2: a plain string, read through WriteChannel::tryFrom(); a value outside the list reads as null.
+    #[ORM\Column(type: 'string', length: 8, nullable: true)]
+    private ?string $channel;
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor (at most 120 characters). */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
@@ -89,7 +90,7 @@ class TaskComment
         $this->createdAt  = $createdAt ?? new DateTimeImmutable();
         $this->authorName = $author === null ? null : Text::cut(UserLabel::of($author), Task::USER_NAME_MAX);
         $this->updatedBy  = $author;
-        $this->channel    = $provenance?->channel;
+        $this->channel    = $provenance?->channel->value;
         $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
     }
 
@@ -153,7 +154,7 @@ class TaskComment
     /** Since 2.18.0 (Beacon spec 234): where the comment's last write came from. */
     public function getChannel(): ?WriteChannel
     {
-        return $this->channel;
+        return $this->channel === null ? null : WriteChannel::tryFrom($this->channel);
     }
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor. */
@@ -252,7 +253,7 @@ class TaskComment
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->updatedBy = $editor;
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-            $this->channel = $provenance?->channel;
+            $this->channel = $provenance?->channel->value;
             // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
         }

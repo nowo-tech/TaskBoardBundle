@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PathWriteProvenance;
 
@@ -91,5 +92,32 @@ final class ApiProvenanceTest extends ApiTestCase
         self::assertSame('api', $comments[0]['channel']);
         self::assertSame(self::LABEL, $comments[0]['token_name']);
         self::assertTrue(array_key_exists('user', $comments[0]), 'the existing fields stay');
+    }
+
+    public function testTheTokenNameOfAWriterHiddenFromTheViewerIsNotAnswered(): void
+    {
+        // Audit PS-M1 (FR-010): the label names a person; a person the host's profiles() leaves out is not shown.
+        ApiTestHost::$tenants = ['tenant-a'];
+        $task                 = $this->task($this->board('Roadmap', tenantKey: 'tenant-a'), 'Own');
+        $bob                  = $this->user('bob@example.com');
+        $label                = 'Bob Smith laptop (bob.smith@corp.example)';
+        $task->recordWrite($bob, new WriteProvenance(WriteChannel::Api, $label));
+        $this->em->persist(new TaskComment($task, $bob, 'Hidden author', [], provenance: new WriteProvenance(WriteChannel::Mcp, $label)));
+        $this->em->flush();
+        ApiTestHost::$unknownEmails = ['bob@example.com'];
+        $this->issueToken();
+
+        $this->get('/api/tasks/v2/task/' . $task->getId());
+        self::assertResponseIsSuccessful();
+        $answer = $this->json();
+        self::assertNull($answer['updated_by']);
+        self::assertSame('api', $answer['channel'], 'the channel names nobody');
+        self::assertNull($answer['token_name']);
+        $this->get('/api/tasks/v2/task/' . $task->getId() . '/comment');
+        $comment = $this->listOf('comments')[0];
+        self::assertNull($comment['updated_by']);
+        self::assertSame('mcp', $comment['channel']);
+        self::assertNull($comment['token_name']);
+        self::assertStringNotContainsString('Bob Smith', (string) $this->client->getResponse()->getContent());
     }
 }

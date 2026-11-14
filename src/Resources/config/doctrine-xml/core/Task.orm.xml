@@ -18,7 +18,7 @@
         <field name="updatedAt" type="datetime_immutable" column="updated_at"/>
         <field name="completedAt" type="datetime_immutable" column="completed_at" nullable="true"/>
         <field name="creatorName" type="string" column="creator_name" length="180" nullable="true"/>
-        <field name="channel" type="string" length="8" nullable="true" enum-type="Nowo\TaskBoardBundle\Provenance\WriteChannel"/>
+        <field name="channel" type="string" length="8" nullable="true"/>
         <field name="actorLabel" type="string" column="actor_label" length="120" nullable="true"/>
         <field name="totalTimeSeconds" type="integer" column="total_time_seconds"/>
         <field name="startAt" type="datetime_immutable" column="start_at" nullable="true"/>

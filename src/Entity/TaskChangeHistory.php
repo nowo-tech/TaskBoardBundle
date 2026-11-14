@@ -30,8 +30,9 @@ class TaskChangeHistory
     private ?string $userName;
 
     /** Since 2.18.0 (Beacon spec 234): where the write came from, as the host's provenance provider told it; null: unknown. */
-    #[ORM\Column(type: 'string', length: 8, nullable: true, enumType: WriteChannel::class)]
-    private ?WriteChannel $channel;
+    // Audit PS-I2: a plain string, read through WriteChannel::tryFrom(); a value outside the list reads as null.
+    #[ORM\Column(type: 'string', length: 8, nullable: true)]
+    private ?string $channel;
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (e.g. an API token's name); null: none. */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
@@ -63,7 +64,7 @@ class TaskChangeHistory
         $this->id         = Uuid::generate()->toString();
         $this->createdAt  = new DateTimeImmutable();
         $this->userName   = $user === null ? null : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
-        $this->channel    = $provenance?->channel;
+        $this->channel    = $provenance?->channel->value;
         $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
     }
 
@@ -148,7 +149,7 @@ class TaskChangeHistory
     /** Since 2.18.0 (Beacon spec 234): where the write came from; null when the host did not say. */
     public function getChannel(): ?WriteChannel
     {
-        return $this->channel;
+        return $this->channel === null ? null : WriteChannel::tryFrom($this->channel);
     }
 
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (at most 120 characters). */

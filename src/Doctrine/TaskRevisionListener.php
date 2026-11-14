@@ -10,10 +10,15 @@ use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
+use stdClass;
 
+use function array_diff;
 use function array_diff_key;
 use function array_flip;
+use function array_keys;
+use function count;
 use function spl_object_id;
 
 /**
@@ -29,6 +34,9 @@ use function spl_object_id;
  * two writers never save the same number, and a write that rolls back takes its 1 with it. The column is
  * `updatable: false`, so no flush ever writes a revision computed in PHP.
  *
+ * Since 2.18.0 (audit PS-L1) it also makes the provenance of a task's or comment's last write ({@see self::PROVENANCE_FIELDS})
+ * one UPDATE.
+ *
  * Stateless: everything it reads is the flushing unit of work and the task objects (worker mode).
  *
  * @internal
@@ -40,13 +48,20 @@ final readonly class TaskRevisionListener
      * `actorLabel`): it changes with every history row, also for a dependency, a link or logged time, which were no
      * new revision in 2.16.
      */
+    /** Since 2.18.0: the provenance of a task's or comment's last write, always written together. */
+    public const PROVENANCE_FIELDS = ['updatedBy', 'channel', 'actorLabel'];
+
     public const IGNORED_FIELDS = ['position', 'totalTimeSeconds', 'updatedAt', 'revision', 'updatedBy', 'channel', 'actorLabel'];
 
     public function onFlush(OnFlushEventArgs $args): void
     {
-        $work    = $args->getObjectManager()->getUnitOfWork();
+        $manager = $args->getObjectManager();
+        $work    = $manager->getUnitOfWork();
         $ignored = array_flip(self::IGNORED_FIELDS);
         foreach ($work->getScheduledEntityUpdates() as $entity) {
+            if ($entity instanceof Task || $entity instanceof TaskComment) {
+                $this->writeProvenanceTogether($manager, $entity);
+            }
             if (!$entity instanceof Task) {
                 continue;
             }
@@ -65,6 +80,25 @@ final readonly class TaskRevisionListener
                 $task->markRevisionPending();
             }
         }
+    }
+
+    /**
+     * Since 2.18.0 (audit PS-L1): the last write's provenance is one fact. When a flush changes any of `updatedBy`,
+     * `channel` and `actorLabel`, the UPDATE carries all three, so two overlapping writes (each loaded before the other
+     * committed) never leave one person's id next to another's token name.
+     */
+    private function writeProvenanceTogether(EntityManagerInterface $manager, Task|TaskComment $entity): void
+    {
+        $work    = $manager->getUnitOfWork();
+        $missing = array_diff(self::PROVENANCE_FIELDS, array_keys($work->getEntityChangeSet($entity)));
+        if ($missing === [] || count($missing) === count(self::PROVENANCE_FIELDS)) {
+            return;
+        }
+        foreach ($missing as $field) {
+            // A value no property can hold: the recomputed change set has the field, its UPDATE the current value.
+            $work->setOriginalEntityProperty(spl_object_id($entity), $field, new stdClass());
+        }
+        $work->recomputeSingleEntityChangeSet($manager->getClassMetadata($entity::class), $entity);
     }
 
     public function postUpdate(PostUpdateEventArgs $args): void

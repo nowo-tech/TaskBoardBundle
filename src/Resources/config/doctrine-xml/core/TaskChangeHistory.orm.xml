@@ -10,7 +10,7 @@
         <id name="id" type="string" length="36"/>
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="userName" type="string" column="user_name" length="180" nullable="true"/>
-        <field name="channel" type="string" length="8" nullable="true" enum-type="Nowo\TaskBoardBundle\Provenance\WriteChannel"/>
+        <field name="channel" type="string" length="8" nullable="true"/>
         <field name="actorLabel" type="string" column="actor_label" length="120" nullable="true"/>
         <field name="changeType" type="string" column="change_type" length="32" enum-type="Nowo\TaskBoardBundle\Enum\TaskChangeType"/>
         <field name="oldValue" type="text" column="old_value" nullable="true"/>

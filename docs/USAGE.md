@@ -1447,10 +1447,21 @@ The history and the comments show `via API · <label>` next to the actor (transl
 `task_board.history.channel.*`). The Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
 tasks and comments ([API](API.md#provenance-fields-since-218)).
 
+**Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
+`actor_label`) are always written in one UPDATE, so two overlapping writes never leave one person's id next to another's
+label; when they overlap, the later flush wins whole. A `channel` value outside the list in the database reads as
+`null`. On a comment the "via" line describes its **last** write: with the default author-only edit rules that is the
+author, but a wider `api.hooks.comment_edit_policy` can make it an editor's (the API's `updated_by` names them), and an
+edit by a provider sync changes the text without changing the provenance.
+
 **Personal data.** The actor label may name a person. `TaskSyncPeopleReassigner::detachUser()` drops the person from
 `updated_by_id` of tasks and comments; with `$anonymise` it also clears `actor_label` on the history rows, tasks and
-comments that person wrote (as it clears the name snapshots). A row an earlier, non-anonymising erasure already
-detached keeps its label, as it keeps its name snapshot. The channel is not personal data and stays.
+comments that person wrote (as it clears the name snapshots). Residuals, as for the name snapshots: a row an earlier,
+non-anonymising erasure already detached keeps its label, and so does a row whose user was deleted directly (the
+foreign key's `ON DELETE SET NULL`) without `detachUser()`. The channel is not personal data and stays. The Task API
+answers `token_name` only when the host shows the writer to the viewer (`profiles()`, FR-010). **No export:** the bundle
+has no per-user export of personal data; to answer an access request, read `getActorLabel()` on the user's tasks,
+comments and history rows (by `getUpdatedBy()` / `getUser()`) yourself.
 
 ### Standard Symfony host
 

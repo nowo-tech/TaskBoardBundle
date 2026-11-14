@@ -133,6 +133,7 @@ final class TaskApiReadSerializer
         $column      = $task->getColumn();
         $spent       = $task->getTotalTimeSeconds() * 1000 + ($page->manualMinutes[$task->getId()] ?? 0) * 60000;
         $description = (string) $task->getDescription();
+        $updatedBy   = $page->profileOf($task->getUpdatedBy());
 
         $data = [
             'id'        => $task->getId(),
@@ -177,9 +178,10 @@ final class TaskApiReadSerializer
             // Since 2.18.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
             // not shown to this viewer), where the last write came from and the host's label of its actor (a token's name).
             'created_by' => $page->profileOf($task->getCreator())?->id,
-            'updated_by' => $page->profileOf($task->getUpdatedBy())?->id,
+            'updated_by' => $updatedBy?->id,
             'channel'    => $task->getChannel()?->value,
-            'token_name' => $task->getActorLabel(),
+            // Audit PS-M1 (FR-010): the label names its writer; only when the host shows that person to this viewer.
+            'token_name' => $updatedBy instanceof TaskApiUser ? $task->getActorLabel() : null,
         ];
         if ($page->markdown) {
             $data['markdown_description'] = $description;
@@ -220,7 +222,8 @@ final class TaskApiReadSerializer
             'created_by' => $author?->id,
             'updated_by' => $updatedBy?->id,
             'channel'    => $comment->getChannel()?->value,
-            'token_name' => $comment->getActorLabel(),
+            // Audit PS-M1 (FR-010): only when the host shows its writer to this viewer.
+            'token_name' => $updatedBy instanceof TaskApiUser ? $comment->getActorLabel() : null,
         ];
     }
 

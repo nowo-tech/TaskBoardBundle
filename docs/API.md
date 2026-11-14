@@ -221,7 +221,7 @@ task) and every comment of `GET /v2/task/{id}/comment` carries four more fields;
 | `created_by` | The API id of the creator (task) or author (comment), as `creator.id` / `user.id`; null when the account is gone or the host does not show that person |
 | `updated_by` | The API id of who made the last recorded write (task) or wrote / last edited the comment; null for rows written before 2.18, an erased account or a person the host does not show |
 | `channel` | `web`, `app`, `api` or `mcp`: where the last write came from, as the host's `write_provenance_provider` said; null without one |
-| `token_name` | The host's plain-text label of that write's actor (e.g. the API token's name, at most 120 characters); null without one. Never the token |
+| `token_name` | The host's plain-text label of that write's actor (e.g. the API token's name, at most 120 characters); null without one, and null when the writer is not shown to you (the host's `profiles()` leaves them out, or `updated_by` is null; audit PS-M1, FR-010). Never the token |
 
 The channel is decided by the host from the path it serves, never from the request: a `channel` or `token_name` field,
 query parameter or header sent by a client is ignored. `token_name` is a JSON string as stored (no HTML entities); the

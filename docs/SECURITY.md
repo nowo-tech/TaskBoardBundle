@@ -289,7 +289,9 @@ no `dump()`, `var_dump()` or `error_log()` in `src/`.
 - **No secret.** The label is a name the host chooses (an API token's name); a host must never pass the token.
 - **Worker mode.** Badges are memoised per request in `Member\MemberBadges` (`ResetInterface`, cleared at every
   boundary): a badge of one request never shows in another.
-- **Personal data.** The actor label may name a person: the account erasure clears it with `$anonymise` (USAGE).
+- **Personal data.** The actor label may name a person: the account erasure clears it with `$anonymise` (USAGE); the
+  Task API answers it only when the host shows the writer to the viewer (audit PS-M1); there is no bundle export of it
+  (read `getActorLabel()` for an access request).
 
 ## Personal data in synced tasks (RGPD / LOPDGDD)
 

@@ -12,7 +12,7 @@
         <field name="editedAt" type="datetime_immutable" column="edited_at" nullable="true"/>
         <field name="deletedAt" type="datetime_immutable" column="deleted_at" nullable="true"/>
         <field name="authorName" type="string" column="author_name" length="180" nullable="true"/>
-        <field name="channel" type="string" length="8" nullable="true" enum-type="Nowo\TaskBoardBundle\Provenance\WriteChannel"/>
+        <field name="channel" type="string" length="8" nullable="true"/>
         <field name="actorLabel" type="string" column="actor_label" length="120" nullable="true"/>
         <field name="body" type="text"/>
         <field name="mentions" type="json"/>
