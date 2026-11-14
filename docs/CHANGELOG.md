@@ -145,7 +145,7 @@ Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
   column that holds tasks and is dropped needs a column map (`columns_in_use` otherwise). A board moved into the folder
   takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
   tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
-  applier.
+  applier; a spec carries the column's 2.16 *humans only* flag too (`humansOnly`, false when an older array has none).
 - **Native custom fields (FR-028).** `Entity\TaskCustomField` (text, number, dropdown with coloured options; per tenant or
   per board) and `TaskCustomFieldValue` (one per task and field). `Field\TaskCustomFieldManager`: `define()`,
   `update()`, `delete()` (under the restructure policy), `setField()` (history row `custom_field`), `valuesOf()` and the
