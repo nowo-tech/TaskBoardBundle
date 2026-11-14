@@ -79,7 +79,7 @@ final class BoardColumnsApplierTest extends TestCase
         $task  = $this->task($board, ColumnTypes::ordered($board)[1], 'Done task');
         $task->markCompleted();
         $limits = new class implements SyncLimitCheckerInterface {
-            public function check(TaskBoard $board, int $newTasks, int $newColumns): ?LimitRefusal
+            public function check(TaskBoard $board, int $newTasks, int $newColumns): LimitRefusal
             {
                 return new LimitRefusal('Plan full');
             }

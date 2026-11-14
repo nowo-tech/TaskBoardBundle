@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Folder\TaskBoardDependencyScope;
 use Nowo\TaskBoardBundle\Folder\TaskBoardFolderManager;
+use Nowo\TaskBoardBundle\Folder\TaskBoardFolderSnapshot;
+use Nowo\TaskBoardBundle\Folder\TaskBoardMoveResult;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
@@ -33,7 +35,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
     }
@@ -43,8 +45,8 @@ final class RestructureEdgeCasesTest extends CopyTestCase
         $manager = $this->manager();
         self::assertNull($manager->find(''));
         self::assertNull($manager->find(str_repeat('a', 37)));
-        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn () => $manager->create($this->owner, 'acme', '  '));
-        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn () => $manager->create($this->owner, 'acme', 'Big', str_repeat('x', TaskBoardFolderManager::DESCRIPTION_MAX + 1)));
+        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn (): TaskBoardFolder => $manager->create($this->owner, 'acme', '  '));
+        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn (): TaskBoardFolder => $manager->create($this->owner, 'acme', 'Big', str_repeat('x', TaskBoardFolderManager::DESCRIPTION_MAX + 1)));
 
         $folder = $manager->create($this->owner, null, 'No tenant');
         self::assertSame([$folder->getId()], array_map(static fn (TaskBoardFolder $f): string => $f->getId(), $manager->folders(null)));
@@ -61,7 +63,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
 
         $stranger = $this->user('stranger@example.com', []);
         $this->signIn($stranger);
-        $this->refused(TaskBoardRestructureRefusedException::NOT_ALLOWED, static fn () => $manager->update($stranger, $folder, 'Renamed', null, 0));
+        $this->refused(TaskBoardRestructureRefusedException::NOT_ALLOWED, static fn (): TaskBoardFolder => $manager->update($stranger, $folder, 'Renamed', null, 0));
         $this->refused(TaskBoardRestructureRefusedException::NOT_ALLOWED, static fn () => $manager->delete($stranger, $folder));
     }
 
@@ -69,7 +71,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
     {
         $manager = $this->manager();
         $this->em->getEventManager()->addEventListener('onFlush', new class {
-            public function onFlush(): void
+            public function onFlush(): never
             {
                 throw new RuntimeException('database down');
             }
@@ -80,7 +82,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
         } catch (RuntimeException $failure) {
             self::assertSame('database down', $failure->getMessage());
         }
-        $em = static::getContainer()->get('doctrine')->getManager();
+        $em = self::getContainer()->get('doctrine')->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         self::assertTrue($em->isOpen());
     }
@@ -96,16 +98,16 @@ final class RestructureEdgeCasesTest extends CopyTestCase
         $parent->getDocuments()->add(new TaskDocument($parent, 'Notes', 'Kept', $this->owner));
         $this->em->flush();
 
-        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $service->moveTasks($this->owner, [$parent->getId()], ''));
-        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $service->moveTasks($this->owner, [''], $target->getId()));
-        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn () => $service->moveTasks($this->owner, [$parent->getId()], $target->getId(), ['To do' => 7]));
+        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn (): TaskBoardMoveResult => $service->moveTasks($this->owner, [$parent->getId()], ''));
+        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn (): TaskBoardMoveResult => $service->moveTasks($this->owner, [''], $target->getId()));
+        $this->refused(TaskBoardRestructureRefusedException::INVALID, fn (): TaskBoardMoveResult => $service->moveTasks($this->owner, [$parent->getId()], $target->getId(), ['To do' => 7]));
 
         $noop = $service->moveTasks($this->owner, [$onTarget->getId()], $target->getId());
         self::assertSame([$onTarget->getId()], $noop->unchangedTaskIds);
         self::assertSame([], $noop->movedTaskIds);
 
         $this->quota()->deny = [TaskBoardQuotaCheckEvent::ACTION_TASK_MOVE];
-        $refusal             = $this->refused(TaskBoardRestructureRefusedException::QUOTA, fn () => $service->moveTasks($this->owner, [$parent->getId()], $target->getId()));
+        $refusal             = $this->refused(TaskBoardRestructureRefusedException::QUOTA, fn (): TaskBoardMoveResult => $service->moveTasks($this->owner, [$parent->getId()], $target->getId()));
         self::assertSame('Your plan is full.', $refusal->hostMessage());
         $this->quota()->deny = [];
 
@@ -117,8 +119,8 @@ final class RestructureEdgeCasesTest extends CopyTestCase
         self::assertInstanceOf(TaskBoard::class, $target);
         $target->archive();
         $this->em->flush();
-        $this->refused(TaskBoardRestructureRefusedException::BOARD_ARCHIVED, fn () => $service->moveTasks($this->owner, [$parent->getId()], $target->getId()));
-        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $service->updateFolder($this->owner, 'unknown', 'Name', null, 0));
+        $this->refused(TaskBoardRestructureRefusedException::BOARD_ARCHIVED, fn (): TaskBoardMoveResult => $service->moveTasks($this->owner, [$parent->getId()], $target->getId()));
+        $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn (): TaskBoardFolderSnapshot => $service->updateFolder($this->owner, 'unknown', 'Name', null, 0));
         $this->refused(TaskBoardRestructureRefusedException::NOT_FOUND, fn () => $service->deleteFolder($this->owner, 'unknown'));
     }
 
@@ -163,7 +165,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
 
     private function manager(): TaskBoardFolderManager
     {
-        $service = static::getContainer()->get(TaskBoardFolderManager::class);
+        $service = self::getContainer()->get(TaskBoardFolderManager::class);
         self::assertInstanceOf(TaskBoardFolderManager::class, $service);
 
         return $service;
@@ -171,7 +173,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
 
     private function restructurer(): TaskBoardRestructureInterface
     {
-        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        $service = self::getContainer()->get(TaskBoardRestructureInterface::class);
         self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
 
         return $service;
@@ -179,7 +181,7 @@ final class RestructureEdgeCasesTest extends CopyTestCase
 
     private function signIn(object $user): void
     {
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($user, 'main', $user->getRoles()));
     }

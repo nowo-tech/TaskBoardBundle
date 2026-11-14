@@ -146,6 +146,8 @@ Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
   takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
   tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
   applier.
+- A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
+- Demo: migrations `Version20261114100000` (folders) and `Version20261114110000` (column types, status sets).
 - **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
   `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
 - **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`
@@ -157,6 +159,10 @@ Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
 - Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
   by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`, or with `include_folders=true` (default:
   `api.lists_include_folders`, false). Nothing changes until a folder is used.
+- `moveTasks()` asks the host's column transition policy (`column_transition_policy`, 2.16.0) for every task that changes
+  board, as it enters its column on the target (operation `ColumnTransitionVia::OP_BOARD_MOVE`, `board_move`), before
+  anything changes; the new optional `$via` carries the caller's channel (null: `web`), so an MCP server that passes
+  `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
 - `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
   context of the `board_moved` history row, so a host can archive the emptied story.
 

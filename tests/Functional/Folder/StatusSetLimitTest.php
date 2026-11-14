@@ -22,12 +22,12 @@ final class StatusSetLimitTest extends SyncFunctionalTestCase
 {
     public function testAReopeningOverTheLimitRefusesTheSet(): void
     {
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
-        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        $service = self::getContainer()->get(TaskBoardRestructureInterface::class);
         self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
-        $sets = static::getContainer()->get(FolderStatusSets::class);
+        $sets = self::getContainer()->get(FolderStatusSets::class);
         self::assertInstanceOf(FolderStatusSets::class, $sets);
 
         $board = $this->board('Board', ['To do', 'Done']);

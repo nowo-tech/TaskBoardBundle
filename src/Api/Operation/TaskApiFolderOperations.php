@@ -183,7 +183,7 @@ final readonly class TaskApiFolderOperations
     {
         $folder = $this->folders->find($folderId);
         $space  = $folder instanceof TaskBoardFolder ? $this->workspace->spaceOfTenant($principal, $folder->getTenantKey()) : null;
-        if (!$folder instanceof TaskBoardFolder || $space === null || $space->tenantKey !== $folder->getTenantKey()) {
+        if (!$folder instanceof TaskBoardFolder || !$space instanceof TaskApiSpace || $space->tenantKey !== $folder->getTenantKey()) {
             throw TaskApiRefusal::notFound();
         }
         $space = $this->guard->space($principal, $space->id, $capability);

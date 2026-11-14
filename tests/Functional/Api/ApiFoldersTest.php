@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
+use Nowo\TaskBoardBundle\Event\TaskApiWriteEvent;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
@@ -83,7 +84,7 @@ final class ApiFoldersTest extends ApiTestCase
         $this->get('/api/tasks/v2/folder/' . $id);
         $this->assertRefused(404, 'ACCESS_001');
 
-        $operations = array_map(static fn ($event): string => $event->operation, $this->audit()->events);
+        $operations = array_map(static fn (TaskApiWriteEvent $event): string => $event->operation, $this->audit()->events);
         self::assertSame(['folder.create', 'board.create', 'folder.list_create', 'folder.update', 'folder.delete'], $operations);
         self::assertSame('tenant-a', $this->audit()->events[0]->tenantKey);
     }

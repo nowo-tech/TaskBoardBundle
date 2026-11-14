@@ -18,7 +18,7 @@ final class ApiFoldersTenancyTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$hostConfig = ['tenancy' => [
+        self::$hostConfig = ['tenancy' => [
             'enabled'      => true,
             'resolver'     => 'app.tenant_resolver',
             'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']],

@@ -18,7 +18,6 @@ use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
-use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
@@ -36,6 +35,7 @@ use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
@@ -46,7 +46,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
 use function array_key_first;
-use function array_key_last;
 use function array_map;
 use function array_unique;
 use function array_values;
@@ -436,7 +435,7 @@ final readonly class TaskApiTaskOperations
     {
         $reopens = [];
         foreach ($plans as $index => $plan) {
-            $task    = $tasks[$index];
+            $task = $tasks[$index];
             if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($plan['status'])) {
                 $reopens[$task->getBoard()->getId()][] = $index;
             }

@@ -28,7 +28,6 @@ use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use SortDirection;
 
 use function array_diff_key;
-use function array_key_last;
 use function array_keys;
 use function array_map;
 use function count;

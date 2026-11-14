@@ -20,7 +20,7 @@ final class ApiFoldersListDefaultTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$api = ['lists_include_folders' => true];
+        self::$api = ['lists_include_folders' => true];
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a'];
         $this->issueToken();

@@ -17,7 +17,7 @@ final class ApiFoldersPolicyTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$hostConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
+        self::$hostConfig = ['security' => ['create_roles' => ['ROLE_ADMIN']]];
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a'];
         $this->issueToken();

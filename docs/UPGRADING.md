@@ -203,23 +203,43 @@ Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-W
 
 ### Schema change for every host: folders
 
-A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless). Generate it
-with `doctrine:migrations:diff`, or apply (table prefix `task_board_`):
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
+rewritten. `doctrine:migrations:diff` writes it (the demo's `Version20261114100000`). By hand, with the default table
+prefix `task_board_` and the names Doctrine gives the foreign key and its index:
 
 ```sql
--- MySQL / MariaDB
-CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`)
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`;
 ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
-ALTER TABLE task_board_boards ADD CONSTRAINT FK_TASK_BOARD_BOARDS_FOLDER FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
-CREATE INDEX IDX_TASK_BOARD_BOARDS_FOLDER ON task_board_boards (folder_id);
--- PostgreSQL: TIMESTAMP(0) WITHOUT TIME ZONE for the dates, TEXT for the description; the rest is the same.
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
 -- rollback
-ALTER TABLE task_board_boards DROP FOREIGN KEY FK_TASK_BOARD_BOARDS_FOLDER;
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942 ON task_board_boards;
 ALTER TABLE task_board_boards DROP folder_id;
 DROP TABLE task_board_folders;
 ```
 
-Let `doctrine:migrations:diff` name the foreign key and the index: the names above are examples.
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description TEXT DEFAULT NULL, position INT NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_folders_tenant ON task_board_folders (tenant_key);
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+SQLite cannot add a foreign key to an existing table: `doctrine:migrations:diff` copies `task_board_boards` into a new
+table with `folder_id` and the foreign key (`CREATE TEMPORARY TABLE … AS SELECT`, `DROP`, `CREATE`, `INSERT … SELECT`,
+then its indexes again). Let it generate that migration rather than writing it by hand.
+
+The folder's `tenant_key` is a key column (REQ-SEC-006): the mapping listener gives it the binary NO PAD collation on
+MySQL / MariaDB, as the boards' `tenant_key`.
 
 ### Folders and restructure: what a host does
 
@@ -230,6 +250,9 @@ Nothing, unless you use folders:
   `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
   `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
   `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
+  (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked as `web` (a person).
 - **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.
@@ -239,33 +262,33 @@ Nothing, unless you use folders:
 
 ### Schema change for every host: column types and status sets
 
-Two nullable columns; nothing is rewritten:
+Two nullable columns, after the folders above; nothing is rewritten (the demo's `Version20261114110000`):
 
 ```sql
+-- MySQL / MariaDB
 ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
-ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL; -- LONGTEXT on MariaDB < 10.2, TEXT on SQLite
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
 -- rollback
 ALTER TABLE task_board_columns DROP column_type;
 ALTER TABLE task_board_folders DROP status_set;
 ```
 
-A column without a type follows its position (first `open`, last `closed`, the rest `custom`), which is what the spec's
-migration writes, so no data step is needed. A host that wants the types stored (for its own SQL reports) may run, per
-board, the equivalent of:
-
 ```sql
--- MySQL 8 / MariaDB 10.2+ / PostgreSQL: first column open, last closed, the rest custom, for boards with no type yet
-UPDATE task_board_columns c SET column_type = CASE
-  WHEN c.position = (SELECT MIN(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 AND c.position <> (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) THEN 'open'
-  WHEN c.position = (SELECT MAX(p.position) FROM task_board_columns p WHERE p.board_id = c.board_id) AND (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) > 1 THEN 'closed'
-  WHEN (SELECT COUNT(*) FROM task_board_columns n WHERE n.board_id = c.board_id) = 1 THEN 'closed'
-  ELSE 'custom' END
-WHERE NOT EXISTS (SELECT 1 FROM task_board_columns t WHERE t.board_id = c.board_id AND t.column_type IS NOT NULL);
+-- PostgreSQL (SQLite: ALTER TABLE … ADD COLUMN, with CLOB for status_set; DROP COLUMN to roll back)
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
 ```
 
-(MySQL refuses a subquery on the updated table: run it through a temporary copy, or let the bundle write the types the
-first time a type is set on the board.) **Behaviour to know:** a board with types no longer treats "the last column" as
-done; *Done* goes to its first `done`/`closed` column.
+No data step: a column without a type keeps its meaning by position (first `open`, last `closed`, the rest `custom`;
+a board of one column: `closed`), exactly as before. The first type set on one column of a board writes the position
+types of its other columns. **Behaviour to know:** a board with types no longer treats "the last column" as done;
+*Done* goes to its first `done`/`closed` column, and a task in any `done` or `closed` column is completed. A
+`column_transition_policy` reads the type in `BoardColumnSnapshot::$type` (and `TaskStatusChangedEvent::$toType`);
+`$last` stays "the last column by position".
+
 ## To 2.17.0
 
 No schema change, no migration, no configuration change.
