@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Te veel subtaken: %count%, hoogstens
 task_board.copy.refusal.sync_running: "Er loopt een synchronisatie op een van de borden. Probeer het opnieuw als die klaar is."
 task_board.copy.refusal.quota: "De limieten van het abonnement staan het niet toe."
 task_board.history.type.board_moved: "heeft de taak naar een ander bord verplaatst"
+task_board.history.type.parent: "heeft de taak onder een andere bovenliggende taak geplaatst"
 task_board.history.type.duplicated: "heeft de taak gedupliceerd van"
 task_board.history.type.member_not_copied: "heeft een lid niet meegekopieerd"
 # Since 2.3.0 (spec 215): recurring tasks.

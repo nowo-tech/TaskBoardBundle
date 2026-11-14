@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Troppe sottoattività: %count%, al m
 task_board.copy.refusal.sync_running: "È in corso una sincronizzazione in una delle bacheche. Riprova quando termina."
 task_board.copy.refusal.quota: "I limiti del piano non lo consentono."
 task_board.history.type.board_moved: "ha spostato l'attività in un'altra bacheca"
+task_board.history.type.parent: "ha spostato l'attività sotto un'altra attività padre"
 task_board.history.type.duplicated: "ha duplicato l'attività da"
 task_board.history.type.member_not_copied: "ha escluso un membro dalla copia"
 # Since 2.3.0 (spec 215): recurring tasks.

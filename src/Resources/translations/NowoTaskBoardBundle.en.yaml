@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Too many subtasks: %count%, at most 
 task_board.copy.refusal.sync_running: "A sync is running on one of the boards. Try again when it ends."
 task_board.copy.refusal.quota: "The plan limits refuse it."
 task_board.history.type.board_moved: "moved the task to another board"
+task_board.history.type.parent: "moved the task under another parent"
 task_board.history.type.duplicated: "duplicated the task from"
 task_board.history.type.member_not_copied: "left a member out of the copy"
 # Since 2.3.0 (spec 215): recurring tasks.

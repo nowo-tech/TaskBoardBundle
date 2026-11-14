@@ -765,6 +765,7 @@ task_board.copy.refusal.subtree_too_large: "Trop de sous-tâches : %count%, au p
 task_board.copy.refusal.sync_running: "Une synchronisation est en cours sur l'un des tableaux. Réessayez quand elle sera terminée."
 task_board.copy.refusal.quota: "Les limites du forfait le refusent."
 task_board.history.type.board_moved: "a déplacé la tâche vers un autre tableau"
+task_board.history.type.parent: "a déplacé la tâche sous une autre tâche parente"
 task_board.history.type.duplicated: "a dupliqué la tâche depuis"
 task_board.history.type.member_not_copied: "a laissé un membre hors de la copie"
 # Since 2.3.0 (spec 215): recurring tasks.
