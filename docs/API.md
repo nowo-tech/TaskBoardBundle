@@ -12,6 +12,7 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Write endpoints](#write-endpoints)
 - [Management endpoints (Full)](#management-endpoints-full)
 - [Task templates (since 2.16)](#task-templates-since-216)
+- [Provenance fields (since 2.18)](#provenance-fields-since-218)
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
@@ -210,6 +211,23 @@ With `task_templates.enabled` (Beacon spec 234, FR-061):
 
 Without the option the route does not exist and `template_id` is an unknown field (warned).
 
+## Provenance fields (since 2.18)
+
+Beacon spec 234 (D-20261114-05). Every task answer (`GET /v2/task/{id}`, the task pages, the write answers that return a
+task) and every comment of `GET /v2/task/{id}/comment` carries four more fields; every other field is unchanged:
+
+| Field | Value |
+|---|---|
+| `created_by` | The API id of the creator (task) or author (comment), as `creator.id` / `user.id`; null when the account is gone or the host does not show that person |
+| `updated_by` | The API id of who made the last recorded write (task) or wrote / last edited the comment; null for rows written before 2.18, an erased account or a person the host does not show |
+| `channel` | `web`, `app`, `api` or `mcp`: where the last write came from, as the host's `write_provenance_provider` said; null without one |
+| `token_name` | The host's plain-text label of that write's actor (e.g. the API token's name, at most 120 characters); null without one, and null when the writer is not shown to you (the host's `profiles()` leaves them out, or `updated_by` is null; audit PS-M1, FR-010). Never the token |
+
+The channel is decided by the host from the path it serves, never from the request: a `channel` or `token_name` field,
+query parameter or header sent by a client is ignored. `token_name` is a JSON string as stored (no HTML entities); the
+JSON encoding escapes `<`, `>`, `&` and quotes as `\u003C` etc., so it is safe to embed, and a client that renders it as
+HTML must escape it. The answers of `POST /v2/task/{id}/comment` and `PUT /v2/comment/{id}` stay as ClickUp's.
+
 ## Idempotency
 
 Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`):
@@ -295,6 +313,10 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `*: *statuses[].humans_only: extra` | Since 2.16.0 (spec 234): a status says whether only people may move tasks into it. |
 | `*: *.status.humans_only: extra` | Since 2.16.0 (spec 234): a task's status says it too. |
 | `*: *.revision: extra` | Since 2.16.0 (spec 234): a task carries its optimistic-lock revision (If-Match / base_revision). |
+| `*: *.created_by: extra` | Since 2.18.0 (Beacon spec 234): a task or comment carries the API id of its creator / author. |
+| `*: *.updated_by: extra` | Since 2.18.0 (Beacon spec 234): the API id of who made the last recorded write. |
+| `*: *.channel: extra` | Since 2.18.0 (Beacon spec 234): where the last write came from (web, app, api, mcp), as the host said. |
+| `*: *.token_name: extra` | Since 2.18.0 (Beacon spec 234): the host's plain-text label of the last write's actor. |
 | `*: *.number: extra` | Since 2.10.0 (spec 214): a task carries its readable number (#123), or null without task numbers. |
 | `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
 | `*: .archived: extra` | Boards say whether they are archived. |

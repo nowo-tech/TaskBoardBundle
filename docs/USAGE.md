@@ -52,6 +52,7 @@
   - [Calendar annotations: Standard Symfony host](#calendar-annotations-standard-symfony-host)
   - [Calendar annotations: DDD / hexagonal host](#calendar-annotations-ddd--hexagonal-host)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
+- [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
   - [Standard Symfony host](#standard-symfony-host)
   - [DDD / hexagonal host](#ddd--hexagonal-host)
   - [Filters, sort, workload and export](#filters-sort-workload-and-export)
@@ -1396,6 +1397,129 @@ and one for their names; the filter choices are two more (assignees and column n
 grouped query. An export reads 500 tasks per query. The label filter is the exception: tags are a JSON column no portable
 query searches, so the matching tasks are read in batches and compared in PHP, at most `multi_board.scan_max_rows`
 (the page then says the result may be incomplete).
+
+## Member badges and write provenance (since 2.18)
+
+Beacon spec 234 (D-20261114-05): a host-decided pill next to a member's name (Beacon: an **Agent** pill for service
+accounts), and where each write came from (`web`, `app`, `api`, `mcp`) with a plain-text label of its actor (an API
+token's name). Both are opt-in ports; without them nothing is asked, the columns stay `NULL` and every page renders
+exactly as in 2.17. The schema change is in [UPGRADING](UPGRADING.md#to-2180).
+
+```yaml
+nowo_task_board:
+    member_badge_provider: App\TaskBoard\MemberBadges          # Member\MemberBadgeProviderInterface
+    write_provenance_provider: App\TaskBoard\WriteProvenance  # Provenance\WriteProvenanceProviderInterface
+```
+
+**Member badges.** `badgesForMany(list<TaskBoardUserRef>)` answers `MemberBadge` values by member id; the bundle asks
+it **once per task page** for the people the page shows (members, comment authors, history users) and keeps the answer
+for that request only (`Member\MemberBadges`, reset at every request, message and command boundary and by
+`kernel.reset`). A member the page did not announce is asked alone, once. `badgesFor()` answers one member.
+
+- `MemberBadge(label, variant = 'neutral', title = null)`: the label is plain text of 1 to 40 characters, the title at
+  most 120; control and format characters are refused. `variant` is an allow-list (`neutral`, `info`, `success`,
+  `warning`, `agent`; `Member\MemberBadgeVariant`), never a CSS class.
+- No HTML from the host: the templates print `label` and `title` escaped. Anything that is not a `MemberBadge` in an
+  answer is dropped; a provider that throws gives no badge and a warning in the log.
+- Where: the history, the comments and the task's assignee / watcher chips (`member_label(user, true)` in
+  `manage/_task_member_label.html.twig`). Other places (avatar titles, sort keys) keep the plain name.
+- Presentation: override `manage/_member_label_suffix.html.twig` and its `member_label_suffix` block
+  (`{% extends '@!NowoTaskBoardBundle/manage/_member_label_suffix.html.twig' %}`); it receives `badges`.
+
+**Write provenance.** `current(): ?WriteProvenance` is asked at every write that leaves a task history row (create,
+update, move, members, dependencies, time, ...) and at every comment added or edited. The answer is stored on the
+history row (`channel`, `actor_label`), and on the task and the comment as their **last** write, with who made it
+(`updated_by_id`, the actor the bundle already receives). The history keeps every write; the task and comment columns
+describe the latest one.
+
+- The **channel** comes from the request path the host serves (its web UI, its app, its Task API route, its MCP
+  endpoint), never from a header, query or body field the client sends. The bundle never reads a channel from the
+  request. With the Task API, the principal's channel (`TaskApiPrincipal::$channel`, set by your authenticator) is a
+  good source.
+- The **actor label** is plain text: control and format characters are removed, the edges trimmed, and a label over 120
+  characters is **cut** to 120 when stored (never refused, so a long token name never blocks a write). It is printed
+  escaped in the pages and returned as a plain JSON string by the Task API (`token_name`). Never put a secret in it.
+- `null`: nothing to say (a console command, a worker): the columns stay `NULL`.
+- Called inside the write, possibly several times per request: keep it cheap, without queries and without state across
+  requests (FrankenPHP worker mode, kernel not reset).
+
+The history and the comments show `via API · <label>` next to the actor (translations
+`task_board.history.channel.*`). The Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
+tasks and comments ([API](API.md#provenance-fields-since-218)).
+
+**Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
+`actor_label`) are always written in one UPDATE, so two overlapping writes never leave one person's id next to another's
+label; when they overlap, the later flush wins whole. A `channel` value outside the list in the database reads as
+`null`. On a comment the "via" line describes its **last** write: with the default author-only edit rules that is the
+author, but a wider `api.hooks.comment_edit_policy` can make it an editor's (the API's `updated_by` names them), and an
+edit by a provider sync changes the text without changing the provenance.
+
+**Personal data.** The actor label may name a person. `TaskSyncPeopleReassigner::detachUser()` drops the person from
+`updated_by_id` of tasks and comments; with `$anonymise` it also clears `actor_label` on the history rows, tasks and
+comments that person wrote (as it clears the name snapshots). Residuals, as for the name snapshots: a row an earlier,
+non-anonymising erasure already detached keeps its label, and so does a row whose user was deleted directly (the
+foreign key's `ON DELETE SET NULL`) without `detachUser()`. The channel is not personal data and stays. The Task API
+answers `token_name` only when the host shows the writer to the viewer (`profiles()`, FR-010). **No export:** the bundle
+has no per-user export of personal data; to answer an access request, read `getActorLabel()` on the user's tasks,
+comments and history rows (by `getUpdatedBy()` / `getUser()`) yourself.
+
+### Standard Symfony host
+
+```php
+use Nowo\TaskBoardBundle\Member\MemberBadge;
+use Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use Symfony\Component\HttpFoundation\RequestStack;
+
+final readonly class MemberBadges implements MemberBadgeProviderInterface
+{
+    public function __construct(private UserRepository $users) {}
+
+    public function badgesFor(TaskBoardUserRef $member): array
+    {
+        return $this->badgesForMany([$member])[$member->id] ?? [];
+    }
+
+    public function badgesForMany(array $members): array
+    {
+        $ids = array_map(static fn (TaskBoardUserRef $member): string => $member->id, $members);
+        $answer = [];
+        foreach ($this->users->serviceAccountIds($ids) as $id) {   // one query
+            $answer[$id] = [new MemberBadge('Agent', 'agent', 'Service account')];
+        }
+
+        return $answer;
+    }
+}
+
+final readonly class WriteProvenance implements WriteProvenanceProviderInterface
+{
+    public function __construct(private RequestStack $requests, private ApiTokenContext $tokens) {}
+
+    public function current(): ?WriteProvenance
+    {
+        $path = $this->requests->getMainRequest()?->getPathInfo();
+
+        return match (true) {
+            $path === null                    => null,
+            str_starts_with($path, '/api/')   => new WriteProvenance(WriteChannel::Api, $this->tokens->currentName()),
+            str_starts_with($path, '/mcp/')   => new WriteProvenance(WriteChannel::Mcp, $this->tokens->currentName()),
+            default                           => new WriteProvenance(WriteChannel::Web),
+        };
+    }
+}
+```
+
+### DDD / hexagonal host
+
+Both ports are framework-free: they take and return only the bundle's values (`TaskBoardUserRef`, `MemberBadge`,
+`WriteProvenance`, `WriteChannel`), so the adapters live in your infrastructure layer and ask your application layer
+(the service-account flag, the channel your entry point recorded). With `database.user_reference: id`, `updated_by_id`
+holds the user's id like the other user columns and `Task::getUpdatedBy()` / `TaskComment::getUpdatedBy()` return a
+`TaskBoardUserRef`. The test kernel `tests/Functional/DddHost` (`DddProvenance`) is a working example.
 
 ## Translations
 

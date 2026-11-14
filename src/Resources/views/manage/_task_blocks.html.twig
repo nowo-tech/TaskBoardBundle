@@ -134,7 +134,7 @@
                             {% for member in task.members %}
                                 <span class="nowo-task-detail__member-chip" title="{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}">
                                     {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-detail__member-chip-avatar', size: 24, labelled: false}, with_context: false) }}
-                                    <span class="nowo-task-detail__member-chip-name">{{ memberUi.member_label(member.user) }}</span>
+                                    <span class="nowo-task-detail__member-chip-name">{{ memberUi.member_label(member.user, true) }}</span>
                                 </span>
                             {% else %}
                                 <span class="nowo-task-detail__empty">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</span>

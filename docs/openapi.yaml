@@ -959,6 +959,10 @@ components:
         time_spent: {type: integer, description: milliseconds}
         archived: {type: boolean}
         creator: {$ref: '#/components/schemas/Person'}
+        created_by: {type: [string, 'null'], description: 'Since 2.18.0: the API id of the creator'}
+        updated_by: {type: [string, 'null'], description: 'Since 2.18.0: the API id of who made the last recorded write'}
+        channel: {type: [string, 'null'], enum: [web, app, api, mcp, null], description: 'Since 2.18.0: where the last write came from, as the host said'}
+        token_name: {type: [string, 'null'], maxLength: 120, description: 'Since 2.18.0: the host''s plain-text label of the last write''s actor (never the token)'}
         assignees: {type: array, items: {$ref: '#/components/schemas/Person'}}
         watchers: {type: array, items: {$ref: '#/components/schemas/Person'}}
         tags: {type: array, items: {type: object, properties: {name: {type: string}}}}
@@ -985,7 +989,7 @@ components:
       properties: {checklist: {$ref: '#/components/schemas/Checklist'}, warnings: {$ref: '#/components/schemas/Warnings'}}
     Comments:
       type: object
-      properties: {comments: {type: array, items: {type: object, properties: {id: {type: string}, comment_text: {type: string}, user: {$ref: '#/components/schemas/Person'}, date: {type: string}}}}}
+      properties: {comments: {type: array, items: {type: object, properties: {id: {type: string}, comment_text: {type: string}, user: {$ref: '#/components/schemas/Person'}, date: {type: string}, created_by: {type: [string, 'null']}, updated_by: {type: [string, 'null']}, channel: {type: [string, 'null'], enum: [web, app, api, mcp, null]}, token_name: {type: [string, 'null'], maxLength: 120}}}}}
     CommentCreated:
       type: object
       properties: {id: {type: string}, hist_id: {type: string}, date: {type: integer}}

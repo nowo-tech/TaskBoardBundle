@@ -60,6 +60,9 @@ use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface;
+use Nowo\TaskBoardBundle\Member\MemberBadges;
+use Nowo\TaskBoardBundle\Member\NoMemberBadges;
 use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
@@ -71,6 +74,8 @@ use Nowo\TaskBoardBundle\MultiBoard\NullMultiBoardScopeProvider;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
+use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceBoardListener;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
@@ -314,6 +319,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
+        $this->registerMemberBadgesAndProvenance($container, $config);
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         // Since 1.24: the host's default board view per user, else the board view.
@@ -809,6 +815,20 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias(TaskBoardPortsPass::PORT_PREFIX . $port, $serviceId);
 
         return new Reference(TaskBoardPortsPass::PORT_PREFIX . $port);
+    }
+
+    /**
+     * Since 2.18.0 (Beacon spec 234): `member_badge_provider` (default: none, nothing is asked) and
+     * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL).
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerMemberBadgesAndProvenance(ContainerBuilder $container, array $config): void
+    {
+        $badges = $config['member_badge_provider'] ?? null;
+        $container->setAlias(MemberBadgeProviderInterface::class, $this->serviceOr($badges, NoMemberBadges::class));
+        $container->getDefinition(MemberBadges::class)->setArgument('$provider', is_string($badges) && $badges !== '' ? new Reference($badges) : null);
+        $container->setAlias(WriteProvenanceProviderInterface::class, $this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class));
     }
 
     private function serviceOr(mixed $id, string $default): string

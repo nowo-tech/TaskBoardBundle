@@ -29,7 +29,6 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
@@ -312,16 +311,34 @@ final readonly class TaskApiReadOperations
         $task     = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
         $comments = $this->queries->comments($task, $start, $startId, self::COMMENTS_PER_PAGE);
         $authors  = [];
-        $profiles = $this->profiles($principal, array_values(array_filter(array_map(static fn (TaskComment $comment): ?object => $comment->getAuthor(), $comments))));
+        $updaters = [];
+        $people   = [];
         foreach ($comments as $comment) {
-            $author = $comment->getAuthor();
-            $id     = $author === null ? null : $profiles['ids'][spl_object_id($author)] ?? null;
-            if ($id !== null && isset($profiles['profiles'][$id])) {
-                $authors[$comment->getId()] = $profiles['profiles'][$id];
+            // Since 2.18.0 (Beacon spec 234): the last writer too, in the same profile call.
+            foreach ([$comment->getAuthor(), $comment->getUpdatedBy()] as $person) {
+                if ($person !== null) {
+                    $people[spl_object_id($person)] = $person;
+                }
+            }
+        }
+        $profiles  = $this->profiles($principal, array_values($people));
+        $profileOf = static function (?object $person) use ($profiles): ?TaskApiUser {
+            $id = $person === null ? null : $profiles['ids'][spl_object_id($person)] ?? null;
+
+            return $id === null ? null : $profiles['profiles'][$id] ?? null;
+        };
+        foreach ($comments as $comment) {
+            $author = $profileOf($comment->getAuthor());
+            if ($author instanceof TaskApiUser) {
+                $authors[$comment->getId()] = $author;
+            }
+            $updater = $profileOf($comment->getUpdatedBy());
+            if ($updater instanceof TaskApiUser) {
+                $updaters[$comment->getId()] = $updater;
             }
         }
 
-        return new TaskApiCommentPage($comments, $authors);
+        return new TaskApiCommentPage($comments, $authors, $updaters);
     }
 
     /**
@@ -445,9 +462,11 @@ final readonly class TaskApiReadOperations
         foreach ($tasks as $task) {
             $board = $task->getBoard();
             $spaces[$board->getId()] ??= $this->spaceOf($principal, $board);
-            $creator = $task->getCreator();
-            if ($creator !== null) {
-                $users[spl_object_id($creator)] = $creator;
+            // Since 2.18.0 (Beacon spec 234): the last writer too (`updated_by`).
+            foreach ([$task->getCreator(), $task->getUpdatedBy()] as $person) {
+                if ($person !== null) {
+                    $users[spl_object_id($person)] = $person;
+                }
             }
             foreach ([$task, ...$subtasks[$task->getId()] ?? []] as $shown) {
                 foreach ($shown->getMembers() as $member) {
