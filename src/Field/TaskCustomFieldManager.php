@@ -42,7 +42,7 @@ use function trim;
 use function usort;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or per board, values per task
+ * Since 2.18.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or per board, values per task
  * ({@see self::setField()}), and the operator filters of the Task API and the list view ({@see self::filter()}).
  *
  * Definitions are written under {@see TaskBoardRestructurePolicyInterface} (a tenant's: `mayManageFolders()`; a board's:
@@ -94,7 +94,7 @@ final readonly class TaskCustomFieldManager
         $query = $this->entityManager->createQueryBuilder()->select('f')->from(TaskCustomField::class, 'f')
             ->where('IDENTITY(f.board) IN (:boards)')->setParameter('boards', array_keys($byBoard));
         if ($tenants !== []) {
-            $query->orWhere('f.board IS NULL AND f.tenantKey IN (:tenants)')->setParameter('tenants', array_map('strval', array_keys($tenants)));
+            $query->orWhere('f.board IS NULL AND f.tenantKey IN (:tenants)')->setParameter('tenants', array_map(strval(...), array_keys($tenants)));
         }
         if ($none) {
             $query->orWhere('f.board IS NULL AND f.tenantKey IS NULL');
@@ -102,7 +102,7 @@ final readonly class TaskCustomFieldManager
         /** @var list<TaskCustomField> $fields */
         $fields = $query->getQuery()->getResult();
         foreach ($boards as $board) {
-            $byBoard[$board->getId()] = self::sorted(array_values(array_filter($fields, static fn (TaskCustomField $field): bool => $field->getTenantKey() === $board->getTenantKey() && ($field->getBoardId() === null || $field->getBoardId() === $board->getId()))));
+            $byBoard[$board->getId()] = $this->sorted(array_values(array_filter($fields, static fn (TaskCustomField $field): bool => $field->getTenantKey() === $board->getTenantKey() && ($field->getBoardId() === null || $field->getBoardId() === $board->getId()))));
         }
 
         return $byBoard;
@@ -113,11 +113,21 @@ final readonly class TaskCustomFieldManager
      *
      * @return list<TaskCustomField>
      */
-    private static function sorted(array $fields): array
+    private function sorted(array $fields): array
     {
-        usort($fields, static fn (TaskCustomField $a, TaskCustomField $b): int => [$a->getBoardId() !== null, $a->getPosition(), $a->getName(), $a->getId()] <=> [$b->getBoardId() !== null, $b->getPosition(), $b->getName(), $b->getId()]);
+        usort($fields, static fn (TaskCustomField $a, TaskCustomField $b): int => self::fieldOrder($a) <=> self::fieldOrder($b));
 
         return $fields;
+    }
+
+    /**
+     * The order of {@see self::fieldsFor()}: tenant fields first, then by position, name and id.
+     *
+     * @return array{bool, int, string, string}
+     */
+    private static function fieldOrder(TaskCustomField $field): array
+    {
+        return [$field->getBoardId() !== null, $field->getPosition(), $field->getName(), $field->getId()];
     }
 
     /**
@@ -261,14 +271,14 @@ final readonly class TaskCustomFieldManager
         });
     }
 
-    /** Since 2.17.0: whether any task holds a value of the field. */
+    /** Since 2.18.0: whether any task holds a value of the field. */
     public function hasValues(TaskCustomField $field): bool
     {
         return $this->entityManager->getRepository(TaskCustomFieldValue::class)->count(['field' => $field]) > 0;
     }
 
     /**
-     * The values of these tasks, by task id.
+     * The values of these tasks, by task id, each list in the order of the fields ({@see self::fieldsFor()}).
      *
      * @param list<string> $taskIds
      *
@@ -286,6 +296,11 @@ final readonly class TaskCustomFieldManager
         foreach ($values as $value) {
             $byTask[$value->getTask()->getId()][] = $value;
         }
+        // The query has no order (the database's own differs: SQLite, MySQL, PostgreSQL): the fields' order, as fieldsFor().
+        foreach ($byTask as $taskId => $list) {
+            usort($list, static fn (TaskCustomFieldValue $a, TaskCustomFieldValue $b): int => self::fieldOrder($a->getField()) <=> self::fieldOrder($b->getField()));
+            $byTask[$taskId] = $list;
+        }
 
         return $byTask;
     }
@@ -295,8 +310,8 @@ final readonly class TaskCustomFieldManager
     {
         return match ($value->getField()->getType()) {
             CustomFieldType::Text     => (string) $value->getTextValue(),
-            CustomFieldType::Number   => self::trimNumber((string) $value->getNumberValue()),
-            CustomFieldType::Dropdown => (string) ($value->getField()->option((string) $value->getTextValue())['name'] ?? ''),
+            CustomFieldType::Number   => $this->trimNumber((string) $value->getNumberValue()),
+            CustomFieldType::Dropdown => $value->getField()->option((string) $value->getTextValue())['name'] ?? '',
         };
     }
 
@@ -383,7 +398,7 @@ final readonly class TaskCustomFieldManager
         return $field->option($value)['id'] ?? $field->optionNamed($value)['id'] ?? null;
     }
 
-    private static function trimNumber(string $number): string
+    private function trimNumber(string $number): string
     {
         return str_contains($number, '.') ? rtrim(rtrim($number, '0'), '.') : $number;
     }

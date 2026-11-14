@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncAttachment;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -20,7 +21,9 @@ use SortDirection;
 use function array_chunk;
 use function array_flip;
 use function array_map;
+use function array_merge;
 use function array_slice;
+use function array_unique;
 use function array_values;
 use function count;
 use function max;
@@ -91,13 +94,19 @@ final readonly class SyncStore
     }
 
     /**
+     * Since 2.15.1 (REQ-SEC-006, audit OM TB-M1): only the items whose external id is exactly one asked. An asked id that
+     * the database matched only through a look-alike item (`ABC-1` for `abc-1`, before the UPGRADING ALTER) goes to
+     * `$lookAlikes`: the caller skips it, since a new item would break the folding unique key and close the manager.
+     *
      * @param list<string> $externalIds
+     * @param array<string, true> $lookAlikes filled with the asked ids matched only through a look-alike
      *
      * @return array<string, TaskSyncItem>
      */
-    public function itemsByExternalIds(TaskBoardConnection $connection, array $externalIds): array
+    public function itemsByExternalIds(TaskBoardConnection $connection, array $externalIds, array &$lookAlikes = []): array
     {
-        $items = [];
+        $folded = [];
+        $items  = [];
         foreach (array_chunk(array_values($externalIds), self::CHUNK) as $chunk) {
             /** @var list<TaskSyncItem> $found */
             $found = $this->entityManager->createQueryBuilder()
@@ -111,11 +120,36 @@ final readonly class SyncStore
                 ->getQuery()
                 ->getResult();
             foreach ($found as $item) {
-                $items[$item->getExternalId()] = $item;
+                // Since 2.15.1 (REQ-SEC-006): the database may fold the id; only exact items count.
+                if (ExactKey::oneOf($item->getExternalId(), $chunk)) {
+                    $items[$item->getExternalId()] = $item;
+                } else {
+                    $folded[] = $chunk;
+                }
+            }
+        }
+        // Rare (a look-alike item exists): ask the database which of the chunk's other ids it takes for one.
+        foreach ($folded === [] ? [] : array_unique(array_merge(...$folded)) as $id) {
+            if (!isset($items[$id]) && $this->hasItemLike($connection, $id)) {
+                $lookAlikes[$id] = true;
             }
         }
 
         return $items;
+    }
+
+    /** Whether the board has an item the database takes for `$externalId` (its collation may fold it). */
+    private function hasItemLike(TaskBoardConnection $connection, string $externalId): bool
+    {
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(i.id)')
+            ->from(TaskSyncItem::class, 'i')
+            ->where('i.boardId = :board')
+            ->andWhere('i.externalId = :id')
+            ->setParameter('board', $connection->getBoard()->getId())
+            ->setParameter('id', $externalId)
+            ->getQuery()
+            ->getSingleScalarResult() > 0;
     }
 
     /**

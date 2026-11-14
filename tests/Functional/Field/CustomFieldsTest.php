@@ -35,7 +35,7 @@ use function urlencode;
 use const INF;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or board, values, the Task API
+ * Since 2.18.0 (Beacon spec 234, FR-028): native custom fields — definitions per tenant or board, values, the Task API
  * (`GET /v2/list/{id}/field`, `POST /v2/task/{id}/field/{field_id}`, `custom_fields` filters) and tenant isolation.
  */
 final class CustomFieldsTest extends ApiTestCase
@@ -199,7 +199,7 @@ final class CustomFieldsTest extends ApiTestCase
         self::assertCount(3, $crawler->filter('[data-testid="nowo-task-custom-field"]'));
         $form   = $crawler->filter('#nowo-task-edit-form')->form();
         $prefix = $form->getName() . '[cf_';
-        $form[$prefix . str_replace('-', '_', $layer->getId()) . ']']->select((string) ($layer->optionNamed('infra')['id'] ?? ''));
+        $form[$prefix . str_replace('-', '_', $layer->getId()) . ']']->select($layer->optionNamed('infra')['id'] ?? '');
         $form[$prefix . str_replace('-', '_', $text->getId()) . ']'] = str_repeat('x', TaskCustomFieldManager::TEXT_MAX + 1);
         $this->client->submit($form);
 
@@ -255,7 +255,7 @@ final class CustomFieldsTest extends ApiTestCase
                 self::assertSame($reason, $exception->reason);
             }
         };
-        $refused(fn () => $fields->define($this->owner, $this->board, null, ' ', CustomFieldType::Text), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn (): TaskCustomField => $fields->define($this->owner, $this->board, null, ' ', CustomFieldType::Text), TaskCustomFieldRefusedException::INVALID);
         $layer = $fields->define($this->owner, $this->board, null, 'Capa', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
         $num   = $fields->define($this->owner, $this->board, null, 'N', CustomFieldType::Number);
         $task  = $this->task($this->board, 'T');
@@ -268,7 +268,7 @@ final class CustomFieldsTest extends ApiTestCase
         $refused(fn () => $fields->setField($task, $num->getId(), INF, $this->owner), TaskCustomFieldRefusedException::INVALID);
         $refused(fn () => $fields->setField($task, $layer->getId(), ['b'], $this->owner), TaskCustomFieldRefusedException::INVALID);
         $refused(fn () => $fields->setField($task, $tenant->getId(), str_repeat('x', TaskCustomFieldManager::TEXT_MAX + 1), $this->owner), TaskCustomFieldRefusedException::INVALID);
-        $refused(fn () => $fields->update($this->owner, $layer, ' ', null, 0), TaskCustomFieldRefusedException::INVALID);
+        $refused(fn (): TaskCustomField => $fields->update($this->owner, $layer, ' ', null, 0), TaskCustomFieldRefusedException::INVALID);
 
         // Dropping option b clears the value that held it.
         $fields->update($this->owner, $layer, 'Layer', [['id' => $layer->optionNamed('a')['id'] ?? null, 'name' => 'a']], 3);

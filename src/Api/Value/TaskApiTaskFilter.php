@@ -22,9 +22,11 @@ use function is_float;
 use function is_int;
 use function is_string;
 use function json_decode;
+use function mb_strlen;
 use function mb_strtolower;
 use function preg_match;
 use function strtolower;
+use function trim;
 
 /**
  * Since 2.2.0 (spec 213): the filters of `GET /v2/list/{id}/task` and `GET /v2/team/{id}/task`, in ClickUp's names. Parameters
@@ -36,6 +38,9 @@ final readonly class TaskApiTaskFilter
 
     public const ORDERS = ['id', 'created', 'updated', 'due_date'];
 
+    /** Since 2.16.0: the longest `query`. */
+    public const QUERY_MAX = 200;
+
     /**
      * @param list<string> $statuses lower-case column names
      * @param list<string> $assigneeIds API ids
@@ -43,7 +48,7 @@ final readonly class TaskApiTaskFilter
      * @param array<string, DateTimeImmutable> $dates `due_date_gt` and the like
      * @param list<string> $spaceIds team endpoint only
      * @param list<string> $listIds team endpoint only
-     * @param list<TaskCustomFieldCondition> $customFields since 2.17.0 (FR-028): `custom_fields`, ClickUp's JSON filter
+     * @param list<TaskCustomFieldCondition> $customFields since 2.18.0 (FR-028): `custom_fields`, ClickUp's JSON filter
      */
     public function __construct(
         public int $page = 0,
@@ -60,6 +65,8 @@ final readonly class TaskApiTaskFilter
         public array $spaceIds = [],
         public array $listIds = [],
         public array $customFields = [],
+        // Since 2.16.0 (spec 234, FR-026): `query`, the text search (null: none).
+        public ?string $query = null,
     ) {
     }
 
@@ -103,11 +110,12 @@ final readonly class TaskApiTaskFilter
             spaceIds: self::list($query, 'space_ids'),
             listIds: self::list($query, 'list_ids'),
             customFields: self::customFields($query['custom_fields'] ?? null),
+            query: self::text($query),
         );
     }
 
     /**
-     * Since 2.17.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
+     * Since 2.18.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
      * `=`, `!=`, `<`, `>`, `IS NOT NULL`, `IS NULL`, `ANY` (value: a list). At most 10 conditions; anything else is 400.
      *
      * @throws TaskApiRefusal
@@ -144,6 +152,25 @@ final readonly class TaskApiTaskFilter
         }
 
         return $conditions;
+    }
+
+    /**
+     * Since 2.16.0: `query`, trimmed; null when absent or blank.
+     *
+     * @param array<string, mixed> $query
+     */
+    private static function text(array $query): ?string
+    {
+        $value = $query['query'] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value) || mb_strlen($value) > self::QUERY_MAX) {
+            throw self::invalid('query');
+        }
+        $value = trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     /**

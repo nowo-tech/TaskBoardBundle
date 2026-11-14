@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Configuration;
 use RuntimeException;
 
 /**
- * Since 2.17.0: a set of columns could not be applied to a board without leaving tasks in a column it removes; nothing was
+ * Since 2.18.0: a set of columns could not be applied to a board without leaving tasks in a column it removes; nothing was
  * written. `columns` names them; give a column map (current column id or name => new column name) to move their tasks.
  */
 final class BoardColumnsRefusedException extends RuntimeException

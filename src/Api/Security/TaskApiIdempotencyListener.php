@@ -81,7 +81,7 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
     }
 
     /**
-     * Since 2.17.0: a write that touched a tenant but no board (a folder): a replay needs the tenant still in reach.
+     * Since 2.18.0: a write that touched a tenant but no board (a folder): a replay needs the tenant still in reach.
      */
     public static function targetTenant(Request $request, ?string $tenantKey): void
     {

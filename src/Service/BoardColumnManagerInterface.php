@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Service;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 
 /**
@@ -37,6 +38,8 @@ interface BoardColumnManagerInterface
      * that column is the last one, reopened otherwise); the last column of a board is never deleted (false).
      *
      * @throws TaskReopenRefusedException since 1.29.0, when the host's limit refuses the tasks it would reopen: nothing changes
+     * @throws ColumnTransitionRefusedException since 2.16.0 ({@see BoardColumnManager::delete()}), when the column transition
+     *                                          policy refuses a task the deletion would move: nothing changes
      */
     public function delete(BoardColumn $column, ?object $actor = null): bool;
 }

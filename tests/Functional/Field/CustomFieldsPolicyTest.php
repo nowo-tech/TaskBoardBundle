@@ -12,7 +12,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
- * Since 2.17.0 (FR-028): field definitions follow the restructure policy (the manage right by default).
+ * Since 2.18.0 (FR-028): field definitions follow the restructure policy (the manage right by default).
  */
 final class CustomFieldsPolicyTest extends FunctionalTestCase
 {
@@ -20,10 +20,10 @@ final class CustomFieldsPolicyTest extends FunctionalTestCase
     {
         $board    = $this->board('Board', tenantKey: 'acme');
         $stranger = $this->user('stranger@example.com', ['ROLE_GUEST']);
-        $tokens   = static::getContainer()->get('security.token_storage');
+        $tokens   = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($stranger, 'main', $stranger->getRoles()));
-        $fields = static::getContainer()->get(TaskCustomFieldManager::class);
+        $fields = self::getContainer()->get(TaskCustomFieldManager::class);
         self::assertInstanceOf(TaskCustomFieldManager::class, $fields);
 
         foreach ([null, $board] as $scope) {

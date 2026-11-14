@@ -15,7 +15,7 @@ use function array_map;
 use function array_values;
 
 /**
- * Since 2.17.0 (Beacon block W): reads a board's configuration as a {@see BoardConfiguration} — its columns (with their
+ * Since 2.18.0 (Beacon block W): reads a board's configuration as a {@see BoardConfiguration} — its columns (with their
  * effective types), its own custom fields, its task templates and its numbering prefix. Reads only; stateless.
  */
 final readonly class BoardConfigurationExporter

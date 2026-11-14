@@ -27,14 +27,14 @@ use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use function array_map;
 
 /**
- * Since 2.17.0 (Beacon block W): a board's configuration, readable and appliable as data.
+ * Since 2.18.0 (Beacon block W): a board's configuration, readable and appliable as data.
  */
 final class BoardConfigurationTest extends CopyTestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
-        $tokens = static::getContainer()->get('security.token_storage');
+        $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
     }
@@ -152,11 +152,11 @@ final class BoardConfigurationTest extends CopyTestCase
             self::assertSame(TaskBoardRestructureRefusedException::INVALID, $refused->reason);
         }
 
-        $service = static::getContainer()->get(TaskBoardRestructureInterface::class);
+        $service = self::getContainer()->get(TaskBoardRestructureInterface::class);
         self::assertInstanceOf(TaskBoardRestructureInterface::class, $service);
         $folder = $service->createFolder($this->owner, 'acme', 'Epic');
         $service->moveBoardToFolder($this->owner, $board->getId(), $folder->id);
-        $sets = static::getContainer()->get(FolderStatusSets::class);
+        $sets = self::getContainer()->get(FolderStatusSets::class);
         self::assertInstanceOf(FolderStatusSets::class, $sets);
         $sets->shareFrom($this->owner, $folder->id, $board->getId());
         try {
@@ -202,7 +202,7 @@ final class BoardConfigurationTest extends CopyTestCase
 
     private function exporter(): BoardConfigurationExporter
     {
-        $service = static::getContainer()->get(BoardConfigurationExporter::class);
+        $service = self::getContainer()->get(BoardConfigurationExporter::class);
         self::assertInstanceOf(BoardConfigurationExporter::class, $service);
 
         return $service;
@@ -210,7 +210,7 @@ final class BoardConfigurationTest extends CopyTestCase
 
     private function applier(): BoardConfigurationApplier
     {
-        $service = static::getContainer()->get(BoardConfigurationApplier::class);
+        $service = self::getContainer()->get(BoardConfigurationApplier::class);
         self::assertInstanceOf(BoardConfigurationApplier::class, $service);
 
         return $service;
@@ -218,7 +218,7 @@ final class BoardConfigurationTest extends CopyTestCase
 
     private function fieldManager(): TaskCustomFieldManager
     {
-        $service = static::getContainer()->get(TaskCustomFieldManager::class);
+        $service = self::getContainer()->get(TaskCustomFieldManager::class);
         self::assertInstanceOf(TaskCustomFieldManager::class, $service);
 
         return $service;

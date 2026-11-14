@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
@@ -20,6 +21,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiMember;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
@@ -42,7 +44,7 @@ use function in_array;
  * The host side of the API in the tests: one scriptable object behind every hook. Its state is static, as a test sets it
  * before the kernel handles the request.
  */
-final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiTimeEntriesInterface, TaskApiAttachmentsInterface
+final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticatorInterface, TaskApiRateLimiterInterface, TaskApiPlanGateInterface, TaskApiWorkspaceInterface, TaskApiUsersInterface, TaskApiTimeEntriesInterface, TaskApiAttachmentsInterface
 {
     /** @var array<string, array{email: string, level: TaskApiLevel, where: TaskApiWhere, id: string, channel?: string}> */
     public static array $tokens = [];
@@ -82,6 +84,12 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
 
     public static bool $refuseUploads = false;
 
+    /** @var array<string, list<TaskApiMember>> since 2.16.0: the members of each team */
+    public static array $members = [];
+
+    /** @var list<string> since 2.16.0: the teams the members hook was asked for */
+    public static array $membersAsked = [];
+
     /** A principal the firewall does not stand behind. */
     public static ?object $forcedUser = null;
 
@@ -107,6 +115,16 @@ final class ApiTestHost implements TaskApiAuthenticatorInterface, TaskApiRateLim
         self::$logged             = [];
         self::$stored             = [];
         self::$refuseUploads      = false;
+        self::$members            = [];
+        self::$membersAsked       = [];
+        RecordingTransitionPolicy::reset();
+    }
+
+    public function members(TaskApiPrincipal $viewer, string $teamId): array
+    {
+        self::$membersAsked[] = $teamId;
+
+        return self::$members[$teamId] ?? [];
     }
 
     public function authenticate(Request $request): TaskApiPrincipal|TaskApiAuthFailure

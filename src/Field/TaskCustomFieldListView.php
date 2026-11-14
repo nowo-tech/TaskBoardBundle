@@ -26,7 +26,7 @@ use function is_string;
 use function trim;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-028): the list view's custom field columns and operator filters — one column per
+ * Since 2.18.0 (Beacon spec 234, FR-028): the list view's custom field columns and operator filters — one column per
  * native field of the board, and a filter (field, operator, value) read from the query string (`cf_field`, `cf_op`,
  * `cf_value`) that keeps only the tasks it holds for. Stateless.
  *
@@ -82,7 +82,7 @@ final readonly class TaskCustomFieldListView
             $field->getType() === CustomFieldType::Number => (string) $value->getNumberValue(),
             default                                       => (string) $value->getTextValue(),
         };
-        $wanted = array_map(static fn (string $one): string => $field->getType() === CustomFieldType::Dropdown ? (string) ($field->option($one)['id'] ?? $field->optionNamed($one)['id'] ?? '') : trim($one), $wanted);
+        $wanted = array_map(static fn (string $one): string => $field->getType() === CustomFieldType::Dropdown ? $field->option($one)['id'] ?? $field->optionNamed($one)['id'] ?? '' : trim($one), $wanted);
         $equals = static fn (string $one): bool => $current !== null && ($field->getType() === CustomFieldType::Number ? is_numeric($one) && (float) $current === (float) $one : $current === $one);
 
         return match ($operator) {
@@ -112,7 +112,7 @@ final readonly class TaskCustomFieldListView
         $raw      = $form->get('cf_value')->getData();
         foreach ($fields as $field) {
             if ($field->getId() === $fieldId && $operator instanceof CustomFieldOperator) {
-                $wanted = is_string($raw) ? array_values(array_filter(array_map('trim', explode(',', $raw)), static fn (string $one): bool => $one !== '')) : [];
+                $wanted = is_string($raw) ? array_values(array_filter(array_map(trim(...), explode(',', $raw)), static fn (string $one): bool => $one !== '')) : [];
                 if ($operator->needsValue() && $wanted === []) {
                     return null;
                 }

@@ -18,9 +18,10 @@ use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 
 use function array_map;
 use function implode;
+use function preg_match;
 
 /**
- * Since 2.17.0 (Beacon block W): makes a board's configuration exactly a {@see BoardConfiguration}, atomically (one
+ * Since 2.18.0 (Beacon block W): makes a board's configuration exactly a {@see BoardConfiguration}, atomically (one
  * transaction: everything or nothing), under {@see TaskBoardRestructurePolicyInterface::mayRestructureBoard()} (the
  * manage right by default).
  *
@@ -61,6 +62,16 @@ final readonly class BoardConfigurationApplier
         if ($shared !== null && $this->columnKeys($shared) !== $this->columnKeys($configuration->columns)) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::COLUMNS_SHARED);
         }
+        // Every refusal known in advance first, changing nothing: a refusal inside the transaction closes and resets the
+        // entity manager (the caller's board and its tasks are detached afterwards, worker mode included).
+        if ($shared === null) {
+            $this->folders->checkColumns($board, $configuration->columns, $columnMap);
+        }
+        $this->checkFields($board, $configuration->fields, $dropFieldValues);
+        if ($configuration->numberPrefix !== null && preg_match(TaskBoard::NUMBER_PREFIX_PATTERN, $configuration->numberPrefix) !== 1) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::INVALID, ['field' => 'number_prefix']);
+        }
+        // @igor-ignore - The closure runs at once inside transactional() and is never stored.
         $this->folders->transactional(function () use ($actor, $board, $configuration, $columnMap, $dropFieldValues, $shared): void {
             if ($shared === null) {
                 $this->folders->applyColumns($board, $configuration->columns, $columnMap);
@@ -128,6 +139,35 @@ final readonly class BoardConfigurationApplier
             if (!isset($kept[$name])) {
                 $this->drop($actor, $field, $dropFieldValues);
             }
+        }
+    }
+
+    /**
+     * The fields {@see self::applyFields()} would drop (gone from the configuration, or retyped) must hold no value unless
+     * `$dropFieldValues`: `fields_in_use` (`fields`: their names) before anything changes.
+     *
+     * @param list<BoardFieldSpec> $specs
+     *
+     * @throws TaskBoardRestructureRefusedException
+     */
+    private function checkFields(TaskBoard $board, array $specs, bool $dropFieldValues): void
+    {
+        if ($dropFieldValues) {
+            return;
+        }
+        $types = [];
+        foreach ($specs as $spec) {
+            $types[$spec->name] = $spec->type;
+        }
+        $inUse = [];
+        foreach ($this->fields->fieldsFor($board) as $field) {
+            $dropped = $field->getBoardId() === $board->getId() && (!isset($types[$field->getName()]) || $types[$field->getName()] !== $field->getType());
+            if ($dropped && $this->fields->hasValues($field)) {
+                $inUse[] = $field->getName();
+            }
+        }
+        if ($inUse !== []) {
+            throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::FIELDS_IN_USE, ['fields' => implode(', ', $inUse)]);
         }
     }
 

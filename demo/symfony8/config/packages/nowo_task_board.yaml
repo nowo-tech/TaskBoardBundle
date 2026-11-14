@@ -6,6 +6,9 @@ nowo_task_board:
         enabled: true
     calendar:
         enabled: true
+    # Since 2.16.0 (Beacon spec 234): task templates (the Template picker of the add-task dialog).
+    task_templates:
+        enabled: true
     # Since 1.23: provider connections. The demo replaces ClickUp by an in-memory provider (see config/services.yaml).
     sync:
         enabled: true

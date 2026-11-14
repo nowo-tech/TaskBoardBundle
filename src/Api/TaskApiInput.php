@@ -103,7 +103,7 @@ final class TaskApiInput
     }
 
     /**
-     * Since 2.17.0: the value as decoded (a string, a number, null…), for a field whose type decides (a custom field).
+     * Since 2.18.0: the value as decoded (a string, a number, null…), for a field whose type decides (a custom field).
      */
     public function raw(string $name): mixed
     {
@@ -163,6 +163,29 @@ final class TaskApiInput
         }
 
         return array_map(static fn (mixed $item): string => is_string($item) || is_int($item) ? (string) $item : throw self::invalid($name), $value);
+    }
+
+    /**
+     * Since 2.16.0: a list of JSON objects (each an array keyed by field name), e.g. the items of a bulk update.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function objects(string $name): array
+    {
+        $value = $this->take($name) ?? [];
+        if (!is_array($value) || !array_is_list($value)) {
+            throw self::invalid($name);
+        }
+        foreach ($value as $item) {
+            if (!is_array($item) || ($item !== [] && array_is_list($item))) {
+                throw self::invalid($name);
+            }
+        }
+
+        /* @var list<array<string, mixed>> $value */
+        return $value;
     }
 
     /**

@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Stringable;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -17,7 +18,8 @@ use function is_scalar;
 use function method_exists;
 
 /**
- * Since 1.23: the default {@see SyncActorResolverInterface} — the user named by the request (the one who pressed the
+ * Since 1.23: the default {@see SyncActorResolverInterface} — since 2.15.1 also the default
+ * {@see SyncActorProviderInterface}, aliased under that interface so a host can autowire it — the user named by the request (the one who pressed the
  * button), else (no named user) the user who linked the board.
  *
  * Since 1.24 (Beacon audit DATA-TASK-TOKEN-ERASURE) a run never acts as a disabled or erased account: a user whose
@@ -26,7 +28,7 @@ use function method_exists;
  * not replaced by the connection's creator: deny, do not substitute. Only a run without a named actor acts as the
  * user who linked the board.
  */
-final readonly class ConnectionCreatorActorResolver implements SyncActorResolverInterface
+final readonly class ConnectionCreatorActorResolver implements SyncActorResolverInterface, SyncActorProviderInterface
 {
     /**
      * @param class-string $userClass
@@ -41,7 +43,11 @@ final readonly class ConnectionCreatorActorResolver implements SyncActorResolver
     ) {
     }
 
-    public function actorFor(TaskBoard $board, ?string $actorId = null): ?object
+    /**
+     * Since 2.15.1 the board may also come as a {@see TaskBoardSnapshot} ({@see SyncActorProviderInterface}, autowirable
+     * under that interface): same answer as for the entity, the connection is found by the board's id.
+     */
+    public function actorFor(TaskBoard|TaskBoardSnapshot $board, ?string $actorId = null): ?object
     {
         if ($actorId !== null && $actorId !== '') {
             // Audit EX-L2: a named actor that no longer resolves (deleted, erased) or whose lookup fails is refused;
@@ -55,7 +61,7 @@ final readonly class ConnectionCreatorActorResolver implements SyncActorResolver
 
             return $user !== null && $this->isActive($user) ? $user : null;
         }
-        $creator = $this->entityManager->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board])?->getCreatedBy();
+        $creator = $this->entityManager->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board instanceof TaskBoard ? $board : $board->id])?->getCreatedBy();
 
         return $creator !== null && $this->isActive($creator) ? $creator : null;
     }

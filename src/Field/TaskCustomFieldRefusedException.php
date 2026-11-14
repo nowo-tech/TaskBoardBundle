@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Field;
 use RuntimeException;
 
 /**
- * Since 2.17.0 (FR-028): a custom field write refused before anything was written. `reason`: `not_found` (unknown, of
+ * Since 2.18.0 (FR-028): a custom field write refused before anything was written. `reason`: `not_found` (unknown, of
  * another tenant, or not a field of the task's board), `not_allowed` (the policy), `invalid` (`$params['field']` names
  * what: `name`, `type`, `options`, `value`).
  */

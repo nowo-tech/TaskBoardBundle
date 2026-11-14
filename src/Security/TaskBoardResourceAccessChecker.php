@@ -156,6 +156,16 @@ final readonly class TaskBoardResourceAccessChecker
         return $this->isBoardViewable($event) && !$event->isReadOnly();
     }
 
+    /**
+     * Since 2.16.0 (Beacon spec 234, FR-061): the default of who manages a tenant's task templates — a holder of one of
+     * `security.manage_roles` (the roles of the signed-in user), or anyone when `security.resource_scoping` is off. A host
+     * that decides per tenant or per user sets `task_templates.permission`.
+     */
+    public function canManageTenantTemplates(object $user, ?string $tenantKey): bool
+    {
+        return !$this->scopingEnabled || $this->hasManageRole();
+    }
+
     public function canViewTask(object $user, Task $task): bool
     {
         return $this->resolveTaskAccess($user, $task)->isGranted();

@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Configuration;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 /**
- * Since 2.17.0: {@see BoardTemplatesConfigurationInterface} without task templates — none exported, none applied.
+ * Since 2.18.0: {@see BoardTemplatesConfigurationInterface} without task templates — none exported, none applied.
  */
 final class NoBoardTemplates implements BoardTemplatesConfigurationInterface
 {

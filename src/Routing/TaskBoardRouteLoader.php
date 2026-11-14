@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Routing;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
@@ -31,10 +32,12 @@ final class TaskBoardRouteLoader extends Loader
 {
     /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action, method (GET when absent)]. */
     private const API_ROUTES = [
-        'user'          => ['/v2/user', TaskApiIdentityController::class, 'user'],
-        'team'          => ['/v2/team', TaskApiIdentityController::class, 'teams'],
-        'spaces'        => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
-        'team_tasks'    => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        'user'       => ['/v2/user', TaskApiIdentityController::class, 'user'],
+        'team'       => ['/v2/team', TaskApiIdentityController::class, 'teams'],
+        'spaces'     => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
+        'team_tasks' => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        // Since 2.16.0 (spec 234, FR-025).
+        'team_members'  => ['/v2/team/{teamId}/member', TaskApiIdentityController::class, 'members'],
         'time_entries'  => ['/v2/team/{teamId}/time_entries', TaskApiReadController::class, 'timeEntries'],
         'space'         => ['/v2/space/{spaceId}', TaskApiReadController::class, 'space'],
         'folders'       => ['/v2/space/{spaceId}/folder', TaskApiReadController::class, 'folders'],
@@ -47,10 +50,14 @@ final class TaskBoardRouteLoader extends Loader
         'task_comments' => ['/v2/task/{taskId}/comment', TaskApiReadController::class, 'comments'],
         'task_members'  => ['/v2/task/{taskId}/member', TaskApiReadController::class, 'members'],
         // Since 2.2.0 (spec 213): writes.
-        'task_create'       => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
-        'task_update'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
-        'task_delete'       => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
-        'comment_create'    => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        'task_create' => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
+        'task_update' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
+        'task_delete' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
+        // Since 2.16.0 (spec 234, FR-021): the atomic bulk update.
+        'task_bulk'      => ['/v2/task/bulk', TaskApiWriteController::class, 'updateTasks', 'POST'],
+        'comment_create' => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        // Since 2.16.0 (spec 234).
+        'comment_update'    => ['/v2/comment/{commentId}', TaskApiWriteController::class, 'updateComment', 'PUT'],
         'tag_add'           => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'addTag', 'POST'],
         'tag_remove'        => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'removeTag', 'DELETE'],
         'field_set'         => ['/v2/task/{taskId}/field/{fieldId}', TaskApiWriteController::class, 'setField', 'POST'],
@@ -78,13 +85,18 @@ final class TaskBoardRouteLoader extends Loader
         'status_order'  => ['/v2/list/{listId}/status/order', TaskApiManagementController::class, 'reorderColumns', 'PUT'],
         'status_update' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'updateColumn', 'PUT'],
         'status_delete' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'deleteColumn', 'DELETE'],
-        // Since 2.17.0 (Beacon spec 234, FR-031): folders.
+        // Since 2.18.0 (Beacon spec 234, FR-031): folders.
         'folder'             => ['/v2/folder/{folderId}', TaskApiReadController::class, 'folder'],
         'folder_lists'       => ['/v2/folder/{folderId}/list', TaskApiReadController::class, 'folderLists'],
         'folder_create'      => ['/v2/space/{spaceId}/folder', TaskApiManagementController::class, 'createFolder', 'POST'],
         'folder_update'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'updateFolder', 'PUT'],
         'folder_delete'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'deleteFolder', 'DELETE'],
         'folder_list_create' => ['/v2/folder/{folderId}/list', TaskApiManagementController::class, 'createFolderList', 'POST'],
+    ];
+
+    /** Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled` only. */
+    private const API_TEMPLATE_ROUTES = [
+        'task_templates' => ['/v2/list/{listId}/taskTemplate', TaskApiTemplateController::class, 'templates'],
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
@@ -112,6 +124,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $recurrenceEnabled = false,
         // Since 2.13.0 (Beacon D-20261112-01): `multi_board.path` with `multi_board.enabled`; null: no multi-board route.
         private readonly ?string $multiBoardPath = null,
+        // Since 2.16.0 (Beacon spec 234): the API's template list exists only with `task_templates.enabled`.
+        private readonly bool $templatesEnabled = false,
     ) {
     }
 
@@ -249,12 +263,12 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        foreach (self::API_ROUTES as $name => $route) {
+        foreach ($this->templatesEnabled ? self::API_ROUTES + self::API_TEMPLATE_ROUTES : self::API_ROUTES as $name => $route) {
             [$path, $controller, $action] = $route;
             $collection->add('nowo_task_board_api_' . $name, new Route(
                 $this->apiPrefix . $path,
                 ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'folderId' => '[^/]+'],
+                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'commentId' => '[^/]+', 'folderId' => '[^/]+'],
                 [],
                 '',
                 [],

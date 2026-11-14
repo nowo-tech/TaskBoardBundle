@@ -246,7 +246,7 @@
                 </div>
                 {% endif %}
 
-                {# Since 2.17.0 (Beacon spec 234, FR-028): a row per native custom field (unmapped cf_* fields of the form). #}
+                {# Since 2.18.0 (Beacon spec 234, FR-028): a row per native custom field (unmapped cf_* fields of the form). #}
                 {% for child in taskForm %}
                     {% if child.vars.name starts with 'cf_' and not child.rendered %}
                     <div class="nowo-task-detail__field nowo-task-detail__attr" data-testid="nowo-task-custom-field">

@@ -36,19 +36,19 @@ final class BoardConfigurationDataTest extends TestCase
     public function testInvalidData(): void
     {
         foreach ([
-            static fn () => new BoardConfiguration([]),
-            static fn () => BoardConfiguration::fromArray('x'),
-            static fn () => BoardConfiguration::fromArray(['version' => 2, 'columns' => [['name' => 'A']]]),
-            static fn () => BoardConfiguration::fromArray(['columns' => 'A']),
-            static fn () => BoardConfiguration::fromArray(['columns' => [['name' => 'A']], 'templates' => ['x']]),
-            static fn () => BoardConfiguration::fromArray(['columns' => [['name' => 'A']], 'numberPrefix' => 5]),
-            static fn () => BoardConfiguration::fromJson('{'),
-            static fn () => BoardFieldSpec::fromArray(['name' => 'X']),
-            static fn () => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'formula']),
-            static fn () => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'dropdown', 'options' => 'a']),
-            static fn () => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'dropdown', 'options' => [['color' => '#fff']]]),
-            static fn () => new BoardFieldSpec('', CustomFieldType::Text),
-            static fn () => new BoardFieldSpec('T', CustomFieldType::Text, [['name' => 'a', 'color' => null]]),
+            static fn (): BoardConfiguration => new BoardConfiguration([]),
+            static fn (): BoardConfiguration => BoardConfiguration::fromArray('x'),
+            static fn (): BoardConfiguration => BoardConfiguration::fromArray(['version' => 2, 'columns' => [['name' => 'A']]]),
+            static fn (): BoardConfiguration => BoardConfiguration::fromArray(['columns' => 'A']),
+            static fn (): BoardConfiguration => BoardConfiguration::fromArray(['columns' => [['name' => 'A']], 'templates' => ['x']]),
+            static fn (): BoardConfiguration => BoardConfiguration::fromArray(['columns' => [['name' => 'A']], 'numberPrefix' => 5]),
+            static fn (): BoardConfiguration => BoardConfiguration::fromJson('{'),
+            static fn (): BoardFieldSpec => BoardFieldSpec::fromArray(['name' => 'X']),
+            static fn (): BoardFieldSpec => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'formula']),
+            static fn (): BoardFieldSpec => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'dropdown', 'options' => 'a']),
+            static fn (): BoardFieldSpec => BoardFieldSpec::fromArray(['name' => 'X', 'type' => 'dropdown', 'options' => [['color' => '#fff']]]),
+            static fn (): BoardFieldSpec => new BoardFieldSpec('', CustomFieldType::Text),
+            static fn (): BoardFieldSpec => new BoardFieldSpec('T', CustomFieldType::Text, [['name' => 'a', 'color' => null]]),
         ] as $index => $invalid) {
             try {
                 $invalid();

@@ -343,17 +343,28 @@ final readonly class DoctrineMultiBoardTaskQuery
             $qb->andWhere('t.id NOT IN (SELECT IDENTITY(na.task) FROM ' . TaskMember::class . ' na WHERE na.memberRole = :assigneeRole)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
         } elseif ($filter->assigneeId !== null && $this->users instanceof TaskBoardUsers && $this->users->idMode()) {
-            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly the filter's.
-            $exact = [];
-            if (TaskBoardUserRef::isValid($filter->assigneeId)) {
-                foreach (TaskBoardUsers::exactRowIds($this->entityManager, TaskMember::class, 'user', $filter->assigneeId) as $memberId) {
-                    $member = $this->entityManager->find(TaskMember::class, $memberId);
-                    if ($member instanceof TaskMember && $member->getMemberRole() === TaskMemberRole::Assignee) {
-                        $exact[] = $member->getTask()->getId();
-                    }
+            // Since 2.15.0 (user_reference: id; audit OC-M2): the tasks whose assignee id is exactly the filter's. Since
+            // 2.15.1 (audit OC Low) the candidates stay in SQL and only the tasks matched through a look-alike id alone
+            // are dropped (none on PostgreSQL or a NO PAD binary column): no IN list grows with the user's tasks.
+            $valid = TaskBoardUserRef::isValid($filter->assigneeId);
+            $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND am.user = :assignee)')
+                ->setParameter('assigneeRole', TaskMemberRole::Assignee)
+                ->setParameter('assignee', $valid ? $filter->assigneeId : '');
+            if ($valid) {
+                /** @var list<array{taskId: mixed, ref: mixed}> $rows */
+                $rows = $this->entityManager->createQueryBuilder()
+                    ->select('IDENTITY(m.task) AS taskId', 'm.user AS ref')
+                    ->from(TaskMember::class, 'm')
+                    ->where('m.memberRole = :role')
+                    ->andWhere('m.user = :id')
+                    ->setParameter('role', TaskMemberRole::Assignee)
+                    ->setParameter('id', $filter->assigneeId)
+                    ->getQuery()
+                    ->getArrayResult();
+                foreach (array_chunk(TaskBoardUsers::lookAlikeOnlyTasks($rows, [$filter->assigneeId => true]), self::ID_CHUNK) as $index => $chunk) {
+                    $qb->andWhere('t.id NOT IN (:lookAlikeAssigneeTasks' . $index . ')')->setParameter('lookAlikeAssigneeTasks' . $index, $chunk);
                 }
             }
-            $qb->andWhere('t.id IN (:exactAssigneeTasks)')->setParameter('exactAssigneeTasks', $exact === [] ? [''] : $exact);
         } elseif ($filter->assigneeId !== null) {
             $qb->andWhere('t.id IN (SELECT IDENTITY(am.task) FROM ' . TaskMember::class . ' am WHERE am.memberRole = :assigneeRole AND ' . $this->userValue('am.user') . ' = :assignee)')
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee)

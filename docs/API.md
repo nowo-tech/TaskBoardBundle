@@ -11,6 +11,7 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Read endpoints](#read-endpoints)
 - [Write endpoints](#write-endpoints)
 - [Management endpoints (Full)](#management-endpoints-full)
+- [Task templates (since 2.16)](#task-templates-since-216)
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
@@ -97,15 +98,15 @@ Paths after `api.prefix`. *Level* is the least a token needs; the person's acces
 |---|---|---|
 | `GET /v2/user`, `GET /v2/team` | My tasks | A team lists no members |
 | `GET /v2/team/{team_id}/space`, `GET /v2/space/{id}` | My tasks | Spaces where reaches and whose plan holds the module |
-| `GET /v2/space/{id}/folder` | My tasks | Since 2.17.0: the space's folders, each with its `lists` (the boards in it the token may view) and a Markdown `content`; a where limited to boards sees only the folders that hold one of them (before 2.17.0 always empty) |
-| `GET /v2/folder/{id}`, `GET /v2/folder/{id}/list` | My tasks | Since 2.17.0: one folder, or its lists. Another tenant's folder is 404 `ACCESS_001` |
-| `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | Since 2.17.0 the space lists only its folderless boards, as ClickUp (`include_folders=true`, or `api.lists_include_folders: true` as the default, lists every board); a board's `folder` is its folder (`hidden: false`) or ClickUp's hidden folder. `task_count` counts only what the token may read; columns are `statuses`; `type` is the column's type since 2.17.0 (`open`, `custom`, `done`, `closed`; a board without types: first `open`, last `closed`, the rest `custom`) |
+| `GET /v2/space/{id}/folder` | My tasks | Since 2.18.0: the space's folders, each with its `lists` (the boards in it the token may view) and a Markdown `content`; a where limited to boards sees only the folders that hold one of them (before 2.18.0 always empty) |
+| `GET /v2/folder/{id}`, `GET /v2/folder/{id}/list` | My tasks | Since 2.18.0: one folder, or its lists. Another tenant's folder is 404 `ACCESS_001` |
+| `GET /v2/space/{id}/list`, `GET /v2/list/{id}` | My tasks | Since 2.18.0 the space lists only its folderless boards, as ClickUp (`include_folders=true`, or `api.lists_include_folders: true` as the default, lists every board); a board's `folder` is its folder (`hidden: false`) or ClickUp's hidden folder. `task_count` counts only what the token may read; columns are `statuses`; `type` is the column's type since 2.18.0 (`open`, `custom`, `done`, `closed`; a board without types: first `open`, last `closed`, the rest `custom`) |
 | `GET /v2/list/{id}/task`, `GET /v2/team/{team_id}/task` | My tasks (its own) | 100 per page from `page=0`, `last_page`; `archived`, `subtasks`, `include_closed`, `statuses[]`, `assignees[]`, `tags[]`, `due_date_gt`/`_lt`, `date_created_*`, `date_updated_*`, `date_done_*`, `order_by` (`id`, `created`, `updated`, `due_date`), `reverse`, `include_markdown_description`; on a team also `space_ids[]`, `list_ids[]` |
 | `GET /v2/task/{id}` | My tasks (its own) | `include_subtasks`, `include_markdown_description`. Since 2.10.0, `custom_task_ids=true` with `space_id` or `list_id`: `{id}` is the task's number (see [Task numbers](#task-numbers)) |
 | `GET /v2/task/{id}/comment` | My tasks (its own) | 25 per page, newest first; `start` and `start_id` of the oldest one shown give the next page |
 | `GET /v2/task/{id}/member` | Read | Everyone attached to the task |
 | `GET /v2/space/{id}/tag` | Read | Tags of the open tasks the token reaches |
-| `GET /v2/list/{id}/field` | Read | Since 2.17.0 the board's native fields first (its tenant's, then its own: `short_text`, `number`, `drop_down` with coloured options, `writable: true`), then the fields a provider sync imported (read-only) |
+| `GET /v2/list/{id}/field` | Read | Since 2.18.0 the board's native fields first (its tenant's, then its own: `short_text`, `number`, `drop_down` with coloured options, `writable: true`), then the fields a provider sync imported (read-only) |
 | `GET /v2/team/{team_id}/time_entries` | My tasks | The host's time store answers; `start_date`, `end_date`, `assignee`, `task_id` |
 
 A malformed filter value is 400 `INPUT_002`. Unknown query parameters are ignored on reads. Each list answers in the same number of queries whatever the page holds (8 for a list's tasks, measured at 25 and 100 tasks), the tag filter included.
@@ -140,7 +141,7 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `DELETE /v2/task/{id}` | Tasks | Erases the task and its subtasks; tracked time is kept, detached. The board's manage decision is needed. A task that follows a provider: 409 `TASK_002` |
 | `POST /v2/task/{id}/comment` | My tasks (own) | `comment_text`. Mentions work as in the UI's comment box: each candidate written `@Label` in the text is mentioned, so `TASK_COMMENT`, `TASK_MENTION` and the host's notifications follow |
 | `POST`, `DELETE /v2/task/{id}/tag/{name}` | Tasks | The task form's rules: a name of 1 to 64 characters, at most 20 tags. `PUT /v2/task/{id}` does not take `tags` (a warning) |
-| `POST /v2/task/{id}/field/{field_id}` | Tasks | Since 2.17.0 a native field of the task's board: `{"value": …}` (text; number; dropdown option id or name; `null` clears), 400 `INPUT_002` when it does not fit. Any other field (a provider's) stays 409 `FIELD_001` |
+| `POST /v2/task/{id}/field/{field_id}` | Tasks | Since 2.18.0 a native field of the task's board: `{"value": …}` (text; number; dropdown option id or name; `null` clears), 400 `INPUT_002` when it does not fit. Any other field (a provider's) stays 409 `FIELD_001` |
 | `POST /v2/task/{id}/dependency`, `DELETE` with `?depends_on=` or `?dependency_of=` | Tasks | Within a board (`LINK_002`); no cycle or duplicate (`LINK_001`) |
 | `POST`, `DELETE /v2/task/{id}/link/{links_to}` | Tasks | A `Related` relation |
 | `POST /v2/task/{id}/checklist`, `PUT`, `DELETE /v2/checklist/{id}` | My tasks (own) | A checklist with no item is not stored. Deleting archives its items |
@@ -149,6 +150,35 @@ Every write goes through the services the UI uses: its plan limits, events (noti
 | `POST /v2/team/{team_id}/time_entries` | My tasks (own task) | `start` and `duration` (1 minute to 7 days) in milliseconds, `tid`, `description`. The token's own person's time only: another `assignee` is 403 `TOKEN_001`. With `tid`, the person needs the time-tracking decision, not the edit right (since 2.4.0; see [Logging time](#logging-time)). Without `tid`, the host's time store decides; `ManualTaskApiTimeEntries` needs a task. Since 2.12.0 `billable` (boolean; absent or null = the host default) |
 | `PUT /v2/team/{team_id}/time_entries/{id}` | My tasks (own task) | Since 2.12.0: `billable` (required boolean) of one of the token's own entries; other fields are warnings. Own entries only (another person's is 404); the board-manager path is the task page. The edit right on the task applies (403 `ACCESS_002`); 409 `TIME_004` when its period is locked or submitted (TimeTrack timesheets); 403 `TIME_003` when the time store does not implement `TaskApiTimeEntryBillableInterface` |
 | `DELETE /v2/team/{team_id}/time_entries/{id}` | — | Always 403 `TIME_002`, before anything is looked up: tracked time is never deleted through the API |
+
+## Column transitions, revisions and bulk updates (since 2.16)
+
+Beacon spec 234 (AI Flow). Every write that sets a status asks the host's `column_transition_policy` first, with the
+principal's channel (`api`, or `mcp` for an in-process caller) and the operation (`create`, `move`, `bulk`,
+`checklist`). A refusal is 403 with the policy's code and message, e.g. `{"err": "Only people can move tasks into this
+status", "ECODE": "STATUS_HUMANS_ONLY"}` or a host's `WIP_LIMIT`; nothing is written. The bundled `HumansOnlyColumnTransitionPolicy` is
+strict: ticking a checklist item into a humans-only column is refused too, unless `humans_only_policy.allow_checklist`.
+Since audit PC the policy is also asked when the tags of a task that stays in its column change (operation `retag`:
+`POST` / `DELETE /v2/task/{id}/tag/{name}`, a bulk item's `tags`, a checklist rename) and for every task a column
+deletion moves (operation `column_delete`, all or none). A refusal decided while a bulk update writes is still 409
+`BULK_001` with that item in `failures`.
+
+| Endpoint | Level | Notes |
+|---|---|---|
+| `GET /v2/task/{id}` | My tasks | Since 2.16.0 the task carries `revision` (an integer, +1 on every change but a reorder; since 2.17.0 incremented by the database, so every write, with or without `If-Match`, gets a number no other write has) and the answer `ETag: "<revision>"` |
+| `PUT /v2/task/{id}` | as before | `If-Match: "<revision>"` (also `n`, `W/"n"`; `*` = any) or `base_revision` in the body: the row is locked and compared; another revision is 409 `{"err", "ECODE": "TASK_409", "current_revision": n}` and nothing is written. The answer carries the new `ETag` |
+| `POST /v2/task/bulk` | My tasks (own fields) / Tasks | `{"tasks": [{"id", "base_revision"?, "description" \| "markdown_content", "status", "tags" (the whole list), "priority", "due_date", "start_date", "assignees": {"add", "rem"}}]}`: 1 to 50 tasks of one space, all or none, one transaction. 200 `{"tasks": [<task>, …]}` in the request's order. Any refusal: `{"err", "ECODE": "BULK_001", "failures": [{"index", "id", "status", "ECODE", "err", "current_revision"?}]}` always with HTTP 409 (each item's own status and ECODE are in `failures`), nothing written. Any other field of an item is refused (`INPUT_002`). After the commit: one `API_WRITE` per task and one `API_BULK_WRITE` with the count |
+| `PUT /v2/comment/{id}` | My tasks (own task) | `comment_text`; the comment's task must be one the token may comment on, then `api.hooks.comment_edit_policy` decides (default: its author). Answers `{}`. Missing, deleted, out of reach or not editable: 404 `ACCESS_001` alike |
+| `GET /v2/team/{id}/member` | any | The team's members (`api.hooks.members`): `{"members": [{"id", "username", "email", "color", "initials", "profilePicture", "service_account"}]}`; `email` only on the viewer's own row. With `?name=`: a prefix of the name or of one of its words, case and accents aside, at most 20, `{"id", "username", "service_account"}` only. A lookup never assigns anyone by name. A team the viewer is not in: 404 |
+| `GET /v2/team/{id}/task?query=…`, `GET /v2/list/{id}/task?query=…` | as the list | Since 2.16.0: every word (white space separated, at most 8, `query` ≤ 200 characters) in the title or description (`search.comments`: or a comment). Only within the boards the token reaches, before any page; the other filters and *My tasks* apply. More than `search.max_matches`: 400 `SEARCH_001` |
+
+`GET /v2/team` lists each team's `members` the same way (`[{"user": {…, "service_account": bool}}]`; `[]` without
+`api.hooks.members`). Status objects carry `humans_only`; `POST` / `PUT /v2/list/{id}/status…` accept `humans_only`
+(boolean). Audit PC-M1: an `api` / `mcp` principal may not lift the gate through the statuses: another `humans_only`
+value on `PUT …/status/{status_id}`, `humans_only: true` on `POST …/status`, a new status while the last one is
+humans-only (it would become the completion column), `DELETE` of a humans-only status, or `PUT …/status/order` that
+moves a humans-only last status away from the end answer 403 `{"err": "Only people can move tasks into this status",
+"ECODE": "STATUS_HUMANS_ONLY"}` and change nothing. Sending a status's current `humans_only` value is accepted.
 
 ## Management endpoints (Full)
 
@@ -159,12 +189,12 @@ Every management write needs a *Full* token and the board's manage decision (`Bo
 | `POST /v2/space/{id}/list` | `name`, `content` / `markdown_content`. The token must reach the whole tenant (naming one board of it is not enough). The board gets the default columns, as from the UI |
 | `PUT /v2/list/{id}` | `name`, `content`; the slug stays. `status`, `priority`, `assignee`, `due_date` are warned about |
 | `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002`. Two deletes of one board at the same time may both pick the same tasks, so `TASK_ERASED` (with its file refs) and `BOARD_DELETED` can come twice: a host's listeners must delete files idempotently |
-| `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex), since 2.17.0 `type` (`open`, `custom`, `done`, `closed`; at most two closed, else 400 `INPUT_002`), since 2.9.0 `icon` (one emoji of at most 16 bytes, or one of `board.column_icons` / `board.default_columns` icon ids such as `tabler:bug`; anything else is 400 `INPUT_002`) |
+| `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex), since 2.18.0 `type` (`open`, `custom`, `done`, `closed`; at most two closed, else 400 `INPUT_002`), since 2.9.0 `icon` (one emoji of at most 16 bytes, or one of `board.column_icons` / `board.default_columns` icon ids such as `tabler:bug`; anything else is 400 `INPUT_002`) |
 | `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames, recolours or (since 2.9.0) sets the `icon` of a column (`null` or `""` removes it); what is not given stays |
 | `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
 | `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`) |
 
-**Folders (since 2.17.0, Beacon spec 234 FR-031).** The token must reach the whole tenant; the restructure policy
+**Folders (since 2.18.0, Beacon spec 234 FR-031).** The token must reach the whole tenant; the restructure policy
 (`restructure.policy`, default: the host's create-board decision for the tenant) decides, else 403 `ACCESS_002`.
 
 | Endpoint | Notes |
@@ -185,6 +215,15 @@ Tags exist on tasks only: there is no space tag to create, rename or delete. Boa
 
 **Several changes in one request are not one transaction.** They are saved one service at a time, as the UI's separate forms are, and each service's events go out after its save. Everything that can be refused is asked first (people, status, dates, limits), so a refusal changes nothing; a database failure between two saves can leave the first one saved. A client retrying with the same `Idempotency-Key` gets a fresh run after such a failure, since errors are not kept. **Known narrow race:** the limit is asked once before the first save, and the restore and the move ask it again as they save; if another write fills the limit in between, the restore is saved and the move then answers 500. Retrying the same request completes it.
 
+## Task templates (since 2.16)
+
+With `task_templates.enabled` (Beacon spec 234, FR-061):
+
+- `GET /v2/list/{list_id}/taskTemplate` — the templates the board offers the token's person: the board's own, then its tenant's, each by name, each allowed by `TaskTemplatePermissionInterface::canUse()`. The board is reached as for creating a task in it (level Full, else 403; a board the token does not reach is 404). Answer: `{"templates": [{"id", "name", "scope": "board"|"tenant", "description" (the Markdown body), "tags": [{"name"}], "status" (the default column as a task's status, or null: for a tenant template, the board's column with exactly the template's `default_column_name`; no such column means the board's first column)}]}`.
+- `POST /v2/list/{list_id}/task` accepts `template_id`. The template fills only what the body leaves out: `markdown_content` / `description`, `tags` and `status` set in the body win (an explicit `""` or `[]` too). Any id the board does not offer — unknown, of another board or tenant, a look-alike, or not allowed — is the same `400 INPUT_002 "Invalid template_id"`, before anything is written. The audit's `API_WRITE` names it in `targetIds['template']`. The default column takes the same create path as a `status`, so the [column transition policy](#column-transitions-revisions-and-bulk-updates-since-216) decides on it too: a template pointing at a *humans only* column is refused for an `api` / `mcp` caller with that policy's code and message, byte for byte the answer the same `status` would give.
+
+Without the option the route does not exist and `template_id` is an unknown field (warned).
+
 ## Idempotency
 
 Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`):
@@ -200,7 +239,7 @@ Any write may carry `Idempotency-Key` (1 to 255 characters, else 400 `IDEMP_003`
 
 ## Errors
 
-Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
+Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds `current_revision`, `BULK_001` adds `failures`, and `TASK_003` adds `task_id` and `scope`); `err` names no id or person. Answers carry `X-RateLimit-Limit`, `-Remaining`, `-Reset` (Unix seconds) and `Cache-Control: no-store, private`. The credential is read only from the `Authorization` header, with or without `Bearer`, and never logged.
 
 | ECODE | HTTP | When |
 |---|---|---|
@@ -217,10 +256,11 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `INPUT_002` | 400 | A field or filter that is not valid; `err` names it |
 | `LIST_001` | 409 | The last column of a board |
 | `LIST_002` | 409 | Deleting a board that follows a provider |
-| `FOLDER_001` | 409 | Since 2.17.0: deleting a folder that still holds boards |
+| `FOLDER_001` | 409 | Since 2.18.0: deleting a folder that still holds boards |
 | `TASK_002` | 409 | Deleting a task that follows a provider |
+| `TASK_003` | 409 | Since 2.15.1: the task cannot be numbered — its scope's counter belongs to a look-alike scope (`scope_key` still folding, see [UPGRADING](UPGRADING.md#to-2151)). Since 2.16.0 the answer adds `task_id` (the task that could not be numbered; for a create, the id it would have had) and `scope` (the scope **the caller's own board asks for**, never the look-alike key stored for someone else). It stays a **request-level** refusal, never an entry of a bulk update's `failures`: the write is all or none, so nothing may read as "the other items landed" |
 | `LINK_001`, `LINK_002` | 400 | A dependency on itself, duplicated or closing a cycle; across boards |
-| `FIELD_001` | 409 | Setting a provider's custom field (native fields are writable since 2.17.0) |
+| `FIELD_001` | 409 | Setting a provider's custom field (native fields are writable since 2.18.0) |
 | `FILE_001` | 403 | No attachment store; the host's store may answer its own `FILE_*` |
 | `TIME_001` | 403 | No time store; the host's store may answer its own `TIME_*` |
 | `TIME_002` | 403 | Deleting a time entry |
@@ -228,6 +268,10 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `TIME_004` | 409 | Since 2.12.0: the time entry's period is locked or waiting for approval |
 | `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
+| `STATUS_HUMANS_ONLY`, `STATUS_REFUSED`, a policy's own code | 403 | Since 2.16.0: the column transition policy refused the status (its message in `err`) |
+| `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`) |
+| `BULK_001`, `BULK_002`, `BULK_003` | 409, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
+| `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp
@@ -263,6 +307,9 @@ Every refusal is `{"err": "…", "ECODE": "…"}`; `err` names no id or person. 
 | `*: *statuses[].id: extra` | Statuses are columns and have ids (used by the status paths). |
 | `*: *statuses[].icon: extra` | Since 2.9.0: a status carries its column's icon (one emoji or an icon id), or null. |
 | `*: *.status.icon: extra` | Since 2.9.0: a task's status carries its column's icon too. |
+| `*: *statuses[].humans_only: extra` | Since 2.16.0 (spec 234): a status says whether only people may move tasks into it. |
+| `*: *.status.humans_only: extra` | Since 2.16.0 (spec 234): a task's status says it too. |
+| `*: *.revision: extra` | Since 2.16.0 (spec 234): a task carries its optimistic-lock revision (If-Match / base_revision). |
 | `*: *.number: extra` | Since 2.10.0 (spec 214): a task carries its readable number (#123), or null without task numbers. |
 | `getfolderlesslists: .lists[].statuses: extra` | Each list carries its statuses (columns). |
 | `*: .archived: extra` | Boards say whether they are archived. |
@@ -331,4 +378,4 @@ curl -X PUT -H "Authorization: bt_placeholder" -H "Content-Type: application/jso
 ```
 
 - **When something is refused.** 404 means "not there, or not yours to see"; 403 names what is missing (`TOKEN_001` the level, `ACCESS_002` the person's right, `PLAN_001` the plan); 429 means slow down. A retry with the same `Idempotency-Key` never does a write twice.
-- **Coming from ClickUp.** Change the base URL and the token. Ids are strings, folders exist since 2.17.0, columns are statuses, and the rest is in *Differences from ClickUp*.
+- **Coming from ClickUp.** Change the base URL and the token. Ids are strings, folders exist since 2.18.0, columns are statuses, and the rest is in *Differences from ClickUp*.

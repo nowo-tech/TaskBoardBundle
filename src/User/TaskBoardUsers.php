@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use Symfony\Contracts\Service\ResetInterface;
 
 use function array_key_exists;
+use function is_scalar;
+use function is_string;
 
 /**
  * Since 2.15.0 (REQ-ARCH-001 rule 2): how the TaskBoard rows reference host users, for the bundle's own queries and pages.
@@ -148,6 +150,36 @@ final class TaskBoardUsers implements ResetInterface
         }
 
         return $ids;
+    }
+
+    /**
+     * Since 2.15.1 (audit OC Low): of the rows a database matched by user id (`taskId`, the stored `ref`), the tasks that
+     * have no row whose id is exactly one of `$ids`: matched only through a look-alike (`U-BRUNO` for `u-bruno`). A query
+     * keeps its candidates in SQL and drops just these, so no IN list grows with the user's tasks.
+     *
+     * @param iterable<array{taskId: mixed, ref: mixed}> $rows
+     * @param array<string, true> $ids
+     *
+     * @return list<string>
+     */
+    public static function lookAlikeOnlyTasks(iterable $rows, array $ids): array
+    {
+        $seen  = [];
+        $exact = [];
+        foreach ($rows as $row) {
+            $task = $row['taskId'];
+            if (!is_scalar($task)) {
+                continue;
+            }
+            $task        = (string) $task;
+            $seen[$task] = true;
+            $ref         = $row['ref'] instanceof TaskBoardUserRef ? $row['ref']->id : $row['ref'];
+            if (is_string($ref) && isset($ids[$ref])) {
+                $exact[$task] = true;
+            }
+        }
+
+        return array_map('strval', array_keys(array_diff_key($seen, $exact)));
     }
 
     public function reset(): void

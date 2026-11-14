@@ -85,7 +85,13 @@ final readonly class TaskSyncPeopleDirectoryService
             throw new InvalidMappingException('invalid_scope');
         }
         $workspaceId = Text::cut($workspaceId, 64);
-        $directory   = $this->people->findDirectory($provider, $scope, $workspaceId);
+        $lookAlike   = false;
+        $directory   = $this->people->findDirectory($provider, $scope, $workspaceId, $lookAlike);
+        if ($lookAlike) {
+            // Since 2.15.1 (REQ-SEC-006, audit OM TB-M1): only a look-alike workspace's directory (a column that still
+            // folds); a new one would break the unique key and close the manager.
+            throw new InvalidMappingException('workspace_look_alike');
+        }
         if (!$directory instanceof TaskSyncDirectory) {
             $directory = new TaskSyncDirectory($provider, $scope, $workspaceId);
             $this->entityManager->persist($directory);

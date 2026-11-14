@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use SortDirection;
 
@@ -23,11 +24,19 @@ class BoardColumn
     private string $id;
 
     /**
-     * Since 2.17.0 (Beacon spec 234, FR-033): `open`, `custom`, `done` or `closed`; null: by position
+     * Since 2.18.0 (Beacon spec 234, FR-033): `open`, `custom`, `done` or `closed`; null: by position
      * ({@see ColumnTypes::of()}).
      */
     #[ORM\Column(name: 'column_type', type: 'string', length: 16, nullable: true, enumType: ColumnType::class)]
     private ?ColumnType $type = null;
+
+    /**
+     * Since 2.16.0 (spec 234, FR-014): only people may move tasks into this column; what that means is the host's
+     * `column_transition_policy` (the bundled {@see HumansOnlyColumnTransitionPolicy}
+     * refuses the Task API and MCP). False by default.
+     */
+    #[ORM\Column(name: 'humans_only', type: 'boolean', options: ['default' => false])]
+    private bool $humansOnly = false;
 
     /** @var Collection<int, Task> */
     #[ORM\OneToMany(targetEntity: Task::class, mappedBy: 'column')]
@@ -127,7 +136,7 @@ class BoardColumn
     }
 
     /**
-     * Since 2.17.0: the type written on the column, null when it follows its position. Read the effective type with
+     * Since 2.18.0: the type written on the column, null when it follows its position. Read the effective type with
      * {@see ColumnTypes::of()}.
      */
     public function getStoredType(): ?ColumnType
@@ -135,7 +144,7 @@ class BoardColumn
         return $this->type;
     }
 
-    /** Since 2.17.0: through {@see BoardColumnManager}, which keeps the board's types coherent. */
+    /** Since 2.18.0: through {@see BoardColumnManager}, which keeps the board's types coherent. */
     public function setType(?ColumnType $type): self
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
@@ -148,5 +157,19 @@ class BoardColumn
     public function getTasks(): Collection
     {
         return $this->tasks;
+    }
+
+    /** Since 2.16.0 (spec 234): only people may move tasks into this column. */
+    public function isHumansOnly(): bool
+    {
+        return $this->humansOnly;
+    }
+
+    public function setHumansOnly(bool $humansOnly): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->humansOnly = $humansOnly;
+
+        return $this;
     }
 }

@@ -25,7 +25,7 @@ use function array_merge;
 use function array_values;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031): folders in the ClickUp v2 shape — `GET/POST /v2/space/{id}/folder`,
+ * Since 2.18.0 (Beacon spec 234, FR-031): folders in the ClickUp v2 shape — `GET/POST /v2/space/{id}/folder`,
  * `GET/PUT/DELETE /v2/folder/{id}`, `GET/POST /v2/folder/{id}/list`.
  *
  * Reach, as for a board: a folder is out of reach (404, the same as an unknown id) unless the host answers a space for its
@@ -183,7 +183,7 @@ final readonly class TaskApiFolderOperations
     {
         $folder = $this->folders->find($folderId);
         $space  = $folder instanceof TaskBoardFolder ? $this->workspace->spaceOfTenant($principal, $folder->getTenantKey()) : null;
-        if (!$folder instanceof TaskBoardFolder || $space === null || $space->tenantKey !== $folder->getTenantKey()) {
+        if (!$folder instanceof TaskBoardFolder || !$space instanceof TaskApiSpace || $space->tenantKey !== $folder->getTenantKey()) {
             throw TaskApiRefusal::notFound();
         }
         $space = $this->guard->space($principal, $space->id, $capability);
