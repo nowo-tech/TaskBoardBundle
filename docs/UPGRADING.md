@@ -210,8 +210,24 @@ No schema change, no migration, no configuration change.
   the column is mapped `updatable: false` now, so setting the property through reflection is no longer saved.
 - Isolation: with the defaults (PostgreSQL `READ COMMITTED`, MySQL / MariaDB InnoDB `REPEATABLE READ`) a second
   writer of the same task waits for the first commit and gets the next number. A PostgreSQL host that runs
-  `REPEATABLE READ` / `SERIALIZABLE` by default gets a serialization error for the second writer instead (as its own
-  row update already did in 2.16 when it changed a field; now also when it only changed assignees or watchers).
+  `REPEATABLE READ` / `SERIALIZABLE` by default gets a serialization error (SQLSTATE `40001`) for the second writer
+  instead. This is not new: 2.16 already updated the task row on every revision, member-only changes included, and
+  that update failed the same way.
+- MariaDB 11.6+ with `innodb_snapshot_isolation=ON`: a writer whose transaction read the task before another writer
+  committed it gets error 1020 ("Record has changed since last read") on its update, the same class of error as
+  PostgreSQL's `40001` above. The flush fails and nothing is saved; retry the request. 2.16 had the same behaviour
+  for the same writes. MariaDB 11.4 (and earlier) defaults the option to OFF.
+- MySQL / MariaDB (audit PG-I2): the increment is `SET revision = LAST_INSERT_ID(revision + 1)`, so after a task
+  write `SELECT LAST_INSERT_ID()` (or `PDO::lastInsertId()`) on that connection returns the revision until the next
+  insert with an auto-increment id. Code that reads the insert id must read it right after its own insert, as the
+  driver documents. Behind ProxySQL, `LAST_INSERT_ID(expr)` disables multiplexing for that client session (ProxySQL
+  keeps it on the same backend connection).
+- A task another request deletes while this one writes it (audit PG-L1): the flush succeeds as in 2.16 (the UPDATE of
+  a missing row changes nothing), the revision is not incremented and the object keeps the one it had, on every
+  database.
+- Column deletion (audit PG-L2): the policy is asked, and the tasks are moved, in the column's order (position, then
+  id). Until 2.16 the order was the board collection's, which MySQL does not define: the first refusal reported and
+  the order of the moved cards in the target column could change from one call to the next.
 
 ## To 2.16.0
 

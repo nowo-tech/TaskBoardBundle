@@ -126,6 +126,13 @@ Target 2.17.0 (minor). No schema change, no migration, no configuration change.
   so no flush writes a revision from PHP any more. What counts as a revision is unchanged: once per flush, never for a
   position, total time or `updatedAt` change alone, also for an assignee or watcher added or removed. Tested with two
   entity managers on two connections (one in-memory SQLite connection by default; MySQL 8.4 and PostgreSQL 16 in CI).
+- **A task deleted during a write (audit PG-L1).** The increment answers "row gone" the same way on every platform
+  (no row from `RETURNING`, 0 affected rows on MySQL / MariaDB and elsewhere): the flush succeeds as in 2.16 and the
+  object keeps its revision, instead of a 500 (`NoIdentityValue`) on MySQL / MariaDB or revision 0 on PostgreSQL /
+  SQLite. A mark a failed flush left on a task is dropped by its next flush (audit PG-I1).
+- **Column deletion order (audit PG-L2).** `BoardColumnManager::delete()` asks the column transition policy and moves
+  the tasks in the column's order (position, then id) instead of the board collection's undefined order: the refusal
+  reported and the order of the moved cards no longer depend on the database (MySQL loaded them by primary key).
 
 ### Changed
 
