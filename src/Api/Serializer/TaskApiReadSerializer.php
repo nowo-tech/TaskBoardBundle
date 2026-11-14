@@ -112,7 +112,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.17.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
+     * Since 2.18.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
      * view). `content` / `markdown_content`: its Markdown description.
      *
      * @param list<TaskBoard> $boards
@@ -145,7 +145,7 @@ final class TaskApiReadSerializer
     }
 
     /**
-     * Since 2.17.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
+     * Since 2.18.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
      *
      * @return array<string, mixed>
      */

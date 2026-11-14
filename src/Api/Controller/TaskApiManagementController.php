@@ -29,12 +29,12 @@ final readonly class TaskApiManagementController
         private TaskApiReadOperations $reads,
         private TaskApiReadSerializer $serializer,
         private int $maxBodyBytes,
-        // Since 2.17.0 (Beacon spec 234): folders.
+        // Since 2.18.0 (Beacon spec 234): folders.
         private ?TaskApiFolderOperations $folders = null,
     ) {
     }
 
-    /** Since 2.17.0: `POST /v2/space/{id}/folder`. */
+    /** Since 2.18.0: `POST /v2/space/{id}/folder`. */
     public function createFolder(Request $request, string $spaceId): JsonResponse
     {
         $input  = $this->input($request);
@@ -43,7 +43,7 @@ final readonly class TaskApiManagementController
         return $this->folder($request, $folder->getId(), $folder->getTenantKey(), $input);
     }
 
-    /** Since 2.17.0: `PUT /v2/folder/{id}`. */
+    /** Since 2.18.0: `PUT /v2/folder/{id}`. */
     public function updateFolder(Request $request, string $folderId): JsonResponse
     {
         $input  = $this->input($request);
@@ -52,7 +52,7 @@ final readonly class TaskApiManagementController
         return $this->folder($request, $folder->getId(), $folder->getTenantKey(), $input);
     }
 
-    /** Since 2.17.0: `DELETE /v2/folder/{id}`: 200 `{}`; 409 `FOLDER_001` while lists are in it. */
+    /** Since 2.18.0: `DELETE /v2/folder/{id}`: 200 `{}`; 409 `FOLDER_001` while lists are in it. */
     public function deleteFolder(Request $request, string $folderId): JsonResponse
     {
         $input = $this->input($request);
@@ -61,7 +61,7 @@ final readonly class TaskApiManagementController
         return $this->answer([], $input);
     }
 
-    /** Since 2.17.0: `POST /v2/folder/{id}/list`: a board created in the folder. */
+    /** Since 2.18.0: `POST /v2/folder/{id}/list`: a board created in the folder. */
     public function createFolderList(Request $request, string $folderId): JsonResponse
     {
         $input = $this->input($request, TaskApiBoardOperations::NOT_SUPPORTED);

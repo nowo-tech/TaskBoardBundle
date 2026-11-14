@@ -229,6 +229,9 @@ Nothing, unless you use folders:
   `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
   `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
   `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
+  (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked as `web` (a person).
 - **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
   (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
   right the bundle already has.

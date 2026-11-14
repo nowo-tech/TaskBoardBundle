@@ -135,6 +135,10 @@ Target 2.18.0 (minor). Schema change (see UPGRADING "To 2.18.0").
 - Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
   by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`, or with `include_folders=true` (default:
   `api.lists_include_folders`, false). Nothing changes until a folder is used.
+- `moveTasks()` asks the host's column transition policy (`column_transition_policy`, 2.16.0) for every task that changes
+  board, as it enters its column on the target (operation `ColumnTransitionVia::OP_BOARD_MOVE`, `board_move`), before
+  anything changes; the new optional `$via` carries the caller's channel (null: `web`), so an MCP server that passes
+  `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
 - `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
   context of the `board_moved` history row, so a host can archive the emptied story.
 

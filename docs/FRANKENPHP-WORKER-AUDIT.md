@@ -66,7 +66,7 @@ Worker demo: `demo/symfony8/Caddyfile` runs `php_server` with a `worker` block (
 | Service | Shared | Mutable state | Scenario A | Scenario B |
 |---------|--------|---------------|------------|------------|
 | `Controller\TaskBoardManageController` | yes (public) | none (`readonly` dependencies, routes, templates, user class) | ✅ | ✅ |
-| `Folder\TaskBoardFolderManager`, `TaskBoardRestructurer`, `ManageRightRestructurePolicy`, `TaskBoardDependencyScope`, `Api\Operation\TaskApiFolderOperations` (2.17.0) | yes | none (`final readonly` / stateless) | ✅ | ✅ (one transaction per write; a closed manager is reset through the registry) |
+| `Folder\TaskBoardFolderManager`, `TaskBoardRestructurer`, `ManageRightRestructurePolicy`, `TaskBoardDependencyScope`, `Api\Operation\TaskApiFolderOperations` (2.18.0) | yes | none (`final readonly` / stateless) | ✅ | ✅ (one transaction per write; a closed manager is reset through the registry) |
 | `Service\TaskManager`, `TaskChangeRecorder`, `TaskLinkAttacher`, `TaskMemberAssigner`, `BoardColumnManager`, `TaskBoardCreator`, `TaskGanttBuilder`, `TaskAccessGuard` | yes | none (`final readonly`) | ✅ | ✅ (`TaskAccessGuard` refreshes task/board before deciding) |
 | `Import\TaskImportOrchestrator` | yes | none (`final readonly`; per-call arrays only) | ✅ | ✅ (resets closed EM on failed flush; identity map: host) |
 | 4 importers (`ClickUpCsvImporter`, `ClickUpJsonImporter`, `JiraCsvImporter`, `TrelloJsonImporter`) + `DelimitedTableParser`, `ImportFieldMapper`, `NullTaskImportUserResolver` | yes | none | ✅ | ✅ |

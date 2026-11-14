@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Event\TaskBoardChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Port\Snapshots;
@@ -26,18 +27,24 @@ use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Throwable;
 
 use function array_map;
+use function array_values;
 use function in_array;
 use function is_string;
 use function max;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
+ * Since 2.18.0 (Beacon spec 234, FR-031 / FR-045): {@see TaskBoardRestructureInterface} — folders through
  * {@see TaskBoardFolderManager}, and tasks moved between the boards of one tenant.
  *
  * A task move is one transaction: the rows of every moved tree are locked first, then each task changes board in place
@@ -67,6 +74,8 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         private TaskBoardQuota $quota = new TaskBoardQuota(),
         private ?ManagerRegistry $managerRegistry = null,
         private bool $syncEnabled = false,
+        // Since 2.18.0: asked for every task a move takes to another board (default: every move is allowed).
+        private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
     ) {
     }
 
@@ -103,7 +112,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId));
     }
 
-    public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = []): TaskBoardMoveResult
+    public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = [], ?ColumnTransitionVia $via = null): TaskBoardMoveResult
     {
         $target = $this->requireBoard($targetBoardId);
         $roots  = $this->roots($target, $taskIds);
@@ -145,6 +154,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         if ($refusal !== null) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::QUOTA, [], $refusal);
         }
+        $this->assertTransitions($moving, $target, $map, $actor, new ColumnTransitionVia(($via ?? ColumnTransitionVia::web())->channel, ColumnTransitionVia::OP_BOARD_MOVE));
 
         $connection = $this->entityManager->getConnection();
         $connection->beginTransaction();
@@ -244,6 +254,57 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         }
 
         return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents);
+    }
+
+    /**
+     * Since 2.18.0: the column transition policy, for every task that changes board, as it enters the column it will have
+     * on the target. Nothing has changed yet; the first refusal stops the move.
+     *
+     * @param list<Task> $roots
+     * @param array<string, BoardColumn> $map
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    private function assertTransitions(array $roots, TaskBoard $target, array $map, object $actor, ColumnTransitionVia $via): void
+    {
+        $last = null;
+        foreach ($target->getColumns() as $column) {
+            $last = $last === null || $column->getPosition() > $last->getPosition() ? $column : $last;
+        }
+        foreach ($roots as $root) {
+            foreach (TaskMovePlanner::subtree($root) as $node) {
+                $to = $this->targetColumn($node, $target, $map);
+                if (!$to instanceof BoardColumn || $node->getBoard()->getId() === $target->getId()) {
+                    continue;
+                }
+                $from       = $node->getColumn();
+                $transition = new ColumnTransition(
+                    Snapshots::board($target),
+                    Snapshots::task($node),
+                    $from instanceof BoardColumn ? Snapshots::column($from, $this->isLast($from)) : null,
+                    Snapshots::column($to, $to === $last),
+                    $actor,
+                    ActorId::of($actor),
+                    $via,
+                    array_values($node->getTags()),
+                );
+                $decision = $this->transitions->decide($transition);
+                if (!$decision->allowed) {
+                    throw new ColumnTransitionRefusedException($transition, $decision);
+                }
+            }
+        }
+    }
+
+    private function isLast(BoardColumn $column): bool
+    {
+        foreach ($column->getBoard()->getColumns() as $other) {
+            if ($other->getPosition() > $column->getPosition()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

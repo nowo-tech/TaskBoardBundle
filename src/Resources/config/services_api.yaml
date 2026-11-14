@@ -76,7 +76,7 @@ services:
         arguments:
             $columnIconIds: '%nowo_task_board.board.column_icon_ids%'
 
-    # Since 2.17.0 (Beacon spec 234): folders.
+    # Since 2.18.0 (Beacon spec 234): folders.
     Nowo\TaskBoardBundle\Api\Operation\TaskApiFolderOperations:
         public: true
 

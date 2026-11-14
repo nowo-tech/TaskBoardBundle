@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
+use Nowo\TaskBoardBundle\Event\TaskApiWriteEvent;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiAuditRecorder;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
@@ -19,7 +20,7 @@ use function array_keys;
 use function ksort;
 
 /**
- * Since 2.17.0 (Beacon spec 234, FR-031): folders on the Task API — `GET/POST /v2/space/{id}/folder`,
+ * Since 2.18.0 (Beacon spec 234, FR-031): folders on the Task API — `GET/POST /v2/space/{id}/folder`,
  * `GET/PUT/DELETE /v2/folder/{id}`, `GET/POST /v2/folder/{id}/list`.
  */
 final class ApiFoldersTest extends ApiTestCase
@@ -83,7 +84,7 @@ final class ApiFoldersTest extends ApiTestCase
         $this->get('/api/tasks/v2/folder/' . $id);
         $this->assertRefused(404, 'ACCESS_001');
 
-        $operations = array_map(static fn ($event): string => $event->operation, $this->audit()->events);
+        $operations = array_map(static fn (TaskApiWriteEvent $event): string => $event->operation, $this->audit()->events);
         self::assertSame(['folder.create', 'board.create', 'folder.list_create', 'folder.update', 'folder.delete'], $operations);
         self::assertSame('tenant-a', $this->audit()->events[0]->tenantKey);
     }

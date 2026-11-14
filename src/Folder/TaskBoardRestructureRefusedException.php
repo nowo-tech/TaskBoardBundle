@@ -7,7 +7,7 @@ namespace Nowo\TaskBoardBundle\Folder;
 use RuntimeException;
 
 /**
- * Since 2.17.0: a folder or restructure write was refused before anything was written. `reason`:
+ * Since 2.18.0: a folder or restructure write was refused before anything was written. `reason`:
  *
  * - `not_found`: a folder, board or task that does not exist, or one of another tenant (never told apart: 404);
  * - `not_allowed`: {@see TaskBoardRestructurePolicyInterface} said no;

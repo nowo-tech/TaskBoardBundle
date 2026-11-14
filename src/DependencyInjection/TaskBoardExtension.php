@@ -551,7 +551,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$entityManager', $manager)
             ->setArgument('$syncEnabled', $sync);
         $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
-        // Since 2.17.0 (Beacon spec 234): the restructure policy port.
+        // Since 2.18.0 (Beacon spec 234): the restructure policy port.
         $container->setAlias(TaskBoardRestructurePolicyInterface::class, $this->serviceOr($config['restructure']['policy'] ?? null, ManageRightRestructurePolicy::class));
     }
 
