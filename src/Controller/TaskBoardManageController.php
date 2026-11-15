@@ -566,7 +566,11 @@ final class TaskBoardManageController extends AbstractController
             $data = $form->getData();
             $set  = $manager->find((string) $data->columnSetId, $user, $board);
             if ($set instanceof ColumnSet) {
-                $manager->applyToBoard($set, $board);
+                try {
+                    $manager->applyToBoard($set, $board, $user);
+                } catch (TaskBoardRestructureRefusedException) {
+                    return $this->sharedColumnsRefused($boardId);
+                }
                 $this->logWrite('column_set_apply', ['board_id' => $boardId, 'column_set_id' => $set->getId()]);
                 $this->addFlash('success', 'task_board.flash.column_set_applied');
             }

@@ -9,6 +9,8 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\ColumnSetQueryEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Folder\FolderStatusSets;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
@@ -27,6 +29,8 @@ final readonly class ColumnSetManager
         private ColumnSetRepositoryInterface $setRepository,
         private BoardColumnRepositoryInterface $columnRepository,
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.19.0 (audit PW-D1-L2): a board whose folder shares its statuses takes a set under the shared rules.
+        private ?FolderStatusSets $statusSets = null,
     ) {
     }
 
@@ -71,10 +75,23 @@ final readonly class ColumnSetManager
     /**
      * Appends copies of the set's columns after the board's columns.
      *
+     * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-D1-L2): `not_allowed`
+     *                                              on a board whose folder shares its statuses
+     *                                              without the shared-columns rights (or an actor)
+     *
      * @return list<BoardColumn> the new columns
      */
-    public function applyToBoard(ColumnSet $set, TaskBoard $board): array
+    public function applyToBoard(ColumnSet $set, TaskBoard $board, ?object $actor = null): array
     {
+        // Audit PW-D1-L2: on a board whose folder shares its statuses the new columns change every board of the folder:
+        // the shared-columns rights first (no actor: refused), then the set is carried to the other boards.
+        $shared = $this->statusSets instanceof FolderStatusSets && $board->getFolder()?->getStatusSet() !== null;
+        if ($shared) {
+            if ($actor === null) {
+                throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
+            }
+            $this->statusSets->assertMayChangeColumns($actor, $board);
+        }
         $position = -1;
         foreach ($board->getColumns() as $column) {
             $position = max($position, $column->getPosition());
@@ -89,6 +106,9 @@ final readonly class ColumnSetManager
 
         if ($added !== []) {
             $this->columnRepository->saveAll($added);
+            if ($shared) {
+                $this->statusSets?->propagateFrom($board->getId(), [], [], $actor);
+            }
         }
 
         return $added;
