@@ -17,13 +17,13 @@ use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Service\TaskColumnFollow;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
-use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Throwable;
 
 use function array_filter;
 use function array_map;
 use function array_values;
 use function implode;
+use function in_array;
 use function max;
 use function mb_strlen;
 use function strcmp;
@@ -163,7 +163,8 @@ final readonly class TaskBoardFolderManager
      * folder is named (`mayManageFolders()`, since 2.19.0 audit PW-H1). Leaving a folder keeps the board's dependencies
      * on the folder's other boards (audit PW-I4): {@see TaskBoardDependencyScope} only decides which new ones are allowed.
      * Into a folder with a shared status set the board takes its columns (FR-034): `$columnMap` (current column id or
-     * name => a column name of the set) moves the tasks of a column the set does not have.
+     * name => a column name of the set) moves the tasks of a column the set does not have; joining such a folder needs the
+     * restructure right on every board already in it (audit PW-D1-L1).
      *
      * @param array<string, string> $columnMap
      *
@@ -183,6 +184,16 @@ final readonly class TaskBoardFolderManager
         }
         if ($board->getFolderId() === $folder?->getId()) {
             return;
+        }
+        // Audit PW-D1-L1: a folder that shares its statuses is changed by every board that joins it (from then on a
+        // column change needs the right on the newcomer too), so joining needs what changing the set needs: the
+        // restructure right on every board already in it.
+        if ($folder instanceof TaskBoardFolder && $folder->getStatusSet() !== null) {
+            foreach ($this->boardsIn($folder, true) as $member) {
+                if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($member))) {
+                    throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
+                }
+            }
         }
         $this->write(function () use ($board, $folder, $columnMap, $actor): void {
             // The columns first: a refusal there leaves the board, in memory too, where it was.
@@ -224,7 +235,7 @@ final readonly class TaskBoardFolderManager
             }
             // Audit PW-H1 / PW-L5: the moved or completed tasks get their history rows (this flush) and events (after the
             // commit of the caller's write; dropped on a rollback).
-            foreach ($this->follow->record($board, $before, $actor, ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMNS)) as [$event, $name]) {
+            foreach ($this->follow->record($board, $before, $actor) as [$event, $name]) {
                 $this->events?->dispatchSaved($event, $name);
             }
         });
@@ -259,6 +270,22 @@ final readonly class TaskBoardFolderManager
         } catch (TaskReopenRefusedException $refused) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::QUOTA, [], $refused->getMessage());
         }
+    }
+
+    /**
+     * Since 2.19.0 (audit PW-D1-I3): the actor as an entity of this manager when Doctrine maps its class (a reference by its
+     * id), so a write on its behalf flushes even when the object came from another manager or was detached; otherwise the
+     * object as it is.
+     */
+    public function managedActor(object $actor): object
+    {
+        if ($this->entityManager->contains($actor) || $this->entityManager->getMetadataFactory()->isTransient($actor::class)) {
+            return $actor;
+        }
+        $metadata = $this->entityManager->getClassMetadata($actor::class);
+        $id       = $metadata->getIdentifierValues($actor);
+
+        return $id === [] || in_array(null, $id, true) ? $actor : ($this->entityManager->getReference($metadata->getName(), $id) ?? $actor);
     }
 
     /**

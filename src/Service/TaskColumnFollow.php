@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Event\TaskCompletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskReopenedEvent;
 use Nowo\TaskBoardBundle\Event\TaskStatusChangedEvent;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
@@ -36,6 +37,8 @@ final readonly class TaskColumnFollow
     public function __construct(
         private ?TaskChangeRecorder $recorder = null,
         private ?EntityManagerInterface $entityManager = null,
+        // Audit PW-D1-I1: the channel of the events when the caller gives none (the host's write provenance, else web).
+        private ?WriteProvenanceProviderInterface $provenance = null,
     ) {
     }
 
@@ -66,11 +69,14 @@ final readonly class TaskColumnFollow
      * History rows for the tasks of `$before` whose column or completion changed (no flush).
      *
      * @param array<string, array{Task, ?BoardColumn, ?string, bool}> $before
+     * @param ColumnTransitionVia|null $via the channel of the change (null: the write provenance's, else `web`; operation
+     *                                      `columns`)
      *
      * @return list<array{object, string}> the events to dispatch after the commit, with their names
      */
-    public function record(TaskBoard $board, array $before, ?object $actor, ColumnTransitionVia $via): array
+    public function record(TaskBoard $board, array $before, ?object $actor, ?ColumnTransitionVia $via = null): array
     {
+        $via ??= new ColumnTransitionVia($this->provenance?->current()?->channel->value ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_COLUMNS);
         $events  = [];
         $columns = ColumnTypes::ordered($board);
         $last    = $columns === [] ? null : $columns[array_key_last($columns)];
