@@ -138,6 +138,11 @@ Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, de
   editable and movable up. `Tree\TaskTreeLimits` holds the rule and the bounded walks.
 - `TaskEventDeferral` is a public service: a host that calls a port inside its own transaction wraps it in `defer()`, so
   the events wait for its commit.
+- **Column maps ask the column transition policy** (audit PW-D2-L1): `FolderStatusSets::setStatusSet()`,
+  `BoardConfigurationApplier::apply()` / `applyById()` and `TaskBoardRestructureInterface::moveBoardToFolder()` (into a
+  folder that shares its statuses) take an optional `?ColumnTransitionVia $via` (none: `web`, operation `columns`). Every
+  live task the column map moves to another status is asked of the policy before the transaction; the first refusal
+  (`ColumnTransitionRefusedException`) changes nothing. 2.19.0 moved them without asking.
 
 ### Changed
 
@@ -150,6 +155,8 @@ Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, de
   the task page (at most 64 nested levels shown; deeper subtasks still count), move and copy subtrees, the move's locks and
   snapshot, erasure. A loop already in the data no longer crashes a page or a worker: reads stop, a move, copy or
   recurrence through it is refused (`tree_loop`), a parent change through it is `PARENT_003`, and a detach repairs it.
+  2.19's restructure (`moveTasks()`) walks the same way: a loop or a tree past the cap is refused with the new
+  `TaskBoardRestructureRefusedException` reasons `tree_loop` / `too_deep`, nothing written.
 - `TaskMover`'s lock-conflict detection moved to the internal `Doctrine\LockConflict` (same behaviour).
 
 ### Fixed
@@ -158,7 +165,8 @@ Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, de
   mode on MySQL / MariaDB): when InnoDB had ended the transaction, the second rollback threw inside the clean-up, so the
   connection kept a DBAL nesting level of 2 and every later write of the worker was saved but answered 500. The rollback
   now closes the connection when it fails at the outermost level, and the clean-up always runs.
-- **Imports, provider sync pages and provider unlinks after a MySQL / MariaDB deadlock** (audit PX-L6): the same pattern
+- **Imports, provider sync pages, provider unlinks, and 2.19's folder, restructure and custom field writes after a MySQL /
+  MariaDB deadlock** (audit PX-L6): the same pattern
   (a rollback that throws because the server already ended the transaction) skipped the clean-up and left the
   connection's nesting level behind. They now roll back through the shared `Doctrine\TransactionRollback`, as the Task
   API, the board move and the re-parent do: back to the level they entered at, closing the connection only when that
