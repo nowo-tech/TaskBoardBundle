@@ -77,9 +77,16 @@ final class ApiTaskReparentAuditTest extends ApiTestCase
         $mover   = self::getContainer()->get(TaskMoverInterface::class);
         self::assertInstanceOf(TaskMovePlanner::class, $planner);
         self::assertInstanceOf(TaskMoverInterface::class, $mover);
-        $plan = $planner->plan($epic, $other, [], $this->owner);
+        // The same objects in a kept-alive standard host; the private manager (dropped at the request boundary) reloads them.
+        $epic  = $this->em->find(Task::class, $epic->getId());
+        $other = $this->em->find(TaskBoard::class, $other->getId());
+        $owner = $this->em->find($this->owner::class, $this->owner->getId());
+        self::assertInstanceOf(Task::class, $epic);
+        self::assertInstanceOf(TaskBoard::class, $other);
+        self::assertNotNull($owner);
+        $plan = $planner->plan($epic, $other, [], $owner);
         self::assertNotContains($story->getId(), $plan->taskIds);
-        $mover->move($epic, $other, [], $plan->fingerprint, $this->owner);
+        $mover->move($epic, $other, [], $plan->fingerprint, $owner);
         self::assertSame($this->roadmap->getId(), (string) $this->em->getConnection()->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$story->getId()]));
     }
 
@@ -196,6 +203,7 @@ final class ApiTaskReparentAuditTest extends ApiTestCase
     {
         $epic   = $this->task($this->roadmap, 'Epic');
         $story  = $this->task($this->roadmap, 'Story', parent: $epic);
+        $other  = $this->task($this->roadmap, 'Other');
         $epicId = $epic->getId();
         $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($epicId): void {
             if ($event->getTask()->getId() === $epicId) {
@@ -209,7 +217,6 @@ final class ApiTaskReparentAuditTest extends ApiTestCase
         self::assertSame('Renamed', $this->json()['name']);
 
         // A real change to a parent the person may not edit is still refused.
-        $other = $this->task($this->roadmap, 'Other');
         $this->send('PUT', '/api/tasks/v2/task/' . $other->getId(), ['parent' => $epicId]);
         $this->assertRefused(403, 'ACCESS_002');
     }
