@@ -4,16 +4,29 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Folder;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskColumnFollow;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\Support\ColumnTasks;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
+use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
+
+use function array_values;
+use function count;
 
 /**
  * Since 2.19.0 (Beacon spec 234, FR-034): a folder's shared status set. Every board in the folder has the set's columns
@@ -33,6 +46,9 @@ final readonly class FolderStatusSets
         private TaskBoardRestructurePolicyInterface $policy,
         private TaskBoardRepositoryInterface $boards,
         private LoggerInterface $logger = new NullLogger(),
+        // Since 2.19.0 (audit PW-D1-L3): asked for the tasks a column change moves on the other boards of the folder.
+        private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
+        private ?EntityManagerInterface $entityManager = null,
     ) {
     }
 
@@ -99,6 +115,48 @@ final readonly class FolderStatusSets
         }
     }
 
+    /**
+     * Since 2.19.0 (audit PW-D1-L3): a column change that moves tasks on the board (a deletion: `$moves` deleted column
+     * name => the name of the column its tasks go to) moves the tasks of the same column on every other board of a
+     * sharing folder too. The column transition policy is asked for each of them, through the caller's channel, before
+     * anything is written; the first refusal stops the change.
+     *
+     * @param array<string, string> $moves
+     *
+     * @throws ColumnTransitionRefusedException
+     */
+    public function assertSiblingTransitions(object $actor, TaskBoard $board, array $moves, ColumnTransitionVia $via): void
+    {
+        $folder = $board->getFolder();
+        if (!$folder instanceof TaskBoardFolder || $folder->getStatusSet() === null || $moves === []) {
+            return;
+        }
+        foreach ($this->folders->boardsIn($folder, true) as $sibling) {
+            if ($sibling->getId() === $board->getId()) {
+                continue;
+            }
+            $columns = ColumnTypes::ordered($sibling);
+            $byName  = [];
+            foreach ($columns as $column) {
+                $byName[$column->getName()] = $column;
+            }
+            $last = $columns === [] ? null : $columns[count($columns) - 1];
+            foreach ($moves as $from => $to) {
+                $source = $byName[$from] ?? null;
+                $target = $byName[$to] ?? null;
+                // A sibling of the set has both columns; a board the set has not reached yet asks nothing.
+                $tasks = $source instanceof BoardColumn && $target instanceof BoardColumn ? ColumnTasks::of($this->entityManager, $source) : [];
+                foreach ($tasks as $task) {
+                    $transition = new ColumnTransition(Snapshots::board($sibling), Snapshots::task($task), Snapshots::column($source, $source === $last, $columns), Snapshots::column($target, $target === $last, $columns), $actor, ActorId::of($actor), $via, array_values($task->getTags()));
+                    $decision   = $this->transitions->decide($transition);
+                    if (!$decision->allowed) {
+                        throw new ColumnTransitionRefusedException($transition, $decision);
+                    }
+                }
+            }
+        }
+    }
+
     private function mayChangeSharedColumns(object $actor, TaskBoardFolder $folder): bool
     {
         if (!$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
@@ -153,6 +211,8 @@ final readonly class FolderStatusSets
 
             return;
         }
+        // Audit PW-D1-I3: history rows and the task's last writer reference the actor: an entity of this manager.
+        $actor = $actor === null ? null : $this->folders->managedActor($actor);
         $specs = BoardColumnsApplier::specsOf($board);
         foreach ($deleted as $name => $targetId) {
             foreach ($board->getColumns() as $column) {

@@ -147,7 +147,13 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   `AbstractColumnEvent::$actor`) and never rewrites a board it may not restructure. The tasks a retype, a status set or
   its propagation moves or completes get a `column` / `completed` history row and TASK_STATUS_CHANGED (operation
   `columns`), TASK_COMPLETED or TASK_REOPENED after the commit (PW-L5). A dependency between two tasks of one board of a
-  folder is checked for cycles across the folder's boards (PW-L3).
+  folder is checked for cycles across the folder's boards (PW-L3). Audit delta PW-1: joining a folder that shares its
+  statuses needs the restructure right on every board already in it (D1-L1); applying a saved column set to a board of
+  such a folder goes through the same rights (`ColumnSetManager::applyToBoard()` takes the actor) and carries the new
+  columns to the other boards (D1-L2); a column deletion asks the column transition policy, through the caller's
+  channel, for the tasks it moves on the other boards too, all or none before anything is written (D1-L3); the
+  follow-up events take the channel of the host's write provenance (D1-I1); the propagation resolves its actor as an
+  entity of the bundle's manager (D1-I3).
 - **Dependencies across the boards of a folder (FR-032).** `TaskDependencyManager` accepts two tasks of two boards of the
   same folder (cycles checked across the folder); any other pair is still `other_board` (`LINK_002`).
 - **Shared status sets (FR-034).** `Folder\FolderStatusSets::setStatusSet()` / `shareFrom()` give every board of a folder
@@ -175,7 +181,8 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
 - `moveTasks()` keeps each task's completion consistent with its column (audit PW-M1): a column map or a same-name
   column is used only when it fits (an open task never lands in a done column, a completed one never in an open column);
-  otherwise the move rule decides, as for a move from the board UI.
+  otherwise the move rule decides, as for a move from the board UI. `TaskBoardMoveResult::$columnMapIgnored` lists the
+  moved tasks whose map entry was not used (audit PW-D1-I2).
 - `moveTasks()` refuses `stale` (`TaskBoardRestructureRefusedException::STALE`) when a moved tree changed between its
   read and its row locks (audit PW-L2): nothing is changed, the caller retries.
 - `moveBoardToFolder()` with a folder needs the folder right of its tenant (`mayManageFolders()`) besides the board's

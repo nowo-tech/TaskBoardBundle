@@ -53,7 +53,10 @@ final class RestructureAuditPwTest extends CopyTestCase
         $done->markCompleted();
         $this->em->flush();
 
-        $this->restructurer()->moveTasks($this->owner, [$open->getId(), $done->getId()], $target->getId(), ['Todo' => 'Shipped', 'Done' => 'Doing']);
+        $result = $this->restructurer()->moveTasks($this->owner, [$open->getId(), $done->getId()], $target->getId(), ['Todo' => 'Shipped', 'Done' => 'Doing']);
+
+        // Audit PW-D1-I2: both map entries were overridden, and the result says so.
+        self::assertSame([$open->getId(), $done->getId()], $result->columnMapIgnored);
 
         $this->clear();
         self::assertSame(['Backlog', false], [$this->reload($open)->getColumn()?->getName(), $this->reload($open)->isCompleted()]);
@@ -67,7 +70,8 @@ final class RestructureAuditPwTest extends CopyTestCase
         $target = $this->board('Target', ['Backlog', 'Doing', 'Shipped'], tenantKey: 'acme');
         $open   = $this->task($source, 'Open', 0);
 
-        $this->restructurer()->moveTasks($this->owner, [$open->getId()], $target->getId(), ['Todo' => 'Doing']);
+        $result = $this->restructurer()->moveTasks($this->owner, [$open->getId()], $target->getId(), ['Todo' => 'Doing']);
+        self::assertSame([], $result->columnMapIgnored);
 
         $this->clear();
         self::assertSame('Doing', $this->reload($open)->getColumn()?->getName());

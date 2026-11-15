@@ -182,7 +182,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             $snapshot = $this->follow?->snapshot($column->getBoard()) ?? [];
             $this->followType($column, $retyped);
             // Audit PW-L5: the tasks the retype completes or reopens get their history rows (this flush) and events.
-            $followed = $this->follow?->record($column->getBoard(), $snapshot, $actor, ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMNS)) ?? [];
+            $followed = $this->follow?->record($column->getBoard(), $snapshot, $actor) ?? [];
             $this->columnRepository->saveAll(array_values($column->getBoard()->getColumns()->toArray()));
             foreach ($followed as [$event, $name]) {
                 $this->eventDispatcher?->dispatch($event, $name);
@@ -275,6 +275,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         if ($actor !== null) {
             $lastOne = $remaining[count($remaining) - 1];
             $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $remaining, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
+            // Audit PW-D1-L3: on a sharing folder the deletion moves the same column's tasks on the other boards too.
+            $this->statusSets?->assertSiblingTransitions($actor, $board, [$column->getName() => $target->getName()], $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE));
         }
 
         $position = 0;

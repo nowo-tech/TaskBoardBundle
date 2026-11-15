@@ -206,6 +206,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $members   = [];
         $events    = [];
         $parents   = [];
+        $ignored   = [];
         foreach ($roots as $root) {
             $tree = TaskMovePlanner::subtree($root);
             // Before the root becomes top-level: each task's parent as it was (the host archives the old story).
@@ -234,9 +235,13 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
                     $this->changeRecorder->record($node, $actor, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $dependency->getDependencyType()->relation(!$outgoing));
                     $this->changeRecorder->record($other, $actor, TaskChangeType::DependencyRemoved, $node->getTitle(), null, $dependency->getDependencyType()->relation($outgoing));
                 }
-                $from   = $node->getBoard();
-                $column = $this->targetColumn($node, $target, $map);
-                $key    = $column?->getId() ?? '';
+                $from       = $node->getBoard();
+                $overridden = false;
+                $column     = $this->targetColumn($node, $target, $map, $overridden);
+                if ($overridden) {
+                    $ignored[] = $node->getId();
+                }
+                $key = $column?->getId() ?? '';
                 foreach ($node->getDocuments() as $document) {
                     $document->rememberOrigin($from->getId());
                 }
@@ -262,7 +267,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
             $this->events->dispatchSaved(new TaskBoardChangedEvent($root, $actor, $sourceId, $target->getId(), $ids), TaskBoardEvents::TASK_BOARD_CHANGED);
         }
 
-        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents);
+        return new TaskBoardMoveResult($target->getId(), $moved, $unchanged, $columns, $deps, $members, $parents, $ignored);
     }
 
     /**
@@ -325,15 +330,18 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
      *
      * @param array<string, BoardColumn> $map
      */
-    private function targetColumn(Task $task, TaskBoard $target, array $map): ?BoardColumn
+    private function targetColumn(Task $task, TaskBoard $target, array $map, bool &$overridden = false): ?BoardColumn
     {
-        $source    = $task->getColumn();
-        $completed = $task->isCompleted();
+        $overridden = false;
+        $source     = $task->getColumn();
+        $completed  = $task->isCompleted();
         if ($source instanceof BoardColumn) {
             $mapped = $map['id:' . $source->getId()] ?? $map['name:' . StatusColumns::normalize($source->getName())] ?? null;
             if ($mapped instanceof BoardColumn && $this->fits($mapped, $target, $completed)) {
                 return $mapped;
             }
+            // Audit PW-D1-I2: the caller's map named a column that does not fit; reported in the move's result.
+            $overridden = $mapped instanceof BoardColumn;
             foreach ($target->getColumns() as $column) {
                 if (StatusColumns::normalize($column->getName()) === StatusColumns::normalize($source->getName()) && $this->fits($column, $target, $completed)) {
                     return $column;
