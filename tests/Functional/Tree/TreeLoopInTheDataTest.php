@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Copy\TaskCopyResult;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Move\TaskMovePlan;
@@ -129,6 +131,22 @@ final class TreeLoopInTheDataTest extends ApiTestCase
         $store = self::getContainer()->get(DoctrineOrmTaskTreeStore::class);
         self::assertInstanceOf(DoctrineOrmTaskTreeStore::class, $store);
         self::assertSame(TaskTreeLimits::UNBOUNDED, $store->transactional(fn (): int => $store->lockedHeight($this->a->getId(), 5)));
+    }
+
+    public function testARestructureThroughTheLoopIsRefused(): void
+    {
+        $restructure = self::getContainer()->get(TaskBoardRestructureInterface::class);
+        self::assertInstanceOf(TaskBoardRestructureInterface::class, $restructure);
+        $other = $this->board('Other', tenantKey: 'tenant-a');
+
+        try {
+            $restructure->moveTasks($this->owner, [$this->a->getId()], $other->getId());
+            self::fail('Refused expected.');
+        } catch (TaskBoardRestructureRefusedException $refused) {
+            self::assertSame(TaskBoardRestructureRefusedException::TREE_LOOP, $refused->reason);
+        }
+        self::assertSame($this->roadmap->getId(), (string) $this->em->getConnection()->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$this->a->getId()]));
+        self::assertSame(0, $this->em->getConnection()->getTransactionNestingLevel());
     }
 
     private function assertCopyRefused(string $reason, callable $write): void

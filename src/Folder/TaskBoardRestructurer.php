@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Copy\TaskColumnRule;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -18,6 +19,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
@@ -39,6 +41,7 @@ use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Throwable;
 
+use function array_fill_keys;
 use function array_map;
 use function array_values;
 use function count;
@@ -114,13 +117,30 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->folders->delete($actor, $this->requireFolder($folderId));
     }
 
-    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void
+    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = [], ?ColumnTransitionVia $via = null): void
     {
         $board = $this->requireBoard($boardId);
-        $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId), $columnMap);
+        $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId), $columnMap, $via);
     }
 
     public function moveTasks(object $actor, array $taskIds, string $targetBoardId, array $columnMap = [], ?ColumnTransitionVia $via = null): TaskBoardMoveResult
+    {
+        try {
+            return $this->moveTrees($actor, $taskIds, $targetBoardId, $columnMap, $via);
+        } catch (TaskCopyRefusedException $refused) {
+            // Since 2.20.0 (audit PX-M2): a loop in the data, or a tree past the safety cap, refuses the move (nothing written).
+            throw new TaskBoardRestructureRefusedException($refused->reason === 'too_deep' ? TaskBoardRestructureRefusedException::TOO_DEEP : TaskBoardRestructureRefusedException::TREE_LOOP);
+        }
+    }
+
+    /**
+     * @param list<mixed> $taskIds
+     * @param array<string, string> $columnMap
+     *
+     * @throws TaskBoardRestructureRefusedException
+     * @throws TaskCopyRefusedException
+     */
+    private function moveTrees(object $actor, array $taskIds, string $targetBoardId, array $columnMap, ?ColumnTransitionVia $via): TaskBoardMoveResult
     {
         $target = $this->requireBoard($targetBoardId);
         $roots  = $this->roots($target, $taskIds);
@@ -165,6 +185,7 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->assertTransitions($moving, $target, $map, $actor, new ColumnTransitionVia($via->channel ?? $this->provenance?->current()?->channel->value ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_BOARD_MOVE));
 
         $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events->begin();
         $applying = false;
@@ -179,9 +200,8 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
             $connection->commit();
         } catch (Throwable $failure) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
+            // Since 2.20.0 (audit PX-L6): back to the entry level; the connection is closed only if the server ended it.
+            TransactionRollback::toLevel($connection, $level);
             $this->events->rollBack();
             if ($applying && $this->entityManager->isOpen()) {
                 $this->entityManager->close();
@@ -439,13 +459,16 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         foreach ($found as $task) {
             $ancestor = $task->getParent();
             $nested   = false;
-            while ($ancestor instanceof Task) {
+            // Since 2.20.0 (audit PX-M2): a loop in the data ends the walk (each ancestor once).
+            $seen = [$task->getId() => true];
+            while ($ancestor instanceof Task && !isset($seen[$ancestor->getId()])) {
                 if (isset($found[$ancestor->getId()])) {
                     $nested = true;
 
                     break;
                 }
-                $ancestor = $ancestor->getParent();
+                $seen[$ancestor->getId()] = true;
+                $ancestor                 = $ancestor->getParent();
             }
             if (!$nested) {
                 $roots[] = $task;
@@ -469,10 +492,14 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         /** @var list<string> $locked */
         $locked = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
             ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+        // Since 2.20.0 (audit PX-M2): bounded, and a loop in the data fails closed.
+        $seen   = array_fill_keys($level, true);
+        $levels = 0;
         while ($level !== []) {
-            /** @var list<string> $level */
-            $level = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
+            /** @var list<string> $ids */
+            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
                 ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
+            $level  = TaskMovePlanner::nextLevel($ids, $seen, ++$levels);
             $locked = [...$locked, ...$level];
         }
         sort($locked);

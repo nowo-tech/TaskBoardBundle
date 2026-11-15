@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardFolderManager;
@@ -15,6 +16,7 @@ use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 
 use function array_map;
 use function implode;
@@ -54,8 +56,10 @@ final readonly class BoardConfigurationApplier
      *
      * @throws TaskBoardRestructureRefusedException `not_allowed`, `columns_in_use`, `columns_shared`, `fields_in_use`,
      *                                              `invalid` (`field`: columns, fields, number_prefix), `quota`
+     * @throws ColumnTransitionRefusedException since 2.20.0, when the column transition policy refuses a task the column
+     *                                          map moves (`$via`: the caller's channel; none: `web`): nothing changes
      */
-    public function apply(object $actor, TaskBoard $board, BoardConfiguration $configuration, array $columnMap = [], bool $dropFieldValues = false): void
+    public function apply(object $actor, TaskBoard $board, BoardConfiguration $configuration, array $columnMap = [], bool $dropFieldValues = false, ?ColumnTransitionVia $via = null): void
     {
         if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($board))) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
@@ -68,6 +72,8 @@ final readonly class BoardConfigurationApplier
         // entity manager (the caller's board and its tasks are detached afterwards, worker mode included).
         if ($shared === null) {
             $this->folders->checkColumns($board, $configuration->columns, $columnMap);
+            // Since 2.20.0 (audit PW-D2-L1): every task the configuration moves, asked of the column transition policy first.
+            $this->folders->assertColumnTransitions($board, $configuration->columns, $columnMap, $actor, $via);
         }
         $this->checkFields($board, $configuration->fields, $dropFieldValues);
         if ($configuration->numberPrefix !== null && preg_match(TaskBoard::NUMBER_PREFIX_PATTERN, $configuration->numberPrefix) !== 1) {
@@ -92,13 +98,13 @@ final readonly class BoardConfigurationApplier
      *
      * @throws TaskBoardRestructureRefusedException
      */
-    public function applyById(object $actor, string $boardId, ?string $tenantKey, BoardConfiguration $configuration, array $columnMap = [], bool $dropFieldValues = false): void
+    public function applyById(object $actor, string $boardId, ?string $tenantKey, BoardConfiguration $configuration, array $columnMap = [], bool $dropFieldValues = false, ?ColumnTransitionVia $via = null): void
     {
         $board = $boardId === '' ? null : $this->boards->findById($boardId);
         if (!$board instanceof TaskBoard || $board->getId() !== $boardId || $board->getTenantKey() !== $tenantKey) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
         }
-        $this->apply($actor, $board, $configuration, $columnMap, $dropFieldValues);
+        $this->apply($actor, $board, $configuration, $columnMap, $dropFieldValues, $via);
     }
 
     /**

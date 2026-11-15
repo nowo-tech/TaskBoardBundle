@@ -40,6 +40,12 @@ final class TaskBoardRestructureRefusedException extends RuntimeException
      */
     public const STALE = 'stale';
 
+    /** Since 2.20.0 (audit PX-M2): a moved tree holds a loop already in the data (a task its own ancestor). */
+    public const TREE_LOOP = 'tree_loop';
+
+    /** Since 2.20.0: a moved tree is deeper than the safety cap (`TaskTreeLimits::SAFETY_CAP` levels). */
+    public const TOO_DEEP = 'too_deep';
+
     /**
      * @param array<string, int|string> $params
      */

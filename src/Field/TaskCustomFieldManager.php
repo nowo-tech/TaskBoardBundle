@@ -9,6 +9,7 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -507,15 +508,15 @@ final readonly class TaskCustomFieldManager
     private function write(callable $change): void
     {
         $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         try {
             $change();
             RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
             $connection->commit();
         } catch (Throwable $failure) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
+            // Since 2.20.0 (audit PX-L6): back to the entry level; the connection is closed only if the server ended it.
+            TransactionRollback::toLevel($connection, $level);
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
 
             throw $failure;
