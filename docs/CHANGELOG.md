@@ -157,6 +157,11 @@ Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, de
   mode on MySQL / MariaDB): when InnoDB had ended the transaction, the second rollback threw inside the clean-up, so the
   connection kept a DBAL nesting level of 2 and every later write of the worker was saved but answered 500. The rollback
   now closes the connection when it fails at the outermost level, and the clean-up always runs.
+- **Imports, provider sync pages and provider unlinks after a MySQL / MariaDB deadlock** (audit PX-L6): the same pattern
+  (a rollback that throws because the server already ended the transaction) skipped the clean-up and left the
+  connection's nesting level behind. They now roll back through the shared `Doctrine\TransactionRollback`, as the Task
+  API, the board move and the re-parent do: back to the level they entered at, closing the connection only when that
+  fails at the outermost level.
 
 ## [2.18.0] - 2026-11-14
 

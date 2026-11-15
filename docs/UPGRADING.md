@@ -228,7 +228,7 @@ changes:
 - From code, the new port `Nowo\TaskBoardBundle\Tree\TaskReparenterInterface::reparent($taskId, $parentId, $actor)`
   (see [USAGE](USAGE.md#changing-a-tasks-parent-since-220)). It checks no access: check `canEditTask()` on both tasks
   first. Inside your own transaction, wrap it in `TaskEventDeferral::defer()` (now a public service), or `TASK_UPDATED`
-  is dispatched before your commit.
+  is dispatched before your commit. `defer()` drops the events only when the closure throws: roll back by throwing.
 - **MySQL / MariaDB in worker mode**: the Task API's transaction no longer leaves the connection's nesting level behind
   after a deadlock (fixed since 2.16.0, see the CHANGELOG). Nothing to do.
 

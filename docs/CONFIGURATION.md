@@ -194,6 +194,13 @@ place a too-deep row under its deepest allowed ancestor, or keep a task's parent
 Trees saved deeper before the limit stay readable and editable, and may move up. With or without it, every tree walk is
 iterative and stops at 10,000 levels (`TaskTreeLimits::SAFETY_CAP`); a loop in the data fails closed.
 
+Which reads are locked: the Task API, the board UI, `TaskManager::create()` and every parent change read the depth
+from the committed rows, locked, so a concurrent move cannot take them past the limit; copies and recurring occurrences
+create through `TaskManager::create()`, so each copied task is checked that way too (the up-front check reads the loaded
+tree). New rows of an import or a provider sync (and synced checklist items) are placed from the loaded tree of the
+run: an existing ancestor that another request moves deeper while the run is going can leave those new rows one level
+past the limit (audit PX-L5; never a cycle, and the next parent change of such a row is checked under lock).
+
 ## Column transitions, humans-only columns and text search (since 2.16)
 
 ```yaml

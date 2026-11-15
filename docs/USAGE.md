@@ -139,6 +139,7 @@ On a DDD host the application service depends on the same interface and passes i
   and provider syncs change parents through this port too.
 - **Inside your own transaction** the port joins it (no savepoint): wrap your transaction in
   `TaskEventDeferral::defer()` (public service) so `TASK_UPDATED` waits for your commit and is dropped on your rollback.
+  `defer()` drops the events only when the closure throws: roll back by throwing out of it, not by returning.
 - **Transaction and locks:** the task's row, then the new parent's and every ancestor's up to the root, are locked and read
   as committed (never the identity map, so a kept-alive worker with a stale copy is safe) before the cycle check. Two
   changes on the same path run one after the other; two crossing changes (A under B, B under A) lock in opposite orders
