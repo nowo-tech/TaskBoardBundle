@@ -14,9 +14,10 @@ use Symfony\Contracts\EventDispatcher\Event;
  * (board drag, previous / next / done, the form, the Task API, a bulk update), after the write is saved (after the commit
  * of a write that holds its events). Framework-free: snapshots and ids only, copied when the event is built.
  *
- * `$toType` is the new column's type (`open`, `custom`, `done`, `closed`). Column types arrive in 2.17: until then it is
- * always null, and a listener must treat null as "unknown" (the last column is still the done one, see
- * `$to->last`).
+ * `$toType` is the new column's type (`open`, `custom`, `done`, `closed`; also `$to->type`). It was always null in
+ * 2.16 and 2.17; since 2.19.0 (Beacon spec 234, FR-033) the bundle fills it. A task in a `done` or `closed` column is
+ * done; on a board none of whose columns carries a type the last column is `closed`. A listener built by other code
+ * may still see null and must treat it as "unknown".
  */
 final class TaskStatusChangedEvent extends Event
 {

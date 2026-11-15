@@ -16,10 +16,12 @@ use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -166,6 +168,17 @@ final class TaskFormType extends AbstractType
                 'required' => false,
             ]);
         }
+
+        // Since 2.19.0 (Beacon spec 234, FR-028): one row per native custom field (`custom_fields`, from TaskCustomFieldForm),
+        // unmapped; TaskCustomFieldForm::save() writes them through TaskCustomFieldManager::setField().
+        foreach ($options['custom_fields'] as $definition) {
+            $common = ['label' => $definition['name'], 'translation_domain' => false, 'mapped' => false, 'required' => false, 'data' => $definition['value']];
+            match ($definition['type']) {
+                'number'   => $this->addWithDefaults($builder, $definition['name_attr'], NumberType::class, $common + ['scale' => 10, 'html5' => true, 'attr' => ['step' => 'any']]),
+                'dropdown' => $this->addWithDefaults($builder, $definition['name_attr'], ChoiceType::class, $common + ['choices' => $definition['choices'], 'placeholder' => '—', 'choice_translation_domain' => false]),
+                default    => $this->addWithDefaults($builder, $definition['name_attr'], TextType::class, $common + ['attr' => ['maxlength' => 5000]]),
+            };
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -180,7 +193,10 @@ final class TaskFormType extends AbstractType
             'rich_description'   => class_exists(TiptapEditorType::class),
             'tag_input'          => class_exists(TagType::class),
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
+            // Since 2.19.0: the board's native custom fields (TaskCustomFieldForm::options()).
+            'custom_fields' => [],
         ]);
+        $resolver->setAllowedTypes('custom_fields', 'array');
         $resolver->setAllowedTypes('shown_column', 'bool');
         $resolver->setAllowedTypes('rich_description', 'bool');
         $resolver->setAllowedTypes('tag_input', 'bool');

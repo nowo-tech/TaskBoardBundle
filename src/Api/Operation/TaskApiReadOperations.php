@@ -29,7 +29,9 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
@@ -71,6 +73,8 @@ final readonly class TaskApiReadOperations
         // Since 2.10.0 (spec 214): `task_numbers.enabled` (null when off): a task looked up by its number.
         private ?TaskNumberLedger $numbers = null,
         private ?TaskNumberScope $numberScope = null,
+        // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
+        private ?TaskCustomFieldManager $customFields = null,
         // Since 2.16.0 (spec 234, FR-025): the members of a team.
         private TaskApiMembersInterface $members = new EmptyTaskApiMembers(),
         // Since 2.16.0 (spec 234, FR-026): the text search, and `search.max_matches`.
@@ -384,6 +388,35 @@ final readonly class TaskApiReadOperations
     }
 
     /**
+     * Since 2.19.0 (FR-028): the board's native custom fields (its tenant's and its own) and its synced ones.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return array{native: list<TaskCustomField>, synced: list<TaskSyncField>}
+     */
+    public function allBoardFields(TaskApiPrincipal $principal, string $boardId): array
+    {
+        $board = $this->guard->board($principal, $boardId, TaskApiCapability::ReadEverything);
+
+        return ['native' => $this->customFields?->fieldsFor($board) ?? [], 'synced' => $this->queries->fieldsOf($board->getId())];
+    }
+
+    /**
+     * @param list<Task> $tasks
+     *
+     * @return array<string, list<TaskCustomField>>
+     */
+    private function nativeFields(array $tasks): array
+    {
+        $boards = [];
+        foreach ($tasks as $task) {
+            $boards[$task->getBoard()->getId()] = $task->getBoard();
+        }
+
+        return $this->customFields?->fieldsForBoards(array_values($boards)) ?? [];
+    }
+
+    /**
      * The host's time store decides whose time the token sees; a named task must be within reach first.
      *
      * @throws TaskApiRefusal
@@ -412,6 +445,12 @@ final readonly class TaskApiReadOperations
                 $assignees[] = $user;
             }
         }
+        $fields = [];
+        foreach ($filter->customFields === [] ? [] : $this->customFields?->fieldsForBoards($boards) ?? [] as $ofBoard) {
+            foreach ($ofBoard as $field) {
+                $fields[$field->getId()] = $field;
+            }
+        }
         $ids     = $this->ids($boards);
         $matches = null;
         if ($filter->query !== null && $ids !== []) {
@@ -426,7 +465,7 @@ final readonly class TaskApiReadOperations
                 throw new TaskApiRefusal(400, 'SEARCH_001', 'Too many matches: narrow the query');
             }
         }
-        $result = $this->queries->taskPage($ids, $filter, $assignees, $this->owner($principal), $matches);
+        $result = $this->queries->taskPage($ids, $filter, $assignees, $this->owner($principal), $matches, $fields);
 
         return $this->context($principal, $result['tasks'], $result['lastPage'], $filter->markdown);
     }
@@ -487,6 +526,8 @@ final readonly class TaskApiReadOperations
             manualMinutes: $this->queries->manualMinutesOf($ids),
             fieldValues: $this->queries->fieldValuesOf($ids),
             markdown: $markdown,
+            customFields: $this->nativeFields($tasks),
+            customFieldValues: $this->customFields?->valuesOf($ids) ?? [],
         );
     }
 

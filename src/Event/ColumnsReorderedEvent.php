@@ -19,7 +19,8 @@ final class ColumnsReorderedEvent extends AbstractColumnEvent
         public readonly array $columnIds,
         ?string $actorId,
         ?string $cause = null,
+        ?object $actor = null,
     ) {
-        parent::__construct($boardId, $tenantKey, $actorId, $cause);
+        parent::__construct($boardId, $tenantKey, $actorId, $cause, $actor);
     }
 }

@@ -73,6 +73,13 @@ The policy is a domain rule: `TaskManager` asks it before every move, whatever t
 principal's channel through `ColumnTransitionVia`, so a host writes its rules once for the board UI, the API and MCP.
 `TaskBoardEvents::TASK_STATUS_CHANGED` (`TaskStatusChangedEvent`, snapshots only) follows every column change.
 
+**Since 2.19.0 (Beacon spec 234).** New ports are framework-free from the start (no deprecated twin):
+`restructure.policy` → `Folder\TaskBoardRestructurePolicyInterface` (`mayManageFolders($user, ?$tenantKey)`,
+`mayRestructureBoard($user, TaskBoardSnapshot)`); the public service `Folder\TaskBoardRestructureInterface` takes ids
+and returns `Folder\TaskBoardFolderSnapshot` / `TaskBoardMoveResult`. Every restructure write runs in one transaction it
+opens and closes; on a failure after in-memory changes the entity manager is closed and reset through the registry, so
+a worker with kernel reset off never keeps a closed manager; `TASK_BOARD_CHANGED` goes out after the commit.
+
 ## Events
 
 Every event that carries a bundle entity also offers ids and snapshots (`getBoardId()`, `getTaskId()`,

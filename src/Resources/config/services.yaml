@@ -35,6 +35,16 @@ services:
             - '../../Copy/TaskCopyResult.php'
             - '../../Copy/TaskColumnRule.php'
             - '../../Move/TaskMovePlan.php'
+            # Since 2.19.0 (Beacon spec 234): data carriers of the restructure service.
+            - '../../Folder/TaskBoardFolderSnapshot.php'
+            - '../../Folder/TaskBoardMoveResult.php'
+            - '../../Folder/TaskBoardRestructureRefusedException.php'
+            - '../../Configuration/BoardColumnSpec.php'
+            - '../../Configuration/BoardColumnsRefusedException.php'
+            - '../../Configuration/BoardConfiguration.php'
+            - '../../Configuration/BoardFieldSpec.php'
+            - '../../Field/TaskCustomFieldCondition.php'
+            - '../../Field/TaskCustomFieldRefusedException.php'
             # Since 2.3.0 (spec 215): loaded only with `recurrence.enabled` (services_recurrence.yaml).
             - '../../Recurrence/'
             - '../../Controller/TaskRecurrenceController.php'
@@ -203,6 +213,29 @@ services:
         public: true
     Nowo\TaskBoardBundle\Service\TaskBoardEraserInterface:
         alias: Nowo\TaskBoardBundle\Service\TaskBoardEraser
+        public: true
+
+    # Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): folders and the restructure service (public for a host's command);
+    # the policy port is `restructure.policy` (default: the manage right).
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface:
+        alias: Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer
+        public: true
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface:
+        alias: Nowo\TaskBoardBundle\Folder\ManageRightRestructurePolicy
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer:
+        arguments:
+            $syncEnabled: '%nowo_task_board.sync.enabled%'
+
+    # Since 2.19.0 (Beacon block W): board configuration as data (public for a host's presets).
+    Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter:
+        public: true
+    Nowo\TaskBoardBundle\Configuration\BoardConfigurationApplier:
+        public: true
+    Nowo\TaskBoardBundle\Configuration\BoardTemplatesConfigurationInterface:
+        alias: Nowo\TaskBoardBundle\Configuration\NoBoardTemplates
+    Nowo\TaskBoardBundle\Folder\FolderStatusSets:
+        public: true
+    Nowo\TaskBoardBundle\Field\TaskCustomFieldManager:
         public: true
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
