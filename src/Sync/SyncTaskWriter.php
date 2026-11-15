@@ -7,8 +7,10 @@ namespace Nowo\TaskBoardBundle\Sync;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -67,6 +69,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\TaskDetailProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ThreadedCommentProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Stringable;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
@@ -173,6 +178,10 @@ final readonly class SyncTaskWriter
         private ?TaskEventDeferral $events = null,
         // Since 2.15.1 (audit OM TB-M1): reopens the manager a failed page closed (worker mode).
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`; a task past it goes under its deepest allowed ancestor.
+        private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
+        // Since 2.20.0 (audit PX-M2): parent changes go through the port, on locked, committed rows.
+        private ?TaskReparenterInterface $reparenter = null,
     ) {
     }
 
@@ -291,6 +300,7 @@ final readonly class SyncTaskWriter
 
         $post       = [];
         $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
         try {
@@ -322,7 +332,7 @@ final readonly class SyncTaskWriter
                 $ctx->warn('assignee_unresolved');
             }
             if ($ctx->options->dryRun) {
-                $connection->rollBack();
+                TransactionRollback::toLevel($connection, $level);
                 $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
@@ -333,9 +343,8 @@ final readonly class SyncTaskWriter
             }
             $connection->commit();
         } catch (Throwable $exception) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
+            // Since 2.20.0 (audit PX-L6): a rollback the server made impossible never skips the clean-up below.
+            TransactionRollback::toLevel($connection, $level);
             $this->events?->rollBack();
             $ctx->taskEvents = [];
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
@@ -451,7 +460,7 @@ final readonly class SyncTaskWriter
     {
         $row     = $remote->task;
         $column  = $this->columnFor($ctx, $remote, $columns) ?? $columns['fallback'] ?? ($columns['list'][0] ?? null);
-        $parent  = $this->parentOf($ctx, $row, $related);
+        $parent  = $this->withinDepth($ctx, $this->parentOf($ctx, $row, $related));
         $creator = $session instanceof PeopleSession && $row->creator instanceof RemotePersonRef ? $session->person($row->creator, TaskSyncPerson::KIND_CREATOR) : null;
         $task    = new Task(
             board: $ctx->board,
@@ -1547,24 +1556,46 @@ final readonly class SyncTaskWriter
         }
     }
 
-    /** Moves a task under a parent, unless that makes it its own ancestor. */
+    /**
+     * Moves a task under a parent, unless that makes it its own ancestor. Since 2.20.0 (audit PX-M2) through
+     * {@see TaskReparenterInterface}: the rows the Task API locks, read as committed, so a parent change committed meanwhile
+     * by the API (or another run) can never close a cycle; `max_subtask_depth` counts the moved subtree. The page's rows
+     * written so far are flushed first, so the locked walk sees them.
+     */
     private function reparent(SyncRunContext $ctx, Task $task, Task $parent): bool
     {
         if ($parent === $task->getParent()) {
             return false;
         }
-        $seen = [];
-        for ($ancestor = $parent; $ancestor instanceof Task; $ancestor = $ancestor->getParent()) {
-            if ($ancestor === $task || isset($seen[$ancestor->getId()])) {
-                $ctx->warn('parent_cycle');
+        RecoveringFlusher::flush($this->entityManager, $this->managerRegistry);
+        try {
+            return ($this->reparenter ?? throw new LogicException('SyncTaskWriter needs the TaskReparenterInterface port to change a parent.'))->reparent($task->getId(), $parent->getId(), $ctx->actor)->changed;
+        } catch (TaskTreeRefusedException $refused) {
+            $ctx->warn(match ($refused->reason) {
+                TaskTreeRefusedException::DESCENDANT, TaskTreeRefusedException::SELF => 'parent_cycle',
+                TaskTreeRefusedException::TOO_DEEP                                   => 'parent_too_deep',
+                default                                                              => 'relation_skipped',
+            });
 
-                return false;
-            }
-            $seen[$ancestor->getId()] = true;
+            return false;
         }
-        $task->setParent($parent);
+    }
 
-        return true;
+    /**
+     * Since 2.20.0 (`max_subtask_depth`): the parent a new task may have — its own, or, when that one is already at the
+     * limit, its nearest ancestor that is not (the top level when none is), with a warning.
+     */
+    private function withinDepth(SyncRunContext $ctx, ?Task $parent): ?Task
+    {
+        if (!$parent instanceof Task || $this->treeLimits->maxSubtaskDepth === null) {
+            return $parent;
+        }
+        $allowed = $this->treeLimits->allowedParent($parent);
+        if ($allowed !== $parent) {
+            $ctx->warn('parent_too_deep');
+        }
+
+        return $allowed;
     }
 
     /**

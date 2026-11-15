@@ -28,6 +28,7 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 
 use function array_filter;
 use function array_map;
@@ -37,7 +38,9 @@ use function array_values;
 use function count;
 use function hash;
 use function json_encode;
+use function max;
 use function sort;
+use function spl_object_id;
 use function usort;
 
 use const JSON_THROW_ON_ERROR;
@@ -75,6 +78,8 @@ final readonly class TaskCopier
         private ?TaskBoardResourceAccessChecker $access = null,
         // Since audit IC-I3: the copy's TASK_CREATED / TASK_MEMBER_ADDED wait for its commit (none wired: at once).
         private ?TaskEventDeferral $events = null,
+        // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`; a copy never creates a task past it.
+        private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
     ) {
     }
 
@@ -82,13 +87,14 @@ final readonly class TaskCopier
      * What {@see self::copy()} would write with these options for `$actor` (subtasks they cannot view are left out and
      * counted in `hidden`). Read-only.
      *
-     * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`
+     * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`, since 2.20.0 `too_deep`
      */
     public function preview(Task $source, TaskCopyOptions $options = new TaskCopyOptions(), ?object $actor = null): TaskCopyPreview
     {
-        $target          = $options->targetBoard ?? $source->getBoard();
-        [$tree, $hidden] = $this->visibleTree($source, $options, $actor);
+        $target                   = $options->targetBoard ?? $source->getBoard();
+        [$tree, $hidden, $height] = $this->visibleTree($source, $options, $actor);
         $this->refuseUnsupported($target, $tree, $options);
+        $this->refuseTooDeep($source, $target, $height);
 
         $copied  = 0;
         $dropped = [];
@@ -209,15 +215,16 @@ final readonly class TaskCopier
      * Since 2.3.0: everything {@see self::copy()} refuses before writing, for a caller that writes first (spec 215's
      * occurrence row): the target, the subtree cap and the host's quota. Subtasks `$actor` cannot view are left out.
      *
-     * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`, `quota`
+     * @throws TaskCopyRefusedException `subtree_too_large`, `board_archived`, `quota`, since 2.20.0 `too_deep`
      *
      * @return list<Task> the tasks the copy would create from
      */
     public function check(Task $source, TaskCopyOptions $options, object $actor): array
     {
-        $target = $options->targetBoard ?? $source->getBoard();
-        [$tree] = $this->visibleTree($source, $options, $actor);
+        $target            = $options->targetBoard ?? $source->getBoard();
+        [$tree, , $height] = $this->visibleTree($source, $options, $actor);
         $this->refuseUnsupported($target, $tree, $options);
+        $this->refuseTooDeep($source, $target, $height);
         $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $target->getTenantKey(), $target, count($tree), $actor);
         if ($refusal !== null) {
             throw new TaskCopyRefusedException('quota', [], $refusal);
@@ -230,17 +237,27 @@ final readonly class TaskCopier
      * Audit IC-L1: the tree as `$actor` may see it. A subtask they cannot view is left out with its own subtasks (counted);
      * without an actor or an access checker, every subtask that is not archived.
      *
-     * @return array{0: list<Task>, 1: int}
+     * Since 2.20.0 also the height of the copied tree (0: no subtask). Iterative; a task met twice (a loop in the data)
+     * refuses the copy (`tree_loop`).
+     *
+     * @return array{0: list<Task>, 1: int, 2: int}
      */
     private function visibleTree(Task $source, TaskCopyOptions $options, ?object $actor): array
     {
         $order  = [];
         $hidden = 0;
-        $stack  = [$source];
+        $height = 0;
+        $seen   = [spl_object_id($source) => true];
+        $stack  = [[$source, 0]];
         while ($stack !== []) {
-            $task    = array_pop($stack);
-            $order[] = $task;
-            $kids    = $options->subtasks ? array_filter($task->getSubtasks()->toArray(), static fn (Task $child): bool => !$child->isArchived()) : [];
+            [$task, $depth] = array_pop($stack);
+            $order[]        = $task;
+            $height         = max($height, $depth);
+            // Since 2.20.0 (audit PX-M2): a loop in the data or a tree past the safety cap fails closed.
+            if ($depth >= TaskTreeLimits::SAFETY_CAP) {
+                throw new TaskCopyRefusedException('too_deep', ['%max%' => TaskTreeLimits::SAFETY_CAP]);
+            }
+            $kids = $options->subtasks ? array_filter($task->getSubtasks()->toArray(), static fn (Task $child): bool => !$child->isArchived()) : [];
             usort($kids, static fn (Task $a, Task $b): int => $b->getPosition() <=> $a->getPosition());
             foreach ($kids as $child) {
                 if ($actor !== null && $this->access instanceof TaskBoardResourceAccessChecker && !$this->access->canViewTask($actor, $child)) {
@@ -248,11 +265,15 @@ final readonly class TaskCopier
 
                     continue;
                 }
-                $stack[] = $child;
+                if (isset($seen[spl_object_id($child)])) {
+                    throw new TaskCopyRefusedException('tree_loop');
+                }
+                $seen[spl_object_id($child)] = true;
+                $stack[]                     = [$child, $depth + 1];
             }
         }
 
-        return [$order, $hidden];
+        return [$order, $hidden, $height];
     }
 
     /**
@@ -268,6 +289,23 @@ final readonly class TaskCopier
         $max = $options->maxSubtasks ?? $this->maxSubtasks;
         if (count($tree) - 1 > $max) {
             throw new TaskCopyRefusedException('subtree_too_large', ['%count%' => count($tree) - 1, '%max%' => $max]);
+        }
+    }
+
+    /**
+     * Since 2.20.0: a copy goes next to its source (or to the top level of another board); its deepest task must stay
+     * within `max_subtask_depth`, also when the source tree was saved deeper.
+     *
+     * @throws TaskCopyRefusedException `too_deep`
+     */
+    private function refuseTooDeep(Task $source, TaskBoard $target, int $height): void
+    {
+        if ($this->treeLimits->maxSubtaskDepth === null) {
+            return;
+        }
+        $top = $target->getId() === $source->getBoard()->getId() ? TaskTreeLimits::depthOf($source) : 0;
+        if (!$this->treeLimits->allowsTree($top, $height)) {
+            throw new TaskCopyRefusedException('too_deep', ['%max%' => $this->treeLimits->maxDepth()]);
         }
     }
 

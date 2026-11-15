@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -212,6 +213,7 @@ final readonly class TaskBoardSyncService
         }
         $connectionId = $connection->getId();
         $db           = $this->entityManager->getConnection();
+        $level        = $db->getTransactionNestingLevel();
         $db->beginTransaction();
         try {
             $this->store->deleteConnection($connection);
@@ -221,7 +223,8 @@ final readonly class TaskBoardSyncService
             }
             $db->commit();
         } catch (Throwable $exception) {
-            $db->rollBack();
+            // Since 2.20.0 (audit PX-L6): a rollback the server made impossible never keeps the lock.
+            TransactionRollback::toLevel($db, $level);
             $this->store->releaseLock($connectionId, $lockId);
 
             throw $exception;

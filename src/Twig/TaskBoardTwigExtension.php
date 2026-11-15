@@ -54,16 +54,21 @@ use Twig\TwigFunction;
 
 use function array_keys;
 use function array_map;
+use function array_pop;
+use function array_reverse;
 use function array_unshift;
+use function array_values;
 use function count;
 use function htmlspecialchars;
 use function in_array;
 use function is_array;
 use function is_string;
+use function iterator_to_array;
 use function json_decode;
 use function mb_strlen;
 use function parse_url;
 use function preg_match;
+use function spl_object_id;
 use function sprintf;
 use function str_replace;
 use function strtolower;
@@ -85,6 +90,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
 {
     /** Since 1.26: the UiKit theme bundle key (`nowo_ui_kit.theme.bundles.NowoTaskBoardBundle`). */
     public const THEME_BUNDLE = 'NowoTaskBoardBundle';
+
+    /** Since 2.20.0: the most levels of the subtask tree a page nests (UiKit's tree partial renders them by recursion). */
+    public const SUBTASK_TREE_LEVELS = 64;
 
     /**
      * @param array<string, array{path?: string, name?: string}> $routes Configured `routes` tree (logical key => path/name)
@@ -413,36 +421,81 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     /**
      * Since 2.0.0: subtasks as the nodes of UiKit's `tree` partial, every group expanded. `taskTree` avoids a query per node.
      *
+     * Since 2.20.0 (DoS bound): built without recursion, each task once (a loop in the data is not followed twice), and
+     * nested at most {@see self::SUBTASK_TREE_LEVELS} levels deep (UiKit's partial renders levels by recursion): a deeper
+     * subtask still counts in its ancestors' done / total and opens from its parent's page.
+     *
      * @param iterable<Task> $tasks
      *
      * @return list<array<string, mixed>>
      */
     public function subtaskNodes(iterable $tasks, ?TaskTree $taskTree = null, bool $panel = false, string $panelTargetPath = ''): array
     {
+        // 1. Depth-first, in order: every task once, with its depth and its children's entries.
+        /** @var list<Task> $order */
+        $order    = [];
+        $depths   = [];
+        $children = [];
+        $roots    = [];
+        $seen     = [];
+        $stack    = [];
+        foreach (array_reverse(is_array($tasks) ? array_values($tasks) : iterator_to_array($tasks, false)) as $task) {
+            $stack[] = [$task, 0, null];
+        }
+        while ($stack !== []) {
+            [$task, $depth, $parentIndex] = array_pop($stack);
+            if (isset($seen[spl_object_id($task)])) {
+                continue;
+            }
+            $seen[spl_object_id($task)] = true;
+            $index                      = count($order);
+            $order[]                    = $task;
+            $depths[$index]             = $depth;
+            $children[$index]           = [];
+            if ($parentIndex === null) {
+                $roots[] = $index;
+            } else {
+                $children[$parentIndex][] = $index;
+            }
+            $subtasks = $taskTree instanceof TaskTree ? $taskTree->childrenOf($task) : $task->getSubtasks()->toArray();
+            foreach (array_reverse($subtasks) as $child) {
+                $stack[] = [$child, $depth + 1, $index];
+            }
+        }
+
+        // 2. Bottom-up (a child's entry comes after its parent's): the done / total of each subtree, then the nodes.
+        $done  = [];
+        $total = [];
         $nodes = [];
-        foreach ($tasks as $task) {
+        for ($index = count($order) - 1; $index >= 0; --$index) {
+            $task          = $order[$index];
+            $done[$index]  = 0;
+            $total[$index] = 0;
+            foreach ($children[$index] as $child) {
+                $total[$index] += 1 + $total[$child];
+                $done[$index] += ($order[$child]->isCompleted() ? 1 : 0) + $done[$child];
+            }
             $link = ['class' => 'nowo-task-subtree__title', 'data-title' => $task->getTitle(), 'data-nowo-task-title' => $task->getTitle()];
             if ($panel && $this->urls instanceof UrlGeneratorInterface) {
                 $link['data-task-panel-url'] = $this->urls->generate($this->routeName('task_panel'), ['taskId' => $task->getId(), '_target_path' => $panelTargetPath]);
             }
-            $children = $taskTree instanceof TaskTree ? $taskTree->childrenOf($task) : $task->getSubtasks();
-            $nodes[]  = [
+            $nodes[$index] = [
                 'id'        => $task->getId(),
                 'label'     => $task->getTitle(),
                 'href'      => $this->urls?->generate($this->routeName('task'), ['taskId' => $task->getId()]) ?? '#',
                 'expanded'  => true,
-                'children'  => $this->subtaskNodes($children, $taskTree, $panel, $panelTargetPath),
+                'children'  => $depths[$index] + 1 < self::SUBTASK_TREE_LEVELS ? array_map(static fn (int $child): array => $nodes[$child], $children[$index]) : [],
                 'link_attr' => $link,
                 'item_attr' => [
                     'class'        => 'nowo-task-subtree__item' . ($task->isCompleted() ? ' is-done' : ''),
                     'data-task-id' => $task->getId(),
                 ] + ($task->getColumn() !== null ? ['data-nowo-task-column' => $task->getColumn()->getName()] : []),
                 'task'     => $task,
-                'progress' => $taskTree instanceof TaskTree ? $taskTree->progress($task) : SubtaskProgress::of($task),
+                'progress' => new SubtaskProgress($done[$index], $total[$index]),
             ];
         }
 
-        return $nodes;
+        return array_map(static fn (int $root): array => $nodes[$root], $roots);
     }
 
     /**

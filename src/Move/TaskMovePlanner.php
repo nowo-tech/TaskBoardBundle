@@ -21,6 +21,8 @@ use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 
 use function array_keys;
 use function array_map;
@@ -32,6 +34,7 @@ use function hash;
 use function in_array;
 use function json_encode;
 use function sort;
+use function spl_object_id;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -195,19 +198,21 @@ final readonly class TaskMovePlanner
      */
     public function snapshot(Task $task): string
     {
-        $rows  = [];
-        $ids   = [$task->getId()];
-        $level = $ids;
+        $rows   = [];
+        $ids    = [$task->getId()];
+        $level  = $ids;
+        $seen   = [$task->getId() => true];
+        $levels = 0;
         while ($level !== []) {
             /** @var list<array{id: string, c: mixed, a: mixed}> $children */
             $children = $this->entityManager->createQueryBuilder()
                 ->select('t.id AS id', 't.completedAt AS c', 't.archivedAt AS a')->from(Task::class, 't')
                 ->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
                 ->getQuery()->getArrayResult();
-            $level = [];
+            // Since 2.20.0 (audit PX-M2): bounded, and a loop in the data fails closed.
+            $level = self::nextLevel(array_map(static fn (array $child): string => (string) $child['id'], $children), $seen, ++$levels);
             foreach ($children as $child) {
-                $level[] = (string) $child['id'];
-                $rows[]  = [(string) $child['id'], $child['c'] !== null, $child['a'] !== null];
+                $rows[] = [(string) $child['id'], $child['c'] !== null, $child['a'] !== null];
             }
             $ids = [...$ids, ...$level];
         }
@@ -227,6 +232,26 @@ final readonly class TaskMovePlanner
         sort($members);
 
         return hash('sha256', json_encode([$rows, ($self['c'] ?? null) !== null, ($self['a'] ?? null) !== null, $self['p'] ?? null, $deps, $members], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Since 2.20.0 (audit PX-M2): {@see TaskTreeLimits::nextLevel()} for a move or a copy: a loop in the data is refused as
+     * `tree_loop`, a walk past the safety cap as `too_deep`.
+     *
+     * @param list<int|string> $ids
+     * @param array<string, true> $seen
+     *
+     * @throws TaskCopyRefusedException
+     *
+     * @return list<string>
+     */
+    public static function nextLevel(array $ids, array &$seen, int $levels): array
+    {
+        try {
+            return TaskTreeLimits::nextLevel($ids, $seen, $levels);
+        } catch (TaskTreeRefusedException $refused) {
+            throw $refused->reason === TaskTreeRefusedException::DESCENDANT ? new TaskCopyRefusedException('tree_loop') : new TaskCopyRefusedException('too_deep', ['%max%' => TaskTreeLimits::SAFETY_CAP]);
+        }
     }
 
     /**
@@ -297,13 +322,23 @@ final readonly class TaskMovePlanner
      */
     public static function subtree(Task $task): array
     {
-        $tree  = [];
-        $stack = [$task];
+        $tree = [];
+        // Since 2.20.0 (audit PX-M2, DoS bound): a task met twice (a loop in the data) or a tree deeper than the safety cap
+        // fails closed: nothing that walks it (a move, a copy, a recurrence) writes anything.
+        $seen  = [spl_object_id($task) => true];
+        $stack = [[$task, 0]];
         while ($stack !== []) {
-            $node   = array_pop($stack);
-            $tree[] = $node;
+            [$node, $depth] = array_pop($stack);
+            $tree[]         = $node;
             foreach ($node->getSubtasks() as $child) {
-                $stack[] = $child;
+                if (isset($seen[spl_object_id($child)])) {
+                    throw new TaskCopyRefusedException('tree_loop');
+                }
+                if ($depth >= TaskTreeLimits::SAFETY_CAP) {
+                    throw new TaskCopyRefusedException('too_deep', ['%max%' => TaskTreeLimits::SAFETY_CAP]);
+                }
+                $seen[spl_object_id($child)] = true;
+                $stack[]                     = [$child, $depth + 1];
             }
         }
 

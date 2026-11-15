@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
+use Closure;
 use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
@@ -15,6 +16,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\Doctrine\LockConflict;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -40,11 +42,15 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
+use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
+use Nowo\TaskBoardBundle\Tree\TaskReparentResult;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Throwable;
 
 use function array_filter;
 use function array_key_first;
@@ -103,6 +109,8 @@ final readonly class TaskApiTaskOperations
         private TaskApiTransaction $transaction,
         // Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`.
         private TaskCommentRepositoryInterface $commentRepository,
+        // Since 2.20.0 (Beacon spec 234, T004): `parent` on `PUT /v2/task/{id}` (MCP `task_update`); null: not read.
+        private ?TaskReparenterInterface $reparenter = null,
         private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
         // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
         private ?TaskTemplateManager $templates = null,
@@ -170,27 +178,96 @@ final readonly class TaskApiTaskOperations
      * body) the task's row is locked and compared first: another revision is 409 `TASK_409` with `current_revision`, and
      * nothing is written. The whole update is then one transaction.
      *
+     * Since 2.20.0 (Beacon spec 234, T004): `parent` (a task id, or null to detach the task to the top level) changes the
+     * parent through {@see TaskReparenterInterface}, the domain service every caller shares: an *Edit tasks* level, the
+     * edit right on the task and on the new parent (as on create; in Beacon `project.tasks.manage` on project boards, `organization.tasks.edit` on organization boards), the same board
+     * (`PARENT_001`), never the task itself (`PARENT_002`) nor one of its subtasks (`PARENT_003`, checked on the rows
+     * locked inside the transaction); a concurrent tree change that deadlocks is `PARENT_004`. It is the first write of
+     * the update, and the whole update is one transaction, so a refusal writes nothing.
+     *
      * @throws TaskApiRefusal
      */
     public function updateTask(TaskApiPrincipal $principal, string $taskId, TaskApiInput $input, ?int $ifMatch = null): Task
     {
         $this->audit->requireListener();
-        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived');
+        // Without the port (a hand-built service), `parent` stays a not_supported warning, as before 2.20.0.
+        $reparent      = $this->reparenter instanceof TaskReparenterInterface && $input->has('parent');
+        $ownFieldsOnly = !$input->hasAny('name', 'priority', 'time_estimate', 'assignees', 'watchers', 'archived') && !$reparent;
         $base          = $ifMatch ?? self::baseRevision($input);
         $task          = $this->guard->task($principal, $taskId, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
-        if ($base === null) {
+        $parentId      = $reparent ? $input->string('parent') : null;
+        if ($base === null && !$reparent) {
             return $this->applyUpdate($principal, $task, $input);
         }
 
-        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        return $this->transaction->run(function () use ($principal, $task, $input, $base): Task {
-            $current = $this->transaction->lockedRevision($task);
-            if ($current !== $base) {
-                throw TaskApiRefusal::stale($current);
+        // Audit PX-L1: what a rollback must put back in memory (the task's old and new parents' subtask lists).
+        $previousParent = $task->getParent();
+        $newParent      = null;
+        try {
+            // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId, &$newParent): Task {
+                // The task's row locked and the task as committed (a stale copy is reloaded), so the no-op test below is true.
+                $current = $this->transaction->lockedRevision($task);
+                if ($base !== null && $current !== $base) {
+                    throw TaskApiRefusal::stale($current);
+                }
+                $change = null;
+                if ($reparent && $parentId !== $task->getParent()?->getId()) {
+                    // @igor-ignore - Runs once, now, inside applyUpdate() of this call; nothing keeps a reference to it.
+                    $change = function () use ($principal, $task, $parentId, &$newParent): TaskReparentResult {
+                        $result    = $this->reparent($principal, $task, $parentId);
+                        $newParent = $task->getParent();
+
+                        return $result;
+                    };
+                }
+
+                return $this->applyUpdate($principal, $task, $input, $change);
+            }, [$task]);
+        } catch (Throwable $failure) {
+            if ($newParent instanceof Task || $previousParent instanceof Task) {
+                $this->restoreTree($task, $previousParent, $newParent);
+            }
+            // Inside this transaction a lost lock reaches here as the driver raised it (the store leaves it to its caller).
+            if ($reparent && LockConflict::is($failure)) {
+                throw TaskApiRefusal::treeRefused(TaskTreeRefusedException::conflict());
             }
 
-            return $this->applyUpdate($principal, $task, $input);
-        }, [$task]);
+            throw $failure;
+        }
+    }
+
+    /**
+     * Since 2.20.0 (audit PX-L1, OG-1): after a rollback the database holds the old tree, so memory does too: the task is
+     * back among its old parent's subtasks and out of the new one's, whatever the rolled-back write changed.
+     */
+    private function restoreTree(Task $task, ?Task $previousParent, ?Task $newParent): void
+    {
+        if ($newParent instanceof Task && $newParent !== $previousParent) {
+            $newParent->getSubtasks()->removeElement($task);
+        }
+        if ($previousParent instanceof Task && $task->getParent() === $previousParent && !$previousParent->getSubtasks()->contains($task)) {
+            $previousParent->getSubtasks()->add($task);
+        }
+    }
+
+    /**
+     * Since 2.20.0: the parent change, through the shared domain service. The new parent must be reachable and editable by
+     * the token, as on create; a parent the task already has is never asked again (audit PX-I3: a client that echoes
+     * the task back needs no right on its parent).
+     *
+     * @throws TaskApiRefusal
+     */
+    private function reparent(TaskApiPrincipal $principal, Task $task, ?string $parentId): TaskReparentResult
+    {
+        if ($parentId !== null) {
+            $parentId = $this->guard->task($principal, $parentId, TaskApiCapability::EditTasks)->getId();
+        }
+        try {
+            return ($this->reparenter ?? throw TaskApiRefusal::notFound())->reparent($task->getId(), $parentId, $principal->user);
+        } catch (TaskTreeRefusedException $refused) {
+            throw TaskApiRefusal::treeRefused($refused);
+        }
     }
 
     /**
@@ -214,7 +291,13 @@ final readonly class TaskApiTaskOperations
     /**
      * @throws TaskApiRefusal
      */
-    private function applyUpdate(TaskApiPrincipal $principal, Task $task, TaskApiInput $input): Task
+    /**
+     * @param (Closure(): TaskReparentResult)|null $reparent since 2.20.0: the parent change, run after every check and
+     *                                                       before the first save (audit PX-L1)
+     *
+     * @throws TaskApiRefusal
+     */
+    private function applyUpdate(TaskApiPrincipal $principal, Task $task, TaskApiInput $input, ?Closure $reparent = null): Task
     {
         $board = $task->getBoard();
 
@@ -241,6 +324,15 @@ final readonly class TaskApiTaskOperations
         $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
         if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
+        }
+
+        // Since 2.20.0 (audit PX-L1): the parent change is the first write, once the status is asked too.
+        $reparented = null;
+        if ($reparent instanceof Closure) {
+            if ($status instanceof BoardColumn) {
+                $this->withinPlan(fn () => $this->tasks->assertCanEnter($task, $status, $principal->user, self::via($principal), $data->tags));
+            }
+            $reparented = $reparent();
         }
 
         // Both ask the limit again; it was asked above for both together.
@@ -274,7 +366,10 @@ final readonly class TaskApiTaskOperations
         if ($archived === true && $this->tasks->archive($task, $principal->user)) {
             $changed[] = 'archived';
         }
-        $this->audit->written($principal, 'task.update', $board, $task->getId(), [], array_values(array_unique($changed)));
+        if ($reparented?->changed === true) {
+            $changed[] = 'parent';
+        }
+        $this->audit->written($principal, 'task.update', $board, $task->getId(), $reparented?->parentId !== null ? ['parent' => $reparented->parentId] : [], array_values(array_unique($changed)));
 
         return $task;
     }
@@ -899,6 +994,9 @@ final readonly class TaskApiTaskOperations
         } catch (ColumnTransitionRefusedException $refused) {
             // Since 2.16.0 (spec 234, FR-015 / FR-017).
             throw TaskApiRefusal::transitionRefused($refused);
+        } catch (TaskTreeRefusedException $refused) {
+            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005).
+            throw TaskApiRefusal::treeRefused($refused);
         }
     }
 }

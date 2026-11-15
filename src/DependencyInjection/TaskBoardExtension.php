@@ -93,6 +93,7 @@ use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskLinkRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskMemberRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskTimeEntryRepository;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskTreeStore;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
@@ -117,6 +118,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
+use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
@@ -158,6 +160,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Tree\TaskTreeStoreInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -277,6 +280,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             'humans_only_field' => $config['board']['column_humans_only_field'] ?? (is_string($config['column_transition_policy']) && $config['column_transition_policy'] !== ''),
         ]);
         $container->setParameter('nowo_task_board.board.max_tasks', $config['board']['max_tasks']);
+        // Since 2.20.0 (Beacon spec 234, T004).
+        $container->setParameter('nowo_task_board.max_subtask_depth', $config['max_subtask_depth'] ?? null);
         $container->setParameter('nowo_task_board.board.create_dialog_header', $config['board']['create_dialog_header']);
         // Since 1.30.0 (spec 211).
         $container->setParameter('nowo_task_board.board.form_options', [
@@ -1333,6 +1338,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->setDefinition($implementation, $definition);
             $container->setAlias($interface, $implementation);
         }
+
+        // Since 2.20.0 (Beacon spec 234, T004): the locked reads and the transaction of a parent change.
+        $container->setDefinition(DoctrineOrmTaskTreeStore::class, (new Definition(DoctrineOrmTaskTreeStore::class))
+            ->setAutowired(false)
+            ->setArgument('$entityManager', $emRef)
+            ->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$events', new Reference(TaskEventDeferral::class)));
+        $container->setAlias(TaskTreeStoreInterface::class, DoctrineOrmTaskTreeStore::class);
     }
 
     /**

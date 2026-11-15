@@ -55,6 +55,10 @@ interface TaskBoardRestructureInterface
      * the set) moves the tasks of a column the set does not have; without it such a column is `columns_in_use`.
      *
      * @param array<string, string> $columnMap
+     *
+     * @throws ColumnTransitionRefusedException since 2.20.0 (audit PW-D2-L1), into a folder that shares its statuses, when the
+     *                                          column transition policy refuses a task the map moves (channel `web`; with
+     *                                          another channel, {@see TaskBoardRestructureViaInterface}): nothing changes
      */
     public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void;
 

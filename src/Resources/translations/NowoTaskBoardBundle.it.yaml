@@ -94,6 +94,8 @@ task_board.flash.task_updated: Task updated.
 task_board.flash.link_added: Link added.
 task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
+task_board.flash.subtask_too_deep: "La sottoattività non è stata creata: sarebbe più profonda del consentito."
+task_board.flash.subtask_conflict: "La sottoattività non è stata creata: l'albero delle attività è cambiato nel frattempo. Riprova."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
@@ -503,6 +505,7 @@ task_board.sync.error.paging_stopped: "L'elenco del fornitore ha smesso di avanz
 task_board.sync.error.restore_refused: "Le attività tornate nel provider non sono state ripristinate: un limite lo ha impedito."
 task_board.sync.error.relation_skipped: "Alcune relazioni padre o di dipendenza sono state saltate (l'altra attività manca o non è modificabile)."
 task_board.sync.error.parent_cycle: "Un cambio di padre è stato rifiutato: un'attività diventerebbe antenata di sé stessa."
+task_board.sync.error.parent_too_deep: "Un cambio di padre o una nuova sottoattività è stato saltato: supererebbe max_subtask_depth (posizionato sotto l'antenato consentito più profondo quando possibile)."
 task_board.sync.error.assignee_unresolved: "Alcuni assegnatari non corrispondono a nessuno di questa bacheca; quelle attività mantengono i loro assegnatari."
 task_board.sync.error.external_id_look_alike: "Alcune attività del provider sono state saltate: il loro id differisce da uno già sincronizzato solo per maiuscole, accenti o spazi finali. Chiedi al tuo amministratore di applicare l'aggiornamento del database di TaskBoard 2.15.1."
 task_board.sync.error.status_without_column: "Alcuni stati non hanno una colonna nella bacheca; quelle attività sono andate nella colonna predefinita."
@@ -764,9 +767,12 @@ task_board.copy.refusal.stale: "Qualcosa è cambiato dall'anteprima: ricontrolla
 task_board.copy.refusal.same_board: "L'attività è già in questa bacheca."
 task_board.copy.refusal.board_archived: "La bacheca di destinazione è archiviata."
 task_board.copy.refusal.subtree_too_large: "Troppe sottoattività: %count%, al massimo %max%."
+task_board.copy.refusal.too_deep: "Troppi livelli di sottoattività: la copia supererebbe la profondità consentita (%max%)."
+task_board.copy.refusal.tree_loop: "L'albero delle attività contiene un ciclo (un'attività è antenata di sé stessa nei dati): non è stato modificato nulla."
 task_board.copy.refusal.sync_running: "È in corso una sincronizzazione in una delle bacheche. Riprova quando termina."
 task_board.copy.refusal.quota: "I limiti del piano non lo consentono."
 task_board.history.type.board_moved: "ha spostato l'attività in un'altra bacheca"
+task_board.history.type.parent: "ha spostato l'attività sotto un'altra attività padre"
 task_board.history.type.duplicated: "ha duplicato l'attività da"
 task_board.history.type.member_not_copied: "ha escluso un membro dalla copia"
 task_board.history.type.custom_field: "ha modificato un campo personalizzato"

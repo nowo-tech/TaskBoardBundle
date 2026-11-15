@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Api;
 
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use RuntimeException;
 
 /**
@@ -22,6 +23,21 @@ final class TaskApiRefusal extends RuntimeException
 
     /** Since 2.16.0 (spec 234, FR-018): the task changed since the revision the client sent. */
     public const TASK_STALE = 'TASK_409';
+
+    /** Since 2.20.0 (Beacon spec 234, T004): 400, the new parent is on another board. */
+    public const PARENT_OTHER_BOARD = 'PARENT_001';
+
+    /** Since 2.20.0: 400, the new parent is the task itself. */
+    public const PARENT_SELF = 'PARENT_002';
+
+    /** Since 2.20.0: 409, the new parent is one of the task's subtasks (at any depth): it would close a cycle. */
+    public const PARENT_DESCENDANT = 'PARENT_003';
+
+    /** Since 2.20.0: 409, a concurrent change of the task tree held the rows; nothing was written, send it again. */
+    public const PARENT_CONFLICT = 'PARENT_004';
+
+    /** Since 2.20.0: 409, the write would put a task deeper than `max_subtask_depth` (a moved subtree counts whole). */
+    public const PARENT_TOO_DEEP = 'PARENT_005';
 
     /**
      * @param array<string, mixed> $extra since 2.16.0: more top-level keys of the answer (`current_revision`, `failures`);
@@ -56,6 +72,22 @@ final class TaskApiRefusal extends RuntimeException
     public static function stale(int $currentRevision): self
     {
         return new self(409, self::TASK_STALE, 'The task changed: read it again', ['current_revision' => $currentRevision]);
+    }
+
+    /**
+     * Since 2.20.0 (Beacon spec 234, T004): the answer to a refused task tree write (a parent change, a subtask). A task or parent that vanished meanwhile
+     * is `ACCESS_001`, as any id out of reach.
+     */
+    public static function treeRefused(TaskTreeRefusedException $refused): self
+    {
+        return match ($refused->reason) {
+            TaskTreeRefusedException::OTHER_BOARD => new self(400, self::PARENT_OTHER_BOARD, 'The parent is on another board'),
+            TaskTreeRefusedException::SELF        => new self(400, self::PARENT_SELF, 'A task cannot be its own parent'),
+            TaskTreeRefusedException::DESCENDANT  => new self(409, self::PARENT_DESCENDANT, 'The parent is one of the task\'s subtasks'),
+            TaskTreeRefusedException::CONFLICT    => new self(409, self::PARENT_CONFLICT, 'The task tree changed meanwhile: try again'),
+            TaskTreeRefusedException::TOO_DEEP    => new self(409, self::PARENT_TOO_DEEP, 'The task tree would be deeper than allowed'),
+            default                               => self::notFound(),
+        };
     }
 
     /**

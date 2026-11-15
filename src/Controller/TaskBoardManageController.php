@@ -112,6 +112,7 @@ use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
@@ -1461,6 +1462,10 @@ final class TaskBoardManageController extends AbstractController
                 } catch (ColumnTransitionRefusedException $refused) {
                     $this->logRefused('task_transition_policy');
                     $this->addFlash('error', $this->transitionMessage($refused));
+                } catch (TaskTreeRefusedException $refused) {
+                    // Since 2.20.0: `max_subtask_depth` (too_deep), or a concurrent tree change (conflict).
+                    $this->logRefused('task_subtask_' . $refused->reason);
+                    $this->addFlash('error', $refused->reason === TaskTreeRefusedException::TOO_DEEP ? 'task_board.flash.subtask_too_deep' : 'task_board.flash.subtask_conflict');
                 }
             }
         } elseif ($form->isSubmitted()) {

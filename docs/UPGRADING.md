@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.20.0](#to-2200)
 - [To 2.19.0](#to-2190)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
   - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
@@ -203,6 +204,50 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
+## To 2.20.0
+
+Beacon spec 234, T004. No schema change. One new option, `max_subtask_depth` (default null: no limit, as before). What
+changes:
+
+- `PUT /v2/task/{id}` reads `parent` (a task id, or `null` to detach). A client that sent `parent` before got a
+  `not_supported` warning and nothing changed; now the task moves (or is refused with `PARENT_001` … `PARENT_005`,
+  `ACCESS_002`, `TOKEN_001`). A *My tasks* token that sends `parent` is refused with `TOKEN_001` instead of being
+  answered with a warning. A client that echoes whole task objects back with the same `parent` changes nothing and needs
+  no right on that parent.
+- New history type `parent` (`TaskChangeType::Parent`). A host that renders history rows by type, or maps the types to
+  its own labels (`history.cause_labeler`, exports, webhooks), adds it; the bundle's pages show it with the translation
+  `task_board.history.type.parent`.
+- `TASK_UPDATED` can carry the changed field `parent` (`getPreviousValue('parent')`: the old parent task, or null). A
+  listener that switches on the changed fields and fails on unknown ones adds it.
+- **Imports and provider syncs** now change a matched task's parent through the port: the change is recorded in the
+  history, dispatches `TASK_UPDATED`, and a change that would close a cycle with a change committed meanwhile is refused
+  (warning, or `parent_cycle`). With `max_subtask_depth` they place too-deep rows under their deepest allowed ancestor
+  (warning / `parent_too_deep`).
+- **`max_subtask_depth`** (set it to cap the tree, e.g. Beacon `7`): `TaskManager::create()` with a parent may now throw
+  `Tree\TaskTreeRefusedException` (`too_deep`), and copies / recurring occurrences may be refused with
+  `TaskCopyRefusedException` `too_deep`. Trees already deeper keep working.
+- **A loop already in the data** (a task its own ancestor, possible before 2.20 through a racing import or sync, or by
+  hand) no longer crashes a page or the worker. Moves, copies and recurrences through it are refused (`tree_loop`); repair
+  it by detaching one of its tasks (`PUT /v2/task/{id}` `{"parent": null}`).
+- `TaskApiTaskOperations` gained an optional constructor argument (`?TaskReparenterInterface $reparenter`, autowired;
+  without it `parent` stays a warning). `Tree\TaskTreeStoreInterface` is `@internal`.
+- From code, the new port `Nowo\TaskBoardBundle\Tree\TaskReparenterInterface::reparent($taskId, $parentId, $actor)`
+  (see [USAGE](USAGE.md#changing-a-tasks-parent-since-220)). It checks no access: check `canEditTask()` on both tasks
+  first. Inside your own transaction, wrap it in `TaskEventDeferral::defer()` (now a public service), or `TASK_UPDATED`
+  is dispatched before your commit. `defer()` drops the events only when the closure throws: roll back by throwing.
+- **Column maps ask the column transition policy** (audit PW-D2-L1). `TaskBoardRestructureInterface` is unchanged: a
+  host class that implements it keeps working. `moveBoardToFolder()` asks the policy with the channel `web`; a caller
+  with another channel uses the new companion port `Folder\TaskBoardRestructureViaInterface::moveBoardToFolderVia(…,
+  ColumnTransitionVia $via)`, which the bundle's `TaskBoardRestructurer` implements (check `instanceof` when your
+  instance may be a decorator). `FolderStatusSets::setStatusSet()`, `BoardConfigurationApplier::apply()` and
+  `applyById()` take an optional trailing `?ColumnTransitionVia $via`: these classes are `final` (not meant to be
+  extended), so the new argument breaks no subclass. With a column map these calls now ask the policy for every task the
+  map moves before writing, and may throw `ColumnTransitionRefusedException`. With the default policy, or with
+  `humans_only_policy` and the `web` channel, nothing changes.
+- `TaskBoardRestructureRefusedException` has two new reasons, `tree_loop` and `too_deep` (a moved tree holds a loop in
+  the data, or is deeper than 10,000 levels).
+- **MySQL / MariaDB in worker mode**: the Task API's transaction no longer leaves the connection's nesting level behind
+  after a deadlock (fixed since 2.16.0, see the CHANGELOG). Nothing to do.
 ## To 2.19.0
 
 Additive (Beacon spec 234 parts A–C, block W). **One schema change for every host**, in four parts that one

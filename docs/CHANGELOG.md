@@ -112,6 +112,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, default unlimited), see
+[UPGRADING](UPGRADING.md#to-2200).
+
+### Added
+
+- **Changing a task's parent through the Task API** (Beacon spec 234, T004; MCP `task_update` `parent`): `PUT /v2/task/{id}`
+  takes `parent`, a task of the same board to move the task (with its subtasks) under, or `null` to detach it to the top
+  level. Tasks level and the edit right on both tasks, as `parent` on create (a parent the task already has is not
+  asked again). Refusal codes: 400 `PARENT_001` (another board), 400 `PARENT_002` (the task itself), 409 `PARENT_003`
+  (one of its subtasks, at any depth), 409 `PARENT_004` (a concurrent tree change held the rows), 409 `PARENT_005`
+  (deeper than `max_subtask_depth`). Every other check of the update runs first; the parent change is its first write,
+  and the whole update is one transaction. See [API](API.md#changing-a-tasks-parent-since-220).
+- **`Tree\TaskReparenterInterface`**, a framework-free port (ids in, `TaskReparentResult` out,
+  `TaskTreeRefusedException` with a stable `reason`), aliased to the domain service `Tree\TaskReparenter`. It locks the
+  task's row and the new parent's path to the root and checks on the committed rows, inside one transaction (its own, or
+  the caller's: no savepoint). The Task API, imports and provider syncs all change parents through it. One history row
+  of the new type `TaskChangeType::Parent` (also between two parents with the same title) with the write provenance, a
+  new revision, and `TASK_UPDATED` with the changed field `parent` after the commit.
+- **`max_subtask_depth`** (int ≥ 1, default null = no limit): the most ancestors a task may have. Enforced on every
+  write that changes depth: create with a parent (Task API, checklist items, board UI, `TaskManager::create()`), a
+  parent change (counting the moved subtree's height, measured level by level under lock), copies and recurring
+  occurrences (`TaskCopyRefusedException` `too_deep`), imports and provider syncs (the row goes under its deepest allowed
+  ancestor, or a parent change is skipped, with a warning / `parent_too_deep`). Trees already deeper stay readable,
+  editable and movable up. `Tree\TaskTreeLimits` holds the rule and the bounded walks.
+- `TaskEventDeferral` is a public service: a host that calls a port inside its own transaction wraps it in `defer()`, so
+  the events wait for its commit.
+- **Column maps ask the column transition policy** (audit PW-D2-L1): `FolderStatusSets::setStatusSet()`,
+  `BoardConfigurationApplier::apply()` / `applyById()` take an optional `?ColumnTransitionVia $via` (none: `web`,
+  operation `columns`); joining a folder that shares its statuses asks too, with `web` through the unchanged
+  `TaskBoardRestructureInterface::moveBoardToFolder()` or with the caller's channel through the new companion port
+  `Folder\TaskBoardRestructureViaInterface::moveBoardToFolderVia()`. Every
+  live task the column map moves to another status is asked of the policy before the transaction; the first refusal
+  (`ColumnTransitionRefusedException`) changes nothing. 2.19.0 moved them without asking.
+
+### Changed
+
+- `PUT /v2/task/{id}` reads `parent` instead of answering it as a `not_supported` warning. A bulk update still refuses it.
+- Imports and provider syncs change a matched task's parent through the port (locked, committed rows) instead of
+  checking the loaded tree: a parent change committed meanwhile (by the API or another run) can no longer close a cycle
+  (audit PX-M2). The change is now recorded in the history and dispatches `TASK_UPDATED`, as any other parent change.
+- Every tree walk is iterative, remembers what it saw and stops at `TaskTreeLimits::SAFETY_CAP` (10,000) levels, with or
+  without `max_subtask_depth` (audit PX-M2 / PX-L4): subtask progress, the task tree, the Gantt order, the subtask tree of
+  the task page (at most 64 nested levels shown; deeper subtasks still count), move and copy subtrees, the move's locks and
+  snapshot, erasure. A loop already in the data no longer crashes a page or a worker: reads stop, a move, copy or
+  recurrence through it is refused (`tree_loop`), a parent change through it is `PARENT_003`, and a detach repairs it.
+  2.19's restructure (`moveTasks()`) walks the same way: a loop or a tree past the cap is refused with the new
+  `TaskBoardRestructureRefusedException` reasons `tree_loop` / `too_deep`, nothing written.
+- `TaskMover`'s lock-conflict detection moved to the internal `Doctrine\LockConflict` (same behaviour).
+
+### Fixed
+
+- **Task API transactions after a MySQL / MariaDB deadlock** (audit PX-M1; affected 2.16.0 to 2.19.x in FrankenPHP worker
+  mode on MySQL / MariaDB): when InnoDB had ended the transaction, the second rollback threw inside the clean-up, so the
+  connection kept a DBAL nesting level of 2 and every later write of the worker was saved but answered 500. The rollback
+  now closes the connection when it fails at the outermost level, and the clean-up always runs.
+- **Imports, provider sync pages, provider unlinks, and 2.19's folder, restructure and custom field writes after a MySQL /
+  MariaDB deadlock** (audit PX-L6): the same pattern
+  (a rollback that throws because the server already ended the transaction) skipped the clean-up and left the
+  connection's nesting level behind. They now roll back through the shared `Doctrine\TransactionRollback`, as the Task
+  API, the board move and the re-parent do: back to the level they entered at, closing the connection only when that
+  fails at the outermost level.
 ## [2.19.0] - 2026-11-15
 
 Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").

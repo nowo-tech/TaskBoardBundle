@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\Validator\Constraint;
@@ -317,6 +318,9 @@ final readonly class TaskApiChecklistOperations
         } catch (ColumnTransitionRefusedException $refused) {
             // Since 2.16.0 (spec 234).
             throw TaskApiRefusal::transitionRefused($refused);
+        } catch (TaskTreeRefusedException $refused) {
+            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005).
+            throw TaskApiRefusal::treeRefused($refused);
         }
     }
 }

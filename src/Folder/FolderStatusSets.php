@@ -68,10 +68,12 @@ final readonly class FolderStatusSets
      *
      * @param list<BoardColumnSpec>|null $specs
      * @param array<string, array<string, string>> $columnMaps by board id: current column id or name => set column name
+     * @param ColumnTransitionVia|null $via since 2.20.0: the caller's channel for the column transition policy (none: `web`)
      *
      * @throws TaskBoardRestructureRefusedException `not_found`, `not_allowed`, `columns_in_use`, `invalid`, `quota`
+     * @throws ColumnTransitionRefusedException since 2.20.0, when the policy refuses a task the set moves: nothing changes
      */
-    public function setStatusSet(object $actor, string $folderId, ?array $specs, array $columnMaps = []): void
+    public function setStatusSet(object $actor, string $folderId, ?array $specs, array $columnMaps = [], ?ColumnTransitionVia $via = null): void
     {
         $folder = $this->folders->find($folderId) ?? throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
         $boards = $this->folders->boardsIn($folder, true);
@@ -87,6 +89,10 @@ final readonly class FolderStatusSets
         if ($specs !== null) {
             foreach ($boards as $board) {
                 $this->folders->checkColumns($board, $specs, $columnMaps[$board->getId()] ?? []);
+            }
+            // Since 2.20.0 (audit PW-D2-L1): every task the set moves, asked of the column transition policy first.
+            foreach ($boards as $board) {
+                $this->folders->assertColumnTransitions($board, $specs, $columnMaps[$board->getId()] ?? [], $actor, $via);
             }
         }
         // @igor-ignore - The closure runs at once inside transactional() and is never stored.

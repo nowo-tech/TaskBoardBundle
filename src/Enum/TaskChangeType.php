@@ -42,6 +42,8 @@ enum TaskChangeType: string
     case SyncPersonReassociated = 'sync_person_reassociated';
     /** Since 2.3.0 (spec 217): the task changed boards; old and new values are the board names. */
     case BoardMoved = 'board_moved';
+    /** Since 2.20.0 (Beacon spec 234, T004): the task got another parent (old / new values: the parents' titles, null at the top level; `context` "task:<id>" of the new parent). */
+    case Parent = 'parent';
     /** Since 2.3.0 (spec 217): the task is a copy; the old value is the source's number or title, `context` "task:<id>". */
     case Duplicated = 'duplicated';
     /** Since 2.3.0 (specs 215, 217): a member of the source left out of a copy (no longer assignable); new value: the label. */

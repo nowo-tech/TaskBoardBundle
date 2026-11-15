@@ -9,6 +9,7 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Throwable;
@@ -43,18 +44,22 @@ final readonly class TaskApiTransaction
     public function run(Closure $write, array $touched = []): mixed
     {
         $connection = $this->entityManager->getConnection();
+        $depth      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
         try {
             $result = $write();
             $connection->commit();
         } catch (Throwable $exception) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
+            // Audit PX-M1 (2.20.0; since 2.16.0): a failed rollback (MySQL ended the transaction on a deadlock, so the
+            // savepoint is gone) never skips the clean-up, and never leaves the connection's nesting level behind.
+            try {
+                TransactionRollback::toLevel($connection, $depth);
+            } finally {
+                $this->events?->rollBack();
+                RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
+                $this->reload($touched);
             }
-            $this->events?->rollBack();
-            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
-            $this->reload($touched);
 
             throw $exception;
         }
@@ -70,12 +75,14 @@ final readonly class TaskApiTransaction
      */
     public function lockedRevision(Task $task): int
     {
-        /** @var int|string $revision */
-        $revision = $this->entityManager->createQuery('SELECT t.revision FROM ' . Task::class . ' t WHERE t.id = :id')
+        /** @var array{revision: int|string, parent: int|string|null} $row */
+        $row = $this->entityManager->createQuery('SELECT t.revision AS revision, IDENTITY(t.parent) AS parent FROM ' . Task::class . ' t WHERE t.id = :id')
             ->setParameter('id', $task->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-            ->getSingleScalarResult();
-        if ((int) $revision !== $task->getRevision()) {
+            ->getSingleResult();
+        $revision = $row['revision'];
+        // Since 2.20.0: also when only the parent differs (a write that bumped no revision), so `parent` compares as committed.
+        if ((int) $revision !== $task->getRevision() || ($row['parent'] === null ? null : (string) $row['parent']) !== $task->getParent()?->getId()) {
             $this->entityManager->refresh($task);
         }
 
