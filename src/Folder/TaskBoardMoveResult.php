@@ -17,6 +17,9 @@ final readonly class TaskBoardMoveResult
      * @param array<string, string> $columns moved task id => the target column id it landed in ('' for none)
      * @param list<string> $removedDependencyIds dependencies the target cannot keep (another board outside its folder)
      * @param list<string> $removedMemberIds members not assignable on the target
+     * @param list<string> $columnMapIgnored since 2.19.0 (audit PW-D1-I2): moved task ids whose column map entry was not
+     *                                       used because it did not fit the task's completion ({@see $columns} says where
+     *                                       each went)
      * @param array<string, string|null> $formerParents moved task id => its parent's id before the move, null when top-level (`parent:<id>` in the history)
      */
     public function __construct(
@@ -27,6 +30,7 @@ final readonly class TaskBoardMoveResult
         public array $removedDependencyIds,
         public array $removedMemberIds,
         public array $formerParents = [],
+        public array $columnMapIgnored = [],
     ) {
     }
 }

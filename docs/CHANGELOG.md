@@ -144,7 +144,8 @@ Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
   `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
 - `moveTasks()` keeps each task's completion consistent with its column (audit PW-M1): a column map or a same-name
   column is used only when it fits (an open task never lands in a done column, a completed one never in an open column);
-  otherwise the move rule decides, as for a move from the board UI.
+  otherwise the move rule decides, as for a move from the board UI. `TaskBoardMoveResult::$columnMapIgnored` lists the
+  moved tasks whose map entry was not used (audit PW-D1-I2).
 - `moveTasks()` refuses `stale` (`TaskBoardRestructureRefusedException::STALE`) when a moved tree changed between its
   read and its row locks (audit PW-L2): nothing is changed, the caller retries.
 - `moveBoardToFolder()` with a folder needs the folder right of its tenant (`mayManageFolders()`) besides the board's
