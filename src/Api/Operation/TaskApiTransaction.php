@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
 use Closure;
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Throwable;
@@ -54,7 +54,7 @@ final readonly class TaskApiTransaction
             // Audit PX-M1 (2.20.0; since 2.16.0): a failed rollback (MySQL ended the transaction on a deadlock, so the
             // savepoint is gone) never skips the clean-up, and never leaves the connection's nesting level behind.
             try {
-                $this->rollBack($connection, $depth);
+                TransactionRollback::toLevel($connection, $depth);
             } finally {
                 $this->events?->rollBack();
                 RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
@@ -87,25 +87,6 @@ final readonly class TaskApiTransaction
         }
 
         return (int) $revision;
-    }
-
-    /**
-     * Audit PX-M1: rolls back the levels this call opened, as `TaskMover` does. When the server already ended the
-     * transaction, rolling back to a savepoint fails and DBAL keeps its nesting level: at the outermost level the
-     * connection is closed (the level goes back to 0, the next query reconnects); inside a caller's transaction the
-     * caller owns it.
-     */
-    private function rollBack(Connection $connection, int $depth): void
-    {
-        try {
-            while ($connection->getTransactionNestingLevel() > $depth) {
-                $connection->rollBack();
-            }
-        } catch (Throwable) {
-            if ($depth === 0) {
-                $connection->close();
-            }
-        }
     }
 
     /**

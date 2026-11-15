@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Move;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Doctrine\LockConflict;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -87,7 +87,7 @@ final readonly class TaskMover implements TaskMoverInterface
             $this->apply($plan, $task, $target, $columnMap, $actor);
             $connection->commit();
         } catch (Throwable $failure) {
-            $this->rollBack($connection, $depth);
+            TransactionRollback::toLevel($connection, $depth);
             // Audit IC-I9r (c): once apply() has started, the managed entities hold part of the move in memory. The
             // database has rolled back, so close the entity manager (as Doctrine does when the flush itself fails): a later
             // flush in the same request then throws instead of writing a half-applied move outside the transaction.
@@ -108,27 +108,6 @@ final readonly class TaskMover implements TaskMoverInterface
         $this->eventDispatcher?->dispatch(new TaskBoardChangedEvent($task, $actor, $plan->sourceBoard->getId(), $target->getId(), $plan->taskIds), TaskBoardEvents::TASK_BOARD_CHANGED);
 
         return $plan;
-    }
-
-    /**
-     * Rolls the move's transaction back. Audit IC-I9r (b): when the server has already ended the transaction (a MySQL
-     * deadlock during the flush), rolling back to the flush's savepoint fails and leaves DBAL's nesting level behind;
-     * when the move opened the outermost transaction (`$depth` 0), closing the connection resets it (the server has
-     * nothing left to undo) and the next query reconnects. Audit IG-L1: inside a caller's transaction (`$depth` > 0) the
-     * connection is never closed: the levels the move opened are rolled back, and if that fails the caller's transaction
-     * is in the state the server left it, for the caller to roll back (the move's failure is rethrown, never `stale`).
-     */
-    private function rollBack(Connection $connection, int $depth): void
-    {
-        try {
-            while ($connection->getTransactionNestingLevel() > $depth) {
-                $connection->rollBack();
-            }
-        } catch (Throwable) {
-            if ($depth === 0) {
-                $connection->close();
-            }
-        }
     }
 
     /**

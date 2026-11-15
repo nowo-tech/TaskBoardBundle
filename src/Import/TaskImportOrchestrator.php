@@ -12,6 +12,7 @@ use InvalidArgumentException;
 use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -185,15 +186,15 @@ final readonly class TaskImportOrchestrator
         // Since 1.22.2 (audit EB-L7): the rows are written in batches (flush, then the batch's tasks leave the entity
         // manager), inside one transaction: a failure anywhere leaves nothing behind.
         $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
         try {
             $result = $this->write($board, $source, $rows, $actor, $options, $parentTask);
             $connection->commit();
         } catch (Throwable $exception) {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
+            // Since 2.20.0 (audit PX-L6): a rollback the server made impossible never skips the clean-up below.
+            TransactionRollback::toLevel($connection, $level);
             $this->events?->rollBack();
             // A failed flush already reopened a closed entity manager (RecoveringFlusher).
             if ($this->entityManager->isOpen()) {

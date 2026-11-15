@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Repository;
 
 use Closure;
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\LockConflict;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
@@ -54,7 +54,7 @@ final readonly class DoctrineOrmTaskTreeStore implements TaskTreeStoreInterface
             $result = $work();
             $connection->commit();
         } catch (Throwable $failure) {
-            $this->rollBack($connection);
+            TransactionRollback::toLevel($connection, 0);
             $this->events?->rollBack();
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
             if (LockConflict::is($failure)) {
@@ -160,21 +160,5 @@ final readonly class DoctrineOrmTaskTreeStore implements TaskTreeStoreInterface
     public function parentChanged(Task $task, object $actor, ?Task $previousParent): void
     {
         $this->events?->dispatchSaved(new TaskUpdatedEvent($task, $actor, ['parent'], ['parent' => $previousParent]), TaskBoardEvents::TASK_UPDATED);
-    }
-
-    /**
-     * Rolls back the transaction this call opened. When the server already ended it (a MySQL deadlock), the rollback can
-     * fail and leave DBAL's nesting level behind: the connection is closed (the level goes back to 0, the next query
-     * reconnects).
-     */
-    private function rollBack(Connection $connection): void
-    {
-        try {
-            while ($connection->getTransactionNestingLevel() > 0) {
-                $connection->rollBack();
-            }
-        } catch (Throwable) {
-            $connection->close();
-        }
     }
 }

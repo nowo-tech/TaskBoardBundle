@@ -64,6 +64,8 @@ final class TaskEventDeferral implements EventDispatcherInterface, ResetInterfac
 
     /**
      * Runs `$write` holding the events it dispatches; dispatches them after it returns, or drops them if it throws.
+     * Since 2.20.0 (audit PX-I9): only a throw drops them. A `$write` that rolls its transaction back and returns
+     * normally still has its events dispatched: roll back by throwing (and catch it outside `defer()`).
      * Since 2.10.1 (audit JY-I6): with `$rethrow` false, a listener's failure after the dispatch is logged, not rethrown
      * (see {@see self::commit()}): for a `$write` that commits its own transaction, so a saved copy is never reported as failed.
      *

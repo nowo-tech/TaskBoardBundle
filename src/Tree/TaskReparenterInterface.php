@@ -21,7 +21,8 @@ use Nowo\TaskBoardBundle\Move\TaskMoverInterface;
  * Transactions: the port opens its own, or joins the caller's (no savepoint). Inside your own transaction, wrap it in
  * `TaskEventDeferral::defer()` (public service) so `TASK_UPDATED` waits for your commit and is dropped on your rollback:
  * `$deferral->defer(function () { $connection->beginTransaction(); …; $reparenter->reparent(…); $connection->commit(); })`.
- * Without it the event is dispatched when the port returns (audit PX-L3).
+ * Without it the event is dispatched when the port returns (audit PX-L3). `defer()` drops the events only when the
+ * closure throws (audit PX-I9): roll your transaction back by throwing out of the closure, not by returning.
  *
  * No access check (as {@see TaskMoverInterface}): before calling it the host checks what the Task API
  * checks: `TaskBoardResourceAccessChecker::canEditTask()` on the task and on the new parent (in Beacon:
