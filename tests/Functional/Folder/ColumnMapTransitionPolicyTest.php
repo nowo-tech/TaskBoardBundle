@@ -13,11 +13,13 @@ use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Folder\FolderStatusSets;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureViaInterface;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
+use ReflectionMethod;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
 /**
@@ -85,9 +87,13 @@ final class ColumnMapTransitionPolicyTest extends CopyTestCase
         $task           = $this->task($newcomer, 'Waiting', 0);
         $this->clear();
         $restructure = $this->service(TaskBoardRestructureInterface::class);
+        // The 2.19 port keeps its signature (host classes implement it); the channel comes through its companion port.
+        self::assertInstanceOf(TaskBoardRestructureViaInterface::class, $restructure);
+        self::assertSame($restructure, $this->service(TaskBoardRestructureViaInterface::class));
+        self::assertSame(4, (new ReflectionMethod(TaskBoardRestructureInterface::class, 'moveBoardToFolder'))->getNumberOfParameters());
 
         try {
-            $restructure->moveBoardToFolder($this->owner, $newcomer->getId(), $folderId, ['Backlog' => 'Todo'], new ColumnTransitionVia('mcp', ColumnTransitionVia::OP_COLUMNS));
+            $restructure->moveBoardToFolderVia($this->owner, $newcomer->getId(), $folderId, ['Backlog' => 'Todo'], new ColumnTransitionVia('mcp', ColumnTransitionVia::OP_COLUMNS));
             self::fail('Refused expected.');
         } catch (ColumnTransitionRefusedException) {
         }

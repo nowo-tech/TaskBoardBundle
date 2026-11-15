@@ -139,8 +139,10 @@ Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, de
 - `TaskEventDeferral` is a public service: a host that calls a port inside its own transaction wraps it in `defer()`, so
   the events wait for its commit.
 - **Column maps ask the column transition policy** (audit PW-D2-L1): `FolderStatusSets::setStatusSet()`,
-  `BoardConfigurationApplier::apply()` / `applyById()` and `TaskBoardRestructureInterface::moveBoardToFolder()` (into a
-  folder that shares its statuses) take an optional `?ColumnTransitionVia $via` (none: `web`, operation `columns`). Every
+  `BoardConfigurationApplier::apply()` / `applyById()` take an optional `?ColumnTransitionVia $via` (none: `web`,
+  operation `columns`); joining a folder that shares its statuses asks too, with `web` through the unchanged
+  `TaskBoardRestructureInterface::moveBoardToFolder()` or with the caller's channel through the new companion port
+  `Folder\TaskBoardRestructureViaInterface::moveBoardToFolderVia()`. Every
   live task the column map moves to another status is asked of the policy before the transaction; the first refusal
   (`ColumnTransitionRefusedException`) changes nothing. 2.19.0 moved them without asking.
 

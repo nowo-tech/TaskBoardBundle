@@ -55,13 +55,12 @@ interface TaskBoardRestructureInterface
      * the set) moves the tasks of a column the set does not have; without it such a column is `columns_in_use`.
      *
      * @param array<string, string> $columnMap
-     * @param ColumnTransitionVia|null $via since 2.20.0 (audit PW-D2-L1): the caller's channel; into a folder that shares its
-     *                                      statuses, every task the column map moves is asked of the column transition
-     *                                      policy before the move (none: `web`); a refusal changes nothing
      *
-     * @throws ColumnTransitionRefusedException since 2.20.0
+     * @throws ColumnTransitionRefusedException since 2.20.0 (audit PW-D2-L1), into a folder that shares its statuses, when the
+     *                                          column transition policy refuses a task the map moves (channel `web`; with
+     *                                          another channel, {@see TaskBoardRestructureViaInterface}): nothing changes
      */
-    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = [], ?ColumnTransitionVia $via = null): void;
+    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void;
 
     /**
      * Moves tasks, each with its whole subtree, to another board of the same tenant; a subtask becomes a top-level task

@@ -220,6 +220,10 @@ services:
     Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface:
         alias: Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer
         public: true
+    # Since 2.20.0 (audit PW-D2-L1): the same service, for a caller that passes its channel (the 2.19 port is unchanged).
+    Nowo\TaskBoardBundle\Folder\TaskBoardRestructureViaInterface:
+        alias: Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer
+        public: true
     Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface:
         alias: Nowo\TaskBoardBundle\Folder\ManageRightRestructurePolicy
     Nowo\TaskBoardBundle\Folder\TaskBoardRestructurer:

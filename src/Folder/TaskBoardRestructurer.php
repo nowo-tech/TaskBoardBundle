@@ -65,7 +65,7 @@ use function sort;
  *
  * Stateless (REQ-RUNTIME-002).
  */
-final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterface
+final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterface, TaskBoardRestructureViaInterface
 {
     public function __construct(
         private TaskBoardFolderManager $folders,
@@ -117,7 +117,13 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
         $this->folders->delete($actor, $this->requireFolder($folderId));
     }
 
-    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = [], ?ColumnTransitionVia $via = null): void
+    public function moveBoardToFolder(object $actor, string $boardId, ?string $folderId, array $columnMap = []): void
+    {
+        $board = $this->requireBoard($boardId);
+        $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId), $columnMap);
+    }
+
+    public function moveBoardToFolderVia(object $actor, string $boardId, ?string $folderId, array $columnMap, ColumnTransitionVia $via): void
     {
         $board = $this->requireBoard($boardId);
         $this->folders->moveBoard($actor, $board, $folderId === null ? null : $this->requireFolder($folderId), $columnMap, $via);

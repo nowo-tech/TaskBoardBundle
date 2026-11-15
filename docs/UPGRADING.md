@@ -235,12 +235,15 @@ changes:
   (see [USAGE](USAGE.md#changing-a-tasks-parent-since-220)). It checks no access: check `canEditTask()` on both tasks
   first. Inside your own transaction, wrap it in `TaskEventDeferral::defer()` (now a public service), or `TASK_UPDATED`
   is dispatched before your commit. `defer()` drops the events only when the closure throws: roll back by throwing.
-- **`TaskBoardRestructureInterface::moveBoardToFolder()`** gains an optional fifth argument `?ColumnTransitionVia $via`
-  (audit PW-D2-L1). A host class that implements the interface adds it; callers change nothing.
-  `FolderStatusSets::setStatusSet()`, `BoardConfigurationApplier::apply()` and `applyById()` take it too. With a column
-  map they now ask the column transition policy for every task the map moves (through `$via`; none: `web`) before
-  writing, and may throw `ColumnTransitionRefusedException`. With the default policy, or with `humans_only_policy` and no
-  `$via`, nothing changes.
+- **Column maps ask the column transition policy** (audit PW-D2-L1). `TaskBoardRestructureInterface` is unchanged: a
+  host class that implements it keeps working. `moveBoardToFolder()` asks the policy with the channel `web`; a caller
+  with another channel uses the new companion port `Folder\TaskBoardRestructureViaInterface::moveBoardToFolderVia(…,
+  ColumnTransitionVia $via)`, which the bundle's `TaskBoardRestructurer` implements (check `instanceof` when your
+  instance may be a decorator). `FolderStatusSets::setStatusSet()`, `BoardConfigurationApplier::apply()` and
+  `applyById()` take an optional trailing `?ColumnTransitionVia $via`: these classes are `final` (not meant to be
+  extended), so the new argument breaks no subclass. With a column map these calls now ask the policy for every task the
+  map moves before writing, and may throw `ColumnTransitionRefusedException`. With the default policy, or with
+  `humans_only_policy` and the `web` channel, nothing changes.
 - `TaskBoardRestructureRefusedException` has two new reasons, `tree_loop` and `too_deep` (a moved tree holds a loop in
   the data, or is deeper than 10,000 levels).
 - **MySQL / MariaDB in worker mode**: the Task API's transaction no longer leaves the connection's nesting level behind
