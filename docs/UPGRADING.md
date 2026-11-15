@@ -4,6 +4,12 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.19.0](#to-2190)
+  - [Schema change for every host: folders](#schema-change-for-every-host-folders)
+  - [Folders and restructure: what a host does](#folders-and-restructure-what-a-host-does)
+  - [Schema change for every host: column types and status sets](#schema-change-for-every-host-column-types-and-status-sets)
+  - [Schema change for every host: native custom fields](#schema-change-for-every-host-native-custom-fields)
+  - [Schema change for every host: numbering prefix; board configuration](#schema-change-for-every-host-numbering-prefix-board-configuration)
 - [To 2.18.0](#to-2180)
   - [Schema change for every host: provenance columns](#schema-change-for-every-host-provenance-columns)
 - [To 2.17.0](#to-2170)
@@ -196,6 +202,194 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.19.0
+
+Additive (Beacon spec 234 parts A–C, block W). **One schema change for every host**, in four parts that one
+`doctrine:migrations:diff` writes together; run it **before** the deploy (every part is mapped):
+
+| Part | Tables and columns | Demo migration |
+|---|---|---|
+| Folders | new `task_board_folders`; `task_board_boards.folder_id` (FK, `ON DELETE SET NULL`) | `Version20261115100000` |
+| Column types, status sets | `task_board_columns.column_type`; `task_board_folders.status_set` | `Version20261115110000` |
+| Native custom fields | new `task_board_custom_fields`, `task_board_custom_field_values` | `Version20261115120000` |
+| Numbering prefix | `task_board_boards.number_prefix` | `Version20261115130000` |
+
+From 2.17 or earlier, apply [To 2.18.0](#to-2180) first (the provenance columns, demo `Version20261114120000`).
+Every new column is nullable and every new table starts empty: nothing is rewritten and no data step is needed. The
+sections below give the SQL for MySQL / MariaDB and PostgreSQL as Doctrine generates it, and what SQLite needs; the two
+new `tenant_key` columns are key columns (REQ-SEC-006) with the binary NO PAD collation on MySQL / MariaDB. The XML
+mapping (`database.mapping: xml`) maps the same columns as the attributes.
+
+### Schema change for every host: folders
+
+A new table `task_board_folders` and a nullable `task_board_boards.folder_id` (every board stays folderless); nothing is
+rewritten. `doctrine:migrations:diff` writes it (the demo's `Version20261115100000`). By hand, with the default table
+prefix `task_board_` and the names Doctrine gives the foreign key and its index:
+
+```sql
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- The table takes the database's default charset and collation: they must be those of task_board_boards, or the
+-- foreign key below fails (MySQL error 3780). Check with SHOW CREATE TABLE task_board_boards and add the same
+-- DEFAULT CHARACTER SET … COLLATE … to the CREATE TABLE if the database default differs.
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, description LONGTEXT DEFAULT NULL, position INT NOT NULL, INDEX idx_task_board_folders_tenant (tenant_key), PRIMARY KEY (id));
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP FOREIGN KEY FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942 ON task_board_boards;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_folders (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(255) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, description TEXT DEFAULT NULL, position INT NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_folders_tenant ON task_board_folders (tenant_key);
+ALTER TABLE task_board_boards ADD folder_id VARCHAR(36) DEFAULT NULL;
+ALTER TABLE task_board_boards ADD CONSTRAINT FK_97612D99162CB942 FOREIGN KEY (folder_id) REFERENCES task_board_folders (id) ON DELETE SET NULL NOT DEFERRABLE;
+CREATE INDEX IDX_97612D99162CB942 ON task_board_boards (folder_id);
+-- rollback
+ALTER TABLE task_board_boards DROP CONSTRAINT FK_97612D99162CB942;
+DROP INDEX IDX_97612D99162CB942;
+ALTER TABLE task_board_boards DROP folder_id;
+DROP TABLE task_board_folders;
+```
+
+SQLite cannot add a foreign key to an existing table: `doctrine:migrations:diff` copies `task_board_boards` into a new
+table with `folder_id` and the foreign key (`CREATE TEMPORARY TABLE … AS SELECT`, `DROP`, `CREATE`, `INSERT … SELECT`,
+then its indexes again). Let it generate that migration rather than writing it by hand.
+
+The folder's `tenant_key` is a key column (REQ-SEC-006): the mapping listener gives it the binary NO PAD collation on
+MySQL / MariaDB, as the boards' `tenant_key`.
+
+### Folders and restructure: what a host does
+
+Nothing, unless you use folders:
+
+- **Restructure service.** Inject `Nowo\TaskBoardBundle\Folder\TaskBoardRestructureInterface` (public): folders,
+  `moveBoardToFolder()` and `moveTasks($actor, $taskIds, $targetBoardId, $columnMap)`. It refuses with
+  `Folder\TaskBoardRestructureRefusedException` (`not_found` for another tenant's ids too, `not_allowed`, `not_empty`,
+  `invalid`, `board_archived`, `sync_running`, `quota`) before anything is written. A task keeps its number when
+  `task_numbers.scope` is `tenant`; with the board scope it gets the target board's next number, as a UI move does.
+- **Column transition policy.** `moveTasks()` asks your `column_transition_policy` for every task that changes board
+  (operation `board_move`). An MCP server or agent caller passes its channel: `moveTasks($actor, $ids, $target, $map,
+  new ColumnTransitionVia(ColumnTransitionVia::MCP))`; without it the move is asked through the channel of your
+  `write_provenance_provider` (2.18.0), else as `web` (a person).
+- **Who may.** `restructure.policy`: the service id of a `TaskBoardRestructurePolicyInterface`
+  (`mayManageFolders($user, $tenantKey)`, `mayRestructureBoard($user, TaskBoardSnapshot)`). The default is the manage
+  right the bundle already has.
+- **Task API clients.** `GET /v2/space/{id}/list` returns the folderless lists only (ClickUp's shape); read the lists of a
+  folder with `GET /v2/folder/{id}/list` or `GET /v2/space/{id}/folder`, or pass `include_folders=true`. A host whose
+  clients expect every board sets `api.lists_include_folders: true`.
+
+### Schema change for every host: column types and status sets
+
+Two nullable columns, after the folders above; nothing is rewritten (the demo's `Version20261115110000`):
+
+```sql
+-- MySQL / MariaDB
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
+```
+
+```sql
+-- PostgreSQL (SQLite: ALTER TABLE … ADD COLUMN, with CLOB for status_set; DROP COLUMN to roll back)
+ALTER TABLE task_board_columns ADD column_type VARCHAR(16) DEFAULT NULL;
+ALTER TABLE task_board_folders ADD status_set JSON DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_columns DROP column_type;
+ALTER TABLE task_board_folders DROP status_set;
+```
+
+No data step: a column without a type keeps its meaning by position (first `open`, last `closed`, the rest `custom`;
+a board of one column: `closed`), exactly as before. The first type set on one column of a board writes the position
+types of its other columns. **Behaviour to know:** a board with types no longer treats "the last column" as done;
+*Done* goes to its first `done`/`closed` column, and a task in any `done` or `closed` column is completed. A
+`column_transition_policy` reads the type in `BoardColumnSnapshot::$type` (and `TaskStatusChangedEvent::$toType`);
+`$last` stays "the last column by position".
+
+### Schema change for every host: native custom fields
+
+Two new tables, after the parts above (the demo's `Version20261115120000`); nothing existing changes:
+
+```sql
+-- MySQL 8.0.17+ (MariaDB: COLLATE `utf8mb4_nopad_bin`; MySQL before 8.0.17: `utf8mb4_bin`).
+-- As for the folders: the tables take the database's default charset and collation, which must be those of
+-- task_board_boards and task_board_tasks for the foreign keys (audit PW-L4).
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL COLLATE `utf8mb4_0900_bin`, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_custom_fields_tenant (tenant_key), INDEX IDX_E928CA7DE7EC5785 (board_id), PRIMARY KEY (id));
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at DATETIME NOT NULL, text_value LONGTEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, INDEX idx_task_board_custom_field_values_field (field_id), UNIQUE INDEX uniq_task_board_custom_field_values (task_id, field_id), INDEX IDX_E5169D958DB60186 (task_id), PRIMARY KEY (id));
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+```sql
+-- PostgreSQL
+CREATE TABLE task_board_custom_fields (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(128) NOT NULL, options JSON NOT NULL, field_type VARCHAR(16) NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, position INT NOT NULL, board_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_fields_tenant ON task_board_custom_fields (tenant_key);
+CREATE INDEX IDX_E928CA7DE7EC5785 ON task_board_custom_fields (board_id);
+CREATE TABLE task_board_custom_field_values (id VARCHAR(36) NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, text_value TEXT DEFAULT NULL, number_value NUMERIC(30, 10) DEFAULT NULL, task_id VARCHAR(36) NOT NULL, field_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_custom_field_values_field ON task_board_custom_field_values (field_id);
+CREATE UNIQUE INDEX uniq_task_board_custom_field_values ON task_board_custom_field_values (task_id, field_id);
+CREATE INDEX IDX_E5169D958DB60186 ON task_board_custom_field_values (task_id);
+ALTER TABLE task_board_custom_fields ADD CONSTRAINT FK_E928CA7DE7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D958DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_custom_field_values ADD CONSTRAINT FK_E5169D95443707B0 FOREIGN KEY (field_id) REFERENCES task_board_custom_fields (id) ON DELETE CASCADE NOT DEFERRABLE;
+-- rollback
+DROP TABLE task_board_custom_field_values;
+DROP TABLE task_board_custom_fields;
+```
+
+SQLite: the same two `CREATE TABLE` as PostgreSQL with `CLOB` for `text_value` and `options`, and the foreign keys inside
+the `CREATE TABLE` (SQLite cannot add them afterwards); let `doctrine:migrations:diff` write it. A tenant field's
+`tenant_key` is a key column (REQ-SEC-006), with the boards' collation on MySQL / MariaDB.
+
+A number is a `DECIMAL(30, 10)`; its integer part is at most PHP_INT_MAX (`9223372036854775807`), so the Task API
+answers exactly the integer written (a larger one is refused, audit PW-L1). SQLite keeps a `DECIMAL` as a floating-point
+value: about 15 significant digits there.
+
+A task moved to another board (`moveTasks()`, the board UI's *Move*) takes its old board's field values to the new
+board's field of the same name and type, or loses them with a `custom_field` history row (audit PW-L6).
+
+`Field\TaskCustomFieldManager` takes and returns bundle entities (`TaskBoard`, `Task`, `TaskCustomField`): a DDD host
+calls it from its infrastructure layer (audit PW-L7, no id-based twin in 2.19.0).
+
+Nothing changes for a host that defines no field. **Task API clients:** `POST /v2/task/{id}/field/{field_id}` now writes
+a native field instead of always answering 409; a provider's (synced) field still answers 409 `FIELD_001` (owner
+decision Q-O3 of spec 213 stands for them).
+
+### Schema change for every host: numbering prefix; board configuration
+
+One nullable column, after the parts above (the demo's `Version20261115130000`); the same statement on MySQL, MariaDB
+and PostgreSQL (SQLite: `ADD COLUMN`):
+
+```sql
+ALTER TABLE task_board_boards ADD number_prefix VARCHAR(16) DEFAULT NULL;
+-- rollback
+ALTER TABLE task_board_boards DROP number_prefix;
+```
+
+With every part of 2.19.0 the board table gains `folder_id` and `number_prefix`: a `doctrine:migrations:diff` run once
+writes them in one `ALTER TABLE` (one table copy on SQLite).
+
+**Board configuration (presets).** A host that stores presets reads a board with
+`Nowo\TaskBoardBundle\Configuration\BoardConfigurationExporter::export($board)` (or `exportById($id, $tenantKey)`),
+keeps `$configuration->toArray()` / `toJson()` as it likes, and copies it onto a board with
+`BoardConfigurationApplier::apply($actor, $board, BoardConfiguration::fromArray($data), $columnMap)` (or
+`applyById($actor, $id, $tenantKey, …)`). The apply is all or nothing; it refuses with
+`Folder\TaskBoardRestructureRefusedException` (`not_found`, `not_allowed`, `columns_in_use` — give a column map,
+`columns_shared` — the board's folder shares its statuses, `fields_in_use` — pass `dropFieldValues: true` to drop them,
+`invalid`, `quota`). Task templates join the configuration through `BoardTemplatesConfigurationInterface`: the default (`NoBoardTemplates`)
+has none, and the bundle's own task templates (2.16, `task_templates.enabled`) are not wired to it in 2.19.0, so a host
+that wants them in its presets aliases the interface to its own service.
 
 ## To 2.18.0
 

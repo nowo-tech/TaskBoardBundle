@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardChangedEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -51,6 +52,8 @@ final readonly class TaskMover implements TaskMoverInterface
         private TaskBoardQuota $quota = new TaskBoardQuota(),
         private ?EventDispatcherInterface $eventDispatcher = null,
         private bool $syncEnabled = false,
+        // Since 2.19.0 (audit PW-L6).
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -192,6 +195,8 @@ final readonly class TaskMover implements TaskMoverInterface
             $node->changeBoard($target, $column, $positions[$key] ?? 0);
             $positions[$key] = ($positions[$key] ?? 0) + 1;
             $this->changeRecorder->record($node, $actor, TaskChangeType::BoardMoved, $source->getName(), $target->getName());
+            // Since 2.19.0 (audit PW-L6): the old board's custom field values follow the task, or are dropped with history.
+            $this->customFields?->followBoardMove($node, $source, $actor);
         }
         // Audit IC-I5: whenever the sync tables exist, sync on or off now. IC-I4: the tombstone keeps the task as
         // detached, so the panel still shows its provider data, read-only, and the people tools still erase it.

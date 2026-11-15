@@ -78,6 +78,25 @@ final class ApiSyncFieldsTest extends ApiTestCase
         self::assertCount(1, $this->em->getRepository(TaskSyncFieldValue::class)->findAll(), 'kept');
     }
 
+    /** Since 2.19.0 (FR-033): a done column retyped as custom reopens its tasks, so the limit is asked first. */
+    public function testRetypingADoneColumnAsksTheLimit(): void
+    {
+        ApiTestHost::$tenants = ['tenant-a'];
+        $board                = $this->board(tenantKey: 'tenant-a');
+        $doneColumn           = $board->getColumns()->last() ?: null;
+        self::assertNotNull($doneColumn);
+        $this->em->persist((new Task(board: $board, title: 'Done', creator: $this->owner, column: $doneColumn))->markCompleted());
+        $this->em->flush();
+        $this->issueToken();
+        TestSyncLimitChecker::$refuseTasks = true;
+        try {
+            $this->send('PUT', '/api/tasks/v2/list/' . $board->getId() . '/status/' . $doneColumn->getId(), ['type' => 'custom']);
+            $this->assertRefused(403, 'PLAN_002');
+        } finally {
+            TestSyncLimitChecker::reset();
+        }
+    }
+
     public function testTheHostsLimitOfActiveTasksRefusesAReopening(): void
     {
         // The limit TaskManager asks when a completed task leaves the done column (sync.limit_checker), as in the UI.

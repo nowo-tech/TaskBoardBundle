@@ -55,6 +55,8 @@ use Nowo\TaskBoardBundle\Doctrine\TaskRevisionListener;
 use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener;
+use Nowo\TaskBoardBundle\Folder\ManageRightRestructurePolicy;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Gantt\ConfiguredWeekStartResolver;
 use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
@@ -420,6 +422,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.api.prefix', $api['prefix']);
         $container->setParameter('nowo_task_board.api.quota_listener_required', $api['quota_listener_required']);
         $container->setParameter('nowo_task_board.api.max_body_bytes', $api['max_body_bytes']);
+        $container->setParameter('nowo_task_board.api.lists_include_folders', (bool) ($api['lists_include_folders'] ?? false));
         $loader->load('services_api.yaml');
         $container->setAlias(TaskApiAuthenticatorInterface::class, $api['hooks']['authenticator']);
         $container->setAlias(TaskApiRateLimiterInterface::class, $this->serviceOr($api['hooks']['rate_limiter'], DenyingTaskApiRateLimiter::class));
@@ -554,6 +557,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$entityManager', $manager)
             ->setArgument('$syncEnabled', $sync);
         $container->setAlias(TaskBoardTargetsInterface::class, $this->serviceOr($move['targets'], DefaultTaskBoardTargets::class));
+        // Since 2.19.0 (Beacon spec 234): the restructure policy port.
+        $container->setAlias(TaskBoardRestructurePolicyInterface::class, $this->serviceOr($config['restructure']['policy'] ?? null, ManageRightRestructurePolicy::class));
     }
 
     /**

@@ -12,13 +12,17 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 
-use function array_key_last;
 use function array_map;
 use function array_slice;
 use function array_values;
@@ -29,6 +33,7 @@ use function mb_strtoupper;
 use function mb_substr;
 use function preg_split;
 use function rtrim;
+use function str_contains;
 use function str_starts_with;
 use function strtr;
 use function substr;
@@ -102,12 +107,57 @@ final class TaskApiReadSerializer
             'task_count'        => $taskCount,
             'due_date'          => null,
             'start_date'        => null,
-            'folder'            => self::HIDDEN_FOLDER,
+            'folder'            => $this->folderRef($board),
             'space'             => ['id' => $space->id, 'name' => $space->name, 'access' => true],
             'archived'          => $board->isArchived(),
             'override_statuses' => true,
             'statuses'          => $this->statuses($board),
         ];
+    }
+
+    /**
+     * Since 2.19.0 (Beacon spec 234, FR-031): a folder in ClickUp's shape, with its lists (the boards in it the token may
+     * view). `content` / `markdown_content`: its Markdown description.
+     *
+     * @param list<TaskBoard> $boards
+     * @param array<string, int> $taskCounts by board id
+     *
+     * @return array<string, mixed>
+     */
+    public function folder(TaskBoardFolder $folder, TaskApiSpace $space, array $boards, array $taskCounts): array
+    {
+        $count = 0;
+        foreach ($boards as $board) {
+            $count += $taskCounts[$board->getId()] ?? 0;
+        }
+
+        return [
+            'id'                => $folder->getId(),
+            'name'              => $folder->getName(),
+            'orderindex'        => $folder->getPosition(),
+            'content'           => (string) $folder->getDescription(),
+            'markdown_content'  => (string) $folder->getDescription(),
+            'override_statuses' => false,
+            'hidden'            => false,
+            'space'             => ['id' => $space->id, 'name' => $space->name, 'access' => true],
+            'task_count'        => (string) $count,
+            'archived'          => false,
+            'statuses'          => [],
+            'lists'             => array_map(fn (TaskBoard $board): array => $this->board($board, $space, $taskCounts[$board->getId()] ?? 0), $boards),
+            'permission_level'  => 'read',
+        ];
+    }
+
+    /**
+     * Since 2.19.0: the folder a board is in, or the hidden folder of a folderless list (as ClickUp shows those).
+     *
+     * @return array<string, mixed>
+     */
+    private function folderRef(TaskBoard $board): array
+    {
+        $folder = $board->getFolder();
+
+        return $folder instanceof TaskBoardFolder ? ['id' => $folder->getId(), 'name' => $folder->getName(), 'hidden' => false, 'access' => true] : self::HIDDEN_FOLDER;
     }
 
     /**
@@ -136,8 +186,9 @@ final class TaskApiReadSerializer
         $updatedBy   = $page->profileOf($task->getUpdatedBy());
 
         $data = [
-            'id'        => $task->getId(),
-            'custom_id' => null,
+            'id' => $task->getId(),
+            // Since 2.19.0: with the board's numbering prefix and a number, ClickUp's custom task id (`AIF-12`).
+            'custom_id' => $board->getNumberPrefix() !== null && $task->getNumber() !== null ? $board->getNumberPrefix() . '-' . $task->getNumber() : null,
             // Since 2.10.0 (spec 214): the task's readable number (#123) in its sequence; null with task_numbers off.
             'number' => $task->getNumber(),
             // Since 2.16.0 (spec 234, FR-018): the optimistic-lock revision (`If-Match` / `base_revision` on update).
@@ -173,7 +224,7 @@ final class TaskApiReadSerializer
             'url'              => null,
             'list'             => ['id' => $board->getId(), 'name' => $board->getName(), 'access' => true],
             'project'          => self::HIDDEN_FOLDER,
-            'folder'           => self::HIDDEN_FOLDER,
+            'folder'           => $this->folderRef($board),
             'space'            => ['id' => $space->id],
             // Since 2.18.0 (Beacon spec 234): the API ids of the creator and of the last recorded writer (null: unknown or
             // not shown to this viewer), where the last write came from and the host's label of its actor (a token's name).
@@ -301,11 +352,8 @@ final class TaskApiReadSerializer
                 $index = $position;
             }
         }
-        $type = match (true) {
-            $index === array_key_last($columns) => 'closed',
-            $index === 0                        => 'open',
-            default                             => 'custom',
-        };
+        // Since 2.19.0 (FR-033): the column's type; by position on an untyped board (first open, last closed).
+        $type = ColumnTypes::of($column, $columns)->value;
 
         // Since 2.16.0 (spec 234, FR-001 / FR-014): `humans_only`.
         return ['id' => $column->getId(), 'status' => $column->getName(), 'color' => $column->getColor(), 'orderindex' => $index, 'type' => $type, 'icon' => $column->getIcon(), 'humans_only' => $column->isHumansOnly()];
@@ -404,12 +452,69 @@ final class TaskApiReadSerializer
      */
     private function fieldValues(Task $task, TaskApiTaskPage $page): array
     {
-        return array_map(static fn ($value): array => [
+        // Since 2.19.0 (FR-028): every native field of the board first, with its value (null when not set).
+        $native = [];
+        $values = [];
+        foreach ($page->customFieldValues[$task->getId()] ?? [] as $value) {
+            $values[$value->getField()->getId()] = $value;
+        }
+        foreach ($page->customFields[$task->getBoard()->getId()] ?? [] as $field) {
+            $native[] = $this->nativeField($field) + ['value' => isset($values[$field->getId()]) ? self::nativeValue($values[$field->getId()]) : null];
+        }
+
+        return [...$native, ...array_map(static fn ($value): array => [
             'id'    => $value->getField()->getId(),
             'name'  => $value->getField()->getName(),
             'type'  => $value->getField()->getRemoteType(),
             'value' => $value->getValue(),
-        ], $page->fieldValues[$task->getId()] ?? []);
+        ], $page->fieldValues[$task->getId()] ?? [])];
+    }
+
+    /**
+     * Since 2.19.0 (FR-028): a native custom field in ClickUp's shape (`short_text`, `number`, `drop_down` with its
+     * options and their colours); `writable` true (synced fields are not).
+     *
+     * @return array<string, mixed>
+     */
+    public function nativeField(TaskCustomField $field): array
+    {
+        $options = [];
+        foreach ($field->getOptions() as $index => $option) {
+            $options[] = ['id' => $option['id'], 'name' => $option['name'], 'color' => $option['color'], 'orderindex' => $index];
+        }
+
+        return [
+            'id'               => $field->getId(),
+            'name'             => $field->getName(),
+            'type'             => $field->getType()->apiType(),
+            'type_config'      => $field->getType() === CustomFieldType::Dropdown ? ['options' => $options] : (object) [],
+            'date_created'     => $this->ms($field->getCreatedAt()),
+            'hide_from_guests' => false,
+            'required'         => false,
+            'scope'            => $field->getBoardId() === null ? 'space' : 'list',
+            'writable'         => true,
+        ];
+    }
+
+    /**
+     * A native value: the text, the number (a JSON number when exact), or the dropdown option's id.
+     */
+    public static function nativeValue(TaskCustomFieldValue $value): string|int|float|null
+    {
+        return match ($value->getField()->getType()) {
+            CustomFieldType::Text     => $value->getTextValue(),
+            CustomFieldType::Dropdown => $value->getTextValue(),
+            CustomFieldType::Number   => self::number((string) $value->getNumberValue()),
+        };
+    }
+
+    private static function number(string $decimal): int|float
+    {
+        $trimmed = str_contains($decimal, '.') ? rtrim(rtrim($decimal, '0'), '.') : $decimal;
+
+        // Audit PW-L1: an integer is answered as one only when it fits (the manager refuses larger ones; an older row is
+        // answered as a float rather than saturated).
+        return str_contains($trimmed, '.') || (float) $trimmed !== (float) (int) $trimmed ? (float) $trimmed : (int) $trimmed;
     }
 
     /**

@@ -111,6 +111,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target 2.19.0 (minor). Schema change (see UPGRADING "To 2.19.0").
+
+### Added
+
+- **Folders and the restructure service (2.19.0, Beacon spec 234 FR-031 / FR-045).** A tenant's boards can be grouped in
+  folders (`Entity\TaskBoardFolder`: name, Markdown description, order; `task_board_boards.folder_id`).
+  `Folder\TaskBoardRestructureInterface` (public, framework-free: ids in, VOs out) creates, updates, lists and deletes
+  folders (only an empty one), moves a board into or out of a folder, and moves tasks between the boards of one tenant
+  (`moveTasks()`): each task with its subtree, keeping id, number (tenant scope), comments, time entries (TimeTrack keeps
+  the task id), tags, documents, links and history; the column is mapped by an explicit map (source column id or name =>
+  target column id or name), else by name, else the target's first open column (a completed task: its last column). One
+  transaction; another tenant's folder, board or task is `not_found`; the entity manager is reset when a failure closed
+  it (worker mode, kernel reset off); `TASK_BOARD_CHANGED` after the commit. A dependency is kept when both boards are
+  in the same folder (`Folder\TaskBoardDependencyScope`), else removed with a history row.
+- **Column types (FR-033).** `BoardColumn` gains a type (`Enum\ColumnType`: `open`, `custom`, `done`, `closed`;
+  column `task_board_columns.column_type`). A task in a `done` or `closed` column is completed, so a board may have two
+  closed columns (*hecho*, *cancelada*; at most two). A board without types keeps its meaning by position (first `open`,
+  last `closed`, the rest `custom`), exactly as before; the first type set on a column writes the position types of the
+  others (`Support\ColumnTypes`). Completion, *Done*, reopening limits, column deletion, imports, moves, duplicates and the
+  sync's checklist items follow the type. Task API: `status.type` is the column's type (`done` is new); `type` is read on
+  `POST/PUT /v2/list/{id}/status…` (before: warned as not supported).
+- **Column types meet the 2.16 column transition policy.** `ValueObject\BoardColumnSnapshot` gains `type` (the column's
+  type, read among the board's columns; a new trailing constructor argument, null by default) and
+  `TaskStatusChangedEvent::$toType` is filled (it was always null in 2.16 and 2.17). The Task API's *humans only* guard
+  of the completion column (audit PC-M1) follows the types: on a typed board an `api` / `mcp` caller may not add a
+  `done` or `closed` column, or retype a column into or out of them, while one of the board's done columns is flagged;
+  reordering a typed board no longer moves the completion, so it is allowed. Reopen limits of `PUT /v2/task/{id}` and
+  the bulk update count a task leaving the done columns (before: leaving the last column, read from an unsorted list).
+- **Audit PW, column changes in a sharing folder.** A column edit (add, update, reorder, delete, humans-only flag) on a
+  board whose folder shares its statuses changes every board of the folder, so `BoardColumnManager` now asks, with an
+  actor, the folder right and the restructure right on every board of the folder (`FolderStatusSets::assertMayChangeColumns()`)
+  and refuses `TaskBoardRestructureRefusedException` (`not_allowed`) before anything changes: a flash in the board UI,
+  403 `ACCESS_002` on the Task API (PW-H1). `propagateFrom()` takes the actor (the column events carry it, new optional
+  `AbstractColumnEvent::$actor`) and never rewrites a board it may not restructure. The tasks a retype, a status set or
+  its propagation moves or completes get a `column` / `completed` history row and TASK_STATUS_CHANGED (operation
+  `columns`), TASK_COMPLETED or TASK_REOPENED after the commit (PW-L5). A dependency between two tasks of one board of a
+  folder is checked for cycles across the folder's boards (PW-L3). Audit delta PW-1: joining a folder that shares its
+  statuses needs the restructure right on every board already in it (D1-L1); applying a saved column set to a board of
+  such a folder goes through the same rights (`ColumnSetManager::applyToBoard()` takes the actor) and carries the new
+  columns to the other boards (D1-L2); a column deletion asks the column transition policy, through the caller's
+  channel, for the tasks it moves on the other boards too, all or none before anything is written (D1-L3); the
+  follow-up events take the channel of the host's write provenance (D1-I1); the propagation resolves its actor as an
+  entity of the bundle's manager (D1-I3).
+- **Dependencies across the boards of a folder (FR-032).** `TaskDependencyManager` accepts two tasks of two boards of the
+  same folder (cycles checked across the folder); any other pair is still `other_board` (`LINK_002`).
+- **Shared status sets (FR-034).** `Folder\FolderStatusSets::setStatusSet()` / `shareFrom()` give every board of a folder
+  the same columns (name, order, type; `task_board_folders.status_set`), in one transaction, never orphaning a task: a
+  column that holds tasks and is dropped needs a column map (`columns_in_use` otherwise). A board moved into the folder
+  takes the set; a column edit on one board is carried to the others after it is saved (a sibling that would orphan
+  tasks is logged and left as it is). `Configuration\BoardColumnSpec` / `BoardColumnsApplier` are the data and the
+  applier; a spec carries the column's 2.16 *humans only* flag too (`humansOnly`, false when an older array has none).
+- **Native custom fields (FR-028).** `Entity\TaskCustomField` (text, number, dropdown with coloured options; per tenant or
+  per board) and `TaskCustomFieldValue` (one per task and field). `Field\TaskCustomFieldManager`: `define()`,
+  `update()`, `delete()` (under the restructure policy), `setField()` (history row `custom_field`), `valuesOf()` and the
+  operator filters (`=`, `≠`, `<`, `>`, is set, is not set, in). Task API: `GET /v2/list/{id}/field` lists the native
+  fields first, `POST /v2/task/{id}/field/{field_id}` writes a native field (a provider's keeps 409 `FIELD_001`), task
+  lists take `custom_fields`, and a task's `custom_fields` carries the native values. UI: a row per field on the task
+  form and a column per field plus an operator filter on the list view. `valuesOf()` gives each task's values in the
+  fields' order (the order of `fieldsFor()`) on every database; a tenant field's `tenant_key` is a key column
+  (REQ-SEC-006: binary NO PAD collation on MySQL / MariaDB). Audit PW: a number whose integer part is above PHP_INT_MAX
+  is refused (`invalid`) instead of being answered saturated by the Task API (PW-L1); a task moved to another board takes
+  its old board's field values to the target's field of the same name and type, or loses them with a history row
+  (`TaskBoardMoveResult::$droppedFieldValues`), and `hasValues()` of a board's field counts only tasks still on it (PW-L6).
+- A folder's `tenant_key` is a key column (REQ-SEC-006): binary NO PAD collation on MySQL / MariaDB, as the boards'.
+- Demo: migrations `Version20261115100000` (folders), `Version20261115110000` (column types, status sets),
+  `Version20261115120000` (custom fields), `Version20261115130000` (numbering prefix).
+- **Board configuration as data (Beacon block W, work method presets).** `Configuration\BoardConfiguration` — a
+  framework-free VO, serialisable to and from an array or JSON — holds a board's columns (order, name, type, colour,
+  icon), its own custom fields (options and colours), its task templates (through
+  `BoardTemplatesConfigurationInterface`; the default `NoBoardTemplates` has none: the bundle's 2.16 task templates
+  are not wired to it yet, so a host aliases its own) and its numbering prefix.
+  `BoardConfigurationExporter::export(board)` reads it; `BoardConfigurationApplier::apply(actor, board, configuration,
+  columnMap)` replaces the board's configuration in one transaction, under the restructure policy, never orphaning a
+  task (`columns_in_use` without a column map) and never dropping field values silently (`fields_in_use` unless
+  `dropFieldValues`); `applyById()` / `exportById()` are tenant-checked. Every refusal known in advance (columns in use,
+  fields with values, an invalid prefix and, since audit PW-M2, field definitions: two fields of one name, more than 200
+  options, a duplicate or empty option name, a colour that is not hex) is checked before the transaction opens, so a
+  refused apply leaves the entity manager and the caller's board as they were (worker mode, kernel reset off). The
+  tasks an apply moves or completes get their history rows and events (audit PW-L5).
+- **Numbering prefix.** `TaskBoard::numberPrefix` (`AIF` shows task 12 as `AIF-12` instead of `#12`); the Task API's
+  `custom_id` is `AIF-12` when the board has a prefix and the task a number.
+- **Restructure policy port** `Folder\TaskBoardRestructurePolicyInterface` (`restructure.policy`; default
+  `ManageRightRestructurePolicy`: the create-board decision for folders, `canManageBoard()` for a board).
+- **Task API folders**: `GET/POST /v2/space/{id}/folder` (before: always empty), `GET/PUT/DELETE /v2/folder/{id}`
+  (409 `FOLDER_001` while lists are in it), `GET/POST /v2/folder/{id}/list`. A list's and a task's `folder` is its real
+  folder (`hidden: false`) when it has one.
+
+### Changed
+
+- Task API: `GET /v2/space/{id}/list` lists the folderless boards only, as ClickUp does; a board in a folder is listed
+  by `GET /v2/folder/{id}/list` and `GET /v2/space/{id}/folder`, or with `include_folders=true` (default:
+  `api.lists_include_folders`, false). Nothing changes until a folder is used.
+- `moveTasks()` asks the host's column transition policy (`column_transition_policy`, 2.16.0) for every task that changes
+  board, as it enters its column on the target (operation `ColumnTransitionVia::OP_BOARD_MOVE`, `board_move`), before
+  anything changes; the new optional `$via` carries the caller's channel (null: the `write_provenance_provider`'s channel, else `web`), so an MCP server that passes
+  `mcp` cannot reach a *humans only* column through a move. A refusal is `ColumnTransitionRefusedException`.
+- `moveTasks()` keeps each task's completion consistent with its column (audit PW-M1): a column map or a same-name
+  column is used only when it fits (an open task never lands in a done column, a completed one never in an open column);
+  otherwise the move rule decides, as for a move from the board UI. `TaskBoardMoveResult::$columnMapIgnored` lists the
+  moved tasks whose map entry was not used (audit PW-D1-I2).
+- `moveTasks()` refuses `stale` (`TaskBoardRestructureRefusedException::STALE`) when a moved tree changed between its
+  read and its row locks (audit PW-L2): nothing is changed, the caller retries.
+- `moveBoardToFolder()` with a folder needs the folder right of its tenant (`mayManageFolders()`) besides the board's
+  (audit PW-H1); leaving a folder keeps the board's existing dependencies on the folder's boards (PW-I4).
+- `folder()` / `folders()` do not check who asks: the host scopes the ids and tenants it passes (PW-I3).
+- `moveTasks()` returns `formerParents` (moved task id => its parent before the move) and writes `parent:<id>` as the
+  context of the `board_moved` history row, so a host can archive the emptied story.
+
 ## [2.18.0] - 2026-11-14
 
 Target 2.18.0 (minor). Additive; one schema change (nullable columns), see [UPGRADING](UPGRADING.md#to-2180).

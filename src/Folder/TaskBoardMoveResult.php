@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Folder;
+
+/**
+ * Since 2.19.0 (FR-045): what {@see TaskBoardRestructureInterface::moveTasks()} did. Every id is kept: a moved task has
+ * the same id, number (with `task_numbers.scope: tenant`), comments, time entries, tags and history as before, plus a
+ * "moved to another board" history row.
+ */
+final readonly class TaskBoardMoveResult
+{
+    /**
+     * @param list<string> $movedTaskIds every task moved, subtasks included, in the order they moved
+     * @param list<string> $unchangedTaskIds tasks asked for that were already top-level tasks of the target
+     * @param array<string, string> $columns moved task id => the target column id it landed in ('' for none)
+     * @param list<string> $removedDependencyIds dependencies the target cannot keep (another board outside its folder)
+     * @param list<string> $removedMemberIds members not assignable on the target
+     * @param list<string> $columnMapIgnored since 2.19.0 (audit PW-D1-I2): moved task ids whose column map entry was not
+     *                                       used because it did not fit the task's completion ({@see $columns} says where
+     *                                       each went)
+     * @param array<string, list<string>> $droppedFieldValues since 2.19.0 (audit PW-L6): moved task id => the names of its
+     *                                                        old board's fields whose values it lost (no field of that name
+     *                                                        and type on the target); the others went to the target's field
+     * @param array<string, string|null> $formerParents moved task id => its parent's id before the move, null when top-level (`parent:<id>` in the history)
+     */
+    public function __construct(
+        public string $targetBoardId,
+        public array $movedTaskIds,
+        public array $unchangedTaskIds,
+        public array $columns,
+        public array $removedDependencyIds,
+        public array $removedMemberIds,
+        public array $formerParents = [],
+        public array $columnMapIgnored = [],
+        public array $droppedFieldValues = [],
+    ) {
+    }
+}

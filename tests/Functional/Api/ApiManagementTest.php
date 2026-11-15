@@ -186,7 +186,9 @@ final class ApiManagementTest extends ApiTestCase
         $statuses = $this->json()['statuses'];
         self::assertSame(['To do', 'Doing', 'Done', 'Review'], array_column($statuses, 'status'));
         self::assertSame('#3b82f6', $statuses[3]['color']);
-        self::assertSame([['field' => 'type', 'reason' => 'not_supported']], $this->json()['warnings']);
+        // Since 2.19.0 (FR-033): `type` is read; the first type set writes the position types of the other columns.
+        self::assertArrayNotHasKey('warnings', $this->json());
+        self::assertSame(['open', 'custom', 'closed', 'custom'], array_column($statuses, 'type'));
         $review = $statuses[3]['id'];
 
         $this->send('PUT', $base . '/' . $review, ['status' => 'Code review']);
@@ -295,6 +297,22 @@ final class ApiManagementTest extends ApiTestCase
             $this->assertRefused(403, 'ACCESS_002');
         }
         self::assertSame([], $this->audit()->events);
+    }
+
+    /** Since 2.19.0 (FR-033): column types on the status paths. */
+    public function testColumnTypes(): void
+    {
+        $base = '/api/tasks/v2/list/' . $this->roadmap->getId() . '/status';
+        $this->send('POST', $base, ['status' => 'Cancelled', 'type' => 'closed']);
+        self::assertSame(['open', 'custom', 'closed', 'closed'], array_column($this->json()['statuses'], 'type'));
+        $this->send('POST', $base, ['status' => 'Third', 'type' => 'closed']);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->send('POST', $base, ['status' => 'Odd', 'type' => 'weird']);
+        $this->assertRefused(400, 'INPUT_002');
+        $this->get('/api/tasks/v2/list/' . $this->roadmap->getId());
+        $doing = $this->json()['statuses'][1]['id'];
+        $this->send('PUT', $base . '/' . $doing, ['type' => 'done']);
+        self::assertSame('done', $this->json()['statuses'][1]['type']);
     }
 
     /** Since 2.5.0 (TB-13): a host that denies `manage_columns` refuses the four status paths, not the board ones. */

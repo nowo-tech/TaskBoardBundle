@@ -6,15 +6,22 @@ namespace Nowo\TaskBoardBundle\Api\Value;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldCondition;
 
 use function array_filter;
+use function array_is_list;
 use function array_map;
 use function array_values;
+use function count;
 use function ctype_digit;
 use function in_array;
 use function intdiv;
 use function is_array;
+use function is_float;
+use function is_int;
 use function is_string;
+use function json_decode;
 use function mb_strlen;
 use function mb_strtolower;
 use function preg_match;
@@ -41,6 +48,7 @@ final readonly class TaskApiTaskFilter
      * @param array<string, DateTimeImmutable> $dates `due_date_gt` and the like
      * @param list<string> $spaceIds team endpoint only
      * @param list<string> $listIds team endpoint only
+     * @param list<TaskCustomFieldCondition> $customFields since 2.19.0 (FR-028): `custom_fields`, ClickUp's JSON filter
      */
     public function __construct(
         public int $page = 0,
@@ -56,6 +64,7 @@ final readonly class TaskApiTaskFilter
         public bool $markdown = false,
         public array $spaceIds = [],
         public array $listIds = [],
+        public array $customFields = [],
         // Since 2.16.0 (spec 234, FR-026): `query`, the text search (null: none).
         public ?string $query = null,
     ) {
@@ -100,8 +109,49 @@ final readonly class TaskApiTaskFilter
             markdown: self::flag($query, 'include_markdown_description'),
             spaceIds: self::list($query, 'space_ids'),
             listIds: self::list($query, 'list_ids'),
+            customFields: self::customFields($query['custom_fields'] ?? null),
             query: self::text($query),
         );
+    }
+
+    /**
+     * Since 2.19.0 (FR-028): `custom_fields=[{"field_id": "…", "operator": "=", "value": "…"}]` (ClickUp's shape): operators
+     * `=`, `!=`, `<`, `>`, `IS NOT NULL`, `IS NULL`, `ANY` (value: a list). At most 10 conditions; anything else is 400.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskCustomFieldCondition>
+     */
+    public static function customFields(mixed $raw): array
+    {
+        if ($raw === null) {
+            return [];
+        }
+        $decoded = is_string($raw) ? json_decode($raw, true, 8) : null;
+        if (!is_array($decoded) || !array_is_list($decoded) || count($decoded) > 10) {
+            throw self::invalid('custom_fields');
+        }
+        $conditions = [];
+        foreach ($decoded as $item) {
+            $operator = is_array($item) && is_string($item['operator'] ?? null) ? CustomFieldOperator::parse($item['operator']) : null;
+            if (!is_array($item) || !is_string($item['field_id'] ?? null) || !$operator instanceof CustomFieldOperator) {
+                throw self::invalid('custom_fields');
+            }
+            $value  = $item['value'] ?? null;
+            $values = [];
+            foreach (is_array($value) ? $value : ($value === null ? [] : [$value]) as $one) {
+                if (!is_string($one) && !is_int($one) && !is_float($one)) {
+                    throw self::invalid('custom_fields');
+                }
+                $values[] = (string) $one;
+            }
+            if (($operator->needsValue() && $values === []) || ($operator !== CustomFieldOperator::In && count($values) > 1) || count($values) > 100) {
+                throw self::invalid('custom_fields');
+            }
+            $conditions[] = new TaskCustomFieldCondition($item['field_id'], $operator, $values);
+        }
+
+        return $conditions;
     }
 
     /**

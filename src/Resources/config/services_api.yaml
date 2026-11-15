@@ -43,6 +43,8 @@ services:
     Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
         public: true
         tags: ['controller.service_arguments']
+        arguments:
+            $listsIncludeFolders: '%nowo_task_board.api.lists_include_folders%'
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController:
         public: true
@@ -73,6 +75,10 @@ services:
         public: true
         arguments:
             $columnIconIds: '%nowo_task_board.board.column_icon_ids%'
+
+    # Since 2.19.0 (Beacon spec 234): folders.
+    Nowo\TaskBoardBundle\Api\Operation\TaskApiFolderOperations:
+        public: true
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController:
         public: true

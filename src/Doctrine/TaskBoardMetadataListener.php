@@ -13,8 +13,10 @@ use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
@@ -57,6 +59,10 @@ final readonly class TaskBoardMetadataListener
         TaskSyncItem::class      => ['externalId'],
         // Since 2.16.0 (spec 234, FR-061): a template's tenant, mapped only with `task_templates.enabled`.
         TaskTemplate::class => ['tenantKey'],
+        // Since 2.19.0 (Beacon spec 234, FR-031): a folder's tenant.
+        TaskBoardFolder::class => ['tenantKey'],
+        // Since 2.19.0 (FR-028): a tenant custom field's tenant.
+        TaskCustomField::class => ['tenantKey'],
     ];
 
     public function __construct(

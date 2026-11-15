@@ -28,6 +28,8 @@ use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
@@ -35,6 +37,7 @@ use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
@@ -45,7 +48,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 use function array_filter;
 use function array_key_first;
-use function array_key_last;
 use function array_map;
 use function array_unique;
 use function array_values;
@@ -104,6 +106,8 @@ final readonly class TaskApiTaskOperations
         private TaskApiCommentEditPolicyInterface $commentEdits = new AuthorOnlyTaskApiCommentEditPolicy(),
         // Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled`, `template_id` on a new task.
         private ?TaskTemplateManager $templates = null,
+        // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -232,9 +236,8 @@ final readonly class TaskApiTaskOperations
         $archived = $input->bool('archived');
         // Audit IA-L6: every limit before the first save. A restored task that was open, and a done one leaving the done
         // column, each add an active task.
-        $columns  = $board->getColumns()->toArray();
-        $last     = $columns === [] ? null : $columns[array_key_last($columns)];
-        $reopens  = $status instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $status->getId() !== $last->getId();
+        // Since 2.19.0 (FR-033): leaving the done columns (column type; the last column on an untyped board).
+        $reopens  = $status instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($status);
         $restores = $archived === false && $task->isArchived() && !$task->isCompleted();
         if ($this->tasks->activeTaskRefusal($board, (int) $reopens + (int) $restores) instanceof LimitRefusal) {
             throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
@@ -436,10 +439,8 @@ final readonly class TaskApiTaskOperations
     {
         $reopens = [];
         foreach ($plans as $index => $plan) {
-            $task    = $tasks[$index];
-            $columns = $task->getBoard()->getColumns()->toArray();
-            $last    = $columns === [] ? null : $columns[array_key_last($columns)];
-            if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && $last instanceof BoardColumn && $plan['status']->getId() !== $last->getId()) {
+            $task = $tasks[$index];
+            if ($plan['status'] instanceof BoardColumn && $task->isCompleted() && !ColumnTypes::isDone($plan['status'])) {
                 $reopens[$task->getBoard()->getId()][] = $index;
             }
         }
@@ -640,12 +641,26 @@ final readonly class TaskApiTaskOperations
      *
      * @throws TaskApiRefusal
      */
-    public function setField(TaskApiPrincipal $principal, string $taskId): never
+    public function setField(TaskApiPrincipal $principal, string $taskId, string $fieldId = '', ?TaskApiInput $input = null): Task
     {
         $this->audit->requireListener();
-        $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        // Since 2.19.0 (FR-028): a native field of the task's board is writable; any other (a provider's) stays 409.
+        $field = $this->customFields?->fieldOfBoard($task->getBoard(), $fieldId);
+        if ($field === null || !$input instanceof TaskApiInput) {
+            throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');
+        }
+        if (!$input->has('value')) {
+            throw new TaskApiRefusal(400, 'INPUT_001', 'Missing value');
+        }
+        try {
+            $this->customFields?->setField($task, $field->getId(), $input->raw('value'), $principal->user);
+        } catch (TaskCustomFieldRefusedException) {
+            throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid value');
+        }
+        $this->audit->written($principal, 'field.set', $task->getBoard(), $taskId, ['field' => $field->getId()], ['custom_fields']);
 
-        throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');
+        return $task;
     }
 
     /**

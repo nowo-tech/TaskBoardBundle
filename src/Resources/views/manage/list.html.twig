@@ -61,6 +61,14 @@
             {% endfor %}
         {{ form_end(filterForm) }}
 
+        {# Since 2.19.0 (Beacon spec 234, FR-028): the custom field filter (field, operator, value), sent as GET. #}
+        {% if customFieldFilter|default(null) is not null %}
+            {{ form_start(customFieldFilter, {attr: {class: 'nowo-ui-filter-bar nowo-task-list__custom-filter', 'data-testid': 'nowo-task-custom-field-filter'}}) }}
+                {{ form_widget(customFieldFilter) }}
+                <button type="submit" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.custom_field.filter.apply'|trans({}, 'NowoTaskBoardBundle') }}</button>
+            {{ form_end(customFieldFilter) }}
+        {% endif %}
+
         {% set _groups = board.columns|map(c => {column: c, tasks: tasks|filter(t => t.column and t.column.id == c.id)}) %}
         {% set _orphans = tasks|filter(t => not t.column) %}
         {% if _orphans is not empty %}
@@ -98,18 +106,18 @@
                     <p class="nowo-task-list__empty">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
                 {% else %}
                     {% embed nowo_ui_partial('table', 'NowoTaskBoardBundle') with {
-                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null)),
+                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null), customFields|default([])),
                         label: group.column ? group.column.name : 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle'),
                         foot_attr: {class: 'nowo-task-list__time-col', 'data-nowo-task-board-list-filter-target': 'totals'},
                         bundle: 'NowoTaskBoardBundle',
                     } %}
                         {% block nowo_ui_table_row %}
-                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row}) }}
+                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row, customFields: customFields|default([]), customValues: customValues|default({})}) }}
                         {% endblock %}
                         {# Since 1.15: the totals of the rows the filters show (kept up to date by the list filter controller). #}
                         {% block nowo_ui_table_foot %}
                             <tr>
-                                <th scope="row" colspan="{{ nowo_task_board_numbers_enabled() ? 6 : 5 }}">{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="row" colspan="{{ (nowo_task_board_numbers_enabled() ? 6 : 5) + customFields|default([])|length }}">{{ 'task_board.list.total_shown'|trans({}, 'NowoTaskBoardBundle') }}</th>
                                 <td class="nowo-task-list__num" data-total="estimate">—</td>
                                 <td class="nowo-task-list__num" data-total="spent">—</td>
                                 <td class="nowo-task-list__num" data-total="deviation">—</td>
