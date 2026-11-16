@@ -113,6 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Demo
+
+- The demo is built on UiKit and FormKit (REQ-DEMO-014 / REQ-DEMO-015): `templates/base.html.twig` is UiKit's admin layout with its default theme and a masthead (the dead Tabler-CDN base template, the CDN Bootstrap Icons stylesheet, `admin.html.twig` and `demo.css` are gone), `nowo_ui_kit` uses `css_framework: custom` with `icon_set: svg_inline`, the Twig, TagInput and Tiptap form themes are UiKit's `nowo_ui_layout`, and `nowo_form_kit.css_framework` is `none`. `nowo-tech/ui-kit-bundle` is required by the demo (`^2.52`, `form-kit-bundle` `^2.23`). The icon e2e test checks that no stylesheet comes from a foreign host instead of the Bootstrap Icons font. WebP screenshots (`make -C demo/symfony8 demo-screenshots`) added to the README (REQ-DEMO-013). No bundle runtime change.
+
 ### Documentation
 
 - Spec Kit baseline maps all 939 tracked `src/` files (1.23–2.20 additions) and `spec.md` gains the semantic FRs of the API, provider sync, ports, numbers, calendar, recurrence, move / duplicate, multi-board, custom fields, folders, templates, transitions, search and task tree (REQ-SPECKIT-001/003).

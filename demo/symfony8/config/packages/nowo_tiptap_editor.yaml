@@ -4,4 +4,4 @@ nowo_tiptap_editor:
     default_profile: default
     profiles:
         default:
-            form_theme: bootstrap_5_layout.html.twig
+            form_theme: '@NowoUiKit/form/nowo_ui_layout.html.twig'

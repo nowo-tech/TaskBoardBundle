@@ -1,18 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Task Board Demo{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-    <link rel="stylesheet" href="{{ asset('css/demo.css') }}">
-</head>
-<body>
-<div class="page">
-    <div class="container py-4">
-        {% block body %}{% endblock %}
-    </div>
-</div>
-</body>
-</html>
+{#- REQ-DEMO-014: the demo shell is UiKit's admin layout with UiKit's default theme (nowo-ui.css from the bundle's own
+    asset package, no CSS framework, no CDN, inline SVG icons). The TaskBoard pages render in it too
+    (nowo_ui_kit.layouts.admin). -#}
+{% extends '@NowoUiKit/layout/admin.html.twig' %}
+
+{% block nowo_ui_document_title %}{% block title %}Task Board Demo{% endblock %}{% endblock %}
+
+{% block nowo_ui_navigation %}
+    {% set _route = app.request.attributes.get('_route')|default('') %}
+    <header class="nowo-ui-header" data-testid="demo-masthead">
+        <a class="nowo-ui-brand" href="{{ path('nowo_task_board_index') }}">Task Board Bundle Demo</a>
+        <nav class="nowo-ui-menu" aria-label="Task Board Bundle">
+            <a class="nowo-ui-link" href="{{ path('nowo_task_board_index') }}"{% if _route starts with 'nowo_task_board' %} aria-current="page"{% endif %}>Boards</a>
+        </nav>
+        <div class="nowo-ui-header__end">
+            {{ include('@NowoUiKitBundle/partials/_theme_toggle.html.twig', { compact: true }, false) }}
+        </div>
+    </header>
+{% endblock %}
+
+{% block nowo_ui_content %}{% block body %}{% endblock %}{% endblock %}

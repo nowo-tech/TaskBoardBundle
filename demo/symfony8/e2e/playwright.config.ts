@@ -28,6 +28,8 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL, trace: 'retain-on-failure', viewport: { width: 1280, height: 900 } },
   projects: [
+    // REQ-DEMO-013: README screenshots (make demo-screenshots), captured on a desktop viewport.
+    { name: 'screenshots', testMatch: /screenshots\.spec/, use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } } },
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'phone', use: { ...devices['Pixel 7'] } },
     // Since 2.0.0: the screens that moved to UiKit run in every engine: `--project=firefox --project=webkit`.
@@ -39,5 +41,5 @@ export default defineConfig({
     // Since 2.8.0 (host mobile UX audit MUX-70, MUX-73, MUX-74): the phone layout at 390 × 844 in Chromium and WebKit.
     { name: 'phone-chromium', testMatch: /phone-layout/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
     { name: 'phone-webkit', testMatch: /phone-layout/, use: { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } } },
-  ],
+  ].map((project) => (project.name === 'screenshots' ? project : { ...project, testIgnore: /screenshots\.spec/ })),
 });
