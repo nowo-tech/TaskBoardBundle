@@ -23,6 +23,8 @@
 - [Services reviewed](#services-reviewed)
 - [Request memos and boundaries (2.11.1)](#request-memos-and-boundaries-2111)
 - [Multi-board list (2.13.0)](#multi-board-list-2130)
+- [AI Flow features (2.16.0)](#ai-flow-features-2160)
+- [Task templates (2.16.0)](#task-templates-2160)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)

@@ -229,9 +229,40 @@ the board.
 
 ---
 
+### Additions 1.23–2.20
+
+- **FR-API-001**: Task API v2 (spec 213, 2.2+): ClickUp-compatible REST endpoints (`Api/Controller`, `Api/Operation`, `Api/Serializer`, `Api/Value`, `Api/Repository`) behind bearer-token principals and capabilities (`Api/*` value types); thin controllers, one operation per request, bounded queries.
+- **FR-API-002**: API security and idempotency: `TaskApiGuard` checks every id-based target per request, `TaskApiRequestListener` resolves the principal, `Idempotency-Key` writes are kept 24 h (`TaskApiIdempotencyRecord`, `DoctrineTaskApiIdempotencyStore`, `TaskApiIdempotencyListener`, purge command); `TaskConstraints` holds the write rules; `JsonTextFunction` DQL helper.
+- **FR-API-003**: API host hooks (`Api/Hook`): deny-by-default attachments, plan gate, comment edit policy and other host decisions, each with a safe default implementation.
+- **FR-SYNC-010**: Provider sync (1.23+): `TaskBoardConnection` links a board to one remote list; `Sync/Provider` adapters (ClickUp, in-memory test provider) read through `ProviderHttpClient` (fixed base URI, timeouts, retries via `SleeperInterface`); `Sync/Entity`, `Sync/Repository`, `Sync/Dto`, `Sync/Event`, `Sync/Exception` (fixed English messages, no provider payload) and `TaskBoardSyncCommand` run resumable slices.
+- **FR-SYNC-011**: Sync host hooks (`Sync/Hook`) and people directory (`Sync/People`, `Sync/View`): person resolution, attribution-only mode, mapping decisions, legacy-author migration and view models of remote people.
+- **FR-SYNC-012**: Sync content safety: `RemoteContentSanitizer` stores provider text as safe Markdown; `Sync/File` downloads attachments only from allow-listed hosts with size / type checks and SSRF guards.
+- **FR-SYNC-013**: Sync status, checklists and tracked time: `Sync/Status` maps remote statuses to columns and cleans unmatched columns after the first import; `SyncChecklistWriter` keeps ClickUp checklists as subtasks; `Sync/Time` hands read-only time entries to the host by window.
+- **FR-PORT-001**: Framework-free host ports (REQ-ARCH-001, 2.15+): `Port/*` gates call the host twins (`*Interface` VO-typed successors under `Assignee`, `Comment`, `History`, `Import`, `Move`, `Tenancy`, `View`, `User`), wired by `TaskBoardPortsPass`; `TaskBoardUsers` / `TaskBoardUserDirectoryInterface` / `TaskBoardUserRefType` reference host users by id when `database.user_reference: id`.
+- **FR-ORM-010**: Persistence options: XML mapping alternative for every entity (`Resources/config/doctrine-xml`), optional private entity manager (`PrivateEntityManagerPass`, `PrivateEntityManagerReferencesPass`), `Doctrine/*` helpers (key collation for REQ-SEC-006, lock-conflict detection, manager lookup), repositories that see archived tasks and slug uniqueness checks.
+- **FR-EVT-010**: Domain events with ids only (`Event/*`, 2.10+): task lifecycle, column and dependency events dispatched after commit so hosts can react without entities.
+- **FR-NUM-001**: Task numbers (spec 214, `task_numbers.enabled`): `TaskNumberCounter` / `TaskNumberEntry` ledger per scope, listener numbering on persist, aliases resolved by `TaskNumberLedger`, backfill service and command.
+- **FR-CAL-001**: Calendar (spec 214, 2.1+ / 2.14): calendar modes, week chips and host day annotations (`Calendar/*`, `CalendarMode`).
+- **FR-REC-001**: Recurring tasks (spec 215, `recurrence.enabled`): `TaskRecurrence` / `TaskOccurrence`, a pure date planner, the series manager and the board-move listener.
+- **FR-MOVE-001**: Move and duplicate (specs 215/217): `TaskCopier` with `TaskCopyOptions`, column rules, target boards (`Move/*`), `TaskCopyController`.
+- **FR-MULTI-001**: Multi-board list and export (2.13, `multi_board.enabled`): bounded per-board queries, read checks, CSV / streamed XLSX export (`MultiBoard/*`, `TaskBoardMultiBoardController`).
+- **FR-FIELD-001**: Native custom fields (2.19, FR-028): `TaskCustomField` / `TaskCustomFieldValue`, filter conditions with operators, form rows and list columns (`Field/*`, `CustomFieldOperator`).
+- **FR-FOLDER-001**: Board folders and shared status sets (2.19, FR-031/FR-034): `TaskBoardFolder`, `Folder/*`, `Configuration/*` column specs applied by `BoardColumnsApplier` without stranding tasks, `ColumnType`, restructure policy.
+- **FR-TPL-002**: Task templates (2.16, FR-061, `task_templates.enabled`): `TaskTemplate` entity, manager, data and permission port (`Template/*`).
+- **FR-TRANS-001**: Column transition policies (2.16, FR-014/015): `ColumnTransitionPolicyInterface` with allow-all default and opt-in humans-only policy; refusals carry codes (`Transition/*`, `ValueObject/ColumnTransition*`).
+- **FR-SEARCH-001**: Task text search (2.16, FR-026): `TaskTextSearchInterface`, Doctrine default search and optional FULLTEXT metadata (`Search/*`).
+- **FR-TREE-002**: Task tree (2.20, T004): reparent port and domain service with bounded walks and `max_subtask_depth` (`Tree/*`, `DoctrineOrmTaskTreeStore`).
+- **FR-MEMBER-001**: Members, avatars and provenance (1.23-2.18): avatar URL policy and resolver port (`Avatar/*`), member badges (`Member/*`), write provenance channel (`Provenance/*`).
+- **FR-BOARD-010**: Board creation scope and icons (spec 211, 2.9): scope steps and fields from the host (`Board/*`), board / column icons and default icon filler (`Support/*`, `DefaultColumnIconFiller`, apply-icons command).
+- **FR-SVC-010**: Supporting services and DTOs of 1.23-2.20: column manager port, period lock defaults, eraser with signed cursor (`Dto/Erase*`, `EraseCursorSigner`), TimeTrack bridges (`Bridge/TimeTrack`), import helpers (`Import/*`), exceptions, view resolvers and UiKit page plumbing (`TaskBoardPages`).
+- **FR-WORKER-002**: Request boundary for kept-alive kernels (REQ-RUNTIME-002): `TaskBoardRequestBoundarySubscriber` + `UnitOfWorkFrames` empty request memos at every unit-of-work boundary.
+- **FR-UI-020**: Manage UI templates of 1.23-2.20 (`Resources/views/manage/*`: board create steps, lists, connection dialogs, calendar, multi-board, templates, custom fields) on the UiKit page contract.
+- **FR-ASSET-010**: TypeScript sources and co-located Vitest tests added in 1.23-2.20 (`Resources/assets/src/*`: board create steps, openers, confirm dialogs, anchors and other Stimulus controllers).
+- **FR-DI-010**: Optional service files per feature (`services_api.yaml`, `services_multi_board.yaml`, `services_numbers.yaml`, `services_recurrence.yaml`, `services_sync.yaml`, `services_templates.yaml`), loaded only when the feature is enabled.
+
 ## Success Criteria
 
-- **SC-001**: **262/262** production files mapped (audited 2026-11-01; `git ls-files src | grep -v '\.test\.ts$' | wc -l`; `*.test.ts` excluded), of which 206 PHP / TypeScript sources.
+- **SC-001**: **939/939** tracked `src/` files mapped in [`code-inventory.md`](code-inventory.md) (audited 2026-11-16 on 2.20.0; `git ls-files src | wc -l`, 20 of them co-located Vitest files).
 - **SC-002**: Config keys match `Configuration.php` and Flex recipe defaults.
 - **SC-003**: PHPUnit + Vitest + PHPStan pass in CI.
 - **SC-004**: Demo with TimeTrack: board + timer + aggregated time on task.

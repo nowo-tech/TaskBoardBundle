@@ -2,14 +2,19 @@
 
 A REST API shaped like ClickUp API v2, for scripts and agents with a personal token (spec 213, since 2.2). Off unless `api.enabled: true`. **Audit IA (2026-11-08): Pass-Low at `637494e`.**
 
+With `api.enabled: false` a host gets no route, service, listener, parameter or table. Paths below are relative to `api.prefix` (default `/api/tasks`).
+
 ## Table of contents
 
 - [Turning it on](#turning-it-on)
 - [What a host provides](#what-a-host-provides)
 - [Firewall](#firewall)
 - [Access](#access)
+  - [Logging time](#logging-time)
 - [Read endpoints](#read-endpoints)
+  - [Task numbers](#task-numbers)
 - [Write endpoints](#write-endpoints)
+- [Column transitions, revisions and bulk updates (since 2.16)](#column-transitions-revisions-and-bulk-updates-since-216)
 - [Management endpoints (Full)](#management-endpoints-full)
 - [Task templates (since 2.16)](#task-templates-since-216)
 - [Provenance fields (since 2.18)](#provenance-fields-since-218)
@@ -17,10 +22,10 @@ A REST API shaped like ClickUp API v2, for scripts and agents with a personal to
 - [Idempotency](#idempotency)
 - [Errors](#errors)
 - [Differences from ClickUp](#differences-from-clickup)
+  - [What the contract test pins](#what-the-contract-test-pins)
+  - [Other differences](#other-differences)
 - [Known differences from the UI](#known-differences-from-the-ui)
 - [Material for a host's manual](#material-for-a-hosts-manual)
-
-With `api.enabled: false` a host gets no route, service, listener, parameter or table. Paths below are relative to `api.prefix` (default `/api/tasks`).
 
 ## Turning it on
 

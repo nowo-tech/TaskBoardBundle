@@ -46,3 +46,6 @@
 *.db
 *.sqlite
 *.sqlite3
+
+# pnpm local store (REQ-GITIGNORE-003)
+/.pnpm-store

@@ -23,14 +23,14 @@ Others are **N/A** (or already covered by Symfony) so the decision stays auditab
 
 | PSR | Decision | Notes |
 | --- | -------- | ----- |
-| PSR-3 Logger | **Adopted** (1.21) | `psr/log`: `Psr\Log\LoggerInterface` injected (default `NullLogger`) in `TaskBoardManageController` and `TaskImportOrchestrator` (REQ-OBS-001); context = action, object ids and counts, no personal data. |
+| PSR-3 Logger | **Adopted** (1.21) | `psr/log`: `Psr\Log\LoggerInterface` injected (default `NullLogger`) since 1.21 in `TaskBoardManageController` and `TaskImportOrchestrator`, and since 1.23 in about 25 services (provider sync, people directory, API operations, recurrence, numbers) (REQ-OBS-001); context = action, object ids and counts, no personal data. |
 | PSR-6 / PSR-16 Cache | **N/A** | No package-owned cache layer. |
 | PSR-7 / PSR-17 HTTP messages | **N/A** | Symfony HttpFoundation (or no HTTP messages API) is the correct surface; a PSR-7 bridge would not help consumers. |
-| PSR-18 HTTP client | **N/A** | No outbound HTTP client. |
+| PSR-18 HTTP client | **N/A** | Since 1.23 the provider sync calls remote APIs through Symfony `HttpClientInterface` wrapped by `Sync\Http\ProviderHttpClient` (fixed base URI, timeouts, private-network refusal). The client is an internal detail configured by service id (`sync.http.client`), not a host SPI, so a PSR-18 abstraction would add no interoperability. |
 | PSR-11 Container | **N/A** | No container locator in the public API; constructor injection only. |
-| PSR-14 Event dispatcher | **N/A** | No domain event extension points that need a dispatcher SPI. |
+| PSR-14 Event dispatcher | **N/A** | The bundle dispatches its events (task lifecycle, columns, dependencies, sync) through Symfony's `EventDispatcherInterface`, which hosts already use; events carry ids only. A PSR-14 SPI would only duplicate that contract. |
 | PSR-15 HTTP middleware | **N/A** | Uses Symfony kernel listeners/subscribers (or has no HTTP middleware pipeline). |
-| PSR-20 Clock | **Adopted** (1.21) | `psr/clock` + `symfony/clock`: `Psr\Clock\ClockInterface` injected (default `NativeClock`) in `TaskGanttBuilder` (now of the timeline) and `TaskBoardManageController` (default day of a time entry) (REQ-DI-001). Entity constructors and mutators keep stamping `createdAt` / `updatedAt` / `completedAt` themselves: entities are not services (REQ-ORM-001 rule 6) and tests set those values through the entities. |
+| PSR-20 Clock | **Adopted** (1.21) | `psr/clock` + `symfony/clock`: `Psr\Clock\ClockInterface` injected (default `NativeClock`) since 1.21 in `TaskGanttBuilder` (now of the timeline) and `TaskBoardManageController` (default day of a time entry), and since 1.23 in about 20 services (sync runs, recurrence, calendar, API idempotency) (REQ-DI-001). Entity constructors and mutators keep stamping `createdAt` / `updatedAt` / `completedAt` themselves: entities are not services (REQ-ORM-001 rule 6) and tests set those values through the entities. |
 
 ## Summary
 

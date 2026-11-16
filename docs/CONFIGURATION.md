@@ -7,7 +7,9 @@
 - [Routes](#routes)
   - [Why a route loader instead of `#[Route]` attributes (REQ-SF-004)](#why-a-route-loader-instead-of-route-attributes-req-sf-004)
 - [Task API (since 2.2)](#task-api-since-22)
+- [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Subtask depth (since 2.20)](#subtask-depth-since-220)
+- [Column transitions, humans-only columns and text search (since 2.16)](#column-transitions-humans-only-columns-and-text-search-since-216)
 - [Security](#security)
   - [Firewall](#firewall)
   - [Access checker](#access-checker)
@@ -20,21 +22,25 @@
   - [FormKit profile (REQ-TWIG-005)](#formkit-profile-req-twig-005)
 - [Other options](#other-options)
   - [Tenancy, boards and assignees (since 1.10)](#tenancy-boards-and-assignees-since-110)
-  - [Comments (since 1.16)](#comments-since-116)
-  - [Gantt (since 1.15)](#gantt-since-115)
   - [Query budget (since 1.21)](#query-budget-since-121)
   - [Logging (since 1.21)](#logging-since-121)
+  - [Comments (since 1.16)](#comments-since-116)
+  - [Gantt (since 1.15)](#gantt-since-115)
   - [Rich description editor (Tiptap profile `task`)](#rich-description-editor-tiptap-profile-task)
 - [TimeTrack integration (optional)](#timetrack-integration-optional)
 - [Task import](#task-import)
   - [Assignee resolver](#assignee-resolver)
   - [Custom importers](#custom-importers)
+  - [Assignees by name (since 1.22)](#assignees-by-name-since-122)
+  - [Import limits (since 1.22)](#import-limits-since-122)
+  - [Cross-board lookup (since 1.22)](#cross-board-lookup-since-122)
 - [Provider sync (since 1.23)](#provider-sync-since-123)
+  - [Timeout hierarchy (FrankenPHP / PHP-FPM, REQ-RUNTIME-001)](#timeout-hierarchy-frankenphp--php-fpm-req-runtime-001)
 - [Assets](#assets)
-- [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
 - [Task templates (since 2.16)](#task-templates-since-216)
+- [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [New board (since 1.30)](#new-board-since-130)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
@@ -795,6 +801,24 @@ changes at most every 5 s, and the `done` element is shown when the run ends.
 
 `sync.badge.progress: true` makes the bundle's own `_connection_badge.html.twig` render that bar (the default `false`
 renders as 1.26.2).
+
+### Timeout hierarchy (FrankenPHP / PHP-FPM, REQ-RUNTIME-001)
+
+The only blocking I/O of the bundle is the provider sync (outbound HTTP to the provider API and attachment downloads).
+Every call is bounded, and a run is split into resumable slices, so no request waits for a whole import:
+
+| Layer | Bound | Where |
+| --- | --- | --- |
+| One API call | `sync.http.timeout` (idle, default 10 s) and `sync.http.max_duration` (total, default 30 s) | `ProviderHttpClient` |
+| Rate-limit wait inside a request | `sync.http.max_inline_wait` (default 30 s); a longer wait pauses the run (`rate_limited`, resumable) | provider adapters |
+| One inline slice | `sync.inline_slice_pages` task pages per request (default 5), plus the per-run caps (`max_tasks_per_run`, `max_pages_per_run`, attachment byte caps) | `InlineSyncRunner` |
+| PHP | `max_execution_time` of the host, **above** the worst inline slice | host `php.ini` |
+| HTTP server | FrankenPHP / Caddy `write` timeout (or the FPM / proxy read timeout), **above** PHP's limit | host Caddyfile / proxy |
+
+Keep the order **operation < PHP < server**: lower `inline_slice_pages` (or raise PHP's limit) if one slice of your
+provider can exceed `max_execution_time`. For long imports set `sync.runner` to a Messenger runner, so slices run in a
+worker instead of an HTTP request. A failed or paused slice leaves a stored cursor; the next slice resumes from it, and
+the `TaskBoardSyncCommand` CLI runs a board to completion with the same caps.
 
 ## Assets
 

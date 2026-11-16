@@ -2,6 +2,18 @@
 
 TaskBoard imports **Jira CSV** exports (`jira_csv`). The file must be comma- or tab-separated with a header row.
 
+## Table of contents
+
+- [Export from Jira Cloud](#export-from-jira-cloud)
+  - [From a board or backlog](#from-a-board-or-backlog)
+  - [From Issue Navigator (JQL)](#from-issue-navigator-jql)
+  - [From a saved filter](#from-a-saved-filter)
+- [Columns used by TaskBoard](#columns-used-by-taskboard)
+- [Subtasks and hierarchy](#subtasks-and-hierarchy)
+- [Example CSV header](#example-csv-header)
+- [Import](#import)
+- [Tips](#tips)
+
 ## Export from Jira Cloud
 
 ### From a board or backlog
