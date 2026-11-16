@@ -1,0 +1,4 @@
+# REQ-DEMO-015: the bundle's forms are FormKit forms (profile `task_board`, seeded by TaskBoardBundle); the demo sets the
+# FormKit CSS framework to `none` so the forms sit on UiKit's form theme (twig.yaml) instead of Bootstrap.
+nowo_form_kit:
+    css_framework: none

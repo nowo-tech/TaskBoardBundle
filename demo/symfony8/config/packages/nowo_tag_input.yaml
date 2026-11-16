@@ -1,5 +1,5 @@
 nowo_tag_input:
-    form_theme: bootstrap_5_layout.html.twig
+    # The base form theme stays Symfony's default (the host `twig.form_themes` is UiKit's nowo_ui_layout, REQ-DEMO-015).
     max_tags: 20
     duplicates: false
     placeholder: 'Add tags and press Enter'

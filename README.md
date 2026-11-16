@@ -58,6 +58,14 @@ make -C demo/symfony8 test-e2e    # Playwright + axe (demo must be up)
 make -C demo down-symfony8
 ```
 
+![Boards list](docs/images/demo/board-index.webp)
+
+![Kanban board](docs/images/demo/board.webp)
+
+![List view](docs/images/demo/board-list.webp)
+
+Refresh the screenshots with `make -C demo/symfony8 demo-screenshots` (demo up).
+
 See [DEMO-FRANKENPHP.md](docs/DEMO-FRANKENPHP.md) for classic / worker mode. TimeTrackBundle's demo also embeds the
 board next to the timer when you want to try both bundles together.
 

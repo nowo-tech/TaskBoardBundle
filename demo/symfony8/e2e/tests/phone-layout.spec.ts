@@ -100,20 +100,12 @@ for (const locale of Object.keys(LEGEND_OVERRUN)) {
   });
 }
 
-test('icons: the demo loads the Bootstrap Icons it configures and the bundle names exist there (JI-L3)', async ({ page }) => {
+test('icons: the demo loads no icon font or stylesheet from a CDN (REQ-DEMO-014)', async ({ page }) => {
   const board = await openBoard(page);
   await page.goto(`${board}/gantt`);
-  const glyphs = await page.locator('.nowo-task-icon i.bi, .nowo-ui-icon.bi, i.bi').evaluateAll((els) =>
-    els.map((el) => {
-      const before = getComputedStyle(el, '::before');
-
-      return { name: [...el.classList].find((c) => c.startsWith('bi-')) ?? '', content: before.content, font: before.fontFamily };
-    }));
-  expect(glyphs.length).toBeGreaterThan(0);
-  for (const glyph of glyphs) {
-    expect.soft(glyph.content, glyph.name).not.toMatch(/^(none|normal|"")$/);
-    expect.soft(glyph.font, glyph.name).toContain('bootstrap-icons');
-  }
+  const foreign = await page.locator('link[rel="stylesheet"]').evaluateAll((els) =>
+    els.map((el) => (el as HTMLLinkElement).href).filter((href) => new URL(href).origin !== location.origin));
+  expect(foreign).toEqual([]);
 });
 
 test('board: the column count and the "+n" avatar are 12 px at least on a phone', async ({ page }) => {

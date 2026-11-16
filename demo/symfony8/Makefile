@@ -8,7 +8,7 @@ endif
 DC := :; $(COMPOSE)
 SERVICE_PHP = php
 
-.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify release-check test-e2e
+.PHONY: help ensure-env up down composer-install build install database database-empty shell test update-bundle fixtures verify release-check test-e2e demo-screenshots
 
 help:
 	@echo "TaskBoard Bundle — Symfony 8.1 Demo"
@@ -19,6 +19,7 @@ help:
 	@echo "  test           update-bundle + demo PHPUnit suite"
 	@echo "  verify         REQ-TEST-011: HTTP 200 on /tools/task-board"
 	@echo "  release-check  up + update-bundle + test + verify (REQ-DEMO-007)"
+	@echo "  demo-screenshots Refresh docs/images/demo/*.webp (REQ-DEMO-013, demo must be up)"
 	@echo "  test-e2e       Playwright + axe: the provider connection flow (demo must be up)"
 
 ensure-env:
@@ -132,3 +133,18 @@ test-e2e:
 		-e DEMO_BASE_URL=http://127.0.0.1:$$PORT \
 		$(PLAYWRIGHT_IMAGE) \
 		bash -lc 'npm install --no-fund --no-audit && npx playwright test $(PW_ARGS)'
+
+# REQ-DEMO-013: README screenshots (Playwright PNG, converted to WebP with sharp; the demo must be up).
+demo-screenshots:
+	@mkdir -p ../../docs/images/demo e2e/node_modules
+	@PORT=$$(grep "^PORT=" .env 2>/dev/null | cut -d= -f2 | tr -d '\r'); \
+	[ -z "$$PORT" ] && PORT=$$(grep "^PORT=" .env.example 2>/dev/null | cut -d= -f2 | tr -d '\r'); \
+	docker run --rm --network host --ipc=host \
+		-v "$(CURDIR)/e2e:/e2e" \
+		-v "$(CURDIR)/../../docs/images/demo:/screenshots" \
+		-w /e2e \
+		-e DEMO_BASE_URL=http://127.0.0.1:$$PORT \
+		-e SCREENSHOT_DIR=/screenshots \
+		$(PLAYWRIGHT_IMAGE) \
+		bash -lc 'npm install --no-fund --no-audit && npx playwright test --project=screenshots && node scripts/to-webp.mjs /screenshots'
+	@echo "Screenshots written under docs/images/demo/ (WebP)"
