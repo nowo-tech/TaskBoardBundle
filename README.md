@@ -1,6 +1,6 @@
 # TaskBoard Bundle
 
-[![CI](https://github.com/nowo-tech/TaskBoardBundle/actions/workflows/ci.yml/badge.svg)](https://github.com/nowo-tech/TaskBoardBundle/actions/workflows/ci.yml) [![Packagist Version](https://img.shields.io/packagist/v/nowo-tech/task-board-bundle.svg?style=flat)](https://packagist.org/packages/nowo-tech/task-board-bundle) [![Packagist Downloads](https://img.shields.io/packagist/dt/nowo-tech/task-board-bundle.svg)](https://packagist.org/packages/nowo-tech/task-board-bundle) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php)](https://php.net) [![Symfony](https://img.shields.io/badge/Symfony-7.4%2B%20%7C%208.0%20%7C%208.1%2B-000000?logo=symfony)](https://symfony.com) [![GitHub stars](https://img.shields.io/github/stars/nowo-tech/TaskBoardBundle.svg?style=social&label=Star)](https://github.com/nowo-tech/TaskBoardBundle) [![Coverage](https://img.shields.io/badge/Coverage-PHP%20%2B%20TS-brightgreen)](#tests-and-coverage)
+[![CI](https://github.com/nowo-tech/TaskBoardBundle/actions/workflows/ci.yml/badge.svg)](https://github.com/nowo-tech/TaskBoardBundle/actions/workflows/ci.yml) [![Packagist Version](https://img.shields.io/packagist/v/nowo-tech/task-board-bundle.svg?style=flat)](https://packagist.org/packages/nowo-tech/task-board-bundle) [![Packagist Downloads](https://img.shields.io/packagist/dt/nowo-tech/task-board-bundle.svg)](https://packagist.org/packages/nowo-tech/task-board-bundle) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php)](https://php.net) [![Symfony](https://img.shields.io/badge/Symfony-7.4%2B%20%7C%208.0%20%7C%208.1%2B-000000?logo=symfony)](https://symfony.com) [![GitHub stars](https://img.shields.io/github/stars/nowo-tech/TaskBoardBundle.svg?style=social&label=Star)](https://github.com/nowo-tech/TaskBoardBundle) [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen)](#tests-and-coverage)
 
 > ⭐ **Found this useful?** Give it a **star** on [GitHub](https://github.com/nowo-tech/TaskBoardBundle) so more developers can find it.
 
@@ -47,15 +47,19 @@ nowo_time_track:
 
 See [Installation](docs/INSTALLATION.md).
 
-## Demo (with TimeTrack)
+## Demo
+
+The bundle ships its own FrankenPHP demo (`demo/symfony8`, Symfony 8.1, MySQL, UiKit shell). The demo signs you in
+automatically as `demo@example.com`.
 
 ```bash
-make -C TimeTrackBundle/demo up-symfony8
-# http://localhost:8024/tools/task-board
-# http://localhost:8024/tools/time-track
+make -C demo up-symfony8          # http://localhost:8024
+make -C demo/symfony8 test-e2e    # Playwright + axe (demo must be up)
+make -C demo down-symfony8
 ```
 
-Login: `demo@example.com` / `demo`
+See [DEMO-FRANKENPHP.md](docs/DEMO-FRANKENPHP.md) for classic / worker mode. TimeTrackBundle's demo also embeds the
+board next to the timer when you want to try both bundles together.
 
 ## Documentation
 
@@ -91,11 +95,11 @@ make release-check
 
 | Language | Suite | Coverage | Gate |
 | --- | --- | --- | --- |
-| PHP | PHPUnit 10: `unit` + `functional` (HTTP pages and writes, Doctrine repositories on SQLite; MySQL in CI), `make test-coverage` | **100%** lines (4831/4831) | `make test-coverage-100` / `scripts/check-coverage.php` (100%, CI coverage job) |
-| TS/JS | Vitest + v8, `make test-ts` (prints the global % with `.scripts/ts-coverage-percent.sh`) | **100%** (min of statements / branches / functions / lines; 148/148 lines) | `vitest.config.ts` thresholds (100%) |
+| PHP | PHPUnit 11: `unit` + `functional` (HTTP pages and writes, Doctrine repositories on SQLite; MySQL in CI), `make test-coverage` | **100%** (22312/22312 statements, 25738/25738 elements) | `make test-coverage-100` / `scripts/check-coverage.php` (100%, CI coverage job) |
+| TS/JS | Vitest + v8, `make test-ts` (prints the global % with `.scripts/ts-coverage-percent.sh`) | **100%** (min of statements / branches / functions / lines; 201/201 lines, 272/272 branches) | `vitest.config.ts` thresholds (100%) |
 | Python | — | N/A | — |
 
-Figures from CI (`ci.yml`, coverage job, PHP 8.2 + Symfony 7.4) on 2026-11-01. Only `src/Resources` (Twig,
+Figures from CI (`ci.yml`, Code Coverage job) on `main` at 2.20.0 (2026-11-15). Only `src/Resources` (Twig,
 translations, config, built assets) is outside the PHP measure; see [CONTRIBUTING](docs/CONTRIBUTING.md#test-suites-req-test-003).
 
 ## License

@@ -4,6 +4,7 @@
 - [Start the demo in production mode](#start-the-demo-in-production-mode)
 - [Demo smoke (REQ-TEST-011)](#demo-smoke-req-test-011)
 - [Switching classic vs worker (`FRANKENPHP_MODE`)](#switching-classic-vs-worker-frankenphp_mode)
+- [Timeouts](#timeouts)
 - [Troubleshooting](#troubleshooting)
 
 **REQ-DEMO-001:** FrankenPHP demos must install **Nowo Twig Inspector** and **Nowo Hot Reload** together (`nowo-tech/twig-inspector-bundle` + `nowo-tech/hot-reload-bundle` in `require-dev`). Caddyfile: Mercure + `hot_reload` (and `worker { file …; watch }` in worker mode). Do not enable Hot Reload in production.
@@ -58,7 +59,7 @@ The demo is a development showcase, but you can run it the way a host runs Frank
 
 Do not expose the demo publicly: its fixtures sign every visitor in as the demo user.
 
-
+## Demo smoke (REQ-TEST-011)
 
 From the repository root:
 
@@ -80,6 +81,13 @@ Demos select the FrankenPHP runtime via **`FRANKENPHP_MODE`** in `.env` / `.env.
 | **`classic`** | Entrypoint uses classic/`Caddyfile.dev` (plain `php_server`, hot-reload friendly) |
 
 Compose passes `FRANKENPHP_MODE=${FRANKENPHP_MODE:-worker}` into the PHP service. After changing `.env`, run `docker compose up -d` (or `make up`) so the container is **recreated** — a plain `restart` does not reload env. No image rebuild is required.
+
+## Timeouts
+
+The demo keeps PHP's and Caddy's defaults. The bundle's only blocking work, the provider sync, is bounded per call
+(`sync.http.timeout` / `max_duration`) and split into resumable slices; see
+[CONFIGURATION.md — Timeout hierarchy](CONFIGURATION.md#timeout-hierarchy-frankenphp--php-fpm-req-runtime-001) for the order
+*operation < PHP `max_execution_time` < Caddy write timeout* a production host should keep.
 
 ## Troubleshooting
 

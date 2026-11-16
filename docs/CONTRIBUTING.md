@@ -5,6 +5,7 @@
 - [Code of Conduct](#code-of-conduct)
 - [Development setup](#development-setup)
 - [Quality checks](#quality-checks)
+  - [Test suites (REQ-TEST-003)](#test-suites-req-test-003)
 - [Pull requests](#pull-requests)
 - [Documentation](#documentation)
 - [Code style](#code-style)

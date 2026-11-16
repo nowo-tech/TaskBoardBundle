@@ -113,6 +113,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Spec Kit baseline maps all 939 tracked `src/` files (1.23–2.20 additions) and `spec.md` gains the semantic FRs of the API, provider sync, ports, numbers, calendar, recurrence, move / duplicate, multi-board, custom fields, folders, templates, transitions, search and task tree (REQ-SPECKIT-001/003).
+- README: own demo section (`make -C demo up-symfony8`, `test-e2e`), coverage figures from CI on 2.20.0 (PHPUnit 11, PHP 22312/22312 statements, TS 201/201 lines) and a `Coverage 100%` badge (REQ-TEST-007, REQ-DOCS-004, REQ-DEMO-013).
+- `docs/CONFIGURATION.md`: timeout hierarchy of the provider sync (operation < PHP < server); `docs/DEMO-FRANKENPHP.md`: Timeouts note and the missing "Demo smoke" heading (REQ-RUNTIME-001).
+- `docs/PSR.md`: PSR-18 and PSR-14 rows re-justified, PSR-3 / PSR-20 call sites updated (REQ-CS-007).
+- Complete tables of contents in USAGE, sync, CONFIGURATION, API, FRANKENPHP-WORKER-AUDIT, CONTRIBUTING and the import guides (REQ-DOCS-005).
+
+### Changed (tooling)
+
+- Dependabot: npm updates for the root and demo e2e manifests (REQ-GH-002); demo `.gitignore` ignores `/.pnpm-store` (REQ-GITIGNORE-003).
+
 ## [2.20.0] - 2026-11-15
 
 Target 2.20.0 (minor). No schema change; one new option (`max_subtask_depth`, default unlimited), see

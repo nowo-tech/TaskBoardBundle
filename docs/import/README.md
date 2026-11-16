@@ -2,6 +2,22 @@
 
 TaskBoard Bundle can import tasks from third-party tools into an existing board. Each source has its own export format. Use these guides to produce a file that matches the built-in importers.
 
+## Table of contents
+
+- [Supported sources](#supported-sources)
+- [Before you import](#before-you-import)
+  - [Import options](#import-options)
+  - [Assignee mapping](#assignee-mapping)
+- [Re-importing: idempotent upsert (since 1.22)](#re-importing-idempotent-upsert-since-122)
+  - [How a row finds its task](#how-a-row-finds-its-task)
+  - [What a re-import changes (precedence)](#what-a-re-import-changes-precedence)
+  - [Across boards](#across-boards)
+  - [Tasks imported before 1.22](#tasks-imported-before-122)
+  - [Who may change what](#who-may-change-what)
+  - [Limits](#limits)
+- [Field mapping overview](#field-mapping-overview)
+- [Further reading](#further-reading)
+
 ## Supported sources
 
 | Source key (`--source`) | File type | Guide |

@@ -2,6 +2,15 @@
 
 TaskBoard imports the standard **Trello board JSON** export (`trello_json`). This is the native format Trello produces when you export a board as JSON.
 
+## Table of contents
+
+- [Export from Trello](#export-from-trello)
+- [JSON structure expected by TaskBoard](#json-structure-expected-by-taskboard)
+  - [Field mapping](#field-mapping)
+- [Lists → kanban columns](#lists--kanban-columns)
+- [Import](#import)
+- [Tips](#tips)
+
 ## Export from Trello
 
 1. Open the **board** you want to migrate.
