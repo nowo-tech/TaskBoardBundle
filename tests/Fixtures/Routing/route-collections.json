@@ -634,6 +634,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_task_menu",
+                "path": "/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_task_by_number",
                 "path": "/tools/task-board/n/{number}",
                 "host": "",
@@ -1622,6 +1640,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_task_menu",
+                "path": "/acme/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_project_nowo_task_board_index",
                 "path": "/projects/{tenantSlug}/tasks",
                 "host": "",
@@ -2324,6 +2360,26 @@
                 "condition": ""
             },
             {
+                "name": "app_project_nowo_task_board_task_menu",
+                "path": "/projects/{tenantSlug}/tasks/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_team_nowo_task_board_index",
                 "path": "/teams/{tenantSlug}",
                 "host": "",
@@ -3015,6 +3071,26 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::restoreTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_menu",
+                "path": "/teams/{tenantSlug}/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
                 },
                 "requirements": {
                     "tenantSlug": "[a-z]+"
@@ -5465,6 +5541,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_task_menu",
+                "path": "/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_api_user",
                 "path": "/api/tasks/v2/user",
                 "host": "",
@@ -7870,6 +7964,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_task_menu",
+                "path": "/acme/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "acme_number",
                 "path": "/acme/work/n/{number}",
                 "host": "",
@@ -8774,6 +8886,26 @@
                 "condition": ""
             },
             {
+                "name": "app_project_nowo_task_board_task_menu",
+                "path": "/projects/{tenantSlug}/tasks/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_team_acme_work",
                 "path": "/teams/{tenantSlug}",
                 "host": "",
@@ -9581,6 +9713,26 @@
                 "condition": ""
             },
             {
+                "name": "app_team_nowo_task_board_task_menu",
+                "path": "/teams/{tenantSlug}/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_tasks",
                 "path": "/acme/orgs/{organisation}/tasks",
                 "host": "",
@@ -10254,6 +10406,24 @@
                     "utf8": true
                 },
                 "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_menu",
+                "path": "/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
             }
         ],
         "aliases": []
@@ -10884,6 +11054,24 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::restoreTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_menu",
+                "path": "/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
                 },
                 "requirements": [],
                 "options": {

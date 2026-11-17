@@ -17,6 +17,9 @@ services:
     Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener:
         arguments:
             $prefix: '%nowo_task_board.api.prefix%'
+            # Since 2.22.0: the shared lock-conflict policy (409 by default); absent when the host did not register
+            # nowo-tech/transaction-doctrine's bundle (the listener then answers 409 + Retry-After: 1).
+            $conflictPolicy: '@?nowo_transaction_doctrine.conflict_response_policy'
 
     Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer: ~
     Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer: ~

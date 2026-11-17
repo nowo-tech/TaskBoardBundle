@@ -9,6 +9,7 @@ use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TaskBoardBundle\Tests\Fixtures\RoutingEntity\HostUser;
+use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
@@ -27,13 +28,26 @@ use const PHP_VERSION_ID;
 /**
  * Host kernel for the routing test (REQ-SF-004 rule 7): its routing is the Symfony default
  * `controllers: { resource: routing.controllers }` and, when `$importBundleRoutes` is true, the documented import of
- * the bundle routes (`type: nowo_task_board` route loader).
+ * the bundle routes (`type: nowo_task_board` route loader). Since 2.22.0 (audit SF4-I2) `$allFeatures` turns on every
+ * feature that adds routes or controllers (API, sync, calendar, task numbers, move, recurrence, multi-board, templates).
  */
 final class HostRoutingKernel extends Kernel
 {
     use MicroKernelTrait;
 
-    public function __construct(private readonly string $dir, private readonly bool $importBundleRoutes)
+    /** Since 2.22.0 (audit SF4-I2): every feature that adds routes or controllers. */
+    public const ALL_FEATURES = [
+        'api'            => ['enabled' => true, 'hooks' => ['authenticator' => 'app.api_authenticator']],
+        'sync'           => ['enabled' => true, 'credential_resolver' => 'app.sync_credentials', 'providers' => ['clickup' => ['enabled' => false]]],
+        'calendar'       => ['enabled' => true],
+        'task_numbers'   => ['enabled' => true],
+        'move'           => ['enabled' => true],
+        'recurrence'     => ['enabled' => true],
+        'multi_board'    => ['enabled' => true],
+        'task_templates' => ['enabled' => true],
+    ];
+
+    public function __construct(private readonly string $dir, private readonly bool $importBundleRoutes, private readonly bool $allFeatures = false)
     {
         parent::__construct('test', false);
     }
@@ -94,7 +108,11 @@ final class HostRoutingKernel extends Kernel
             'providers' => ['in_memory' => ['memory' => null]],
             'firewalls' => ['main' => ['lazy' => true]],
         ]);
-        $container->extension('nowo_task_board', ['user_class' => HostUser::class]);
+        $container->extension('nowo_task_board', ['user_class' => HostUser::class] + ($this->allFeatures ? self::ALL_FEATURES : []));
+        if ($this->allFeatures) {
+            $container->services()->set('app.api_authenticator', DenyingTaskApiAuthenticator::class);
+            $container->services()->set('app.sync_credentials', TestCredentialResolver::class);
+        }
     }
 
     /**

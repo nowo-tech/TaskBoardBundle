@@ -5,6 +5,8 @@
     manage (BoardAccessCheckEvent::ACTION_MANAGE_COLUMNS denied) has no grip, no drag handle and no pencil.
     Since 1.11 the colour is a CSS custom property set from data-nowo-task-vars (no inline style) and the header
     shows the column icon.
+    Since 2.22.0, with taskMenuContext (board page): the header's menu (_column_menu.html.twig) and the cards' menus; a
+    column folded by its Hide / collapse entry gets `is-collapsed` (task-board.js, remembered per board in this browser).
 #}
 {% set columnTasks = tasks|filter(t => t.column and t.column.id == column.id) %}
 {% set columnColor = column.color|nowo_task_board_safe_color %}
@@ -16,11 +18,13 @@
     {% if columnColor %}data-nowo-task-vars="{{ {'--nowo-task-column-color': columnColor}|json_encode }}"{% endif %}
     aria-labelledby="nowo-task-column-{{ column.id }}-name"
 >
+    {#- Since 2.22.0: the header's menu (Rename, Add task, Hide / collapse) and its context menu scope. -#}
+    {% set _menuContext = taskMenuContext ?? null %}
     {% if _columnsLocked %}
-    <div class="nowo-task-board__column-header nowo-task-column__header">
+    <div class="nowo-task-board__column-header nowo-task-column__header"{% if _menuContext %} tabindex="0" data-nowo-ui-context-menu-scope{% endif %}>
     {% else %}
     <div
-        class="nowo-task-board__column-header nowo-task-column__header"
+        class="nowo-task-board__column-header nowo-task-column__header"{% if _menuContext %} tabindex="0" data-nowo-ui-context-menu-scope{% endif %}
         data-column-handle
         draggable="true"
         title="{{ 'task_board.board.drag_column'|trans({}, 'NowoTaskBoardBundle') }}"
@@ -60,6 +64,7 @@
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}
         </button>
         {% endif %}
+        {% if _menuContext %}{{ include('@NowoTaskBoardBundle/manage/_column_menu.html.twig', {column: column, menuContext: _menuContext, taskContextMenu: taskContextMenu ?? false}, with_context: false) }}{% endif %}
     </div>
 
     <ul class="nowo-task-board__task-list nowo-task-column__tasks" data-nowo-task-board-target="taskList">

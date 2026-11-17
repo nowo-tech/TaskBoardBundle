@@ -227,6 +227,32 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * Since 2.22.0 (Beacon): {@see self::lists()} and {@see self::visibleBoards()} for several spaces at once, from the
+     * active boards of their tenants loaded in one query (`$boards`) instead of two queries per space: the spaces the token
+     * may list, each with the boards the person may view, in the given order. The same decisions, deny by default: a space
+     * the token does not touch or whose plan lacks the module is left out, as {@see self::lists()} leaves it.
+     *
+     * @param list<TaskApiSpace> $spaces
+     * @param list<TaskBoard> $boards the active boards of the spaces' tenants
+     *
+     * @return list<array{0: TaskApiSpace, 1: list<TaskBoard>}>
+     */
+    public function visibleBoardsOfSpaces(TaskApiPrincipal $principal, array $spaces, array $boards): array
+    {
+        $lists = [];
+        foreach ($spaces as $space) {
+            $ofTenant = array_values(array_filter($boards, static fn (TaskBoard $board): bool => $board->getTenantKey() === $space->tenantKey));
+            $owns     = $this->ownsTenant($principal->user, $space->tenantKey);
+            if (!$owns || !$principal->where->touchesTenant($space->tenantKey, array_map(static fn (TaskBoard $board): string => $board->getId(), $ofTenant)) || !$this->planGate->allowsTasks($principal->user, $space->tenantKey)) {
+                continue;
+            }
+            $lists[] = [$space, array_values(array_filter($ofTenant, fn (TaskBoard $board): bool => $principal->where->reachesBoardOf($board->getId(), $board->getTenantKey()) && $this->access->canViewBoard($principal->user, $board)))];
+        }
+
+        return $lists;
+    }
+
+    /**
      * Whether an answer kept for this token may be given again: what the write touched is still within reach. A board that
      * is gone leaves its tenant, which where and the tenant check must still reach. A write that touched no board needs nothing more.
      */

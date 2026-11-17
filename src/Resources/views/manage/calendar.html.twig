@@ -38,6 +38,8 @@
 {% endblock %}
 
 {% block nowo_ui_content %}
+    {# Since 2.22.0: UiKit 2.55's focus mode toggle (nothing while the host has focus mode off). #}
+    {% block nowo_task_board_focus_mode %}{{ include('@NowoTaskBoardBundle/manage/_focus_mode_toggle.html.twig') }}{% endblock %}
     {% block nowo_task_board_connection %}
         {{ include(nowo_task_board_connection_badge_template|default('@NowoTaskBoardBundle/manage/_connection_badge.html.twig'), {sync: nowo_task_board_connection(board)}) }}
     {% endblock %}

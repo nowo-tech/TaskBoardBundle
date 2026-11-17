@@ -26,6 +26,7 @@ import FilterFoldController from './filter-fold-controller';
 import CalendarController from './calendar-controller';
 import { installFormConfirm } from './ask-confirm';
 import { installBoardOpeners } from './board-openers';
+import { installColumnCollapse } from './column-collapse';
 import { observeCssVars } from './css-vars';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
@@ -66,6 +67,8 @@ application.register('nowo-task-board-select-anchor', SelectAnchorController);
 installFormConfirm(document);
 // Since 2.0.0 (TB-10): a host's button opens the column-set dialogs.
 installBoardOpeners(document);
+// Since 2.22.0: "Hide / collapse" of a column header's menu.
+installColumnCollapse(document);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

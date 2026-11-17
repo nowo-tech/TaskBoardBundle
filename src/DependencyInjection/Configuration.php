@@ -16,6 +16,7 @@ use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 use function array_map;
+use function is_bool;
 use function is_string;
 use function preg_match;
 use function str_contains;
@@ -493,6 +494,14 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('name')->defaultValue('nowo_task_board_task_restore')->end()
                             ->end()
                         ->end()
+                        // Since 2.22.0: the writes of the task menu (context menus).
+                        ->arrayNode('task_menu')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/menu/task')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_task_menu')->end()
+                            ->end()
+                        ->end()
                         ->arrayNode('board_connection')
                             ->addDefaultsIfNotSet()
                             ->children()
@@ -580,6 +589,14 @@ final class Configuration implements ConfigurationInterface
                             ->useAttributeAsKey('page')
                             ->scalarPrototype()->end()
                             ->defaultValue([])
+                        ->end()
+                        ->scalarNode('context_menus')
+                            ->defaultNull()
+                            ->info('Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 or the ContextMenu key, a long press) opens the items of their kebab (UiKit 2.54 context menus). null follows nowo_ui_kit.theme.context_menus; true or false forces it on or off for TaskBoard\'s pages. The kebab itself is always there.')
+                            ->validate()
+                                ->ifTrue(static fn (mixed $value): bool => $value !== null && !is_bool($value))
+                                ->thenInvalid('web_ui.context_menus must be null, true or false; got %s.')
+                            ->end()
                         ->end()
                     ->end()
                 ->end()

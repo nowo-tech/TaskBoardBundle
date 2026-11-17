@@ -3600,6 +3600,12 @@ a.nowo-task-nav__step:focus-visible {
     --nowo-task-cal-gap: 1px;
     --nowo-task-cal-row: 1.6rem;
     --nowo-task-cal-line: var(--nowo-ui-border);
+
+    /* Since 2.22.0 (Beacon, UI-PATTERNS §13): the positioned ancestor of the chips' and counts' screen-reader text, so an
+       absolutely placed `.nowo-task-sr-only` stays inside the calendar and never widens the page on a phone. */
+    position: relative;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .nowo-task-cal__filters {
@@ -3625,8 +3631,14 @@ a.nowo-task-nav__step:focus-visible {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem 1rem;
+    max-width: 100%;
     margin-block: 0.75rem;
+}
+
+.nowo-task-cal__toolbar > * {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .nowo-task-cal__nav {
@@ -3639,6 +3651,18 @@ a.nowo-task-nav__step:focus-visible {
     flex: 1 1 auto;
     margin: 0;
     font-size: 1.1rem;
+    overflow-wrap: anywhere;
+}
+
+/* Since 2.22.0 (Beacon): the Month / Week / List tabs on the toolbar's line, pushed to its end, without the tab row's own
+   bottom margin (it lifted them above Previous / Today / Next); they wrap with the rest on a narrow screen. */
+.nowo-task-cal__modes,
+.nowo-task-cal__modes .nowo-ui-tabs {
+    margin-block: 0;
+}
+
+.nowo-task-cal__modes {
+    margin-inline-start: auto;
 }
 
 .nowo-task-cal__undated,
@@ -3912,6 +3936,15 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
 
 /* Phones (spec 214, FR-025): no sideways scroll and no drag. A month is day cells with counts; a week is seven stacked days. */
 @media (max-width: 40rem) {
+    /* Since 2.22.0 (Beacon): nothing of the calendar may widen the page; the toolbar spreads over the width it has. */
+    .nowo-task-cal {
+        overflow-x: clip;
+    }
+
+    .nowo-task-cal__toolbar {
+        justify-content: space-between;
+    }
+
     .nowo-task-cal__add,
     .nowo-task-cal__day-number {
         display: inline-flex;
@@ -4135,4 +4168,125 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
 .nowo-task-cal__chip.has-off-day {
     outline: 1px dashed var(--nowo-task-warning, var(--nowo-ui-warning-text));
     outline-offset: -1px;
+}
+
+/* Since 2.22.0 (UiKit 2.55 focus mode): the toggle at the end of the view's first line (not rendered while focus mode is off). */
+.nowo-task-focus-toggle {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.nowo-task-detail__actions .nowo-task-focus-toggle {
+    display: inline-flex;
+}
+
+/* Since 2.22.0: the task and column menus (UiKit `menu` partial, «⋮»). The list sits in the kit's popover panel; the
+   submenus (Assign, Status, Priority, Due date) unfold inside it, indented. The same items open as UiKit's context menu. */
+.nowo-task-menu {
+    flex: 0 0 auto;
+}
+
+.nowo-task-menu > .nowo-ui-popover {
+    min-width: 13rem;
+    max-height: min(70vh, 32rem);
+    overflow-y: auto;
+    padding: 0.25rem !important;
+}
+
+/* The lists carry UiKit's panel class (the context menu finds the kebab's list, and each submenu's, by it), but they sit in
+   the popover panel, in the flow: no second floating panel. */
+.nowo-task-menu .nowo-task-menu__panel,
+.nowo-task-menu .nowo-task-menu__subpanel {
+    position: static;
+    z-index: auto;
+    min-width: 0;
+    max-width: none;
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.nowo-task-menu .nowo-task-menu__subpanel {
+    padding-inline-start: 0.75rem !important;
+}
+
+.nowo-task-menu__panel > li,
+.nowo-task-menu__subpanel > li {
+    margin: 0;
+}
+
+.nowo-task-menu__sub > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.nowo-task-menu__sub > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nowo-task-menu__sub > summary::after {
+    content: "›";
+    margin-inline-start: auto;
+    padding-inline-start: 0.75rem;
+}
+
+.nowo-task-menu__sub[open] > summary::after {
+    content: "⌄";
+}
+
+.nowo-task-menu__separator {
+    height: 0;
+    margin-block: 0.25rem !important;
+    border-top: 1px solid var(--nowo-ui-border);
+}
+
+.nowo-task-menu .nowo-ui-menu__toggle--icon {
+    padding: 0.1rem 0.35rem;
+    border-color: transparent;
+    background: transparent;
+}
+
+/* The card: the menu at the top right, over the title's end. */
+.nowo-task-card--menu {
+    position: relative;
+    padding-inline-end: 2.25rem;
+}
+
+.nowo-task-card--menu > .nowo-task-menu {
+    position: absolute;
+    inset-block-start: 0.35rem;
+    inset-inline-end: 0.35rem;
+}
+
+.nowo-task-card--menu:focus-visible,
+.nowo-task-column__header[data-nowo-ui-context-menu-scope]:focus-visible,
+.nowo-task-list__row[tabindex]:focus-visible {
+    outline: 2px solid var(--nowo-ui-focus-ring-color, var(--nowo-ui-primary));
+    outline-offset: 2px;
+}
+
+.nowo-task-board [data-nowo-ui-context-menu-open],
+.nowo-task-list__row[data-nowo-ui-context-menu-open] {
+    box-shadow: 0 0 0 2px var(--nowo-ui-primary);
+}
+
+.nowo-task-list__actions {
+    width: 1%;
+    text-align: end;
+    white-space: nowrap;
+}
+
+/* A column folded by "Hide / collapse": its header (and menu, to unfold it) stays; the cards and the add button go. */
+.nowo-task-board__column.is-collapsed {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 14rem;
+}
+
+.nowo-task-board__column.is-collapsed > :not(.nowo-task-board__column-header) {
+    display: none;
 }

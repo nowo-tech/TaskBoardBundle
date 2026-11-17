@@ -34,7 +34,8 @@ final class TaskNumbersOffTest extends FunctionalTestCase
             $html = (string) $this->client->getResponse()->getContent();
             self::assertStringNotContainsString('nowo-task-number', $html);
             self::assertStringNotContainsString('/calendar"', $html);
-            self::assertStringNotContainsString('nowo-ui-clipboard.js', $html);
+            // Since 2.22.0 the clipboard script is there for the task menu's Copy link, whatever the numbers say.
+            self::assertStringNotContainsString('data-nowo-ui-clipboard-text="#', $html);
             self::assertStringNotContainsString('value="number"', $html);
         }
     }

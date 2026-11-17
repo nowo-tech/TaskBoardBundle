@@ -12,8 +12,10 @@ use Nowo\TaskBoardBundle\Api\TaskApiCredential;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
+use Nowo\TaskBoardBundle\Doctrine\LockConflictChain;
 use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Stringable;
@@ -41,6 +43,11 @@ use function str_starts_with;
  * Since 2.2.0 (spec 213): what every API request goes through before its controller, on the API's routes only, and the way
  * every answer leaves. Below the firewall, so the security user is set. It fails closed: anything it cannot establish is a
  * refusal, and the credential is never logged or echoed.
+ *
+ * Since 2.22.0 (owner decision, transaction-doctrine 1.3): a database lock conflict anywhere in a failure's chain
+ * ({@see LockConflictChain}: deadlock, lock wait timeout, `LockConflictExceptionInterface`, `TransientStorageFailure`)
+ * answers the shared {@see ConflictResponsePolicy}'s status (409 by default, was 500 `SERVER_001`) with `Retry-After`,
+ * `{"err", "ECODE": "CONFLICT_001"}`; after a partial commit `CONFLICT_002` and no `Retry-After`.
  */
 final readonly class TaskApiRequestListener implements EventSubscriberInterface
 {
@@ -58,6 +65,8 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         private TokenStorageInterface $tokenStorage,
         private string $prefix,
         private LoggerInterface $logger = new NullLogger(),
+        // Since 2.22.0: the shared lock-conflict policy of nowo-tech/transaction-doctrine's bundle; 409 + 1 s without it.
+        private ?ConflictResponsePolicy $conflictPolicy = null,
     ) {
     }
 
@@ -216,6 +225,12 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         if ($throwable instanceof AuthenticationException) {
             return $this->invalidToken();
         }
+        // Since 2.22.0: a lock conflict anywhere in the chain; the class only in the log, as below.
+        if (LockConflictChain::isConflict($throwable)) {
+            $this->logger->warning('TaskBoard API: a write met a database lock conflict.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
+
+            return TaskApiRefusal::lockConflict($this->conflictPolicy ?? new ConflictResponsePolicy(), LockConflictChain::committed($throwable), LockConflictChain::retryAfterHint($throwable));
+        }
         // The class only: a message may hold user data.
         $this->logger->error('TaskBoard API: unexpected error.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
 
@@ -234,6 +249,6 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
 
     private function answer(TaskApiRefusal $refusal): JsonResponse
     {
-        return new JsonResponse($refusal->body(), $refusal->status);
+        return new JsonResponse($refusal->body(), $refusal->status, $refusal->headers);
     }
 }

@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Controller\TaskMenuController;
 use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
@@ -57,6 +58,7 @@ final class TaskBoardRouteLoader extends Loader
         TaskBoardManageController::class,
         TaskCopyController::class,
         TaskRecurrenceController::class,
+        TaskMenuController::class,
         TaskBoardConnectionController::class,
         TaskBoardMultiBoardController::class,
         TaskApiIdentityController::class,
@@ -217,6 +219,8 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, $attributes, 'task_comment_delete', TaskBoardManageController::class . '::deleteComment');
         // Since 1.23.
         $this->addRoute($collection, $attributes, 'task_restore', TaskBoardManageController::class . '::restoreTask');
+        // Since 2.22.0.
+        $this->addRoute($collection, $attributes, 'task_menu', TaskMenuController::class . '::act');
         if ($this->taskNumbersEnabled) {
             $this->addRoute($collection, $attributes, 'task_by_number', TaskBoardManageController::class . '::taskByNumber');
         }

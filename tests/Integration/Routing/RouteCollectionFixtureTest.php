@@ -33,7 +33,7 @@ use const JSON_UNESCAPED_SLASHES;
  * built in PHP) taken before the routes moved to `#[Route]` attributes. Every route keeps its name, order, path, methods,
  * requirements, defaults, options, host, schemes and condition: with the default configuration, every optional feature,
  * a route prefix with renamed / moved routes and tenant copies, and the Task API (default and custom prefix).
- * `TASK_BOARD_ROUTE_FIXTURE_WRITE=1` rewrites the fixture (only to record an intended change).
+ * `TASK_BOARD_ROUTE_FIXTURE_WRITE=1` rewrites the fixture (only to record an intended change: 2.22.0 added `task_menu`).
  */
 final class RouteCollectionFixtureTest extends TestCase
 {

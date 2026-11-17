@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
@@ -20,6 +21,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
+use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
@@ -29,6 +31,7 @@ use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 
 use function array_chunk;
+use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_slice;
@@ -40,6 +43,7 @@ use function is_string;
 use function json_encode;
 use function mb_strtolower;
 use function strtr;
+use function strval;
 
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -138,6 +142,53 @@ final readonly class TaskApiQueryRepository
         }
 
         return $counts;
+    }
+
+    /**
+     * Since 2.22.0 (Beacon): the active boards of several tenants (`null`: the boards without a tenant) with their columns,
+     * in one query, by name as {@see TaskBoardRepositoryInterface::findActiveByTenant()}
+     * gives them. Only exact keys match (REQ-SEC-006: a folding collation's look-alike tenant is left out here).
+     *
+     * @param list<string|null> $tenantKeys
+     *
+     * @return list<TaskBoard>
+     */
+    public function activeBoardsOfTenants(array $tenantKeys): array
+    {
+        $keys     = [];
+        $withNull = false;
+        foreach ($tenantKeys as $key) {
+            if ($key === null) {
+                $withNull = true;
+            } elseif (ExactKey::isUsable($key)) {
+                $keys[$key] = true;
+            }
+        }
+        if ($keys === [] && !$withNull) {
+            return [];
+        }
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('b', 'c')
+            ->from(TaskBoard::class, 'b')
+            ->leftJoin('b.columns', 'c')
+            ->where('b.archivedAt IS NULL')
+            ->orderBy('b.name', 'ASC')
+            ->addOrderBy('b.id', 'ASC')
+            ->addOrderBy('c.position', 'ASC');
+        $tenant = [];
+        if ($keys !== []) {
+            $tenant[] = 'b.tenantKey IN (:tenantKeys)';
+            $qb->setParameter('tenantKeys', array_map(strval(...), array_keys($keys)));
+        }
+        if ($withNull) {
+            $tenant[] = 'b.tenantKey IS NULL';
+        }
+        $qb->andWhere(implode(' OR ', $tenant));
+
+        /** @var list<TaskBoard> $boards */
+        $boards = $qb->getQuery()->getResult();
+
+        return array_values(array_filter($boards, static fn (TaskBoard $board): bool => $board->getTenantKey() === null ? $withNull : isset($keys[$board->getTenantKey()])));
     }
 
     /**

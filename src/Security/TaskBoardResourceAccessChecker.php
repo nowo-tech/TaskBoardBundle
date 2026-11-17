@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Security;
 
+use Closure;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -222,6 +223,32 @@ final readonly class TaskBoardResourceAccessChecker
         $event = $this->resolveTaskAccess($user, $task);
 
         return $event->isGranted() && !$event->isReadOnly();
+    }
+
+    /**
+     * Since 2.22.0 (context menus): {@see self::canEditTask()} for the many tasks of one board page, with the board's own
+     * decision (BOARD_ACCESS_CHECK) taken once instead of once per task: the returned closure answers exactly what
+     * canEditTask() answers for a task of `$board` (TASK_ACCESS_CHECK first, then a participant or the board's viewers; a
+     * read-only board keeps its tasks read-only). Build it per page; it holds nothing beyond that call.
+     *
+     * @return Closure(Task): bool
+     */
+    public function taskEditDecider(object $user, TaskBoard $board): Closure
+    {
+        $boardAccess = $this->resolveBoardAccess($user, $board);
+
+        return function (Task $task) use ($user, $boardAccess): bool {
+            $event = new TaskAccessCheckEvent($user, $task);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ACCESS_CHECK);
+            if ($event->isDenied()) {
+                return false;
+            }
+            if ($event->isGranted()) {
+                return !$event->isReadOnly();
+            }
+
+            return ($this->isTaskParticipant($user, $task) || $this->isBoardViewable($boardAccess)) && !$boardAccess->isReadOnly();
+        };
     }
 
     /**

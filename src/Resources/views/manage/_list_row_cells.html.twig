@@ -1,5 +1,6 @@
 {#
-    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts; since 2.19.0 customFields, customValues.
+    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts; since 2.19.0 customFields, customValues;
+    since 2.22.0 taskMenu (Menu\TaskMenu or null: the last cell holds the row's menu), taskMenuFormReady, taskContextMenu.
     The row's attributes (filter, sort, totals, panel) come from nowo_task_board_list_table().
 #}
 {% set _cell = nowo_ui_class('table_cell', 'NowoTaskBoardBundle') %}
@@ -45,3 +46,4 @@
         <span class="nowo-task-list__none">—</span>
     {% endif %}
 </td>
+{% if taskMenu|default(null) %}<td class="{{ _cell }} nowo-task-list__actions">{{ include('@NowoTaskBoardBundle/manage/_task_menu.html.twig', {menu: taskMenu, taskMenuFormReady: taskMenuFormReady|default(false), taskContextMenu: taskContextMenu|default(false), menuFrom: 'list'}, with_context: false) }}</td>{% endif %}

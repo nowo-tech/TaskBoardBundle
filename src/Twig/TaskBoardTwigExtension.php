@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Text\PlainTaskTextRenderer;
+use Nowo\TaskBoardBundle\Text\ReservedAttributeStripper;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
@@ -504,8 +505,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      *
      * @param iterable<Task> $tasks
      * @param list<TaskCustomField> $customFields since 2.19.0 (FR-028): a column per field, after the tags
+     * @param bool $actions since 2.22.0: a last column for the row's menu (the template prints it)
      */
-    public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = []): Table
+    public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = [], bool $actions = false): Table
     {
         $search = $this->syncSearchTexts($tasks);
         $label  = static fn (string $key): Label => TaskBoardPages::label($key);
@@ -524,11 +526,12 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
                 new Column('estimate', $label('task_board.time.estimate'), class: $time),
                 new Column('spent', $label('task_board.time.spent'), class: $time),
                 new Column('deviation', $label('task_board.time.deviation'), class: $time),
+                ...($actions ? [new Column('actions', $label('task_board.menu.column'), class: 'nowo-task-list__actions')] : []),
             ],
             $tasks,
             responsive: 'scroll',
             bundle: TaskBoardPages::BUNDLE,
-            rowAttributes: function (Task $task) use ($search, $panelTargetPath): array {
+            rowAttributes: function (Task $task) use ($search, $panelTargetPath, $actions): array {
                 $deviation = TaskDeviation::of($task);
                 $column    = $task->getColumn()?->getName() ?? '';
 
@@ -549,7 +552,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
                     'data-spent'          => $deviation->spentMinutes,
                     'data-over'           => $deviation->isOver() ? '1' : '0',
                     'data-task-panel-url' => $this->urls?->generate($this->routeName('task_panel'), ['taskId' => $task->getId()] + ($panelTargetPath !== null && $panelTargetPath !== '' ? ['_target_path' => $panelTargetPath] : [])),
-                ] + ($this->taskNumber($task) !== null ? ['data-number' => $task->getNumber()] : []);
+                ] + ($this->taskNumber($task) !== null ? ['data-number' => $task->getNumber()] : [])
+                    // Since 2.22.0: a focusable row, so Shift+F10 / the ContextMenu key opens its menu.
+                    + ($actions ? ['tabindex' => '0'] : []);
             },
         );
     }
@@ -611,7 +616,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             );
         }
 
-        return strtr($renderer->render($text), $chips);
+        // Since 2.22.0: UiKit's context-menu attributes never come from user HTML (the chips are the bundle's own).
+        return strtr(ReservedAttributeStripper::strip($renderer->render($text)), $chips);
     }
 
     /**
@@ -630,7 +636,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     {
         $text = (string) $board->getDescription();
 
-        return $board->getDescriptionFormat() === TaskBoard::FORMAT_MARKDOWN ? $this->textRenderer->render($text) : htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // Since 2.22.0: without UiKit's context-menu attributes (ReservedAttributeStripper).
+        return $board->getDescriptionFormat() === TaskBoard::FORMAT_MARKDOWN ? ReservedAttributeStripper::strip($this->textRenderer->render($text)) : htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     /** Since 1.30.0 (spec 211): "🚀 Roadmap" as text, for a host's breadcrumbs and search. Escape it as any text. */
@@ -667,7 +674,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      */
     public function renderText(?string $text): string
     {
-        return $text === null || trim($text) === '' ? '' : $this->textRenderer->render($text);
+        // Since 2.22.0: without UiKit's context-menu attributes (ReservedAttributeStripper).
+        return $text === null || trim($text) === '' ? '' : ReservedAttributeStripper::strip($this->textRenderer->render($text));
     }
 
     /**
