@@ -85,6 +85,7 @@ use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmBoardColumnRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmColumnSetRepository;
+use Nowo\TaskBoardBundle\Repository\DoctrineOrmOrderedRowLock;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskBoardRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskCommentRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskDependencyRepository;
@@ -117,6 +118,7 @@ use Nowo\TaskBoardBundle\Security\NullTaskBoardTeamMembershipResolver;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
+use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
@@ -1346,6 +1348,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$events', new Reference(TaskEventDeferral::class)));
         $container->setAlias(TaskTreeStoreInterface::class, DoctrineOrmTaskTreeStore::class);
+
+        // Since 2.21.0 (Beacon spec 239, FR-013): the fixed lock order of the multi-row writes (task moves, column changes).
+        $container->setDefinition(DoctrineOrmOrderedRowLock::class, (new Definition(DoctrineOrmOrderedRowLock::class))
+            ->setAutowired(false)
+            ->setArgument('$entityManager', $emRef)
+            ->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+        $container->setAlias(OrderedRowLockInterface::class, DoctrineOrmOrderedRowLock::class);
     }
 
     /**

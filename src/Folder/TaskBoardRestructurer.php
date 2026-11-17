@@ -496,14 +496,14 @@ final readonly class TaskBoardRestructurer implements TaskBoardRestructureInterf
     {
         $level = array_map(static fn (Task $task): string => $task->getId(), $roots);
         /** @var list<string> $locked */
-        $locked = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)
+        $locked = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', 'ASC')
             ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
         // Since 2.20.0 (audit PX-M2): bounded, and a loop in the data fails closed.
         $seen   = array_fill_keys($level, true);
         $levels = 0;
         while ($level !== []) {
             /** @var list<string> $ids */
-            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)
+            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', 'ASC')
                 ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
             $level  = TaskMovePlanner::nextLevel($ids, $seen, ++$levels);
             $locked = [...$locked, ...$level];

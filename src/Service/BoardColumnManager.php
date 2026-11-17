@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -71,6 +72,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         private ?FolderStatusSets $statusSets = null,
         // Since 2.19.0 (audit PW-L5): history rows and events for the tasks a retype completes or reopens.
         private ?TaskColumnFollow $follow = null,
+        // Since 2.21.0 (Beacon spec 239, FR-013): the fixed lock order of the multi-row writes; none: written as before.
+        private ?OrderedRowLockInterface $rowLock = null,
     ) {
     }
 
@@ -128,28 +131,29 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
         sort($before);
 
-        $updated  = [];
-        $position = 0;
-
+        $updated = [];
         foreach ($orderedColumnIds as $columnId) {
             if (!is_string($columnId) || !isset($byId[$columnId])) {
                 continue;
             }
 
-            $byId[$columnId]->setPosition($position);
             $updated[] = $byId[$columnId];
             unset($byId[$columnId]);
-            ++$position;
         }
 
         foreach ($byId as $column) {
-            $column->setPosition($position);
             $updated[] = $column;
-            ++$position;
         }
 
         if ($updated !== []) {
-            $this->columnRepository->saveAll($updated);
+            // Since 2.21.0 (Beacon spec 239, FR-013): the rows are locked by id first, never in identity-map order.
+            // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+            $this->lockedWrite(self::ids($updated), [], function () use ($updated): void {
+                foreach ($updated as $position => $column) {
+                    $column->setPosition($position);
+                }
+                $this->columnRepository->saveAll($updated);
+            });
             $order = array_map(static fn (BoardColumn $column): string => $column->getId(), $updated);
             if ($order !== array_column($before, 1)) {
                 $this->dispatch(new ColumnsReorderedEvent($board->getId(), $board->getTenantKey(), $order, ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMNS_REORDERED);
@@ -169,25 +173,38 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             $this->assertTypes($column->getBoard(), $column, $retyped);
             $this->assertRetypeAllowed($column, $retyped);
         }
-        $column
-            ->setName(trim($data->name))
-            ->setColor($this->normalize($data->color))
-            ->setIcon(ColumnIcon::normalize($data->icon))
-            ->setHumansOnly($data->humansOnly);
+        // @igor-ignore - The closure runs once, now (inside the locked write or directly), and is never stored.
+        $edit = function () use ($column, $data): void {
+            $column
+                ->setName(trim($data->name))
+                ->setColor($this->normalize($data->color))
+                ->setIcon(ColumnIcon::normalize($data->icon))
+                ->setHumansOnly($data->humansOnly);
+        };
         if ($retyped instanceof ColumnType) {
-            // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
-            // (the flush of the columns saves them).
-            ColumnTypes::materialize($column->getBoard());
-            $column->setType($retyped);
-            $snapshot = $this->follow?->snapshot($column->getBoard()) ?? [];
-            $this->followType($column, $retyped);
-            // Audit PW-L5: the tasks the retype completes or reopens get their history rows (this flush) and events.
-            $followed = $this->follow?->record($column->getBoard(), $snapshot, $actor) ?? [];
-            $this->columnRepository->saveAll(array_values($column->getBoard()->getColumns()->toArray()));
+            $board    = $column->getBoard();
+            $columns  = array_values($board->getColumns()->toArray());
+            $followed = [];
+            // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board, then the column's tasks, locked by id first.
+            // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+            $this->lockedWrite(self::ids($columns), self::ids(ColumnTasks::of($this->entityManager, $column)), function () use ($edit, $column, $board, $columns, $retyped, $actor, &$followed): void {
+                $edit();
+                // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
+                // (the flush of the columns saves them).
+                ColumnTypes::materialize($board);
+                $column->setType($retyped);
+                $snapshot = $this->follow?->snapshot($board) ?? [];
+                $this->followType($column, $retyped);
+                // Audit PW-L5: the tasks the retype completes or reopens get their history rows (this flush) and events.
+                $followed = $this->follow?->record($board, $snapshot, $actor) ?? [];
+                $this->columnRepository->saveAll($columns);
+            });
+            // Since 2.21.0: after the transaction, as before after the flush.
             foreach ($followed as [$event, $name]) {
                 $this->eventDispatcher?->dispatch($event, $name);
             }
         } else {
+            $edit();
             $this->columnRepository->save($column);
         }
 
@@ -286,24 +303,29 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             }
         }
 
-        $moved = [];
-        foreach (self::tasksOf($column) as $task) {
-            $moved[] = $task->getId();
-            $task->setColumn($target)->setPosition($position++);
-            if ($targetDone && !$task->isCompleted()) {
-                $task->markCompleted();
-            } elseif (!$targetDone && $task->isCompleted()) {
-                $task->markIncomplete();
+        $tasks = self::tasksOf($column);
+        $moved = self::ids($tasks);
+        // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board (the deleted one included), then the tasks that
+        // move, locked by id first.
+        // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+        $this->lockedWrite([...self::ids($remaining), $column->getId()], $moved, function () use ($board, $column, $remaining, $tasks, $target, $targetDone, $position): void {
+            foreach ($tasks as $task) {
+                $task->setColumn($target)->setPosition($position++);
+                if ($targetDone && !$task->isCompleted()) {
+                    $task->markCompleted();
+                } elseif (!$targetDone && $task->isCompleted()) {
+                    $task->markIncomplete();
+                }
             }
-        }
 
-        $board->removeColumn($column);
-        foreach ($remaining as $index => $candidate) {
-            $candidate->setPosition($index);
-        }
+            $board->removeColumn($column);
+            foreach ($remaining as $index => $candidate) {
+                $candidate->setPosition($index);
+            }
 
-        // The flush also deletes the removed column (orphan removal) and saves the moved tasks.
-        $this->columnRepository->saveAll($remaining);
+            // The flush also deletes the removed column (orphan removal) and saves the moved tasks.
+            $this->columnRepository->saveAll($remaining);
+        });
         $this->dispatch(new ColumnDeletedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $target->getId(), $moved, ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_DELETED);
 
         return true;
@@ -341,6 +363,43 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 throw new ColumnTransitionRefusedException($transition, $decision);
             }
         }
+    }
+
+    /**
+     * Since 2.21.0 (Beacon spec 239, FR-013): runs `$write` in one transaction after locking every row it writes in the
+     * fixed order (columns, then tasks, each by id); the caller dispatches the events after it. Without a lock service (a
+     * hand-built manager) `$write` runs as before.
+     *
+     * @param list<string> $columnIds
+     * @param list<string> $taskIds
+     * @param Closure(): void $write
+     */
+    private function lockedWrite(array $columnIds, array $taskIds, Closure $write): void
+    {
+        if (!$this->rowLock instanceof OrderedRowLockInterface) {
+            $write();
+
+            return;
+        }
+        $rowLock = $this->rowLock;
+        // @igor-ignore - The closure runs once, now, inside transactional(); the stateless lock keeps no reference to it.
+        $rowLock->transactional(static function () use ($rowLock, $columnIds, $taskIds, $write): void {
+            $rowLock->lockColumns($columnIds);
+            if ($taskIds !== []) {
+                $rowLock->lockTasks($taskIds);
+            }
+            $write();
+        });
+    }
+
+    /**
+     * @param list<BoardColumn|Task> $entities
+     *
+     * @return list<string>
+     */
+    private static function ids(array $entities): array
+    {
+        return array_map(static fn (BoardColumn|Task $entity): string => $entity->getId(), $entities);
     }
 
     /**
