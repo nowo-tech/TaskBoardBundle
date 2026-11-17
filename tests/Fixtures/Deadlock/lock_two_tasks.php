@@ -19,8 +19,9 @@ require dirname(__DIR__, 3) . '/vendor/autoload.php';
 $connection                      = DriverManager::getConnection((new DsnParser(['mysql' => 'pdo_mysql', 'postgresql' => 'pdo_pgsql']))->parse($url));
 $connection->beginTransaction();
 $connection->fetchOne('SELECT id FROM task_board_tasks WHERE id = ? FOR UPDATE', [$first]);
-echo "locked\n";
-flush();
+// Straight to the stream (no output buffer a kernel may have opened), so the test reads it now.
+fwrite(\STDOUT, "locked\n");
+fflush(\STDOUT);
 usleep((int) $wait);
 
 try {

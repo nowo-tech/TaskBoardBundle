@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Throwable;
 
 use function array_chunk;
+use function array_filter;
 use function array_unique;
 use function array_values;
 use function sort;
@@ -73,6 +74,54 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
     public function lockTasks(array $taskIds): void
     {
         $this->lock(Task::class, $taskIds);
+    }
+
+    public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = []): array
+    {
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('t.id AS id', 't.position AS position', 'IDENTITY(t.column) AS col', 't.revision AS revision')
+            ->from(Task::class, 't')
+            ->where('t.archivedAt IS NULL')
+            ->orderBy('t.id', 'ASC');
+        // A column belongs to one board: its id alone, so the locking read walks the column's index, not the whole board.
+        if ($columnId === null) {
+            $qb->andWhere('IDENTITY(t.board) = :board')->andWhere('t.column IS NULL')->setParameter('board', $boardId);
+        } else {
+            $qb->andWhere('IDENTITY(t.column) = :column')->setParameter('column', $columnId);
+        }
+        /** @var list<array{id: int|string, position: int|string, col: int|string|null, revision: int|string}> $rows */
+        $rows = $qb->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getArrayResult();
+
+        $seen = [];
+        foreach ($rows as $row) {
+            $seen[(string) $row['id']] = true;
+        }
+        $extra = array_values(array_filter(array_unique($alsoTaskIds), static fn (string $id): bool => !isset($seen[$id])));
+        sort($extra, SORT_STRING);
+        foreach (array_chunk($extra, self::CHUNK) as $chunk) {
+            /** @var list<array{id: int|string, position: int|string, col: int|string|null, revision: int|string}> $more */
+            $more = $this->entityManager->createQuery('SELECT t.id AS id, t.position AS position, IDENTITY(t.column) AS col, t.revision AS revision FROM ' . Task::class . ' t WHERE t.id IN (:ids) ORDER BY t.id ASC')
+                ->setParameter('ids', $chunk)
+                ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                ->getArrayResult();
+            $rows = [...$rows, ...$more];
+        }
+
+        $tasks = [];
+        foreach ($rows as $row) {
+            $task = $this->entityManager->find(Task::class, (string) $row['id']);
+            if (!$task instanceof Task) {
+                continue; // @codeCoverageIgnore - the row is locked: it cannot disappear between the two reads
+            }
+            $column = $row['col'] === null ? null : (string) $row['col'];
+            // A copy loaded before a concurrent writer committed (or kept by a worker's identity map) starts from the row locked.
+            if ($task->getPosition() !== (int) $row['position'] || $task->getColumn()?->getId() !== $column || $task->getRevision() !== (int) $row['revision']) {
+                $this->entityManager->refresh($task);
+            }
+            $tasks[] = $task;
+        }
+
+        return $tasks;
     }
 
     /**

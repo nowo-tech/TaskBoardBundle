@@ -20,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 
 use function array_map;
 use function implode;
+use function in_array;
 
 /**
  * Beacon spec 239, FR-013, through a plain-PHP double of the lock (a DDD host's path): every row a write changes is locked
@@ -41,17 +42,32 @@ final class FixedLockOrderTest extends TestCase
             $this->taskManager([$a, $b, $moved], $locked)->move($moved, $doing->getId(), 1, $this->user);
 
             self::assertSame([0, 1, 2], [$a->getPosition(), $moved->getPosition(), $b->getPosition()]);
-            self::assertSame($locked ? ['begin', 'columns ' . $doing->getId(), 'tasks ' . $moved->getId() . ',' . $a->getId() . ',' . $b->getId(), 'save ' . $b->getTitle(), 'save ' . $moved->getTitle(), 'end'] : ['save ' . $b->getTitle(), 'save ' . $moved->getTitle()], $this->log);
+            self::assertSame($locked ? ['begin', 'columns ' . $doing->getId(), 'tasks ' . $moved->getId() . ',' . $a->getId() . ',' . $b->getId(), 'fresh ' . $doing->getId() . ' +' . $moved->getId(), 'save ' . $b->getTitle(), 'save ' . $moved->getTitle(), 'end'] : ['save ' . $b->getTitle(), 'save ' . $moved->getTitle()], $this->log);
         }
     }
 
-    public function testAMoveWithinItsColumnLocksNoColumn(): void
+    public function testAMoveWithinItsColumnLocksItsColumnToo(): void
     {
-        [$board, $doing, $a, $b] = $this->scene();
+        [, $doing, $a, $b] = $this->scene();
 
         $this->taskManager([$a, $b], true)->move($b, $doing->getId(), 0, $this->user);
 
-        self::assertSame(['begin', 'tasks ' . $b->getId() . ',' . $a->getId(), 'save ' . $a->getTitle(), 'save ' . $b->getTitle(), 'end'], $this->log);
+        self::assertSame(['begin', 'columns ' . $doing->getId(), 'tasks ' . $b->getId() . ',' . $a->getId(), 'fresh ' . $doing->getId() . ' +' . $b->getId(), 'save ' . $a->getTitle(), 'save ' . $b->getTitle(), 'end'], $this->log);
+    }
+
+    public function testAMoveThatWaitedRenumbersFromTheColumnAsCommittedNotFromItsEarlierRead(): void
+    {
+        [$board, $doing, $a, $b, $moved] = $this->scene();
+        // Read before the lock: A (0), B (1). Committed meanwhile by a concurrent move: C entered at the top, A and B shifted.
+        $c         = new Task($board, 'C', $this->user, column: $doing, position: 0);
+        $committed = static function () use ($a, $b): void {
+            $a->setPosition(1);
+            $b->setPosition(2);
+        };
+
+        $this->taskManager([$a, $b, $moved], true, $committed, [$c])->move($moved, $doing->getId(), 1, $this->user);
+
+        self::assertSame([0, 1, 2, 3], [$c->getPosition(), $moved->getPosition(), $a->getPosition(), $b->getPosition()]);
     }
 
     public function testAnUpdateThatChangesTheColumnLocksTheColumnThenTheTask(): void
@@ -94,8 +110,10 @@ final class FixedLockOrderTest extends TestCase
 
     /**
      * @param list<Task> $tasks
+     * @param (Closure(): void)|null $committed what a concurrent write committed before the lock was granted
+     * @param list<Task> $entered tasks that write put in the column
      */
-    private function taskManager(array $tasks, bool $locked): TaskManager
+    private function taskManager(array $tasks, bool $locked, ?Closure $committed = null, array $entered = []): TaskManager
     {
         $repository = $this->createMock(TaskRepositoryInterface::class);
         $repository->method('findByBoard')->willReturn($tasks);
@@ -103,7 +121,19 @@ final class FixedLockOrderTest extends TestCase
             $this->log[] = 'save ' . $task->getTitle();
         });
 
-        return new TaskManager($repository, new TaskChangeRecorder(), rowLock: $locked ? $this->lock() : null);
+        return new TaskManager($repository, new TaskChangeRecorder(), rowLock: $locked ? $this->lock(static function (?string $columnId, array $also) use ($tasks, $committed, $entered): array {
+            if ($committed instanceof Closure) {
+                $committed();
+            }
+            $fresh = [];
+            foreach ([...$tasks, ...$entered] as $task) {
+                if ($task->getColumn()?->getId() === $columnId || in_array($task->getId(), $also, true)) {
+                    $fresh[] = $task;
+                }
+            }
+
+            return $fresh;
+        }) : null);
     }
 
     private function columnManager(bool $locked): BoardColumnManager
@@ -119,18 +149,29 @@ final class FixedLockOrderTest extends TestCase
     /**
      * Records the calls as given (the Doctrine lock sorts the ids itself).
      */
-    private function lock(): OrderedRowLockInterface
+    /**
+     * @param (Closure(?string, list<string>): list<Task>)|null $fresh the column as committed
+     */
+    private function lock(?Closure $fresh = null): OrderedRowLockInterface
     {
         $record = function (string $entry): void {
             $this->log[] = $entry;
         };
 
-        return new class($record) implements OrderedRowLockInterface {
+        return new class($record, $fresh ?? static fn (): array => []) implements OrderedRowLockInterface {
             /**
              * @param Closure(string): void $record
+             * @param Closure(?string, list<string>): list<Task> $fresh
              */
-            public function __construct(private readonly Closure $record)
+            public function __construct(private readonly Closure $record, private readonly Closure $fresh)
             {
+            }
+
+            public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = []): array
+            {
+                ($this->record)('fresh ' . $columnId . ' +' . implode(',', $alsoTaskIds));
+
+                return ($this->fresh)($columnId, $alsoTaskIds);
             }
 
             public function transactional(Closure $work): mixed

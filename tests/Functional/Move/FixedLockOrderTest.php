@@ -164,6 +164,55 @@ final class FixedLockOrderTest extends FunctionalTestCase
         $this->assertPositions([$high, $low, $middle]);
     }
 
+    public function testTwoConcurrentMovesInOneColumnEndWithUniqueContiguousPositions(): void
+    {
+        [$board, $doing, $tasks] = $this->column();
+        $this->requireRowLocks();
+        [$low, $middle, $high] = $tasks;
+        $entering              = $this->task($board, 'Entering', 0);
+        $this->em->clear();
+        $entering = $this->em->find(Task::class, $entering->getId());
+        self::assertInstanceOf(Task::class, $entering);
+        $manager = $this->service(TaskManager::class);
+
+        // The other process holds the column, then moves H to the top (H, L, M). This move read L, M, H before it waited.
+        $process = proc_open([PHP_BINARY, __DIR__ . '/../../Fixtures/Deadlock/move_worker.php', $high->getId(), $doing->getId(), '0', (string) self::OTHER_WAIT], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertTrue(is_resource($process));
+        // Never read its stderr before it ends: that read would wait for the other process to finish.
+        self::assertSame("locked\n", fgets($pipes[1]), 'the other process holds the column');
+        $manager->move($entering, $doing->getId(), 1, $entering->getCreator() ?? $entering);
+        $other  = (string) stream_get_contents($pipes[1]);
+        $errors = (string) stream_get_contents($pipes[2]);
+        self::assertSame(0, proc_close($process), $errors);
+        self::assertSame('moved', $other);
+
+        $positions = array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()]));
+        self::assertSame([0, 1, 2, 3], $positions, 'unique and contiguous');
+        // From the committed column (H, L, M), not from the one read before the lock (L, M, H).
+        $this->assertPositions([$high, $entering, $low, $middle]);
+    }
+
+    public function testTheLockedReadReturnsTheColumnAsCommittedAndRefreshesStaleCopies(): void
+    {
+        $board = $this->board('No columns', []);
+        $loose = new Task(board: $board, title: 'Loose', creator: $this->owner, position: 0);
+        $other = new Task(board: $board, title: 'Other', creator: $this->owner, position: 1);
+        $this->em->persist($loose);
+        $this->em->persist($other);
+        $this->em->flush();
+        // Committed by another writer after this copy was loaded.
+        $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 5 WHERE id = ?', [$loose->getId()]);
+        $lock = new DoctrineOrmOrderedRowLock($this->em);
+
+        $tasks = $lock->transactional(static fn (): array => $lock->lockedColumnTasks($board->getId(), null, [$other->getId()]));
+
+        $ids = [$loose->getId(), $other->getId()];
+        sort($ids);
+        self::assertSame($ids, array_map(static fn (Task $task): string => $task->getId(), $tasks), 'each task once, by id');
+        self::assertSame(5, $loose->getPosition(), 'the stale copy was refreshed');
+        self::assertSame(1, $other->getPosition());
+    }
+
     /**
      * A board whose second column ("Doing") holds three tasks, by position in ascending id order.
      *

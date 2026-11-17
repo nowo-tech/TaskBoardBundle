@@ -406,6 +406,11 @@ final readonly class TaskManager implements TaskManagerInterface
         $siblings = $renumberSiblings ? $this->columnSiblings($task, $column) : [];
         // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
         $write = function () use ($task, $column, $position, $renumberSiblings, $siblings, $columns, $user, $oldColumn, $wasCompleted): void {
+            // Since 2.21.0 (Beacon spec 239, FR-013): with the rows locked, the column as committed now. A move that waited
+            // for a concurrent one renumbers from that one's positions, never from what it read before the lock.
+            if ($renumberSiblings && $this->rowLock instanceof OrderedRowLockInterface) {
+                $siblings = $this->lockedSiblings($this->rowLock, $task, $column);
+            }
             $task
                 ->setColumn($column)
                 ->setPosition($position);
@@ -423,7 +428,8 @@ final readonly class TaskManager implements TaskManagerInterface
 
             $this->taskRepository->save($task);
         };
-        $this->lockedWrite($oldColumn?->getId() !== $column?->getId() ? $column : null, [$task, ...$siblings], $write);
+        // A renumbering move always locks its column (the column's tasks change together); a plain move only the one it enters.
+        $this->lockedWrite($renumberSiblings || $oldColumn?->getId() !== $column?->getId() ? $column : null, [$task, ...$siblings], $write);
 
         if ($oldColumn?->getId() !== $column?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
@@ -762,6 +768,25 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         usort($siblings, static fn (Task $a, Task $b): int => $a->getPosition() <=> $b->getPosition());
+
+        return $siblings;
+    }
+
+    /**
+     * Since 2.21.0 (Beacon spec 239, FR-013): the other tasks of `$column` as committed now, each row locked, by position
+     * (then id); the moved task is brought up to date too. Inside the locked write only.
+     *
+     * @return list<Task>
+     */
+    private function lockedSiblings(OrderedRowLockInterface $rowLock, Task $task, ?BoardColumn $column): array
+    {
+        $siblings = [];
+        foreach ($rowLock->lockedColumnTasks($task->getBoard()->getId(), $column?->getId(), [$task->getId()]) as $candidate) {
+            if ($candidate->getId() !== $task->getId() && $candidate->getColumn()?->getId() === $column?->getId() && !$candidate->isArchived()) {
+                $siblings[] = $candidate;
+            }
+        }
+        usort($siblings, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
 
         return $siblings;
     }
