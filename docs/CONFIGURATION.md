@@ -5,7 +5,7 @@
 - [Required](#required)
 - [Database](#database)
 - [Routes](#routes)
-  - [Why a route loader instead of `#[Route]` attributes (REQ-SF-004)](#why-a-route-loader-instead-of-route-attributes-req-sf-004)
+  - [Attribute routes and the route loader (REQ-SF-004)](#attribute-routes-and-the-route-loader-req-sf-004)
 - [Task API (since 2.2)](#task-api-since-22)
 - [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Subtask depth (since 2.20)](#subtask-depth-since-220)
@@ -144,25 +144,31 @@ nowo_task_board:
     type: nowo_task_board
 ```
 
-### Why a route loader instead of `#[Route]` attributes (REQ-SF-004)
+### Attribute routes and the route loader (REQ-SF-004)
 
-REQ-SF-004 exemption, recorded on purpose: the manage routes are built by `Routing\TaskBoardRouteLoader` (`type: nowo_task_board`)
-from this configuration, not declared with `#[Route]` attributes on `TaskBoardManageController`.
+Since 2.21.1 (owner approval 2026-11-17) the routes are declared with `#[Route]` attributes on the controllers
+(`TaskBoardManageController`, `TaskCopyController`, `TaskRecurrenceController`, `TaskBoardConnectionController`,
+`TaskBoardMultiBoardController` and the `Api\Controller\TaskApi*Controller` classes): HTTP methods, requirements,
+defaults, the default path and the default name of each action. `Routing\TaskBoardRouteLoader` (`type: nowo_task_board`)
+reads them through an internal `ControllerAttributeRouteLoader` and applies this configuration, as before:
 
-- **Every route name and path is configuration** (`routes.<key>.name`, `routes.<key>.path`, `route_prefix`). Hosts
-  rename them (Beacon serves them under its own paths) and generate them by name. An attribute fixes one name and one
-  path per action at compile time, so attributes could not keep these keys without a BC break (REQ-SF-004 rule 5,
-  REQ-BC-001).
-- **Tenancy copies every route** once per `tenancy.tenant_paths` entry (`<name_prefix><name>`, `{tenantSlug}` in the
-  path, a slug requirement per entry). Attribute routing has no equivalent of a per-host list of copies.
-- **Routes stay opt-in (REQ-SF-004 rule 7).** The controller carries no `#[Route]`, so `routing.controllers` (Symfony
-  >= 7.3 autoconfiguration) never loads it; only the documented `type: nowo_task_board` import does.
+- **Names and paths stay configuration** (`routes.<key>.name`, `routes.<key>.path`, `route_prefix`, `multi_board.path`,
+  `api.prefix`). The attributes hold the defaults only; hosts that rename or move routes keep doing it here.
+- **Feature switches** (`sync`, `task_numbers`, `calendar`, `move`, `recurrence`, `multi_board`, `api`,
+  `task_templates`) still decide which routes exist.
+- **Tenancy copies every manage route** once per `tenancy.tenant_paths` entry (`<name_prefix><name>`, `{tenantSlug}` in
+  the path, a slug requirement per entry), as before.
+- **Routes stay opt-in (REQ-SF-004 rule 7).** The controller services are not autoconfigured (they are tagged
+  `controller.service_arguments`, plus `container.service_subscriber` for the `AbstractController` ones, explicitly), so
+  `routing.controllers` (Symfony >= 7.3) never loads them; only the documented `type: nowo_task_board` import does.
   `tests/Unit/Routing/HostRoutingControllersTest` boots a kernel whose only routing is `routing.controllers` and
   asserts that no bundle route exists.
-- **One loader, no YAML route files** (REQ-SF-004 rule 3): the bundle ships no `routing.yaml`/XML; the loader maps
-  each route key to its controller action and HTTP methods in one place (`TaskBoardRouteLoader::load()`).
+- **Nothing changes for a host.** Every route keeps its name, path, methods, requirements, defaults, options and order:
+  `tests/Integration/Routing/RouteCollectionFixtureTest` compares the router's collection with a dump of 2.21.0
+  (`tests/Fixtures/Routing/route-collections.json`).
 
-Route names, paths, methods and the prefix are unchanged by 1.21.
+Do not import the controllers with `type: attribute` (or `routing.controllers`) instead of the loader: that skips
+`route_prefix`, your names and paths, the tenant copies and the feature switches.
 
 ## Task API (since 2.2)
 

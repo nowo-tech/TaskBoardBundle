@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Controller;
 
+use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
+use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
@@ -23,6 +25,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
@@ -53,6 +56,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
+use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
@@ -65,6 +69,7 @@ use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\GitLabMergeRequestLinkParser;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
@@ -532,6 +537,40 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame(['Done is full'], $request->getSession()->getFlashBag()->get('error'));
         self::assertTrue($this->board->getColumns()->contains($this->column));
         self::assertSame($this->column, $this->task->getColumn());
+    }
+
+    /**
+     * Since 2.21.1 (audit SF3-L1): a retype whose column holds a task changed meanwhile (an out-of-date copy with unsaved
+     * changes, found once the rows are locked) is refused with the "changed meanwhile" flash, not a 500.
+     */
+    public function testAColumnRetypeThatFindsATaskChangedMeanwhileFlashesInsteadOfFailing(): void
+    {
+        $rowLock = new class implements OrderedRowLockInterface {
+            public function transactional(Closure $work): mixed
+            {
+                return $work();
+            }
+
+            public function lockColumns(array $columnIds): void
+            {
+            }
+
+            public function lockTasks(array $taskIds): void
+            {
+            }
+
+            public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = [], bool $withArchived = false): array
+            {
+                throw TaskTreeRefusedException::conflict();
+            }
+        };
+        $request  = Request::create('/', 'POST');
+        $response = $this->controller($this->owner, currentRequest: $request, formData: new BoardColumnFormData('Todo', type: ColumnType::Done), rowLock: $rowLock)
+            ->updateColumn($this->board->getId(), $this->column->getId(), $request);
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(['task_board.flash.column_changed_meanwhile'], $request->getSession()->getFlashBag()->get('error'));
+        self::assertSame([], $request->getSession()->getFlashBag()->get('success'));
     }
 
     public function testDeletingAColumnNeedsAValidToken(): void
@@ -1162,7 +1201,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
      * @param list<TaskBoard> $boards
      * @param list<string> $listRoles
      */
-    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null, ?TaskBoardDefaultViewResolverInterface $defaultView = null, bool $routerThrows = false, ?ColumnTransitionPolicyInterface $transitions = null): TaskBoardManageController
+    private function controller(TestUser $user, array $boards = [], array $listRoles = ['ROLE_USER'], ?FormFactoryInterface $realFormFactory = null, bool $csrfValid = true, ?EventDispatcher $dispatcher = null, ?ColumnSetManager $columnSets = null, mixed $formData = null, bool $formValid = true, ?Request $currentRequest = null, bool $rootError = false, bool $translator = false, bool $readersCanComment = true, bool $comments = true, ?TaskBoardAccessCheckerInterface $accessChecker = null, ?TaskBoardDefaultViewResolverInterface $defaultView = null, bool $routerThrows = false, ?ColumnTransitionPolicyInterface $transitions = null, ?OrderedRowLockInterface $rowLock = null): TaskBoardManageController
     {
         $boardRepository = $this->createMock(TaskBoardRepositoryInterface::class);
         $boardRepository->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -1191,7 +1230,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $authorization->method('isGranted')->willReturnCallback(static fn (mixed $role): bool => $role === 'ROLE_USER');
 
         $recorder      = new TaskChangeRecorder();
-        $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class), transitions: $transitions);
+        $columnManager = new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class), transitions: $transitions, rowLock: $rowLock);
 
         $controller = new TaskBoardManageController(
             accessChecker: $accessChecker ?? new ConfigurableTaskBoardAccessChecker($authorization, ['ROLE_USER'], ['ROLE_USER'], $listRoles),

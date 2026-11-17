@@ -72,7 +72,9 @@ use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
+use Psr\Clock\ClockInterface;
 use Stringable;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
@@ -108,7 +110,6 @@ use function str_ends_with;
 use function str_starts_with;
 use function substr;
 use function substr_count;
-use function time;
 use function trim;
 
 use const JSON_PRESERVE_ZERO_FRACTION;
@@ -182,6 +183,8 @@ final readonly class SyncTaskWriter
         private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
         // Since 2.20.0 (audit PX-M2): parent changes go through the port, on locked, committed rows.
         private ?TaskReparenterInterface $reparenter = null,
+        // Since 2.21.1 (REQ-DI-001): the time a task was archived remotely.
+        private ClockInterface $clock = new NativeClock(),
     ) {
     }
 
@@ -644,7 +647,7 @@ final readonly class SyncTaskWriter
     private function markArchived(SyncRunContext $ctx, Task $task, TaskSyncItem $item, string $externalId): void
     {
         $task->archive(Task::ARCHIVE_REASON_REMOTE);
-        $item->setRemoteArchivedAt(new DateTimeImmutable());
+        $item->setRemoteArchivedAt($this->clock->now());
         $this->changeRecorder->record($task, $ctx->actor, TaskChangeType::Archived, null, $ctx->provider->id());
         $ctx->taskEvents[] = ['archived', $task->getId(), $externalId];
         ++$ctx->archived;
@@ -1410,7 +1413,7 @@ final readonly class SyncTaskWriter
     /** Since 1.25: the creation date of the source when it is plausible (2000-01-01 … now + 5 min). */
     private function createdAt(?DateTimeImmutable $at): ?DateTimeImmutable
     {
-        if (!$at instanceof DateTimeImmutable || $at->getTimestamp() < 946_684_800 || $at->getTimestamp() > time() + 300) {
+        if (!$at instanceof DateTimeImmutable || $at->getTimestamp() < 946_684_800 || $at->getTimestamp() > $this->clock->now()->getTimestamp() + 300) {
             return null;
         }
 

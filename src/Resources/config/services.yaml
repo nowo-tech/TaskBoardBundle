@@ -73,6 +73,8 @@ services:
             - '../../Tree/TaskReparentResult.php'
             - '../../Tree/TaskTreeRefusedException.php'
             - '../../Routing/TenantPathUrlGenerator.php'
+            # Since 2.21.1 (REQ-SF-004): owned by TaskBoardRouteLoader; a service would be autoconfigured as a routing.loader.
+            - '../../Routing/ControllerAttributeRouteLoader.php'
             - '../../Assignee/'
             # Since 1.23: the sync services are registered by services_sync.yaml (sync.enabled) and the avatar
             # services explicitly below.
@@ -94,6 +96,10 @@ services:
             # Since 2.15.0: registered by the extension (database.user_reference).
             - '../../User/'
 
+    # REQ-SF-004 rule 7 (since 2.21.1): the controllers carry #[Route] attributes but are NOT autoconfigured, so Symfony
+    # >= 7.3 does not tag them routing.controller and a host's default `routing.controllers` import does not load the
+    # bundle routes; the only way in stays the documented `type: nowo_task_board` import (route prefix, configurable
+    # paths and names, feature switches). Each controller definition is tagged explicitly instead.
     Nowo\TaskBoardBundle\Controller\:
         resource: '../../Controller/'
         # Since 1.23: registered by services_sync.yaml (sync.enabled); since 2.3.0 the Repeat controller by
@@ -104,6 +110,8 @@ services:
             # Since 2.13.0: registered by services_multi_board.yaml (multi_board.enabled).
             - '../../Controller/TaskBoardMultiBoardController.php'
         public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
 
     Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader:
         arguments:
@@ -115,6 +123,8 @@ services:
 
     Nowo\TaskBoardBundle\Controller\TaskBoardManageController:
         public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
         arguments:
             $routes: '%nowo_task_board.routes%'
             $templates: '%nowo_task_board.templates%'
@@ -245,6 +255,8 @@ services:
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:
         public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
         arguments:
             $routes: '%nowo_task_board.routes%'
 

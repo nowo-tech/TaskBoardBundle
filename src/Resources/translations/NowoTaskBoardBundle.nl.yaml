@@ -97,6 +97,7 @@ task_board.flash.subtask_created: Subtask created.
 task_board.flash.subtask_too_deep: "De subtaak is niet aangemaakt: die zou dieper liggen dan toegestaan."
 task_board.flash.subtask_conflict: "De subtaak is niet aangemaakt: de takenboom is intussen gewijzigd. Probeer het opnieuw."
 task_board.flash.task_changed_meanwhile: "De taak is intussen gewijzigd: er is niets opgeslagen. Probeer het opnieuw."
+task_board.flash.column_changed_meanwhile: "De taken van de kolom zijn intussen gewijzigd: er is niets opgeslagen. Probeer het opnieuw."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.

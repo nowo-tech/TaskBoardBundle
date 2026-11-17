@@ -19,9 +19,11 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
 
 use function array_filter;
 use function array_map;
@@ -32,6 +34,7 @@ use function is_string;
 /**
  * Since 2.2.0 (spec 213): the read endpoints. Thin: parse the request, call one operation, serialize.
  */
+#[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiReadController
 {
     public function __construct(
@@ -44,6 +47,7 @@ final readonly class TaskApiReadController
     ) {
     }
 
+    #[Route('/v2/team/{teamId}/space', name: 'nowo_task_board_api_spaces', methods: ['GET'])]
     public function spaces(Request $request, string $teamId): JsonResponse
     {
         $spaces = $this->operations->spaces(TaskApiRequestListener::principalOf($request), $teamId);
@@ -51,12 +55,14 @@ final readonly class TaskApiReadController
         return new JsonResponse(['spaces' => array_map(fn (TaskApiSpace $space): array => $this->serializer->space($space), $spaces)]);
     }
 
+    #[Route('/v2/space/{spaceId}', name: 'nowo_task_board_api_space', methods: ['GET'])]
     public function space(Request $request, string $spaceId): JsonResponse
     {
         return new JsonResponse($this->serializer->space($this->operations->space(TaskApiRequestListener::principalOf($request), $spaceId)));
     }
 
     /** Since 2.19.0 (Beacon spec 234, FR-031): the space's folders, each with its lists (before: always empty). */
+    #[Route('/v2/space/{spaceId}/folder', name: 'nowo_task_board_api_folders', methods: ['GET'])]
     public function folders(Request $request, string $spaceId): JsonResponse
     {
         $list = $this->folderOperations->folders(TaskApiRequestListener::principalOf($request), $spaceId);
@@ -65,6 +71,7 @@ final readonly class TaskApiReadController
     }
 
     /** Since 2.19.0: `GET /v2/folder/{id}`. */
+    #[Route('/v2/folder/{folderId}', name: 'nowo_task_board_api_folder', methods: ['GET'])]
     public function folder(Request $request, string $folderId): JsonResponse
     {
         $list   = $this->folderOperations->folder(TaskApiRequestListener::principalOf($request), $folderId);
@@ -74,6 +81,7 @@ final readonly class TaskApiReadController
     }
 
     /** Since 2.19.0: `GET /v2/folder/{id}/list`: the lists of the folder. */
+    #[Route('/v2/folder/{folderId}/list', name: 'nowo_task_board_api_folder_lists', methods: ['GET'])]
     public function folderLists(Request $request, string $folderId): JsonResponse
     {
         $list   = $this->folderOperations->folder(TaskApiRequestListener::principalOf($request), $folderId);
@@ -86,6 +94,7 @@ final readonly class TaskApiReadController
      * Since 2.19.0 (as ClickUp): the folderless lists only, a board in a folder being listed under its folder; with
      * `include_folders=true` (or `api.lists_include_folders`) every board, each with its `folder`.
      */
+    #[Route('/v2/space/{spaceId}/list', name: 'nowo_task_board_api_lists', methods: ['GET'])]
     public function lists(Request $request, string $spaceId): JsonResponse
     {
         $query  = $request->query->all();
@@ -96,6 +105,7 @@ final readonly class TaskApiReadController
         return new JsonResponse(['lists' => array_map(fn (TaskBoard $board): array => $this->serializer->board($board, $list->space, $list->taskCounts[$board->getId()] ?? 0), $boards)]);
     }
 
+    #[Route('/v2/list/{listId}', name: 'nowo_task_board_api_list', methods: ['GET'])]
     public function list(Request $request, string $listId): JsonResponse
     {
         $list = $this->operations->board(TaskApiRequestListener::principalOf($request), $listId);
@@ -103,16 +113,19 @@ final readonly class TaskApiReadController
         return new JsonResponse($this->serializer->board($list->boards[0], $list->space, $list->taskCounts[$listId] ?? 0));
     }
 
+    #[Route('/v2/list/{listId}/task', name: 'nowo_task_board_api_list_tasks', methods: ['GET'])]
     public function listTasks(Request $request, string $listId): JsonResponse
     {
         return new JsonResponse($this->serializer->taskPage($this->operations->tasks(TaskApiRequestListener::principalOf($request), $listId, TaskApiTaskFilter::fromQuery($request->query->all()))));
     }
 
+    #[Route('/v2/team/{teamId}/task', name: 'nowo_task_board_api_team_tasks', methods: ['GET'])]
     public function teamTasks(Request $request, string $teamId): JsonResponse
     {
         return new JsonResponse($this->serializer->taskPage($this->operations->teamTasks(TaskApiRequestListener::principalOf($request), $teamId, TaskApiTaskFilter::fromQuery($request->query->all()))));
     }
 
+    #[Route('/v2/task/{taskId}', name: 'nowo_task_board_api_task', methods: ['GET'])]
     public function task(Request $request, string $taskId): JsonResponse
     {
         $query     = $request->query->all();
@@ -132,6 +145,7 @@ final readonly class TaskApiReadController
         return TaskApiRevision::etag(new JsonResponse($task), $found);
     }
 
+    #[Route('/v2/task/{taskId}/comment', name: 'nowo_task_board_api_task_comments', methods: ['GET'])]
     public function comments(Request $request, string $taskId): JsonResponse
     {
         $query   = $request->query->all();
@@ -142,6 +156,7 @@ final readonly class TaskApiReadController
         return new JsonResponse(['comments' => array_map(fn (TaskComment $comment): array => $this->serializer->comment($comment, $page->authors[$comment->getId()] ?? null, $page->updaters[$comment->getId()] ?? null), $page->comments)]);
     }
 
+    #[Route('/v2/task/{taskId}/member', name: 'nowo_task_board_api_task_members', methods: ['GET'])]
     public function members(Request $request, string $taskId): JsonResponse
     {
         $members = $this->operations->members(TaskApiRequestListener::principalOf($request), $taskId);
@@ -149,6 +164,7 @@ final readonly class TaskApiReadController
         return new JsonResponse(['members' => array_map(fn (TaskApiUser $user): ?array => $this->serializer->user($user), $members)]);
     }
 
+    #[Route('/v2/space/{spaceId}/tag', name: 'nowo_task_board_api_space_tags', methods: ['GET'])]
     public function tags(Request $request, string $spaceId): JsonResponse
     {
         $tags = $this->operations->spaceTags(TaskApiRequestListener::principalOf($request), $spaceId);
@@ -156,6 +172,7 @@ final readonly class TaskApiReadController
         return new JsonResponse(['tags' => array_map(static fn (string $tag): array => ['name' => $tag, 'tag_fg' => null, 'tag_bg' => null], $tags)]);
     }
 
+    #[Route('/v2/list/{listId}/field', name: 'nowo_task_board_api_list_fields', methods: ['GET'])]
     public function fields(Request $request, string $listId): JsonResponse
     {
         // Since 2.19.0 (FR-028): the native fields first (writable), then the synced ones (read-only).
@@ -170,6 +187,7 @@ final readonly class TaskApiReadController
     /**
      * `start_date` and `end_date` in Unix milliseconds, `assignee` a comma-separated list of ids, `task_id`.
      */
+    #[Route('/v2/team/{teamId}/time_entries', name: 'nowo_task_board_api_time_entries', methods: ['GET'])]
     public function timeEntries(Request $request, string $teamId): JsonResponse
     {
         $query    = $request->query->all();

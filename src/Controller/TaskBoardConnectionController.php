@@ -69,6 +69,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -146,6 +147,7 @@ final class TaskBoardConnectionController extends AbstractController
     ) {
     }
 
+    #[Route('/tools/task-board/board/{boardId}/connection', name: 'nowo_task_board_board_connection', methods: ['GET'])]
     public function connection(string $boardId, Request $request): Response
     {
         $user       = $this->requireUser();
@@ -206,6 +208,7 @@ final class TaskBoardConnectionController extends AbstractController
      * One level of the container browser: an HTML fragment for the browser's script, or (without script) a
      * redirect to the page with that level open.
      */
+    #[Route('/tools/task-board/board/{boardId}/connection/containers', name: 'nowo_task_board_board_connection_containers', methods: ['POST'])]
     public function containers(string $boardId, Request $request): Response
     {
         $user  = $this->requireUser();
@@ -258,6 +261,7 @@ final class TaskBoardConnectionController extends AbstractController
         ]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/connection/link', name: 'nowo_task_board_board_connection_link', methods: ['POST'])]
     public function link(string $boardId, Request $request): RedirectResponse
     {
         $user     = $this->requireUser();
@@ -325,6 +329,7 @@ final class TaskBoardConnectionController extends AbstractController
         return $this->backToPage($boardId);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/connection/refresh', name: 'nowo_task_board_board_connection_refresh', methods: ['POST'])]
     public function refresh(string $boardId, Request $request): RedirectResponse
     {
         $user        = $this->requireUser();
@@ -352,6 +357,7 @@ final class TaskBoardConnectionController extends AbstractController
      * Progress of a run as JSON (counters only, never a credential). With the inline runner a paused run advances by
      * one slice per poll.
      */
+    #[Route('/tools/task-board/board/{boardId}/connection/progress/{runId}', name: 'nowo_task_board_board_connection_progress', methods: ['GET'])]
     public function progress(string $boardId, string $runId): JsonResponse
     {
         $user  = $this->requireUser();
@@ -390,6 +396,7 @@ final class TaskBoardConnectionController extends AbstractController
         return $response;
     }
 
+    #[Route('/tools/task-board/board/{boardId}/connection/cancel/{runId}', name: 'nowo_task_board_board_connection_cancel', methods: ['POST'])]
     public function cancel(string $boardId, string $runId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
@@ -401,6 +408,7 @@ final class TaskBoardConnectionController extends AbstractController
         return $this->backToPage($boardId);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/connection/unlink', name: 'nowo_task_board_board_connection_unlink', methods: ['POST'])]
     public function unlink(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
@@ -424,6 +432,7 @@ final class TaskBoardConnectionController extends AbstractController
      * Since 1.27.0 (TB-SYNC-2): the People page — every remote person of the connection's directory with a host-user
      * select (pre-filled by e-mail, then by name). Managers only (remote e-mails are shown here).
      */
+    #[Route('/tools/task-board/board/{boardId}/connection/people', name: 'nowo_task_board_board_connection_people', methods: ['GET'])]
     public function people(string $boardId, Request $request): Response
     {
         $user       = $this->requireUser();
@@ -440,6 +449,7 @@ final class TaskBoardConnectionController extends AbstractController
      * Since 1.27.0 (TB-SYNC-2): saves the People page (changed rows are re-applied to the imported tasks); during the
      * People step it also starts the first import (`skip` starts it without changing anything).
      */
+    #[Route('/tools/task-board/board/{boardId}/connection/people/save', name: 'nowo_task_board_board_connection_people_save', methods: ['POST'])]
     public function peopleSave(string $boardId, Request $request): RedirectResponse
     {
         $user       = $this->requireUser();
@@ -503,6 +513,7 @@ final class TaskBoardConnectionController extends AbstractController
      * Since 1.28.0 (`sync.people_bulk_former`): every person nobody decided yet becomes a former person. The rows stay
      * changeable person by person; during the People step the page's save still starts the import.
      */
+    #[Route('/tools/task-board/board/{boardId}/connection/people/former', name: 'nowo_task_board_board_connection_people_former', methods: ['POST'])]
     public function peopleFormer(string $boardId, Request $request): RedirectResponse
     {
         $user       = $this->requireUser();

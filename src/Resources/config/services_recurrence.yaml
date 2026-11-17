@@ -23,6 +23,8 @@ services:
 
     Nowo\TaskBoardBundle\Controller\TaskRecurrenceController:
         public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
         arguments:
             $routes: '%nowo_task_board.routes%'
             $templates: '%nowo_task_board.templates%'

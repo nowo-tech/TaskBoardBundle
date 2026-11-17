@@ -97,6 +97,7 @@ task_board.flash.subtask_created: Subtarea creada.
 task_board.flash.subtask_too_deep: "No se ha creado la subtarea: quedaría a más niveles de los permitidos."
 task_board.flash.subtask_conflict: "No se ha creado la subtarea: el árbol de tareas cambió mientras tanto. Inténtalo de nuevo."
 task_board.flash.task_changed_meanwhile: "La tarea cambió mientras tanto: no se ha guardado nada. Inténtalo de nuevo."
+task_board.flash.column_changed_meanwhile: "Las tareas de la columna cambiaron mientras tanto: no se ha guardado nada. Inténtalo de nuevo."
 task_board.form.board.name: Nombre del tablero
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Déjalo vacío para generarlo desde el nombre.

@@ -89,7 +89,7 @@ the board.
 - **FR-DI-001**: Core `services.yaml` wires repositories, services, controller, forms, route loader.
 - **FR-DI-002**: `services_timetrack.yaml` registers TimeTrack bridge when package present.
 - **FR-TWIG-001**: `TwigPathsPass` registers `NowoTaskBoardBundle` view namespace with app override support.
-- **FR-ROUTE-001**: `TaskBoardRouteLoader` exposes index, board, list, gantt, task, import routes from config.
+- **FR-ROUTE-001**: `TaskBoardRouteLoader` exposes index, board, list, gantt, task, import routes from config. Since 2.21.1 (REQ-SF-004) the routes are `#[Route]` attributes on the controllers, read by the loader, which still applies the configured names / paths, `route_prefix`, feature switches and tenant copies; the collection is pinned against 2.21.0.
 - **FR-DOCTRINE-001**: `TaskBoardMetadataListener` applies configurable table prefix to all bundle entities.
 - **FR-DOCTRINE-002**: Flushing repositories and import orchestration recover a closed EntityManager via `RecoveringFlusher` / `ManagerRegistry` so FrankenPHP workers without kernel reset stay usable after a failed flush; security/timer paths refresh managed entities before deciding or mutating.
 

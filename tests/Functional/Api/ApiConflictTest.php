@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\RecordingTransitionPolicy;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
 
 use function array_intersect_key;
 
@@ -83,6 +85,76 @@ final class ApiConflictTest extends ApiTestCase
 
         $this->assertTask409();
         self::assertSame($this->column('Doing')->getId(), $this->em->getConnection()->fetchOne('SELECT column_id FROM task_board_tasks WHERE id = ?', [$itemId]));
+    }
+
+    /**
+     * Since 2.21.1 (audit SF3-L1): a status delete that finds, once the rows are locked, one of its tasks changed by a
+     * concurrent write (here while the policy is asked) while this request's copy holds unsaved changes writes nothing and
+     * answers 409 `STATUS_409`, not 500.
+     */
+    public function testAStatusDeleteThatFindsATaskChangedMeanwhileIsStatus409(): void
+    {
+        $doing                              = $this->column('Doing');
+        $task                               = $this->task($this->board, 'Raced', 1);
+        $em                                 = $this->em;
+        $taskId                             = $task->getId();
+        RecordingTransitionPolicy::$decider = static function () use ($em, $taskId): ?ColumnTransitionDecision {
+            $em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$taskId]);
+            $em->find(Task::class, $taskId)?->setTitle('Unsaved');
+
+            return ColumnTransitionDecision::allow();
+        };
+
+        // The request reads the column's tasks as committed (its in-memory collection was built before the task).
+        $this->em->clear();
+        $this->send('DELETE', '/api/tasks/v2/list/' . $this->board->getId() . '/status/' . $doing->getId());
+
+        $this->assertStatus409();
+        self::assertSame(1, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM task_board_columns WHERE id = ?', [$doing->getId()]), 'the column stays');
+        self::assertSame(['column_id' => $doing->getId(), 'title' => 'Raced', 'position' => 7], $this->row($taskId));
+    }
+
+    /**
+     * Since 2.21.1 (audit SF3-L1): a status retype locks the column's tasks first; an out-of-date copy of one of them that
+     * holds unsaved changes (a concurrent write committed a new position) is 409 `STATUS_409`, and nothing is written. A
+     * retype asks no transition policy: the request's copy is changed once the controller is chosen.
+     */
+    public function testAStatusRetypeThatFindsATaskChangedMeanwhileIsStatus409(): void
+    {
+        $doing  = $this->column('Doing');
+        $task   = $this->task($this->board, 'Raced', 1);
+        $taskId = $task->getId();
+        $em     = $this->em;
+        $this->em->clear();
+        $dispatcher = static::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($em, $taskId): void {
+            $em->find(Task::class, $taskId)?->setTitle('Unsaved');
+            $em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$taskId]);
+        });
+
+        $this->send('PUT', '/api/tasks/v2/list/' . $this->board->getId() . '/status/' . $doing->getId(), ['type' => 'done']);
+
+        $this->assertStatus409();
+        self::assertNull($this->em->getConnection()->fetchOne('SELECT column_type FROM task_board_columns WHERE id = ?', [$doing->getId()]), 'the column keeps its type');
+        self::assertSame(['column_id' => $doing->getId(), 'title' => 'Raced', 'position' => 7], $this->row($taskId));
+    }
+
+    private function assertStatus409(): void
+    {
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame(['err' => 'The status\'s tasks changed: read the list again', 'ECODE' => 'STATUS_409'], $this->json());
+    }
+
+    /**
+     * @return array{column_id: mixed, title: mixed, position: int}
+     */
+    private function row(string $taskId): array
+    {
+        $row = $this->em->getConnection()->fetchAssociative('SELECT column_id, title, position FROM task_board_tasks WHERE id = ?', [$taskId]);
+        self::assertIsArray($row);
+
+        return ['column_id' => $row['column_id'], 'title' => $row['title'], 'position' => (int) $row['position']];
     }
 
     /**

@@ -96,6 +96,8 @@ services:
 
     Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController:
         public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
         arguments:
             $routes: '%nowo_task_board.routes%'
             $templates: '%nowo_task_board.templates%'
@@ -107,7 +109,6 @@ services:
             $peopleBulkFormer: '%nowo_task_board.sync.people_bulk_former%'
             $unmatchedColumnsChoice: '%nowo_task_board.sync.unmatched_columns_choice%'
             $peoplePageSize: '%nowo_task_board.sync.people.page_size%'
-        tags: ['controller.service_arguments']
 
     Nowo\TaskBoardBundle\Command\TaskBoardSyncCommand: ~
 

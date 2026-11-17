@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.21.1](#to-2211)
 - [To 2.21.0](#to-2210)
 - [To 2.20.0](#to-2200)
 - [To 2.19.0](#to-2190)
@@ -204,6 +205,34 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.21.1
+
+No schema change, no new option. What changes for a host:
+
+- **Attribute routes (REQ-SF-004), no action needed.** The routes moved from PHP code in `TaskBoardRouteLoader` to
+  `#[Route]` attributes on the controllers. Keep your import as it is:
+
+  ```yaml
+  # config/routes/nowo_task_board.yaml (unchanged)
+  nowo_task_board:
+      resource: .
+      type: nowo_task_board
+  ```
+
+  The loader still applies `route_prefix`, `routes.*`, `multi_board.path`, `api.prefix`, the feature switches and the
+  tenant copies, and the route collection is the 2.21.0 one (names, paths, methods, requirements, defaults, order).
+  - Do **not** replace the import with `type: attribute` on the bundle's controllers (or `routing.controllers`): the
+    attributes hold the default paths and names only, so that skips your configuration and the feature switches.
+  - The controller services are no longer autoconfigured. If you decorate or extend a bundle controller and relied on
+    autoconfiguration of that bundle definition, tag your own service explicitly.
+  - Routes you declare yourself for single controller actions (`controller: Nowo\TaskBoardBundle\Controller\...::action`)
+    keep working: `_controller` values are unchanged.
+- **New Task API code `STATUS_409`.** A status delete or retype that meets a task changed meanwhile answered 500; it now
+  answers 409 `STATUS_409` (nothing written; read the list again and retry). The board UI shows a flash instead of an
+  error page, and the task edit form's column change shows "The task changed meanwhile", as a move does.
+- **Clock.** `SyncTaskWriter` takes an optional `Psr\Clock\ClockInterface` (last argument, `NativeClock` by default):
+  hand-built instances behave as before.
 
 ## To 2.21.0
 

@@ -38,16 +38,22 @@ services:
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController:
         public: true
+        # REQ-SF-004 rule 7: #[Route] attributes, not autoconfigured (see services.yaml).
+        autoconfigure: false
         tags: ['controller.service_arguments']
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController:
         public: true
+        # REQ-SF-004 rule 7: #[Route] attributes, not autoconfigured (see services.yaml).
+        autoconfigure: false
         tags: ['controller.service_arguments']
         arguments:
             $listsIncludeFolders: '%nowo_task_board.api.lists_include_folders%'
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController:
         public: true
+        # REQ-SF-004 rule 7: #[Route] attributes, not autoconfigured (see services.yaml).
+        autoconfigure: false
         tags: ['controller.service_arguments']
         arguments:
             $maxBodyBytes: '%nowo_task_board.api.max_body_bytes%'
@@ -82,6 +88,8 @@ services:
 
     Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController:
         public: true
+        # REQ-SF-004 rule 7: #[Route] attributes, not autoconfigured (see services.yaml).
+        autoconfigure: false
         tags: ['controller.service_arguments']
         arguments:
             $maxBodyBytes: '%nowo_task_board.api.max_body_bytes%'

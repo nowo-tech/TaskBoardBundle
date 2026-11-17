@@ -114,6 +114,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Audit SF3-L1: three paths answered 500 instead of a refusal when they met the 2.21.0 "changed meanwhile" conflict (`TaskTreeRefusedException`, reason `conflict`); nothing was written in any of them, and that stays so.
+  - The task edit form, when its column change finds the task changed meanwhile: the "The task changed meanwhile" flash, as a move on the board.
+  - Column delete and column update (a retype) in the board UI: the new flash `task_board.flash.column_changed_meanwhile` ("The column's tasks changed meanwhile: nothing was saved. Try again.", 7 locales).
+  - `PUT` and `DELETE /v2/list/{id}/status/{status_id}` in the Task API: 409 with the new ECODE `STATUS_409` (`TaskApiRefusal::STATUS_STALE`; a status has no revision, so no `current_revision`). See [API — Errors](API.md#errors).
+- REQ-DI-001: `SyncTaskWriter` reads the time from the injected clock (`Psr\Clock\ClockInterface`, autowired to the framework's `clock` service; a `NativeClock` when built by hand): the remote archive date of a task and the "not in the future" bound of a source's creation date. Before, a bare `new DateTimeImmutable()` / `time()`.
+
+### Changed
+
+- Routes are declared with `#[Route]` attributes on the controllers (REQ-SF-004; owner approval 2026-11-17). The `type: nowo_task_board` route loader now reads those attributes (through an internal `ControllerAttributeRouteLoader`, so a host decorating `routing.loader.attribute` cannot change the bundle routes) and applies the configured names and paths, `route_prefix`, `multi_board.path`, `api.prefix`, the feature switches and the tenant copies, as before. Every route keeps its name, path, methods, requirements, defaults, options, host, schemes, condition and order: `tests/Integration/Routing/RouteCollectionFixtureTest.php` pins the collection against a dump of 2.21.0 (default configuration, every optional feature, custom prefix / names / paths with tenant copies, a multi-board list at the root, the Task API at its default and a custom prefix). The controller classes are now router cache resources (a changed controller refreshes the routes in debug). No host change: keep the route import as it is. See [UPGRADING](UPGRADING.md#to-2211).
+- The controller services are no longer autoconfigured (REQ-SF-004 rule 7): they are tagged `controller.service_arguments` explicitly, plus `container.service_subscriber` for the `AbstractController` ones, so the host's `routing.controllers` import on Symfony >= 7.3 does not load the attribute routes.
+
 ## [2.21.0] - 2026-11-17
 
 ### Fixed

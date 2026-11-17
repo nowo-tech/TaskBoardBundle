@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\MultiBoard\MultiBoardPerson;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardViewer;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
@@ -33,6 +34,7 @@ use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Twig\Environment;
 
@@ -91,6 +93,7 @@ final class TaskBoardMultiBoardController extends AbstractController
     ) {
     }
 
+    #[Route('/tools/task-board/tasks', name: 'nowo_task_board_tasks', methods: ['GET'])]
     public function tasks(Request $request): Response
     {
         $user    = $this->requireUser();
@@ -169,6 +172,7 @@ final class TaskBoardMultiBoardController extends AbstractController
         ]);
     }
 
+    #[Route('/tools/task-board/tasks/export.{format}', name: 'nowo_task_board_tasks_export', methods: ['GET'], requirements: ['format' => TaskBoardRouteLoader::EXPORT_FORMAT_REQUIREMENT])]
     public function export(Request $request, string $format): Response
     {
         $user   = $this->requireUser();

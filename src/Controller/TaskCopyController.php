@@ -36,6 +36,7 @@ use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
@@ -80,6 +81,7 @@ final class TaskCopyController extends AbstractController
     ) {
     }
 
+    #[Route('/tools/task-board/task/{taskId}/move-board', name: 'nowo_task_board_task_move_board', methods: ['GET', 'POST'])]
     public function move(string $taskId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
@@ -133,6 +135,7 @@ final class TaskCopyController extends AbstractController
         ]);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/duplicate', name: 'nowo_task_board_task_duplicate', methods: ['GET', 'POST'])]
     public function duplicate(string $taskId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);

@@ -97,6 +97,7 @@ task_board.flash.subtask_created: Subtask created.
 task_board.flash.subtask_too_deep: "La sottoattività non è stata creata: sarebbe più profonda del consentito."
 task_board.flash.subtask_conflict: "La sottoattività non è stata creata: l'albero delle attività è cambiato nel frattempo. Riprova."
 task_board.flash.task_changed_meanwhile: "L'attività è cambiata nel frattempo: non è stato salvato nulla. Riprova."
+task_board.flash.column_changed_meanwhile: "Le attività della colonna sono cambiate nel frattempo: non è stato salvato nulla. Riprova."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.
