@@ -197,9 +197,9 @@ Every management write needs a *Full* token and the board's manage decision (`Bo
 | `PUT /v2/list/{id}` | `name`, `content`; the slug stays. `status`, `priority`, `assignee`, `due_date` are warned about |
 | `DELETE /v2/list/{id}` | Erases every task, tracked time kept and detached, then the columns and the board. Works within a time budget: 200 `{}` when done, otherwise 202 `{"status": "in_progress"}` with `Retry-After`; call again until 200. A 202 is not kept for an idempotency key. A board that follows a provider: 409 `LIST_002`. Two deletes of one board at the same time may both pick the same tasks, so `TASK_ERASED` (with its file refs) and `BOARD_DELETED` can come twice: a host's listeners must delete files idempotently |
 | `POST /v2/list/{id}/status` | **Not in ClickUp's API.** A column at the end: `status` (its name), `color` (hex), since 2.19.0 `type` (`open`, `custom`, `done`, `closed`; at most two closed, else 400 `INPUT_002`), since 2.9.0 `icon` (one emoji of at most 16 bytes, or one of `board.column_icons` / `board.default_columns` icon ids such as `tabler:bug`; anything else is 400 `INPUT_002`) |
-| `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames, recolours or (since 2.9.0) sets the `icon` of a column (`null` or `""` removes it); what is not given stays |
+| `PUT /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Renames, recolours or (since 2.9.0) sets the `icon` of a column (`null` or `""` removes it); what is not given stays. Since 2.21.1 a retype (`type`) that finds a task of the column changed by a concurrent write answers 409 `STATUS_409` and writes nothing |
 | `PUT /v2/list/{id}/status/order` | **Not in ClickUp's API.** `order` lists every column id once |
-| `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`) |
+| `DELETE /v2/list/{id}/status/{status_id}` | **Not in ClickUp's API.** Its tasks move to the first remaining column (completed or reopened as the board's last column says, within the host's limit); the last column stays (409 `LIST_001`). Since 2.21.1 a task of the column changed by a concurrent write meanwhile is 409 `STATUS_409`: nothing was written; read the list again |
 
 **Folders (since 2.19.0, Beacon spec 234 FR-031).** The token must reach the whole tenant; the restructure policy
 (`restructure.policy`, default: the host's create-board decision for the tenant) decides, else 403 `ACCESS_002`.
@@ -332,6 +332,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
 | `STATUS_HUMANS_ONLY`, `STATUS_REFUSED`, a policy's own code | 403 | Since 2.16.0: the column transition policy refused the status (its message in `err`) |
+| `STATUS_409` | 409 | Since 2.21.1: a status (column) delete or retype found one of its tasks changed by a concurrent write; nothing was written. Read the list again and retry. No `current_revision`: a status has none |
 | `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`). Since 2.21.0 also a status change (task, bulk item, checklist item) whose task a concurrent write changed meanwhile (another column, board, archive or completion state): nothing was written; read the task again |
 | `BULK_001`, `BULK_002`, `BULK_003` | 409, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
 | `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |

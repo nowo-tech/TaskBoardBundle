@@ -31,6 +31,7 @@ use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -254,6 +255,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses a task: nothing changes
      * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-H1), `not_allowed` on a board whose folder shares
      *                                              its statuses, without the right on every board of the folder
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a task of the column changed meanwhile and its copy
+     *                                  holds unsaved changes: nothing changes
      */
     public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {

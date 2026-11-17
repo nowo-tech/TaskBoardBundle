@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 
 /**
  * Since 2.10.0 (DDD audit G4): the port of {@see BoardColumnManager}, which adds, edits, reorders and deletes columns.
@@ -37,6 +39,14 @@ interface BoardColumnManagerInterface
      */
     public function reorder(TaskBoard $board, array $orderedColumnIds, ?object $actor = null): void;
 
+    /**
+     * @throws InvalidArgumentException since 2.19.0, a retype past the board's closed columns limit
+     * @throws TaskReopenRefusedException since 2.19.0, when a retype would reopen more tasks than the host's limit allows
+     * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-H1), `not_allowed` on a board whose folder shares
+     *                                              its statuses, without the right on every board of the folder
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a retype finds a task of the column changed meanwhile
+     *                                  and its copy holds unsaved changes: nothing changes
+     */
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void;
 
     /**
@@ -47,6 +57,8 @@ interface BoardColumnManagerInterface
      * @throws ColumnTransitionRefusedException since 2.16.0 ({@see BoardColumnManager::delete()}), when the column transition
      *                                          policy refuses a task the deletion would move: nothing changes
      * @throws TaskBoardRestructureRefusedException since 2.19.0 (audit PW-H1): see above
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a task of the column changed meanwhile and its copy
+     *                                  holds unsaved changes: nothing changes
      */
     public function delete(BoardColumn $column, ?object $actor = null): bool;
 }

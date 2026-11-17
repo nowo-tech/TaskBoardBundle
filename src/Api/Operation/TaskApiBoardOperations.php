@@ -28,6 +28,7 @@ use Nowo\TaskBoardBundle\Service\TaskBoardEditor;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionVia;
 use Symfony\Component\Validator\Constraint;
@@ -218,6 +219,9 @@ final readonly class TaskApiBoardOperations
         } catch (TaskBoardRestructureRefusedException) {
             // Audit PW-H1: the board's folder shares its statuses with boards the caller may not restructure.
             throw TaskApiRefusal::permissionRefused();
+        } catch (TaskTreeRefusedException) {
+            // Since 2.21.1 (audit SF3-L1): a task of the column changed meanwhile; nothing was written.
+            throw TaskApiRefusal::statusStale();
         }
         $this->audit->written($principal, 'column.delete', $board, null, ['column' => $columnId]);
 
@@ -389,6 +393,9 @@ final readonly class TaskApiBoardOperations
         } catch (TaskBoardRestructureRefusedException) {
             // Audit PW-H1: the board's folder shares its statuses with boards the caller may not restructure.
             throw TaskApiRefusal::permissionRefused();
+        } catch (TaskTreeRefusedException) {
+            // Since 2.21.1 (audit SF3-L1): a retype found a task of the column changed meanwhile; nothing was written.
+            throw TaskApiRefusal::statusStale();
         }
     }
 }

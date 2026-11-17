@@ -25,6 +25,12 @@ final class TaskApiRefusal extends RuntimeException
     /** Since 2.16.0 (spec 234, FR-018): the task changed since the revision the client sent. */
     public const TASK_STALE = 'TASK_409';
 
+    /**
+     * Since 2.21.1 (audit SF3-L1): 409, a status (column) delete or retype found one of its tasks changed by a concurrent
+     * write; nothing was written: read the list again and retry.
+     */
+    public const STATUS_STALE = 'STATUS_409';
+
     /** Since 2.20.0 (Beacon spec 234, T004): 400, the new parent is on another board. */
     public const PARENT_OTHER_BOARD = 'PARENT_001';
 
@@ -73,6 +79,12 @@ final class TaskApiRefusal extends RuntimeException
     public static function stale(int $currentRevision): self
     {
         return new self(409, self::TASK_STALE, 'The task changed: read it again', ['current_revision' => $currentRevision]);
+    }
+
+    /** Since 2.21.1 (audit SF3-L1): 409 `STATUS_409`, a status write whose tasks changed meanwhile. */
+    public static function statusStale(): self
+    {
+        return new self(409, self::STATUS_STALE, 'The status\'s tasks changed: read the list again');
     }
 
     /**

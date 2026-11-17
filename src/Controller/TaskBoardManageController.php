@@ -516,6 +516,10 @@ final class TaskBoardManageController extends AbstractController
             return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
         } catch (TaskBoardRestructureRefusedException) {
             return $this->sharedColumnsRefused($boardId);
+        } catch (TaskTreeRefusedException) {
+            // Since 2.21.1 (audit SF3-L1): a task of the column changed meanwhile (an out-of-date copy with unsaved changes);
+            // nothing was written.
+            return $this->columnChangedMeanwhile($boardId);
         }
         if ($deleted) {
             $this->logWrite('column_delete', ['board_id' => $boardId, 'column_id' => $columnId]);
@@ -654,12 +658,27 @@ final class TaskBoardManageController extends AbstractController
                 $this->columnManager->update($column, $data, $user);
             } catch (TaskBoardRestructureRefusedException) {
                 return $this->sharedColumnsRefused($boardId);
+            } catch (TaskTreeRefusedException) {
+                // Since 2.21.1 (audit SF3-L1): a retype found a task of the column changed meanwhile; nothing was written.
+                return $this->columnChangedMeanwhile($boardId);
             }
             $this->logWrite('column_update', ['board_id' => $boardId, 'column_id' => $columnId]);
             $this->addFlash('success', 'task_board.flash.column_updated');
         } else {
             $this->flashColumnIconError($form);
         }
+
+        return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 2.21.1 (audit SF3-L1): a column delete or retype found a task of the column changed by a concurrent write (an
+     * out-of-date copy holding unsaved changes); nothing was written.
+     */
+    private function columnChangedMeanwhile(string $boardId): RedirectResponse
+    {
+        $this->logRefused('column_changed_meanwhile');
+        $this->addFlash('error', 'task_board.flash.column_changed_meanwhile');
 
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
@@ -1222,6 +1241,11 @@ final class TaskBoardManageController extends AbstractController
                 // Since 2.2.1: a column change in the form is a move, so the host's limit refuses it as on the board; nothing is saved.
                 $this->logRefused('task_reopen_limit');
                 $this->addFlash('error', 'task_board.flash.task_reopen_refused');
+            } catch (TaskTreeRefusedException) {
+                // Since 2.21.1 (audit SF3-L1): a column change in the form found the task changed meanwhile, as a move does;
+                // nothing is saved.
+                $this->logRefused('task_changed_meanwhile');
+                $this->addFlash('error', 'task_board.flash.task_changed_meanwhile');
             }
 
             return $this->afterTaskWrite($request, $task, $user);
