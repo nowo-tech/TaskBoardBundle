@@ -51,6 +51,10 @@ The functional kernel uses SQLite in memory. Set `TASK_BOARD_TEST_DATABASE_URL` 
 TASK_BOARD_TEST_DATABASE_URL='mysql://root:root@127.0.0.1:3306/task_board_test?serverVersion=8.4.0' composer test -- --testsuite functional
 ```
 
+Locally, `make test-with-db` starts the MySQL 8.4 and PostgreSQL 16 services of the root `docker-compose.yml` (compose
+profile `db`), runs the functional suite against each through `TASK_BOARD_TEST_DATABASE_URL` and stops them again;
+`make test-coverage-with-db` runs the whole suite with coverage against MySQL (REQ-TEST-005).
+
 Its CSRF token manager is predictable (`csrf-<token id>`, `App\PredictableCsrfTokenManager`) and its logger records
 (`App\RecordingLogger`), so tests post the token of the action they call and assert what was logged. Coverage is
 measured on all of `src/` except `src/Resources` (Twig, translations, config, built assets).

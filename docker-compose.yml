@@ -10,6 +10,31 @@ services:
     stdin_open: true
     tty: true
 
+  # Real servers for `make test-with-db` (profile "db": not started by `make up`).
+  mysql:
+    profiles: ["db"]
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: task_board_test
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    profiles: ["db"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: task_board_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task_board_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
 volumes:
   coverage-data:
     driver: local

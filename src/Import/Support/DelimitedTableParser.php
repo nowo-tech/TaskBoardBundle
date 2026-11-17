@@ -269,7 +269,8 @@ final readonly class DelimitedTableParser
             return [];
         }
 
-        $headers = fgetcsv($stream);
+        // REQ-SF-005: PHP 8.4 requires the escape argument; '\\' is the value the call always used (no behaviour change).
+        $headers = fgetcsv($stream, null, ',', '"', '\\');
         if ($headers === false) {
             return [];
         }
@@ -281,7 +282,7 @@ final readonly class DelimitedTableParser
 
         $rows = [];
 
-        while (($values = fgetcsv($stream)) !== false) {
+        while (($values = fgetcsv($stream, null, ',', '"', '\\')) !== false) {
             $assoc = [];
             foreach ($headers as $index => $header) {
                 $assoc[$header] = trim($values[$index] ?? '');

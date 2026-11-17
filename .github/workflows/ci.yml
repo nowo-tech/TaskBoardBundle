@@ -87,7 +87,7 @@ jobs:
           SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
         run: |
           echo "🧪 Running tests on PHP ${{ matrix.php }} with Symfony ${{ matrix.symfony }}..."
-          composer test
+          composer test -- --display-deprecations
           if [ $? -ne 0 ]; then
             echo "❌ ERROR: Some tests failed"
             exit 1
