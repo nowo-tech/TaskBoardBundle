@@ -447,8 +447,8 @@ final readonly class TaskApiTaskOperations
         }
 
         // 2. One transaction: lock, compare, check everything, then write.
-        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
         $entered = $this->statusColumnIds($tasks, $inputs);
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
         $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases, $entered): array {
             // Since 2.21.0 (audit SF-M1): the columns the items enter before their rows (columns before tasks).
             $this->lockColumns($entered);
