@@ -1,6 +1,6 @@
 # TaskBoard Bundle - Development
 SHELL := /bin/bash
-.PHONY: assets help up down down-dev build shell install test test-coverage test-coverage-100 coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra check-no-raw-html-form record-clickup-fixtures
+.PHONY: assets help up down down-dev build shell install test test-coverage test-coverage-100 test-with-db test-coverage-with-db coverage-php-percent test-ts cs-check cs-fix qa clean ensure-up rector rector-dry phpstan igor release-check release-check-demos demo-smoke composer-sync update validate validate-translations setup-hooks check-no-cursor-coauthor check-open-prs strip-cursor-coauthor-from-history check-twig-extra check-no-raw-html-form record-clickup-fixtures
 
 COMPOSE_FILE ?= docker-compose.yml
 # Prefer Compose V2; absolute docker path avoids shadowing by local docker/ when PATH has "." (REQ-MAKE-010).
@@ -21,6 +21,7 @@ help:
 	@echo "Dependencies:  install"
 	@echo "Assets:        assets              Build the Stimulus/Vite assets (pnpm build -> src/Resources/public)"
 	@echo "Tests:         test / test-coverage / test-coverage-100 / test-ts (Vitest + global TS %)"
+	@echo "Database:      test-with-db / test-coverage-with-db (functional suite on the MySQL and PostgreSQL containers, REQ-TEST-005)"
 	@echo "Quality:       cs-check / cs-fix / rector / rector-dry / phpstan / igor / qa / twig-lint"
 	@echo "Release:       release-check / composer-sync"
 	@echo "Cleanup:       clean"
@@ -71,6 +72,25 @@ test-coverage: ensure-up
 
 test-coverage-100: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) composer test-coverage-100
+
+# REQ-TEST-005: the functional suite (which includes the repository tests) against real MySQL 8.4 and PostgreSQL 16
+# containers of the root compose file (profile "db"), through TASK_BOARD_TEST_DATABASE_URL like the CI jobs.
+DB_URL_MYSQL    ?= mysql://root:root@mysql:3306/task_board_test?serverVersion=8.4.0&charset=utf8mb4
+DB_URL_POSTGRES ?= postgresql://postgres:root@postgres:5432/task_board_test?serverVersion=16&charset=utf8
+
+test-with-db: ensure-up
+	$(COMPOSE) --profile db up -d --wait mysql postgres
+	@status=0; \
+	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_MYSQL)' $(SERVICE_PHP) vendor/bin/phpunit --testsuite functional --no-coverage || status=$$?; \
+	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_POSTGRES)' $(SERVICE_PHP) vendor/bin/phpunit --testsuite functional --no-coverage || status=$$?; \
+	$(COMPOSE) --profile db stop mysql postgres; exit $$status
+
+test-coverage-with-db: ensure-up
+	$(COMPOSE) --profile db up -d --wait mysql
+	@status=0; \
+	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_MYSQL)' $(SERVICE_PHP) vendor/bin/phpunit --coverage-text | tee coverage-php.txt || status=$$?; \
+	$(COMPOSE) --profile db stop mysql; \
+	./.scripts/php-coverage-percent.sh coverage-php.txt; exit $$status
 
 # REQ-TEST-009: Vitest coverage, then one global TS % (min of Statements/Branches/Functions/Lines).
 test-ts: ensure-up
