@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 /*
- * Beacon spec 239, FR-013 (MySQL / PostgreSQL): a concurrent move through the real `TaskManager` in its own process and
+ * Beacon spec 239, FR-013 (MySQL / PostgreSQL): a concurrent write through the real `TaskManager` in its own process and
  * kernel. It opens a transaction, locks the column's row (as a move does first), says so ("locked" on stdout), waits so
- * that the test's move reads the column and then waits on that lock, moves the task, commits and prints "moved".
+ * that the test's write reads the column and then waits on that lock, writes, commits and prints "moved".
  *
- * Arguments: task id, column id, position, wait before the move (microseconds).
+ * Arguments: mode, task id, column id, [position,] wait before the write (microseconds). Modes:
+ *  - move:  TaskManager::move() of the task to the position (renumbers the column);
+ *  - enter: TaskManager::moveToColumn() of the task (the column's next free position).
  */
 
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,8 +20,14 @@ use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
-[, $taskId, $columnId, $position, $wait] = $argv;
-$kernel                                  = new FunctionalKernel();
+$mode = $argv[1];
+if ($mode === 'move') {
+    [, , $taskId, $columnId, $position, $wait] = $argv;
+} else {
+    [, , $taskId, $columnId, $wait] = $argv;
+    $position                       = null;
+}
+$kernel = new FunctionalKernel();
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
 $em        = $container->get(PrivateEntityManagerReplay::enabled() && $container->has('app.task_board_em') ? 'app.task_board_em' : 'doctrine.orm.entity_manager');
@@ -37,7 +45,12 @@ usleep((int) $wait);
 
 $task = $em->find(Task::class, $taskId);
 assert($task instanceof Task);
-$manager->move($task, $columnId, (int) $position, $task->getCreator() ?? $task);
+$actor = $task->getCreator() ?? $task;
+if ($position === null) {
+    $manager->moveToColumn($task, $columnId, $actor);
+} else {
+    $manager->move($task, $columnId, (int) $position, $actor);
+}
 $connection->commit();
 fwrite(\STDOUT, 'moved');
 $kernel->shutdown();

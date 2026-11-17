@@ -47,7 +47,6 @@ use function array_filter;
 use function array_flip;
 use function array_intersect_key;
 use function array_keys;
-use function array_map;
 use function count;
 use function in_array;
 use function mb_strlen;
@@ -180,6 +179,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
      * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a column change finds the task changed meanwhile: nothing changes
      * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change, or
      *                                          (audit PC-L2) the new tags of a task that stays in its column (operation
      *                                          `retag`): nothing changes
@@ -196,6 +196,7 @@ final readonly class TaskManager implements TaskManagerInterface
         $oldColor            = $task->getColor();
         $oldStartAt          = $task->getStartAt();
         $wasCompleted        = $task->isCompleted();
+        $checked             = self::checked($task);
 
         // Since 2.2.1 (audit IB-L1): data from fromTask() without a column keeps the task's own, even none: never a move.
         $newColumn = $data->keepsColumn && ($data->columnId === null || $data->columnId === '')
@@ -217,13 +218,9 @@ final readonly class TaskManager implements TaskManagerInterface
             }
             $this->assertReopenAllowed($task, $newColumn, $columns);
         }
-        $nextPosition = $moves && $newColumn instanceof BoardColumn ? $this->nextPosition($task->getBoard(), $newColumn) : null;
 
         // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-        $write = function () use ($task, $data, $user, $moves, $newColumn, $columns, $nextPosition, $oldTitle, $oldDescription, $oldPriority, $oldColumn, $oldEstimatedMinutes, $oldStartAt, $oldDueAt, $oldTags, $oldColor, $wasCompleted): void {
-            if ($nextPosition !== null) {
-                $task->setPosition($nextPosition);
-            }
+        $write = function () use ($task, $data, $user, $moves, $newColumn, $columns, $oldTitle, $oldDescription, $oldPriority, $oldColumn, $oldEstimatedMinutes, $oldStartAt, $oldDueAt, $oldTags, $oldColor, $wasCompleted): void {
             $task
                 ->setTitle($data->title)
                 ->setDescription($data->description)
@@ -253,9 +250,16 @@ final readonly class TaskManager implements TaskManagerInterface
 
             $this->taskRepository->save($task);
         };
-        // Since 2.21.0 (Beacon spec 239, FR-013): a column change locks the column, then the task, as a move does.
+        // Since 2.21.0 (Beacon spec 239, FR-013, audits SF-L1 / SF-L3): a column change locks the column, reads it and the
+        // task as committed, and takes the next free position from there, as a move does.
         if ($moves) {
-            $this->lockedWrite($newColumn, [$task], $write);
+            // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+            $this->lockedColumnWrite($task, $newColumn, $checked, false, $newColumn instanceof BoardColumn, static function (array $siblings, int $next) use ($task, $newColumn, $write): void {
+                if ($newColumn instanceof BoardColumn) {
+                    $task->setPosition($next);
+                }
+                $write();
+            });
         } else {
             $write();
         }
@@ -376,23 +380,30 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
-     * @throws ColumnNotFoundException when $columnId is not a column of the task's board
-     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
-     */
-    /**
      * Moves a task to a column at the given index and renumbers the target column (0..n-1) so
      * client-computed positions (e.g. drag & drop card counts) never collide with existing ones.
+     *
+     * Since 2.21.0 (Beacon spec 239, FR-013): in one transaction (or the caller's), the column's row locked first and the
+     * column's tasks re-read as committed, so a move that waited for a concurrent one renumbers from that one's positions.
+     * A copy of one of those tasks that is out of date is refreshed; one that is out of date and holds unsaved changes is
+     * not (they would be lost) and the move is refused as a conflict, as it is when the task itself changed board, column,
+     * archive or completion state meanwhile. Nothing is written then; try again.
+     *
+     * @throws ColumnNotFoundException when $columnId is not a column of the task's board
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` (see above)
      */
     public function move(Task $task, ?string $columnId, int $position, object $user, ?ColumnTransitionVia $via = null): void
     {
         $this->applyMove($task, $columnId, $position, $user, true, $via);
     }
 
-    private function applyMove(Task $task, ?string $columnId, int $position, object $user, bool $renumberSiblings, ?ColumnTransitionVia $via): void
+    private function applyMove(Task $task, ?string $columnId, ?int $position, object $user, bool $renumberSiblings, ?ColumnTransitionVia $via): void
     {
         $columns      = $this->orderedColumns($task->getBoard());
         $oldColumn    = $task->getColumn();
         $wasCompleted = $task->isCompleted();
+        $checked      = self::checked($task);
         $column       = $this->resolveColumn($task->getBoard(), $columnId);
 
         if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
@@ -403,20 +414,15 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         $this->assertReopenAllowed($task, $column, $columns);
 
-        $siblings = $renumberSiblings ? $this->columnSiblings($task, $column) : [];
         // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-        $write = function () use ($task, $column, $position, $renumberSiblings, $siblings, $columns, $user, $oldColumn, $wasCompleted): void {
-            // Since 2.21.0 (Beacon spec 239, FR-013): with the rows locked, the column as committed now. A move that waited
-            // for a concurrent one renumbers from that one's positions, never from what it read before the lock.
-            if ($renumberSiblings && $this->rowLock instanceof OrderedRowLockInterface) {
-                $siblings = $this->lockedSiblings($this->rowLock, $task, $column);
-            }
+        $this->lockedColumnWrite($task, $column, $checked, $renumberSiblings, $position === null, function (array $siblings, int $next) use ($task, $column, $position, $renumberSiblings, $columns, $user, $oldColumn, $wasCompleted): void {
+            $at = $position ?? $next;
             $task
                 ->setColumn($column)
-                ->setPosition($position);
+                ->setPosition($at);
 
             if ($renumberSiblings) {
-                $this->renumberColumn($task, $siblings, $position);
+                $this->renumberColumn($task, $siblings, $at);
             }
 
             $this->syncCompletionForColumn($task, $column, $columns);
@@ -427,9 +433,7 @@ final readonly class TaskManager implements TaskManagerInterface
             }
 
             $this->taskRepository->save($task);
-        };
-        // A renumbering move always locks its column (the column's tasks change together); a plain move only the one it enters.
-        $this->lockedWrite($renumberSiblings || $oldColumn?->getId() !== $column?->getId() ? $column : null, [$task, ...$siblings], $write);
+        });
 
         if ($oldColumn?->getId() !== $column?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
@@ -439,30 +443,62 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
-     * Since 2.21.0 (Beacon spec 239, FR-013): runs `$write` in one transaction after locking every row it writes in the
-     * fixed order (the column a task enters, then the tasks, each by id); the caller dispatches the events after it.
-     * Without a lock service (a hand-built manager) `$write` runs as before.
+     * Since 2.21.0 (Beacon spec 239, FR-013, audits SF-L1 / SF-L3 / SF-I2): runs a write that puts `$task` in `$column`
+     * in one transaction. First the column's row is locked (every write that changes the column's tasks waits there),
+     * then the column's tasks and `$task` are read as committed, each row locked (out-of-date copies refreshed). When
+     * `$task` is no longer what the caller checked (`$checked`: its board, column, archive and completion state before the
+     * checks), nothing is written: {@see TaskTreeRefusedException::conflict()}. `$write` gets the column's other tasks
+     * (not archived) by position, and the column's next free position, both as committed. The caller dispatches the
+     * events after it. Without a lock service (a hand-built manager) both come from a read without locks, as before, and
+     * only when asked (`$needsSiblings`, `$needsNext`; otherwise none and 0).
      *
-     * @param list<Task> $tasks
-     * @param Closure(): void $write
+     * @param array{0: string, 1: string|null, 2: bool, 3: bool} $checked from {@see self::checked()}
+     * @param Closure(list<Task>, int): void $write
+     *
+     * @throws TaskTreeRefusedException `conflict`
      */
-    private function lockedWrite(?BoardColumn $entered, array $tasks, Closure $write): void
+    private function lockedColumnWrite(Task $task, ?BoardColumn $column, array $checked, bool $needsSiblings, bool $needsNext, Closure $write): void
     {
         if (!$this->rowLock instanceof OrderedRowLockInterface) {
-            $write();
+            $write($needsSiblings ? $this->columnSiblings($task, $column) : [], $needsNext ? $this->nextPosition($task->getBoard(), $column) : 0);
 
             return;
         }
         $rowLock = $this->rowLock;
         // @igor-ignore - The closure runs once, now, inside transactional(); the stateless lock keeps no reference to it.
-        $rowLock->transactional(static function () use ($rowLock, $entered, $tasks, $write): void {
-            // A task entering a column checks the column's row (its foreign key): the column first, as everywhere.
-            if ($entered instanceof BoardColumn) {
-                $rowLock->lockColumns([$entered->getId()]);
+        $rowLock->transactional(static function () use ($rowLock, $task, $column, $checked, $write): void {
+            if ($column instanceof BoardColumn) {
+                $rowLock->lockColumns([$column->getId()]);
             }
-            $rowLock->lockTasks(array_map(static fn (Task $task): string => $task->getId(), $tasks));
-            $write();
+            // The column's scan locks its tasks in id order (audit SF-I2: no separate lock of the siblings read before).
+            $fresh = $rowLock->lockedColumnTasks($checked[0], $column?->getId(), [$task->getId()]);
+            if (self::checked($task) !== $checked) {
+                throw TaskTreeRefusedException::conflict();
+            }
+            $siblings = [];
+            $next     = 0;
+            foreach ($fresh as $candidate) {
+                if ($candidate->getColumn()?->getId() !== $column?->getId() || $candidate->isArchived()) {
+                    continue;
+                }
+                $next = max($next, $candidate->getPosition() + 1);
+                if ($candidate->getId() !== $task->getId()) {
+                    $siblings[] = $candidate;
+                }
+            }
+            usort($siblings, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
+            $write($siblings, $next);
         });
+    }
+
+    /**
+     * What a move checks about its task: its board, column, archive and completion state.
+     *
+     * @return array{0: string, 1: string|null, 2: bool, 3: bool}
+     */
+    private static function checked(Task $task): array
+    {
+        return [$task->getBoard()->getId(), $task->getColumn()?->getId(), $task->isArchived(), $task->isCompleted()];
     }
 
     /**
@@ -607,6 +643,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToPreviousColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -618,7 +655,7 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         $target = $columns[$index - 1];
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
+        $this->applyMove($task, $target->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -628,6 +665,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToNextColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -639,7 +677,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
+        $this->applyMove($task, $target->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -649,6 +687,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToDone(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -659,7 +698,7 @@ final readonly class TaskManager implements TaskManagerInterface
 
         // Since 2.19.0 (FR-033): the first done or closed column (the last one on an untyped board).
         $done = ColumnTypes::doneColumn($task->getBoard(), $columns) ?? $columns[array_key_last($columns)];
-        $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false, $via);
+        $this->applyMove($task, $done->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -671,6 +710,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0, when the policy refuses: nothing changes
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToColumn(Task $task, string $columnId, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -683,7 +723,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user, false, $via);
+        $this->applyMove($task, $columnId, null, $user, false, $via);
 
         return true;
     }
@@ -768,25 +808,6 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         usort($siblings, static fn (Task $a, Task $b): int => $a->getPosition() <=> $b->getPosition());
-
-        return $siblings;
-    }
-
-    /**
-     * Since 2.21.0 (Beacon spec 239, FR-013): the other tasks of `$column` as committed now, each row locked, by position
-     * (then id); the moved task is brought up to date too. Inside the locked write only.
-     *
-     * @return list<Task>
-     */
-    private function lockedSiblings(OrderedRowLockInterface $rowLock, Task $task, ?BoardColumn $column): array
-    {
-        $siblings = [];
-        foreach ($rowLock->lockedColumnTasks($task->getBoard()->getId(), $column?->getId(), [$task->getId()]) as $candidate) {
-            if ($candidate->getId() !== $task->getId() && $candidate->getColumn()?->getId() === $column?->getId() && !$candidate->isArchived()) {
-                $siblings[] = $candidate;
-            }
-        }
-        usort($siblings, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
 
         return $siblings;
     }

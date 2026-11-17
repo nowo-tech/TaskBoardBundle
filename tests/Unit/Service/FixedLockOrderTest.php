@@ -42,7 +42,7 @@ final class FixedLockOrderTest extends TestCase
             $this->taskManager([$a, $b, $moved], $locked)->move($moved, $doing->getId(), 1, $this->user);
 
             self::assertSame([0, 1, 2], [$a->getPosition(), $moved->getPosition(), $b->getPosition()]);
-            self::assertSame($locked ? ['begin', 'columns ' . $doing->getId(), 'tasks ' . $moved->getId() . ',' . $a->getId() . ',' . $b->getId(), 'fresh ' . $doing->getId() . ' +' . $moved->getId(), 'save ' . $b->getTitle(), 'save ' . $moved->getTitle(), 'end'] : ['save ' . $b->getTitle(), 'save ' . $moved->getTitle()], $this->log);
+            self::assertSame($locked ? ['begin', 'columns ' . $doing->getId(), 'fresh ' . $doing->getId() . ' +' . $moved->getId(), 'save ' . $b->getTitle(), 'save ' . $moved->getTitle(), 'end'] : ['save ' . $b->getTitle(), 'save ' . $moved->getTitle()], $this->log);
         }
     }
 
@@ -52,7 +52,7 @@ final class FixedLockOrderTest extends TestCase
 
         $this->taskManager([$a, $b], true)->move($b, $doing->getId(), 0, $this->user);
 
-        self::assertSame(['begin', 'columns ' . $doing->getId(), 'tasks ' . $b->getId() . ',' . $a->getId(), 'fresh ' . $doing->getId() . ' +' . $b->getId(), 'save ' . $a->getTitle(), 'save ' . $b->getTitle(), 'end'], $this->log);
+        self::assertSame(['begin', 'columns ' . $doing->getId(), 'fresh ' . $doing->getId() . ' +' . $b->getId(), 'save ' . $a->getTitle(), 'save ' . $b->getTitle(), 'end'], $this->log);
     }
 
     public function testAMoveThatWaitedRenumbersFromTheColumnAsCommittedNotFromItsEarlierRead(): void
@@ -76,7 +76,7 @@ final class FixedLockOrderTest extends TestCase
 
         $this->taskManager([], true)->update($moved, new TaskFormData(title: 'Renamed', columnId: $doing->getId()), $this->user);
 
-        self::assertSame(['begin', 'columns ' . $doing->getId(), 'tasks ' . $moved->getId(), 'save Renamed', 'end'], $this->log);
+        self::assertSame(['begin', 'columns ' . $doing->getId(), 'fresh ' . $doing->getId() . ' +' . $moved->getId(), 'save Renamed', 'end'], $this->log);
     }
 
     public function testAColumnReorderLocksEveryColumnBeforeItSavesThem(): void
@@ -167,7 +167,7 @@ final class FixedLockOrderTest extends TestCase
             {
             }
 
-            public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = []): array
+            public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = [], bool $withArchived = false): array
             {
                 ($this->record)('fresh ' . $columnId . ' +' . implode(',', $alsoTaskIds));
 

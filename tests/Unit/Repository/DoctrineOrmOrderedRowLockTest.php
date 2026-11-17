@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Repository;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\AbstractException;
 use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmOrderedRowLock;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -49,6 +50,33 @@ final class DoctrineOrmOrderedRowLockTest extends TestCase
         } catch (DeadlockException) {
         }
         self::assertSame(0, $connection->getTransactionNestingLevel());
+    }
+
+    public function testADeadlockHiddenBehindAFailedSavepointRollbackReachesTheCallerAsTheDeadlock(): void
+    {
+        // Audit SF-L5: MySQL ended the transaction on the deadlock, so the flush's ROLLBACK TO SAVEPOINT failed (1305);
+        // the 1213 is only in the chain.
+        $deadlock  = self::deadlock();
+        $savepoint = new DriverException(new class('SAVEPOINT DOCTRINE_2 does not exist', '42000', 1305, $deadlock) extends AbstractException {}, null);
+
+        try {
+            $this->lock($this->connection(0, false))->transactional(static fn (): never => throw $savepoint);
+            self::fail('The deadlock was expected.');
+        } catch (DeadlockException $caught) {
+            self::assertSame($deadlock, $caught);
+        }
+    }
+
+    public function testInsideACallersTransactionTheFailureStaysAsItIs(): void
+    {
+        $savepoint = new DriverException(new class('SAVEPOINT DOCTRINE_2 does not exist', '42000', 1305, self::deadlock()) extends AbstractException {}, null);
+
+        try {
+            $this->lock($this->connection(1, false))->transactional(static fn (): never => throw $savepoint);
+            self::fail('The failure was expected.');
+        } catch (DriverException $caught) {
+            self::assertSame($savepoint, $caught);
+        }
     }
 
     public function testARollbackTheServerMadeImpossibleClosesTheConnection(): void

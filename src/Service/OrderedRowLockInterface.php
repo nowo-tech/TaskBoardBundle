@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use Closure;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 
 /**
  * Since 2.21.0 (Beacon spec 239, block B, FR-013): the fixed lock order of the bundle's multi-row writes. A write that
@@ -25,9 +26,12 @@ interface OrderedRowLockInterface
 {
     /**
      * Runs `$work` in one transaction: committed when it returns, rolled back when it throws. Inside a caller's
-     * transaction it joins it (no savepoint): the caller owns the outcome, and the locks stay until its commit. A
-     * failure, a lock conflict included, reaches the caller as it is (a MySQL deadlock stays the driver's deadlock
-     * exception, so a host that retries 1213 / 1205 keeps doing so).
+     * transaction it joins it (no savepoint): the caller owns the outcome, and the locks stay until its commit, and a
+     * failure reaches the caller as it is. At the outermost level a lock conflict reaches the caller as the driver's
+     * deadlock or lock-wait-timeout exception (`Doctrine\DBAL\Exception\DeadlockException` /
+     * `LockWaitTimeoutException`), also when the flush's failed `ROLLBACK TO SAVEPOINT` (MySQL 1305, the server had
+     * already ended the transaction) hid it in the exception chain, so a host that retries 1213 / 1205 / 40P01 keeps
+     * doing so; any other failure reaches it as it is.
      *
      * @template T
      *
@@ -55,16 +59,22 @@ interface OrderedRowLockInterface
     public function lockTasks(array $taskIds): void;
 
     /**
-     * The tasks of a board's column (`null`: the tasks without one), active and completed, not archived, as committed
-     * now: each row is locked like {@see self::lockTasks()} (the locking read sees the last committed rows, whatever
-     * the transaction read before), and a task whose loaded copy is out of date (position, column or revision) is
-     * refreshed before it is returned. The tasks of `$alsoTaskIds` (already locked, e.g. a task entering the column)
-     * are brought up to date the same way and returned too. Inside {@see self::transactional()} only, after the column
-     * is locked. Since 2.21.0: a write that waited for a concurrent one computes from that one's values.
+     * The tasks of a board's column (`null`: the tasks without one), active and completed (archived ones too with
+     * `$withArchived`), as committed now: each row is locked like {@see self::lockTasks()} (the locking read sees the
+     * last committed rows, whatever the transaction read before), and a task whose loaded copy is out of date
+     * (position, column or revision) is refreshed before it is returned. The tasks of `$alsoTaskIds` (e.g. a task
+     * entering the column) are locked and brought up to date the same way and returned too. Inside
+     * {@see self::transactional()} only, after the column is locked. Since 2.21.0: a write that waited for a
+     * concurrent one computes from that one's values.
+     *
+     * A copy that is out of date AND holds unsaved changes is never refreshed (that would drop them silently): the read
+     * throws the conflict instead, before anything is written.
      *
      * @param list<string> $alsoTaskIds
      *
+     * @throws TaskTreeRefusedException `conflict` when an out-of-date copy has unsaved changes
+     *
      * @return list<Task> by id
      */
-    public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = []): array;
+    public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = [], bool $withArchived = false): array;
 }

@@ -284,7 +284,7 @@ PUT /v2/task/9c1f…   {"parent": null}          // to the top level
 | `PARENT_001` | 400 | The new parent is on another board |
 | `PARENT_002` | 400 | The new parent is the task itself |
 | `PARENT_003` | 409 | The new parent is one of the task's subtasks (at any depth), or a loop already in the data: it would close a cycle |
-| `PARENT_004` | 409 | A concurrent change of the task tree held the rows (deadlock or lock wait timeout); nothing was written |
+| `PARENT_004` | 409 | A concurrent change of the task tree held the rows (deadlock or lock wait timeout); since 2.21.0 also a status change whose task changed meanwhile (another column, board, archive or completion state). Nothing was written; send it again |
 | `PARENT_005` | 409 | Deeper than `max_subtask_depth`: a new subtask (`POST /v2/list/{id}/task` with `parent`, a checklist item) or a parent change, counting the moved subtree |
 
 ## Idempotency

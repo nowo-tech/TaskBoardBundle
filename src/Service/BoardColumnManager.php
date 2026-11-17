@@ -41,6 +41,7 @@ use function array_keys;
 use function array_map;
 use function array_values;
 use function count;
+use function in_array;
 use function is_string;
 use function max;
 use function sort;
@@ -148,7 +149,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         if ($updated !== []) {
             // Since 2.21.0 (Beacon spec 239, FR-013): the rows are locked by id first, never in identity-map order.
             // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-            $this->lockedWrite(self::ids($updated), [], function () use ($updated): void {
+            $this->lockedWrite(self::ids($updated), function () use ($updated): void {
                 foreach ($updated as $position => $column) {
                     $column->setPosition($position);
                 }
@@ -185,9 +186,11 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             $board    = $column->getBoard();
             $columns  = array_values($board->getColumns()->toArray());
             $followed = [];
-            // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board, then the column's tasks, locked by id first.
+            // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board, then the column's tasks as committed (each
+            // row locked, by id), before the first write.
             // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-            $this->lockedWrite(self::ids($columns), self::ids(ColumnTasks::of($this->entityManager, $column)), function () use ($edit, $column, $board, $columns, $retyped, $actor, &$followed): void {
+            $this->lockedWrite(self::ids($columns), function (?OrderedRowLockInterface $rowLock) use ($edit, $column, $board, $columns, $retyped, $actor, &$followed): void {
+                $rowLock?->lockedColumnTasks($board->getId(), $column->getId(), [], true);
                 $edit();
                 // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
                 // (the flush of the columns saves them).
@@ -304,11 +307,27 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
 
         $tasks = self::tasksOf($column);
-        $moved = self::ids($tasks);
-        // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board (the deleted one included), then the tasks that
-        // move, locked by id first.
+        $moved = [];
+        // Since 2.21.0 (Beacon spec 239, FR-013): every column of the board (the deleted one included), then the tasks as
+        // committed (audits SF-L3 / SF-L4): a task that entered the column while the deletion waited moves too, and the
+        // target's next free position counts what entered it meanwhile.
         // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-        $this->lockedWrite([...self::ids($remaining), $column->getId()], $moved, function () use ($board, $column, $remaining, $tasks, $target, $targetDone, $position): void {
+        $this->lockedWrite([...self::ids($remaining), $column->getId()], function (?OrderedRowLockInterface $rowLock) use ($board, $column, $remaining, $tasks, $target, $targetDone, $position, $actor, $via, &$moved): void {
+            if ($rowLock instanceof OrderedRowLockInterface) {
+                $read    = self::ids($tasks);
+                $tasks   = self::byPosition($rowLock->lockedColumnTasks($board->getId(), $column->getId(), [], true));
+                $entered = array_values(array_filter($tasks, static fn (Task $task): bool => !in_array($task->getId(), $read, true)));
+                if ($actor !== null && $entered !== []) {
+                    // The policy was asked for the tasks read before the lock; the ones that entered meanwhile are asked now.
+                    $lastOne = $remaining[count($remaining) - 1];
+                    $this->assertTasksMayMove($column, $column->getPosition() > $lastOne->getPosition(), $target, $target === $lastOne, $remaining, $actor, $via ?? ColumnTransitionVia::web(ColumnTransitionVia::OP_COLUMN_DELETE), $entered);
+                }
+                $position = 0;
+                foreach ($rowLock->lockedColumnTasks($board->getId(), $target->getId(), [], true) as $task) {
+                    $position = max($position, $task->getPosition() + 1);
+                }
+            }
+            $moved = self::ids($tasks);
             foreach ($tasks as $task) {
                 $task->setColumn($target)->setPosition($position++);
                 if ($targetDone && !$task->isCompleted()) {
@@ -337,17 +356,18 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      *
      * @param list<BoardColumn> $remaining the board's columns once the deletion is done, by position (since 2.19.0: the
      *                                     target's type is read among them)
+     * @param list<Task>|null $tasks since 2.21.0: these tasks only (null: every task of the column)
      *
      * @throws ColumnTransitionRefusedException
      */
-    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, array $remaining, object $actor, ColumnTransitionVia $via): void
+    private function assertTasksMayMove(BoardColumn $column, bool $columnIsLast, BoardColumn $target, bool $targetIsLast, array $remaining, object $actor, ColumnTransitionVia $via, ?array $tasks = null): void
     {
         if (!$this->transitions instanceof ColumnTransitionPolicyInterface) {
             return;
         }
         $board = $column->getBoard();
         $all   = ColumnTypes::ordered($board);
-        foreach (self::tasksOf($column) as $task) {
+        foreach ($tasks ?? self::tasksOf($column) as $task) {
             $transition = new ColumnTransition(
                 Snapshots::board($board),
                 Snapshots::task($task),
@@ -366,30 +386,39 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
     }
 
     /**
-     * Since 2.21.0 (Beacon spec 239, FR-013): runs `$write` in one transaction after locking every row it writes in the
-     * fixed order (columns, then tasks, each by id); the caller dispatches the events after it. Without a lock service (a
+     * Since 2.21.0 (Beacon spec 239, FR-013): runs `$write` in one transaction once the columns are locked (by id), the
+     * first rows every write that changes them or their tasks takes; `$write` gets the lock service to read and lock the
+     * tasks as committed (null without one). The caller dispatches the events after it. Without a lock service (a
      * hand-built manager) `$write` runs as before.
      *
      * @param list<string> $columnIds
-     * @param list<string> $taskIds
-     * @param Closure(): void $write
+     * @param Closure(?OrderedRowLockInterface): void $write
      */
-    private function lockedWrite(array $columnIds, array $taskIds, Closure $write): void
+    private function lockedWrite(array $columnIds, Closure $write): void
     {
         if (!$this->rowLock instanceof OrderedRowLockInterface) {
-            $write();
+            $write(null);
 
             return;
         }
         $rowLock = $this->rowLock;
         // @igor-ignore - The closure runs once, now, inside transactional(); the stateless lock keeps no reference to it.
-        $rowLock->transactional(static function () use ($rowLock, $columnIds, $taskIds, $write): void {
+        $rowLock->transactional(static function () use ($rowLock, $columnIds, $write): void {
             $rowLock->lockColumns($columnIds);
-            if ($taskIds !== []) {
-                $rowLock->lockTasks($taskIds);
-            }
-            $write();
+            $write($rowLock);
         });
+    }
+
+    /**
+     * @param list<Task> $tasks
+     *
+     * @return list<Task> by position, then id
+     */
+    private static function byPosition(array $tasks): array
+    {
+        usort($tasks, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
+
+        return $tasks;
     }
 
     /**
@@ -416,9 +445,8 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 $tasks[] = $task;
             }
         }
-        usort($tasks, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
 
-        return $tasks;
+        return self::byPosition($tasks);
     }
 
     private function cause(): ?string

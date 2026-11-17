@@ -96,6 +96,7 @@ task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
 task_board.flash.subtask_too_deep: "A subtarefa não foi criada: ficaria mais profunda do que o permitido."
 task_board.flash.subtask_conflict: "A subtarefa não foi criada: a árvore de tarefas mudou entretanto. Tente novamente."
+task_board.flash.task_changed_meanwhile: "A tarefa mudou entretanto: nada foi guardado. Tente novamente."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.

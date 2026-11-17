@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
+use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Throwable;
 
@@ -65,14 +66,11 @@ final class FixedLockOrderTest extends FunctionalTestCase
         $queries = $this->logged(fn () => $this->service(TaskManager::class)->move($moved, $doing->getId(), 1, $this->owner));
 
         $locks = $this->lockReads($queries);
-        self::assertCount(2, $locks, 'one lock of the entered column, one of the column\'s tasks');
-        self::assertStringContainsString('task_board_columns', $locks[0]['sql']);
-        self::assertSame([$doing->getId()], $locks[0]['ids']);
-        $all = [$moved->getId(), ...array_map(static fn (Task $task): string => $task->getId(), $tasks)];
-        sort($all);
-        self::assertStringContainsString('task_board_tasks', $locks[1]['sql']);
-        self::assertSame($all, $locks[1]['ids'], 'every task of the column, the moved one included, in ascending id order');
-        self::assertGreaterThan($locks[1]['index'], $this->firstWrite($queries), 'nothing is written before the rows are locked');
+        self::assertCount(3, $locks, 'the entered column, then its tasks, then the moved task');
+        self::assertSame(['task_board_columns', [$doing->getId()]], [$locks[0]['table'], $locks[0]['ids']]);
+        self::assertSame(['task_board_tasks', [$doing->getId()]], [$locks[1]['table'], $locks[1]['ids']], 'the column\'s tasks, by id');
+        self::assertSame(['task_board_tasks', [$moved->getId()]], [$locks[2]['table'], $locks[2]['ids']]);
+        self::assertGreaterThan($locks[2]['index'], $this->firstWrite($queries), 'nothing is written before the rows are locked');
         $this->assertPositions([$tasks[0], $moved, $tasks[1], $tasks[2]]);
     }
 
@@ -86,7 +84,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
 
         $locks = $this->lockReads($queries);
         self::assertCount(1, $locks);
-        self::assertStringContainsString('task_board_columns', $locks[0]['sql']);
+        self::assertSame('task_board_columns', $locks[0]['table']);
         $sorted = $ids;
         sort($sorted);
         self::assertSame($sorted, $locks[0]['ids']);
@@ -114,15 +112,13 @@ final class FixedLockOrderTest extends FunctionalTestCase
         $queries = $this->logged(fn () => self::assertTrue($this->service(BoardColumnManager::class)->delete($deleted, $owner)));
 
         $locks = $this->lockReads($queries);
-        self::assertCount(2, $locks);
+        self::assertCount(3, $locks);
         $columnIds = array_map(static fn (BoardColumn $column): string => $column->getId(), $columns);
         sort($columnIds);
-        self::assertStringContainsString('task_board_columns', $locks[0]['sql']);
-        self::assertSame($columnIds, $locks[0]['ids'], 'the remaining columns and the deleted one');
-        $taskIds = [$first->getId(), $second->getId()];
-        sort($taskIds);
-        self::assertSame($taskIds, $locks[1]['ids']);
-        self::assertGreaterThan($locks[1]['index'], $this->firstWrite($queries));
+        self::assertSame(['task_board_columns', $columnIds], [$locks[0]['table'], $locks[0]['ids']], 'the remaining columns and the deleted one');
+        self::assertSame(['task_board_tasks', [$columns[1]->getId()]], [$locks[1]['table'], $locks[1]['ids']], 'the deleted column\'s tasks');
+        self::assertSame(['task_board_tasks', [$columns[0]->getId()]], [$locks[2]['table'], $locks[2]['ids']], 'the target column\'s tasks');
+        self::assertGreaterThan($locks[2]['index'], $this->firstWrite($queries));
         $this->em->clear();
         self::assertSame([$columns[0]->getId(), 0], [$this->em->find(Task::class, $first->getId())?->getColumn()?->getId(), $this->em->find(Task::class, $first->getId())?->getPosition()]);
         self::assertSame(1, $this->em->find(Task::class, $second->getId())?->getPosition());
@@ -176,7 +172,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
         $manager = $this->service(TaskManager::class);
 
         // The other process holds the column, then moves H to the top (H, L, M). This move read L, M, H before it waited.
-        $process = proc_open([PHP_BINARY, __DIR__ . '/../../Fixtures/Deadlock/move_worker.php', $high->getId(), $doing->getId(), '0', (string) self::OTHER_WAIT], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $process = proc_open([PHP_BINARY, __DIR__ . '/../../Fixtures/Deadlock/move_worker.php', 'move', $high->getId(), $doing->getId(), '0', (string) self::OTHER_WAIT], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         self::assertTrue(is_resource($process));
         // Never read its stderr before it ends: that read would wait for the other process to finish.
         self::assertSame("locked\n", fgets($pipes[1]), 'the other process holds the column');
@@ -211,6 +207,115 @@ final class FixedLockOrderTest extends FunctionalTestCase
         self::assertSame($ids, array_map(static fn (Task $task): string => $task->getId(), $tasks), 'each task once, by id');
         self::assertSame(5, $loose->getPosition(), 'the stale copy was refreshed');
         self::assertSame(1, $other->getPosition());
+    }
+
+    public function testTwoConcurrentEntriesIntoAColumnGetUniquePositions(): void
+    {
+        // Audit SF-L3 (probe P2): moveToColumn() took the next free position before the lock.
+        $this->requireRowLocks();
+        $board = $this->board('Entries');
+        $this->task($board, 'Already there', 1, position: 0);
+        $p     = $this->task($board, 'P', 0, position: 0);
+        $q     = $this->task($board, 'Q', 0, position: 1);
+        $doing = $board->getColumns()->get(1);
+        self::assertInstanceOf(BoardColumn::class, $doing);
+        $this->em->clear();
+        $q = $this->em->find(Task::class, $q->getId());
+        self::assertInstanceOf(Task::class, $q);
+        $manager = $this->service(TaskManager::class);
+
+        [$failure, $other] = $this->withWorker(['enter', $p->getId(), $doing->getId(), (string) self::OTHER_WAIT], static fn () => $manager->moveToColumn($q, $doing->getId(), $q->getCreator() ?? $q));
+
+        self::assertNull($failure, (string) $failure?->getMessage());
+        self::assertSame('moved', $other);
+        self::assertSame([0, 1, 2], array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])));
+    }
+
+    public function testAColumnDeletionMovesATaskThatEnteredWhileItWaited(): void
+    {
+        // Audit SF-L4 (probe P3): the deletion moved the tasks it read before the lock; one that entered meanwhile lost
+        // its column (ON DELETE SET NULL).
+        $this->requireRowLocks();
+        $board   = $this->board('Delete race', ['A', 'B', 'C']);
+        $columns = array_values($board->getColumns()->toArray());
+        $t       = $this->task($board, 'T in C', 2);
+        $this->em->clear();
+        $deleted = $this->em->find(BoardColumn::class, $columns[0]->getId());
+        $owner   = $this->em->find($this->owner::class, $this->owner->getId());
+        self::assertInstanceOf(BoardColumn::class, $deleted);
+        self::assertNotNull($owner);
+        // As a request: the board's tasks loaded before the write.
+        $deleted->getBoard()->getTasks()->count();
+        $manager = $this->service(BoardColumnManager::class);
+
+        [$failure, $other] = $this->withWorker(['enter', $t->getId(), $deleted->getId(), (string) self::OTHER_WAIT], static fn () => $manager->delete($deleted, $owner));
+
+        self::assertNull($failure, (string) $failure?->getMessage());
+        self::assertSame('moved', $other);
+        self::assertSame($columns[1]->getId(), $this->em->getConnection()->fetchOne('SELECT column_id FROM task_board_tasks WHERE id = ?', [$t->getId()]));
+    }
+
+    public function testAColumnDeletionMovesTheTasksOfTheColumnAsCommitted(): void
+    {
+        // Audit SF-L4, on every platform: a task put in the column after the board's tasks were loaded moves too.
+        $board   = $this->board('Delete committed', ['A', 'B', 'C']);
+        $columns = array_values($board->getColumns()->toArray());
+        $kept    = $this->task($board, 'In A', 0, position: 0);
+        $late    = $this->task($board, 'Late', 2, position: 0);
+        $this->em->clear();
+        $deleted = $this->em->find(BoardColumn::class, $columns[0]->getId());
+        $owner   = $this->em->find($this->owner::class, $this->owner->getId());
+        self::assertInstanceOf(BoardColumn::class, $deleted);
+        self::assertNotNull($owner);
+        $deleted->getBoard()->getTasks()->count();
+        $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET column_id = ?, position = 1 WHERE id = ?', [$deleted->getId(), $late->getId()]);
+
+        self::assertTrue($this->service(BoardColumnManager::class)->delete($deleted, $owner));
+
+        $connection = $this->em->getConnection();
+        foreach ([[$kept, 0], [$late, 1]] as [$task, $position]) {
+            self::assertSame([$columns[1]->getId(), $position], [$connection->fetchOne('SELECT column_id FROM task_board_tasks WHERE id = ?', [$task->getId()]), (int) $connection->fetchOne('SELECT position FROM task_board_tasks WHERE id = ?', [$task->getId()])]);
+        }
+    }
+
+    public function testAMoveWhoseTaskChangedColumnMeanwhileIsAConflict(): void
+    {
+        // Audit SF-L1: the checks (transition policy, history's from-column) were made on the copy read before the lock.
+        [$board, $doing] = $this->column();
+        $moved           = $this->task($board, 'Moved', 0);
+        $done            = $board->getColumns()->get(2);
+        self::assertInstanceOf(BoardColumn::class, $done);
+        $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET column_id = ? WHERE id = ?', [$done->getId(), $moved->getId()]);
+
+        try {
+            $this->service(TaskManager::class)->moveToColumn($moved, $doing->getId(), $this->owner);
+            self::fail('A conflict was expected.');
+        } catch (TaskTreeRefusedException $refused) {
+            self::assertSame(TaskTreeRefusedException::CONFLICT, $refused->reason);
+        }
+        self::assertSame($done->getId(), $this->em->getConnection()->fetchOne('SELECT column_id FROM task_board_tasks WHERE id = ?', [$moved->getId()]), 'nothing was written');
+        self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM task_board_task_change_history WHERE task_id = ? AND change_type = ?', [$moved->getId(), 'column']));
+    }
+
+    public function testAnOutOfDateCopyWithUnsavedChangesIsAConflictNotADroppedChange(): void
+    {
+        // Audit SF-L2 (probe P4): refresh() dropped the caller's change silently.
+        $board = $this->board('Pending');
+        $task  = $this->task($board, 'Original', 1, position: 0);
+        $this->task($board, 'Sibling', 1, position: 1);
+        $doing = $board->getColumns()->get(1);
+        self::assertInstanceOf(BoardColumn::class, $doing);
+        $task->setTitle('Changed by the caller, not saved');
+        $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$task->getId()]);
+
+        try {
+            $this->service(TaskManager::class)->move($task, $doing->getId(), 1, $this->owner);
+            self::fail('A conflict was expected.');
+        } catch (TaskTreeRefusedException $refused) {
+            self::assertSame(TaskTreeRefusedException::CONFLICT, $refused->reason);
+        }
+        self::assertSame('Changed by the caller, not saved', $task->getTitle(), 'the change is still there');
+        self::assertSame(['Original', 7], [$this->em->getConnection()->fetchOne('SELECT title FROM task_board_tasks WHERE id = ?', [$task->getId()]), (int) $this->em->getConnection()->fetchOne('SELECT position FROM task_board_tasks WHERE id = ?', [$task->getId()])]);
     }
 
     /**
@@ -267,6 +372,35 @@ final class FixedLockOrderTest extends FunctionalTestCase
     }
 
     /**
+     * Runs `tests/Fixtures/Deadlock/move_worker.php` (it holds a column, then writes through its own kernel) while
+     * `$write` runs here.
+     *
+     * @param list<string> $args
+     * @param callable(): mixed $write
+     *
+     * @return array{0: Throwable|null, 1: string} the write's failure, and what the worker printed
+     */
+    private function withWorker(array $args, callable $write): array
+    {
+        $process = proc_open([PHP_BINARY, __DIR__ . '/../../Fixtures/Deadlock/move_worker.php', ...$args], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertTrue(is_resource($process));
+        // Never read its stderr before it ends: that read would wait for the other process to finish.
+        self::assertSame("locked\n", fgets($pipes[1]), 'the other process holds the column');
+        $failure = null;
+
+        try {
+            $write();
+        } catch (Throwable $exception) {
+            $failure = $exception;
+        }
+        $other  = (string) stream_get_contents($pipes[1]);
+        $errors = (string) stream_get_contents($pipes[2]);
+        self::assertSame(0, proc_close($process), $errors);
+
+        return [$failure, $other];
+    }
+
+    /**
      * @param callable(): mixed $write
      *
      * @return list<array{sql: string, params: array<mixed>}>
@@ -288,21 +422,22 @@ final class FixedLockOrderTest extends FunctionalTestCase
     }
 
     /**
-     * The locking reads (`SELECT … WHERE id IN (…) ORDER BY id`, with `FOR UPDATE` where the platform has it), in order.
+     * The locking reads of the fixed order (`SELECT … ORDER BY id`, with `FOR UPDATE` where the platform has it), in order:
+     * the table and the parameters (the ids, or the column of a column's scan).
      *
      * @param list<array{sql: string, params: array<mixed>}> $queries
      *
-     * @return list<array{index: int, sql: string, ids: list<string>}>
+     * @return list<array{index: int, table: string, ids: list<string>}>
      */
     private function lockReads(array $queries): array
     {
         $locks = [];
         foreach ($queries as $index => $query) {
-            if (preg_match('/^SELECT \w+\.id AS \w+ FROM (task_board_tasks|task_board_columns) \w+ WHERE \w+\.id IN \([?, ]+\) ORDER BY \w+\.id ASC/', $query['sql']) === 1) {
+            if (preg_match('/^SELECT \w+\.id AS \w+.* FROM (task_board_tasks|task_board_columns) \w+ WHERE .* ORDER BY \w+\.id ASC/', $query['sql'], $match) === 1) {
                 if (!$this->em->getConnection()->getDatabasePlatform() instanceof SQLitePlatform) {
                     self::assertStringContainsString('FOR UPDATE', $query['sql']);
                 }
-                $locks[] = ['index' => $index, 'sql' => $query['sql'], 'ids' => array_values(array_map('strval', $query['params']))];
+                $locks[] = ['index' => $index, 'table' => $match[1], 'ids' => array_values(array_map('strval', $query['params']))];
             }
         }
 

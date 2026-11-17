@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
@@ -116,6 +117,8 @@ final readonly class TaskApiTaskOperations
         private ?TaskTemplateManager $templates = null,
         // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
         private ?TaskCustomFieldManager $customFields = null,
+        // Since 2.21.0 (Beacon spec 239, audit SF-M1): the fixed lock order (columns before tasks) of a locked update.
+        private ?OrderedRowLockInterface $rowLock = null,
     ) {
     }
 
@@ -203,9 +206,12 @@ final readonly class TaskApiTaskOperations
         // Audit PX-L1: what a rollback must put back in memory (the task's old and new parents' subtask lists).
         $previousParent = $task->getParent();
         $newParent      = null;
+        $entered        = $this->statusColumnIds([$task], [$input]);
         try {
             // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId, &$newParent): Task {
+            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId, $entered, &$newParent): Task {
+                // Since 2.21.0 (audit SF-M1): the column the status enters before the task's row (columns before tasks).
+                $this->lockColumns($entered);
                 // The task's row locked and the task as committed (a stale copy is reloaded), so the no-op test below is true.
                 $current = $this->transaction->lockedRevision($task);
                 if ($base !== null && $current !== $base) {
@@ -442,7 +448,10 @@ final readonly class TaskApiTaskOperations
 
         // 2. One transaction: lock, compare, check everything, then write.
         // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases): array {
+        $entered = $this->statusColumnIds($tasks, $inputs);
+        $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases, $entered): array {
+            // Since 2.21.0 (audit SF-M1): the columns the items enter before their rows (columns before tasks).
+            $this->lockColumns($entered);
             $ordered = $tasks;
             uasort($ordered, static fn (Task $a, Task $b): int => strcmp($a->getId(), $b->getId()));
             $failures = [];
@@ -970,6 +979,47 @@ final readonly class TaskApiTaskOperations
     {
         if ($this->validator->validate($value, $constraints)->count() > 0) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid ' . $field);
+        }
+    }
+
+    /**
+     * Since 2.21.0 (Beacon spec 239, audit SF-M1): the columns a locked update's `status` fields enter, read before the
+     * transaction so they are locked before the tasks (the fixed order). A status the board lacks is left to the item's
+     * own check, which refuses it in its place.
+     *
+     * @param array<int, Task> $tasks
+     * @param array<int, TaskApiInput> $inputs by the same keys
+     *
+     * @return list<string>
+     */
+    private function statusColumnIds(array $tasks, array $inputs): array
+    {
+        $ids = [];
+        foreach ($tasks as $index => $task) {
+            $input = $inputs[$index];
+            if (!$input->has('status')) {
+                continue;
+            }
+            try {
+                $column = $this->columnOf($task->getBoard(), $input->string('status', true));
+                if ($column instanceof BoardColumn) {
+                    $ids[] = $column->getId();
+                }
+            } catch (TaskApiRefusal) {
+                continue;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param list<string> $columnIds
+     */
+    private function lockColumns(array $columnIds): void
+    {
+        if ($columnIds !== []) {
+            $this->rowLock?->lockColumns($columnIds);
         }
     }
 
