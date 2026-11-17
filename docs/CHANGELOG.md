@@ -116,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 
 - `make test-with-db` / `make test-coverage-with-db`: the functional suite on real MySQL 8.4 and PostgreSQL 16 containers (root `docker-compose.yml`, compose profile `db`); the dev image gains `pdo_mysql` and `pdo_pgsql` (REQ-TEST-005).
-- CI: the matrix test step passes `--display-deprecations`, so the two deprecations reported on PHP 8.4 / 8.5 (REQ-SF-005) are named in the log.
+- PHP 8.4 / 8.5: `DelimitedTableParser::parseStream()` passes the `fgetcsv()` escape argument explicitly (`'\\'`, the value the calls always used), which removes the two deprecations the suite reported (REQ-SF-005). CI shows deprecations (`--display-deprecations`).
 
 ### Demo
 
