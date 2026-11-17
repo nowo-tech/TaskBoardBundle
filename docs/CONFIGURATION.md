@@ -351,6 +351,7 @@ nowo_task_board:
 |--------|---------|-------------|
 | `web_ui.layout_template` | `null` | Since 2.0.0: layout of the pages; null = `nowo_ui_kit.layouts.admin`. |
 | `web_ui.templates.<page>` | none | Since 2.0.0: template per page; wins over `templates.<page>`. |
+| `web_ui.context_menus` | `null` | Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 / ContextMenu key, long press) with the items of their «⋮» menu. `null` follows UiKit's `theme.context_menus`; `true` / `false` force it on or off for TaskBoard's pages (`true` also loads UiKit's `nowo-ui-context-menu.js` there). The «⋮» menus are always there. See [USAGE](USAGE.md#task-and-column-menus). |
 | `templates.layout` | `null` | Deprecated since 2.0.0: use `web_ui.layout_template`. |
 | `templates.page_header` | `true` | Since 2.0.0: `false` leaves the header out of the board, list, Gantt and import pages. |
 | `board.toolbar` | `true` | Since 2.0.0: `false` leaves the strip above the board out. |
@@ -756,6 +757,8 @@ Since 1.25 the sync tables gain a people directory (schema in [UPGRADING — To 
 New routes (configurable like the others, copied under `tenancy.tenant_paths`): `board_connection` (GET),
 `board_connection_containers`, `board_connection_link`, `board_connection_refresh`, `board_connection_cancel`,
 `board_connection_unlink` (POST, CSRF), `board_connection_progress` (GET, JSON), and `task_restore` (POST, always on).
+Since 2.22.0 `task_menu` (`POST /tools/task-board/menu/task`, CSRF `task_board_task_menu`, same origin only, always on)
+takes the writes of the task menus.
 New templates: `connection`, `connection_containers`, `connection_badge`, `connection_progress`, `connection_history`;
 since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
 Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.

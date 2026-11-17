@@ -115,6 +115,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Context menus on the board cards, list rows and column headers** (owner request via Beacon; UiKit 2.54 context menus). Every card and list row has a «⋮» menu (UiKit's `menu` partial): Open, Edit, Assign (Assign to me, Remove me, Other people…), Status (the board's other columns), Priority, Due date (Today, Tomorrow, In a week, No due date), Tags…, Start timer (only with the TimeTrack integration), Copy link, Duplicate… and Move to… (`move.enabled`), Archive, Delete. Column headers have Rename, Add task and Hide / collapse (folded per board in this browser, `localStorage`). With the context menus on, a right-click, Shift+F10 / the ContextMenu key or a long press on the card, row or header opens the same items (UiKit mirrors the kebab: one list of items). Cards, rows and headers are focusable; the kebab toggle is reachable with Tab. See [USAGE — Task and column menus](USAGE.md#task-and-column-menus).
+  - Each entry is printed only when the user may use it (`Menu\TaskMenuBuilder`: `canEditTask()`, `canEditBoard()`, `canManageBoard()` for Delete, `canManageColumns()` for Rename, `canTrackTime()` for the timer), with the board's decision taken once per page (`TaskBoardResourceAccessChecker::taskEditDecider()`, no query per card).
+  - The writes go through one new route, `task_menu` (`POST /tools/task-board/menu/task`, `Controller\TaskMenuController`): CSRF token `task_board_task_menu`, same origin only (`Sec-Fetch-Site`, else `Origin`), and every right checked again on the server (an entry the menu hides answers 403 when posted anyway). It reuses `TaskManager` (status with the 2.21 ordered locking, priority, due date, archive), `TaskMemberAssigner`, `TaskBoardEraserInterface` (board managers) and TimeTrack's `TimerService`. The page prints one CSRF-only form (`nowo-task-menu-form`, REQ-TWIG-005) whose submit buttons are the entries.
+  - New option `web_ui.context_menus` (`null` default: follow UiKit's `theme.context_menus`; `true` / `false` force it on or off for TaskBoard's pages; `true` also loads UiKit's `nowo-ui-context-menu.js` on the board and list pages).
+  - New Twig functions `nowo_task_board_menu_context()`, `nowo_task_board_task_menu()`, `nowo_task_board_context_menus()`, `nowo_task_board_menu_form()`; templates `manage/_task_menu.html.twig`, `manage/_column_menu.html.twig`; texts `task_board.menu.*` in the 7 locales.
+- **Focus mode toggle** (UiKit 2.55) on the board, list, calendar and task pages (`manage/_focus_mode_toggle.html.twig`, area `tasks`, block `nowo_task_board_focus_mode`). It renders nothing while the host has not turned on `nowo_ui_kit.theme.focus_mode`.
+- **`TaskApiReadOperations::boardsOfTeam()`** (Beacon): the boards of every space of a team in one batch — the spaces (one host call), the active boards of their tenants with their columns (one query) and the task counts (one query) — instead of `spaces()` then `boards()` per space (about three queries per space, plus the columns of each board). `TaskApiGuard::visibleBoardsOfSpaces()` makes the same decisions as `lists()` / `visibleBoards()`.
+- **`Api\Security\TaskApiConflictResponseFormatter`**, a `ConflictResponseFormatterInterface` of nowo-tech/transaction-doctrine 1.3 (registered with `api.enabled` only when the interface exists): a host that lists Task API routes in `nowo_transaction_doctrine.controller_routes` gets the API's `{"err", "ECODE"}` shape (`CONFLICT_001`, or `CONFLICT_002` after a partial commit) instead of `{"error": "concurrency_conflict"}`. It recognises the API's requests by their route flag, so a host needs no route-prefix matching.
+
+### Changed
+
+- **Lock conflicts in the Task API answer 409 + `Retry-After`** (owner decision, transaction-doctrine 1.3 `ConflictResponsePolicy`). A deadlock or lock wait timeout anywhere in a failure's chain (a DBAL `RetryableException`, PostgreSQL `55P03`, a `TransientStorageFailure`, any `LockConflictExceptionInterface`, a write unit's `ConcurrencyConflict`) answered 500 `SERVER_001` from the bundle (503 from the host's own conflict responder with transaction-doctrine 1.2); it now answers the shared policy's status (409 by default; `nowo_transaction_doctrine.conflict_response.status: 503` keeps 503) with `Retry-After` and `{"err", "ECODE": "CONFLICT_001"}`. A conflict that already committed part of a write unit is `CONFLICT_002` with no `Retry-After` (read the task again first). New `TaskApiRefusal::lockConflict()`, constants `CONFLICT`, `CONFLICT_PARTIAL`, and an optional `$headers` argument. See [UPGRADING](UPGRADING.md#to-2220).
+- Requires `nowo-tech/transaction-doctrine ^1.3` and `nowo-tech/ui-kit-bundle ^2.55`.
+- Calendar on phones (Beacon): the calendar is the positioned ancestor of its screen-reader text and clips sideways overflow, so it never widens the page; its toolbar wraps (Previous / Today / Next, the period and the Month / Week / List tabs on one line, the tabs without their row margin). Beacon's host CSS for this can go.
+- Composer `config.process-timeout: 0` (audit SF4-I1): `composer igor` and the long suites are not cut at 300 s.
+
+### Security
+
+- User HTML (task descriptions, comment bodies, Markdown board descriptions) goes through `Text\ReservedAttributeStripper` after the host's text renderer: UiKit's `data-nowo-ui-context-menu*` attributes and `data-nowo-ui-card` are removed from every tag, then renamed anywhere they are left (fail closed, as ChatKit 1.33), so a user's content cannot open another element's kebab items on right-click (UiKit 2.54 SECURITY).
+
+### Tests
+
+- `HostRoutingControllersTest` also runs with every feature that adds routes or controllers turned on (API, sync, calendar, task numbers, move, recurrence, multi-board, templates; audit SF4-I2).
+
 ## [2.21.1] - 2026-11-17
 
 ### Fixed

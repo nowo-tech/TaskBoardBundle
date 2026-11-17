@@ -13,6 +13,7 @@ With `api.enabled: false` a host gets no route, service, listener, parameter or 
   - [Logging time](#logging-time)
 - [Read endpoints](#read-endpoints)
   - [Task numbers](#task-numbers)
+  - [Several spaces at once (in process, since 2.22)](#several-spaces-at-once-in-process-since-222)
 - [Write endpoints](#write-endpoints)
 - [Column transitions, revisions and bulk updates (since 2.16)](#column-transitions-revisions-and-bulk-updates-since-216)
 - [Management endpoints (Full)](#management-endpoints-full)
@@ -136,6 +137,14 @@ GET /v2/task/%23123?custom_task_ids=true&list_id=LIST_ID  any scope; "#123" work
 ```
 
 Why a space or a list: ClickUp's custom ids (`DEV-123`) are unique in a workspace because they carry the space's prefix; here a number is unique only in its sequence, which is a tenant (one space) or, with `scope: board` or a board without tenant, one list. `space_id` of a space whose numbers are per list is 400 `INPUT_002`, as is neither parameter. A number not in that sequence, a number a moved task left behind (it now has a number in its new sequence, and only that one answers, even after it moved back), or any number without the option is 404, the same as a task the token may not see; access, level and plan are then checked as for `GET /v2/task/{id}`. The provider's custom id of a synced task (`DEV-123`) is not looked up here.
+
+### Several spaces at once (in process, since 2.22)
+
+`TaskApiReadOperations::boardsOfTeam($principal, $teamId)` returns what `boards()` returns for each space of a team the
+token may list (one `TaskApiBoardList` per space, in the host's order), in one batch: the host's spaces (one call), the
+active boards of their tenants with their columns (one query) and the task counts (one query), instead of `spaces()`
+then `boards()` per space (about three queries per space, plus the columns of each board). The same decisions apply:
+`where`, the plan per tenant, the tenant check and `canViewBoard()`.
 
 ## Write endpoints
 
@@ -338,6 +347,8 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
 | `PARENT_001`, `PARENT_002` | 400 | Since 2.20.0: a new parent on another board; the task itself ([parent changes](#changing-a-tasks-parent-since-220)) |
 | `PARENT_003`, `PARENT_004`, `PARENT_005` | 409 | Since 2.20.0: a new parent among the task's subtasks; a concurrent tree change (send it again); deeper than `max_subtask_depth` |
+| `CONFLICT_001` | 409 (or 503) | Since 2.22.0: the request met a database lock conflict (deadlock, lock wait timeout, a write unit that gave up; anywhere in the failure's chain). Nothing was saved: send the same request again after `Retry-After` seconds. The status is nowo-tech/transaction-doctrine's shared policy (409 by default, 503 when the host keeps it; was 500 `SERVER_001`) |
+| `CONFLICT_002` | 409 (or 503) | Since 2.22.0: the same, after a write unit already committed part of its work: **no** `Retry-After`; read the task again before trying, a blind retry could repeat what was saved |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp

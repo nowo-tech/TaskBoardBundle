@@ -19,6 +19,8 @@
 - [Task API (2.2)](#task-api-22)
 - [Shared write rules (2.2)](#shared-write-rules-22)
 - [Concurrency: fixed lock order (2.21)](#concurrency-fixed-lock-order-221)
+- [Task menus, context menus and focus mode (2.22)](#task-menus-context-menus-and-focus-mode-222)
+- [Lock conflicts: 409 + Retry-After (2.22)](#lock-conflicts-409--retry-after-222)
 - [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
@@ -280,6 +282,37 @@ Beacon spec 239, block B, FR-013 (audit SF). The multi-row writes of tasks and c
 - **Gap locks (MySQL, InnoDB).** The locking read of a column's tasks walks the `column_id` index (checked with `EXPLAIN`: `ref` on the foreign-key index, ordered by the primary key it carries, no filesort). Under REPEATABLE READ it also takes next-key locks on that index range. A new task created in the same column waits for the write's commit; other columns and boards are not touched. No extra index is needed.
 - **Known limit: a caller's own transaction.** The fixed order holds inside the bundle's writes and the Task API, which locks the columns its `status` fields enter before its tasks. A host that locks task rows in its own transaction and then calls one of these writes takes those rows before the column. Such a host can still cross a concurrent move in that column; the database rolls one of the two back for the caller to retry. Lock the column first (`OrderedRowLockInterface` is internal; take the column's row with `SELECT … FOR UPDATE`), or retry.
 - **Known limit: import and provider sync.** The import batches (`TaskImportOrchestrator` / `ImportedTaskUpdater`) and the provider sync writers (`SyncTaskWriter`, `SyncChecklistWriter`) write in file or remote order, inside their own long transaction, without the fixed order or the read after the lock. Only one run per board goes at a time. A board move or a column change during a run can still deadlock against it, and one of the two is rolled back (the run reports it; nothing is half-written). New tasks, imported rows and synced rows take the column's next position without the column lock.
+
+## Task menus, context menus and focus mode (2.22)
+
+- **No new authorization surface in the browser.** The card, row and column menus print only the entries the user may
+  use (`Menu\TaskMenuBuilder`, the bundle's own decisions); UiKit's context menu only mirrors and clicks the entries of
+  that kebab (UiKit 2.54 SECURITY), so it can show and run nothing more.
+- **Every write is checked again on the server.** `task_menu` (`POST /tools/task-board/menu/task`) refuses a
+  cross-origin request (`Sec-Fetch-Site` other than `same-origin`, else an `Origin` that is not this scheme, host and
+  port: 403), a missing or wrong CSRF token (`task_board_task_menu`: 403), an unknown action (400), a task out of reach
+  (404, another tenant's included) and an operation the user may not do (403): edit rights on a task that is not
+  archived for status, priority, due date, assignment and archive; `canManageBoard()` for delete (the eraser checks it
+  too); the TimeTrack integration and `canTrackTime()` for the timer. Then the service's own rules apply (transition
+  policy, reopen limits, assignee policy, period lock). A refusal is logged as a warning with the reason, never the token.
+- **No open redirect.** The page to go back to (`_target_path`) is used only when it is a local path.
+- **User HTML cannot drive a context menu.** Task descriptions, comment bodies and Markdown board descriptions go through
+  `Text\ReservedAttributeStripper` after the host's `TaskTextRendererInterface`: `data-nowo-ui-context-menu*` and
+  `data-nowo-ui-card` are removed from every tag (read as the HTML tokenizer reads it), then renamed `data-removed-…`
+  anywhere they are left (comments, raw-text elements, text), failing closed as ChatKit 1.33 does. The task cards and
+  rows print titles and tags escaped, never user HTML.
+- **Focus mode** sends nothing: UiKit's script keeps the state in `localStorage` (`nowo-ui-focus:tasks`).
+- **Collapsed columns** are a view setting kept in `localStorage` (`nowo-task-board:collapsed:<board id>`, column ids
+  only); nothing is written on the server.
+- **Worker mode.** The per-page decisions (`TaskMenuContext`) are values built per request; the builder, controller and
+  Twig extension keep no state (FrankenPHP with the kernel not reset).
+
+## Lock conflicts: 409 + Retry-After (2.22)
+
+A Task API failure with a database lock conflict anywhere in its chain answers transaction-doctrine's shared policy
+(409 by default, 503 when the host keeps it) with `Retry-After` and `CONFLICT_001`, or `CONFLICT_002` without
+`Retry-After` after a partial commit, so a client never retries blindly a write that may have half-saved. The answer
+names no table, SQL or parameter; the log line carries the exception class only.
 
 ## Logging and personal data
 
