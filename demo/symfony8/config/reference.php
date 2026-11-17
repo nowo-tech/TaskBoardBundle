@@ -828,11 +828,13 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             class_metadata_factory_name?: scalar|Param|null, // Default: "Doctrine\\ORM\\Mapping\\ClassMetadataFactory"
  *             default_repository_class?: scalar|Param|null, // Default: "Doctrine\\ORM\\EntityRepository"
  *             auto_mapping?: scalar|Param|null, // Default: false
+ *             auto_discover_entities?: bool|Param|null, // Registers all entity classes discovered by the container scan, removing the need for explicit "mappings". When not set, enabled if neither "mappings" nor "auto_mapping" is configured and Symfony 8.2 and doctrine/orm 3.6 are available. // Default: null
  *             naming_strategy?: scalar|Param|null, // Default: "doctrine.orm.naming_strategy.default"
  *             quote_strategy?: scalar|Param|null, // Default: "doctrine.orm.quote_strategy.default"
  *             typed_field_mapper?: scalar|Param|null, // Default: "doctrine.orm.typed_field_mapper.default"
  *             entity_listener_resolver?: scalar|Param|null, // Default: null
  *             fetch_mode_subselect_batch_size?: scalar|Param|null,
+ *             use_schema_editor_api?: bool|Param|null, // Set to "true" or "false" to explicitly opt in or out of the schema editor API for schema generation. Requires doctrine/dbal 4.5 or higher and doctrine/orm 3.8 or higher. // Default: null
  *             repository_factory?: scalar|Param|null, // Default: "doctrine.orm.container_repository_factory"
  *             schema_ignore_classes?: list<scalar|Param|null>,
  *             validate_xml_mapping?: bool|Param, // Set to "true" to opt-in to the new mapping driver mode that was added in Doctrine ORM 2.14 and will be mandatory in ORM 3.0. See https://github.com/doctrine/orm/pull/6728. // Default: false
@@ -870,7 +872,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                 mapping?: scalar|Param|null, // Default: true
  *                 type?: scalar|Param|null,
  *                 dir?: scalar|Param|null,
- *                 alias?: scalar|Param|null,
+ *                 alias?: scalar|Param|null, // Deprecated: The "doctrine.orm.entity_managers..mappings..alias.alias" option is deprecated and will be removed in DoctrineBundle 4.0, as Doctrine ORM no longer supports entity namespace aliases.
  *                 prefix?: scalar|Param|null,
  *                 is_bundle?: bool|Param,
  *             }>,
@@ -1258,12 +1260,33 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  * }
  * @psalm-type NowoTaskBoardConfig = array{
+ *     user_directory?: scalar|Param|null, // Since 2.15.0: service id of a Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface (finds a host user by id). Required with database.user_reference: id. // Default: null
  *     user_class?: scalar|Param|null,
  *     table_prefix?: scalar|Param|null, // Default: "task_board_"
  *     team_membership_resolver?: scalar|Param|null, // Default: null
  *     route_prefix?: scalar|Param|null, // Default: ""
  *     dashboard_route?: scalar|Param|null, // Default: null
  *     firewall?: scalar|Param|null, // Deprecated: The "firewall" option at path "nowo_task_board.firewall" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead. // Deprecated: never read by the bundle. Protect the manage routes with your own security.yaml firewall/access_control. // Default: "main"
+ *     api?: array{ // Since 2.2.0 (spec 213): a REST API shaped like ClickUp API v2. Off: no route, service, listener or table. See docs/API.md.
+ *         enabled?: bool|Param, // Default: false
+ *         prefix?: scalar|Param|null, // Base path of the API. Not affected by route_prefix or the tenant copies. // Default: "/api/tasks"
+ *         host_decides_access?: bool|Param, // With security.resource_scoping: false every board is open unless a listener denies it. true says the host has those listeners: without it the API refuses to build. // Default: false
+ *         quota_listener_required?: bool|Param, // Board and task creates through the API are refused unless a listener answers QUOTA_CHECK. false: a host with no plan limits. // Default: true
+ *         max_body_bytes?: int|Param, // The largest JSON body. // Default: 1048576
+ *         lists_include_folders?: bool|Param, // Since 2.19.0: whether GET /v2/space/{id}/list lists the boards in folders too by default (false: folderless only, as ClickUp; a request overrides it with include_folders=true|false). // Default: false
+ *         hooks?: array{ // Service ids. Without them every default denies.
+ *             authenticator?: scalar|Param|null, // Required with enabled: Api\Hook\TaskApiAuthenticatorInterface. // Default: null
+ *             rate_limiter?: scalar|Param|null, // Api\Hook\TaskApiRateLimiterInterface. null: every request 429. // Default: null
+ *             plan_gate?: scalar|Param|null, // Api\Hook\TaskApiPlanGateInterface. null: 403 PLAN_001. // Default: null
+ *             workspace?: scalar|Param|null, // Api\Hook\TaskApiWorkspaceInterface. null: every board 404. // Default: null
+ *             users?: scalar|Param|null, // Api\Hook\TaskApiUsersInterface. null: nobody is known. // Default: null
+ *             comment_edit_policy?: scalar|Param|null, // Since 2.16.0: Api\Hook\TaskApiCommentEditPolicyInterface, who may edit a comment through PUT /v2/comment/{id}. null: its author only. // Default: null
+ *             members?: scalar|Param|null, // Since 2.16.0: Api\Hook\TaskApiMembersInterface, the members of a team (/v2/team, /v2/team/{id}/member). null: none. // Default: null
+ *             time_entries?: scalar|Param|null, // Api\Hook\TaskApiTimeEntriesInterface. null: 403 TIME_001. // Default: null
+ *             attachments?: scalar|Param|null, // Api\Hook\TaskApiAttachmentsInterface. null: 403 FILE_001. // Default: null
+ *             idempotency_store?: scalar|Param|null, // Api\Hook\TaskApiIdempotencyStoreInterface. // Default: null
+ *         },
+ *     },
  *     security?: array{
  *         access_checker?: scalar|Param|null, // Default: null
  *         access_roles?: list<scalar|Param|null>,
@@ -1406,6 +1429,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time/{entryId}/remove"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time_remove"
  *         },
+ *         task_time_billable?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/time/{entryId}/billable"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_time_billable"
+ *         },
  *         task_by_number?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/n/{number}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_by_number"
@@ -1418,9 +1445,29 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/schedule"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_schedule"
  *         },
+ *         task_move_board?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/move-board"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_move_board"
+ *         },
+ *         task_duplicate?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/duplicate"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_duplicate"
+ *         },
+ *         task_recurrence?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/recurrence"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_recurrence"
+ *         },
+ *         task_recurrence_action?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/recurrence/{action}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_recurrence_action"
+ *         },
  *         task_restore?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/restore"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_restore"
+ *         },
+ *         task_menu?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/menu/task"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_menu"
  *         },
  *         board_connection?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection"
@@ -1466,6 +1513,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     web_ui?: array{ // Since 2.0.0: the UiKit page contract (REQ-UI-003).
  *         layout_template?: scalar|Param|null, // Layout the pages extend. null = nowo_ui_kit.layouts.admin. A pre-2.0 layout without the UiKit canonical blocks goes through a deprecated bridge. // Default: null
  *         templates?: array<string, scalar|Param|null>,
+ *         context_menus?: scalar|Param|null, // Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 or the ContextMenu key, a long press) opens the items of their kebab (UiKit 2.54 context menus). null follows nowo_ui_kit.theme.context_menus; true or false forces it on or off for TaskBoard's pages. The kebab itself is always there. // Default: null
  *     },
  *     templates?: array{
  *         layout?: scalar|Param|null, // Deprecated: The "nowo_task_board.templates.layout.layout" option is deprecated, use "nowo_task_board.web_ui.layout_template" instead. // Deprecated since 2.0.0: use web_ui.layout_template. // Default: null
@@ -1475,8 +1523,12 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         list?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/list.html.twig"
  *         gantt?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/gantt.html.twig"
  *         calendar?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/calendar.html.twig"
+ *         tasks?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/tasks.html.twig"
  *         task?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task.html.twig"
  *         import?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import.html.twig"
+ *         task_move?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_move.html.twig"
+ *         task_duplicate?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_duplicate.html.twig"
+ *         task_recurrence?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_recurrence.html.twig"
  *         connection?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/connection.html.twig"
  *         connection_containers?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_containers.html.twig"
  *         connection_badge?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_badge.html.twig"
@@ -1492,6 +1544,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     database?: array{
  *         entity_manager?: scalar|Param|null, // Default: "default"
+ *         mapping_type?: "attribute"|"xml"|Param, // Since 2.15.0 (REQ-ARCH-001 rule 2): how the TaskBoard entities are mapped. attribute (default) = the ORM attributes, as before; xml = the Doctrine XML files of Resources/config/doctrine-xml (same tables, columns, indexes and constraints), for a host that keeps its mapping out of PHP attributes. // Default: "attribute"
+ *         user_reference?: "entity"|"id"|Param, // Since 2.15.0 (REQ-ARCH-001 rule 2): how the TaskBoard rows reference host users. entity (default) = a Doctrine relation to user_class, as before; id = the user's id in a string column (no relation: user_class need not be a Doctrine entity), found again through user_directory. // Default: "entity"
+ *         private_entity_manager?: bool|Param|null, // Since 2.15.0 (REQ-ARCH-001 rule 6): true = the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application's manager. null (default) keeps the 2.14 behaviour; false too, deprecated: true becomes the only mode in 3.0. // Default: null
  *     },
  *     tenancy?: array{ // Boards per host tenant (since 1.10): every manage route is copied under each `tenant_paths` entry (its {tenantSlug} names the tenant), a tenant sees only its boards and a board or task of another tenant answers 404.
  *         enabled?: bool|Param, // Default: false
@@ -1500,20 +1555,38 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             name_prefix?: scalar|Param|null, // Prefix of the copied route names, e.g. app_project_ (app_project_nowo_task_board_board).
  *             slug_prefix?: scalar|Param|null, // Slugs this path serves (prefix match); empty: every slug. // Default: ""
  *             slug_requirement?: scalar|Param|null, // Route requirement of {tenantSlug}; default: the slug prefix then [A-Za-z0-9_-]+. // Default: null
+ *             open_single_board?: bool|Param, // Since 2.6.0 (TB-18): tenancy.open_single_board for the tenants of this path only (e.g. true for projects, false for personal or organization indexes). Not set: the global tenancy.open_single_board.
  *         }>,
  *         single_board?: bool|Param, // One board per tenant: the tenant index opens its board, created (with board.default_columns) on the first visit. // Default: false
- *         open_single_board?: bool|Param, // Since 2.0.0: a tenant index opens the board when the user sees exactly one. ?boards=1 keeps the list. // Default: false
+ *         open_single_board?: bool|Param, // Since 2.0.0: a tenant index opens the board when the user sees exactly one. ?boards=1 keeps the list. Since 2.6.0 a tenant_paths entry may set its own open_single_board, which wins over this one. // Default: false
  *         first_board_provisioner?: scalar|Param|null, // Since 2.0.0: service id of a Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface, called on a tenant's empty index for a user the create check and the quota event accept. null = the empty index. // Default: null
  *         resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface (slug => tenant key and name; null for a slug the user may not open). null = the slug is the tenant. // Default: null
  *     },
+ *     search?: array{ // Since 2.16.0 (spec 234): the text search of the Task API (GET /v2/team/{id}/task?query=…, GET /v2/list/{id}/task?query=…).
+ *         provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Search\TaskTextSearchInterface. null = DoctrineTaskTextSearch. // Default: null
+ *         fulltext?: bool|Param, // MySQL / MariaDB: map and use the FULLTEXT index on the tasks' title and description (and the comments' body with comments). Run the migration first. Other platforms always use LIKE. // Default: false
+ *         comments?: bool|Param, // Also match the text of the tasks' comments (not deleted). // Default: false
+ *         min_token_length?: int|Param, // The server's innodb_ft_min_token_size: shorter words use LIKE. // Default: 3
+ *         max_matches?: int|Param, // More matches than this answer 400 SEARCH_001 (narrow the query); never a silently cut list. // Default: 500
+ *     },
+ *     humans_only_policy?: array{ // Since 2.16.0 (spec 234): options of Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy.
+ *         allow_checklist?: bool|Param, // Let the Task API and MCP tick checklist items into a humans-only column (default: refused like any other move). // Default: false
+ *     },
+ *     column_transition_policy?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface (since 2.16.0, spec 234): whether a task may enter a column, per channel (web, api, mcp, import). null = every move is allowed. Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy refuses the Task API and MCP into columns flagged humans only. // Default: null
+ *     member_badge_provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface (since 2.18.0, Beacon spec 234): badges next to a member's name (history, comments, assignees), e.g. "Agent" for a service account. Plain-text values with an allow-listed variant, asked once per page. null = no badge. // Default: null
+ *     write_provenance_provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface (since 2.18.0, Beacon spec 234): the channel (web, app, api, mcp; decided by the host from the path it serves, never from client input) and actor label stored on every task history row, task and comment write. null = the columns stay NULL. // Default: null
+ *     max_subtask_depth?: int|Param, // Since 2.20.0 (Beacon spec 234): the most ancestors a task may have (a top-level task has 0, its subtasks 1). A write that would put a task deeper is refused (Task API 409 PARENT_005; the board UI and copies refuse it; imports and provider syncs place the task under its deepest allowed ancestor and warn); a re-parent counts the moved subtree. Trees already deeper stay readable and editable, and may move up. null = no limit (every tree walk stays bounded at 10000 levels). // Default: null
  *     assignee_provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface (since 1.10): who may be a member of a task on a board. null = every user of user_class. // Default: null
  *     board?: array{
  *         default_columns?: list<array{ // Default: [{"name":"To do","color":"#94a3b8"},{"name":"In progress","color":"#3b82f6"},{"name":"Done","color":"#22c55e"}]
  *             name?: scalar|Param|null,
  *             color?: scalar|Param|null, // Default: null
- *             icon?: scalar|Param|null, // Icon name such as tabler:bug (since 1.11). // Default: null
+ *             icon?: scalar|Param|null, // Icon name such as tabler:bug (since 1.11), or since 2.9.0 one emoji such as 📝 (printed as text, aria-hidden; the name stays the accessible text). // Default: null
  *         }>,
  *         column_icons?: list<scalar|Param|null>,
+ *         column_icon_form_type?: scalar|Param|null, // Since 2.9.0: form type of the column icon field in the add / edit column dialogs, e.g. Nowo\UiKitBundle\Form\EmojiPickerType. The bundle's constraint always applies: one emoji, or one of board.column_icons / board.default_columns icons. null = the grid of board.column_icons. // Default: null
+ *         column_icon_form_options?: list<mixed>,
+ *         column_humans_only_field?: bool|Param|null, // Since 2.16.0 (spec 234): the "Only people can move tasks here" toggle in the add / edit column dialogs. null = shown when column_transition_policy is set. // Default: null
  *         top_level_only?: bool|Param, // The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10. // Default: false
  *         max_tasks?: int|Param, // Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded. // Default: 500
  *         default_view_resolver?: scalar|Param|null, // Since 1.24: service id of a Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface (the view a board opens in for a user: board, list, gantt or, with calendar.enabled, calendar). The plain board route redirects to that route; ?view=board, XHR and links from the same board keep the board view. null = always the board view. // Default: null
@@ -1533,9 +1606,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         toolbar?: bool|Param, // Since 2.0.0: false leaves the trail and actions out of the task panel, for a host drawer with its own. // Default: true
  *     },
  *     import?: array{ // Task import limits (since 1.22) and the help link of the import forms (since 2.0.0).
- *         help_link?: array{ // Since 2.0.0: the default of the import forms' help link (the include parameter help_link and a Twig global nowo_task_board_import_help_link still win). Needs url or route, and label. Without them: no link.
+ *         help_link?: array{ // Since 2.0.0: the default of the import forms' help link (the include parameter help_link and a Twig global nowo_task_board_import_help_link still win). Needs url, route or url_resolver, and label. Without them: no link.
  *             url?: scalar|Param|null, // An http(s) URL or a path on this site. // Default: null
  *             route?: scalar|Param|null, // A route name; wins over url. // Default: null
+ *             url_resolver?: scalar|Param|null, // Since 2.5.0 (TB-17): service id of an ImportHelpLinkUrlResolverInterface that gets the url / route URL (or null) and returns the URL to link, or null for no link. With it, url and route are optional. // Default: null
  *             route_params?: list<mixed>,
  *             label?: scalar|Param|null, // Translation key or text. // Default: null
  *             translation_domain?: scalar|Param|null, // Default: "messages"
@@ -1550,6 +1624,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         max_json_nodes?: int|Param, // Since 1.22.1: the weight of a JSON import (about 16 bytes of peak decoded memory per unit: strings by their length, list and object tables at their doubled size; 4 000 000 takes a ClickUp API export of about 2 700 tasks within a 128 MB memory_limit, 7 500 000 with 256 MB takes 5 000); a heavier file is refused before it is decoded. // Default: 4000000
  *     },
  *     comments?: array{ // Task comments and @mentions (since 1.16).
+ *         cause_labeler?: scalar|Param|null, // Since 2.10.0 (spec 216): service id of a Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface: how a comment shows why it was written (TaskChangeContext, e.g. an automation rule). null = the cause is not shown. // Default: null
  *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment. // Default: true
  *         mention_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface: who may be @mentioned (the people who can read the task). null = the board's assignable users, else its creator and task members. // Default: null
  *     },
@@ -1563,6 +1638,38 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     calendar?: array{ // Since 2.1.0 (spec 214): the Calendar view of a board and the task_schedule route. Opt-in: false = no routes, no tab.
  *         enabled?: bool|Param, // Default: false
+ *         day_annotation_provider?: scalar|Param|null, // Since 2.14.0 (Beacon spec 204): service id of a Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface: working days, holidays and leave of the viewer (day shading and label) and of the assignees (a warning on a task whose assignee is off on one of its days). null = the calendar of 2.13, unchanged. // Default: null
+ *         skip_non_working_days?: bool|Param, // Since 2.14.0: with day_annotation_provider, a dragged task (body or edge) lands on the next working day of the viewer when dropped on a non-working one. false = drops land where they fall, as before. // Default: false
+ *     },
+ *     multi_board?: array{ // Since 2.13.0 (Beacon D-20261112-01): the tasks of several boards in one list ("All tasks"), with a Board / Project column, filters, pagination, the workload per person and a CSV / XLSX export. Opt-in: false = no routes, services or output change.
+ *         enabled?: bool|Param, // Default: false
+ *         scope_provider?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\MultiBoard\MultiBoardScopeProviderInterface: the boards each viewer may read here (re-checked with canViewBoard()). null = no board for anyone (deny by default). // Default: null
+ *         path?: scalar|Param|null, // Path of the list (route nowo_task_board_tasks); the export is <path>/export.{format} (nowo_task_board_tasks_export). May hold route variables (e.g. /orgs/{organisation}/tasks): they reach the provider in MultiBoardViewer::$context. Not copied under tenancy.tenant_paths. // Default: "/tools/task-board/tasks"
+ *         per_page?: int|Param, // Default rows per page: 10, 25, 50 or 100 (the page offers the same choices). // Default: 25
+ *         max_boards?: int|Param, // The most boards of a scope the list reads (the rest is left out and logged as a warning): bounds the IN-list of the queries and the per-board access checks. // Default: 500
+ *         scan_max_rows?: int|Param, // With a label filter the tasks are compared in PHP (tags are JSON): the most tasks one page, workload or export reads for it (an export reads them twice: once to count). Above it the page says the result is partial and the export sends X-Task-Board-Export-Partial. // Default: 10000
+ *         export?: array{
+ *             max_rows?: int|Param, // The most rows of one CSV / XLSX export (streamed in batches of 500). Above it the export stops there and carries the header X-Task-Board-Export-Truncated. // Default: 5000
+ *         },
+ *     },
+ *     history?: array{ // Since 2.3.0 (spec 216).
+ *         cause_labeler?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface: how the history shows why a change happened (TaskChangeContext). null = the cause is not shown. // Default: null
+ *     },
+ *     recurrence?: array{ // Since 2.3.0 (spec 215): recurring tasks — the series and occurrence tables, TaskRecurrenceManager, the Repeat section of the task panel, the task_recurrence routes and the repeat icon. No scheduler: the host creates the occurrences (dueSeries(), createOccurrence()). Opt-in: false = no routes, services, mapping or output change.
+ *         enabled?: bool|Param, // Default: false
+ *         max_subtasks?: int|Param, // The most subtasks an occurrence copies; a series over it is refused with the count. // Default: 200
+ *     },
+ *     task_templates?: array{ // Since 2.16.0 (Beacon spec 234, FR-061): task templates per board or per tenant — the template table, TaskTemplateManager, the Template picker of the add-task dialog, GET {api.prefix}/v2/list/{id}/taskTemplate and template_id on a new task. Opt-in: false = no table mapping, service, route or output change.
+ *         enabled?: bool|Param, // Default: false
+ *         permission?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Template\TaskTemplatePermissionInterface: who manages and who uses templates. null = DefaultTaskTemplatePermission (manage a board's templates with the right to manage the board, a tenant's with security.manage_roles; use them with the right to add tasks). // Default: null
+ *     },
+ *     move?: array{ // Since 2.3.0 (spec 217): move a task and its subtasks to another board, and duplicate a task (routes task_move_board and task_duplicate, actions in the task panel). Opt-in: false = no routes and no actions. TaskCopier, TaskMovePlanner and TaskMover are services either way.
+ *         enabled?: bool|Param, // Default: false
+ *         max_subtasks?: int|Param, // The most subtasks a move or a duplicate carries; above it the action is refused with the count. // Default: 200
+ *         targets?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface: the boards offered as a target (any other answers 404). null = the active boards of the task's tenant the user may edit. // Default: null
+ *     },
+ *     restructure?: array{ // Since 2.19.0 (Beacon spec 234): folders of boards and moves of tasks between the boards of one tenant (TaskBoardRestructureInterface, the Task API folder routes). Always on: a host without folders sees nothing new.
+ *         policy?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface: who may manage folders and restructure a board. null = ManageRightRestructurePolicy (the create-board decision for folders, canManageBoard() for a board). // Default: null
  *     },
  *     sync?: array{ // Since 1.23: provider connections (ClickUp first). Opt-in: false = no routes, services, mapping or header change.
  *         enabled?: bool|Param, // Default: false
@@ -1606,6 +1713,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         },
  *         badge?: array{
  *             connect_link?: bool|Param, // Since 1.25.2: false = the connection badge shows nothing for an unlinked board (no "Connect provider" link, no empty strip); a linked board keeps its badge. // Default: true
+ *             style?: "badge"|"strip"|Param, // Since 2.5.0 (TB-16): badge = the inline badge (as before); strip = one UiKit notice strip (provider · list and the status on the left, a progress bar while a run is going, Refresh and Connection on the right). Applies to the bundle's own templates.connection_badge partial. // Default: "badge"
  *             progress?: bool|Param, // Since 1.26.3: true = the bundle's own connection badge shows a determinate progress bar of the running run (polling board_connection_progress, managers only). The badge data (activeRunId, progressUrl, total, processed, pollInterval) is given either way, for a host template. // Default: false
  *         },
  *         import_archived?: bool|Param, // Since 1.27.0 (TB-SYNC-3): archived provider tasks are read (ClickUp: a second pass with archived=true) and imported archived. false = 1.26 (an archived task is not created). // Default: true
@@ -1687,6 +1795,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             testid?: scalar|Param|null, // Default: null
  *         }>,
  *     },
+ *     base_stylesheet?: bool|Param, // 2.51: link UiKit's opt-in default theme (css/nowo-ui-base.css) before nowo-ui.css in the document / error layouts: body font stack, page gutters and masthead height for hosts that bring no CSS framework and no theme stylesheet. Its rules nest in `@layer theme.nowo-ui-base`, below `base`, so a framework, host utilities and unlayered host CSS still win. Leave it false when the host already has a framework or a theme file. // Default: false
  *     font_preload?: array{ // 2.21: <link rel="preload" as="font" crossorigin> tags printed in the <head> of the document and error layouts (Twig nowo_ui_font_preload()) for the fonts painted above the fold. Empty = no tags.
  *         fonts?: list<scalar|Param|null>,
  *         manifest?: array{ // Hashed builds: pick the fonts from a Vite manifest (.vite/manifest.json). A missing manifest (dev server) prints nothing.
@@ -1698,7 +1807,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     appearance?: array{ // Optional site appearance SPI (presets, --nowo-ui-* token emitter, Twig functions). Off by default.
  *         enabled?: bool|Param, // Default: false
- *         provider?: scalar|Param|null, // Service id implementing AppearanceProviderInterface (host storage). Null = the config defaults below. // Default: null
+ *         provider?: scalar|Param|null, // Service id implementing AppearanceProviderInterface (host storage). Null = the config defaults below (or, 2.40, the brand provider: see brand). // Default: null
+ *         brand?: "auto"|"off"|Param, // 2.40 (spec 220): auto = with provider null and a nowo-tech/brand-contracts BrandProviderInterface service, the brand drives the name, eyebrow, colours and logos (corner, border and footer stay from defaults). off = always the defaults. No brand service = no change. // Default: "auto"
+ *         head_links?: bool|Param, // 2.40: the kit layouts (document, error) print nowo_ui_appearance_head() in <head>: favicon / apple-touch links of the appearance logos and meta theme-color (paper colour per colour scheme). Off = the 2.39 <head>. // Default: false
  *         defaults?: array{
  *             brand_name?: scalar|Param|null, // Default: ""
  *             brand_eyebrow?: scalar|Param|null, // Default: ""
@@ -1749,8 +1860,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         enabled?: bool|Param, // 2.3.1: false drops the breadcrumb trail (BreadcrumbKit and PageHeader::breadcrumbs) from every page header, e.g. when the host layout renders its own. // Default: true
  *     },
  *     header?: array{ // 2.27 compact header: the default page-header presentation (a request attribute _nowo_ui_header_presentation overrides it per request) and where PageHeader::actions go in the compact presentation.
- *         presentation?: "standard"|"compact"|Param, // standard (default) | compact: in compact the page header keeps a visually hidden h1 and leaves its intro, breadcrumbs and back link to the top bar (header_context). // Default: "standard"
+ *         presentation?: "standard"|"compact"|"inline"|"no_intro"|"no_title"|"no_header"|Param, // standard (default) | compact | inline | no_intro | no_title | no_header: in compact the page header keeps a visually hidden h1 and leaves its intro, breadcrumbs and back link to the top bar (header_context); 2.39: inline puts the intro on the title row, no_intro drops the intro, no_title keeps the h1 visually hidden, no_header does both. // Default: "standard"
  *         compact_actions?: "page"|"bar"|Param, // page (default): header.actions stay in the page header; bar: in the compact presentation the page header leaves them out (the host shows them in the top bar through the page_actions partial). extra_actions always stay. // Default: "page"
+ *     },
+ *     auth_panel?: array{ // 2.44: the auth scaffold (page/auth.html.twig) panel (Twig global nowo_ui_kit_auth_panel).
+ *         brand?: "auto"|"none"|Param, // auto (default, the 2.43 markup): the panel brand region prints the appearance logo lockup, else AuthPage::brand as text; none: the panel prints no brand region (a host guest layout that prints its own brand). A render variable nowo_ui_auth_brand (auto | none) wins over it. // Default: "auto"
  *     },
  *     remote_dialog?: array{ // 2.28 remote form dialog (X-Nowo-Dialog requests).
  *         convert_redirects?: bool|Param, // Turn a RedirectResponse answered to a dialog request (X-Nowo-Dialog: 1, main request) into 204 + X-Nowo-Redirect when its Location is a same-origin path, so redirectToRoute() controllers work in the dialog without code changes. // Default: false
@@ -1768,10 +1882,18 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         tokens_dark?: array<string, mixed>,
  *         confirm_message_in_header?: bool|Param, // Confirm dialogs and the full-page confirm render the message inside the header, under the title (hosts whose dialog header is title + message). View\Confirm::messageInHeader wins when set. // Default: false
  *         popover_menus?: bool|Param, // 2.4: menu / kebab / row-action menus render their panel as a native [popover] (browser top layer: never clipped by table scrollers or cards; nowo-ui-popover.js places it). The partial option `popover` wins. // Default: false
+ *         context_menus?: bool|Param, // 2.54: kebab / row-action menus also open as the context menu of the row or card around them (right-click, the ContextMenu key, Shift+F10, long press on touch), with the same items. Loads the opt-in context-menu runtime through the scripts partial. The partial option `context_menu` wins; data-nowo-ui-context-menu="off" opts a row out. // Default: false
  *         form_errors_after_widget?: bool|Param, // 2.10: the UiKit form theme (form/nowo_ui_layout.html.twig) prints a field's errors after its widget (and before the help), instead of Symfony's order (label, errors, widget, help). // Default: false
  *         menu_semantics?: null|"menu"|"disclosure"|Param, // 2.28: ARIA of popover menus with items. null (default) = as 2.27; menu = APG menu button (role="menu" / menuitem, arrow keys in nowo-ui-popover.js); disclosure = no aria-haspopup. The menu partial option `menu_semantics` wins. // Default: null
  *         dialog?: array{ // 2.31: kit dialog options (docs/THEMING.md#dialog-sizes-229).
  *             height?: "content"|"size"|Param, // 2.31: content (default, dialog rule v2) = a dialog is as tall as its content, capped at min(the size's height token, 100dvh - 2rem), only the body scrolls; size = every dialog with a field, list, table or fold has the size's height (2.29 / 2.30), printed as --nowo-ui-dialog-fill: 1 by nowo_ui_theme_css(). // Default: "content"
+ *         },
+ *         focus_mode?: array{ // 2.55: shell focus mode — [data-nowo-ui-focus-mode] toggles hide the shell regions (level 1) and optionally enter the browser fullscreen (level 2); js/nowo-ui-focus-mode.js. See docs/USAGE.md#shell-focus-mode-255.
+ *             enabled?: bool|Param, // false (default): no shell attributes, no focus bar, the focus_mode_toggle partial renders nothing and the scripts partial does not load the runtime. // Default: false
+ *             regions?: list<scalar|Param|null>,
+ *             keep?: list<scalar|Param|null>,
+ *             shortcut?: scalar|Param|null, // Key that toggles level 1 on pages with a toggle (never while typing, with a modifier pressed or with a dialog / menu open); e.g. F or Alt+Shift+F. null or false: no shortcut. // Default: "F"
+ *             fullscreen?: bool|Param, // Offer level 2 (the browser fullscreen on the shell, from the focus bar or a fullscreen toggle). Unsupported or refused by the browser: level 1 stays. // Default: true
  *         },
  *         bundles?: array<string, array{ // Default: []
  *             framework_defaults?: bool|Param, // Override of theme.framework_defaults for this bundle (unset = inherit).
@@ -1826,6 +1948,8 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         }>,
  *         illustration_width?: int|Param, // Default intrinsic width of the illustrations. // Default: 1024
  *         illustration_height?: int|Param, // Default intrinsic height of the illustrations. // Default: 683
+ *         illustration_provider?: scalar|Param|null, // 2.47: service id implementing Nowo\UiKitBundle\View\ErrorIllustrationProviderInterface, asked first per status code (null answer, any exception or an invalid illustration → the illustrations map). Must be fast and must not need the database. Null = the map only. // Default: null
+ *         illustration_provider_budget_ms?: int|Param, // 2.47: when > 0, a provider call slower than this many milliseconds makes the rest of the same request skip the provider (logged once). 0 = no budget. // Default: 0
  *         webp?: bool|Param, // Illustrations ship a .webp next to the fallback image (<source type="image/webp">). // Default: true
  *         retry_statuses?: list<int|Param>,
  *         back_link_statuses?: list<int|Param>,
@@ -1841,6 +1965,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         sidebar_rail_value?: scalar|Param|null, // Cookie value of the icons-only rail. // Default: "rail"
  *         sidebar_storage?: scalar|Param|null, // localStorage key of the aside mode (data-nowo-ui-sidebar-storage on the shell root; kit_styles + rail only). // Default: null
  *         sidebar_layout?: "below-header"|"full-height"|Param, // 2.32: below-header (default, the 2.31 markup byte for byte) | full-height: on desktop the aside runs from the top edge with the burger and the brand in its head (aside_brand_html / brand_icon_html + brand_name / brand_html), the header and the footer start at its right edge. The app_shell_open option sidebar_layout, then the request attribute _nowo_ui_sidebar_layout, win over it. // Default: "below-header"
+ *         sidebar_style?: "classic"|"inset"|Param, // 2.52: classic (default, the 2.51 markup byte for byte) | inset: on desktop the header, the aside and the footer share one shell surface with no border between them, and the content is an inset panel with rounded corners (tokens --nowo-ui-shell-inset-gap / -radius / -surface / -panel-surface). Phones are unchanged. The app_shell_open option sidebar_style, then the request attribute _nowo_ui_sidebar_style, win over it. // Default: "classic"
  *         brand?: array{ // 2.32: the shell brand from config (no template override): the aside head of the full-height layout, and the header brand when a page passes neither brand_html nor brand. The app_shell_open options brand_name / brand_href / brand_icon_src / brand_icon_html / aside_brand_html win.
  *             name?: scalar|Param|null, // Brand name (text); the icons-only rail hides it and keeps it as the link name. // Default: null
  *             href?: scalar|Param|null, // Brand link: relative, http, https or mailto (validated when the container compiles; javascript:, data: and other schemes are refused). // Default: null
@@ -1989,6 +2114,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         default_locale?: scalar|Param|null, // Default language (marked and listed first). Null (default) = kernel.default_locale when it is one of the locales, else the first locale. // Default: null
  *         renderer?: "auto"|"ui_kit"|"native"|Param, // auto (default): the UiKit locale_tabs partial when nowo-tech/ui-kit-bundle 2.5+ is installed, else the neutral FormKit markup; native: always the neutral markup; ui_kit: same as auto (falls back to native without UiKit). // Default: "auto"
  *         form_theme?: bool|Param, // When true (default), registers @NowoFormKitBundle/form/locale_tabs_theme.html.twig in twig.form_themes (it only renders fields with locale_tabs). // Default: true
+ *     },
+ *     field_widgets?: array{ // Field widgets (2.22): the choice_cards (ChoiceType), switch (CheckboxType) and char_counter (TextType) options.
+ *         form_theme?: bool|Param, // When true (default), registers @NowoFormKitBundle/form/field_widgets_theme.html.twig in twig.form_themes (it only renders fields with choice_cards, switch or char_counter). // Default: true
  *     },
  *     twig?: array{ // Twig helpers shipped by the bundle (registered only when twig/twig is installed).
  *         csrf_action_form?: bool|Param, // When true (default), registers the csrf_action_form() Twig function (CSRF-only single-action POST forms). Set false if the host keeps its own function with that name. // Default: true
