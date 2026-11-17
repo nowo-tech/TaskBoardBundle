@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -109,10 +110,8 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
 
         $tasks = [];
         foreach ($rows as $row) {
-            $task = $this->entityManager->find(Task::class, (string) $row['id']);
-            if (!$task instanceof Task) {
-                continue; // @codeCoverageIgnore - the row is locked: it cannot disappear between the two reads
-            }
+            // The row is locked, so it cannot disappear between the locking read and this one.
+            $task   = $this->entityManager->find(Task::class, (string) $row['id']) ?? throw new LogicException('A locked task row is gone.');
             $column = $row['col'] === null ? null : (string) $row['col'];
             // A copy loaded before a concurrent writer committed (or kept by a worker's identity map) starts from the row locked.
             if ($task->getPosition() !== (int) $row['position'] || $task->getColumn()?->getId() !== $column || $task->getRevision() !== (int) $row['revision']) {
