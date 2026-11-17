@@ -42,7 +42,7 @@
     {% set taskContextMenu = _forcedContextMenus is same as(null) ? ((nowo_ui_theme|default(null)) and nowo_ui_theme.contextMenus is defined ? nowo_ui_theme.contextMenus() : false) : _forcedContextMenus %}
     {% set _taskMenuForm = taskMenuContext ? nowo_task_board_menu_form(path(nowo_task_board_route('task_menu'), {_target_path: path(nowo_task_board_route('list'), {boardId: board.id})})) : null %}
     {% set taskMenuFormReady = _taskMenuForm is not null %}
-    {% if _taskMenuForm %}{{ form_start(_taskMenuForm, {attr: {id: 'nowo-task-menu-form', hidden: 'hidden', 'data-testid': 'nowo-task-menu-form'}}) }}{{ form_end(_taskMenuForm) }}{% endif %}
+    {% if _taskMenuForm %}{{ form_start(_taskMenuForm, {attr: {id: 'nowo-task-menu-form', hidden: 'hidden', 'data-testid': 'nowo-task-menu-form'}}) }}{{ form_end(_taskMenuForm) }}{{ include('@NowoTaskBoardBundle/manage/_task_menu_shared.html.twig', {board: board}, with_context: false) }}{% endif %}
 
     {# Since 1.23: the board's provider connection (badge, Refresh, Connect provider); nothing without sync. #}
     {% block nowo_task_board_connection %}

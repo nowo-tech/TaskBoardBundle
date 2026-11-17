@@ -76,8 +76,8 @@ final class TaskMenuTest extends FunctionalTestCase
      */
     public static function roles(): iterable
     {
-        yield 'board manager' => ['owner', ['archive', 'assign', 'copy-link', 'delete', 'due', 'duplicate', 'edit', 'move', 'open', 'priority', 'status', 'tags'], ['add-task', 'collapse', 'rename']];
-        yield 'editor' => ['editor', ['archive', 'assign', 'copy-link', 'due', 'duplicate', 'edit', 'move', 'open', 'priority', 'status', 'tags'], ['add-task', 'collapse', 'rename']];
+        yield 'board manager' => ['owner', ['archive', 'assign', 'copy-link', 'delete', 'duplicate', 'edit', 'move', 'open', 'tags'], ['add-task', 'collapse', 'rename']];
+        yield 'editor' => ['editor', ['archive', 'assign', 'copy-link', 'duplicate', 'edit', 'move', 'open', 'tags'], ['add-task', 'collapse', 'rename']];
         yield 'reader' => ['reader', ['copy-link', 'open'], ['collapse']];
     }
 
@@ -103,20 +103,32 @@ final class TaskMenuTest extends FunctionalTestCase
         // One CSRF-only form for the whole page (REQ-TWIG-005); the write entries are its submit buttons.
         self::assertCount(1, $crawler->filter('form#nowo-task-menu-form'));
         $writes = $card->filter('button[form="nowo-task-menu-form"]');
-        self::assertSame($role === 'reader' ? 0 : ($role === 'owner' ? 12 : 11), $writes->count());
+        self::assertSame($role === 'reader' ? 0 : ($role === 'owner' ? 3 : 2), $writes->count());
+        // Status, Priority and Due date: a slot the page's shared template fills (task-board.js), only for those who may write.
+        self::assertCount($role === 'reader' ? 0 : 1, $card->filter('[data-nowo-task-menu-shared="' . $this->task->getId() . '"]'));
+        self::assertCount(1, $crawler->filter('template#nowo-task-menu-shared'));
         // Off by default: UiKit's theme.context_menus is off and web_ui.context_menus follows it.
         self::assertCount(0, $crawler->filter('[data-nowo-ui-context-menu-source]'));
     }
 
-    public function testTheStatusAndPriorityEntriesNameTheOtherColumnsAndPriorities(): void
+    public function testTheSharedTemplateHoldsEveryColumnPriorityAndDueDate(): void
     {
         $this->login($this->owner);
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $this->board->getId() . '?view=board');
         $card    = $crawler->filter('[data-task-id="' . $this->task->getId() . '"]');
+        $slot    = $card->filter('[data-nowo-task-menu-shared]');
+        self::assertSame([$this->columnId('To do'), 'normal'], [$slot->attr('data-column'), $slot->attr('data-priority')]);
 
-        self::assertSame(['Doing', 'Done'], $card->filter('[data-nowo-task-menu="status"] button')->each(static fn ($b): string => $b->text()));
-        self::assertSame(['Low', 'High', 'Urgent'], $card->filter('[data-nowo-task-menu="priority"] button')->each(static fn ($b): string => $b->text()));
-        self::assertSame([$this->task->getId() . '|due:today', $this->task->getId() . '|due:tomorrow', $this->task->getId() . '|due:next_week', $this->task->getId() . '|due:none'], $card->filter('[data-nowo-task-menu="due"] button')->each(static fn ($b): string => (string) $b->attr('value')));
+        $template = (string) $crawler->filter('template#nowo-task-menu-shared')->html();
+        foreach (['To do', 'Doing', 'Done'] as $column) {
+            self::assertStringContainsString('value="__TASK__|status:' . $this->columnId($column) . '"', $template);
+        }
+        foreach (['low', 'normal', 'high', 'urgent'] as $priority) {
+            self::assertStringContainsString('value="__TASK__|priority:' . $priority . '"', $template);
+        }
+        foreach (['today', 'tomorrow', 'next_week', 'none'] as $choice) {
+            self::assertStringContainsString('value="__TASK__|due:' . $choice . '"', $template);
+        }
         self::assertStringContainsString('/tools/task-board/task/' . $this->task->getId(), (string) $card->filter('[data-nowo-task-menu="copy-link"]')->attr('data-nowo-ui-clipboard-text'));
         self::assertNotSame('', (string) $card->filter('[data-nowo-task-menu="delete"]')->attr('data-confirm'));
     }
@@ -129,7 +141,9 @@ final class TaskMenuTest extends FunctionalTestCase
 
         $row = $crawler->filter('tr[data-task-id="' . $this->task->getId() . '"]');
         self::assertSame('0', $row->attr('tabindex'));
-        self::assertSame(['archive', 'assign', 'copy-link', 'due', 'duplicate', 'edit', 'move', 'open', 'priority', 'status', 'tags'], $this->entries($row->filter('[data-testid="nowo-task-menu-panel"]')));
+        self::assertSame(['archive', 'assign', 'copy-link', 'duplicate', 'edit', 'move', 'open', 'tags'], $this->entries($row->filter('[data-testid="nowo-task-menu-panel"]')));
+        self::assertCount(1, $row->filter('[data-nowo-task-menu-shared]'));
+        self::assertCount(1, $crawler->filter('template#nowo-task-menu-shared'));
         self::assertStringContainsString('from=list', (string) $row->filter('[data-nowo-task-menu="open"]')->attr('href'));
         self::assertCount(1, $crawler->filter('form#nowo-task-menu-form'));
         self::assertStringContainsString('_target_path=', (string) $crawler->filter('form#nowo-task-menu-form')->attr('action'));

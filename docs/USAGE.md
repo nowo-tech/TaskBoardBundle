@@ -115,8 +115,10 @@ the kebab's toggle is reachable with Tab. `web_ui.context_menus: false` keeps th
 whatever the theme says. The board and list pages load UiKit's `nowo-ui-context-menu.js` when the bundle option is
 `true`; under the theme flag UiKit's `scripts` partial loads it.
 
-**Templates.** `manage/_task_menu.html.twig` (variables `menu`, `taskMenuFormReady`, `taskContextMenu`, `menuFrom`) and
-`manage/_column_menu.html.twig`. A page that includes cards outside the board page gets no menu unless it sets
+**Templates.** `manage/_task_menu.html.twig` (variables `menu`, `taskMenuFormReady`, `taskContextMenu`, `menuFrom`),
+`manage/_column_menu.html.twig` and `manage/_task_menu_shared.html.twig`: the Status, Priority and Due date lists are printed
+once per page and copied by task-board.js into a menu's hidden slot (`data-nowo-task-menu-shared`) before it opens
+(without JavaScript those three submenus are not there; the task page still has the fields). A page that includes cards outside the board page gets no menu unless it sets
 `taskMenuContext = nowo_task_board_menu_context(board)` and prints `nowo_task_board_menu_form(...)` as the board page
 does. The decisions of a page are taken once (`TaskBoardResourceAccessChecker::taskEditDecider()`), not per card.
 

@@ -27,6 +27,7 @@ import CalendarController from './calendar-controller';
 import { installFormConfirm } from './ask-confirm';
 import { installBoardOpeners } from './board-openers';
 import { installColumnCollapse } from './column-collapse';
+import { installSharedMenus } from './task-menu-shared';
 import { observeCssVars } from './css-vars';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
@@ -69,6 +70,8 @@ installFormConfirm(document);
 installBoardOpeners(document);
 // Since 2.22.0: "Hide / collapse" of a column header's menu.
 installColumnCollapse(document);
+// Since 2.22.0: Status, Priority and Due date of the task menus, from the page's one template.
+installSharedMenus(document);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

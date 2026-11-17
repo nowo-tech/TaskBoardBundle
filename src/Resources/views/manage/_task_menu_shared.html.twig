@@ -1,0 +1,20 @@
+{#
+    Since 2.22.0: the Status, Priority and Due date submenus of every task menu of the page, printed once. Each card or row
+    menu holds a hidden slot (data-nowo-task-menu-shared="<task id>", data-column, data-priority); task-board.js
+    (task-menu-shared.ts) puts a copy of these lists there before the menu or its context menu opens, with the task's id in
+    each `action` (`__TASK__` here) and without the task's own column and priority. The writes are checked on the server
+    as any menu entry. Variables: board.
+#}
+{%- set _b = 'NowoTaskBoardBundle' -%}
+{%- set _item = nowo_ui_class('menu_item', _b) -%}
+<template id="nowo-task-menu-shared" data-testid="nowo-task-menu-shared">
+<li class="nowo-task-menu__group"><details class="nowo-task-menu__sub" data-nowo-task-menu="status"><summary class="{{ _item }}">{{ 'task_board.menu.status'|trans({}, _b) }}</summary><ul class="nowo-ui-menu__panel nowo-task-menu__subpanel">
+    {%- for column in board.columns %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="__TASK__|status:{{ column.id }}" data-nowo-column="{{ column.id }}" class="{{ _item }}">{{ column.name }}</button></li>{% endfor %}
+</ul></details></li>
+<li class="nowo-task-menu__group"><details class="nowo-task-menu__sub" data-nowo-task-menu="priority"><summary class="{{ _item }}">{{ 'task_board.menu.priority'|trans({}, _b) }}</summary><ul class="nowo-ui-menu__panel nowo-task-menu__subpanel">
+    {%- for priority in ['low', 'normal', 'high', 'urgent'] %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="__TASK__|priority:{{ priority }}" data-nowo-priority="{{ priority }}" class="{{ _item }}">{{ {low: 'task_board.priority.low', normal: 'task_board.priority.normal', high: 'task_board.priority.high', urgent: 'task_board.priority.urgent'}[priority]|trans({}, _b) }}</button></li>{% endfor %}
+</ul></details></li>
+<li class="nowo-task-menu__group"><details class="nowo-task-menu__sub" data-nowo-task-menu="due"><summary class="{{ _item }}">{{ 'task_board.menu.due'|trans({}, _b) }}</summary><ul class="nowo-ui-menu__panel nowo-task-menu__subpanel">
+    {%- for choice, key in {today: 'task_board.menu.due_today', tomorrow: 'task_board.menu.due_tomorrow', next_week: 'task_board.menu.due_next_week', none: 'task_board.menu.due_none'} %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="__TASK__|due:{{ choice }}" class="{{ _item }}">{{ key|trans({}, _b) }}</button></li>{% endfor %}
+</ul></details></li>
+</template>
