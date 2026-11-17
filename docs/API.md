@@ -284,7 +284,7 @@ PUT /v2/task/9c1f…   {"parent": null}          // to the top level
 | `PARENT_001` | 400 | The new parent is on another board |
 | `PARENT_002` | 400 | The new parent is the task itself |
 | `PARENT_003` | 409 | The new parent is one of the task's subtasks (at any depth), or a loop already in the data: it would close a cycle |
-| `PARENT_004` | 409 | A concurrent change of the task tree held the rows (deadlock or lock wait timeout); since 2.21.0 also a status change whose task changed meanwhile (another column, board, archive or completion state). Nothing was written; send it again |
+| `PARENT_004` | 409 | A concurrent change of the task tree held the rows (deadlock or lock wait timeout); nothing was written |
 | `PARENT_005` | 409 | Deeper than `max_subtask_depth`: a new subtask (`POST /v2/list/{id}/task` with `parent`, a checklist item) or a parent change, counting the moved subtree |
 
 ## Idempotency
@@ -332,7 +332,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `IDEMP_001` … `IDEMP_004` | 409, 409, 400, 503 | Idempotency: in flight, another request, bad key, store down |
 | `AUDIT_001` | 503 | No `API_WRITE` listener |
 | `STATUS_HUMANS_ONLY`, `STATUS_REFUSED`, a policy's own code | 403 | Since 2.16.0: the column transition policy refused the status (its message in `err`) |
-| `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`) |
+| `TASK_409` | 409 | Since 2.16.0: `If-Match` / `base_revision` is not the task's revision (`current_revision`). Since 2.21.0 also a status change (task, bulk item, checklist item) whose task a concurrent write changed meanwhile (another column, board, archive or completion state): nothing was written; read the task again |
 | `BULK_001`, `BULK_002`, `BULK_003` | 409, 400, 400 | Since 2.16.0: a bulk item refused (`failures`), tasks of several spaces, more than 50 tasks |
 | `SEARCH_001` | 400 | Since 2.16.0: the text search matched more than `search.max_matches` tasks |
 | `PARENT_001`, `PARENT_002` | 400 | Since 2.20.0: a new parent on another board; the task itself ([parent changes](#changing-a-tasks-parent-since-220)) |

@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
+use Nowo\TaskBoardBundle\Tests\Unit\Tree\InMemoryTaskTreeStore;
+use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use PHPUnit\Framework\TestCase;
 
 use function array_map;
@@ -77,6 +79,31 @@ final class FixedLockOrderTest extends TestCase
         $this->taskManager([], true)->update($moved, new TaskFormData(title: 'Renamed', columnId: $doing->getId()), $this->user);
 
         self::assertSame(['begin', 'columns ' . $doing->getId(), 'fresh ' . $doing->getId() . ' +' . $moved->getId(), 'save Renamed', 'end'], $this->log);
+    }
+
+    public function testASubtaskWithADepthLimitLocksItsColumnBeforeTheParentAndTakesTheCommittedPosition(): void
+    {
+        // Audit SF-D1: the column first (as a move takes it), then the parent's rows; the position from the column as
+        // committed. Without a lock service the position is read as before.
+        foreach ([true, false] as $locked) {
+            $this->log                 = [];
+            [, $doing, $a, $b, $moved] = $this->scene();
+            $store                     = new InMemoryTaskTreeStore();
+            $store->add($a, $b, $moved);
+            $repository = $this->createMock(TaskRepositoryInterface::class);
+            $repository->method('findByBoard')->willReturn([$a, $b]);
+            $repository->method('save')->willReturnCallback(function (Task $task): void {
+                $this->log[] = 'save ' . $task->getTitle();
+            });
+            $lock    = $locked ? $this->lock(static fn (?string $columnId): array => $columnId === $doing->getId() ? [$a, $b] : []) : null;
+            $manager = new TaskManager($repository, new TaskChangeRecorder(), tree: $store, treeLimits: new TaskTreeLimits(7), rowLock: $lock);
+
+            $subtask = $manager->create($doing->getBoard(), new TaskFormData(title: 'Sub', columnId: $doing->getId()), $this->user, $a);
+
+            self::assertSame(2, $subtask->getPosition());
+            self::assertSame($locked ? ['columns ' . $doing->getId(), 'fresh ' . $doing->getId() . ' +', 'save Sub'] : ['save Sub'], $this->log);
+            self::assertSame([$a->getId()], $store->locked, 'then the parent\'s rows');
+        }
     }
 
     public function testAColumnReorderLocksEveryColumnBeforeItSavesThem(): void

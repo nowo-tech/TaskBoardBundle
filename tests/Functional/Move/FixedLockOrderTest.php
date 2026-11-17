@@ -231,6 +231,29 @@ final class FixedLockOrderTest extends FunctionalTestCase
         self::assertSame([0, 1, 2], array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])));
     }
 
+    public function testASubtaskCreatedWithADepthLimitAndAConcurrentRenumberingMoveBothFinish(): void
+    {
+        // Audit SF-D1 (probe P5): with `max_subtask_depth` (Beacon: 7) the create locked the parent's rows, then its INSERT
+        // needed the column's row; a move renumbering that column held the column and waited on the parent: deadlock.
+        $this->requireRowLocks();
+        $board = $this->board('Subtask race');
+        $x     = $this->task($board, 'Parent X', 1, position: 0);
+        $z     = $this->task($board, 'Z', 1, position: 1);
+        $doing = $board->getColumns()->get(1);
+        self::assertInstanceOf(BoardColumn::class, $doing);
+        $this->em->clear();
+        $z = $this->em->find(Task::class, $z->getId());
+        self::assertInstanceOf(Task::class, $z);
+        $manager = $this->service(TaskManager::class);
+
+        // The other process creates a subtask of X in Doing and holds its locks; this move of Z then renumbers Doing.
+        [$failure, $other] = $this->withWorker(['subtask', $x->getId(), $doing->getId(), (string) self::OTHER_WAIT], static fn () => $manager->move($z, $doing->getId(), 0, $z->getCreator() ?? $z));
+
+        self::assertNull($failure, (string) $failure?->getMessage());
+        self::assertSame('created', $other);
+        self::assertSame([0, 1, 2], array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])), 'unique and contiguous');
+    }
+
     public function testAColumnDeletionMovesATaskThatEnteredWhileItWaited(): void
     {
         // Audit SF-L4 (probe P3): the deletion moved the tasks it read before the lock; one that entered meanwhile lost

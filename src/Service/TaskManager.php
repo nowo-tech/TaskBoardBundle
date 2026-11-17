@@ -107,9 +107,14 @@ final readonly class TaskManager implements TaskManagerInterface
             // The parent's path locked, as a parent change locks it: a concurrent move cannot take it deeper meanwhile.
             // @igor-ignore - The closure runs once, now, inside transactional(); the stateless store keeps no reference to it.
             return $this->tree->transactional(function () use ($board, $data, $creator, $parent, $context, $via): Task {
+                // Since 2.21.0 (Beacon spec 239, audit SF-D1): the column the subtask enters first, as every write that puts
+                // a task in a column (the fixed order: columns, then tasks), and its next free position as committed. Before,
+                // the parent's rows were locked first and a move renumbering that column (it holds the column, then waits
+                // on the parent) deadlocked against it.
+                $position = $this->lockedNextPosition($board, $this->resolveColumn($board, $data->columnId));
                 $this->assertSubtaskDepth($this->lockedDepth($parent->getId()) + 1);
 
-                return $this->createTask($board, $data, $creator, $parent, $context, $via);
+                return $this->createTask($board, $data, $creator, $parent, $context, $via, $position);
             });
         }
 
@@ -140,7 +145,25 @@ final readonly class TaskManager implements TaskManagerInterface
         }
     }
 
-    private function createTask(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent, ?string $context, ?ColumnTransitionVia $via): Task
+    /**
+     * Since 2.21.0 (audit SF-D1): inside a transaction, the column's row locked and its next free position read from its
+     * tasks as committed (each row locked); null without a column or a lock service (the position is then read as before).
+     */
+    private function lockedNextPosition(TaskBoard $board, ?BoardColumn $column): ?int
+    {
+        if (!$column instanceof BoardColumn || !$this->rowLock instanceof OrderedRowLockInterface) {
+            return null;
+        }
+        $this->rowLock->lockColumns([$column->getId()]);
+        $next = 0;
+        foreach ($this->rowLock->lockedColumnTasks($board->getId(), $column->getId()) as $task) {
+            $next = max($next, $task->getPosition() + 1);
+        }
+
+        return $next;
+    }
+
+    private function createTask(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent, ?string $context, ?ColumnTransitionVia $via, ?int $position = null): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
         if ($column instanceof BoardColumn) {
@@ -155,7 +178,7 @@ final readonly class TaskManager implements TaskManagerInterface
             parent: $parent,
             description: $data->description,
             priority: $data->priority,
-            position: $this->nextPosition($board, $column),
+            position: $position ?? $this->nextPosition($board, $column),
             estimatedMinutes: $data->estimatedMinutes,
             dueAt: $data->dueAt,
             tags: $data->tags,

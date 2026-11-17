@@ -346,13 +346,13 @@ final readonly class TaskApiTaskOperations
         if ($archived === false && $this->withinPlan(fn (): bool => $this->tasks->restore($task, $principal->user))) {
             $changed[] = 'archived';
         }
-        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, self::via($principal)))) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, self::via($principal)), $task)) {
             $changed[] = 'status';
         }
         // The column is where the move left it: update() must never move the task (it would skip completion and its events).
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)), $task);
             $changed[] = 'fields';
         }
         foreach ([TaskMemberRole::Assignee, TaskMemberRole::Watcher] as $role) {
@@ -576,11 +576,11 @@ final readonly class TaskApiTaskOperations
         $data           = $plan['data'];
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, $via));
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, $via), $task);
             $changed[] = 'fields';
         }
         $status = $plan['status'];
-        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, $via))) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, $via), $task)) {
             $changed[] = 'status';
         }
         foreach ($plan['add'] as $user) {
@@ -734,7 +734,7 @@ final readonly class TaskApiTaskOperations
         $data->tags = $add
             ? $this->tags([...$task->getTags(), $name])
             : array_values(array_filter($task->getTags(), static fn (string $tag): bool => mb_strtolower($tag) !== mb_strtolower($name)));
-        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
+        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)), $task);
         $this->audit->written($principal, $add ? 'tag.add' : 'tag.remove', $task->getBoard(), $taskId, [], ['tags']);
 
         return $task;
@@ -1030,12 +1030,13 @@ final readonly class TaskApiTaskOperations
      * @template T
      *
      * @param callable(): T $write
+     * @param Task|null $task since 2.21.0: the existing task the write changes; a `conflict` on it is 409 `TASK_409`
      *
      * @throws TaskApiRefusal
      *
      * @return T
      */
-    private function withinPlan(callable $write): mixed
+    private function withinPlan(callable $write, ?Task $task = null): mixed
     {
         try {
             return $write();
@@ -1045,8 +1046,9 @@ final readonly class TaskApiTaskOperations
             // Since 2.16.0 (spec 234, FR-015 / FR-017).
             throw TaskApiRefusal::transitionRefused($refused);
         } catch (TaskTreeRefusedException $refused) {
-            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005).
-            throw TaskApiRefusal::treeRefused($refused);
+            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005). Since 2.21.0 (audit SF-2): a write on an existing
+            // task that changed meanwhile is TASK_409 with its current revision.
+            throw $task instanceof Task ? TaskApiRefusal::taskWriteRefused($refused, $task) : TaskApiRefusal::treeRefused($refused);
         }
     }
 }

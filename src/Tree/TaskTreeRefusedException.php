@@ -36,7 +36,7 @@ final class TaskTreeRefusedException extends DomainException
      * A concurrent write held the rows (a deadlock or a lock wait that timed out): nothing was written, try again. Since
      * 2.21.0 (Beacon spec 239, audits SF-L1 / SF-L2) also a move, or a column delete or retype, that found its task
      * changed by a concurrent write once the rows were locked (another board, column, archive or completion state than
-     * the one it checked), or an out-of-date copy holding unsaved changes: the Task API answers 409 `PARENT_004`, the
+     * the one it checked), or an out-of-date copy holding unsaved changes: the Task API answers 409 `TASK_409` there, the
      * board shows the "changed meanwhile" message and reloads.
      */
     public const CONFLICT = 'conflict';
