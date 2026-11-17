@@ -10,6 +10,9 @@ export default defineConfig({
             reportsDirectory: './coverage-ts',
             include: [
                 'src/Resources/assets/src/list-filter-utils.ts',
+                // Since 2.22.0 (audit SU-I6).
+                'src/Resources/assets/src/column-collapse.ts',
+                'src/Resources/assets/src/task-menu-shared.ts',
                 'src/Resources/assets/src/calendar-utils.ts',
                 'src/Resources/assets/src/css-vars.ts',
                 'src/Resources/assets/src/storage.ts',

@@ -161,10 +161,17 @@ final readonly class TaskApiTaskOperations
         $assignees  = $this->assignable($board, $input->strings('assignees'));
         $this->audit->requireTaskQuota($board, 1, $principal->user);
 
-        $task = $this->withinPlan(fn (): Task => $this->tasks->create($board, $data, $principal->user, $parent, null, self::via($principal, ColumnTransitionVia::OP_CREATE)));
-        foreach ($assignees as $user) {
-            $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
-        }
+        // Since 2.22.0 (audit SU-L1): the task and its assignees are one transaction, with their events held until the commit
+        // (a failing listener then never reports the saved task as failed): a conflict in the middle writes nothing.
+        // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+        $task = $this->transaction->run(function () use ($board, $data, $principal, $parent, $assignees): Task {
+            $task = $this->withinPlan(fn (): Task => $this->tasks->create($board, $data, $principal->user, $parent, null, self::via($principal, ColumnTransitionVia::OP_CREATE)));
+            foreach ($assignees as $user) {
+                $this->members->assign($task, new TaskMemberFormData($user, TaskMemberRole::Assignee), $principal->user);
+            }
+
+            return $task;
+        });
         $targets = $parent !== null ? ['parent' => $parent->getId()] : [];
         if ($template !== null) {
             $targets['template'] = $template;
@@ -628,7 +635,9 @@ final readonly class TaskApiTaskOperations
         $task  = $this->guard->task($principal, $taskId, TaskApiCapability::DeleteTask);
         $board = $task->getBoard();
         try {
-            $this->eraser->eraseTask($task, $principal->user);
+            // Since 2.22.0 (audit SU-L1): the levels of the tree go in one transaction (the eraser flushes level by level).
+            // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
+            $this->transaction->run(fn (): int => $this->eraser->eraseTask($task, $principal->user));
         } catch (TaskLinkedToProviderException) {
             throw new TaskApiRefusal(409, 'TASK_002', 'The task follows a provider: unlink its board first');
         }

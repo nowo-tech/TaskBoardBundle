@@ -131,8 +131,10 @@ final readonly class TaskApiIdempotencyListener implements EventSubscriberInterf
         [$scope, $keyHash] = $claim;
         $response          = $event->getResponse();
         try {
-            // A 202 (a board deleted in slices) is not an answer to keep: the next call carries on.
-            if ($response->isSuccessful() && $response->getStatusCode() !== Response::HTTP_ACCEPTED) {
+            // A 202 (a board deleted in slices) is not an answer to keep: the next call carries on. Since 2.22.0 (audit SU-L1)
+            // a lock conflict after part of the write was committed (CONFLICT_002) is kept: the same key must not write again.
+            $partial = $request->attributes->getBoolean(TaskApiRequestListener::PARTIAL_COMMIT);
+            if ($partial || ($response->isSuccessful() && $response->getStatusCode() !== Response::HTTP_ACCEPTED)) {
                 $target                = $request->attributes->get(self::TARGET);
                 [$tenantKey, $boardId] = is_array($target) ? $target : [null, null];
                 $this->store->complete($scope, $keyHash, $response->getStatusCode(), (string) $response->getContent(), $tenantKey, $boardId);

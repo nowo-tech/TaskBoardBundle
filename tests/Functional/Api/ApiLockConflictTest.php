@@ -8,6 +8,7 @@ use Doctrine\DBAL\Driver\Exception as DriverException;
 use Doctrine\DBAL\Exception\DeadlockException;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TransactionDoctrine\TransientFailureKind;
 use Nowo\TransactionDoctrine\WriteUnit\ConcurrencyConflict;
@@ -77,6 +78,63 @@ final class ApiLockConflictTest extends ApiTestCase
         $this->get('/api/tasks/v2/list/' . $this->board->getId() . '/task');
 
         $this->assertRefused(409, 'CONFLICT_001');
+    }
+
+    /**
+     * Audit SU-L1 (the probe): a TASK_CREATED listener that deadlocks after the create. The create and its assignees are one
+     * transaction whose events are dispatched after the commit, so the failing listener is logged and the client gets its
+     * task; the same Idempotency-Key replays that answer and writes no second task.
+     */
+    public function testAListenerDeadlockAfterTheCreateNeverLeadsToASecondTask(): void
+    {
+        $dispatcher = static::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(TaskBoardEvents::TASK_CREATED, static function (): never {
+            throw new DeadlockException(self::driver(), null);
+        });
+        $path = '/api/tasks/v2/list/' . $this->board->getId() . '/task';
+
+        $this->send('POST', $path, ['name' => 'Exactly once'], ['HTTP_IDEMPOTENCY_KEY' => 'probe-1']);
+        self::assertResponseIsSuccessful();
+        $this->send('POST', $path, ['name' => 'Exactly once'], ['HTTP_IDEMPOTENCY_KEY' => 'probe-1']);
+        self::assertResponseIsSuccessful();
+
+        self::assertSame(1, (int) $this->em->getConnection()->fetchOne("SELECT COUNT(*) FROM task_board_tasks WHERE title = 'Exactly once'"));
+    }
+
+    /**
+     * Audit SU-L1: a request that committed part of its work (here a host step after the controller is chosen) and then meets
+     * a deadlock answers CONFLICT_002 without Retry-After, and its idempotency key keeps that answer: the same key replays it
+     * and writes nothing more.
+     */
+    public function testAConflictAfterACommitOfThisRequestIsConflict002AndTheKeyKeepsIt(): void
+    {
+        $connection = $this->em->getConnection();
+        $boardId    = $this->board->getId();
+        $calls      = 0;
+        $dispatcher = static::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($connection, $boardId, &$calls): void {
+            // The first request commits a host step, then deadlocks; a second one would create the task.
+            if (++$calls === 1) {
+                $connection->executeStatement('UPDATE task_board_boards SET name = ? WHERE id = ?', ['Touched', $boardId]);
+
+                throw new DeadlockException(self::driver(), null);
+            }
+        }, -32);
+        $path = '/api/tasks/v2/list/' . $boardId . '/task';
+
+        $this->send('POST', $path, ['name' => 'Half'], ['HTTP_IDEMPOTENCY_KEY' => 'half-1']);
+        $this->assertRefused(409, 'CONFLICT_002');
+        self::assertFalse($this->client->getResponse()->headers->has('Retry-After'));
+
+        $this->send('POST', $path, ['name' => 'Half'], ['HTTP_IDEMPOTENCY_KEY' => 'half-1']);
+        $this->assertRefused(409, 'CONFLICT_002');
+        self::assertSame(0, (int) $connection->fetchOne("SELECT COUNT(*) FROM task_board_tasks WHERE title = 'Half'"), 'the same key replays the kept answer: no write');
+        self::assertSame('Touched', $connection->fetchOne('SELECT name FROM task_board_boards WHERE id = ?', [$boardId]));
+        // Another key is another request: it writes.
+        $this->send('POST', $path, ['name' => 'Half'], ['HTTP_IDEMPOTENCY_KEY' => 'half-2']);
+        self::assertResponseIsSuccessful();
     }
 
     private function failWith(Throwable $failure): void

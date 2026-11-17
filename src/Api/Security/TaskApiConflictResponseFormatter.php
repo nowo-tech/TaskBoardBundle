@@ -24,13 +24,20 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final readonly class TaskApiConflictResponseFormatter implements ConflictResponseFormatterInterface
 {
+    public function __construct(private ?TaskApiCommitWatermark $commits = null)
+    {
+    }
+
     public function format(Request $request, ConflictResponseContext $context): ?Response
     {
         if (!$request->attributes->getBoolean(TaskApiRequestListener::ROUTE_FLAG)) {
             return null;
         }
+        // Audit SU-L1: the responder sets the status and its own Retry-After; the code still says "read again" when this
+        // request committed part of its work outside the write unit's own tracking.
+        $committed = $context->committed || $this->commits?->committedSince($request) === true;
 
-        return new JsonResponse($context->committed
+        return new JsonResponse($committed
             ? ['err' => TaskApiRefusal::CONFLICT_PARTIAL_MESSAGE, 'ECODE' => TaskApiRefusal::CONFLICT_PARTIAL]
             : ['err' => TaskApiRefusal::CONFLICT_MESSAGE, 'ECODE' => TaskApiRefusal::CONFLICT], $context->status);
     }

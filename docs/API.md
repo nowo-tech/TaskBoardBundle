@@ -348,7 +348,7 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `PARENT_001`, `PARENT_002` | 400 | Since 2.20.0: a new parent on another board; the task itself ([parent changes](#changing-a-tasks-parent-since-220)) |
 | `PARENT_003`, `PARENT_004`, `PARENT_005` | 409 | Since 2.20.0: a new parent among the task's subtasks; a concurrent tree change (send it again); deeper than `max_subtask_depth` |
 | `CONFLICT_001` | 409 (or 503) | Since 2.22.0: the request met a database lock conflict (deadlock, lock wait timeout, a write unit that gave up; anywhere in the failure's chain). Nothing was saved: send the same request again after `Retry-After` seconds. The status is nowo-tech/transaction-doctrine's shared policy (409 by default, 503 when the host keeps it; was 500 `SERVER_001`) |
-| `CONFLICT_002` | 409 (or 503) | Since 2.22.0: the same, after a write unit already committed part of its work: **no** `Retry-After`; read the task again before trying, a blind retry could repeat what was saved |
+| `CONFLICT_002` | 409 (or 503) | Since 2.22.0: the same, after the request already committed part of its work (counted by transaction-doctrine's commit ledger, a write unit's `committed`, a lost savepoint): **no** `Retry-After`; read the task again before trying. The idempotency key keeps this answer: the same key replays it and writes nothing |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp

@@ -310,9 +310,15 @@ Beacon spec 239, block B, FR-013 (audit SF). The multi-row writes of tasks and c
 ## Lock conflicts: 409 + Retry-After (2.22)
 
 A Task API failure with a database lock conflict anywhere in its chain answers transaction-doctrine's shared policy
-(409 by default, 503 when the host keeps it) with `Retry-After` and `CONFLICT_001`, or `CONFLICT_002` without
-`Retry-After` after a partial commit, so a client never retries blindly a write that may have half-saved. The answer
-names no table, SQL or parameter; the log line carries the exception class only.
+(409 by default, 503 when the host keeps it) with `Retry-After` and `CONFLICT_001` only when nothing of the request was
+committed. Anything the request already committed — known from transaction-doctrine's commit ledger (every COMMIT and
+write outside a transaction on the connections, counted from the moment the API's controller is chosen), a write unit's
+`committed` flag, or a MySQL lost savepoint without a deadlock or lock wait timeout — answers `CONFLICT_002` without
+`Retry-After`, and the idempotency key keeps that answer, so the same key cannot write twice (audit SU-L1). Task creates
+(with their assignees) and deletes are one transaction; their events are dispatched after the commit and a failing
+listener is logged, not reported as a failed write. Limit: when transaction-doctrine's responder answers first
+(`controller_routes`), the `Retry-After` header is its own write unit's decision; the body still says `CONFLICT_002`.
+The answer names no table, SQL or parameter; the log line carries the exception class only.
 
 ## Logging and personal data
 

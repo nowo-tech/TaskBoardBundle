@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Doctrine;
 
+use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Nowo\TransactionContract\TransientStorageFailure;
 use Nowo\TransactionDoctrine\WriteUnit\ConcurrencyConflict;
@@ -36,16 +38,25 @@ final class LockConflictChain
         return false;
     }
 
-    /** Whether a write unit already committed part of its work before the conflict (no blind retry). */
+    /**
+     * Whether part of the work may already be committed, so the same request must not be sent blindly again: a write unit's
+     * {@see ConcurrencyConflict} that committed, or (since 2.22.0, audit SU-I1) a lost savepoint (MySQL 1305) with no
+     * deadlock or lock wait timeout in the chain to say the server rolled the transaction back.
+     */
     public static function committed(Throwable $failure): bool
     {
+        $lostSavepoint = false;
         for ($current = $failure; $current instanceof Throwable; $current = $current->getPrevious()) {
             if ($current instanceof ConcurrencyConflict && $current->committed) {
                 return true;
             }
+            if ($current instanceof DeadlockException || $current instanceof LockWaitTimeoutException) {
+                return false;
+            }
+            $lostSavepoint = $lostSavepoint || LockConflict::isLostSavepoint($current);
         }
 
-        return false;
+        return $lostSavepoint;
     }
 
     /** The `Retry-After` hint (seconds, at least 1) a {@see TransientStorageFailure} of the chain carries; null: none. */

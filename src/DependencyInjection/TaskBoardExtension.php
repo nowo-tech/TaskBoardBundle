@@ -31,6 +31,7 @@ use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -471,6 +472,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // nowo-tech/transaction-doctrine's bundle, only when its interface exists.
         if (interface_exists($this->conflictFormatterInterface)) {
             $container->setDefinition(TaskApiConflictResponseFormatter::class, (new Definition(TaskApiConflictResponseFormatter::class))
+                ->setArgument('$commits', new Reference(TaskApiCommitWatermark::class))
                 ->addTag(ConflictResponseFormatterInterface::TAG));
         }
     }

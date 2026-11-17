@@ -122,7 +122,7 @@ release-check: up
 	@$(MAKE) --no-print-directory verify
 
 # Since 1.23: Playwright e2e with axe (the official Playwright image; the demo must be up).
-PLAYWRIGHT_IMAGE ?= mcr.microsoft.com/playwright:v1.64.1-jammy
+PLAYWRIGHT_IMAGE ?= mcr.microsoft.com/playwright:v1.65.0-jammy
 
 test-e2e:
 	@mkdir -p e2e/node_modules

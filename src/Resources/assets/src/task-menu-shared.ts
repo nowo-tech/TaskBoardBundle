@@ -20,12 +20,12 @@ export function fillSharedMenus(scope: ParentNode, doc: Document): number {
     }
     let filled = 0;
     scope.querySelectorAll<HTMLElement>('[data-nowo-task-menu-shared]').forEach((slot) => {
-        const taskId = slot.getAttribute('data-nowo-task-menu-shared') ?? '';
+        const taskId = slot.getAttribute('data-nowo-task-menu-shared') as string;
         const column = slot.getAttribute('data-column') ?? '';
         const priority = slot.getAttribute('data-priority') ?? '';
         const copy = template.content.cloneNode(true) as DocumentFragment;
         copy.querySelectorAll('button[value]').forEach((button) => {
-            const value = button.getAttribute('value') ?? '';
+            const value = button.getAttribute('value') as string;
             if (value.startsWith(PLACEHOLDER)) {
                 button.setAttribute('value', `${taskId}|${value.slice(PLACEHOLDER.length)}`);
             }

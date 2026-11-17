@@ -43,6 +43,7 @@ describe('shared task menus (2.22.0)', () => {
         second.dispatchEvent(new Event('focusin', { bubbles: true }));
         expect(second.querySelector('[data-nowo-task-menu-shared]')).toBeNull();
         document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        document.dispatchEvent(new Event('keydown'));
     });
 
     it('fills a kebab outside a card scope, and a slot without an id', () => {

@@ -228,11 +228,21 @@ deadlock or lock wait timeout (a DBAL `RetryableException`, PostgreSQL `55P03`),
 - **503 + `Retry-After`** where the host's conflict responder of transaction-doctrine 1.2 caught it first (a host that
   listed TaskBoard routes in `nowo_transaction_doctrine.controller_routes`).
 
-It now answers the policy's status, **409** by default, with `Retry-After` and `{"err", "ECODE": "CONFLICT_001"}`. A
-conflict after a write unit already committed part of its work (`ConcurrencyConflict` with `committed: true`) answers
-the same status **without** `Retry-After` and `ECODE: "CONFLICT_002"`: read the task again, never retry it blindly.
-Nothing else changes: the API's other 409 codes (`TASK_409`, `STATUS_409`, `PARENT_004`…) stay as they are, and the
-idempotency key of a refused write is released, so the same request may be sent again.
+It now answers the policy's status, **409** by default, with `Retry-After` and `{"err", "ECODE": "CONFLICT_001"}`, when
+nothing of the request was committed: send the same request again. When the request had **already committed** part of
+its work, the answer is the same status **without** `Retry-After` and `ECODE: "CONFLICT_002"`: read the task again, never
+retry it blindly. The bundle knows it from nowo-tech/transaction-doctrine's commit ledger, which counts every COMMIT and
+every write outside a transaction on the connections (a DBAL middleware the bundle registers, `doctrine.middleware`;
+transaction-doctrine's own when its bundle has `commit_detection` on), compared with the count when the API's controller
+was chosen; from a write unit's `ConcurrencyConflict` with `committed: true`; and from MySQL's lost savepoint (1305) seen
+without a deadlock or lock wait timeout. Task creates (with their assignees) and deletes are one transaction, and their
+events are dispatched after the commit without failing the request.
+Nothing else changes: the API's other 409 codes (`TASK_409`, `STATUS_409`, `PARENT_004`…) stay as they are. The
+idempotency key of a `CONFLICT_001` is released, so the same request may be sent again; the key of a `CONFLICT_002` keeps
+that answer, so the same key sent again replays it and writes nothing.
+
+- With transaction-doctrine's responder answering first (`controller_routes`), the body says `CONFLICT_002` from the
+  same ledger, but the `Retry-After` header is the responder's own decision (its write unit's commit detection).
 
 ```yaml
 # Keep 503: register Nowo\TransactionDoctrine\Symfony\NowoTransactionDoctrineBundle in config/bundles.php, then
@@ -258,6 +268,9 @@ nowo_transaction_doctrine:
 
 ### Task and column menus, focus mode
 
+- **Behind a TLS-terminating proxy**, the menu's same-origin check compares `Origin` with this request's scheme, host
+  and port for browsers that send no `Sec-Fetch-Site`: set `framework.trusted_proxies` (and the trusted headers), or
+  such a browser's menu writes are refused with 403.
 - **New route `task_menu`** (`POST /tools/task-board/menu/task`, name `nowo_task_board_task_menu`; configurable under
   `routes.task_menu` like the others, copied under each tenant path). Nothing to do with the documented
   `type: nowo_task_board` import. A host that lists the bundle's routes (an access map, a firewall rule, a CSP

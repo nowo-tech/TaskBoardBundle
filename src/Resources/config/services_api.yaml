@@ -20,6 +20,19 @@ services:
             # Since 2.22.0: the shared lock-conflict policy (409 by default); absent when the host did not register
             # nowo-tech/transaction-doctrine's bundle (the listener then answers 409 + Retry-After: 1).
             $conflictPolicy: '@?nowo_transaction_doctrine.conflict_response_policy'
+            $commits: '@Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark'
+
+    # Since 2.22.0 (audit SU-L1): the durable writes of the process (nowo-tech/transaction-doctrine's ledger and DBAL
+    # middleware, on the connections), so an API request that committed part of its work answers CONFLICT_002. With
+    # transaction-doctrine's bundle and its commit detection on, TaskBoardPortsPass uses that bundle's ledger instead.
+    nowo_task_board.api.commit_ledger:
+        class: Nowo\TransactionDoctrine\WriteUnit\CommitLedger
+    nowo_task_board.api.commit_tracking_middleware:
+        class: Nowo\TransactionDoctrine\WriteUnit\Dbal\CommitTrackingMiddleware
+        arguments: ['@nowo_task_board.api.commit_ledger']
+        tags: ['doctrine.middleware']
+    Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark:
+        arguments: ['@nowo_task_board.api.commit_ledger']
 
     Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer: ~
     Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer: ~

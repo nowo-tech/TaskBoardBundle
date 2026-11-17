@@ -34,7 +34,7 @@ export function setCollapsed(button: Element, collapsed: boolean): HTMLElement |
 export function restoreCollapsed(root: ParentNode, storage: Storage | null = safeStorage()): void {
     root.querySelectorAll('[data-nowo-task-column-collapse]').forEach((button) => {
         const boardId = boardIdOf(button);
-        const columnId = button.getAttribute('data-nowo-task-column-collapse') ?? '';
+        const columnId = button.getAttribute('data-nowo-task-column-collapse') as string;
         if (boardId !== '' && columnId !== '' && readMap(COLLAPSE_KEY_PREFIX + boardId, storage)[columnId] === true) {
             setCollapsed(button, true);
         }
@@ -73,7 +73,7 @@ export function installColumnCollapse(root: Document, storage: Storage | null = 
             return;
         }
         const boardId = boardIdOf(button);
-        const columnId = button.getAttribute('data-nowo-task-column-collapse') ?? '';
+        const columnId = button.getAttribute('data-nowo-task-column-collapse') as string;
         if (boardId !== '' && columnId !== '') {
             writeEntry(COLLAPSE_KEY_PREFIX + boardId, columnId, collapsed ? true : null, storage);
         }

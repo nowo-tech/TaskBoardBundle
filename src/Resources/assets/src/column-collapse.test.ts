@@ -50,6 +50,7 @@ describe('column collapse (2.22.0)', () => {
         orphan.click();
         expect(orphan.getAttribute('aria-expanded')).toBe('true');
         document.body.click();
+        document.dispatchEvent(new Event('click'));
         expect(setCollapsed(orphan, true)).toBeNull();
 
         document.body.innerHTML = '<section data-nowo-task-board-target="column"><button data-nowo-task-column-collapse="c1" aria-expanded="true">x</button></section>';

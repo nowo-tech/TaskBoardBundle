@@ -56,6 +56,9 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
 
     private const PRINCIPAL = '_nowo_task_board_api_principal';
 
+    /** Since 2.22.0 (audit SU-L1): request attribute, true when a lock conflict was answered after a partial commit. */
+    public const PARTIAL_COMMIT = '_nowo_task_board_api_partial_commit';
+
     private const RATE_LIMIT = '_nowo_task_board_api_rate_limit';
 
     public function __construct(
@@ -67,6 +70,8 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         private LoggerInterface $logger = new NullLogger(),
         // Since 2.22.0: the shared lock-conflict policy of nowo-tech/transaction-doctrine's bundle; 409 + 1 s without it.
         private ?ConflictResponsePolicy $conflictPolicy = null,
+        // Since 2.22.0 (audit SU-L1): whether the request already committed part of its work.
+        private ?TaskApiCommitWatermark $commits = null,
     ) {
     }
 
@@ -123,7 +128,7 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         if (!$event->isMainRequest() || !$this->isApiRequest($event->getRequest())) {
             return;
         }
-        $event->setResponse($this->answer($this->refusalFor($event->getThrowable())));
+        $event->setResponse($this->answer($this->refusalFor($event->getThrowable(), $event->getRequest())));
     }
 
     /**
@@ -205,7 +210,7 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         return !$request->attributes->has('_route') && str_starts_with($request->getPathInfo() . '/', $this->prefix . '/');
     }
 
-    private function refusalFor(Throwable $throwable): TaskApiRefusal
+    private function refusalFor(Throwable $throwable, ?Request $request = null): TaskApiRefusal
     {
         if ($throwable instanceof TaskApiRefusal) {
             return $throwable;
@@ -229,7 +234,12 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         if (LockConflictChain::isConflict($throwable)) {
             $this->logger->warning('TaskBoard API: a write met a database lock conflict.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
 
-            return TaskApiRefusal::lockConflict($this->conflictPolicy ?? new ConflictResponsePolicy(), LockConflictChain::committed($throwable), LockConflictChain::retryAfterHint($throwable));
+            // Audit SU-L1: anything this request already committed (a post-commit listener, a write in steps) is a reload.
+            $committed = LockConflictChain::committed($throwable) || ($request instanceof Request && $this->commits?->committedSince($request) === true);
+            // The idempotency key keeps this answer: the same key sent again must not write a second time.
+            $request?->attributes->set(self::PARTIAL_COMMIT, $committed);
+
+            return TaskApiRefusal::lockConflict($this->conflictPolicy ?? new ConflictResponsePolicy(), $committed, LockConflictChain::retryAfterHint($throwable));
         }
         // The class only: a message may hold user data.
         $this->logger->error('TaskBoard API: unexpected error.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
