@@ -119,7 +119,7 @@ final readonly class DoctrineOrmTaskTreeStore implements TaskTreeStoreInterface
         $height = 0;
         while ($height <= $bound) {
             /** @var list<int|string> $ids */
-            $ids = $this->entityManager->createQuery('SELECT t.id FROM ' . Task::class . ' t WHERE IDENTITY(t.parent) IN (:ids)')
+            $ids = $this->entityManager->createQuery('SELECT t.id FROM ' . Task::class . ' t WHERE IDENTITY(t.parent) IN (:ids) ORDER BY t.id ASC')
                 ->setParameter('ids', $level)
                 ->setLockMode(LockMode::PESSIMISTIC_WRITE)
                 ->getSingleColumnResult();

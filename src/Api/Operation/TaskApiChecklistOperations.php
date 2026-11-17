@@ -124,7 +124,7 @@ final readonly class TaskApiChecklistOperations
             foreach ($items as $item) {
                 $data       = TaskFormData::fromTask($item);
                 $data->tags = [...array_values(array_filter($item->getTags(), static fn (string $tag): bool => $tag !== self::TAG_PREFIX . $name)), self::TAG_PREFIX . $renamed];
-                $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+                $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
             }
         };
         // @igor-ignore - The closure runs once, now; the stateless transaction keeps no reference to it.
@@ -172,16 +172,16 @@ final readonly class TaskApiChecklistOperations
         $assignee = $input->has('assignee') ? $this->assignee($principal, $task, $input) : null;
 
         if ($resolved === true && !$item->isCompleted()) {
-            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
         } elseif ($resolved === false && $item->isCompleted()) {
             $first = $item->getBoard()->getColumns()->first();
             if ($first instanceof BoardColumn) {
-                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
             }
         }
         $data->columnId = $item->getColumn()?->getId();
         if ($data->title !== $item->getTitle()) {
-            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
         }
         if ($assignee !== null) {
             $this->members->assign($item, new TaskMemberFormData($assignee, TaskMemberRole::Assignee), $principal->user);
@@ -304,12 +304,13 @@ final readonly class TaskApiChecklistOperations
      * @template T
      *
      * @param callable(): T $write
+     * @param Task|null $task since 2.21.0: the existing task the write changes; a `conflict` on it is 409 `TASK_409`
      *
      * @throws TaskApiRefusal
      *
      * @return T
      */
-    private function withinPlan(callable $write): mixed
+    private function withinPlan(callable $write, ?Task $task = null): mixed
     {
         try {
             return $write();
@@ -319,8 +320,9 @@ final readonly class TaskApiChecklistOperations
             // Since 2.16.0 (spec 234).
             throw TaskApiRefusal::transitionRefused($refused);
         } catch (TaskTreeRefusedException $refused) {
-            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005).
-            throw TaskApiRefusal::treeRefused($refused);
+            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005). Since 2.21.0 (audit SF-2): a write on an existing
+            // task that changed meanwhile is TASK_409 with its current revision.
+            throw $task instanceof Task ? TaskApiRefusal::taskWriteRefused($refused, $task) : TaskApiRefusal::treeRefused($refused);
         }
     }
 }

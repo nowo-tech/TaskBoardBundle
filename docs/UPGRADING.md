@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.21.0](#to-2210)
 - [To 2.20.0](#to-2200)
 - [To 2.19.0](#to-2190)
   - [Schema change for every host: folders](#schema-change-for-every-host-folders)
@@ -203,6 +204,20 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.21.0
+
+Beacon spec 239, block B, FR-013. No schema change, no new option. What changes for a host:
+
+- **These writes run in a transaction of their own.** That covers task moves (`move()`, `moveTo*()`), a column-changing `update()`, and column reorder, delete and retype. If the host's transaction is already open, they join it, without a savepoint.
+  - The siblings a move renumbers are rolled back with it when its final save fails. Before, they stayed saved.
+  - Events are still dispatched after the write, as before. Inside the host's transaction they go out when the write returns, unless the host defers them (`TaskEventDeferral::defer()`).
+- **Locks, columns first.** Each of these writes locks the column's row, then the column's tasks, before its first write. A host that calls them inside its own transaction keeps those locks until its commit. If it locks task rows of its own before calling them, it takes them in the reverse order: lock the column first (`SELECT … FOR UPDATE` on `task_board_columns`) or be ready to retry. See [SECURITY — Concurrency](SECURITY.md#concurrency-fixed-lock-order-221).
+- **New refusal: the task changed meanwhile.** `TaskManager::move()`, `moveTo*()` and a column-changing `update()` throw `Tree\TaskTreeRefusedException` with reason `conflict` (nothing written) in two cases: the task changed board, column, archive or completion state between the caller's read and the lock, or a stale copy of one of the column's tasks holds unsaved changes. `BoardColumnManager::delete()` and a retype throw it in the second case. Catch it where you catch `ColumnTransitionRefusedException` and offer a retry. The Task API answers 409 `TASK_409` with `current_revision` (read the task again; in a bulk update, in the item's `BULK_001` entry); `PARENT_004` stays for re-parent and subtask conflicts. The board UI shows "The task changed meanwhile" and its drag gets 409.
+- **Deadlock exceptions.** When one of these writes owns its transaction, a lock conflict reaches the caller as `Doctrine\DBAL\Exception\DeadlockException` (MySQL 1213, PostgreSQL 40P01) or `LockWaitTimeoutException` (1205), never as the failed `ROLLBACK TO SAVEPOINT` (1305) that hid it before. Inside the host's transaction the driver's failure reaches the host as it is: after a MySQL deadlock the host's transaction is gone too, so retry it as a whole.
+- **Positions.** Concurrent moves into one column now get unique positions, contiguous after a renumbering move, and a column delete also moves a task that entered the column meanwhile. Code that compensated for duplicate positions can stay; nothing else changes.
+- Hand-built `TaskManager`, `BoardColumnManager` or `TaskApiTaskOperations` instances without the new optional `OrderedRowLockInterface` argument behave as in 2.20.0.
+- **DDD / hand-wired hosts: give the lock to `TaskApiTaskOperations` and `TaskManager` together, or to neither.** The Task API locks the columns its `status` fields enter before the task rows, and `TaskManager` then locks them again (it joins the transaction). If only `TaskManager` has the lock, the API locks its tasks first and the column after them. That is the reverse order (audit SF-M1), and it can deadlock against a renumbering move. Services wired by the bundle's container get it everywhere.
 
 ## To 2.20.0
 

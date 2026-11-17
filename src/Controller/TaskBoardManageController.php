@@ -1274,6 +1274,11 @@ final class TaskBoardManageController extends AbstractController
             $this->logRefused('task_transition_policy');
             $this->addFlash('error', $this->transitionMessage($refused));
             $success = false;
+        } catch (TaskTreeRefusedException) {
+            // Since 2.21.0 (Beacon spec 239, audit SF-L1): the task changed meanwhile; nothing was written.
+            $this->logRefused('task_changed_meanwhile');
+            $this->addFlash('error', 'task_board.flash.task_changed_meanwhile');
+            $success = false;
         }
 
         if ($success) {
@@ -1316,6 +1321,14 @@ final class TaskBoardManageController extends AbstractController
             $this->addFlash('error', $this->transitionMessage($refused));
             if ($this->isPanelRequest($request)) {
                 return new JsonResponse(['refused' => $refused->decision->code, 'message' => $this->translator->trans($this->transitionMessage($refused), [], 'NowoTaskBoardBundle')], Response::HTTP_CONFLICT);
+            }
+        } catch (TaskTreeRefusedException $refused) {
+            // Since 2.21.0 (Beacon spec 239, audit SF-L1): the task (or a card of its column) changed meanwhile; nothing was
+            // written. The board's drag reloads on 409 and shows the flash.
+            $this->logRefused('task_changed_meanwhile');
+            $this->addFlash('error', 'task_board.flash.task_changed_meanwhile');
+            if ($this->isPanelRequest($request)) {
+                return new JsonResponse(['refused' => $refused->reason, 'message' => $this->translator->trans('task_board.flash.task_changed_meanwhile', [], 'NowoTaskBoardBundle')], Response::HTTP_CONFLICT);
             }
         }
 

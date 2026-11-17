@@ -96,6 +96,7 @@ task_board.flash.member_added: Member added.
 task_board.flash.subtask_created: Subtask created.
 task_board.flash.subtask_too_deep: "Die Unteraufgabe wurde nicht angelegt: Sie läge tiefer als erlaubt."
 task_board.flash.subtask_conflict: "Die Unteraufgabe wurde nicht angelegt: Der Aufgabenbaum hat sich inzwischen geändert. Bitte erneut versuchen."
+task_board.flash.task_changed_meanwhile: "Die Aufgabe hat sich inzwischen geändert: Es wurde nichts gespeichert. Bitte erneut versuchen."
 task_board.form.board.name: Board name
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: Leave empty to auto-generate from name.

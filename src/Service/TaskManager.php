@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Closure;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\TaskColumnNavigation;
@@ -75,6 +76,8 @@ final readonly class TaskManager implements TaskManagerInterface
         // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`, checked on the parent's rows locked in the store.
         private ?TaskTreeStoreInterface $tree = null,
         private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
+        // Since 2.21.0 (Beacon spec 239, FR-013): the fixed lock order of a move's rows; none: written as before.
+        private ?OrderedRowLockInterface $rowLock = null,
     ) {
     }
 
@@ -104,9 +107,14 @@ final readonly class TaskManager implements TaskManagerInterface
             // The parent's path locked, as a parent change locks it: a concurrent move cannot take it deeper meanwhile.
             // @igor-ignore - The closure runs once, now, inside transactional(); the stateless store keeps no reference to it.
             return $this->tree->transactional(function () use ($board, $data, $creator, $parent, $context, $via): Task {
+                // Since 2.21.0 (Beacon spec 239, audit SF-D1): the column the subtask enters first, as every write that puts
+                // a task in a column (the fixed order: columns, then tasks), and its next free position as committed. Before,
+                // the parent's rows were locked first and a move renumbering that column (it holds the column, then waits
+                // on the parent) deadlocked against it.
+                $position = $this->lockedNextPosition($board, $this->resolveColumn($board, $data->columnId));
                 $this->assertSubtaskDepth($this->lockedDepth($parent->getId()) + 1);
 
-                return $this->createTask($board, $data, $creator, $parent, $context, $via);
+                return $this->createTask($board, $data, $creator, $parent, $context, $via, $position);
             });
         }
 
@@ -137,7 +145,25 @@ final readonly class TaskManager implements TaskManagerInterface
         }
     }
 
-    private function createTask(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent, ?string $context, ?ColumnTransitionVia $via): Task
+    /**
+     * Since 2.21.0 (audit SF-D1): inside a transaction, the column's row locked and its next free position read from its
+     * tasks as committed (each row locked); null without a column or a lock service (the position is then read as before).
+     */
+    private function lockedNextPosition(TaskBoard $board, ?BoardColumn $column): ?int
+    {
+        if (!$column instanceof BoardColumn || !$this->rowLock instanceof OrderedRowLockInterface) {
+            return null;
+        }
+        $this->rowLock->lockColumns([$column->getId()]);
+        $next = 0;
+        foreach ($this->rowLock->lockedColumnTasks($board->getId(), $column->getId()) as $task) {
+            $next = max($next, $task->getPosition() + 1);
+        }
+
+        return $next;
+    }
+
+    private function createTask(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent, ?string $context, ?ColumnTransitionVia $via, ?int $position = null): Task
     {
         $column = $this->resolveColumn($board, $data->columnId);
         if ($column instanceof BoardColumn) {
@@ -152,7 +178,7 @@ final readonly class TaskManager implements TaskManagerInterface
             parent: $parent,
             description: $data->description,
             priority: $data->priority,
-            position: $this->nextPosition($board, $column),
+            position: $position ?? $this->nextPosition($board, $column),
             estimatedMinutes: $data->estimatedMinutes,
             dueAt: $data->dueAt,
             tags: $data->tags,
@@ -176,6 +202,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
      * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a column change finds the task changed meanwhile: nothing changes
      * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change, or
      *                                          (audit PC-L2) the new tags of a task that stays in its column (operation
      *                                          `retag`): nothing changes
@@ -192,6 +219,7 @@ final readonly class TaskManager implements TaskManagerInterface
         $oldColor            = $task->getColor();
         $oldStartAt          = $task->getStartAt();
         $wasCompleted        = $task->isCompleted();
+        $checked             = self::checked($task);
 
         // Since 2.2.1 (audit IB-L1): data from fromTask() without a column keeps the task's own, even none: never a move.
         $newColumn = $data->keepsColumn && ($data->columnId === null || $data->columnId === '')
@@ -212,39 +240,52 @@ final readonly class TaskManager implements TaskManagerInterface
                 $this->assertTransition($task->getBoard(), $task, $newColumn, $user, $via ?? ColumnTransitionVia::web(), $data->tags);
             }
             $this->assertReopenAllowed($task, $newColumn, $columns);
-            if ($newColumn instanceof BoardColumn) {
-                $task->setPosition($this->nextPosition($task->getBoard(), $newColumn));
+        }
+
+        // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+        $write = function () use ($task, $data, $user, $moves, $newColumn, $columns, $oldTitle, $oldDescription, $oldPriority, $oldColumn, $oldEstimatedMinutes, $oldStartAt, $oldDueAt, $oldTags, $oldColor, $wasCompleted): void {
+            $task
+                ->setTitle($data->title)
+                ->setDescription($data->description)
+                ->setPriority($data->priority)
+                ->setColumn($newColumn)
+                ->setEstimatedMinutes($data->estimatedMinutes)
+                ->setDueAt($data->dueAt)
+                ->setTags($data->tags)
+                ->setColor($data->color)
+                ->setStartAt($data->startAt);
+            if ($moves) {
+                $this->syncCompletionForColumn($task, $newColumn, $columns);
             }
-        }
 
-        $task
-            ->setTitle($data->title)
-            ->setDescription($data->description)
-            ->setPriority($data->priority)
-            ->setColumn($newColumn)
-            ->setEstimatedMinutes($data->estimatedMinutes)
-            ->setDueAt($data->dueAt)
-            ->setTags($data->tags)
-            ->setColor($data->color)
-            ->setStartAt($data->startAt);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Title, $oldTitle, $data->title);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Description, $oldDescription, $data->description);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $data->priority);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $newColumn);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::EstimatedMinutes, $oldEstimatedMinutes, $data->estimatedMinutes);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $data->startAt);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $data->dueAt);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Color, $oldColor, $task->getColor());
+            if ($wasCompleted !== $task->isCompleted()) {
+                $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
+            }
+
+            $this->taskRepository->save($task);
+        };
+        // Since 2.21.0 (Beacon spec 239, FR-013, audits SF-L1 / SF-L3): a column change locks the column, reads it and the
+        // task as committed, and takes the next free position from there, as a move does.
         if ($moves) {
-            $this->syncCompletionForColumn($task, $newColumn, $columns);
+            // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+            $this->lockedColumnWrite($task, $newColumn, $checked, false, $newColumn instanceof BoardColumn, static function (array $siblings, int $next) use ($task, $newColumn, $write): void {
+                if ($newColumn instanceof BoardColumn) {
+                    $task->setPosition($next);
+                }
+                $write();
+            });
+        } else {
+            $write();
         }
-
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Title, $oldTitle, $data->title);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Description, $oldDescription, $data->description);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $data->priority);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $newColumn);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::EstimatedMinutes, $oldEstimatedMinutes, $data->estimatedMinutes);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::StartDate, $oldStartAt, $data->startAt);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::DueDate, $oldDueAt, $data->dueAt);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Color, $oldColor, $task->getColor());
-        if ($wasCompleted !== $task->isCompleted()) {
-            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
-        }
-
-        $this->taskRepository->save($task);
 
         $changed = array_keys(array_filter([
             'title'            => $oldTitle !== $task->getTitle(),
@@ -362,23 +403,30 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
-     * @throws ColumnNotFoundException when $columnId is not a column of the task's board
-     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
-     */
-    /**
      * Moves a task to a column at the given index and renumbers the target column (0..n-1) so
      * client-computed positions (e.g. drag & drop card counts) never collide with existing ones.
+     *
+     * Since 2.21.0 (Beacon spec 239, FR-013): in one transaction (or the caller's), the column's row locked first and the
+     * column's tasks re-read as committed, so a move that waited for a concurrent one renumbers from that one's positions.
+     * A copy of one of those tasks that is out of date is refreshed; one that is out of date and holds unsaved changes is
+     * not (they would be lost) and the move is refused as a conflict, as it is when the task itself changed board, column,
+     * archive or completion state meanwhile. Nothing is written then; try again.
+     *
+     * @throws ColumnNotFoundException when $columnId is not a column of the task's board
+     * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` (see above)
      */
     public function move(Task $task, ?string $columnId, int $position, object $user, ?ColumnTransitionVia $via = null): void
     {
         $this->applyMove($task, $columnId, $position, $user, true, $via);
     }
 
-    private function applyMove(Task $task, ?string $columnId, int $position, object $user, bool $renumberSiblings, ?ColumnTransitionVia $via): void
+    private function applyMove(Task $task, ?string $columnId, ?int $position, object $user, bool $renumberSiblings, ?ColumnTransitionVia $via): void
     {
         $columns      = $this->orderedColumns($task->getBoard());
         $oldColumn    = $task->getColumn();
         $wasCompleted = $task->isCompleted();
+        $checked      = self::checked($task);
         $column       = $this->resolveColumn($task->getBoard(), $columnId);
 
         if ($columnId !== null && $columnId !== '' && !$column instanceof BoardColumn) {
@@ -389,28 +437,91 @@ final readonly class TaskManager implements TaskManagerInterface
         }
         $this->assertReopenAllowed($task, $column, $columns);
 
-        $task
-            ->setColumn($column)
-            ->setPosition($position);
+        // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+        $this->lockedColumnWrite($task, $column, $checked, $renumberSiblings, $position === null, function (array $siblings, int $next) use ($task, $column, $position, $renumberSiblings, $columns, $user, $oldColumn, $wasCompleted): void {
+            $at = $position ?? $next;
+            $task
+                ->setColumn($column)
+                ->setPosition($at);
 
-        if ($renumberSiblings) {
-            $this->renumberColumn($task, $column, $position);
-        }
+            if ($renumberSiblings) {
+                $this->renumberColumn($task, $siblings, $at);
+            }
 
-        $this->syncCompletionForColumn($task, $column, $columns);
-        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $column);
+            $this->syncCompletionForColumn($task, $column, $columns);
+            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Column, $oldColumn, $column);
 
-        if ($wasCompleted !== $task->isCompleted()) {
-            $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
-        }
+            if ($wasCompleted !== $task->isCompleted()) {
+                $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, $wasCompleted, $task->isCompleted());
+            }
 
-        $this->taskRepository->save($task);
+            $this->taskRepository->save($task);
+        });
 
         if ($oldColumn?->getId() !== $column?->getId()) {
             $this->dispatch(new TaskMovedEvent($task, $user, $oldColumn, $column), TaskBoardEvents::TASK_MOVED);
             $this->dispatchStatusChanged($task, $oldColumn, $column, $user, $via ?? ColumnTransitionVia::web());
         }
         $this->dispatchCompletion($task, $user, $wasCompleted);
+    }
+
+    /**
+     * Since 2.21.0 (Beacon spec 239, FR-013, audits SF-L1 / SF-L3 / SF-I2): runs a write that puts `$task` in `$column`
+     * in one transaction. First the column's row is locked (every write that changes the column's tasks waits there),
+     * then the column's tasks and `$task` are read as committed, each row locked (out-of-date copies refreshed). When
+     * `$task` is no longer what the caller checked (`$checked`: its board, column, archive and completion state before the
+     * checks), nothing is written: {@see TaskTreeRefusedException::conflict()}. `$write` gets the column's other tasks
+     * (not archived) by position, and the column's next free position, both as committed. The caller dispatches the
+     * events after it. Without a lock service (a hand-built manager) both come from a read without locks, as before, and
+     * only when asked (`$needsSiblings`, `$needsNext`; otherwise none and 0).
+     *
+     * @param array{0: string, 1: string|null, 2: bool, 3: bool} $checked from {@see self::checked()}
+     * @param Closure(list<Task>, int): void $write
+     *
+     * @throws TaskTreeRefusedException `conflict`
+     */
+    private function lockedColumnWrite(Task $task, ?BoardColumn $column, array $checked, bool $needsSiblings, bool $needsNext, Closure $write): void
+    {
+        if (!$this->rowLock instanceof OrderedRowLockInterface) {
+            $write($needsSiblings ? $this->columnSiblings($task, $column) : [], $needsNext ? $this->nextPosition($task->getBoard(), $column) : 0);
+
+            return;
+        }
+        $rowLock = $this->rowLock;
+        // @igor-ignore - The closure runs once, now, inside transactional(); the stateless lock keeps no reference to it.
+        $rowLock->transactional(static function () use ($rowLock, $task, $column, $checked, $write): void {
+            if ($column instanceof BoardColumn) {
+                $rowLock->lockColumns([$column->getId()]);
+            }
+            // The column's scan locks its tasks in id order (audit SF-I2: no separate lock of the siblings read before).
+            $fresh = $rowLock->lockedColumnTasks($checked[0], $column?->getId(), [$task->getId()]);
+            if (self::checked($task) !== $checked) {
+                throw TaskTreeRefusedException::conflict();
+            }
+            $siblings = [];
+            $next     = 0;
+            foreach ($fresh as $candidate) {
+                if ($candidate->getColumn()?->getId() !== $column?->getId() || $candidate->isArchived()) {
+                    continue;
+                }
+                $next = max($next, $candidate->getPosition() + 1);
+                if ($candidate->getId() !== $task->getId()) {
+                    $siblings[] = $candidate;
+                }
+            }
+            usort($siblings, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
+            $write($siblings, $next);
+        });
+    }
+
+    /**
+     * What a move checks about its task: its board, column, archive and completion state.
+     *
+     * @return array{0: string, 1: string|null, 2: bool, 3: bool}
+     */
+    private static function checked(Task $task): array
+    {
+        return [$task->getBoard()->getId(), $task->getColumn()?->getId(), $task->isArchived(), $task->isCompleted()];
     }
 
     /**
@@ -555,6 +666,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToPreviousColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -566,7 +678,7 @@ final readonly class TaskManager implements TaskManagerInterface
         }
 
         $target = $columns[$index - 1];
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
+        $this->applyMove($task, $target->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -576,6 +688,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToNextColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -587,7 +700,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $target->getId(), $this->nextPosition($task->getBoard(), $target), $user, false, $via);
+        $this->applyMove($task, $target->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -597,6 +710,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToDone(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -607,7 +721,7 @@ final readonly class TaskManager implements TaskManagerInterface
 
         // Since 2.19.0 (FR-033): the first done or closed column (the last one on an untyped board).
         $done = ColumnTypes::doneColumn($task->getBoard(), $columns) ?? $columns[array_key_last($columns)];
-        $this->applyMove($task, $done->getId(), $this->nextPosition($task->getBoard(), $done), $user, false, $via);
+        $this->applyMove($task, $done->getId(), null, $user, false, $via);
 
         return true;
     }
@@ -619,6 +733,7 @@ final readonly class TaskManager implements TaskManagerInterface
      *
      * @throws ColumnTransitionRefusedException since 2.16.0, when the policy refuses: nothing changes
      * @throws TaskReopenRefusedException since 1.29.0, when the move would reopen a completed task over the host's limit
+     * @throws TaskTreeRefusedException since 2.21.0, `conflict` when the task changed meanwhile (see move())
      */
     public function moveToColumn(Task $task, string $columnId, object $user, ?ColumnTransitionVia $via = null): bool
     {
@@ -631,7 +746,7 @@ final readonly class TaskManager implements TaskManagerInterface
             return false;
         }
 
-        $this->applyMove($task, $columnId, $this->nextPosition($task->getBoard(), $column), $user, false, $via);
+        $this->applyMove($task, $columnId, null, $user, false, $via);
 
         return true;
     }
@@ -698,10 +813,11 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
-     * Inserts $task at index $position among the other tasks of $column and rewrites positions as 0..n-1.
-     * Siblings whose position changes are saved; the moved task is saved by the caller.
+     * The other tasks of `$column` (active and completed, not archived), by position.
+     *
+     * @return list<Task>
      */
-    private function renumberColumn(Task $task, ?BoardColumn $column, int $position): void
+    private function columnSiblings(Task $task, ?BoardColumn $column): array
     {
         $siblings = [];
         foreach ($this->taskRepository->findByBoard($task->getBoard(), true) as $candidate) {
@@ -716,6 +832,17 @@ final readonly class TaskManager implements TaskManagerInterface
 
         usort($siblings, static fn (Task $a, Task $b): int => $a->getPosition() <=> $b->getPosition());
 
+        return $siblings;
+    }
+
+    /**
+     * Inserts $task at index $position among the other tasks of its column and rewrites positions as 0..n-1.
+     * Siblings whose position changes are saved; the moved task is saved by the caller.
+     *
+     * @param list<Task> $siblings from {@see self::columnSiblings()}, by position
+     */
+    private function renumberColumn(Task $task, array $siblings, int $position): void
+    {
         $index = max(0, min($position, count($siblings)));
         array_splice($siblings, $index, 0, [$task]);
 

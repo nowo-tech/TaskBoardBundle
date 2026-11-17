@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api;
 
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
@@ -88,6 +89,17 @@ final class TaskApiRefusal extends RuntimeException
             TaskTreeRefusedException::TOO_DEEP    => new self(409, self::PARENT_TOO_DEEP, 'The task tree would be deeper than allowed'),
             default                               => self::notFound(),
         };
+    }
+
+    /**
+     * Since 2.21.0 (Beacon spec 239, audit SF-2): the answer to a refused write on an existing task (a status change, a
+     * field update): a `conflict` (the task changed meanwhile, found once its rows were locked) is 409 `TASK_409` with the
+     * task's current revision, as a stale base revision is; anything else as {@see self::treeRefused()} (a subtask past
+     * `max_subtask_depth`).
+     */
+    public static function taskWriteRefused(TaskTreeRefusedException $refused, Task $task): self
+    {
+        return $refused->reason === TaskTreeRefusedException::CONFLICT ? self::stale($task->getRevision()) : self::treeRefused($refused);
     }
 
     /**

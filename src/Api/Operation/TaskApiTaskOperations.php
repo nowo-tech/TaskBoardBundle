@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
+use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
@@ -116,6 +117,8 @@ final readonly class TaskApiTaskOperations
         private ?TaskTemplateManager $templates = null,
         // Since 2.19.0 (Beacon spec 234, FR-028): native custom fields.
         private ?TaskCustomFieldManager $customFields = null,
+        // Since 2.21.0 (Beacon spec 239, audit SF-M1): the fixed lock order (columns before tasks) of a locked update.
+        private ?OrderedRowLockInterface $rowLock = null,
     ) {
     }
 
@@ -203,9 +206,12 @@ final readonly class TaskApiTaskOperations
         // Audit PX-L1: what a rollback must put back in memory (the task's old and new parents' subtask lists).
         $previousParent = $task->getParent();
         $newParent      = null;
+        $entered        = $this->statusColumnIds([$task], [$input]);
         try {
             // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId, &$newParent): Task {
+            return $this->transaction->run(function () use ($principal, $task, $input, $base, $reparent, $parentId, $entered, &$newParent): Task {
+                // Since 2.21.0 (audit SF-M1): the column the status enters before the task's row (columns before tasks).
+                $this->lockColumns($entered);
                 // The task's row locked and the task as committed (a stale copy is reloaded), so the no-op test below is true.
                 $current = $this->transaction->lockedRevision($task);
                 if ($base !== null && $current !== $base) {
@@ -340,13 +346,13 @@ final readonly class TaskApiTaskOperations
         if ($archived === false && $this->withinPlan(fn (): bool => $this->tasks->restore($task, $principal->user))) {
             $changed[] = 'archived';
         }
-        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, self::via($principal)))) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, self::via($principal)), $task)) {
             $changed[] = 'status';
         }
         // The column is where the move left it: update() must never move the task (it would skip completion and its events).
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)), $task);
             $changed[] = 'fields';
         }
         foreach ([TaskMemberRole::Assignee, TaskMemberRole::Watcher] as $role) {
@@ -441,8 +447,11 @@ final readonly class TaskApiTaskOperations
         }
 
         // 2. One transaction: lock, compare, check everything, then write.
+        $entered = $this->statusColumnIds($tasks, $inputs);
         // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases): array {
+        $changed = $this->transaction->run(function () use ($principal, $tasks, $inputs, $bases, $entered): array {
+            // Since 2.21.0 (audit SF-M1): the columns the items enter before their rows (columns before tasks).
+            $this->lockColumns($entered);
             $ordered = $tasks;
             uasort($ordered, static fn (Task $a, Task $b): int => strcmp($a->getId(), $b->getId()));
             $failures = [];
@@ -567,11 +576,11 @@ final readonly class TaskApiTaskOperations
         $data           = $plan['data'];
         $data->columnId = $task->getColumn()?->getId();
         if ($data != TaskFormData::fromTask($task)) {
-            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, $via));
+            $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, $via), $task);
             $changed[] = 'fields';
         }
         $status = $plan['status'];
-        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, $via))) {
+        if ($status instanceof BoardColumn && $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($task, $status->getId(), $principal->user, $via), $task)) {
             $changed[] = 'status';
         }
         foreach ($plan['add'] as $user) {
@@ -725,7 +734,7 @@ final readonly class TaskApiTaskOperations
         $data->tags = $add
             ? $this->tags([...$task->getTags(), $name])
             : array_values(array_filter($task->getTags(), static fn (string $tag): bool => mb_strtolower($tag) !== mb_strtolower($name)));
-        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)));
+        $this->withinPlan(fn () => $this->tasks->update($task, $data, $principal->user, self::via($principal)), $task);
         $this->audit->written($principal, $add ? 'tag.add' : 'tag.remove', $task->getBoard(), $taskId, [], ['tags']);
 
         return $task;
@@ -974,18 +983,60 @@ final readonly class TaskApiTaskOperations
     }
 
     /**
+     * Since 2.21.0 (Beacon spec 239, audit SF-M1): the columns a locked update's `status` fields enter, read before the
+     * transaction so they are locked before the tasks (the fixed order). A status the board lacks is left to the item's
+     * own check, which refuses it in its place.
+     *
+     * @param array<int, Task> $tasks
+     * @param array<int, TaskApiInput> $inputs by the same keys
+     *
+     * @return list<string>
+     */
+    private function statusColumnIds(array $tasks, array $inputs): array
+    {
+        $ids = [];
+        foreach ($tasks as $index => $task) {
+            $input = $inputs[$index];
+            if (!$input->has('status')) {
+                continue;
+            }
+            try {
+                $column = $this->columnOf($task->getBoard(), $input->string('status', true));
+                if ($column instanceof BoardColumn) {
+                    $ids[] = $column->getId();
+                }
+            } catch (TaskApiRefusal) {
+                continue;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param list<string> $columnIds
+     */
+    private function lockColumns(array $columnIds): void
+    {
+        if ($columnIds !== []) {
+            $this->rowLock?->lockColumns($columnIds);
+        }
+    }
+
+    /**
      * Since 2.2.1 (audit IB-L1): the host's limit refusing a write after the checks above (it changed in between) is 403
      * `PLAN_002`, never a 500.
      *
      * @template T
      *
      * @param callable(): T $write
+     * @param Task|null $task since 2.21.0: the existing task the write changes; a `conflict` on it is 409 `TASK_409`
      *
      * @throws TaskApiRefusal
      *
      * @return T
      */
-    private function withinPlan(callable $write): mixed
+    private function withinPlan(callable $write, ?Task $task = null): mixed
     {
         try {
             return $write();
@@ -995,8 +1046,9 @@ final readonly class TaskApiTaskOperations
             // Since 2.16.0 (spec 234, FR-015 / FR-017).
             throw TaskApiRefusal::transitionRefused($refused);
         } catch (TaskTreeRefusedException $refused) {
-            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005).
-            throw TaskApiRefusal::treeRefused($refused);
+            // Since 2.20.0: a subtask past `max_subtask_depth` (PARENT_005). Since 2.21.0 (audit SF-2): a write on an existing
+            // task that changed meanwhile is TASK_409 with its current revision.
+            throw $task instanceof Task ? TaskApiRefusal::taskWriteRefused($refused, $task) : TaskApiRefusal::treeRefused($refused);
         }
     }
 }
