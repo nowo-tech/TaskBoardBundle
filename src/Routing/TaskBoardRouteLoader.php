@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Routing;
 
+use LogicException;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
@@ -20,87 +21,127 @@ use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
 use function rtrim;
+use function sprintf;
 use function str_starts_with;
 use function strlen;
 use function substr;
 
 /**
- * Loads TaskBoard routes from bundle configuration and, with `tenancy`, a copy of every manage route under each
- * `tenancy.tenant_paths` entry (`<name_prefix><route name>`, path `<path><route path minus routes.index.path>`).
+ * Route loader (type `nowo_task_board`) of the manage UI, the provider connections, the multi-board list and the Task API.
+ * Since 2.21.1 (REQ-SF-004) the routes are declared with `#[Route]` attributes on the controllers (methods, requirements,
+ * defaults, `_controller`, default path and name); this loader reads them and applies the configuration as before: the
+ * name and path of each manage route (`routes.*`), `route_prefix`, the feature switches, `multi_board.path`, `api.prefix`
+ * and, with `tenancy`, a copy of every manage route under each `tenancy.tenant_paths` entry (`<name_prefix><route name>`,
+ * path `<path><route path minus routes.index.path>`). The route collection is the 2.21.0 one, route for route and in the
+ * same order (pinned by tests/Fixtures/Routing/route-collections.json); hosts keep their `type: nowo_task_board` import.
  */
 final class TaskBoardRouteLoader extends Loader
 {
-    /** Since 2.2.0 (spec 213): name => [path after `api.prefix`, controller, action, method (GET when absent)]. */
+    /** Since 2.1.0 (spec 214): `{number}` of task_by_number. */
+    public const NUMBER_REQUIREMENT = '[1-9][0-9]{0,8}';
+
+    /** Since 2.3.0 (spec 215): `{action}` of task_recurrence_action. */
+    public const RECURRENCE_ACTION_REQUIREMENT = 'pause|resume|stop|skip|unskip';
+
+    /** Since 2.13.0: `{format}` of the multi-board export. */
+    public const EXPORT_FORMAT_REQUIREMENT = 'csv|xlsx';
+
+    /** Since 2.2.0 (spec 213): every placeholder of the Task API routes (each API route carries all of them). */
+    public const API_REQUIREMENTS = ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'commentId' => '[^/]+', 'folderId' => '[^/]+'];
+
+    /** Since 2.2.0 (spec 213): the Task API routes are flagged for its request listener and stateless. */
+    public const API_DEFAULTS = [TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true];
+
+    /** Since 2.21.1: the controllers whose `#[Route]` attributes are read. */
+    public const CONTROLLERS = [
+        TaskBoardManageController::class,
+        TaskCopyController::class,
+        TaskRecurrenceController::class,
+        TaskBoardConnectionController::class,
+        TaskBoardMultiBoardController::class,
+        TaskApiIdentityController::class,
+        TaskApiReadController::class,
+        TaskApiWriteController::class,
+        TaskApiManagementController::class,
+        TaskApiTemplateController::class,
+    ];
+
+    /**
+     * Since 2.2.0 (spec 213): name (after `nowo_task_board_api_`) => controller action, in collection order; the path
+     * after `api.prefix`, the method and the requirements are on the action's `#[Route]`.
+     */
     private const API_ROUTES = [
-        'user'       => ['/v2/user', TaskApiIdentityController::class, 'user'],
-        'team'       => ['/v2/team', TaskApiIdentityController::class, 'teams'],
-        'spaces'     => ['/v2/team/{teamId}/space', TaskApiReadController::class, 'spaces'],
-        'team_tasks' => ['/v2/team/{teamId}/task', TaskApiReadController::class, 'teamTasks'],
+        'user'       => TaskApiIdentityController::class . '::user',
+        'team'       => TaskApiIdentityController::class . '::teams',
+        'spaces'     => TaskApiReadController::class . '::spaces',
+        'team_tasks' => TaskApiReadController::class . '::teamTasks',
         // Since 2.16.0 (spec 234, FR-025).
-        'team_members'  => ['/v2/team/{teamId}/member', TaskApiIdentityController::class, 'members'],
-        'time_entries'  => ['/v2/team/{teamId}/time_entries', TaskApiReadController::class, 'timeEntries'],
-        'space'         => ['/v2/space/{spaceId}', TaskApiReadController::class, 'space'],
-        'folders'       => ['/v2/space/{spaceId}/folder', TaskApiReadController::class, 'folders'],
-        'lists'         => ['/v2/space/{spaceId}/list', TaskApiReadController::class, 'lists'],
-        'space_tags'    => ['/v2/space/{spaceId}/tag', TaskApiReadController::class, 'tags'],
-        'list'          => ['/v2/list/{listId}', TaskApiReadController::class, 'list'],
-        'list_tasks'    => ['/v2/list/{listId}/task', TaskApiReadController::class, 'listTasks'],
-        'list_fields'   => ['/v2/list/{listId}/field', TaskApiReadController::class, 'fields'],
-        'task'          => ['/v2/task/{taskId}', TaskApiReadController::class, 'task'],
-        'task_comments' => ['/v2/task/{taskId}/comment', TaskApiReadController::class, 'comments'],
-        'task_members'  => ['/v2/task/{taskId}/member', TaskApiReadController::class, 'members'],
+        'team_members'  => TaskApiIdentityController::class . '::members',
+        'time_entries'  => TaskApiReadController::class . '::timeEntries',
+        'space'         => TaskApiReadController::class . '::space',
+        'folders'       => TaskApiReadController::class . '::folders',
+        'lists'         => TaskApiReadController::class . '::lists',
+        'space_tags'    => TaskApiReadController::class . '::tags',
+        'list'          => TaskApiReadController::class . '::list',
+        'list_tasks'    => TaskApiReadController::class . '::listTasks',
+        'list_fields'   => TaskApiReadController::class . '::fields',
+        'task'          => TaskApiReadController::class . '::task',
+        'task_comments' => TaskApiReadController::class . '::comments',
+        'task_members'  => TaskApiReadController::class . '::members',
         // Since 2.2.0 (spec 213): writes.
-        'task_create' => ['/v2/list/{listId}/task', TaskApiWriteController::class, 'createTask', 'POST'],
-        'task_update' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'updateTask', 'PUT'],
-        'task_delete' => ['/v2/task/{taskId}', TaskApiWriteController::class, 'deleteTask', 'DELETE'],
+        'task_create' => TaskApiWriteController::class . '::createTask',
+        'task_update' => TaskApiWriteController::class . '::updateTask',
+        'task_delete' => TaskApiWriteController::class . '::deleteTask',
         // Since 2.16.0 (spec 234, FR-021): the atomic bulk update.
-        'task_bulk'      => ['/v2/task/bulk', TaskApiWriteController::class, 'updateTasks', 'POST'],
-        'comment_create' => ['/v2/task/{taskId}/comment', TaskApiWriteController::class, 'addComment', 'POST'],
+        'task_bulk'      => TaskApiWriteController::class . '::updateTasks',
+        'comment_create' => TaskApiWriteController::class . '::addComment',
         // Since 2.16.0 (spec 234).
-        'comment_update'    => ['/v2/comment/{commentId}', TaskApiWriteController::class, 'updateComment', 'PUT'],
-        'tag_add'           => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'addTag', 'POST'],
-        'tag_remove'        => ['/v2/task/{taskId}/tag/{tagName}', TaskApiWriteController::class, 'removeTag', 'DELETE'],
-        'field_set'         => ['/v2/task/{taskId}/field/{fieldId}', TaskApiWriteController::class, 'setField', 'POST'],
-        'dependency_add'    => ['/v2/task/{taskId}/dependency', TaskApiWriteController::class, 'addDependency', 'POST'],
-        'dependency_remove' => ['/v2/task/{taskId}/dependency', TaskApiWriteController::class, 'removeDependency', 'DELETE'],
-        'link_add'          => ['/v2/task/{taskId}/link/{linksTo}', TaskApiWriteController::class, 'addLink', 'POST'],
-        'link_remove'       => ['/v2/task/{taskId}/link/{linksTo}', TaskApiWriteController::class, 'removeLink', 'DELETE'],
-        'checklist_create'  => ['/v2/task/{taskId}/checklist', TaskApiWriteController::class, 'createChecklist', 'POST'],
-        'checklist_update'  => ['/v2/checklist/{checklistId}', TaskApiWriteController::class, 'updateChecklist', 'PUT'],
-        'checklist_delete'  => ['/v2/checklist/{checklistId}', TaskApiWriteController::class, 'deleteChecklist', 'DELETE'],
-        'item_create'       => ['/v2/checklist/{checklistId}/checklist_item', TaskApiWriteController::class, 'createItem', 'POST'],
-        'item_update'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'updateItem', 'PUT'],
-        'item_delete'       => ['/v2/checklist/{checklistId}/checklist_item/{itemId}', TaskApiWriteController::class, 'deleteItem', 'DELETE'],
-        'attachment_create' => ['/v2/task/{taskId}/attachment', TaskApiWriteController::class, 'addAttachment', 'POST'],
-        'time_log'          => ['/v2/team/{teamId}/time_entries', TaskApiWriteController::class, 'logTime', 'POST'],
-        'time_delete'       => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'deleteTime', 'DELETE'],
+        'comment_update'    => TaskApiWriteController::class . '::updateComment',
+        'tag_add'           => TaskApiWriteController::class . '::addTag',
+        'tag_remove'        => TaskApiWriteController::class . '::removeTag',
+        'field_set'         => TaskApiWriteController::class . '::setField',
+        'dependency_add'    => TaskApiWriteController::class . '::addDependency',
+        'dependency_remove' => TaskApiWriteController::class . '::removeDependency',
+        'link_add'          => TaskApiWriteController::class . '::addLink',
+        'link_remove'       => TaskApiWriteController::class . '::removeLink',
+        'checklist_create'  => TaskApiWriteController::class . '::createChecklist',
+        'checklist_update'  => TaskApiWriteController::class . '::updateChecklist',
+        'checklist_delete'  => TaskApiWriteController::class . '::deleteChecklist',
+        'item_create'       => TaskApiWriteController::class . '::createItem',
+        'item_update'       => TaskApiWriteController::class . '::updateItem',
+        'item_delete'       => TaskApiWriteController::class . '::deleteItem',
+        'attachment_create' => TaskApiWriteController::class . '::addAttachment',
+        'time_log'          => TaskApiWriteController::class . '::logTime',
+        'time_delete'       => TaskApiWriteController::class . '::deleteTime',
         // Since 2.12.0: the billable flag of an own entry.
-        'time_update' => ['/v2/team/{teamId}/time_entries/{timerId}', TaskApiWriteController::class, 'updateTime', 'PUT'],
+        'time_update' => TaskApiWriteController::class . '::updateTime',
         // Since 2.2.0 (spec 213): management. Columns are statuses, on paths of this API's own (owner, Q-O2).
-        'board_create'  => ['/v2/space/{spaceId}/list', TaskApiManagementController::class, 'createBoard', 'POST'],
-        'board_update'  => ['/v2/list/{listId}', TaskApiManagementController::class, 'updateBoard', 'PUT'],
-        'board_delete'  => ['/v2/list/{listId}', TaskApiManagementController::class, 'deleteBoard', 'DELETE'],
-        'status_create' => ['/v2/list/{listId}/status', TaskApiManagementController::class, 'createColumn', 'POST'],
+        'board_create'  => TaskApiManagementController::class . '::createBoard',
+        'board_update'  => TaskApiManagementController::class . '::updateBoard',
+        'board_delete'  => TaskApiManagementController::class . '::deleteBoard',
+        'status_create' => TaskApiManagementController::class . '::createColumn',
         // Before status_update: "order" is not a column id.
-        'status_order'  => ['/v2/list/{listId}/status/order', TaskApiManagementController::class, 'reorderColumns', 'PUT'],
-        'status_update' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'updateColumn', 'PUT'],
-        'status_delete' => ['/v2/list/{listId}/status/{statusId}', TaskApiManagementController::class, 'deleteColumn', 'DELETE'],
+        'status_order'  => TaskApiManagementController::class . '::reorderColumns',
+        'status_update' => TaskApiManagementController::class . '::updateColumn',
+        'status_delete' => TaskApiManagementController::class . '::deleteColumn',
         // Since 2.19.0 (Beacon spec 234, FR-031): folders.
-        'folder'             => ['/v2/folder/{folderId}', TaskApiReadController::class, 'folder'],
-        'folder_lists'       => ['/v2/folder/{folderId}/list', TaskApiReadController::class, 'folderLists'],
-        'folder_create'      => ['/v2/space/{spaceId}/folder', TaskApiManagementController::class, 'createFolder', 'POST'],
-        'folder_update'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'updateFolder', 'PUT'],
-        'folder_delete'      => ['/v2/folder/{folderId}', TaskApiManagementController::class, 'deleteFolder', 'DELETE'],
-        'folder_list_create' => ['/v2/folder/{folderId}/list', TaskApiManagementController::class, 'createFolderList', 'POST'],
+        'folder'             => TaskApiReadController::class . '::folder',
+        'folder_lists'       => TaskApiReadController::class . '::folderLists',
+        'folder_create'      => TaskApiManagementController::class . '::createFolder',
+        'folder_update'      => TaskApiManagementController::class . '::updateFolder',
+        'folder_delete'      => TaskApiManagementController::class . '::deleteFolder',
+        'folder_list_create' => TaskApiManagementController::class . '::createFolderList',
     ];
 
     /** Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled` only. */
     private const API_TEMPLATE_ROUTES = [
-        'task_templates' => ['/v2/list/{listId}/taskTemplate', TaskApiTemplateController::class, 'templates'],
+        'task_templates' => TaskApiTemplateController::class . '::templates',
     ];
 
     /** Default base path of the manage routes (routes.index.path). */
     private const DEFAULT_BASE = '/tools/task-board';
+
+    private readonly ControllerAttributeRouteLoader $attributeLoader;
 
     /**
      * @param array<string, array{path: string, name: string}> $routes
@@ -127,84 +168,87 @@ final class TaskBoardRouteLoader extends Loader
         // Since 2.16.0 (Beacon spec 234): the API's template list exists only with `task_templates.enabled`.
         private readonly bool $templatesEnabled = false,
     ) {
+        parent::__construct();
+        $this->attributeLoader = new ControllerAttributeRouteLoader();
     }
 
     public function load(mixed $resource, ?string $type = null): RouteCollection
     {
         $collection = new RouteCollection();
+        $attributes = $this->attributeRoutes($collection);
 
-        $this->addRoute($collection, 'index', 'index', ['GET']);
-        $this->addRoute($collection, 'board', 'board', ['GET']);
-        $this->addRoute($collection, 'list', 'listView', ['GET']);
-        $this->addRoute($collection, 'gantt', 'ganttView', ['GET']);
-        $this->addRoute($collection, 'task', 'task', ['GET', 'POST']);
-        $this->addRoute($collection, 'board_create', 'createBoard', ['POST']);
-        $this->addRoute($collection, 'task_create', 'createTask', ['POST']);
-        $this->addRoute($collection, 'task_move', 'moveTask', ['POST']);
-        $this->addRoute($collection, 'task_advance', 'advanceTask', ['POST']);
-        $this->addRoute($collection, 'task_link', 'attachLink', ['POST']);
-        $this->addRoute($collection, 'task_link_update', 'updateLink', ['POST']);
-        $this->addRoute($collection, 'task_link_remove', 'removeLink', ['POST']);
-        $this->addRoute($collection, 'task_member', 'addMember', ['POST']);
-        $this->addRoute($collection, 'task_member_remove', 'removeMember', ['POST']);
-        $this->addRoute($collection, 'task_subtask', 'createSubtask', ['POST']);
-        $this->addRoute($collection, 'task_priority', 'updatePriority', ['POST']);
-        $this->addRoute($collection, 'column_create', 'createColumn', ['POST']);
-        $this->addRoute($collection, 'column_update', 'updateColumn', ['POST']);
-        $this->addRoute($collection, 'column_reorder', 'reorderColumns', ['POST']);
-        $this->addRoute($collection, 'board_import', 'importBoard', ['GET', 'POST']);
+        $this->addRoute($collection, $attributes, 'index', TaskBoardManageController::class . '::index');
+        $this->addRoute($collection, $attributes, 'board', TaskBoardManageController::class . '::board');
+        $this->addRoute($collection, $attributes, 'list', TaskBoardManageController::class . '::listView');
+        $this->addRoute($collection, $attributes, 'gantt', TaskBoardManageController::class . '::ganttView');
+        $this->addRoute($collection, $attributes, 'task', TaskBoardManageController::class . '::task');
+        $this->addRoute($collection, $attributes, 'board_create', TaskBoardManageController::class . '::createBoard');
+        $this->addRoute($collection, $attributes, 'task_create', TaskBoardManageController::class . '::createTask');
+        $this->addRoute($collection, $attributes, 'task_move', TaskBoardManageController::class . '::moveTask');
+        $this->addRoute($collection, $attributes, 'task_advance', TaskBoardManageController::class . '::advanceTask');
+        $this->addRoute($collection, $attributes, 'task_link', TaskBoardManageController::class . '::attachLink');
+        $this->addRoute($collection, $attributes, 'task_link_update', TaskBoardManageController::class . '::updateLink');
+        $this->addRoute($collection, $attributes, 'task_link_remove', TaskBoardManageController::class . '::removeLink');
+        $this->addRoute($collection, $attributes, 'task_member', TaskBoardManageController::class . '::addMember');
+        $this->addRoute($collection, $attributes, 'task_member_remove', TaskBoardManageController::class . '::removeMember');
+        $this->addRoute($collection, $attributes, 'task_subtask', TaskBoardManageController::class . '::createSubtask');
+        $this->addRoute($collection, $attributes, 'task_priority', TaskBoardManageController::class . '::updatePriority');
+        $this->addRoute($collection, $attributes, 'column_create', TaskBoardManageController::class . '::createColumn');
+        $this->addRoute($collection, $attributes, 'column_update', TaskBoardManageController::class . '::updateColumn');
+        $this->addRoute($collection, $attributes, 'column_reorder', TaskBoardManageController::class . '::reorderColumns');
+        $this->addRoute($collection, $attributes, 'board_import', TaskBoardManageController::class . '::importBoard');
         // Since 1.11.
-        $this->addRoute($collection, 'column_delete', 'deleteColumn', ['POST']);
-        $this->addRoute($collection, 'column_set_create', 'createColumnSet', ['POST']);
-        $this->addRoute($collection, 'column_set_apply', 'applyColumnSet', ['POST']);
-        $this->addRoute($collection, 'column_set_delete', 'deleteColumnSet', ['POST']);
-        $this->addRoute($collection, 'task_panel', 'taskPanel', ['GET']);
+        $this->addRoute($collection, $attributes, 'column_delete', TaskBoardManageController::class . '::deleteColumn');
+        $this->addRoute($collection, $attributes, 'column_set_create', TaskBoardManageController::class . '::createColumnSet');
+        $this->addRoute($collection, $attributes, 'column_set_apply', TaskBoardManageController::class . '::applyColumnSet');
+        $this->addRoute($collection, $attributes, 'column_set_delete', TaskBoardManageController::class . '::deleteColumnSet');
+        $this->addRoute($collection, $attributes, 'task_panel', TaskBoardManageController::class . '::taskPanel');
         // Since 1.15.
-        $this->addRoute($collection, 'task_dependency', 'addDependency', ['POST']);
-        $this->addRoute($collection, 'task_dependency_remove', 'removeDependency', ['POST']);
-        $this->addRoute($collection, 'task_import', 'importIntoTask', ['POST']);
-        $this->addRoute($collection, 'task_time', 'logTime', ['POST']);
-        $this->addRoute($collection, 'task_time_remove', 'removeTimeEntry', ['POST']);
+        $this->addRoute($collection, $attributes, 'task_dependency', TaskBoardManageController::class . '::addDependency');
+        $this->addRoute($collection, $attributes, 'task_dependency_remove', TaskBoardManageController::class . '::removeDependency');
+        $this->addRoute($collection, $attributes, 'task_import', TaskBoardManageController::class . '::importIntoTask');
+        $this->addRoute($collection, $attributes, 'task_time', TaskBoardManageController::class . '::logTime');
+        $this->addRoute($collection, $attributes, 'task_time_remove', TaskBoardManageController::class . '::removeTimeEntry');
         // Since 2.12.0.
-        $this->addRoute($collection, 'task_time_billable', 'setTimeEntryBillable', ['POST']);
+        $this->addRoute($collection, $attributes, 'task_time_billable', TaskBoardManageController::class . '::setTimeEntryBillable');
         // Since 1.16.
-        $this->addRoute($collection, 'task_comment', 'addComment', ['POST']);
-        $this->addRoute($collection, 'task_comment_edit', 'editComment', ['POST']);
-        $this->addRoute($collection, 'task_comment_delete', 'deleteComment', ['POST']);
+        $this->addRoute($collection, $attributes, 'task_comment', TaskBoardManageController::class . '::addComment');
+        $this->addRoute($collection, $attributes, 'task_comment_edit', TaskBoardManageController::class . '::editComment');
+        $this->addRoute($collection, $attributes, 'task_comment_delete', TaskBoardManageController::class . '::deleteComment');
         // Since 1.23.
-        $this->addRoute($collection, 'task_restore', 'restoreTask', ['POST']);
+        $this->addRoute($collection, $attributes, 'task_restore', TaskBoardManageController::class . '::restoreTask');
         if ($this->taskNumbersEnabled) {
-            $this->addRoute($collection, 'task_by_number', 'taskByNumber', ['GET'], requirements: ['number' => '[1-9][0-9]{0,8}']);
+            $this->addRoute($collection, $attributes, 'task_by_number', TaskBoardManageController::class . '::taskByNumber');
         }
         if ($this->calendarEnabled) {
-            $this->addRoute($collection, 'calendar', 'calendarView', ['GET']);
-            $this->addRoute($collection, 'task_schedule', 'scheduleTask', ['POST']);
+            $this->addRoute($collection, $attributes, 'calendar', TaskBoardManageController::class . '::calendarView');
+            $this->addRoute($collection, $attributes, 'task_schedule', TaskBoardManageController::class . '::scheduleTask');
         }
         if ($this->moveEnabled) {
-            $this->addRoute($collection, 'task_move_board', 'move', ['GET', 'POST'], TaskCopyController::class);
-            $this->addRoute($collection, 'task_duplicate', 'duplicate', ['GET', 'POST'], TaskCopyController::class);
+            $this->addRoute($collection, $attributes, 'task_move_board', TaskCopyController::class . '::move');
+            $this->addRoute($collection, $attributes, 'task_duplicate', TaskCopyController::class . '::duplicate');
         }
         if ($this->recurrenceEnabled) {
-            $this->addRoute($collection, 'task_recurrence', 'edit', ['GET', 'POST'], TaskRecurrenceController::class);
-            $this->addRoute($collection, 'task_recurrence_action', 'action', ['POST'], TaskRecurrenceController::class, ['action' => 'pause|resume|stop|skip|unskip']);
+            $this->addRoute($collection, $attributes, 'task_recurrence', TaskRecurrenceController::class . '::edit');
+            $this->addRoute($collection, $attributes, 'task_recurrence_action', TaskRecurrenceController::class . '::action');
         }
         if ($this->syncEnabled) {
-            $this->addRoute($collection, 'board_connection', 'connection', ['GET'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_containers', 'containers', ['POST'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_link', 'link', ['POST'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_refresh', 'refresh', ['POST'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_progress', 'progress', ['GET'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_cancel', 'cancel', ['POST'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_unlink', 'unlink', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, $attributes, 'board_connection', TaskBoardConnectionController::class . '::connection');
+            $this->addRoute($collection, $attributes, 'board_connection_containers', TaskBoardConnectionController::class . '::containers');
+            $this->addRoute($collection, $attributes, 'board_connection_link', TaskBoardConnectionController::class . '::link');
+            $this->addRoute($collection, $attributes, 'board_connection_refresh', TaskBoardConnectionController::class . '::refresh');
+            $this->addRoute($collection, $attributes, 'board_connection_progress', TaskBoardConnectionController::class . '::progress');
+            $this->addRoute($collection, $attributes, 'board_connection_cancel', TaskBoardConnectionController::class . '::cancel');
+            $this->addRoute($collection, $attributes, 'board_connection_unlink', TaskBoardConnectionController::class . '::unlink');
             // Since 1.27.0 (TB-SYNC-2).
-            $this->addRoute($collection, 'board_connection_people', 'people', ['GET'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_people_save', 'peopleSave', ['POST'], TaskBoardConnectionController::class);
-            $this->addRoute($collection, 'board_connection_people_former', 'peopleFormer', ['POST'], TaskBoardConnectionController::class);
+            $this->addRoute($collection, $attributes, 'board_connection_people', TaskBoardConnectionController::class . '::people');
+            $this->addRoute($collection, $attributes, 'board_connection_people_save', TaskBoardConnectionController::class . '::peopleSave');
+            $this->addRoute($collection, $attributes, 'board_connection_people_former', TaskBoardConnectionController::class . '::peopleFormer');
         }
 
         $this->addTenantCopies($collection);
-        $this->addMultiBoardRoutes($collection);
-        $this->addApiRoutes($collection);
+        $this->addMultiBoardRoutes($collection, $attributes);
+        $this->addApiRoutes($collection, $attributes);
 
         return $collection;
     }
@@ -215,65 +259,97 @@ final class TaskBoardRouteLoader extends Loader
     }
 
     /**
-     * @param list<string> $methods
-     * @param array<string, string> $requirements
+     * The routes declared by the controller attributes, by `_controller`; the controller class resources go to
+     * `$collection` (router cache freshness in debug).
+     *
+     * @return array<string, Route>
      */
-    private function addRoute(RouteCollection $collection, string $key, string $action, array $methods, string $controller = TaskBoardManageController::class, array $requirements = []): void
+    private function attributeRoutes(RouteCollection $collection): array
+    {
+        $routes = [];
+        foreach (self::CONTROLLERS as $controller) {
+            $loaded = $this->attributeLoader->load($controller);
+            foreach ($loaded->getResources() as $resource) {
+                $collection->addResource($resource);
+            }
+            foreach ($loaded->all() as $route) {
+                $routes[(string) $route->getDefault('_controller')] = $route;
+            }
+        }
+
+        return $routes;
+    }
+
+    /**
+     * A manage route: its configured name and path (with the route prefix), everything else from the action's attribute.
+     * A key without a configuration entry (a hand-built loader) is skipped.
+     *
+     * @param array<string, Route> $attributes
+     */
+    private function addRoute(RouteCollection $collection, array $attributes, string $key, string $controller): void
     {
         if (!isset($this->routes[$key])) {
             return;
         }
 
-        $collection->add(
-            $this->routes[$key]['name'],
-            new Route(
-                $this->routePrefix . $this->routes[$key]['path'],
-                ['_controller' => $controller . '::' . $action],
-                $requirements,
-                [],
-                '',
-                [],
-                $methods,
-            ),
+        $collection->add($this->routes[$key]['name'], self::fromAttribute($attributes, $controller, $this->routePrefix . $this->routes[$key]['path']));
+    }
+
+    /**
+     * A route at `$path` with the methods, requirements, defaults, options, host, schemes and condition of the
+     * controller action's `#[Route]` (`_controller` first, as the 2.21.0 loader wrote it).
+     *
+     * @param array<string, Route> $attributes
+     */
+    private static function fromAttribute(array $attributes, string $controller, string $path): Route
+    {
+        $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
+
+        return new Route(
+            $path,
+            ['_controller' => $controller] + $attribute->getDefaults(),
+            $attribute->getRequirements(),
+            $attribute->getOptions(),
+            $attribute->getHost(),
+            $attribute->getSchemes(),
+            $attribute->getMethods(),
+            $attribute->getCondition(),
         );
     }
 
     /**
      * Since 2.13.0: the multi-board list and its export, after the tenant copies: they span tenants, so they are never
-     * copied under a tenant path (the provider scopes them, with the path's own variables if it has any).
+     * copied under a tenant path (the provider scopes them, with the path's own variables if it has any). The export is
+     * `<path>/export.{format}`.
+     *
+     * @param array<string, Route> $attributes
      */
-    private function addMultiBoardRoutes(RouteCollection $collection): void
+    private function addMultiBoardRoutes(RouteCollection $collection, array $attributes): void
     {
         if ($this->multiBoardPath === null) {
             return;
         }
 
         $path = $this->routePrefix . rtrim($this->multiBoardPath, '/');
-        $collection->add(TaskBoardMultiBoardController::ROUTE, new Route($path === '' ? '/' : $path, ['_controller' => TaskBoardMultiBoardController::class . '::tasks'], [], [], '', [], ['GET']));
-        $collection->add(TaskBoardMultiBoardController::ROUTE_EXPORT, new Route($path . '/export.{format}', ['_controller' => TaskBoardMultiBoardController::class . '::export'], ['format' => 'csv|xlsx'], [], '', [], ['GET']));
+        $collection->add(TaskBoardMultiBoardController::ROUTE, self::fromAttribute($attributes, TaskBoardMultiBoardController::class . '::tasks', $path === '' ? '/' : $path));
+        $collection->add(TaskBoardMultiBoardController::ROUTE_EXPORT, self::fromAttribute($attributes, TaskBoardMultiBoardController::class . '::export', $path . '/export.{format}'));
     }
 
     /**
      * Since 2.2.0 (spec 213): stateless, one path per tenant-free resource: no `route_prefix` and no tenant copies. After the
-     * copies, which only read `routes`.
+     * copies, which only read `routes`. The path after `api.prefix` is the attribute's.
+     *
+     * @param array<string, Route> $attributes
      */
-    private function addApiRoutes(RouteCollection $collection): void
+    private function addApiRoutes(RouteCollection $collection, array $attributes): void
     {
         if ($this->apiPrefix === null) {
             return;
         }
 
-        foreach ($this->templatesEnabled ? self::API_ROUTES + self::API_TEMPLATE_ROUTES : self::API_ROUTES as $name => $route) {
-            [$path, $controller, $action] = $route;
-            $collection->add('nowo_task_board_api_' . $name, new Route(
-                $this->apiPrefix . $path,
-                ['_controller' => $controller . '::' . $action, TaskApiRequestListener::ROUTE_FLAG => true, '_stateless' => true],
-                ['teamId' => '[^/]+', 'spaceId' => '[^/]+', 'listId' => '[^/]+', 'taskId' => '[^/]+', 'tagName' => '[^/]+', 'fieldId' => '[^/]+', 'linksTo' => '[^/]+', 'checklistId' => '[^/]+', 'itemId' => '[^/]+', 'timerId' => '[^/]+', 'statusId' => '[^/]+', 'commentId' => '[^/]+', 'folderId' => '[^/]+'],
-                [],
-                '',
-                [],
-                [$route[3] ?? 'GET'],
-            ));
+        foreach ($this->templatesEnabled ? self::API_ROUTES + self::API_TEMPLATE_ROUTES : self::API_ROUTES as $name => $controller) {
+            $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
+            $collection->add('nowo_task_board_api_' . $name, self::fromAttribute($attributes, $controller, $this->apiPrefix . $attribute->getPath()));
         }
     }
 

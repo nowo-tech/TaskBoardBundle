@@ -83,6 +83,7 @@ use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCalendarRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
@@ -141,6 +142,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingExceptionInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -271,6 +273,7 @@ final class TaskBoardManageController extends AbstractController
     ) {
     }
 
+    #[Route('/tools/task-board', name: 'nowo_task_board_index', methods: ['GET'])]
     public function index(): Response
     {
         $user   = $this->requireUser();
@@ -305,6 +308,7 @@ final class TaskBoardManageController extends AbstractController
      * errors: the index page with the New board dialog open, or only the create form when the request carries the
      * `board.create_dialog_header` header (a host dialog). It used to redirect to the index and lose them.
      */
+    #[Route('/tools/task-board/create', name: 'nowo_task_board_board_create', methods: ['POST'])]
     public function createBoard(Request $request): Response
     {
         $user   = $this->requireUser();
@@ -378,6 +382,7 @@ final class TaskBoardManageController extends AbstractController
         return $response;
     }
 
+    #[Route('/tools/task-board/board/{boardId}', name: 'nowo_task_board_board', methods: ['GET'])]
     public function board(string $boardId): Response
     {
         $user  = $this->requireUser();
@@ -494,6 +499,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.11: deletes a column; its tasks move to the first remaining column. The last column is kept.
      */
+    #[Route('/tools/task-board/board/{boardId}/column/{columnId}/delete', name: 'nowo_task_board_column_delete', methods: ['POST'])]
     public function deleteColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
@@ -532,6 +538,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.11: saves the board's columns as a named column set.
      */
+    #[Route('/tools/task-board/board/{boardId}/column-sets', name: 'nowo_task_board_column_set_create', methods: ['POST'])]
     public function createColumnSet(string $boardId, Request $request): RedirectResponse
     {
         $user    = $this->requireUser();
@@ -555,6 +562,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.11: appends copies of a column set's columns to the board.
      */
+    #[Route('/tools/task-board/board/{boardId}/column-sets/apply', name: 'nowo_task_board_column_set_apply', methods: ['POST'])]
     public function applyColumnSet(string $boardId, Request $request): RedirectResponse
     {
         $user    = $this->requireUser();
@@ -588,6 +596,7 @@ final class TaskBoardManageController extends AbstractController
      * Since 1.11: deletes a column set (its creator or a manage role, unless a COLUMN_SET_ACCESS_CHECK listener
      * decides otherwise); boards keep the columns they got from it.
      */
+    #[Route('/tools/task-board/board/{boardId}/column-sets/{setId}/delete', name: 'nowo_task_board_column_set_delete', methods: ['POST'])]
     public function deleteColumnSet(string $boardId, string $setId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
@@ -607,6 +616,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/column', name: 'nowo_task_board_column_create', methods: ['POST'])]
     public function createColumn(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
@@ -633,6 +643,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/column/{columnId}', name: 'nowo_task_board_column_update', methods: ['POST'])]
     public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user   = $this->requireUser();
@@ -695,6 +706,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/columns/reorder', name: 'nowo_task_board_column_reorder', methods: ['POST'])]
     public function reorderColumns(string $boardId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
@@ -720,6 +732,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/create', name: 'nowo_task_board_task_create', methods: ['POST'])]
     public function createTask(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
@@ -761,6 +774,7 @@ final class TaskBoardManageController extends AbstractController
         return $target !== null ? $this->redirect($target) : $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/import', name: 'nowo_task_board_board_import', methods: ['GET', 'POST'])]
     public function importBoard(string $boardId, Request $request): Response
     {
         $user  = $this->requireUser();
@@ -842,6 +856,7 @@ final class TaskBoardManageController extends AbstractController
      * their `parent` — with their Gantt relations (the bundle's own CSV / JSON documents them; third-party exports
      * work too). Needs edit rights on the task.
      */
+    #[Route('/tools/task-board/task/{taskId}/import', name: 'nowo_task_board_task_import', methods: ['POST'])]
     public function importIntoTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -886,6 +901,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/list', name: 'nowo_task_board_list', methods: ['GET'])]
     public function listView(string $boardId): Response
     {
         $user         = $this->requireUser();
@@ -952,6 +968,7 @@ final class TaskBoardManageController extends AbstractController
      * Since 1.23: makes an archived task active again (any archive reason; editors of the task only). A task a
      * provider sync archived is archived again by the next sync if the provider still does not list it.
      */
+    #[Route('/tools/task-board/task/{taskId}/restore', name: 'nowo_task_board_task_restore', methods: ['POST'])]
     public function restoreTask(string $taskId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
@@ -970,6 +987,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['list']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
+    #[Route('/tools/task-board/board/{boardId}/gantt', name: 'nowo_task_board_gantt', methods: ['GET'])]
     public function ganttView(string $boardId): Response
     {
         $user  = $this->requireUser();
@@ -995,6 +1013,7 @@ final class TaskBoardManageController extends AbstractController
      * Since 2.1.0 (spec 214, FR-018 to FR-022): the board's dated tasks by day (`calendar.enabled`). Everything it shows is in
      * the URL (`mode`, `date` and the filters), and the query reads only the tasks that overlap the visible days.
      */
+    #[Route('/tools/task-board/board/{boardId}/calendar', name: 'nowo_task_board_calendar', methods: ['GET'])]
     public function calendarView(string $boardId, Request $request): Response
     {
         $user       = $this->requireUser();
@@ -1079,6 +1098,7 @@ final class TaskBoardManageController extends AbstractController
      * Since 2.1.0 (spec 214, FR-026 to FR-028): changes a task's dates, from a drag, the Reschedule dialog or Undo. An empty date
      * clears it; a missing one is refused, so a partial request never clears a date. Out of reach: 404. Read-only: 403.
      */
+    #[Route('/tools/task-board/task/{taskId}/schedule', name: 'nowo_task_board_task_schedule', methods: ['POST'])]
     public function scheduleTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1128,6 +1148,7 @@ final class TaskBoardManageController extends AbstractController
      * where there is no tenant to tell (`scope: board`, or no tenancy). Unknown, retired and unreadable answer the same 404. An
      * alias of a task moved to another tenant goes to that tenant's page, for whoever may read it there.
      */
+    #[Route('/tools/task-board/n/{number}', name: 'nowo_task_board_task_by_number', methods: ['GET'], requirements: ['number' => TaskBoardRouteLoader::NUMBER_REQUIREMENT])]
     public function taskByNumber(string $number, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
@@ -1201,6 +1222,7 @@ final class TaskBoardManageController extends AbstractController
         return $day;
     }
 
+    #[Route('/tools/task-board/task/{taskId}', name: 'nowo_task_board_task', methods: ['GET', 'POST'])]
     public function task(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1266,6 +1288,7 @@ final class TaskBoardManageController extends AbstractController
      * open a task in a side drawer. Its forms post to the usual routes and come back to `_target_path` (a local path,
      * default the task's board), or answer the refreshed fragment when they are sent with fetch.
      */
+    #[Route('/tools/task-board/task/{taskId}/panel', name: 'nowo_task_board_task_panel', methods: ['GET'])]
     public function taskPanel(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1273,6 +1296,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->renderTaskPanel($request, $this->findTask($taskId, $user, detail: true), $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/advance', name: 'nowo_task_board_task_advance', methods: ['POST'])]
     public function advanceTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1319,6 +1343,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/move', name: 'nowo_task_board_task_move', methods: ['POST'])]
     public function moveTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1359,6 +1384,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/link', name: 'nowo_task_board_task_link', methods: ['POST'])]
     public function attachLink(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1378,6 +1404,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/link/{linkId}', name: 'nowo_task_board_task_link_update', methods: ['POST'])]
     public function updateLink(string $taskId, string $linkId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1398,6 +1425,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/link/{linkId}/remove', name: 'nowo_task_board_task_link_remove', methods: ['POST'])]
     public function removeLink(string $taskId, string $linkId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1413,6 +1441,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/member', name: 'nowo_task_board_task_member', methods: ['POST'])]
     public function addMember(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1436,6 +1465,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/member/{memberId}/remove', name: 'nowo_task_board_task_member_remove', methods: ['POST'])]
     public function removeMember(string $taskId, string $memberId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1450,6 +1480,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/priority', name: 'nowo_task_board_task_priority', methods: ['POST'])]
     public function updatePriority(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1473,6 +1504,7 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/subtask', name: 'nowo_task_board_task_subtask', methods: ['POST'])]
     public function createSubtask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1516,6 +1548,7 @@ final class TaskBoardManageController extends AbstractController
      * Since 1.15: adds a dependency between the task and another task of its board (CSRF, edit access); a dependency
      * on itself, towards another board, a duplicate or one closing a cycle is refused with a flash message.
      */
+    #[Route('/tools/task-board/task/{taskId}/dependency', name: 'nowo_task_board_task_dependency', methods: ['POST'])]
     public function addDependency(string $taskId, Request $request): Response
     {
         $user    = $this->requireUser();
@@ -1553,6 +1586,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.15: removes one of the task's dependencies (POST + CSRF, edit access).
      */
+    #[Route('/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove', name: 'nowo_task_board_task_dependency_remove', methods: ['POST'])]
     public function removeDependency(string $taskId, string $dependencyId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1572,6 +1606,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.15: logs time spent on the task (minutes, day, note; CSRF, edit access).
      */
+    #[Route('/tools/task-board/task/{taskId}/time', name: 'nowo_task_board_task_time', methods: ['POST'])]
     public function logTime(string $taskId, Request $request): Response
     {
         $user   = $this->requireUser();
@@ -1603,6 +1638,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.15: removes a manual time entry of the task (POST + CSRF, edit access).
      */
+    #[Route('/tools/task-board/task/{taskId}/time/{entryId}/remove', name: 'nowo_task_board_task_time_remove', methods: ['POST'])]
     public function removeTimeEntry(string $taskId, string $entryId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1632,6 +1668,7 @@ final class TaskBoardManageController extends AbstractController
      * CSRF; its author or a board manager, not in a locked period, audited in the task's history
      * ({@see TaskTimeBillableService}).
      */
+    #[Route('/tools/task-board/task/{taskId}/time/{entryId}/billable', name: 'nowo_task_board_task_time_billable', methods: ['POST'])]
     public function setTimeEntryBillable(string $taskId, string $entryId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -1676,6 +1713,7 @@ final class TaskBoardManageController extends AbstractController
      *
      * @mentions of valid candidates only).
      */
+    #[Route('/tools/task-board/task/{taskId}/comment', name: 'nowo_task_board_task_comment', methods: ['POST'])]
     public function addComment(string $taskId, Request $request): Response
     {
         $user    = $this->requireUser();
@@ -1701,6 +1739,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.16: the author edits their comment (others: 403); the mentions it adds are notified.
      */
+    #[Route('/tools/task-board/task/{taskId}/comment/{commentId}', name: 'nowo_task_board_task_comment_edit', methods: ['POST'])]
     public function editComment(string $taskId, string $commentId, Request $request): Response
     {
         $user    = $this->requireUser();
@@ -1728,6 +1767,7 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.16: the author, or an editor of the task, deletes a comment (POST + CSRF); its place stays in the stream.
      */
+    #[Route('/tools/task-board/task/{taskId}/comment/{commentId}/delete', name: 'nowo_task_board_task_comment_delete', methods: ['POST'])]
     public function deleteComment(string $taskId, string $commentId, Request $request): Response
     {
         $user = $this->requireUser();

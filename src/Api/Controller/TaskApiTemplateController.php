@@ -7,10 +7,12 @@ namespace Nowo\TaskBoardBundle\Api\Controller;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\Template\TaskTemplateSnapshot;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
 
 use function array_map;
 
@@ -19,6 +21,7 @@ use function array_map;
  * Thin: one operation, then the shape of ClickUp's template list (`templates`, each with `id` and `name`) plus what a
  * template pre-fills.
  */
+#[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiTemplateController
 {
     public function __construct(
@@ -27,6 +30,7 @@ final readonly class TaskApiTemplateController
     ) {
     }
 
+    #[Route('/v2/list/{listId}/taskTemplate', name: 'nowo_task_board_api_task_templates', methods: ['GET'])]
     public function templates(Request $request, string $listId): JsonResponse
     {
         $list     = $this->operations->templates(TaskApiRequestListener::principalOf($request), $listId);

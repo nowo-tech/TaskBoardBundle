@@ -151,7 +151,8 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Repository/TaskRepositoryInterface.php` | Repository interface | FR-REPO-001 |
 | `Repository/TaskTimeEntryRepositoryInterface.php` | Repository interface | FR-REPO-001 |
 | `Repository/TeamMemberRepositoryInterface.php` | Repository interface | FR-REPO-001 |
-| `Routing/TaskBoardRouteLoader.php` | Route loader (config-driven names / paths, REQ-SF-004 exemption) | FR-ROUTE-001 |
+| `Routing/ControllerAttributeRouteLoader.php` | Internal reader of the controllers' `#[Route]` attributes (since 2.21.1, REQ-SF-004) | FR-ROUTE-001 |
+| `Routing/TaskBoardRouteLoader.php` | Route loader: `#[Route]` attributes (since 2.21.1) with config-driven names / paths, feature switches and tenant copies (REQ-SF-004) | FR-ROUTE-001 |
 | `Routing/TenantPathUrlGenerator.php` | Tenant route copies and URL generation (since 1.10) | FR-ROUTE-001, FR-TENANT-001 |
 | `Routing/TenantPaths.php` | Tenant route copies and URL generation (since 1.10) | FR-ROUTE-001, FR-TENANT-001 |
 | `Security/AllowAllTaskBoardAccessChecker.php` | Demo-only checker when `security.allow_unauthenticated` is true | FR-SEC-002 |

@@ -14,14 +14,17 @@ use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Since 2.2.0 (spec 213): boards and columns (Full management). Each answers the board as `GET /v2/list/{id}` does, with
  * `warnings` for the fields nothing read.
  */
+#[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiManagementController
 {
     public function __construct(
@@ -35,6 +38,7 @@ final readonly class TaskApiManagementController
     }
 
     /** Since 2.19.0: `POST /v2/space/{id}/folder`. */
+    #[Route('/v2/space/{spaceId}/folder', name: 'nowo_task_board_api_folder_create', methods: ['POST'])]
     public function createFolder(Request $request, string $spaceId): JsonResponse
     {
         $input  = $this->input($request);
@@ -44,6 +48,7 @@ final readonly class TaskApiManagementController
     }
 
     /** Since 2.19.0: `PUT /v2/folder/{id}`. */
+    #[Route('/v2/folder/{folderId}', name: 'nowo_task_board_api_folder_update', methods: ['PUT'])]
     public function updateFolder(Request $request, string $folderId): JsonResponse
     {
         $input  = $this->input($request);
@@ -53,6 +58,7 @@ final readonly class TaskApiManagementController
     }
 
     /** Since 2.19.0: `DELETE /v2/folder/{id}`: 200 `{}`; 409 `FOLDER_001` while lists are in it. */
+    #[Route('/v2/folder/{folderId}', name: 'nowo_task_board_api_folder_delete', methods: ['DELETE'])]
     public function deleteFolder(Request $request, string $folderId): JsonResponse
     {
         $input = $this->input($request);
@@ -62,6 +68,7 @@ final readonly class TaskApiManagementController
     }
 
     /** Since 2.19.0: `POST /v2/folder/{id}/list`: a board created in the folder. */
+    #[Route('/v2/folder/{folderId}/list', name: 'nowo_task_board_api_folder_list_create', methods: ['POST'])]
     public function createFolderList(Request $request, string $folderId): JsonResponse
     {
         $input = $this->input($request, TaskApiBoardOperations::NOT_SUPPORTED);
@@ -83,6 +90,7 @@ final readonly class TaskApiManagementController
         return $this->folders ?? throw new LogicException('TaskApiFolderOperations is not wired.');
     }
 
+    #[Route('/v2/space/{spaceId}/list', name: 'nowo_task_board_api_board_create', methods: ['POST'])]
     public function createBoard(Request $request, string $spaceId): JsonResponse
     {
         $input = $this->input($request, TaskApiBoardOperations::NOT_SUPPORTED);
@@ -90,6 +98,7 @@ final readonly class TaskApiManagementController
         return $this->board($request, $this->boards->createBoard($this->principal($request), $spaceId, $input), $input);
     }
 
+    #[Route('/v2/list/{listId}', name: 'nowo_task_board_api_board_update', methods: ['PUT'])]
     public function updateBoard(Request $request, string $listId): JsonResponse
     {
         $input = $this->input($request, TaskApiBoardOperations::NOT_SUPPORTED);
@@ -100,6 +109,7 @@ final readonly class TaskApiManagementController
     /**
      * 200 `{}` when the board is gone; 202 while tasks remain, with `Retry-After`: call `DELETE` again.
      */
+    #[Route('/v2/list/{listId}', name: 'nowo_task_board_api_board_delete', methods: ['DELETE'])]
     public function deleteBoard(Request $request, string $listId): JsonResponse
     {
         $input = $this->input($request);
@@ -115,6 +125,7 @@ final readonly class TaskApiManagementController
         return $response;
     }
 
+    #[Route('/v2/list/{listId}/status', name: 'nowo_task_board_api_status_create', methods: ['POST'])]
     public function createColumn(Request $request, string $listId): JsonResponse
     {
         // Since 2.19.0 (FR-033): `type` is read.
@@ -123,6 +134,7 @@ final readonly class TaskApiManagementController
         return $this->board($request, $this->boards->createColumn($this->principal($request), $listId, $input), $input);
     }
 
+    #[Route('/v2/list/{listId}/status/{statusId}', name: 'nowo_task_board_api_status_update', methods: ['PUT'])]
     public function updateColumn(Request $request, string $listId, string $statusId): JsonResponse
     {
         $input = $this->input($request, ['orderindex']);
@@ -130,6 +142,7 @@ final readonly class TaskApiManagementController
         return $this->board($request, $this->boards->updateColumn($this->principal($request), $listId, $statusId, $input), $input);
     }
 
+    #[Route('/v2/list/{listId}/status/{statusId}', name: 'nowo_task_board_api_status_delete', methods: ['DELETE'])]
     public function deleteColumn(Request $request, string $listId, string $statusId): JsonResponse
     {
         $input = $this->input($request);
@@ -137,6 +150,7 @@ final readonly class TaskApiManagementController
         return $this->board($request, $this->boards->deleteColumn($this->principal($request), $listId, $statusId), $input);
     }
 
+    #[Route('/v2/list/{listId}/status/order', name: 'nowo_task_board_api_status_order', methods: ['PUT'])]
     public function reorderColumns(Request $request, string $listId): JsonResponse
     {
         $input = $this->input($request);

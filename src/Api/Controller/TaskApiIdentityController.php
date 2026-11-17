@@ -9,8 +9,10 @@ use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiIdentitySerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
 
 use function array_map;
 use function is_string;
@@ -18,6 +20,7 @@ use function is_string;
 /**
  * Since 2.2.0 (spec 213): `GET /v2/user` and `GET /v2/team`. Thin: every check is in the operation.
  */
+#[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiIdentityController
 {
     public function __construct(
@@ -26,11 +29,13 @@ final readonly class TaskApiIdentityController
     ) {
     }
 
+    #[Route('/v2/user', name: 'nowo_task_board_api_user', methods: ['GET'])]
     public function user(Request $request): JsonResponse
     {
         return new JsonResponse(['user' => $this->serializer->user($this->operations->me($this->principal($request)))]);
     }
 
+    #[Route('/v2/team', name: 'nowo_task_board_api_team', methods: ['GET'])]
     public function teams(Request $request): JsonResponse
     {
         $teams = $this->operations->teamsWithMembers($this->principal($request));
@@ -42,6 +47,7 @@ final readonly class TaskApiIdentityController
      * Since 2.16.0 (spec 234, FR-025): `GET /v2/team/{id}/member` (every member) and `?name=` (a prefix of the name or of
      * one of its words, case and accents aside: id, name and service-account flag only).
      */
+    #[Route('/v2/team/{teamId}/member', name: 'nowo_task_board_api_team_members', methods: ['GET'])]
     public function members(Request $request, string $teamId): JsonResponse
     {
         $principal = $this->principal($request);

@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceRule;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -32,6 +33,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
@@ -66,6 +68,7 @@ final class TaskRecurrenceController extends AbstractController
     ) {
     }
 
+    #[Route('/tools/task-board/task/{taskId}/recurrence', name: 'nowo_task_board_task_recurrence', methods: ['GET', 'POST'])]
     public function edit(string $taskId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
@@ -137,6 +140,7 @@ final class TaskRecurrenceController extends AbstractController
         ]);
     }
 
+    #[Route('/tools/task-board/task/{taskId}/recurrence/{action}', name: 'nowo_task_board_task_recurrence_action', methods: ['POST'], requirements: ['action' => TaskBoardRouteLoader::RECURRENCE_ACTION_REQUIREMENT])]
     public function action(string $taskId, string $action, Request $request): RedirectResponse
     {
         [$user, $task] = $this->source($taskId);

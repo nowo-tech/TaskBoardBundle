@@ -17,11 +17,13 @@ use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiRevision;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
 
 use function array_map;
 use function is_string;
@@ -33,6 +35,7 @@ use const PATHINFO_EXTENSION;
  * Since 2.2.0 (spec 213): the write endpoints. Thin: parse the body, call one operation, answer as ClickUp does, with
  * `warnings` for the fields nothing read.
  */
+#[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiWriteController
 {
     public function __construct(
@@ -46,6 +49,7 @@ final readonly class TaskApiWriteController
     ) {
     }
 
+    #[Route('/v2/list/{listId}/task', name: 'nowo_task_board_api_task_create', methods: ['POST'])]
     public function createTask(Request $request, string $listId): JsonResponse
     {
         $input = $this->input($request, TaskApiTaskOperations::NOT_SUPPORTED);
@@ -54,6 +58,7 @@ final readonly class TaskApiWriteController
         return $this->taskAnswer($request, $task, $input);
     }
 
+    #[Route('/v2/task/{taskId}', name: 'nowo_task_board_api_task_update', methods: ['PUT'])]
     public function updateTask(Request $request, string $taskId): JsonResponse
     {
         $input = $this->input($request, TaskApiTaskOperations::NOT_SUPPORTED);
@@ -66,6 +71,7 @@ final readonly class TaskApiWriteController
     /**
      * Since 2.16.0 (spec 234, FR-021): `POST /v2/task/bulk`, all or none; answers `{"tasks": [...]}` in the request's order.
      */
+    #[Route('/v2/task/bulk', name: 'nowo_task_board_api_task_bulk', methods: ['POST'])]
     public function updateTasks(Request $request): JsonResponse
     {
         $input     = $this->input($request);
@@ -81,6 +87,7 @@ final readonly class TaskApiWriteController
         return $this->answer(['tasks' => $data], $input);
     }
 
+    #[Route('/v2/task/{taskId}', name: 'nowo_task_board_api_task_delete', methods: ['DELETE'])]
     public function deleteTask(Request $request, string $taskId): JsonResponse
     {
         // A body is read for its warnings only: nothing in it is saved.
@@ -90,6 +97,7 @@ final readonly class TaskApiWriteController
         return $this->answer([], $input);
     }
 
+    #[Route('/v2/task/{taskId}/comment', name: 'nowo_task_board_api_comment_create', methods: ['POST'])]
     public function addComment(Request $request, string $taskId): JsonResponse
     {
         $input = $this->input($request, ['notify_all', 'assignee', 'group_assignee']);
@@ -103,6 +111,7 @@ final readonly class TaskApiWriteController
     /**
      * Since 2.16.0 (spec 234): `PUT /v2/comment/{id}`; answers `{}` as ClickUp does.
      */
+    #[Route('/v2/comment/{commentId}', name: 'nowo_task_board_api_comment_update', methods: ['PUT'])]
     public function updateComment(Request $request, string $commentId): JsonResponse
     {
         $input   = $this->input($request, ['assignee', 'group_assignee', 'resolved', 'notify_all']);
@@ -112,6 +121,7 @@ final readonly class TaskApiWriteController
         return $this->answer([], $input);
     }
 
+    #[Route('/v2/task/{taskId}/attachment', name: 'nowo_task_board_api_attachment_create', methods: ['POST'])]
     public function addAttachment(Request $request, string $taskId): JsonResponse
     {
         // The form fields besides the file are read for their warnings only.
@@ -136,6 +146,7 @@ final readonly class TaskApiWriteController
         ], $input);
     }
 
+    #[Route('/v2/team/{teamId}/time_entries', name: 'nowo_task_board_api_time_log', methods: ['POST'])]
     public function logTime(Request $request, string $teamId): JsonResponse
     {
         $input          = $this->input($request, TaskApiTimeOperations::NOT_SUPPORTED);
@@ -146,6 +157,7 @@ final readonly class TaskApiWriteController
     }
 
     /** Since 2.12.0: the `billable` flag of one of the token's own time entries. */
+    #[Route('/v2/team/{teamId}/time_entries/{timerId}', name: 'nowo_task_board_api_time_update', methods: ['PUT'])]
     public function updateTime(Request $request, string $teamId, string $timerId): JsonResponse
     {
         $input           = $this->input($request, TaskApiTimeOperations::UPDATE_NOT_SUPPORTED);
@@ -156,11 +168,13 @@ final readonly class TaskApiWriteController
     }
 
     /** Tracked time is never deleted through the API (owner, Q-O7): refused before anything is read or looked up. */
+    #[Route('/v2/team/{teamId}/time_entries/{timerId}', name: 'nowo_task_board_api_time_delete', methods: ['DELETE'])]
     public function deleteTime(): JsonResponse
     {
         throw new TaskApiRefusal(403, 'TIME_002', 'Time entries are not deleted through the API');
     }
 
+    #[Route('/v2/task/{taskId}/tag/{tagName}', name: 'nowo_task_board_api_tag_add', methods: ['POST'])]
     public function addTag(Request $request, string $taskId, string $tagName): JsonResponse
     {
         $input = $this->input($request);
@@ -168,6 +182,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->tag($this->principal($request), $taskId, $tagName, true), $input);
     }
 
+    #[Route('/v2/task/{taskId}/tag/{tagName}', name: 'nowo_task_board_api_tag_remove', methods: ['DELETE'])]
     public function removeTag(Request $request, string $taskId, string $tagName): JsonResponse
     {
         $input = $this->input($request);
@@ -176,6 +191,7 @@ final readonly class TaskApiWriteController
     }
 
     /** Since 2.19.0 (FR-028): `{"value": …}` on a native field; a provider's field stays 409 `FIELD_001`. */
+    #[Route('/v2/task/{taskId}/field/{fieldId}', name: 'nowo_task_board_api_field_set', methods: ['POST'])]
     public function setField(Request $request, string $taskId, string $fieldId = ''): JsonResponse
     {
         $input = $this->input($request);
@@ -184,6 +200,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->setField($this->principal($request), $taskId, $fieldId, $input), $input);
     }
 
+    #[Route('/v2/task/{taskId}/dependency', name: 'nowo_task_board_api_dependency_add', methods: ['POST'])]
     public function addDependency(Request $request, string $taskId): JsonResponse
     {
         $input          = $this->input($request);
@@ -192,6 +209,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->relate($this->principal($request), $taskId, $other, $type), $input);
     }
 
+    #[Route('/v2/task/{taskId}/dependency', name: 'nowo_task_board_api_dependency_remove', methods: ['DELETE'])]
     public function removeDependency(Request $request, string $taskId): JsonResponse
     {
         $query          = new TaskApiInput($request->query->all());
@@ -202,6 +220,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->tasks->unrelate($this->principal($request), $taskId, $other, [TaskDependencyType::Blocks, TaskDependencyType::BlockedBy], $type === TaskDependencyType::BlockedBy), $input);
     }
 
+    #[Route('/v2/task/{taskId}/link/{linksTo}', name: 'nowo_task_board_api_link_add', methods: ['POST'])]
     public function addLink(Request $request, string $taskId, string $linksTo): JsonResponse
     {
         $task = $this->tasks->relate($this->principal($request), $taskId, $linksTo, TaskDependencyType::Related);
@@ -209,6 +228,7 @@ final readonly class TaskApiWriteController
         return $this->taskAnswer($request, $task, $this->input($request), true);
     }
 
+    #[Route('/v2/task/{taskId}/link/{linksTo}', name: 'nowo_task_board_api_link_remove', methods: ['DELETE'])]
     public function removeLink(Request $request, string $taskId, string $linksTo): JsonResponse
     {
         $task = $this->tasks->unrelate($this->principal($request), $taskId, $linksTo, [TaskDependencyType::Related, TaskDependencyType::Duplicates], null);
@@ -216,6 +236,7 @@ final readonly class TaskApiWriteController
         return $this->taskAnswer($request, $task, $this->input($request), true);
     }
 
+    #[Route('/v2/task/{taskId}/checklist', name: 'nowo_task_board_api_checklist_create', methods: ['POST'])]
     public function createChecklist(Request $request, string $taskId): JsonResponse
     {
         $input         = $this->input($request);
@@ -224,6 +245,7 @@ final readonly class TaskApiWriteController
         return $this->checklistAnswer($request, $task, $name, $input);
     }
 
+    #[Route('/v2/checklist/{checklistId}', name: 'nowo_task_board_api_checklist_update', methods: ['PUT'])]
     public function updateChecklist(Request $request, string $checklistId): JsonResponse
     {
         $input  = $this->input($request, ['position']);
@@ -232,6 +254,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $task, $input);
     }
 
+    #[Route('/v2/checklist/{checklistId}', name: 'nowo_task_board_api_checklist_delete', methods: ['DELETE'])]
     public function deleteChecklist(Request $request, string $checklistId): JsonResponse
     {
         $input = $this->input($request);
@@ -239,6 +262,7 @@ final readonly class TaskApiWriteController
         return $this->empty($request, $this->checklists->deleteChecklist($this->principal($request), $checklistId), $input);
     }
 
+    #[Route('/v2/checklist/{checklistId}/checklist_item', name: 'nowo_task_board_api_item_create', methods: ['POST'])]
     public function createItem(Request $request, string $checklistId): JsonResponse
     {
         $input         = $this->input($request);
@@ -247,6 +271,7 @@ final readonly class TaskApiWriteController
         return $this->checklistAnswer($request, $task, $name, $input);
     }
 
+    #[Route('/v2/checklist/{checklistId}/checklist_item/{itemId}', name: 'nowo_task_board_api_item_update', methods: ['PUT'])]
     public function updateItem(Request $request, string $checklistId, string $itemId): JsonResponse
     {
         $input         = $this->input($request, ['parent']);
@@ -255,6 +280,7 @@ final readonly class TaskApiWriteController
         return $this->checklistAnswer($request, $task, $name, $input);
     }
 
+    #[Route('/v2/checklist/{checklistId}/checklist_item/{itemId}', name: 'nowo_task_board_api_item_delete', methods: ['DELETE'])]
     public function deleteItem(Request $request, string $checklistId, string $itemId): JsonResponse
     {
         $input = $this->input($request);
