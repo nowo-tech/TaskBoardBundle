@@ -31,7 +31,7 @@ final class ControllerAttributeRouteLoader extends AttributeClassLoader
      */
     protected function configureRoute(Route $route, ReflectionClass $class, ReflectionMethod $method, object $attr): void
     {
-        $declared = $attr instanceof RouteAttribute ? $attr->getDefaults() : [];
+        $declared = $attr instanceof RouteAttribute ? $attr->defaults : [];
         foreach ($method->getParameters() as $parameter) {
             if (!array_key_exists($parameter->getName(), $declared)) {
                 $route->setDefaults(array_diff_key($route->getDefaults(), [$parameter->getName() => true]));

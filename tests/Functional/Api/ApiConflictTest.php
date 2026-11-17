@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\RecordingTransitionPolicy;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
 
 use function array_intersect_key;
 
@@ -114,15 +116,22 @@ final class ApiConflictTest extends ApiTestCase
 
     /**
      * Since 2.21.1 (audit SF3-L1): a status retype locks the column's tasks first; an out-of-date copy of one of them that
-     * holds unsaved changes (a concurrent write committed a new position) is 409 `STATUS_409`, and nothing is written.
+     * holds unsaved changes (a concurrent write committed a new position) is 409 `STATUS_409`, and nothing is written. A
+     * retype asks no transition policy: the request's copy is changed once the controller is chosen.
      */
     public function testAStatusRetypeThatFindsATaskChangedMeanwhileIsStatus409(): void
     {
         $doing  = $this->column('Doing');
         $task   = $this->task($this->board, 'Raced', 1);
         $taskId = $task->getId();
-        $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$taskId]);
-        $task->setTitle('Unsaved');
+        $em     = $this->em;
+        $this->em->clear();
+        $dispatcher = static::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($em, $taskId): void {
+            $em->find(Task::class, $taskId)?->setTitle('Unsaved');
+            $em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$taskId]);
+        });
 
         $this->send('PUT', '/api/tasks/v2/list/' . $this->board->getId() . '/status/' . $doing->getId(), ['type' => 'done']);
 
