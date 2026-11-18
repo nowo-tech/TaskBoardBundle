@@ -175,8 +175,10 @@ final class TaskQuestionManagerTest extends QuestionTestCase
         self::assertSame($revision, $task->getRevision(), 'Answering never moves the task revision');
         $rows = $task->getChangeHistory()->filter(static fn ($e): bool => $e->getChangeType() === TaskChangeType::QuestionAnswered)->getValues();
         self::assertCount(2, $rows);
-        self::assertSame('Hetzner', $rows[1]->getOldValue());
-        self::assertSame('Neither: on premises', $rows[1]->getNewValue());
+        // Both entries carry the same second: read them by content, not by position (MySQL orders ties as it likes).
+        $values = array_map(static fn ($e): array => [$e->getOldValue(), $e->getNewValue()], $rows);
+        self::assertContains([null, 'Hetzner'], $values);
+        self::assertContains(['Hetzner', 'Neither: on premises'], $values);
 
         self::assertSame(['nowo_task_board.task_question_answered', 'nowo_task_board.task_question_answered'], $this->eventNames());
         $event = $this->events[1][1];
