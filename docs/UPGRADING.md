@@ -4,6 +4,10 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.22.0](#to-2220)
+  - [Lock conflicts: 409 + Retry-After (was 500 / 503)](#lock-conflicts-409--retry-after-was-500--503)
+  - [Write units (transaction-doctrine)](#write-units-transaction-doctrine)
+  - [Task and column menus, focus mode](#task-and-column-menus-focus-mode)
 - [To 2.21.1](#to-2211)
 - [To 2.21.0](#to-2210)
 - [To 2.20.0](#to-2200)
@@ -205,6 +209,97 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.22.0
+
+```bash
+composer update nowo-tech/task-board-bundle nowo-tech/transaction-doctrine nowo-tech/ui-kit-bundle
+```
+
+No schema change. The bundle now requires `nowo-tech/transaction-doctrine ^1.3` and `nowo-tech/ui-kit-bundle ^2.55`.
+
+### Lock conflicts: 409 + Retry-After (was 500 / 503)
+
+Owner platform decision (one lock-conflict status: **409 Conflict + `Retry-After`**, transaction-doctrine 1.3's shared
+`ConflictResponsePolicy`). A Task API request whose failure holds a database lock conflict anywhere in its chain — a
+deadlock or lock wait timeout (a DBAL `RetryableException`, PostgreSQL `55P03`), a `TransientStorageFailure`, any
+`Nowo\TransactionDoctrine\WriteUnit\LockConflictExceptionInterface` (a write unit's `ConcurrencyConflict`) — answered:
+
+- **500 `SERVER_001`** from the bundle's own API listener, or
+- **503 + `Retry-After`** where the host's conflict responder of transaction-doctrine 1.2 caught it first (a host that
+  listed TaskBoard routes in `nowo_transaction_doctrine.controller_routes`).
+
+It now answers the policy's status, **409** by default, with `Retry-After` and `{"err", "ECODE": "CONFLICT_001"}`, when
+nothing of the request was committed: send the same request again. When the request had **already committed** part of
+its work, the answer is the same status **without** `Retry-After` and `ECODE: "CONFLICT_002"`: read the task again, never
+retry it blindly. The bundle knows it from nowo-tech/transaction-doctrine's commit ledger, which counts every COMMIT and
+every write outside a transaction on the connections (a DBAL middleware the bundle registers, `doctrine.middleware`;
+transaction-doctrine's own when its bundle has `commit_detection` on), compared with the count when the API's controller
+was chosen; from a write unit's `ConcurrencyConflict` with `committed: true`; and from MySQL's lost savepoint (1305) seen
+without a deadlock or lock wait timeout. Task creates (with their assignees) and deletes are one transaction, and their
+events are dispatched after the commit without failing the request.
+Nothing else changes: the API's other 409 codes (`TASK_409`, `STATUS_409`, `PARENT_004`…) stay as they are. The
+idempotency key of a `CONFLICT_001` is released, so the same request may be sent again; the key of a `CONFLICT_002` keeps
+that answer, so the same key sent again replays it and writes nothing.
+
+- With transaction-doctrine's responder answering first (`controller_routes`), the body says `CONFLICT_002` from the
+  same ledger, but the `Retry-After` header is the responder's own decision (its write unit's commit detection).
+
+```yaml
+# Keep 503: register Nowo\TransactionDoctrine\Symfony\NowoTransactionDoctrineBundle in config/bundles.php, then
+# config/packages/nowo_transaction_doctrine.yaml
+nowo_transaction_doctrine:
+    conflict_response:
+        status: 503        # 409 (default) or 503
+        retry_after: 1
+```
+
+- **Hosts that do not register `NowoTransactionDoctrineBundle` move to 409 too**: the bundle falls back to
+  `new ConflictResponsePolicy()` (409, `Retry-After: 1`). The only way back to 503 is to register that bundle and set
+  `conflict_response.status: 503`.
+- **Clients** that retry on 503 + `Retry-After` must also retry on 409 + `Retry-After` when `ECODE` is `CONFLICT_001`.
+  A client that reads every 409 as "my change lost to another" should tell `CONFLICT_001` (send the same request again)
+  from `TASK_409` / `STATUS_409` (read again, then decide).
+- **Hosts with `controller_routes`**: with the bundle registered, the new `TaskApiConflictResponseFormatter` answers
+  the Task API's routes in the API's shape (it recognises them by the route flag, tenant copies and renamed routes
+  included). A host formatter that matched the `nowo_task_board_api_` route prefix (Beacon's
+  `App\Tasks\Api\TaskApiConflictResponseFormatter`) can be removed; its codes are the same.
+- `TaskApiRefusal` has a new optional last constructor argument, `array $headers = []`, and `lockConflict()`;
+  existing callers are unchanged.
+
+### Write units (transaction-doctrine)
+
+- The Task API's write routes may run as transaction-doctrine write units (`controller_routes`): each attempt now writes
+  the principal's user as the bundle's entity manager manages it, so a replay no longer fails with
+  `ORMInvalidArgumentException` (Beacon spec 241 T020). If your `TaskApiAuthenticatorInterface` returns a principal
+  whose user is an entity, nothing changes for you; `TaskApiPrincipal::withUser()` is new.
+- **Your attachment store** (`api.hooks.attachments`) is asked once per request: a replay of the same request reuses
+  what it returned. A store that fails part-way (it wrote the file, then its record failed) may be asked again by a
+  replay: write the file and the record so that a failed call leaves nothing, or under a key the second call overwrites.
+
+### Task and column menus, focus mode
+
+- **Behind a TLS-terminating proxy**, the menu's same-origin check compares `Origin` with this request's scheme, host
+  and port for browsers that send no `Sec-Fetch-Site`: set `framework.trusted_proxies` (and the trusted headers), or
+  such a browser's menu writes are refused with 403.
+- **New route `task_menu`** (`POST /tools/task-board/menu/task`, name `nowo_task_board_task_menu`; configurable under
+  `routes.task_menu` like the others, copied under each tenant path). Nothing to do with the documented
+  `type: nowo_task_board` import. A host that lists the bundle's routes (an access map, a firewall rule, a CSP
+  `form-action`) adds it; it is a same-origin POST with the CSRF token `task_board_task_menu`.
+- **Every card and list row gets a «⋮» menu, every column header too.** A host template that overrides
+  `manage/_task_card.html.twig`, `_board_column.html.twig`, `_list_row_cells.html.twig`, `board.html.twig` or
+  `list.html.twig` keeps working and shows no menu until it includes `manage/_task_menu.html.twig` /
+  `_column_menu.html.twig` (see [USAGE](USAGE.md#task-and-column-menus)); the board and list pages print the menu form
+  `nowo-task-menu-form` once. The list view has one more column (`actions`) when the menus are on the page.
+- **Context menus follow UiKit's `theme.context_menus`.** `nowo_task_board.web_ui.context_menus: true | false` forces
+  them on or off for TaskBoard's pages; `true` also loads UiKit's `nowo-ui-context-menu.js` on them.
+- **Your text renderer.** The HTML it returns for descriptions and comments no longer keeps `data-nowo-ui-context-menu*`
+  or `data-nowo-ui-card` (renamed `data-removed-…` anywhere they are left). Nothing else of it changes.
+- **Focus mode.** With `nowo_ui_kit.theme.focus_mode.enabled: true` the board, list, calendar and task pages show the
+  focus toggle (area `tasks`). Override `manage/_focus_mode_toggle.html.twig` (or the `nowo_task_board_focus_mode`
+  block) to move or drop it.
+- **Calendar.** If your host CSS gave `.nowo-task-cal` a positioned ancestor and a wrapping toolbar for phones, the
+  bundle does it now; that CSS can go.
 
 ## To 2.21.1
 

@@ -9,7 +9,10 @@
 {% block nowo_ui_scripts %}
     {{ parent() }}
     <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
-    {% if nowo_task_board_numbers_enabled() %}<script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>{% endif %}<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+    {#- Since 2.22.0: Copy link of the task menu; the context menu runtime when web_ui.context_menus forces it on. -#}
+    <script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>
+    {% if nowo_task_board_context_menus() %}<script src="{{ asset('js/nowo-ui-context-menu.js', 'nowo_ui_kit') }}" defer></script>{% endif %}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.list.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
@@ -30,6 +33,16 @@
 {% endblock %}
 
 {% block nowo_ui_content %}
+    {# Since 2.22.0: UiKit 2.55's focus mode toggle (nothing while the host has focus mode off). #}
+    {% block nowo_task_board_focus_mode %}{{ include('@NowoTaskBoardBundle/manage/_focus_mode_toggle.html.twig') }}{% endblock %}
+    {# Since 2.22.0: the rows' menus (Menu\TaskMenuBuilder) and the one form their write entries submit. #}
+    {% set taskMenuContext = nowo_task_board_menu_context(board) %}
+    {#- web_ui.context_menus: true / false forces it; null follows UiKit's theme.context_menus (Twig's ?? would take false for null). -#}
+    {% set _forcedContextMenus = nowo_task_board_context_menus() %}
+    {% set taskContextMenu = _forcedContextMenus is same as(null) ? ((nowo_ui_theme|default(null)) and nowo_ui_theme.contextMenus is defined ? nowo_ui_theme.contextMenus() : false) : _forcedContextMenus %}
+    {% set _taskMenuForm = taskMenuContext ? nowo_task_board_menu_form(path(nowo_task_board_route('task_menu'), {_target_path: path(nowo_task_board_route('list'), {boardId: board.id})})) : null %}
+    {% set taskMenuFormReady = _taskMenuForm is not null %}
+    {% if _taskMenuForm %}{{ form_start(_taskMenuForm, {attr: {id: 'nowo-task-menu-form', hidden: 'hidden', 'data-testid': 'nowo-task-menu-form'}}) }}{{ form_end(_taskMenuForm) }}{{ include('@NowoTaskBoardBundle/manage/_task_menu_shared.html.twig', {board: board}, with_context: false) }}{% endif %}
 
     {# Since 1.23: the board's provider connection (badge, Refresh, Connect provider); nothing without sync. #}
     {% block nowo_task_board_connection %}
@@ -106,13 +119,13 @@
                     <p class="nowo-task-list__empty">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
                 {% else %}
                     {% embed nowo_ui_partial('table', 'NowoTaskBoardBundle') with {
-                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null), customFields|default([])),
+                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null), customFields|default([]), taskMenuContext is not null),
                         label: group.column ? group.column.name : 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle'),
                         foot_attr: {class: 'nowo-task-list__time-col', 'data-nowo-task-board-list-filter-target': 'totals'},
                         bundle: 'NowoTaskBoardBundle',
                     } %}
                         {% block nowo_ui_table_row %}
-                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row, customFields: customFields|default([]), customValues: customValues|default({})}) }}
+                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row, customFields: customFields|default([]), customValues: customValues|default({}), taskMenu: taskMenuContext ? nowo_task_board_task_menu(row, taskMenuContext) : null, taskMenuFormReady: taskMenuFormReady, taskContextMenu: taskContextMenu}) }}
                         {% endblock %}
                         {# Since 1.15: the totals of the rows the filters show (kept up to date by the list filter controller). #}
                         {% block nowo_ui_table_foot %}
@@ -121,6 +134,7 @@
                                 <td class="nowo-task-list__num" data-total="estimate">—</td>
                                 <td class="nowo-task-list__num" data-total="spent">—</td>
                                 <td class="nowo-task-list__num" data-total="deviation">—</td>
+                                {% if taskMenuContext %}<td></td>{% endif %}
                             </tr>
                         {% endblock %}
                     {% endembed %}

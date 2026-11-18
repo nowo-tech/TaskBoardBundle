@@ -7,8 +7,8 @@
 >
     <php>
         <!-- The functional suite boots one kernel per configuration and renders every page; the HTML coverage report needs
-             more on top (spec 213 went past 512M while writing it). -->
-        <ini name="memory_limit" value="1G"/>
+             more on top (spec 213 went past 512M while writing it; 2.22.0 past 1G). -->
+        <ini name="memory_limit" value="2G"/>
         <!-- REQ-SF-005: fail on direct Symfony deprecations -->
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="max[direct]=0"/>
         <!-- WebTestCase kernel (tests/Functional): the bundle on SQLite in memory, or TASK_BOARD_TEST_DATABASE_URL -->

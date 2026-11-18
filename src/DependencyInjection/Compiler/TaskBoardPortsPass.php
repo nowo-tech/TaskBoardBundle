@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeStoreInterface;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneePolicyInterface;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
@@ -111,8 +112,17 @@ final class TaskBoardPortsPass implements CompilerPassInterface
     /**
      * @throws LogicException when a port service implements neither interface
      */
+    /** Since 2.22.0 (audit SU-L1): transaction-doctrine's own commit ledger, when its bundle detects commits. */
+    public const TRANSACTION_DOCTRINE_LEDGER = 'nowo_transaction_doctrine.commit_ledger';
+
     public function process(ContainerBuilder $container): void
     {
+        // Since 2.22.0 (audit SU-L1): with transaction-doctrine's commit detection on, the API's watermark reads that bundle's
+        // ledger (its write units count with it too); the bundle's own middleware keeps counting, unread.
+        if ($container->hasDefinition(TaskApiCommitWatermark::class) && $container->has(self::TRANSACTION_DOCTRINE_LEDGER)) {
+            $container->getDefinition(TaskApiCommitWatermark::class)->setArgument(0, new Reference(self::TRANSACTION_DOCTRINE_LEDGER));
+        }
+
         foreach (self::PORTS as $port) {
             $id = $port['id'];
             if (!$container->hasAlias($id) && !$container->hasDefinition($id)) {

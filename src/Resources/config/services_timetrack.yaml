@@ -12,6 +12,8 @@ services:
             # Since 2.12.0: registered by the extension only with the TimeTrack version that has their dependencies.
             - '../../Bridge/TimeTrack/TimeTrackTaskTimeBillableDefaultProvider.php'
             - '../../Bridge/TimeTrack/TimeTrackTaskTimePeriodLock.php'
+            # Since 2.22.0: registered by the extension (TimeTrack's TimerService, when it exists).
+            - '../../Bridge/TimeTrack/TimeTrackTaskTimerStarter.php'
 
     Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener: ~
 

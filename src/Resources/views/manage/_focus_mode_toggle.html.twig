@@ -1,0 +1,7 @@
+{#
+    Since 2.22.0 (UiKit 2.55 shell focus mode): the focus mode toggle of the board, list, calendar and task views, remembered
+    under the area `tasks`. UiKit's partial renders nothing while the host has not turned on `nowo_ui_kit.theme.focus_mode`,
+    and then neither does this one. Override this template to move or drop the toggle.
+#}
+{% set _toggle = include(nowo_ui_partial('focus_mode_toggle'), {area: 'tasks'}) %}
+{% if _toggle|trim is not empty %}<div class="nowo-task-focus-toggle" data-testid="nowo-task-focus-toggle">{{ _toggle }}</div>{% endif %}

@@ -31,12 +31,16 @@ use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimerStarter;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
@@ -65,6 +69,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Member\NoMemberBadges;
+use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
 use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
@@ -175,6 +180,7 @@ use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -223,8 +229,15 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         private readonly string $timeTrackEntryCreatedEvent = TimeEntryCreatedEvent::class,
         private readonly string $timeTrackBillableDefaults = self::TIME_TRACK_BILLABLE_DEFAULTS,
         private readonly string $timeTrackPeriodLockGuard = PeriodLockGuard::class,
+        // Since 2.22.0: interface whose presence registers the Task API's conflict formatter (transaction-doctrine >= 1.3).
+        private readonly string $conflictFormatterInterface = ConflictResponseFormatterInterface::class,
+        // Since 2.22.0: the service id of TimeTrack's timer use cases ("Start timer" of the task menu).
+        private readonly string $timeTrackTimerService = self::TIME_TRACK_TIMER_SERVICE,
     ) {
     }
+
+    /** Since 2.22.0: TimeTrack's timer use cases (its service id is the class). */
+    public const TIME_TRACK_TIMER_SERVICE = 'Nowo\\TimeTrackBundle\\Service\\TimerService';
 
     /** Since 2.12.0: TimeTrack's billable default port (TimeTrack >= 1.21); a string, so older TimeTrack still loads. */
     public const TIME_TRACK_BILLABLE_DEFAULTS = 'Nowo\\TimeTrackBundle\\Integration\\TimeEntryBillableDefaultProviderInterface';
@@ -250,6 +263,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $config['templates'] = $config['web_ui']['templates'] + $config['templates'];
         $container->setParameter('nowo_task_board.templates', $config['templates']);
         $container->setParameter('nowo_task_board.web_ui.layout_template', $config['web_ui']['layout_template'] ?? $config['templates']['layout']);
+        // Since 2.22.0: null follows UiKit's theme.context_menus.
+        $container->setParameter('nowo_task_board.web_ui.context_menus', $config['web_ui']['context_menus']);
         $container->setParameter('nowo_task_board.templates.page_header', $config['templates']['page_header']);
         $container->setParameter('nowo_task_board.board.toolbar', $config['board']['toolbar']);
         $container->setParameter('nowo_task_board.task_panel.toolbar', $config['task_panel']['toolbar']);
@@ -454,6 +469,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->getDefinition(TaskApiQueryRepository::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(ManualTaskApiTimeEntries::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
         $container->getDefinition(TaskApiTransaction::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        $container->getDefinition(TaskApiActors::class)->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)));
+        // Since 2.22.0 (owner decision, transaction-doctrine 1.3): the API's own shape for the lock-conflict responder of
+        // nowo-tech/transaction-doctrine's bundle, only when its interface exists.
+        if (interface_exists($this->conflictFormatterInterface)) {
+            $container->setDefinition(TaskApiConflictResponseFormatter::class, (new Definition(TaskApiConflictResponseFormatter::class))
+                ->setArgument('$commits', new Reference(TaskApiCommitWatermark::class))
+                ->addTag(ConflictResponseFormatterInterface::TAG));
+        }
     }
 
     /**
@@ -960,6 +983,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
             $container->setAlias(TaskTimePeriodLockInterface::class, TimeTrackTaskTimePeriodLock::class);
         }
+        // Since 2.22.0: "Start timer" of the task menu, through TimeTrack's TimerService (absent: the entry is not offered).
+        $container->register(TimeTrackTaskTimerStarter::class, TimeTrackTaskTimerStarter::class)
+            ->setArgument('$timers', new Reference($this->timeTrackTimerService, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+        $container->setAlias(TaskTimerStarterInterface::class, TimeTrackTaskTimerStarter::class);
     }
 
     /** Since 2.2.0: whether a host set `api.hooks.idempotency_store` (then the bundle's table is not mapped). */

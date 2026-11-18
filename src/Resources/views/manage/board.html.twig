@@ -10,7 +10,11 @@
     {{ parent() }}
     <script src="{{ asset('js/nowo-ui-show-more.js', 'nowo_ui_kit') }}" defer></script>
     <script src="{{ asset('js/nowo-ui-tree.js', 'nowo_ui_kit') }}" defer></script>
-    {% if nowo_task_board_numbers_enabled() %}<script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>{% endif %}<script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+    {#- Since 2.22.0: Copy link of the task menu; the context menu runtime when web_ui.context_menus forces it on (UiKit's
+        scripts partial loads it itself under theme.context_menus; the runtime binds once). -#}
+    <script src="{{ asset('js/nowo-ui-clipboard.js', 'nowo_ui_kit') }}" defer></script>
+    {% if nowo_task_board_context_menus() %}<script src="{{ asset('js/nowo-ui-context-menu.js', 'nowo_ui_kit') }}" defer></script>{% endif %}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
 {% endblock %}
 
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
@@ -35,6 +39,8 @@
 {% endblock %}
 
 {% block nowo_ui_content %}
+    {# Since 2.22.0: UiKit 2.55's focus mode toggle (nothing while the host has focus mode off). #}
+    {% block nowo_task_board_focus_mode %}{{ include('@NowoTaskBoardBundle/manage/_focus_mode_toggle.html.twig') }}{% endblock %}
     {% if board.description and board.descriptionFormat == 'markdown' %}
         {{ include('@NowoTaskBoardBundle/manage/_board_description.html.twig', {board: board}) }}
     {% endif %}
@@ -48,6 +54,15 @@
 
     {#- Since 2.5.0 (TB-13): canManageColumns false hides Add column, the column dialogs and the column sets. -#}
     {% set _manageColumns = (canEditBoard ?? true) and (canManageColumns ?? true) %}
+    {#- Since 2.22.0: the menus of the cards and column headers (Menu\TaskMenuBuilder), the context menu switch, and the one
+        CSRF-only form their write entries submit (REQ-TWIG-005). -#}
+    {% set taskMenuContext = nowo_task_board_menu_context(board) %}
+    {#- web_ui.context_menus: true / false forces it; null follows UiKit's theme.context_menus (Twig's ?? would take false for null). -#}
+    {% set _forcedContextMenus = nowo_task_board_context_menus() %}
+    {% set taskContextMenu = _forcedContextMenus is same as(null) ? ((nowo_ui_theme|default(null)) and nowo_ui_theme.contextMenus is defined ? nowo_ui_theme.contextMenus() : false) : _forcedContextMenus %}
+    {% set _taskMenuForm = taskMenuContext ? nowo_task_board_menu_form(path(nowo_task_board_route('task_menu'), {_target_path: path(nowo_task_board_route('board'), {boardId: board.id})})) : null %}
+    {% set taskMenuFormReady = _taskMenuForm is not null %}
+    {% if _taskMenuForm %}{{ form_start(_taskMenuForm, {attr: {id: 'nowo-task-menu-form', hidden: 'hidden', 'data-testid': 'nowo-task-menu-form'}}) }}{{ form_end(_taskMenuForm) }}{{ include('@NowoTaskBoardBundle/manage/_task_menu_shared.html.twig', {board: board}, with_context: false) }}{% endif %}
     <div
         data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
@@ -84,6 +99,7 @@
         <div
             class="nowo-task-board"
             data-controller="nowo-task-board"
+            data-board-id="{{ board.id }}"
             {%- if not nowo_task_board_ui.board_toolbar and (canEditBoard ?? true) and _manageColumns %} aria-describedby="nowo-task-board-reorder-hint"{% endif %}
             {#- Audit IM-I3: no reorder URL and token on a board whose columns the user may not manage. -#}
             {% if not ((canEditBoard ?? true) and not (canManageColumns ?? true)) %}

@@ -27,6 +27,12 @@ services:
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
+            # Since 2.22.0: values of the task menu (the builder is a service).
+            - '../../Menu/TaskMenu.php'
+            - '../../Menu/TaskMenuContext.php'
+            - '../../Menu/TaskMenuOperation.php'
+            - '../../Menu/TaskTimerStart.php'
+            - '../../Menu/TaskTimerStarterInterface.php'
             # Since 2.1.0: loaded only with `task_numbers.enabled` (services_numbers.yaml).
             - '../../Number/'
             # Since 2.3.0 (specs 215, 217): data carriers of the copier and the mover.
@@ -251,6 +257,25 @@ services:
         public: true
     Nowo\TaskBoardBundle\Field\TaskCustomFieldManager:
         public: true
+
+    # Since 2.22.0: the menus of the board cards, list rows and column headers (UiKit context menus) and their writes.
+    Nowo\TaskBoardBundle\Menu\TaskMenuBuilder:
+        arguments:
+            $moveEnabled: '%nowo_task_board.move.enabled%'
+            $timer: '@?Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface'
+
+    Nowo\TaskBoardBundle\Twig\TaskMenuTwigExtension:
+        arguments:
+            $contextMenus: '%nowo_task_board.web_ui.context_menus%'
+
+    Nowo\TaskBoardBundle\Controller\TaskMenuController:
+        public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $timer: '@?Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface'
+            $logger: '@?logger'
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
     Nowo\TaskBoardBundle\Controller\TaskCopyController:

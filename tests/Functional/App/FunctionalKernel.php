@@ -10,6 +10,7 @@ use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -164,7 +165,12 @@ final class FunctionalKernel extends Kernel
                 ->tag('messenger.message_handler', ['handles' => WorkerProbeMessage::class])
                 ->tag('kernel.event_listener', ['event' => WorkerProbeHandler::EVENT, 'method' => 'onProbe']);
         }
-        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true]));
+        // Since 2.22.0: the task menu's time tracker (`__timer: true`); not a bundle option.
+        if (($this->taskBoard['__timer'] ?? false) === true) {
+            $container->services()->set('app.timer', ScriptedTimerStarter::class);
+            $container->services()->alias(TaskTimerStarterInterface::class, 'app.timer');
+        }
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true]));
         PrivateEntityManagerReplay::alias($container, $taskBoard);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));

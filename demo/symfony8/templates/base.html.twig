@@ -5,6 +5,22 @@
 
 {% block nowo_ui_document_title %}{% block title %}Task Board Demo{% endblock %}{% endblock %}
 
+{#- Since TaskBoard 2.22.0: the admin page as the focus mode shell root (UiKit 2.55): its header hides in focus mode, the
+    focus bar keeps the Exit button. -#}
+{% block nowo_ui_body %}
+    {% set _bundle = nowo_ui_bundle|default(null) %}
+    <div class="{{ nowo_ui_class('page', _bundle) }} nowo-ui-page--admin" data-nowo-ui-shell data-nowo-ui-focus-regions="header" data-nowo-ui-focus-shortcut="F" data-nowo-ui-focus-fullscreen="false" data-testid="demo-shell">
+        {{ block('nowo_ui_navigation') }}
+        <main class="{{ nowo_ui_class('content', _bundle) }}" id="nowo-ui-content"{% if _bundle %} data-nowo-ui-bundle="{{ _bundle }}"{% endif %}>
+            {{ include(nowo_ui_partial('focus_mode_bar', _bundle), {fullscreen: false, bundle: _bundle}) }}
+            {{ block('nowo_ui_page_header') }}
+            {% block nowo_ui_flashes %}{{ include(nowo_ui_partial('flashes', _bundle), {bundle: _bundle}) }}{% endblock %}
+            {{ block('nowo_ui_content') }}
+        </main>
+        {{ block('nowo_ui_modals') }}
+    </div>
+{% endblock %}
+
 {% block nowo_ui_navigation %}
     {% set _route = app.request.attributes.get('_route')|default('') %}
     <header class="nowo-ui-header" data-testid="demo-masthead">

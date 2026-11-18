@@ -970,7 +970,7 @@ components:
       schema: {type: string, maxLength: 255}
   responses:
     Error:
-      description: 'Every refusal: {"err", "ECODE"}, plus the detail of some codes (TASK_409: current_revision; BULK_001: failures; TASK_003: task_id and scope). 404 ACCESS_001 for anything out of reach.'
+      description: 'Every refusal: {"err", "ECODE"}, plus the detail of some codes (TASK_409: current_revision; BULK_001: failures; TASK_003: task_id and scope). 404 ACCESS_001 for anything out of reach. Since 2.22.0 a database lock conflict is 409 (the host''s policy may keep 503) CONFLICT_001 with Retry-After, or CONFLICT_002 without it after a partial commit.'
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -982,7 +982,7 @@ components:
         err: {type: string}
         ECODE:
           type: string
-          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, FOLDER_001, TASK_002, TASK_003, TASK_409, BULK_001, BULK_002, BULK_003, SEARCH_001, STATUS_HUMANS_ONLY, STATUS_REFUSED, STATUS_409, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, TIME_003, TIME_004, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, SERVER_001]
+          enum: [OAUTH_017, OAUTH_019, API_001, ACCESS_001, ACCESS_002, TOKEN_001, PLAN_001, PLAN_002, RATE_001, RATE_002, INPUT_001, INPUT_002, LIST_001, LIST_002, FOLDER_001, TASK_002, TASK_003, TASK_409, BULK_001, BULK_002, BULK_003, SEARCH_001, STATUS_HUMANS_ONLY, STATUS_REFUSED, STATUS_409, LINK_001, LINK_002, FIELD_001, FILE_001, TIME_001, TIME_002, TIME_003, TIME_004, IDEMP_001, IDEMP_002, IDEMP_003, IDEMP_004, AUDIT_001, CONFLICT_001, CONFLICT_002, SERVER_001]
         current_revision:
           type: integer
           description: 'TASK_409 only (since 2.16.0): the task''s revision now.'

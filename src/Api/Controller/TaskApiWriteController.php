@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Api\Operation\TaskApiChecklistOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTimeOperations;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
@@ -15,6 +16,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiRevision;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
@@ -26,6 +28,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 
 use function array_map;
+use function is_array;
 use function is_string;
 use function pathinfo;
 
@@ -38,6 +41,9 @@ use const PATHINFO_EXTENSION;
 #[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiWriteController
 {
+    /** Since 2.22.0: request attribute, the attachment the host stored in an earlier attempt of this request. */
+    public const STORED_ATTACHMENT = '_nowo_task_board_api_stored_attachment';
+
     public function __construct(
         private TaskApiTaskOperations $tasks,
         private TaskApiChecklistOperations $checklists,
@@ -46,6 +52,8 @@ final readonly class TaskApiWriteController
         private TaskApiTimeOperations $time,
         private int $maxBodyBytes,
         private ClockInterface $clock = new NativeClock(),
+        // Since 2.22.0 (Beacon spec 241 T020): write-unit replay safety; null in a hand-built controller.
+        private ?TaskApiActors $actors = null,
     ) {
     }
 
@@ -129,9 +137,16 @@ final readonly class TaskApiWriteController
         $fields = $request->request->all();
         $input  = new TaskApiInput($fields, ['filename', 'custom_task_ids', 'team_id']);
         $file   = $request->files->get('attachment');
+        $upload = $file instanceof UploadedFile ? $file : null;
+        // Since 2.22.0 (Beacon spec 241 T020): a replayed attempt of a write unit (the same request) gets the file the host
+        // already stored, never a second copy; the access checks run again.
+        $kept   = $request->attributes->get(self::STORED_ATTACHMENT);
+        $key    = $upload !== null && $upload->isValid() ? $taskId . '|' . hash_file('sha256', $upload->getPathname()) : null;
+        $stored = is_array($kept) && $key !== null && ($kept[0] ?? null) === $key && ($kept[1] ?? null) instanceof TaskApiAttachment ? $kept[1] : null;
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
-        [$task, $attachment] = $this->tasks->addAttachment($this->principal($request), $taskId, $file instanceof UploadedFile ? $file : null);
-        $extension           = pathinfo($attachment->title, PATHINFO_EXTENSION);
+        [$task, $attachment] = $this->tasks->addAttachment($this->principal($request), $taskId, $upload, $stored);
+        $request->attributes->set(self::STORED_ATTACHMENT, [$key, $attachment]);
+        $extension = pathinfo($attachment->title, PATHINFO_EXTENSION);
         TaskApiIdempotencyListener::target($request, $task->getBoard());
 
         return $this->answer([
@@ -353,6 +368,7 @@ final readonly class TaskApiWriteController
 
     private function principal(Request $request): TaskApiPrincipal
     {
-        return TaskApiRequestListener::principalOf($request);
+        // Since 2.22.0 (Beacon spec 241 T020): the user as the entity manager manages it in this attempt of a write unit.
+        return $this->actors?->principal($request) ?? TaskApiRequestListener::principalOf($request);
     }
 }

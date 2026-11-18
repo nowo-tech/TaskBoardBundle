@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use RuntimeException;
 
 /**
@@ -47,12 +48,44 @@ final class TaskApiRefusal extends RuntimeException
     public const PARENT_TOO_DEEP = 'PARENT_005';
 
     /**
+     * Since 2.22.0 (owner decision, transaction-doctrine 1.3): 409 (or the shared policy's 503) + `Retry-After`, a write met
+     * a database lock conflict (deadlock, lock wait timeout) and nothing was saved: send the same request again after
+     * `Retry-After` seconds.
+     */
+    public const CONFLICT = 'CONFLICT_001';
+
+    /**
+     * Since 2.22.0: the same status without `Retry-After`, a write unit that already committed part of its work met the
+     * conflict: read the task again before trying, a blind retry could repeat what was saved.
+     */
+    public const CONFLICT_PARTIAL = 'CONFLICT_002';
+
+    /** Since 2.22.0: the message of {@see self::CONFLICT}. */
+    public const CONFLICT_MESSAGE = 'Someone else was saving at the same moment: try again';
+
+    /** Since 2.22.0: the message of {@see self::CONFLICT_PARTIAL}. */
+    public const CONFLICT_PARTIAL_MESSAGE = 'Part of your change may have been saved: read it again before trying';
+
+    /**
      * @param array<string, mixed> $extra since 2.16.0: more top-level keys of the answer (`current_revision`, `failures`);
      *                                    never `err` or `ECODE`
+     * @param array<string, string> $headers since 2.22.0: response headers of the answer (`Retry-After`)
      */
-    public function __construct(public readonly int $status, public readonly string $ecode, string $message, public readonly array $extra = [])
+    public function __construct(public readonly int $status, public readonly string $ecode, string $message, public readonly array $extra = [], public readonly array $headers = [])
     {
         parent::__construct($message);
+    }
+
+    /**
+     * Since 2.22.0 (owner decision, transaction-doctrine 1.3 `ConflictResponsePolicy`): the answer to a database lock
+     * conflict — the policy's status (409 by default, 503 when the host keeps it) with its `Retry-After` (`CONFLICT_001`),
+     * or, after a partial commit, the same status without `Retry-After` (`CONFLICT_002`).
+     */
+    public static function lockConflict(ConflictResponsePolicy $policy, bool $committed, ?int $retryAfterHint = null): self
+    {
+        return $committed
+            ? new self($policy->status, self::CONFLICT_PARTIAL, self::CONFLICT_PARTIAL_MESSAGE)
+            : new self($policy->status, self::CONFLICT, self::CONFLICT_MESSAGE, [], $policy->headers($retryAfterHint));
     }
 
     /**

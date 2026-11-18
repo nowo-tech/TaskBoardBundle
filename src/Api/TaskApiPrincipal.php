@@ -40,4 +40,13 @@ final readonly class TaskApiPrincipal
             throw new InvalidArgumentException('A TaskApiPrincipal channel is a lowercase label of at most 32 characters ([a-z][a-z0-9_]*).');
         }
     }
+
+    /**
+     * Since 2.22.0 (Beacon spec 241 T020): the same principal with another object for the same user (the one the current
+     * entity manager manages, after a write unit cleared it between attempts).
+     */
+    public function withUser(object $user): self
+    {
+        return $user === $this->user ? $this : new self($user, $this->level, $this->where, $this->tokenId, $this->tokenName, $this->channel);
+    }
 }

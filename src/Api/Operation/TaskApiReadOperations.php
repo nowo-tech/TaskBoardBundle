@@ -40,6 +40,9 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\ValueObject\TaskTextQuery;
 
 use function array_filter;
+use function array_flip;
+use function array_intersect_key;
+use function array_keys;
 use function array_map;
 use function array_values;
 use function count;
@@ -49,6 +52,7 @@ use function mb_strlen;
 use function preg_match;
 use function spl_object_id;
 use function str_starts_with;
+use function strval;
 use function trim;
 
 /**
@@ -204,6 +208,34 @@ final readonly class TaskApiReadOperations
         $boards = $this->guard->visibleBoards($principal, $space->tenantKey);
 
         return new TaskApiBoardList($space, $boards, $this->queries->countByBoard($this->ids($boards), $this->owner($principal)));
+    }
+
+    /**
+     * Since 2.22.0 (Beacon): the boards of every space of a team the token may list, in one batch — the spaces (one host
+     * call), the active boards of their tenants with their columns (one query) and the task counts (one query) — instead of
+     * {@see self::spaces()} then {@see self::boards()} per space (about three queries per space, plus the columns of each
+     * board). Each list holds what {@see self::boards()} returns for that space; spaces in the host's order.
+     *
+     * @throws TaskApiRefusal
+     *
+     * @return list<TaskApiBoardList>
+     */
+    public function boardsOfTeam(TaskApiPrincipal $principal, string $teamId): array
+    {
+        $this->requireTeam($principal, $teamId);
+        $this->guard->requireLevel($principal, TaskApiCapability::ReadOwn);
+        $spaces = $this->workspace->spaces($principal, $teamId);
+        $boards = $this->queries->activeBoardsOfTenants(array_map(static fn (TaskApiSpace $space): ?string => $space->tenantKey, $spaces));
+        $lists  = $this->guard->visibleBoardsOfSpaces($principal, $spaces, $boards);
+        $ids    = [];
+        foreach ($lists as [, $visible]) {
+            foreach ($this->ids($visible) as $id) {
+                $ids[$id] = true;
+            }
+        }
+        $counts = $this->queries->countByBoard(array_map(strval(...), array_keys($ids)), $this->owner($principal));
+
+        return array_map(fn (array $list): TaskApiBoardList => new TaskApiBoardList($list[0], $list[1], array_intersect_key($counts, array_flip($this->ids($list[1])))), $lists);
     }
 
     /**

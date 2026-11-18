@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Service\TaskGanttBuilder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Twig\TaskMenuTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Theme\Theme;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
@@ -176,6 +177,8 @@ final class RenamedRoutesRenderingTest extends TestCase
         $twig->addExtension(new FormExtension());
         $twig->addExtension(new TaskBoardTwigExtension($routes, pages: new TaskBoardPages('layout.html.twig'), urls: new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new ThemeExtension(new Theme()));
+        // Since 2.22.0: the task menus (no user here: the pages print none).
+        $twig->addExtension(new TaskMenuTwigExtension());
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/assets/' . $path));

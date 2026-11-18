@@ -1,0 +1,31 @@
+{#
+    Since 2.22.0: the menu («⋮») of a board column header, drawn with UiKit's `menu` partial; with the context menus on
+    (taskContextMenu) a right-click, Shift+F10 / the ContextMenu key or a long press on the header opens the same items.
+    Rename opens the column dialog through the header's own pencil button (column management only), Add task the task
+    dialog (board editors), Hide / collapse folds the column in this browser (everyone; remembered per board in
+    localStorage, no server write).
+
+    Variables: column (BoardColumn), menuContext (Menu\TaskMenuContext), taskContextMenu (bool).
+#}
+{%- set _b = 'NowoTaskBoardBundle' -%}
+{%- set _item = nowo_ui_class('menu_item', _b) -%}
+{%- set _content -%}
+<ul class="nowo-ui-menu__panel nowo-task-menu__panel" data-testid="nowo-task-column-menu-panel">
+    {%- if menuContext.canManageColumns %}
+    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="rename" data-nowo-task-column-rename="{{ column.id }}">{{ 'task_board.menu.rename_column'|trans({}, _b) }}</button></li>
+    {%- endif %}
+    {%- if menuContext.canEditBoard %}
+    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="add-task" data-action="click->nowo-task-board-add-task-modal#open" data-column-id="{{ column.id }}" data-column-name="{{ column.name }}">{{ 'task_board.action.add_task'|trans({}, _b) }}</button></li>
+    {%- endif %}
+    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="collapse" data-nowo-task-column-collapse="{{ column.id }}" aria-expanded="true" data-label-collapse="{{ 'task_board.menu.collapse_column'|trans({}, _b) }}" data-label-expand="{{ 'task_board.menu.expand_column'|trans({}, _b) }}">{{ 'task_board.menu.collapse_column'|trans({}, _b) }}</button></li>
+</ul>
+{%- endset -%}
+{{ include(nowo_ui_partial('menu', _b), {
+    content: _content,
+    label: '⋮',
+    toggle_attr: {class: 'nowo-task-menu__toggle', 'aria-label': 'task_board.menu.column_label'|trans({'%column%': column.name}, _b), title: 'task_board.menu.column'|trans({}, _b)},
+    popover: false,
+    context_menu: taskContextMenu|default(false),
+    attr: {class: 'nowo-task-menu nowo-task-column__menu', 'data-testid': 'nowo-task-column-menu'},
+    bundle: _b,
+}, with_context: false) }}

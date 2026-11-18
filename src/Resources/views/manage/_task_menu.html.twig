@@ -1,0 +1,65 @@
+{#
+    Since 2.22.0: the menu («⋮») of a task on a board card or a list row, drawn with UiKit's `menu` partial. With
+    `web_ui.context_menus: true` (or null and UiKit's `theme.context_menus` on) the same items open on a right-click,
+    Shift+F10 / the ContextMenu key or a long press on the card or row (UiKit 2.54 context menus): UiKit mirrors this
+    kebab, so there is one list of items. Only the entries the user may use are printed (Menu\TaskMenuBuilder); every
+    write is checked again by the task_menu route (Controller\TaskMenuController).
+
+    Variables: menu (Menu\TaskMenu, required), taskMenuFormReady (bool: the page printed the menu form
+    `nowo-task-menu-form` and the shared template `nowo-task-menu-shared`, else the write entries are left out),
+    taskContextMenu (bool), menuFrom (optional: `list` adds from=list to the task links).
+    The write entries are submit buttons of the page's one CSRF-only form (REQ-TWIG-005): `action` is
+    `<task id>|<operation>[:<value>]`.
+#}
+{%- set _t = menu.task -%}
+{%- set _b = 'NowoTaskBoardBundle' -%}
+{%- set _item = nowo_ui_class('menu_item', _b) -%}
+{%- set _writes = taskMenuFormReady|default(false) -%}
+{%- set _task_url = path(nowo_task_board_route('task'), {taskId: _t.id}|merge(menuFrom|default(null) ? {from: menuFrom} : {})) -%}
+{%- set _content -%}
+<ul class="nowo-ui-menu__panel nowo-task-menu__panel" data-testid="nowo-task-menu-panel">
+    <li><a class="{{ _item }}" href="{{ _task_url }}" data-nowo-task-menu="open">{{ 'task_board.menu.open'|trans({}, _b) }}</a></li>
+    {%- if menu.edit %}
+    <li><a class="{{ _item }}" href="{{ _task_url }}#nowo-task-edit-form" data-nowo-task-menu="edit">{{ 'task_board.menu.edit'|trans({}, _b) }}</a></li>
+    {%- endif %}
+    {%- if _writes and (menu.assignMe or menu.unassignMe or menu.assignOthers) %}
+    <li class="nowo-task-menu__group"><details class="nowo-task-menu__sub" data-nowo-task-menu="assign"><summary class="{{ _item }}">{{ 'task_board.menu.assign'|trans({}, _b) }}</summary><ul class="nowo-ui-menu__panel nowo-task-menu__subpanel">
+        {%- if menu.assignMe %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="{{ _t.id }}|assign_me" class="{{ _item }}">{{ 'task_board.menu.assign_me'|trans({}, _b) }}</button></li>{% endif %}
+        {%- if menu.unassignMe %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="{{ _t.id }}|unassign_me" class="{{ _item }}">{{ 'task_board.menu.unassign_me'|trans({}, _b) }}</button></li>{% endif %}
+        {%- if menu.assignOthers %}<li><a class="{{ _item }}" href="{{ _task_url }}#nowo-task-members">{{ 'task_board.menu.assign_others'|trans({}, _b) }}</a></li>{% endif %}
+    </ul></details></li>
+    {%- endif %}
+    {#- Since 2.22.0: Status, Priority and Due date come from the page's one shared template (_task_menu_shared.html.twig),
+        put here by task-board.js before the menu opens: printed for every card they made a 500-card board several times
+        heavier. -#}
+    {%- if _writes and (menu.statuses is not empty or menu.priorities is not empty or menu.dueChoices is not empty) %}
+    <li hidden data-nowo-task-menu-shared="{{ _t.id }}" data-column="{{ _t.column ? _t.column.id : '' }}" data-priority="{{ _t.priority.value }}"></li>
+    {%- endif %}
+    {%- if menu.tags %}
+    <li><a class="{{ _item }}" href="{{ _task_url }}#nowo-task-edit-form" data-nowo-task-menu="tags">{{ 'task_board.menu.tags'|trans({}, _b) }}</a></li>
+    {%- endif %}
+    {%- if _writes and menu.timer %}
+    <li><button type="submit" form="nowo-task-menu-form" name="action" value="{{ _t.id }}|timer" class="{{ _item }}" data-nowo-task-menu="timer">{{ 'task_board.menu.timer'|trans({}, _b) }}</button></li>
+    {%- endif %}
+    <li class="nowo-task-menu__separator" role="separator"></li>
+    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="copy-link" data-nowo-ui-clipboard data-nowo-ui-clipboard-text="{{ url(nowo_task_board_route('task'), {taskId: _t.id}) }}" data-nowo-ui-clipboard-label="{{ 'task_board.menu.copy_link'|trans({}, _b) }}" data-nowo-ui-clipboard-done-label="{{ 'task_board.menu.link_copied'|trans({}, _b) }}">{{ 'task_board.menu.copy_link'|trans({}, _b) }}</button></li>
+    {%- if menu.copy %}
+    <li><a class="{{ _item }}" href="{{ path(nowo_task_board_route('task_duplicate'), {taskId: _t.id}) }}" data-nowo-task-menu="duplicate">{{ 'task_board.menu.duplicate'|trans({}, _b) }}</a></li>
+    <li><a class="{{ _item }}" href="{{ path(nowo_task_board_route('task_move_board'), {taskId: _t.id}) }}" data-nowo-task-menu="move">{{ 'task_board.menu.move'|trans({}, _b) }}</a></li>
+    {%- endif %}
+    {%- if _writes and (menu.archive or menu.delete) %}
+    <li class="nowo-task-menu__separator" role="separator"></li>
+    {%- if menu.archive %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="{{ _t.id }}|archive" class="{{ _item }}" data-nowo-task-menu="archive">{{ 'task_board.menu.archive'|trans({}, _b) }}</button></li>{% endif %}
+    {%- if menu.delete %}<li><button type="submit" form="nowo-task-menu-form" name="action" value="{{ _t.id }}|delete" class="{{ _item }} nowo-ui-menu__item--danger" data-nowo-task-menu="delete" data-confirm="{{ 'task_board.menu.delete_confirm'|trans({'%task%': _t.title}, _b) }}">{{ 'task_board.menu.delete'|trans({}, _b) }}</button></li>{% endif %}
+    {%- endif %}
+</ul>
+{%- endset -%}
+{{ include(nowo_ui_partial('menu', _b), {
+    content: _content,
+    label: '⋮',
+    toggle_attr: {class: 'nowo-task-menu__toggle', 'aria-label': 'task_board.menu.label'|trans({'%task%': _t.title}, _b), title: 'task_board.menu.column'|trans({}, _b)},
+    popover: false,
+    context_menu: taskContextMenu|default(false),
+    attr: {class: 'nowo-task-menu', 'data-testid': 'nowo-task-menu'},
+    bundle: _b,
+}, with_context: false) }}

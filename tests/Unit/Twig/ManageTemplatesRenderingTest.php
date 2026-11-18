@@ -66,6 +66,7 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\Twig\TaskMenuTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Theme\Theme;
 use Nowo\UiKitBundle\Twig\ThemeExtension;
@@ -1386,6 +1387,8 @@ final class ManageTemplatesRenderingTest extends TestCase
         $twig->addExtension(new FormExtension());
         $twig->addExtension(new TaskBoardTwigExtension($routes, $linkResolver ?? new TaskObjectLinkResolver(), $filtersCollapse, $filtersFormClass, pages: new TaskBoardPages('layout.html.twig'), urls: new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new ThemeExtension(new Theme()));
+        // Since 2.22.0: the task menus (no user here: the pages print none).
+        $twig->addExtension(new TaskMenuTwigExtension());
         // The task page's scaffold reads it; the pages with a model of their own pass theirs.
         $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));

@@ -5,3 +5,9 @@ nowo_ui_kit:
     icon_set: svg_inline
     layouts:
         admin: base.html.twig
+    # Since TaskBoard 2.22.0: the context menus of the cards, list rows and column headers (UiKit 2.54) and the shell focus
+    # mode (UiKit 2.55; the demo shell in templates/base.html.twig carries the shell root attributes and the focus bar).
+    theme:
+        context_menus: true
+        focus_mode:
+            enabled: true

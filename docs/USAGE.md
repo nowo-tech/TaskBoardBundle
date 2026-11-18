@@ -3,6 +3,8 @@
 ## Table of contents
 
 - [Manage UI](#manage-ui)
+  - [Task and column menus](#task-and-column-menus)
+  - [Focus mode (since 2.22)](#focus-mode-since-222)
 - [Task operations](#task-operations)
   - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
   - [Changing a task's parent (since 2.20)](#changing-a-tasks-parent-since-220)
@@ -76,6 +78,66 @@ Authenticated users open the manage UI (default `/tools/task-board`):
 - **List view** — filterable task table with status, priority, assignee, and due date. Completed tasks (last column) are included; filter by column to hide them.
 - **Gantt view** — timeline with task bars and blocking dependencies. Completed tasks are drawn as finished bars; subtasks whose parent is not on the board's timeline appear at root level.
 - **Task detail** — description, subtasks, members, links, change history, and aggregated time.
+
+### Task and column menus
+
+*(Since 2.22.)* Every board card and list row has a «⋮» menu (UiKit's `menu` partial), and every board column header too.
+Only the entries the signed-in user may use are printed, and each write is checked again on the server:
+
+| Entry | Shown when | What it does |
+|-------|------------|--------------|
+| Open | always | the task page |
+| Edit | `canEditTask()` | the task page's edit form |
+| Assign › Assign to me / Remove me / Other people… | `canEditTask()`, task not archived | adds or removes the user as assignee (`TaskMemberAssigner`, the assignee policy applies); "Other people…" opens the task page |
+| Status › (the board's other columns) | `canEditTask()`, task not archived | `TaskManager::moveToColumn()` (transition policy, reopen limits, the 2.21 ordered locking) |
+| Priority › (the other priorities) | `canEditTask()`, task not archived | `TaskManager::updatePriority()` |
+| Due date › Today / Tomorrow / In a week / No due date | `canEditTask()`, task not archived | `TaskManager::reschedule()` (refused before the start date) |
+| Tags… | `canEditTask()`, task not archived | the task page's edit form |
+| Start timer | the TimeTrack integration (TimeTrack's `TimerService`), `canTrackTime()`, task not archived | starts the user's timer on the task (never replaces a running one) |
+| Copy link | always | copies the task page's absolute URL (UiKit clipboard) |
+| Duplicate… / Move to… | `move.enabled`, `canEditTask()` and `canEditBoard()` | the Duplicate / Move pages |
+| Archive | `canEditTask()`, task not archived | `TaskManager::archive()` |
+| Delete | `canManageBoard()` | `TaskBoardEraserInterface::eraseTask()` after a confirmation (time is kept) |
+| Column › Rename | `canManageColumns()` | the column dialog |
+| Column › Add task | `canEditBoard()` | the task dialog for that column |
+| Column › Hide / collapse | always | folds the column in this browser (remembered per board in `localStorage`; no server write) |
+
+The writes post to the `task_menu` route (`POST /tools/task-board/menu/task`): the page prints one CSRF-only form,
+`nowo-task-menu-form` (token `task_board_task_menu`), and each entry is one of its submit buttons with
+`action=<task id>|<operation>[:<value>]`. The route only accepts same-origin requests (`Sec-Fetch-Site: same-origin`,
+else a matching `Origin`), checks the user's right for the operation again (403 otherwise, also for an entry the menu
+did not offer) and goes back to the page (`_target_path`, a local path) with a flash.
+
+**Context menu.** With UiKit's `theme.context_menus: true`, or `nowo_task_board.web_ui.context_menus: true`, a
+right-click, Shift+F10 / the ContextMenu key or a long press on a card, row or column header opens the same items at
+the pointer: UiKit mirrors the kebab, so there is one list. Cards, rows and headers are focusable for the keyboard, and
+the kebab's toggle is reachable with Tab. `web_ui.context_menus: false` keeps the browser's menu on TaskBoard's pages
+whatever the theme says. The board and list pages load UiKit's `nowo-ui-context-menu.js` when the bundle option is
+`true`; under the theme flag UiKit's `scripts` partial loads it.
+
+**Templates.** `manage/_task_menu.html.twig` (variables `menu`, `taskMenuFormReady`, `taskContextMenu`, `menuFrom`),
+`manage/_column_menu.html.twig` and `manage/_task_menu_shared.html.twig`: the Status, Priority and Due date lists are printed
+once per page and copied by task-board.js into a menu's hidden slot (`data-nowo-task-menu-shared`) before it opens
+(without JavaScript those three submenus are not there; the task page still has the fields). A page that includes cards outside the board page gets no menu unless it sets
+`taskMenuContext = nowo_task_board_menu_context(board)` and prints `nowo_task_board_menu_form(...)` as the board page
+does. The decisions of a page are taken once (`TaskBoardResourceAccessChecker::taskEditDecider()`), not per card.
+
+**User HTML.** Whatever your `TaskTextRendererInterface` returns for descriptions and comments goes through
+`Text\ReservedAttributeStripper`: UiKit's `data-nowo-ui-context-menu*` and `data-nowo-ui-card` never reach the page from
+user content (see [SECURITY](SECURITY.md)).
+
+### Focus mode (since 2.22)
+
+The board, list, calendar and task pages include UiKit 2.55's focus mode toggle (`area: 'tasks'`), through
+`manage/_focus_mode_toggle.html.twig` (block `nowo_task_board_focus_mode` on the board, list and calendar pages). It
+renders nothing until the host turns focus mode on:
+
+```yaml
+nowo_ui_kit:
+    theme:
+        focus_mode:
+            enabled: true
+```
 
 ## Task operations
 

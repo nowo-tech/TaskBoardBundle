@@ -54,6 +54,8 @@
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-kanban'}) }}{{ 'task_board.view.back_board'|trans({}, 'NowoTaskBoardBundle') }}
                 </a>
                 {% endif %}
+                {#- Since 2.22.0: UiKit 2.55's focus mode toggle on the task page (not in the side panel). -#}
+                {% if not panel|default(false) %}{{ include('@NowoTaskBoardBundle/manage/_focus_mode_toggle.html.twig') }}{% endif %}
                 {% if (canEditTask ?? true) %}
                 <button type="submit" form="nowo-task-edit-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}">
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}

@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
 use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
+use Nowo\TransactionDoctrine\Symfony\NowoTransactionDoctrineBundle;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
@@ -68,6 +69,10 @@ final class ApiKernel extends Kernel
         yield new NowoUiKitBundle();
         yield new NowoFormKitBundle();
         yield new TaskBoardBundle();
+        // Since 2.22.0 (Beacon spec 241 T020): the API's write routes as transaction-doctrine write units.
+        if (($this->taskBoard['__write_units'] ?? false) === true) {
+            yield new NowoTransactionDoctrineBundle();
+        }
     }
 
     public function getProjectDir(): string
@@ -140,6 +145,13 @@ final class ApiKernel extends Kernel
         ]);
         $container->extension('twig', ['strict_variables' => true]);
         // Like Beacon: no resource scoping, the host's listeners decide (one configuration, so one container, for most tests).
+        if (($this->taskBoard['__write_units'] ?? false) === true) {
+            $container->extension('nowo_transaction_doctrine', [
+                'max_attempts'      => 3,
+                'backoff'           => ['floor_ms' => 0, 'base_ms' => 0, 'cap_ms' => 0],
+                'controller_routes' => ['nowo_task_board_api_task_create', 'nowo_task_board_api_task_update', 'nowo_task_board_api_comment_create', 'nowo_task_board_api_attachment_create'],
+            ]);
+        }
         $taskBoardConfig = ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false] + ($this->taskBoard['security'] ?? []), 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [
             'authenticator' => 'app.api_host',
             'rate_limiter'  => 'app.api_host',
@@ -149,7 +161,7 @@ final class ApiKernel extends Kernel
             'time_entries'  => 'app.api_host',
             'attachments'   => 'app.api_host',
             'members'       => 'app.api_host',
-        ]]] + array_diff_key($this->taskBoard, ['security' => true]);
+        ]]] + array_diff_key($this->taskBoard, ['security' => true, '__write_units' => true]);
         $taskBoardConfig = PrivateEntityManagerReplay::configure($taskBoardConfig);
         PrivateEntityManagerReplay::alias($container, $taskBoardConfig);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
