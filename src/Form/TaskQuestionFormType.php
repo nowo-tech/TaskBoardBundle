@@ -132,7 +132,7 @@ final class TaskQuestionFormType extends AbstractType
             'recipients'         => [],
             // Since 2.23.0: true, the Tiptap editor (task profile) for the context. Off by default: the context is Markdown as
             // the Task API returns it, and Tiptap stores HTML (a host that wants it passes the option, Tiptap installed).
-            'rich_context'       => false,
+            'rich_context' => false,
         ]);
         $resolver->setAllowedTypes('recipients', 'array');
         $resolver->setAllowedTypes('rich_context', 'bool');
