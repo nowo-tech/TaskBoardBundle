@@ -116,9 +116,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Questions on tasks for the business to answer** (Beacon spec 242, owner decision D-20261117-23;
+  `task_questions.enabled`, **off by default**: no table mapping, service, route, Twig output, API route or menu entry
+  without it). A question has a text, optional Markdown context, 0 or 2–4 options (at most one *recommended*), single or
+  multiple choice, an optional *Other* free text, 1–`max_recipients` recipients (opaque subject ids from the host) and an
+  optional due date. A recipient answers; a later answer supersedes the one in force and both are kept; the asker or a
+  board manager withdraws it with a reason. New namespace `Nowo\TaskBoardBundle\Question\`, four tables
+  (`task_board_task_questions`, `…_question_options`, `…_question_recipients`, `…_question_answers`, see UPGRADING).
+  - `Question\TaskQuestionManager` (public): `ask()`, `answer()`, `answerAsSubject()` (an external answer through the
+    host's signed link), `withdraw()`, `publish()`, `detachUser()` and `forgetSubject()` (erasure). Each write checks its
+    input and permission before it opens one `TaskApiTransaction` (a savepoint inside a host's transaction or a
+    transaction-doctrine write unit), locks the question row, compares its `version` column, and dispatches its events
+    after the outermost commit. A racing second answer gets `TaskQuestionConflictException` (Task API: 409
+    `CONFLICT_002` with `current_version`, never replayed blindly).
+  - Host ports, framework-free value objects only: `TaskQuestionRecipientResolverInterface`
+    (`task_questions.recipient_resolver`; default: the task's mention candidates as `user:<id>`, without the asker),
+    `TaskQuestionExternalAnswerInterface` (`external_answers`: the host-signed answer URL, offered as *Copy answer link*
+    to the asker and board managers, never stored or logged) and `TaskQuestionDecisionPublisherInterface`
+    (`decision_publisher`: *Publish decision*, called outside the bundle's transaction).
+  - Permissions through `TaskBoardResourceAccessChecker`: new actions `ask_question`, `answer_question` and
+    `withdraw_question`, `TaskAccessCheckEvent::getQuestionId()`. Defaults: asking as commenting (never on an archived
+    task), answering for recipients only, withdrawing for the asker or a board manager. On `TASK_ACCESS_CHECK` these
+    actions honour `deny()` only, so a listener that grants every action never widens them (audit TE-M2); the new
+    `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` may `grant()` on purpose.
+  - Concurrency (audit TE, REQ-RUNTIME-003): inside a host's REPEATABLE READ transaction a write never acts on a stale
+    copy (TE-M1); `max_open_per_task` and the 50-answer cap are counted again under the task's and the question's lock
+    (TE-L1); every question write locks the task's row first, then the question, then its answers, so an ask and an
+    answer on one task never deadlock (TE-2); see the new `docs/CONCURRENCY.md`.
+  - Events `TaskBoardEvents::TASK_QUESTION_ASKED`, `TASK_QUESTION_ANSWERED`, `TASK_QUESTION_WITHDRAWN` (values only)
+    for the host's notifications and reminders; immutable activity entries `question_asked`, `question_answered`,
+    `question_withdrawn`, and `TaskChangeRecorder::recordAs()` for an actor without a user object.
+  - Web UI: a *Questions* section before the comments on the task page and drawer (ask form in a disclosure, question
+    cards with the answer, withdraw and publish forms), a *Waiting for answer* badge on board cards and list rows, a
+    *Waiting for answer* list filter, *My open questions* (`my_questions` route, tabs *To answer* / *Asked by me*, and the
+    `nowo_task_board_my_questions()` component), *Ask a question…* in the task menu (kebab and right-click). UiKit
+    tokens only, no inline style or script, a phone layout. Texts in the 7 locales.
+  - Task API (with `api.enabled`, **Not in ClickUp's API**): `GET|POST /v2/task/{id}/question`,
+    `POST /v2/question/{id}/answer`, `POST /v2/question/{id}/withdraw`, `GET /v2/list/{id}/question` (answered
+    questions, keyset-paginated) and `GET /v2/user/question`; errors `QUESTION_001`…`QUESTION_005`.
+  - `Question\TaskQuestionQuery::answeredOnBoard()` for a host's *Decisions* view and export.
+- The task's status never changes through a question: no column move, completion, archive, status event or revision bump.
+
 ### Changed
 
 - CI: new `deps-floor` job (as in BreadcrumbKit). It checks that the demo lock installs every nowo-tech requirement of the bundle (`.scripts/check-demo-lock.py`), then downgrades nowo-tech/transaction-* to the lowest versions composer.json allows (`composer update 'nowo-tech/transaction-*' --prefer-lowest`) and runs PHPStan and the tests there, so a call to a newer API than the constraint allows fails the pull request.
+
+### Fixed
+
+- **Attachment replay (audit SU2-I1).** A write unit's replay of `POST /v2/task/{id}/attachment` reuses the host's
+  stored file only when `store()` moved transaction-doctrine's commit ledger (its work is committed); otherwise it calls
+  `store()` again. A host whose store writes its record in the same entity manager (Beacon) no longer risks answering 200
+  with a record the rollback removed. `TaskApiTaskOperations::addAttachment()` returns a third element (whether the store
+  committed) and `TaskApiCommitWatermark::count()` is new.
+- **Stale task copy in a host transaction (audit TE-M1, since 2.16.0).** `TaskApiTransaction::lockedRevision()` no longer
+  returns the locked revision with a task the refresh read from an outer REPEATABLE READ snapshot (MySQL / MariaDB): it
+  answers 409 `TASK_409` with `current_revision`, so a `base_revision` write never undoes another writer's change.
+- **Tag filter on MariaDB (audit TE-I6).** `tags[]` on the Task API's task lists matched no tag with a slash or a
+  non-ASCII letter on MariaDB (its JSON is text kept as Doctrine wrote it); CI now runs the functional suite on
+  MariaDB 11.4 too.
+- **Lock-conflict answer (audit SU2-I3).** The Task API reads the request's commit watermark before it logs the
+  conflict, so a host log handler that writes to the database no longer turns `CONFLICT_001` into `CONFLICT_002`.
+- **Docs (audits SU2-I2, SU2-I4).** SECURITY and UPGRADING say the commit ledger sees only DBAL writes on DoctrineBundle
+  connections (Messenger to other transports, HTTP, mail or raw PDO still answer `CONFLICT_001`); `TASK_ERASED` is
+  documented as dispatched inside the delete's transaction (it may still roll back: act after the commit).
 
 ### Documentation
 

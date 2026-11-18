@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.23.0](#to-2230)
+  - [Questions on tasks (opt-in)](#questions-on-tasks-opt-in)
+  - [API conflicts and replays (audit SU-2)](#api-conflicts-and-replays-audit-su-2)
 - [To 2.22.0](#to-2220)
   - [Lock conflicts: 409 + Retry-After (was 500 / 503)](#lock-conflicts-409--retry-after-was-500--503)
   - [Write units (transaction-doctrine)](#write-units-transaction-doctrine)
@@ -209,6 +212,117 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.23.0
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+Nothing changes until you opt in. **Questions on tasks** (Beacon spec 242) are off by default: with
+`task_questions.enabled: false` no table is mapped and no service, route, Twig output, API route or menu entry exists.
+
+### Questions on tasks (opt-in)
+
+```yaml
+nowo_task_board:
+    task_questions:
+        enabled: true
+        recipient_resolver: null   # service id, Question\TaskQuestionRecipientResolverInterface (default: the task's mention candidates as user:<id>)
+        external_answers: null     # service id, Question\TaskQuestionExternalAnswerInterface (host-signed answer links)
+        decision_publisher: null   # service id, Question\TaskQuestionDecisionPublisherInterface (Publish decision)
+        max_recipients: 20
+        max_open_per_task: 20
+        my_questions_per_page: 25
+```
+
+Then generate and run the migration (`php bin/console doctrine:migrations:diff` and `doctrine:migrations:migrate`). It
+adds four tables and changes nothing existing. With `table_prefix` other than `task_board_`, the names follow it, and
+`<user table>` is your `user_class` table (with `database.user_reference: id`, the user columns are plain ids without a
+foreign key).
+
+MySQL / MariaDB (the subject ids are compared byte for byte, so they get the binary collation, as every key column):
+
+```sql
+CREATE TABLE task_board_task_question_answers (id VARCHAR(36) NOT NULL, answered_by_name VARCHAR(180) DEFAULT NULL, superseded_at DATETIME DEFAULT NULL, superseded_by_id VARCHAR(36) DEFAULT NULL, answer_number INT NOT NULL, selected_option_ids JSON NOT NULL, other_text LONGTEXT DEFAULT NULL, answered_by_subject VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, via VARCHAR(8) NOT NULL, answered_at DATETIME NOT NULL, question_id VARCHAR(36) NOT NULL, answered_by_id INT DEFAULT NULL, INDEX idx_task_board_task_question_answers_question (question_id, answer_number), INDEX IDX_C7EEDECC1E27F6BF (question_id), INDEX IDX_C7EEDECC2FC55A77 (answered_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_task_question_options (id VARCHAR(36) NOT NULL, position SMALLINT NOT NULL, label VARCHAR(120) NOT NULL, description VARCHAR(500) DEFAULT NULL, recommended TINYINT NOT NULL, question_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_task_question_options_position (question_id, position), INDEX IDX_470BE24D1E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, label VARCHAR(180) NOT NULL, external TINYINT NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, INDEX idx_task_board_task_question_recipients_subject (subject_id), UNIQUE INDEX uniq_task_board_task_question_recipients_subject (question_id, subject_id), INDEX IDX_CB24A4371E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_task_questions (id VARCHAR(36) NOT NULL, state VARCHAR(10) NOT NULL, asked_by_name VARCHAR(180) DEFAULT NULL, current_answer_id VARCHAR(36) DEFAULT NULL, answered_at DATETIME DEFAULT NULL, withdrawn_by_name VARCHAR(180) DEFAULT NULL, withdrawn_at DATETIME DEFAULT NULL, withdraw_reason VARCHAR(500) DEFAULT NULL, published_url VARCHAR(2048) DEFAULT NULL, published_label VARCHAR(180) DEFAULT NULL, published_at DATETIME DEFAULT NULL, version INT DEFAULT 1 NOT NULL, question_text VARCHAR(500) NOT NULL, context LONGTEXT DEFAULT NULL, choice_mode VARCHAR(8) NOT NULL, allow_other TINYINT NOT NULL, asked_at DATETIME NOT NULL, due_on DATE DEFAULT NULL, task_id VARCHAR(36) NOT NULL, asked_by_id INT DEFAULT NULL, withdrawn_by_id INT DEFAULT NULL, INDEX idx_task_board_task_questions_task_state (task_id, state), INDEX idx_task_board_task_questions_state_due (state, due_on), INDEX IDX_3FEF3BF38DB60186 (task_id), INDEX IDX_3FEF3BF34F7A72E4 (asked_by_id), INDEX IDX_3FEF3BF389BE4D2E (withdrawn_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC1E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE;
+ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC2FC55A77 FOREIGN KEY (answered_by_id) REFERENCES <user table> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_task_question_options ADD CONSTRAINT FK_470BE24D1E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE;
+ALTER TABLE task_board_task_question_recipients ADD CONSTRAINT FK_CB24A4371E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF38DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF34F7A72E4 FOREIGN KEY (asked_by_id) REFERENCES <user table> (id) ON DELETE SET NULL;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF389BE4D2E FOREIGN KEY (withdrawn_by_id) REFERENCES <user table> (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+CREATE TABLE task_board_task_question_answers (id VARCHAR(36) NOT NULL, answered_by_name VARCHAR(180) DEFAULT NULL, superseded_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, superseded_by_id VARCHAR(36) DEFAULT NULL, answer_number INT NOT NULL, selected_option_ids JSON NOT NULL, other_text TEXT DEFAULT NULL, answered_by_subject VARCHAR(191) NOT NULL, via VARCHAR(8) NOT NULL, answered_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, question_id VARCHAR(36) NOT NULL, answered_by_id INT DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_task_question_answers_question ON task_board_task_question_answers (question_id, answer_number);
+CREATE INDEX IDX_C7EEDECC1E27F6BF ON task_board_task_question_answers (question_id);
+CREATE INDEX IDX_C7EEDECC2FC55A77 ON task_board_task_question_answers (answered_by_id);
+CREATE TABLE task_board_task_question_options (id VARCHAR(36) NOT NULL, position SMALLINT NOT NULL, label VARCHAR(120) NOT NULL, description VARCHAR(500) DEFAULT NULL, recommended BOOLEAN NOT NULL, question_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_task_question_options_position ON task_board_task_question_options (question_id, position);
+CREATE INDEX IDX_470BE24D1E27F6BF ON task_board_task_question_options (question_id);
+CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL, label VARCHAR(180) NOT NULL, external BOOLEAN NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_task_question_recipients_subject ON task_board_task_question_recipients (subject_id);
+CREATE UNIQUE INDEX uniq_task_board_task_question_recipients_subject ON task_board_task_question_recipients (question_id, subject_id);
+CREATE INDEX IDX_CB24A4371E27F6BF ON task_board_task_question_recipients (question_id);
+CREATE TABLE task_board_task_questions (id VARCHAR(36) NOT NULL, state VARCHAR(10) NOT NULL, asked_by_name VARCHAR(180) DEFAULT NULL, current_answer_id VARCHAR(36) DEFAULT NULL, answered_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, withdrawn_by_name VARCHAR(180) DEFAULT NULL, withdrawn_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, withdraw_reason VARCHAR(500) DEFAULT NULL, published_url VARCHAR(2048) DEFAULT NULL, published_label VARCHAR(180) DEFAULT NULL, published_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, version INT DEFAULT 1 NOT NULL, question_text VARCHAR(500) NOT NULL, context TEXT DEFAULT NULL, choice_mode VARCHAR(8) NOT NULL, allow_other BOOLEAN NOT NULL, asked_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, due_on DATE DEFAULT NULL, task_id VARCHAR(36) NOT NULL, asked_by_id INT DEFAULT NULL, withdrawn_by_id INT DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_task_questions_task_state ON task_board_task_questions (task_id, state);
+CREATE INDEX idx_task_board_task_questions_state_due ON task_board_task_questions (state, due_on);
+CREATE INDEX IDX_3FEF3BF38DB60186 ON task_board_task_questions (task_id);
+CREATE INDEX IDX_3FEF3BF34F7A72E4 ON task_board_task_questions (asked_by_id);
+CREATE INDEX IDX_3FEF3BF389BE4D2E ON task_board_task_questions (withdrawn_by_id);
+ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC1E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC2FC55A77 FOREIGN KEY (answered_by_id) REFERENCES <user table> (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_task_question_options ADD CONSTRAINT FK_470BE24D1E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_task_question_recipients ADD CONSTRAINT FK_CB24A4371E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF38DB60186 FOREIGN KEY (task_id) REFERENCES task_board_tasks (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF34F7A72E4 FOREIGN KEY (asked_by_id) REFERENCES <user table> (id) ON DELETE SET NULL NOT DEFERRABLE;
+ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF389BE4D2E FOREIGN KEY (withdrawn_by_id) REFERENCES <user table> (id) ON DELETE SET NULL NOT DEFERRABLE;
+```
+
+- The new routes (`task_question_ask`, `task_question_answer`, `task_question_withdraw`, `task_question_publish`,
+  `my_questions`) follow `routes` like every manage route; tenant copies too. With `api.enabled` the Task API gains the
+  question routes under `{api.prefix}/v2` (see [API.md](API.md)).
+- Asking defaults to the comment right, answering to the recipients, withdrawing to the asker or a board manager. A
+  `TASK_ACCESS_CHECK` listener can decide `ask_question`, `answer_question` and `withdraw_question` (a `deny()` sticks).
+- Notifications, reminders and chat notices are yours: listen to `TaskBoardEvents::TASK_QUESTION_ASKED`, `…_ANSWERED`
+  and `…_WITHDRAWN`. The bundle sends none.
+- **Host access listeners (audit TE-M2).** On `TASK_ACCESS_CHECK` the question actions honour only `deny()`: a listener
+  that calls `grant()` for every action (most written before 2.23) does **not** let anyone answer, withdraw or ask beyond
+  the bundle's rules. If your host must widen them (a manager answering on someone's behalf), listen to the new
+  `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` and `grant()` there, for the actions you mean.
+- **External answers (audit TE-I4).** `answerAsSubject()` accepts any recipient of the question, not only those marked
+  external: sign answer links only for the subjects you mean to let answer that way.
+- **Host transactions (audit TE-M1).** A question write inside your own transaction (a signed-link controller in
+  `wrapInTransaction()`, a Messenger handler with `doctrine_transaction`) that meets a newer row than its snapshot is
+  refused (`TaskQuestionConflictException` or *withdrawn*); read the question again in a new transaction. The same holds
+  for the Task API's `base_revision` writes (`TaskApiTransaction::lockedRevision()`: 409 `TASK_409`).
+- Erasure: `TaskSyncPeopleReassigner::detachUser()` detaches the user from the questions too. Without sync, call
+  `TaskQuestionManager::detachUser($user, $forgetName)` before deleting a user, and
+  `TaskQuestionManager::forgetSubject($subjectId)` for an erased external contact.
+- The bundle's CSS adds the question card, badge and *My open questions* styles; republish the assets
+  (`php bin/console assets:install`) if you copy them.
+
+### API conflicts and replays (audit SU-2)
+
+- **Attachment replay (SU2-I1).** A write unit's replay of `POST /v2/task/{id}/attachment` reuses the file your
+  `TaskApiAttachmentsInterface::store()` returned only when that call committed a write the commit ledger saw (its record
+  is saved). A store that writes its record in the request's transaction (as an entity in the same manager) is rolled
+  back with it, so the replay calls `store()` again. A store that writes nothing to the database is called again too:
+  make it idempotent or clean up unreferenced blobs.
+- **What the ledger sees (SU2-I2).** Only DBAL writes on DoctrineBundle connections count as "already committed". A side
+  effect through Messenger to a non-Doctrine transport, an HTTP call, a mail or a raw PDO still answers `CONFLICT_001`
+  (send again), so keep such side effects after the commit or idempotent.
+- **`TASK_ERASED` (SU2-I4).** Since 2.22.0 an API delete is one transaction, and `TASK_ERASED` is dispatched inside it,
+  before each level's flush: it may still roll back. Do reversible work in the listener, and anything irreversible
+  (deleting stored files) after the commit.
 
 ## To 2.22.0
 

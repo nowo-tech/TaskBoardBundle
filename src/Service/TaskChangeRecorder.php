@@ -80,6 +80,38 @@ final readonly class TaskChangeRecorder
         $task->recordWrite($user, $provenance);
     }
 
+    /**
+     * Since 2.23.0 (Beacon spec 242): a change whose actor may have no user object — an external answer through the host's
+     * signed link (`$user` null, `$actorName` the name the host gave). With a user it is {@see self::record()}. The task's
+     * last-write provenance moves only with a user.
+     */
+    public function recordAs(
+        Task $task,
+        ?object $user,
+        ?string $actorName,
+        TaskChangeType $changeType,
+        ?string $oldValue = null,
+        ?string $newValue = null,
+        ?string $context = null,
+    ): void {
+        if ($user !== null) {
+            $this->record($task, $user, $changeType, $oldValue, $newValue, $context);
+
+            return;
+        }
+        $task->addChangeHistory(new TaskChangeHistory(
+            task: $task,
+            user: null,
+            changeType: $changeType,
+            oldValue: $oldValue,
+            newValue: $newValue,
+            context: $context,
+            cause: $this->cause?->current(),
+            provenance: $this->provenance?->current(),
+            actorName: $actorName,
+        ));
+    }
+
     public function recordIfChanged(
         Task $task,
         object $user,

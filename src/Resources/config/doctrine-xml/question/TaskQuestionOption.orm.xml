@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionOption" table="task_board_task_question_options">
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_task_question_options_position" columns="question_id,position"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="position" type="smallint"/>
+        <field name="label" type="string" length="120"/>
+        <field name="description" type="string" length="500" nullable="true"/>
+        <field name="recommended" type="boolean"/>
+        <many-to-one field="question" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestion" inversed-by="options">
+            <join-column name="question_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

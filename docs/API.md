@@ -18,6 +18,7 @@ With `api.enabled: false` a host gets no route, service, listener, parameter or 
 - [Column transitions, revisions and bulk updates (since 2.16)](#column-transitions-revisions-and-bulk-updates-since-216)
 - [Management endpoints (Full)](#management-endpoints-full)
 - [Task templates (since 2.16)](#task-templates-since-216)
+- [Questions on tasks (since 2.23)](#questions-on-tasks-since-223)
 - [Provenance fields (since 2.18)](#provenance-fields-since-218)
 - [Changing a task's parent (since 2.20)](#changing-a-tasks-parent-since-220)
 - [Idempotency](#idempotency)
@@ -240,6 +241,38 @@ With `task_templates.enabled` (Beacon spec 234, FR-061):
 
 Without the option the route does not exist and `template_id` is an unknown field (warned).
 
+## Questions on tasks (since 2.23)
+
+With `task_questions.enabled` (Beacon spec 242). **Not in ClickUp's API.** Under the same `{api.prefix}/v2` as the rest
+(Beacon: `/api/tasks/v2`). Reach, tenant, plan and level are checked as for comments; then the person's right
+([USAGE](USAGE.md#questions-on-tasks-since-223)). A question that does not exist, is on a task the token does not reach
+or on another tenant is `404 ACCESS_001` alike.
+
+| Route | Level | Body / query | Answer |
+|---|---|---|---|
+| `GET /v2/task/{task_id}/question` | My tasks (own) | `state` = `open`, `answered` or `withdrawn` (optional) | `{"questions": [question…]}`, oldest first |
+| `POST /v2/task/{task_id}/question` | My tasks (own) | `text`, `context` (Markdown), `options` (`[{"label", "description", "recommended"}]`, none or 2 to 4), `choice` (`single` default, `multiple`), `allow_other`, `recipients` (subject ids, at least one), `due_date` (`YYYY-MM-DD`) | the question |
+| `POST /v2/question/{question_id}/answer` | My tasks (own) | `options` (option ids), `other_text`, `version` (the version read; without it the question must still be open) | the question |
+| `POST /v2/question/{question_id}/withdraw` | My tasks (own) | `reason` (required), `version` | the question |
+| `GET /v2/list/{list_id}/question` | Read | `state=answered` (the only state listed), `answered_since` (Unix ms), `start_id` (the last id of the previous page) | `{"questions": [...], "last_page"}`, 100 per page, by answer time |
+| `GET /v2/user/question` | My tasks | — | the token user's open questions on tasks it reaches (100 at most) |
+
+A question: `id`, `task_id`, `list_id`, `text`, `context` (Markdown as stored, never HTML), `choice`, `allow_other`,
+`state` (`open`, `answered`, `withdrawn`), `options` (`[{"id", "label", "description", "recommended"}]`), `recipients`
+(`[{"id", "label", "external"}]`), `due_date`, `asked_by` (`{"id", "name"}` or null), `asked_at` (ms), `answer` (the one
+in force or null), `answers` (all, newest first: `{"id", "options", "option_labels", "other_text", "subject_id",
+"answered_by", "via", "answered_at", "superseded_at"}`), `withdrawn` (`{"reason", "by", "at"}` or null; `by` is `{"id", "name"}` or null), `published`
+(`{"url", "label", "at"}` or null), `version`.
+
+**A racing answer.** Two first answers to the same question: the later one is `409 CONFLICT_002` with
+`current_version` and no `Retry-After` — read the question again; send `version` to supersede the answer you read. A
+stale `version` on an answer or a withdraw is the same 409. The task's status never changes. The writes go through
+`API_WRITE` (`question.create`, `question.answer`, `question.withdraw`, `targetIds['question']`) and `Idempotency-Key`;
+`via` of an answer is the principal's channel (`api` or `mcp`).
+
+In process (an MCP server): `Api\Operation\TaskApiQuestionOperations` (public) — `taskQuestions()`, `ask()`, `answer()`,
+`withdraw()`, `boardQuestions()`, `myQuestions()`.
+
 ## Provenance fields (since 2.18)
 
 Beacon spec 234 (D-20261114-05). Every task answer (`GET /v2/task/{id}`, the task pages, the write answers that return a
@@ -348,7 +381,12 @@ Every refusal is `{"err": "…", "ECODE": "…"}` (since 2.16.0 `TASK_409` adds 
 | `PARENT_001`, `PARENT_002` | 400 | Since 2.20.0: a new parent on another board; the task itself ([parent changes](#changing-a-tasks-parent-since-220)) |
 | `PARENT_003`, `PARENT_004`, `PARENT_005` | 409 | Since 2.20.0: a new parent among the task's subtasks; a concurrent tree change (send it again); deeper than `max_subtask_depth` |
 | `CONFLICT_001` | 409 (or 503) | Since 2.22.0: the request met a database lock conflict (deadlock, lock wait timeout, a write unit that gave up; anywhere in the failure's chain). Nothing was saved: send the same request again after `Retry-After` seconds. The status is nowo-tech/transaction-doctrine's shared policy (409 by default, 503 when the host keeps it; was 500 `SERVER_001`) |
-| `CONFLICT_002` | 409 (or 503) | Since 2.22.0: the same, after the request already committed part of its work (counted by transaction-doctrine's commit ledger, a write unit's `committed`, a lost savepoint): **no** `Retry-After`; read the task again before trying. The idempotency key keeps this answer: the same key replays it and writes nothing |
+| `CONFLICT_002` | 409 (or 503) | Since 2.22.0: the same, after the request already committed part of its work (counted by transaction-doctrine's commit ledger, a write unit's `committed`, a lost savepoint): **no** `Retry-After`; read the task again before trying. The idempotency key keeps this answer: the same key replays it and writes nothing Since 2.23.0 also a question whose `version` moved (a racing answer or withdraw): `current_version` is the question's version, read it again. |
+| `QUESTION_001` | 400 | Since 2.23.0: an invalid question (`field`: `text`, `context`, `options`, `choice`, `recipients`, `due_date`, `reason`) |
+| `QUESTION_002` | 400 | Since 2.23.0: an invalid answer (`field`: `options`, `other_text`, `answers`) |
+| `QUESTION_003` | 409 | Since 2.23.0: the question is withdrawn |
+| `QUESTION_004` | 403 | Since 2.23.0: the person may not do this on the question (not a recipient; not the asker or a manager) |
+| `QUESTION_005` | 409 | Since 2.23.0: the task takes no more questions (archived, or `max_open_per_task` reached) |
 | `SERVER_001` | 500 | Anything else, including a security user that is not the token's user. No detail |
 
 ## Differences from ClickUp

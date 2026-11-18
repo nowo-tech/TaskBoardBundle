@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
 use Nowo\TaskBoardBundle\Support\ExactKey;
@@ -66,6 +67,8 @@ final readonly class TaskSyncPeopleReassigner
         ?TaskTimeEntrySnapshotPurger $timeEntries = null,
         // Since 2.15.0 (database.user_reference).
         private ?TaskBoardUsers $users = null,
+        // Since 2.23.0 (audit TE-L2): with task_questions.enabled, the user's questions, answers and recipient rows too.
+        private ?TaskQuestionManager $questions = null,
     ) {
         $this->timeEntries = $timeEntries ?? new TaskTimeEntrySnapshotPurger($entityManager);
     }
@@ -188,6 +191,10 @@ final readonly class TaskSyncPeopleReassigner
             }
             $this->entityManager->flush();
         }
+
+        // Since 2.23.0 (audit TE-L2): the questions they asked, answered or withdrew keep their content and lose the user;
+        // with `$anonymise` their name goes from those rows and from the recipient rows of their subject ids.
+        $this->questions?->detachUser($user, $anonymise);
 
         return $total->plus($this->detachContent($user, $anonymise))
             // Owner rule (audit GWd-M2): the user's manual time stays, with their name unless it is forgotten.

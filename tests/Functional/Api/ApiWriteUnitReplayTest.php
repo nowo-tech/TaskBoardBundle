@@ -96,18 +96,54 @@ final class ApiWriteUnitReplayTest extends ApiTestCase
     /**
      * The host's store writes no row of this database, so no flush can deadlock here: a second attempt of the same request
      * is simulated by running the controller twice with the entity manager cleared in between, as a write unit does.
+     * Audit SU2-I1: the stored attachment is reused only when its store committed work (the commit ledger moved).
      */
-    public function testAnAttachmentReplayedInTheSameRequestIsStoredOnce(): void
+    public function testAnAttachmentWhoseStoreCommittedIsStoredOnce(): void
+    {
+        ApiTestHost::$storeWritesRow = true;
+        $this->replayAttachment(false);
+
+        self::assertCount(1, ApiTestHost::$stored, 'exactly one file');
+        self::assertSame('file-1', json_decode((string) $this->client->getResponse()->getContent(), true)['id'] ?? null);
+    }
+
+    /** Audit SU2-I1: a store whose record is in the request's transaction is rolled back with it, so the replay stores again. */
+    public function testAnAttachmentStoredInTheRolledBackTransactionIsStoredAgain(): void
+    {
+        ApiTestHost::$storeWritesRow = true;
+        $this->replayAttachment(true);
+
+        self::assertCount(2, ApiTestHost::$stored, 'the rolled-back store is asked again');
+        self::assertSame('file-2', json_decode((string) $this->client->getResponse()->getContent(), true)['id'] ?? null, 'never the ghost of the rolled-back attempt');
+    }
+
+    /** Audit SU2-I1: a store that commits nothing the ledger can see proves nothing, so the replay stores again. */
+    public function testAnAttachmentWhoseStoreCommittedNothingIsStoredAgain(): void
+    {
+        $this->replayAttachment(false);
+
+        self::assertCount(2, ApiTestHost::$stored);
+        self::assertSame('file-2', json_decode((string) $this->client->getResponse()->getContent(), true)['id'] ?? null);
+    }
+
+    /** Runs the attachment controller twice in one request, the first attempt inside a transaction rolled back when asked. */
+    private function replayAttachment(bool $firstInRolledBackTransaction): void
     {
         $task       = $this->task($this->board, 'With a file');
         $em         = $this->em;
         $dispatcher = static::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
-        $dispatcher->addListener(KernelEvents::CONTROLLER_ARGUMENTS, static function (ControllerArgumentsEvent $event) use ($em): void {
+        $dispatcher->addListener(KernelEvents::CONTROLLER_ARGUMENTS, static function (ControllerArgumentsEvent $event) use ($em, $firstInRolledBackTransaction): void {
             $controller = $event->getController();
             $arguments  = $event->getArguments();
-            $event->setController(static function () use ($controller, $arguments, $em): mixed {
+            $event->setController(static function () use ($controller, $arguments, $em, $firstInRolledBackTransaction): mixed {
+                if ($firstInRolledBackTransaction) {
+                    $em->getConnection()->beginTransaction();
+                }
                 $controller(...$arguments);
+                if ($firstInRolledBackTransaction) {
+                    $em->getConnection()->rollBack();
+                }
                 $em->clear();
 
                 return $controller(...$arguments);
@@ -119,8 +155,6 @@ final class ApiWriteUnitReplayTest extends ApiTestCase
         $this->client->request('POST', '/api/tasks/v2/task/' . $task->getId() . '/attachment', [], ['attachment' => new UploadedFile($path, 'a.txt', 'text/plain', null, true)], ['HTTP_AUTHORIZATION' => self::TOKEN]);
 
         self::assertResponseIsSuccessful();
-        self::assertCount(1, ApiTestHost::$stored, 'exactly one file');
-        self::assertSame('file-1', json_decode((string) $this->client->getResponse()->getContent(), true)['id'] ?? null);
     }
 
     /** The first insert of the request fails with a deadlock, inside the flush, as a concurrent writer would make it. */

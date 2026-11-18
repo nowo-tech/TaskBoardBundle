@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Routing;
 use LogicException;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiIdentityController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiQuestionController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
@@ -16,6 +17,7 @@ use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Controller\TaskMenuController;
+use Nowo\TaskBoardBundle\Controller\TaskQuestionController;
 use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
@@ -66,6 +68,9 @@ final class TaskBoardRouteLoader extends Loader
         TaskApiWriteController::class,
         TaskApiManagementController::class,
         TaskApiTemplateController::class,
+        // Since 2.23.0 (Beacon spec 242).
+        TaskQuestionController::class,
+        TaskApiQuestionController::class,
     ];
 
     /**
@@ -135,6 +140,16 @@ final class TaskBoardRouteLoader extends Loader
         'folder_list_create' => TaskApiManagementController::class . '::createFolderList',
     ];
 
+    /** Since 2.23.0 (Beacon spec 242): with `task_questions.enabled` only. */
+    private const API_QUESTION_ROUTES = [
+        'task_questions'    => TaskApiQuestionController::class . '::taskQuestions',
+        'question_ask'      => TaskApiQuestionController::class . '::ask',
+        'question_answer'   => TaskApiQuestionController::class . '::answer',
+        'question_withdraw' => TaskApiQuestionController::class . '::withdraw',
+        'list_questions'    => TaskApiQuestionController::class . '::listQuestions',
+        'my_questions'      => TaskApiQuestionController::class . '::myQuestions',
+    ];
+
     /** Since 2.16.0 (Beacon spec 234, FR-061): with `task_templates.enabled` only. */
     private const API_TEMPLATE_ROUTES = [
         'task_templates' => TaskApiTemplateController::class . '::templates',
@@ -169,6 +184,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly ?string $multiBoardPath = null,
         // Since 2.16.0 (Beacon spec 234): the API's template list exists only with `task_templates.enabled`.
         private readonly bool $templatesEnabled = false,
+        // Since 2.23.0 (Beacon spec 242): the question routes (pages and API) exist only with `task_questions.enabled`.
+        private readonly bool $questionsEnabled = false,
     ) {
         parent::__construct();
         $this->attributeLoader = new ControllerAttributeRouteLoader();
@@ -235,6 +252,13 @@ final class TaskBoardRouteLoader extends Loader
         if ($this->recurrenceEnabled) {
             $this->addRoute($collection, $attributes, 'task_recurrence', TaskRecurrenceController::class . '::edit');
             $this->addRoute($collection, $attributes, 'task_recurrence_action', TaskRecurrenceController::class . '::action');
+        }
+        if ($this->questionsEnabled) {
+            $this->addRoute($collection, $attributes, 'task_question_ask', TaskQuestionController::class . '::ask');
+            $this->addRoute($collection, $attributes, 'task_question_answer', TaskQuestionController::class . '::answer');
+            $this->addRoute($collection, $attributes, 'task_question_withdraw', TaskQuestionController::class . '::withdraw');
+            $this->addRoute($collection, $attributes, 'task_question_publish', TaskQuestionController::class . '::publish');
+            $this->addRoute($collection, $attributes, 'my_questions', TaskQuestionController::class . '::mine');
         }
         if ($this->syncEnabled) {
             $this->addRoute($collection, $attributes, 'board_connection', TaskBoardConnectionController::class . '::connection');
@@ -351,7 +375,8 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        foreach ($this->templatesEnabled ? self::API_ROUTES + self::API_TEMPLATE_ROUTES : self::API_ROUTES as $name => $controller) {
+        $routes = self::API_ROUTES + ($this->templatesEnabled ? self::API_TEMPLATE_ROUTES : []) + ($this->questionsEnabled ? self::API_QUESTION_ROUTES : []);
+        foreach ($routes as $name => $controller) {
             $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
             $collection->add('nowo_task_board_api_' . $name, self::fromAttribute($attributes, $controller, $this->apiPrefix . $attribute->getPath()));
         }

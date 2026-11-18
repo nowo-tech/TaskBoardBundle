@@ -27,6 +27,7 @@ use function array_values;
  *   {@see TaskBoardResourceAccessChecker::canTrackTime()};
  * - Duplicate, Move to…: `move.enabled`, canEditTask() and {@see TaskBoardResourceAccessChecker::canEditBoard()};
  * - Delete: {@see TaskBoardResourceAccessChecker::canManageBoard()};
+ * - Ask a question… (since 2.23.0, `task_questions.enabled`): {@see TaskBoardResourceAccessChecker::canAskQuestion()};
  * - column headers: Rename with {@see TaskBoardResourceAccessChecker::canManageColumns()}, Add task with canEditBoard(),
  *   Hide / collapse for everyone (a view setting of the browser).
  *
@@ -39,6 +40,8 @@ final readonly class TaskMenuBuilder
         private ?TokenStorageInterface $tokenStorage = null,
         private bool $moveEnabled = false,
         private ?TaskTimerStarterInterface $timer = null,
+        // Since 2.23.0 (Beacon spec 242): `task_questions.enabled` (the *Ask a question…* entry).
+        private bool $questionsEnabled = false,
     ) {
     }
 
@@ -60,6 +63,7 @@ final readonly class TaskMenuBuilder
             canEditTask: $this->access->taskEditDecider($user, $board),
             copyEnabled: $this->moveEnabled,
             timerEnabled: $this->timer?->isAvailable() === true,
+            canAskQuestion: $this->questionsEnabled ? $this->access->askQuestionDecider($user, $board) : null,
         );
     }
 
@@ -83,6 +87,7 @@ final readonly class TaskMenuBuilder
             copy: $context->copyEnabled && $edit && $context->canEditBoard,
             archive: $writable,
             delete: $context->canManageBoard,
+            askQuestion: $context->canAskQuestion($task),
         );
     }
 

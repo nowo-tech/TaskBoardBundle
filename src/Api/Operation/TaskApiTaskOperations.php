@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
@@ -119,6 +120,8 @@ final readonly class TaskApiTaskOperations
         private ?TaskCustomFieldManager $customFields = null,
         // Since 2.21.0 (Beacon spec 239, audit SF-M1): the fixed lock order (columns before tasks) of a locked update.
         private ?OrderedRowLockInterface $rowLock = null,
+        // Since 2.23.0 (audit SU2-I1): whether the host's attachment store committed its work (replay reuse); null: never reused.
+        private ?TaskApiCommitWatermark $commits = null,
     ) {
     }
 
@@ -714,7 +717,7 @@ final readonly class TaskApiTaskOperations
      *
      * @throws TaskApiRefusal
      *
-     * @return array{0: Task, 1: TaskApiAttachment}
+     * @return array{0: Task, 1: TaskApiAttachment, 2: bool} 2 (since 2.23.0, audit SU2-I1): whether the store committed its work, so a replay may reuse it
      */
     public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file, ?TaskApiAttachment $stored = null): array
     {
@@ -725,10 +728,20 @@ final readonly class TaskApiTaskOperations
         }
         // Since 2.22.0 (Beacon spec 241 T020): `$stored`, what the host stored in an earlier attempt of the same request (a
         // write unit's replay): it is not asked again, so a replay leaves one file.
-        $attachment = $stored ?? $this->attachments->store($principal, $task, $file);
+        $committed = false;
+        if ($stored instanceof TaskApiAttachment) {
+            $attachment = $stored;
+            $committed  = true;
+        } else {
+            $before     = $this->commits?->count();
+            $attachment = $this->attachments->store($principal, $task, $file);
+            // Audit SU2-I1: only a store whose work is committed (the ledger moved during store()) may be reused by a replay.
+            // A store that writes its record in the request's transaction is rolled back with it: asked again.
+            $committed = $before !== null && $this->commits?->count() !== $before;
+        }
         $this->audit->written($principal, 'attachment.create', $task->getBoard(), $taskId, ['attachment' => $attachment->id]);
 
-        return [$task, $attachment];
+        return [$task, $attachment, $committed];
     }
 
     /**

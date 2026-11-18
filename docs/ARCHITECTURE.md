@@ -68,6 +68,9 @@ rate limiter / idempotency store, the providers, ...) already take values only.
 | `search.provider` | `Search\TaskTextSearchInterface` (default `DoctrineTaskTextSearch`) | `ValueObject\TaskTextQuery` |
 | `member_badge_provider` (2.18) | `Member\MemberBadgeProviderInterface` (default: none; `NoMemberBadges`) | `ValueObject\TaskBoardUserRef` in, `Member\MemberBadge` (`MemberBadgeVariant`) out |
 | `write_provenance_provider` (2.18) | `Provenance\WriteProvenanceProviderInterface` (default `NoWriteProvenance`) | `Provenance\WriteProvenance` (`WriteChannel`, actor label) |
+| `task_questions.recipient_resolver` (2.23) | `Question\TaskQuestionRecipientResolverInterface` (default `DefaultTaskQuestionRecipientResolver`) | `TaskSnapshot`, `TaskBoardSnapshot` in, `Question\TaskQuestionRecipientCandidate` and subject ids out |
+| `task_questions.external_answers` (2.23) | `Question\TaskQuestionExternalAnswerInterface` (default: none) | `Question\TaskQuestionSnapshot` in, a URL out |
+| `task_questions.decision_publisher` (2.23) | `Question\TaskQuestionDecisionPublisherInterface` (default: none) | `TaskQuestionSnapshot`, `TaskQuestionAnswerSnapshot` in, `TaskQuestionPublication` out |
 
 The policy is a domain rule: `TaskManager` asks it before every move, whatever the channel, and the Task API passes its
 principal's channel through `ColumnTransitionVia`, so a host writes its rules once for the board UI, the API and MCP.
@@ -117,7 +120,7 @@ build time; your services keep your manager.
 
 | | Standard host (default) | DDD host (opt-in) |
 |---|---|---|
-| Mapping of the 29 bundle entities (2.16: `TaskTemplate`, group `template`) | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
+| Mapping of the bundle entities (2.16: `TaskTemplate`, group `template`; 2.23: the four question entities, group `question`) | ORM attributes | `database.mapping_type: xml` (`Resources/config/doctrine-xml`, generated from the attributes, identical metadata) |
 | Host users on TaskBoard rows | `ManyToOne` to `user_class` (a Doctrine entity in the same manager) | `database.user_reference: id`: the id in a string column (`TaskBoardUserRef`), found again through `user_directory` |
 | Bundle base classes / traits for host entities | none (the bundle owns its entities; the host references them by id) | none |
 

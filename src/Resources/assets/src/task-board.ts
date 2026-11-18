@@ -28,6 +28,7 @@ import { installFormConfirm } from './ask-confirm';
 import { installBoardOpeners } from './board-openers';
 import { installColumnCollapse } from './column-collapse';
 import { installSharedMenus } from './task-menu-shared';
+import { installQuestionAsk } from './task-questions';
 import { observeCssVars } from './css-vars';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
@@ -72,6 +73,8 @@ installBoardOpeners(document);
 installColumnCollapse(document);
 // Since 2.22.0: Status, Priority and Due date of the task menus, from the page's one template.
 installSharedMenus(document);
+// Since 2.23.0 (Beacon spec 242): links to the ask form of a task's questions open it.
+installQuestionAsk(document);
 
 // Since 1.11: CSS custom properties from data-nowo-task-vars (no inline style), also inside panels loaded later.
 if (document.readyState === 'loading') {

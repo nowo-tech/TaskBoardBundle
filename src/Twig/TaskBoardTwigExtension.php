@@ -20,6 +20,8 @@ use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Member\MemberBadge;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -148,7 +150,45 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
         private readonly ?TaskBoardUsers $users = null,
         // Since 2.18.0 (Beacon spec 234): `member_badge_provider`, memoised per request.
         private readonly ?MemberBadges $memberBadges = null,
+        // Since 2.23.0 (Beacon spec 242): set with `task_questions.enabled` only.
+        private readonly ?TaskQuestionView $questions = null,
     ) {
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): the *Questions* section of a task for the signed-in viewer, or null with
+     * `task_questions.enabled: false` or without a viewer (nothing rendered).
+     *
+     * @param array<string, string> $routeExtra
+     *
+     * @return array<string, mixed>|null
+     */
+    public function questions(Task $task, array $routeExtra = []): ?array
+    {
+        return $this->questions?->section($task, $routeExtra);
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): open questions per task id of a page (one query; empty with the feature off).
+     *
+     * @param iterable<Task> $tasks
+     *
+     * @return array<string, int>
+     */
+    public function openQuestions(iterable $tasks): array
+    {
+        return $this->questions?->openCounts($tasks) ?? [];
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): the viewer's open questions (`to_answer` or `asked`), at most `$limit`, for a host
+     * dashboard; empty with the feature off.
+     *
+     * @return list<TaskQuestion>
+     */
+    public function myQuestions(int $limit = 5, string $tab = TaskQuestionView::TAB_TO_ANSWER): array
+    {
+        return $this->questions?->mine($tab, $limit) ?? [];
     }
 
     /**
@@ -389,6 +429,11 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_column_icon_storable', static fn (string $icon): bool => ColumnIcon::normalize($icon) !== null),
             // Since 2.18.0 (Beacon spec 234): the host's member badges (values; printed escaped).
             new TwigFunction('nowo_task_board_member_badges', $this->memberBadges(...)),
+            // Since 2.23.0 (Beacon spec 242): questions on tasks (nothing with task_questions.enabled: false).
+            new TwigFunction('nowo_task_board_questions_enabled', fn (): bool => $this->questions instanceof TaskQuestionView),
+            new TwigFunction('nowo_task_board_questions', $this->questions(...)),
+            new TwigFunction('nowo_task_board_open_questions', $this->openQuestions(...)),
+            new TwigFunction('nowo_task_board_my_questions', $this->myQuestions(...)),
         ];
     }
 
@@ -506,8 +551,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
      * @param iterable<Task> $tasks
      * @param list<TaskCustomField> $customFields since 2.19.0 (FR-028): a column per field, after the tags
      * @param bool $actions since 2.22.0: a last column for the row's menu (the template prints it)
+     * @param array<string, int> $openQuestions since 2.23.0 (Beacon spec 242): open questions per task id (`data-waiting`)
      */
-    public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = [], bool $actions = false): Table
+    public function listTable(iterable $tasks, ?string $panelTargetPath = null, array $customFields = [], bool $actions = false, array $openQuestions = []): Table
     {
         $search = $this->syncSearchTexts($tasks);
         $label  = static fn (string $key): Label => TaskBoardPages::label($key);
@@ -531,7 +577,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             $tasks,
             responsive: 'scroll',
             bundle: TaskBoardPages::BUNDLE,
-            rowAttributes: function (Task $task) use ($search, $panelTargetPath, $actions): array {
+            rowAttributes: function (Task $task) use ($search, $panelTargetPath, $actions, $openQuestions): array {
                 $deviation = TaskDeviation::of($task);
                 $column    = $task->getColumn()?->getName() ?? '';
 
@@ -554,7 +600,9 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
                     'data-task-panel-url' => $this->urls?->generate($this->routeName('task_panel'), ['taskId' => $task->getId()] + ($panelTargetPath !== null && $panelTargetPath !== '' ? ['_target_path' => $panelTargetPath] : [])),
                 ] + ($this->taskNumber($task) !== null ? ['data-number' => $task->getNumber()] : [])
                     // Since 2.22.0: a focusable row, so Shift+F10 / the ContextMenu key opens its menu.
-                    + ($actions ? ['tabindex' => '0'] : []);
+                    + ($actions ? ['tabindex' => '0'] : [])
+                    // Since 2.23.0 (Beacon spec 242): the "Waiting for answer" filter reads it.
+                    + ($this->questions instanceof TaskQuestionView ? ['data-waiting' => ($openQuestions[$task->getId()] ?? 0) > 0 ? '1' : '0'] : []);
             },
         );
     }

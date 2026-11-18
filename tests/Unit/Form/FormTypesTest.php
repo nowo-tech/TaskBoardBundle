@@ -7,15 +7,19 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Form;
 use Nowo\FormKitBundle\Form\Constraint\ConstraintDefinitionFactory;
 use Nowo\FormKitBundle\Form\FormOptionsMerger;
 use Nowo\TagInputBundle\Form\TagType;
+use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
+use Nowo\TaskBoardBundle\Dto\TaskQuestionFormData;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
+use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
+use Nowo\TaskBoardBundle\Question\TaskQuestionRecipientCandidate;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -74,6 +78,35 @@ final class FormTypesTest extends TestCase
 
         self::assertInstanceOf(TiptapEditorType::class, $form->get('description')->getConfig()->getType()->getInnerType());
         self::assertInstanceOf(TagType::class, $form->get('tags')->getConfig()->getType()->getInnerType());
+    }
+
+    /** Since 2.23.0: the question's context is a plain textarea without Tiptap, the task profile's editor with it. */
+    public function testTheQuestionContextUsesTiptapWhenInstalled(): void
+    {
+        $plain = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['rich_context' => false]);
+        self::assertInstanceOf(TextareaType::class, $plain->get('context')->getConfig()->getType()->getInnerType());
+
+        require_once __DIR__ . '/../../Fixtures/OptionalFormTypes.php';
+        $rich = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['rich_context' => true]);
+        self::assertInstanceOf(TiptapEditorType::class, $rich->get('context')->getConfig()->getType()->getInnerType());
+        self::assertSame(TaskBoardExtension::TIPTAP_TASK_PROFILE, $rich->get('context')->getConfig()->getOption('config'));
+    }
+
+    /** Audit TE-L4: two candidates with the same name stay two choices, each keyed by its id. */
+    public function testTheQuestionRecipientsAreKeyedByIdNotByName(): void
+    {
+        $candidates = [new TaskQuestionRecipientCandidate('user:1', 'Alex Kim'), new TaskQuestionRecipientCandidate('user:2', 'Alex Kim', true)];
+        $form       = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(recipients: ['user:2', 'user:9']), ['recipients' => $candidates]);
+        $view       = $form->createView();
+        self::assertSame(['user:1', 'user:2'], array_map(static fn ($choice): string => $choice->value, $view['recipients']->vars['choices']));
+        self::assertSame(['user:2'], array_map(static fn (TaskQuestionRecipientCandidate $c): string => $c->id, $form->get('recipients')->getNormData()), 'an id no longer offered is left out');
+        self::assertSame('1', $view['recipients']->children[1]->vars['attr']['data-nowo-task-question-external'] ?? null);
+
+        $form = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['recipients' => $candidates]);
+        $form->submit(['text' => 'Q', 'choiceMode' => 'single', 'recipients' => ['user:1']]);
+        /** @var TaskQuestionFormData $data */
+        $data = $form->getData();
+        self::assertSame(['user:1'], $data->recipients);
     }
 
     public function testTagsTransformer(): void
@@ -252,7 +285,7 @@ final class FormTypesTest extends TestCase
             'field_types'        => [],
         ];
         $merger = new FormOptionsMerger(['default' => $profile, 'task_board' => $profile], 'default', new ConstraintDefinitionFactory());
-        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType()];
+        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType(), new TaskQuestionFormType()];
         foreach ($types as $type) {
             $type->setFormOptionsMerger($merger);
         }

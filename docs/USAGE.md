@@ -67,6 +67,9 @@
 - [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
   - [Standard Symfony host](#standard-symfony-host-1)
   - [DDD / hexagonal host](#ddd--hexagonal-host-1)
+- [Questions on tasks (since 2.23)](#questions-on-tasks-since-223)
+  - [Questions: Standard Symfony host](#questions-standard-symfony-host)
+  - [Questions: DDD / hexagonal host](#questions-ddd--hexagonal-host)
 - [Translations](#translations)
 
 ## Manage UI
@@ -633,7 +636,7 @@ Since 2.10 (spec 216, DDD audit G2/G3), id-only events: public readonly scalars,
 | `TASK_LINK_REMOVED` | `TaskLinkRemovedEvent` | since 2.11: the same, for the link as it was (`remove()`, `detachObject()`) |
 | `TASK_MEMBER_REMOVED` | `TaskMemberRemovedEvent` | since 2.11: `memberId`, `taskId`, `boardId`, `tenantKey`, `userId`, `role`, `actorId`, `cause` |
 
-**Where the 2.11 events come from (audit KO-T-L1).** `TASK_TIME_*`, `TASK_DEPENDENCY_*`, `TASK_LINK_*` and `TASK_MEMBER_REMOVED` (like `TASK_MEMBER_ADDED`) are dispatched by the board and API actions, i.e. the calls to `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher` and `TaskMemberAssigner` (an import's dependencies go through `TaskDependencyManager` too). A provider sync (`SyncTaskWriter`), the people sync (`PeopleProjection`, `SyncPeopleWriter`), the import updater (`ImportedTaskUpdater`) and the move to another board (`TaskMover`, which drops members and dependencies the target cannot keep) change members, links and dependencies **without** these events, and erasing a task or a board dispatches only `TASK_ERASED` and `BOARD_EMPTIED` / `BOARD_DELETED`. A host projection built from the ADDED / REMOVED pairs alone drifts: rebuild the affected task from the `TASK_REMOTE_*` / `SYNC_*` events, `TASK_BOARD_CHANGED` and `TASK_ERASED` (or reload the task). Events for those paths are a follow-up.
+**Where the 2.11 events come from (audit KO-T-L1).** `TASK_TIME_*`, `TASK_DEPENDENCY_*`, `TASK_LINK_*` and `TASK_MEMBER_REMOVED` (like `TASK_MEMBER_ADDED`) are dispatched by the board and API actions, i.e. the calls to `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher` and `TaskMemberAssigner` (an import's dependencies go through `TaskDependencyManager` too). A provider sync (`SyncTaskWriter`), the people sync (`PeopleProjection`, `SyncPeopleWriter`), the import updater (`ImportedTaskUpdater`) and the move to another board (`TaskMover`, which drops members and dependencies the target cannot keep) change members, links and dependencies **without** these events, and erasing a task or a board dispatches only `TASK_ERASED` and `BOARD_EMPTIED` / `BOARD_DELETED`. A host projection built from the ADDED / REMOVED pairs alone drifts: rebuild the affected task from the `TASK_REMOTE_*` / `SYNC_*` events, `TASK_BOARD_CHANGED` and `TASK_ERASED` (or reload the task). Events for those paths are a follow-up. `TASK_ERASED` is dispatched **inside** the erase's transaction (since 2.22.0 one transaction for a whole API delete), so it may still roll back: act on anything irreversible, such as deleting stored files, after the commit (audit SU2-I4).
 
 Outside a deferred write (the board UI, the API) these 2.11 events are dispatched right after the save, and since 2.11 a listener that throws is logged as an error (`TaskBoard: a listener failed after the write was committed`) instead of failing the saved write (audit KO-T-L2). The older events (`TASK_CREATED`, `TASK_MEMBER_ADDED`, …) keep propagating a listener's exception at depth 0, as before: their listeners must not throw.
 
@@ -1634,6 +1637,140 @@ Both ports are framework-free: they take and return only the bundle's values (`T
 (the service-account flag, the channel your entry point recorded). With `database.user_reference: id`, `updated_by_id`
 holds the user's id like the other user columns and `Task::getUpdatedBy()` / `TaskComment::getUpdatedBy()` return a
 `TaskBoardUserRef`. The test kernel `tests/Functional/DddHost` (`DddProvenance`) is a working example.
+
+## Questions on tasks (since 2.23)
+
+Beacon spec 242 (D-20261117-23): next to the comments, a task can carry **questions** for the business to answer, with
+options, one of them recommended, and a free-text *Other* answer. Off by default; with `task_questions.enabled: false`
+nothing changes (no table, route, service, menu entry or output). The schema is in [UPGRADING](UPGRADING.md#to-2230).
+
+```yaml
+nowo_task_board:
+    task_questions:
+        enabled: true
+        recipient_resolver: App\TaskBoard\QuestionRecipients    # Question\TaskQuestionRecipientResolverInterface (optional)
+        external_answers: App\TaskBoard\SignedAnswerLinks       # Question\TaskQuestionExternalAnswerInterface (optional)
+        decision_publisher: App\TaskBoard\PublishToWiki         # Question\TaskQuestionDecisionPublisherInterface (optional)
+        max_recipients: 20
+        max_open_per_task: 20
+        my_questions_per_page: 25
+```
+
+**A question** has a text (1 to 500 characters), an optional Markdown context (at most 20 000), no options or two to
+four (label up to 120 characters, description up to 500, at most one *Recommended*), single or multiple choice, an
+optional *Other* answer (always on for a question without options), one or more recipients and an optional due date
+(today or later; a date, no time). Its state is **open**, then **answered** (a later answer **supersedes** the one in
+force, and both are kept), or **withdrawn** with a reason (final; its answers stay readable). A due date never changes
+the state: an open question past it shows *Overdue*.
+
+**Who.** Through `TaskBoardResourceAccessChecker` (actions `ask_question`, `answer_question`, `withdraw_question`;
+`getQuestionId()` names the question). View access is always needed. On the generic `TASK_ACCESS_CHECK` a listener may
+only **refuse** a question action (`deny()`, which sticks): a `grant()` there is ignored, so a listener written before
+2.23 that grants every action never widens who may ask, answer or withdraw (audit TE-M2). To widen a rule (a manager
+answering on someone's behalf), listen to `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` (the same
+`TaskAccessCheckEvent`, question actions only): `grant()` allows, `deny()` refuses and sticks, no answer keeps the
+default:
+
+| Right | Default |
+|---|---|
+| Ask (`canAskQuestion()`) | the comment right: every viewer with `comments.readers_can_comment` (the default), else editors; never on an archived task |
+| Answer (`canAnswerQuestion()`) | a viewer who answers for one of the question's recipients (`subjectIdsOf()`); never a withdrawn question |
+| Withdraw (`canWithdrawQuestion()`) | its asker (by id) or a manager of the board (`canManageBoard()`) |
+| Publish the decision (`canPublishDecision()`) | an editor of the task, on an answered question, when the publisher shows its button |
+
+**Racing answers.** Every answer carries the question's `version` it was given (the form's hidden field, the API's
+`version`). Two first answers race: the second one is refused (*Someone answered meanwhile*), nothing is overwritten.
+To supersede an answer, send the version you read.
+
+**Where.** The task page and drawer get a *Questions* section before the comments (anchor `#nowo-task-questions`)
+with **Ask a question** (also next to the comment box and, with the context menus, in the card's and row's «⋮» and
+right-click menu); each question card shows its options, the answer form for its recipients, the earlier answers and
+*Withdraw* for its asker and the board's managers. Cards and list rows show *Waiting for answer* (one query per page),
+the list filter has *Waiting for answer*, and **My open questions** (`routes.my_questions`, default
+`/tools/task-board/questions`) lists, in two tabs, the open questions addressed to the viewer and the ones they asked,
+on every board they may see (inside a tenant URL: that tenant's boards). A dashboard includes the same list:
+
+```twig
+{{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}   {# tab: 'asked' for the other list #}
+```
+
+Twig functions: `nowo_task_board_questions_enabled()`, `nowo_task_board_questions(task)`,
+`nowo_task_board_open_questions(tasks)`, `nowo_task_board_my_questions(limit, tab)`. Templates:
+`manage/_task_questions_section.html.twig`, `manage/_task_question_card.html.twig`, `manage/my_questions.html.twig`
+(`web_ui.templates.my_questions`), `manage/_my_questions.html.twig`.
+
+**Never.** The task's status never changes: no column move, no completion, no archive, no revision bump. The bundle
+sends no notification: the host listens to `TASK_QUESTION_ASKED`, `TASK_QUESTION_ANSWERED` and
+`TASK_QUESTION_WITHDRAWN` (snapshots only, after the commit) for its notifications, reminders and chat notices. Questions
+are never synced to a provider.
+
+**Activity.** Asking, answering and withdrawing leave history rows (`question_asked`, `question_answered` with the
+earlier answer as the old value, `question_withdrawn` with the reason; `context` `question:<id>`), immutable like every
+history row.
+
+**In process.** `Question\TaskQuestionManager` (public): `ask()`, `answer()`, `answerAsSubject()` (external, see below),
+`withdraw()`, `publish()`, `detachUser()` and `forgetSubject()` (erasure). Each write checks everything before it
+writes (`TaskQuestionRefusedException` with `reason` and `field`), then runs in one
+transaction at the connection's current level (a savepoint inside yours or inside a transaction-doctrine write unit),
+locks the question's row and compares its version (`TaskQuestionConflictException`:
+read it again; a write unit never replays it). `Question\TaskQuestionQuery` (public): `forTask()`, `openCounts()`,
+`answeredOnBoard($boardId, $since, $limit, $afterId)` — the answered questions of a board as
+`TaskQuestionSnapshot`s (a *Decisions* view, an export), keyset-paginated, with no permission decision (the caller
+decides).
+
+**External answers (signed links).** `answerUrl(TaskQuestionSnapshot, $subjectId): ?string` gives the link where an
+external recipient (`TaskQuestionRecipientCandidate::$external`) answers; the card shows *Copy answer link* to the asker
+and the board's managers and never stores or logs it. The host's page behind the link checks the signature, then calls
+`TaskQuestionManager::answerAsSubject($questionId, $subjectId, $answererName, new TaskQuestionAnswerInput(...),
+$version)`: the bundle checks only that the subject is one of the recipients and that the question is not withdrawn.
+
+**Publish decision.** `targetLabel()` gives the button's label (null hides it), `publish()` writes the decision where the
+host decides (a wiki page) and returns a `TaskQuestionPublication(url, label)`; the bundle calls it outside its own
+transaction and then stores the link on the question (http / https only).
+
+### Questions: Standard Symfony host
+
+```php
+use Nowo\TaskBoardBundle\Question\TaskQuestionRecipientCandidate;
+use Nowo\TaskBoardBundle\Question\TaskQuestionRecipientResolverInterface;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
+use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
+
+final readonly class QuestionRecipients implements TaskQuestionRecipientResolverInterface
+{
+    public function __construct(private ProjectMembers $members, private ClientContacts $contacts) {}
+
+    public function candidates(TaskSnapshot $task, TaskBoardSnapshot $board, object $asker): array
+    {
+        $people = [];
+        foreach ($this->members->ofTenant($board->tenantKey) as $member) {       // one query
+            $people[] = new TaskQuestionRecipientCandidate('user:' . $member->id, $member->name);
+        }
+        foreach ($this->contacts->ofTenant($board->tenantKey) as $contact) {
+            $people[] = new TaskQuestionRecipientCandidate('contact:' . $contact->id, $contact->name, external: true);
+        }
+
+        return $people;
+    }
+
+    public function subjectIdsOf(object $user, ?string $tenantKey): array
+    {
+        return ['user:' . $user->getId()];
+    }
+}
+```
+
+The default, `DefaultTaskQuestionRecipientResolver`, offers the task's @mention candidates (`comments.mention_resolver`)
+as `user:<id>`, without the asker. Ids are opaque to the bundle (1 to 191 characters, compared byte for byte); a bad id
+from the resolver is dropped and logged, never stored.
+
+### Questions: DDD / hexagonal host
+
+The three ports take and return only values (`TaskSnapshot`, `TaskBoardSnapshot`, `TaskQuestionSnapshot`,
+`TaskQuestionAnswerSnapshot`, `TaskQuestionRecipientCandidate`, `TaskQuestionPublication`) and your own user object, so
+the adapters live in your infrastructure layer. With `database.mapping_type: xml` the tables come from
+`Resources/config/doctrine-xml/question/`; with `database.user_reference: id` the asker, answerer and withdrawer are
+user ids. With `database.private_entity_manager: true` every question write goes through the bundle's private manager.
 
 ## Translations
 

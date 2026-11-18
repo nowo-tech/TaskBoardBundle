@@ -369,6 +369,9 @@
     {{ include('@NowoTaskBoardBundle/manage/_task_time_section.html.twig') }}
     {% endblock %}{% block nowo_task_repeat %}{% set _repeat = nowo_task_board_recurrence(task) %}{% if _repeat is not null %}{{ include('@NowoTaskBoardBundle/manage/_task_repeat_section.html.twig', {repeat: _repeat}) }}{% endif %}{% endblock %}
 
+    {#- Since 2.23.0 (Beacon spec 242): the task's questions, before the comments (task_questions.enabled). -#}
+    {% block nowo_task_questions %}{% set _questions = nowo_task_board_questions(task, taskRouteExtra|default({})) %}{% if _questions is not null %}{{ include('@NowoTaskBoardBundle/manage/_task_questions_section.html.twig', {task: task, questions: _questions}, with_context: false) }}{% endif %}{% endblock %}
+
     {% block nowo_task_relations %}
     <div
         class="nowo-task-detail__relations"

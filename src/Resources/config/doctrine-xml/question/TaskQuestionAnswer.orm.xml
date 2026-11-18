@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer" table="task_board_task_question_answers">
+        <indexes>
+            <index name="idx_task_board_task_question_answers_question" columns="question_id,answer_number"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="answeredByName" type="string" column="answered_by_name" length="180" nullable="true"/>
+        <field name="supersededAt" type="datetime_immutable" column="superseded_at" nullable="true"/>
+        <field name="supersededById" type="string" column="superseded_by_id" length="36" nullable="true"/>
+        <field name="sequence" type="integer" column="answer_number"/>
+        <field name="selectedOptionIds" type="json" column="selected_option_ids"/>
+        <field name="otherText" type="text" column="other_text" nullable="true"/>
+        <field name="answeredBySubject" type="string" column="answered_by_subject" length="191"/>
+        <field name="via" type="string" length="8"/>
+        <field name="answeredAt" type="datetime_immutable" column="answered_at"/>
+        <many-to-one field="question" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestion" inversed-by="answers">
+            <join-column name="question_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="answeredBy" target-entity="App\Entity\User">
+            <join-column name="answered_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

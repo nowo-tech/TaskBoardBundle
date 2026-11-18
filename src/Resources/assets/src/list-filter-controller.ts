@@ -1,6 +1,7 @@
 import { Controller } from '@hotwired/stimulus';
 import { openFold } from './filter-fold-utils';
 import { matchesListFilter } from './list-filter-utils';
+import { matchesWaiting } from './task-questions';
 import { compareRows, readSortRow } from './list-sort-utils';
 import { readMap, writeEntry } from './storage';
 import { formatDeviation, formatMinutes, readTimeRow, sumTimes } from './time-utils';
@@ -13,7 +14,7 @@ const TIME_COLUMNS_KEY = 'nowo-task-board.list-time-columns';
  * <tfoot> sums its table, the list's summary sums every shown row).
  */
 export default class ListFilterController extends Controller<HTMLElement> {
-    static targets = ['search', 'priority', 'column', 'row', 'overEstimate', 'timeColumns', 'totals', 'sort'];
+    static targets = ['search', 'priority', 'column', 'row', 'overEstimate', 'timeColumns', 'totals', 'sort', 'waiting'];
 
     static values = { board: String };
 
@@ -24,6 +25,9 @@ export default class ListFilterController extends Controller<HTMLElement> {
     declare readonly columnTarget: HTMLSelectElement;
 
     declare readonly overEstimateTarget: HTMLInputElement;
+    // Since 2.23.0 (Beacon spec 242): "Waiting for answer".
+    declare readonly hasWaitingTarget: boolean;
+    declare readonly waitingTarget: HTMLInputElement;
 
     declare readonly timeColumnsTarget: HTMLInputElement;
 
@@ -77,7 +81,8 @@ export default class ListFilterController extends Controller<HTMLElement> {
         return (this.hasSearchTarget && this.searchTarget.value !== '')
             || (this.hasPriorityTarget && this.priorityTarget.value !== '')
             || (this.hasColumnTarget && this.columnTarget.value !== '')
-            || (this.hasOverEstimateTarget && this.overEstimateTarget.checked);
+            || (this.hasOverEstimateTarget && this.overEstimateTarget.checked)
+            || (this.hasWaitingTarget && this.waitingTarget.checked);
     }
 
     filter(): void {
@@ -119,6 +124,7 @@ export default class ListFilterController extends Controller<HTMLElement> {
         const priority = this.hasPriorityTarget ? this.priorityTarget.value : '';
         const column = this.hasColumnTarget ? this.columnTarget.value : '';
         const overOnly = this.hasOverEstimateTarget && this.overEstimateTarget.checked;
+        const waitingOnly = this.hasWaitingTarget && this.waitingTarget.checked;
 
         this.rowTargets.forEach((row) => {
             const visible = matchesListFilter(
@@ -131,7 +137,7 @@ export default class ListFilterController extends Controller<HTMLElement> {
                 column,
                 overOnly,
                 row.dataset.over === '1',
-            );
+            ) && matchesWaiting(waitingOnly, row.dataset.waiting);
             row.hidden = !visible;
         });
 

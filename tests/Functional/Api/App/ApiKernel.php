@@ -149,7 +149,7 @@ final class ApiKernel extends Kernel
             $container->extension('nowo_transaction_doctrine', [
                 'max_attempts'      => 3,
                 'backoff'           => ['floor_ms' => 0, 'base_ms' => 0, 'cap_ms' => 0],
-                'controller_routes' => ['nowo_task_board_api_task_create', 'nowo_task_board_api_task_update', 'nowo_task_board_api_comment_create', 'nowo_task_board_api_attachment_create'],
+                'controller_routes' => ['nowo_task_board_api_task_create', 'nowo_task_board_api_task_update', 'nowo_task_board_api_comment_create', 'nowo_task_board_api_attachment_create', 'nowo_task_board_api_question_ask', 'nowo_task_board_api_question_answer'],
             ]);
         }
         $taskBoardConfig = ['user_class' => AppUser::class, 'security' => ['resource_scoping' => false] + ($this->taskBoard['security'] ?? []), 'api' => $this->api + ['enabled' => true, 'host_decides_access' => true, 'hooks' => [

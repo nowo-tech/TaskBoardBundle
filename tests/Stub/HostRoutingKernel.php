@@ -29,7 +29,7 @@ use const PHP_VERSION_ID;
  * Host kernel for the routing test (REQ-SF-004 rule 7): its routing is the Symfony default
  * `controllers: { resource: routing.controllers }` and, when `$importBundleRoutes` is true, the documented import of
  * the bundle routes (`type: nowo_task_board` route loader). Since 2.22.0 (audit SF4-I2) `$allFeatures` turns on every
- * feature that adds routes or controllers (API, sync, calendar, task numbers, move, recurrence, multi-board, templates).
+ * feature that adds routes or controllers (API, sync, calendar, task numbers, move, recurrence, multi-board, templates, questions).
  */
 final class HostRoutingKernel extends Kernel
 {
@@ -45,6 +45,8 @@ final class HostRoutingKernel extends Kernel
         'recurrence'     => ['enabled' => true],
         'multi_board'    => ['enabled' => true],
         'task_templates' => ['enabled' => true],
+        // Since 2.23.0 (Beacon spec 242).
+        'task_questions' => ['enabled' => true],
     ];
 
     public function __construct(private readonly string $dir, private readonly bool $importBundleRoutes, private readonly bool $allFeatures = false)

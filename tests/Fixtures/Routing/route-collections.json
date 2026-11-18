@@ -11120,5 +11120,4372 @@
             }
         ],
         "aliases": []
+    },
+    "questions": {
+        "routes": [
+            {
+                "name": "nowo_task_board_index",
+                "path": "/tools/task-board",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::index"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board",
+                "path": "/tools/task-board/board/{boardId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::board"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_list",
+                "path": "/tools/task-board/board/{boardId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::listView"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_gantt",
+                "path": "/tools/task-board/board/{boardId}/gantt",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::ganttView"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task",
+                "path": "/tools/task-board/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::task"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board_create",
+                "path": "/tools/task-board/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createBoard"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_create",
+                "path": "/tools/task-board/board/{boardId}/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_move",
+                "path": "/tools/task-board/task/{taskId}/move",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::moveTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_advance",
+                "path": "/tools/task-board/task/{taskId}/advance",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::advanceTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_link",
+                "path": "/tools/task-board/task/{taskId}/link",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::attachLink"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_link_update",
+                "path": "/tools/task-board/task/{taskId}/link/{linkId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateLink"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_link_remove",
+                "path": "/tools/task-board/task/{taskId}/link/{linkId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeLink"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_member",
+                "path": "/tools/task-board/task/{taskId}/member",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addMember"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_member_remove",
+                "path": "/tools/task-board/task/{taskId}/member/{memberId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeMember"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_subtask",
+                "path": "/tools/task-board/task/{taskId}/subtask",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createSubtask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_priority",
+                "path": "/tools/task-board/task/{taskId}/priority",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updatePriority"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_create",
+                "path": "/tools/task-board/board/{boardId}/column",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_update",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_reorder",
+                "path": "/tools/task-board/board/{boardId}/columns/reorder",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::reorderColumns"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board_import",
+                "path": "/tools/task-board/board/{boardId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importBoard"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_delete",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_set_create",
+                "path": "/tools/task-board/board/{boardId}/column-sets",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumnSet"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_set_apply",
+                "path": "/tools/task-board/board/{boardId}/column-sets/apply",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::applyColumnSet"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_set_delete",
+                "path": "/tools/task-board/board/{boardId}/column-sets/{setId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumnSet"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_panel",
+                "path": "/tools/task-board/task/{taskId}/panel",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::taskPanel"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_dependency",
+                "path": "/tools/task-board/task/{taskId}/dependency",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addDependency"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_dependency_remove",
+                "path": "/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeDependency"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_import",
+                "path": "/tools/task-board/task/{taskId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importIntoTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_time",
+                "path": "/tools/task-board/task/{taskId}/time",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::logTime"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_time_remove",
+                "path": "/tools/task-board/task/{taskId}/time/{entryId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeTimeEntry"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_time_billable",
+                "path": "/tools/task-board/task/{taskId}/time/{entryId}/billable",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::setTimeEntryBillable"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_comment",
+                "path": "/tools/task-board/task/{taskId}/comment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addComment"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_comment_edit",
+                "path": "/tools/task-board/task/{taskId}/comment/{commentId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editComment"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_comment_delete",
+                "path": "/tools/task-board/task/{taskId}/comment/{commentId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteComment"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_restore",
+                "path": "/tools/task-board/task/{taskId}/restore",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::restoreTask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_menu",
+                "path": "/tools/task-board/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_question_ask",
+                "path": "/tools/task-board/task/{taskId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::ask"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_question_answer",
+                "path": "/tools/task-board/task/{taskId}/question/{questionId}/answer",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::answer"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_question_withdraw",
+                "path": "/tools/task-board/task/{taskId}/question/{questionId}/withdraw",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::withdraw"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_question_publish",
+                "path": "/tools/task-board/task/{taskId}/question/{questionId}/publish",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::publish"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_my_questions",
+                "path": "/tools/task-board/questions",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::mine"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_index",
+                "path": "/projects/{tenantSlug}/tasks",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::index"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_board",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::board"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_list",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::listView"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_gantt",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/gantt",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::ganttView"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::task"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_board_create",
+                "path": "/projects/{tenantSlug}/tasks/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createBoard"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_create",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createTask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_move",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/move",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::moveTask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_advance",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/advance",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::advanceTask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_link",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/link",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::attachLink"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_link_update",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/link/{linkId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateLink"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_link_remove",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/link/{linkId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeLink"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_member",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/member",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addMember"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_member_remove",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/member/{memberId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeMember"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_subtask",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/subtask",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createSubtask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_priority",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/priority",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updatePriority"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_create",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_update",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/{columnId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_reorder",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/columns/reorder",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::reorderColumns"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_board_import",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importBoard"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_delete",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/{columnId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_set_create",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column-sets",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_set_apply",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column-sets/apply",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::applyColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_set_delete",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column-sets/{setId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_panel",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/panel",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::taskPanel"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_comment",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/comment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addComment"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_comment_edit",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/comment/{commentId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editComment"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_comment_delete",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/comment/{commentId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteComment"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_dependency",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/dependency",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addDependency"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_import",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importIntoTask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_dependency_remove",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/dependency/{dependencyId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeDependency"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_time",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/time",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::logTime"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_time_remove",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/time/{entryId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeTimeEntry"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_time_billable",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/time/{entryId}/billable",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::setTimeEntryBillable"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_question_ask",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::ask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_question_answer",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/question/{questionId}/answer",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::answer"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_question_withdraw",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/question/{questionId}/withdraw",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::withdraw"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_question_publish",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/question/{questionId}/publish",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::publish"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_my_questions",
+                "path": "/projects/{tenantSlug}/tasks/questions",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::mine"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_restore",
+                "path": "/projects/{tenantSlug}/tasks/task/{taskId}/restore",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::restoreTask"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_menu",
+                "path": "/projects/{tenantSlug}/tasks/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_index",
+                "path": "/teams/{tenantSlug}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::index"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_board",
+                "path": "/teams/{tenantSlug}/board/{boardId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::board"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_list",
+                "path": "/teams/{tenantSlug}/board/{boardId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::listView"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_gantt",
+                "path": "/teams/{tenantSlug}/board/{boardId}/gantt",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::ganttView"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task",
+                "path": "/teams/{tenantSlug}/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::task"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_board_create",
+                "path": "/teams/{tenantSlug}/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createBoard"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_create",
+                "path": "/teams/{tenantSlug}/board/{boardId}/create",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_move",
+                "path": "/teams/{tenantSlug}/task/{taskId}/move",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::moveTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_advance",
+                "path": "/teams/{tenantSlug}/task/{taskId}/advance",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::advanceTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_link",
+                "path": "/teams/{tenantSlug}/task/{taskId}/link",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::attachLink"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_link_update",
+                "path": "/teams/{tenantSlug}/task/{taskId}/link/{linkId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateLink"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_link_remove",
+                "path": "/teams/{tenantSlug}/task/{taskId}/link/{linkId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeLink"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_member",
+                "path": "/teams/{tenantSlug}/task/{taskId}/member",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addMember"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_member_remove",
+                "path": "/teams/{tenantSlug}/task/{taskId}/member/{memberId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeMember"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_subtask",
+                "path": "/teams/{tenantSlug}/task/{taskId}/subtask",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createSubtask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_priority",
+                "path": "/teams/{tenantSlug}/task/{taskId}/priority",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updatePriority"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_create",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_update",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/{columnId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_reorder",
+                "path": "/teams/{tenantSlug}/board/{boardId}/columns/reorder",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::reorderColumns"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_board_import",
+                "path": "/teams/{tenantSlug}/board/{boardId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET",
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importBoard"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_delete",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/{columnId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_set_create",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column-sets",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::createColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_set_apply",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column-sets/apply",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::applyColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_set_delete",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column-sets/{setId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteColumnSet"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_panel",
+                "path": "/teams/{tenantSlug}/task/{taskId}/panel",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::taskPanel"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_comment",
+                "path": "/teams/{tenantSlug}/task/{taskId}/comment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addComment"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_comment_edit",
+                "path": "/teams/{tenantSlug}/task/{taskId}/comment/{commentId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editComment"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_comment_delete",
+                "path": "/teams/{tenantSlug}/task/{taskId}/comment/{commentId}/delete",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::deleteComment"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_dependency",
+                "path": "/teams/{tenantSlug}/task/{taskId}/dependency",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::addDependency"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_import",
+                "path": "/teams/{tenantSlug}/task/{taskId}/import",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::importIntoTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_dependency_remove",
+                "path": "/teams/{tenantSlug}/task/{taskId}/dependency/{dependencyId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeDependency"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_time",
+                "path": "/teams/{tenantSlug}/task/{taskId}/time",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::logTime"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_time_remove",
+                "path": "/teams/{tenantSlug}/task/{taskId}/time/{entryId}/remove",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::removeTimeEntry"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_time_billable",
+                "path": "/teams/{tenantSlug}/task/{taskId}/time/{entryId}/billable",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::setTimeEntryBillable"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_question_ask",
+                "path": "/teams/{tenantSlug}/task/{taskId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::ask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_question_answer",
+                "path": "/teams/{tenantSlug}/task/{taskId}/question/{questionId}/answer",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::answer"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_question_withdraw",
+                "path": "/teams/{tenantSlug}/task/{taskId}/question/{questionId}/withdraw",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::withdraw"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_question_publish",
+                "path": "/teams/{tenantSlug}/task/{taskId}/question/{questionId}/publish",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::publish"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_my_questions",
+                "path": "/teams/{tenantSlug}/questions",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskQuestionController::mine"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_restore",
+                "path": "/teams/{tenantSlug}/task/{taskId}/restore",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::restoreTask"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_menu",
+                "path": "/teams/{tenantSlug}/menu/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskMenuController::act"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_user",
+                "path": "/api/tasks/v2/user",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiIdentityController::user",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_team",
+                "path": "/api/tasks/v2/team",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiIdentityController::teams",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_spaces",
+                "path": "/api/tasks/v2/team/{teamId}/space",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::spaces",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_team_tasks",
+                "path": "/api/tasks/v2/team/{teamId}/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::teamTasks",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_team_members",
+                "path": "/api/tasks/v2/team/{teamId}/member",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiIdentityController::members",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_time_entries",
+                "path": "/api/tasks/v2/team/{teamId}/time_entries",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::timeEntries",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_space",
+                "path": "/api/tasks/v2/space/{spaceId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::space",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folders",
+                "path": "/api/tasks/v2/space/{spaceId}/folder",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::folders",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_lists",
+                "path": "/api/tasks/v2/space/{spaceId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::lists",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_space_tags",
+                "path": "/api/tasks/v2/space/{spaceId}/tag",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::tags",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_list",
+                "path": "/api/tasks/v2/list/{listId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::list",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_list_tasks",
+                "path": "/api/tasks/v2/list/{listId}/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::listTasks",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_list_fields",
+                "path": "/api/tasks/v2/list/{listId}/field",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::fields",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task",
+                "path": "/api/tasks/v2/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::task",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_comments",
+                "path": "/api/tasks/v2/task/{taskId}/comment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::comments",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_members",
+                "path": "/api/tasks/v2/task/{taskId}/member",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::members",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_create",
+                "path": "/api/tasks/v2/list/{listId}/task",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::createTask",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_update",
+                "path": "/api/tasks/v2/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateTask",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_delete",
+                "path": "/api/tasks/v2/task/{taskId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::deleteTask",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_bulk",
+                "path": "/api/tasks/v2/task/bulk",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateTasks",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_comment_create",
+                "path": "/api/tasks/v2/task/{taskId}/comment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::addComment",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_comment_update",
+                "path": "/api/tasks/v2/comment/{commentId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateComment",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_tag_add",
+                "path": "/api/tasks/v2/task/{taskId}/tag/{tagName}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::addTag",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_tag_remove",
+                "path": "/api/tasks/v2/task/{taskId}/tag/{tagName}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::removeTag",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_field_set",
+                "path": "/api/tasks/v2/task/{taskId}/field/{fieldId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::setField",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_dependency_add",
+                "path": "/api/tasks/v2/task/{taskId}/dependency",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::addDependency",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_dependency_remove",
+                "path": "/api/tasks/v2/task/{taskId}/dependency",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::removeDependency",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_link_add",
+                "path": "/api/tasks/v2/task/{taskId}/link/{linksTo}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::addLink",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_link_remove",
+                "path": "/api/tasks/v2/task/{taskId}/link/{linksTo}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::removeLink",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_checklist_create",
+                "path": "/api/tasks/v2/task/{taskId}/checklist",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::createChecklist",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_checklist_update",
+                "path": "/api/tasks/v2/checklist/{checklistId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateChecklist",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_checklist_delete",
+                "path": "/api/tasks/v2/checklist/{checklistId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::deleteChecklist",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_item_create",
+                "path": "/api/tasks/v2/checklist/{checklistId}/checklist_item",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::createItem",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_item_update",
+                "path": "/api/tasks/v2/checklist/{checklistId}/checklist_item/{itemId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateItem",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_item_delete",
+                "path": "/api/tasks/v2/checklist/{checklistId}/checklist_item/{itemId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::deleteItem",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_attachment_create",
+                "path": "/api/tasks/v2/task/{taskId}/attachment",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::addAttachment",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_time_log",
+                "path": "/api/tasks/v2/team/{teamId}/time_entries",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::logTime",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_time_delete",
+                "path": "/api/tasks/v2/team/{teamId}/time_entries/{timerId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::deleteTime",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_time_update",
+                "path": "/api/tasks/v2/team/{teamId}/time_entries/{timerId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiWriteController::updateTime",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_board_create",
+                "path": "/api/tasks/v2/space/{spaceId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::createBoard",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_board_update",
+                "path": "/api/tasks/v2/list/{listId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::updateBoard",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_board_delete",
+                "path": "/api/tasks/v2/list/{listId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::deleteBoard",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_status_create",
+                "path": "/api/tasks/v2/list/{listId}/status",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::createColumn",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_status_order",
+                "path": "/api/tasks/v2/list/{listId}/status/order",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::reorderColumns",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_status_update",
+                "path": "/api/tasks/v2/list/{listId}/status/{statusId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::updateColumn",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_status_delete",
+                "path": "/api/tasks/v2/list/{listId}/status/{statusId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::deleteColumn",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder",
+                "path": "/api/tasks/v2/folder/{folderId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::folder",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder_lists",
+                "path": "/api/tasks/v2/folder/{folderId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiReadController::folderLists",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder_create",
+                "path": "/api/tasks/v2/space/{spaceId}/folder",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::createFolder",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder_update",
+                "path": "/api/tasks/v2/folder/{folderId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "PUT"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::updateFolder",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder_delete",
+                "path": "/api/tasks/v2/folder/{folderId}",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "DELETE"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::deleteFolder",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_folder_list_create",
+                "path": "/api/tasks/v2/folder/{folderId}/list",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiManagementController::createFolderList",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_task_questions",
+                "path": "/api/tasks/v2/task/{taskId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::taskQuestions",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_question_ask",
+                "path": "/api/tasks/v2/task/{taskId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::ask",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_question_answer",
+                "path": "/api/tasks/v2/question/{questionId}/answer",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::answer",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_question_withdraw",
+                "path": "/api/tasks/v2/question/{questionId}/withdraw",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::withdraw",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_list_questions",
+                "path": "/api/tasks/v2/list/{listId}/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::listQuestions",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_api_my_questions",
+                "path": "/api/tasks/v2/user/question",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Api\\Controller\\TaskApiQuestionController::myQuestions",
+                    "_nowo_task_board_api": true,
+                    "_stateless": true
+                },
+                "requirements": {
+                    "teamId": "[^/]+",
+                    "spaceId": "[^/]+",
+                    "listId": "[^/]+",
+                    "taskId": "[^/]+",
+                    "tagName": "[^/]+",
+                    "fieldId": "[^/]+",
+                    "linksTo": "[^/]+",
+                    "checklistId": "[^/]+",
+                    "itemId": "[^/]+",
+                    "timerId": "[^/]+",
+                    "statusId": "[^/]+",
+                    "commentId": "[^/]+",
+                    "folderId": "[^/]+",
+                    "questionId": "[^/]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            }
+        ],
+        "aliases": []
     }
 }

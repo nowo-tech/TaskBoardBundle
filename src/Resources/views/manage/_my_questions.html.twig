@@ -1,0 +1,23 @@
+{#
+    Since 2.23.0 (Beacon spec 242): the viewer's open questions as a dashboard component —
+    {{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}. Variables: limit (default 5), tab
+    (to_answer | asked, default to_answer). Renders nothing with task_questions.enabled: false.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+{% if nowo_task_board_questions_enabled() %}
+    {% set _tab = tab|default('to_answer') %}
+    {% set _rows = nowo_task_board_my_questions(limit|default(5), _tab) %}
+    <section class="{{ nowo_ui_class('card', _b) }} nowo-task-my-questions" data-testid="nowo-task-my-questions-widget">
+        <div class="{{ nowo_ui_class('card_header', _b) }}"><h2 class="{{ nowo_ui_class('card_title', _b) }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ ('task_board.question.mine.' ~ _tab)|trans({}, _b) }}</h2></div>
+        <div class="{{ nowo_ui_class('card_body', _b) }}">
+            {% for question in _rows %}
+                {% if loop.first %}<ul class="nowo-task-my-questions__list">{% endif %}
+                <li class="nowo-task-my-questions__item"><a href="{{ path(nowo_task_board_route('task'), {taskId: question.task.id, _fragment: 'nowo-task-question-' ~ question.id}) }}">{{ question.text }}</a> <span class="{{ nowo_ui_class('muted', _b) }}">{{ question.task.title }}{% if question.dueOn %} · <time datetime="{{ question.dueOn|date('Y-m-d') }}">{{ question.dueOn|date('Y-m-d') }}</time>{% endif %}</span></li>
+                {% if loop.last %}</ul>{% endif %}
+            {% else %}
+                <p class="{{ nowo_ui_class('muted', _b) }}">{{ ('task_board.question.mine.empty.' ~ _tab)|trans({}, _b) }}</p>
+            {% endfor %}
+            <a class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_link', _b) }}" href="{{ path(nowo_task_board_route('my_questions'), _tab == 'asked' ? {tab: 'asked'} : {}) }}">{{ 'task_board.question.mine.see_all'|trans({}, _b) }}</a>
+        </div>
+    </section>
+{% endif %}

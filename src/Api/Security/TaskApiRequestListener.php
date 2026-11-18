@@ -232,10 +232,10 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
         }
         // Since 2.22.0: a lock conflict anywhere in the chain; the class only in the log, as below.
         if (LockConflictChain::isConflict($throwable)) {
-            $this->logger->warning('TaskBoard API: a write met a database lock conflict.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
-
             // Audit SU-L1: anything this request already committed (a post-commit listener, a write in steps) is a reload.
+            // Audit SU2-I3: read before the log line, so a host log handler that writes to the database is not counted.
             $committed = LockConflictChain::committed($throwable) || ($request instanceof Request && $this->commits?->committedSince($request) === true);
+            $this->logger->warning('TaskBoard API: a write met a database lock conflict.', ['bundle' => 'nowo_task_board', 'exception_class' => $throwable::class]);
             // The idempotency key keeps this answer: the same key sent again must not write a second time.
             $request?->attributes->set(self::PARTIAL_COMMIT, $committed);
 

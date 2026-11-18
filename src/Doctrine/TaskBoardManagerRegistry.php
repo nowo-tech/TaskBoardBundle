@@ -24,7 +24,7 @@ use function substr;
 final readonly class TaskBoardManagerRegistry implements ManagerRegistry
 {
     /** The namespaces of the bundle's entities. */
-    public const ENTITY_PATTERN = '/^Nowo\\\\TaskBoardBundle\\\\(?:(?:Sync|Recurrence|Number|Api|Template)\\\\)?Entity\\\\/';
+    public const ENTITY_PATTERN = '/^Nowo\\\\TaskBoardBundle\\\\(?:(?:Sync|Recurrence|Number|Api|Template|Question)\\\\)?Entity\\\\/';
 
     /**
      * @param ManagerRegistry $registry The application's Doctrine registry

@@ -15,6 +15,8 @@ use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
 use Nowo\TaskBoardBundle\Event\ColumnSetAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Stringable;
@@ -48,6 +50,8 @@ final readonly class TaskBoardResourceAccessChecker
         private ?EventDispatcherInterface $eventDispatcher = null,
         private array $manageRoles = ['ROLE_ADMIN'],
         private bool $scopingEnabled = true,
+        // Since 2.23.0 (Beacon spec 242): `comments.readers_can_comment`, the default of who may ask a question.
+        private bool $readersCanComment = true,
     ) {
     }
 
@@ -249,6 +253,109 @@ final readonly class TaskBoardResourceAccessChecker
 
             return ($this->isTaskParticipant($user, $task) || $this->isBoardViewable($boardAccess)) && !$boardAccess->isReadOnly();
         };
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): whether the user may ask a question on the task. View access is required and an
+     * archived task gets none. The {@see TaskAccessCheckEvent::ACTION_ASK_QUESTION} decision of TASK_ACCESS_CHECK: grant()
+     * allows it, deny() refuses it (and sticks); with no answer it is the comment right — every viewer with
+     * `comments.readers_can_comment` (the default), else {@see self::canEditTask()}.
+     */
+    public function canAskQuestion(object $user, Task $task): bool
+    {
+        if ($task->isArchived() || !$this->canViewTask($user, $task)) {
+            return false;
+        }
+
+        return $this->questionDecision($user, $task, TaskAccessCheckEvent::ACTION_ASK_QUESTION, null)
+            ?? ($this->readersCanComment || $this->canEditTask($user, $task));
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): {@see self::canAskQuestion()} for the tasks of one board page (the task menu's
+     * *Ask a question…* entry), built on {@see self::taskEditDecider()}: the board's decision is taken once. Build it per
+     * page; it holds nothing beyond that call. Every task it is asked about is one the page shows (view access).
+     *
+     * @return Closure(Task): bool
+     */
+    public function askQuestionDecider(object $user, TaskBoard $board): Closure
+    {
+        $canEdit = $this->taskEditDecider($user, $board);
+
+        return fn (Task $task): bool => !$task->isArchived()
+            && ($this->questionDecision($user, $task, TaskAccessCheckEvent::ACTION_ASK_QUESTION, null) ?? ($this->readersCanComment || $canEdit($task)));
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): whether the user may answer the question — view access to its task, the question not
+     * withdrawn, then the {@see TaskAccessCheckEvent::ACTION_ANSWER_QUESTION} decision; with no answer, one of
+     * `$subjectIds` (the recipient resolver's `subjectIdsOf()` for the user) is one of its recipients, byte for byte.
+     *
+     * @param list<string> $subjectIds
+     */
+    public function canAnswerQuestion(object $user, TaskQuestion $question, array $subjectIds): bool
+    {
+        $task = $question->getTask();
+        if ($question->isWithdrawn() || !$this->canViewTask($user, $task)) {
+            return false;
+        }
+        $decision = $this->questionDecision($user, $task, TaskAccessCheckEvent::ACTION_ANSWER_QUESTION, $question->getId());
+        if ($decision !== null) {
+            return $decision;
+        }
+        foreach ($subjectIds as $subjectId) {
+            if ($question->recipient($subjectId) instanceof TaskQuestionRecipient) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): whether the user may withdraw the question — view access to its task, the question
+     * open or answered, then the {@see TaskAccessCheckEvent::ACTION_WITHDRAW_QUESTION} decision; with no answer its asker
+     * (by id) or a manager of the board ({@see self::canManageBoard()}).
+     */
+    public function canWithdrawQuestion(object $user, TaskQuestion $question): bool
+    {
+        $task = $question->getTask();
+        if ($question->isWithdrawn() || !$this->canViewTask($user, $task)) {
+            return false;
+        }
+
+        return $this->questionDecision($user, $task, TaskAccessCheckEvent::ACTION_WITHDRAW_QUESTION, $question->getId())
+            ?? ($this->sameUser($user, $question->getAskedBy()) || $this->canManageBoard($user, $task->getBoard()));
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): whether the user may publish the decision of an answered question (the host's
+     * publisher decides the target and may still hide the button): {@see self::canEditTask()}.
+     */
+    public function canPublishDecision(object $user, TaskQuestion $question): bool
+    {
+        return $question->isAnswered() && $this->canEditTask($user, $question->getTask());
+    }
+
+    /**
+     * The host's decision on a question action: false denied, true granted, null when no listener answered (the bundle's
+     * rule holds). Audit TE-M2: on the generic TASK_ACCESS_CHECK only `deny()` counts — a listener that grants every
+     * action (written before 2.23) never widens the question rules; only TASK_QUESTION_ACCESS_CHECK may grant.
+     */
+    private function questionDecision(object $user, Task $task, string $action, ?string $questionId): ?bool
+    {
+        $generic = new TaskAccessCheckEvent($user, $task, $action, $questionId);
+        $this->eventDispatcher?->dispatch($generic, TaskBoardEvents::TASK_ACCESS_CHECK);
+        if ($generic->isDenied()) {
+            return false;
+        }
+        $event = new TaskAccessCheckEvent($user, $task, $action, $questionId);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK);
+        if ($event->isDenied()) {
+            return false;
+        }
+
+        return $event->isGranted() && !$event->isReadOnly() ? true : null;
     }
 
     /**

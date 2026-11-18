@@ -121,6 +121,11 @@ final class FunctionalKernel extends Kernel
         // Since 1.24: a tenant-aware create check and a default board view, used when a test configures them.
         $container->services()->set('app.tenant_create_checker', TenantCreateChecker::class)->public();
         $container->services()->set('app.default_view', PreferredViewResolver::class)->public();
+        // Since 2.23.0 (Beacon spec 242): the question ports a test configures.
+        $container->services()->set('app.question_publisher', ScriptedQuestionPublisher::class)->public();
+        $container->services()->set('app.question_links', ScriptedQuestionLinks::class)->public();
+        $container->services()->set('app.question_recipients', ScriptedQuestionRecipients::class)->autowire()->public();
+        $container->services()->set('app.switchable_provenance', SwitchableWriteProvenance::class);
         // Since 2.5.0 (TB-17): the help link's URL from the host.
         $container->services()->set('app.help_link_urls', ManualHelpLinkUrls::class);
         // Since 2.12.0: the host's billable default and period lock of manual entries (none until a test sets them).

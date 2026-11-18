@@ -1,0 +1,46 @@
+{#
+    Since 2.23.0 (Beacon spec 242, task_questions.enabled): the Questions section of a task page and drawer (anchor
+    #nowo-task-questions). Variables: task, questions (from nowo_task_board_questions(): cards, askForm, open, total).
+    The ask form opens in a disclosure (#nowo-task-question-ask; `?ask=1` opens it, the task menu's "Ask a question…" links
+    there). Every form posts to a route that checks the right again; nothing here changes the task's status.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+<section class="nowo-task-section nowo-task-detail nowo-task-questions" id="nowo-task-questions" data-testid="nowo-task-questions" aria-labelledby="nowo-task-questions-title">
+    <header class="nowo-task-section__header nowo-task-detail__section-header">
+        <h2 class="nowo-task-section__title" id="nowo-task-questions-title">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.question.section'|trans({}, _b) }}{% if questions.open > 0 %} <span class="nowo-task-section__count" data-testid="nowo-task-questions-open">{{ 'task_board.question.open_count'|trans({'%count%': questions.open}, _b) }}</span>{% endif %}</h2>
+    </header>
+    {% for card in questions.cards %}
+        {{ include('@NowoTaskBoardBundle/manage/_task_question_card.html.twig', {card: card}, with_context: false) }}
+    {% else %}
+        <p class="{{ nowo_ui_class('muted', _b) }} nowo-task-questions__empty">{{ 'task_board.question.none'|trans({}, _b) }}</p>
+    {% endfor %}
+    {% if questions.askForm %}
+        {% set _f = questions.askForm %}
+        <details class="nowo-task-questions__ask" id="nowo-task-question-ask" data-testid="nowo-task-question-ask"{% if app.request.query.get('ask') == '1' or _f.vars.submitted|default(false) %} open{% endif %}>
+            <summary class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-controller="disclosure-icon">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.question.ask'|trans({}, _b) }}</summary>
+            {{ form_start(_f, {method: 'POST', attr: {class: 'nowo-task-question-form', 'data-testid': 'nowo-task-question-form'}}) }}
+                {{ form_row(_f.text) }}
+                {{ form_row(_f.context) }}
+                <fieldset class="nowo-task-question-form__options">
+                    <legend class="{{ nowo_ui_class('form_label', _b) }}">{{ 'task_board.question.form.options'|trans({}, _b) }}</legend>
+                    <p class="{{ nowo_ui_class('muted', _b) }}">{{ 'task_board.question.form.options_help'|trans({}, _b) }}</p>
+                    {% for n in 1..4 %}
+                        <div class="nowo-task-question-form__option">
+                            {{ form_row(_f['option' ~ n]) }}
+                            {{ form_row(_f['option' ~ n ~ 'Description']) }}
+                        </div>
+                    {% endfor %}
+                    {{ form_row(_f.recommended) }}
+                </fieldset>
+                {{ form_row(_f.choiceMode) }}
+                {{ form_row(_f.allowOther) }}
+                {{ form_row(_f.recipients) }}
+                {{ form_row(_f.dueOn) }}
+                {% for child in _f %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                <div class="nowo-task-question-form__actions">
+                    <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-question-submit">{{ 'task_board.question.ask_submit'|trans({}, _b) }}</button>
+                </div>
+            {{ form_end(_f, {render_rest: false}) }}
+        </details>
+    {% endif %}
+</section>

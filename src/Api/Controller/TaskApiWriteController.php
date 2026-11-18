@@ -144,8 +144,9 @@ final readonly class TaskApiWriteController
         $key    = $upload !== null && $upload->isValid() ? $taskId . '|' . hash_file('sha256', $upload->getPathname()) : null;
         $stored = is_array($kept) && $key !== null && ($kept[0] ?? null) === $key && ($kept[1] ?? null) instanceof TaskApiAttachment ? $kept[1] : null;
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
-        [$task, $attachment] = $this->tasks->addAttachment($this->principal($request), $taskId, $upload, $stored);
-        $request->attributes->set(self::STORED_ATTACHMENT, [$key, $attachment]);
+        [$task, $attachment, $committed] = $this->tasks->addAttachment($this->principal($request), $taskId, $upload, $stored);
+        // Audit SU2-I1: kept for a replay only when the host's store committed its work; otherwise a replay stores again.
+        $request->attributes->set(self::STORED_ATTACHMENT, $committed ? [$key, $attachment] : null);
         $extension = pathinfo($attachment->title, PATHINFO_EXTENSION);
         TaskApiIdempotencyListener::target($request, $task->getBoard());
 

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Api\Repository;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
@@ -486,8 +487,10 @@ final readonly class TaskApiQueryRepository
             // Audit IA-L3: in SQL, so the page and `last_page` cost what any filter costs. Tags are stored as a JSON list of
             // strings: a quoted name matches one element exactly (case aside for ASCII).
             $any = [];
-            // MySQL keeps JSON normalised (unicode and slashes unescaped); the others keep Doctrine's encoding.
-            $flags = $this->entityManager->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform ? JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES : 0;
+            // MySQL keeps JSON normalised (unicode and slashes unescaped); the others keep Doctrine's encoding. Since 2.23.0
+            // (audit TE-I6): MariaDB too, its JSON is a LONGTEXT holding the text as written.
+            $platform = $this->entityManager->getConnection()->getDatabasePlatform();
+            $flags    = $platform instanceof AbstractMySQLPlatform && !$platform instanceof MariaDBPlatform ? JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES : 0;
             foreach (array_values($filter->tags) as $index => $tag) {
                 $any[] = 'LOWER(' . JsonTextFunction::NAME . "(t.tags)) LIKE :tag{$index} ESCAPE '!'";
                 $qb->setParameter('tag' . $index, '%' . strtr(mb_strtolower((string) json_encode($tag, $flags)), ['!' => '!!', '%' => '!%', '_' => '!_']) . '%');

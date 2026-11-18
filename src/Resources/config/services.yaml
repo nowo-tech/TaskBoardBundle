@@ -61,6 +61,9 @@ services:
             - '../../Provenance/WriteProvenance.php'
             # Since 2.16.0 (Beacon spec 234): loaded only with `task_templates.enabled` (services_templates.yaml).
             - '../../Template/'
+            # Since 2.23.0 (Beacon spec 242): loaded only with `task_questions.enabled` (services_questions.yaml).
+            - '../../Question/'
+            - '../../Controller/TaskQuestionController.php'
             - '../../EventListener/TimeSpentAggregatorListener.php'
             - '../../Security/TaskBoardAccessCheckerInterface.php'
             - '../../Security/TenantAwareTaskBoardAccessCheckerInterface.php'
@@ -115,6 +118,8 @@ services:
             - '../../Controller/TaskRecurrenceController.php'
             # Since 2.13.0: registered by services_multi_board.yaml (multi_board.enabled).
             - '../../Controller/TaskBoardMultiBoardController.php'
+            # Since 2.23.0: registered by services_questions.yaml (task_questions.enabled).
+            - '../../Controller/TaskQuestionController.php'
         public: true
         autoconfigure: false
         tags: ['controller.service_arguments', 'container.service_subscriber']

@@ -46,6 +46,15 @@ final readonly class TaskApiCommitWatermark implements EventSubscriberInterface
         }
     }
 
+    /**
+     * Since 2.23.0 (audit SU2-I1): the ledger's count now, to tell whether a step in between committed a durable write (a
+     * host's attachment store). Only DBAL writes on DoctrineBundle connections are counted.
+     */
+    public function count(): int
+    {
+        return $this->ledger->count();
+    }
+
     /** Whether the request committed a write since its controller was chosen; false before that point or off the API. */
     public function committedSince(Request $request): bool
     {

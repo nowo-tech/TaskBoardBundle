@@ -1,0 +1,42 @@
+# Since 2.23.0 (Beacon spec 242): loaded only with `task_questions.enabled`.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver: ~
+
+    # Public: the bundle's pages, its Task API, a host's signed-link page and its MCP tools call it in process.
+    Nowo\TaskBoardBundle\Question\TaskQuestionManager:
+        public: true
+        arguments:
+            $events: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+            $users: '@Nowo\TaskBoardBundle\User\TaskBoardUsers'
+            $logger: '@?logger'
+            $maxRecipients: '%nowo_task_board.task_questions.max_recipients%'
+            $maxOpenPerTask: '%nowo_task_board.task_questions.max_open_per_task%'
+
+    # Public: a host's Decisions view and export read the answered questions of a board.
+    Nowo\TaskBoardBundle\Question\TaskQuestionQuery:
+        public: true
+        arguments:
+            $users: '@Nowo\TaskBoardBundle\User\TaskBoardUsers'
+
+    Nowo\TaskBoardBundle\Question\TaskQuestionView:
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $tokenStorage: '@?security.token_storage'
+            $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
+
+    Nowo\TaskBoardBundle\Controller\TaskQuestionController:
+        public: true
+        # REQ-SF-004 rule 7: #[Route] attributes, read by the route loader; not autoconfigured.
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
+            $perPage: '%nowo_task_board.task_questions.my_questions_per_page%'
+            $logger: '@?logger'

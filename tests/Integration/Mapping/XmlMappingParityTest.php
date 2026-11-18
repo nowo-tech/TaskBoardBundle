@@ -52,6 +52,7 @@ final class XmlMappingParityTest extends TestCase
         'api'        => ['Api/Entity', 'Nowo\\TaskBoardBundle\\Api\\Entity'],
         'recurrence' => ['Recurrence/Entity', 'Nowo\\TaskBoardBundle\\Recurrence\\Entity'],
         'template'   => ['Template/Entity', 'Nowo\\TaskBoardBundle\\Template\\Entity'],
+        'question'   => ['Question/Entity', 'Nowo\\TaskBoardBundle\\Question\\Entity'],
         'number'     => ['Number/Entity', 'Nowo\\TaskBoardBundle\\Number\\Entity'],
     ];
 
@@ -77,8 +78,8 @@ final class XmlMappingParityTest extends TestCase
             $classes[] = $metadata->getName();
             self::assertSame($this->normalize($metadata), $this->normalize($xml->getClassMetadata($metadata->getName())), $metadata->getName());
         }
-        self::assertCount(32, $classes, 'every TaskBoard entity has an XML mapping');
-        self::assertCount(33, $xml->getMetadataFactory()->getAllMetadata(), 'and nothing else (plus the test user)');
+        self::assertCount(36, $classes, 'every TaskBoard entity has an XML mapping');
+        self::assertCount(37, $xml->getMetadataFactory()->getAllMetadata(), 'and nothing else (plus the test user)');
 
         self::assertSame($this->schema($attributes), $this->schema($xml), 'the same tables, columns, indexes and foreign keys');
     }

@@ -1461,6 +1461,26 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/recurrence/{action}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_recurrence_action"
  *         },
+ *         task_question_ask?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/question"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_question_ask"
+ *         },
+ *         task_question_answer?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/question/{questionId}/answer"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_question_answer"
+ *         },
+ *         task_question_withdraw?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/question/{questionId}/withdraw"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_question_withdraw"
+ *         },
+ *         task_question_publish?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/question/{questionId}/publish"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_question_publish"
+ *         },
+ *         my_questions?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/questions"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_my_questions"
+ *         },
  *         task_restore?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/task/{taskId}/restore"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_task_restore"
@@ -1529,6 +1549,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         task_move?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_move.html.twig"
  *         task_duplicate?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_duplicate.html.twig"
  *         task_recurrence?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/task_recurrence.html.twig"
+ *         my_questions?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/my_questions.html.twig"
  *         connection?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/connection.html.twig"
  *         connection_containers?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_containers.html.twig"
  *         connection_badge?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_badge.html.twig"
@@ -1662,6 +1683,15 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     task_templates?: array{ // Since 2.16.0 (Beacon spec 234, FR-061): task templates per board or per tenant — the template table, TaskTemplateManager, the Template picker of the add-task dialog, GET {api.prefix}/v2/list/{id}/taskTemplate and template_id on a new task. Opt-in: false = no table mapping, service, route or output change.
  *         enabled?: bool|Param, // Default: false
  *         permission?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Template\TaskTemplatePermissionInterface: who manages and who uses templates. null = DefaultTaskTemplatePermission (manage a board's templates with the right to manage the board, a tenant's with security.manage_roles; use them with the right to add tasks). // Default: null
+ *     },
+ *     task_questions?: array{ // Since 2.23.0 (Beacon spec 242): questions on tasks for the business to answer — options (one recommended), single or multiple choice, an Other text, recipients from the host, a due date; answers superseded and kept; withdraw with a reason. The question tables, TaskQuestionManager, the Questions section of the task page, the Waiting for answer badge and filter, My open questions, the task menu entry and the API routes. Opt-in: false = no table mapping, service, route or output change.
+ *         enabled?: bool|Param, // Default: false
+ *         recipient_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Question\TaskQuestionRecipientResolverInterface: who may be asked and whom a user answers for. null = DefaultTaskQuestionRecipientResolver (the task's mention candidates as user:<id>). // Default: null
+ *         external_answers?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Question\TaskQuestionExternalAnswerInterface: the host-signed link where an external recipient answers (shown to the asker and the board managers, never stored). null = none. // Default: null
+ *         decision_publisher?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Question\TaskQuestionDecisionPublisherInterface: the Publish decision action of answered questions (the host decides the target, e.g. a wiki page). null = no action. // Default: null
+ *         max_recipients?: int|Param, // The most recipients of one question. // Default: 20
+ *         max_open_per_task?: int|Param, // The most open questions of one task. // Default: 20
+ *         my_questions_per_page?: int|Param, // Default: 25
  *     },
  *     move?: array{ // Since 2.3.0 (spec 217): move a task and its subtasks to another board, and duplicate a task (routes task_move_board and task_duplicate, actions in the task panel). Opt-in: false = no routes and no actions. TaskCopier, TaskMovePlanner and TaskMover are services either way.
  *         enabled?: bool|Param, // Default: false
