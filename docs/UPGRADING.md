@@ -294,7 +294,18 @@ ALTER TABLE task_board_task_questions ADD CONSTRAINT FK_3FEF3BF389BE4D2E FOREIGN
   `TASK_ACCESS_CHECK` listener can decide `ask_question`, `answer_question` and `withdraw_question` (a `deny()` sticks).
 - Notifications, reminders and chat notices are yours: listen to `TaskBoardEvents::TASK_QUESTION_ASKED`, `…_ANSWERED`
   and `…_WITHDRAWN`. The bundle sends none.
-- Erasure: call `TaskQuestionManager::detachUser($user, $forgetName)` before deleting a user, and
+- **Host access listeners (audit TE-M2).** On `TASK_ACCESS_CHECK` the question actions honour only `deny()`: a listener
+  that calls `grant()` for every action (most written before 2.23) does **not** let anyone answer, withdraw or ask beyond
+  the bundle's rules. If your host must widen them (a manager answering on someone's behalf), listen to the new
+  `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` and `grant()` there, for the actions you mean.
+- **External answers (audit TE-I4).** `answerAsSubject()` accepts any recipient of the question, not only those marked
+  external: sign answer links only for the subjects you mean to let answer that way.
+- **Host transactions (audit TE-M1).** A question write inside your own transaction (a signed-link controller in
+  `wrapInTransaction()`, a Messenger handler with `doctrine_transaction`) that meets a newer row than its snapshot is
+  refused (`TaskQuestionConflictException` or *withdrawn*); read the question again in a new transaction. The same holds
+  for the Task API's `base_revision` writes (`TaskApiTransaction::lockedRevision()`: 409 `TASK_409`).
+- Erasure: `TaskSyncPeopleReassigner::detachUser()` detaches the user from the questions too. Without sync, call
+  `TaskQuestionManager::detachUser($user, $forgetName)` before deleting a user, and
   `TaskQuestionManager::forgetSubject($subjectId)` for an erased external contact.
 - The bundle's CSS adds the question card, badge and *My open questions* styles; republish the assets
   (`php bin/console assets:install`) if you copy them.

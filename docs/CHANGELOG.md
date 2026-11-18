@@ -136,10 +136,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `TaskQuestionExternalAnswerInterface` (`external_answers`: the host-signed answer URL, offered as *Copy answer link*
     to the asker and board managers, never stored or logged) and `TaskQuestionDecisionPublisherInterface`
     (`decision_publisher`: *Publish decision*, called outside the bundle's transaction).
-  - Permissions through `TaskBoardResourceAccessChecker` and `TASK_ACCESS_CHECK`: new actions `ask_question`,
-    `answer_question` and `withdraw_question` (a `deny()` sticks), `TaskAccessCheckEvent::getQuestionId()`. Defaults:
-    asking as commenting (never on an archived task), answering for recipients only, withdrawing for the asker or a
-    board manager.
+  - Permissions through `TaskBoardResourceAccessChecker`: new actions `ask_question`, `answer_question` and
+    `withdraw_question`, `TaskAccessCheckEvent::getQuestionId()`. Defaults: asking as commenting (never on an archived
+    task), answering for recipients only, withdrawing for the asker or a board manager. On `TASK_ACCESS_CHECK` these
+    actions honour `deny()` only, so a listener that grants every action never widens them (audit TE-M2); the new
+    `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` may `grant()` on purpose.
+  - Concurrency (audit TE, REQ-RUNTIME-003): inside a host's REPEATABLE READ transaction a write never acts on a stale
+    copy (TE-M1); `max_open_per_task` and the 50-answer cap are counted again under the task's and the question's lock
+    (TE-L1); see the new `docs/CONCURRENCY.md`.
   - Events `TaskBoardEvents::TASK_QUESTION_ASKED`, `TASK_QUESTION_ANSWERED`, `TASK_QUESTION_WITHDRAWN` (values only)
     for the host's notifications and reminders; immutable activity entries `question_asked`, `question_answered`,
     `question_withdrawn`, and `TaskChangeRecorder::recordAs()` for an actor without a user object.
@@ -161,6 +165,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `store()` again. A host whose store writes its record in the same entity manager (Beacon) no longer risks answering 200
   with a record the rollback removed. `TaskApiTaskOperations::addAttachment()` returns a third element (whether the store
   committed) and `TaskApiCommitWatermark::count()` is new.
+- **Stale task copy in a host transaction (audit TE-M1, since 2.16.0).** `TaskApiTransaction::lockedRevision()` no longer
+  returns the locked revision with a task the refresh read from an outer REPEATABLE READ snapshot (MySQL / MariaDB): it
+  answers 409 `TASK_409` with `current_revision`, so a `base_revision` write never undoes another writer's change.
+- **Tag filter on MariaDB (audit TE-I6).** `tags[]` on the Task API's task lists matched no tag with a slash or a
+  non-ASCII letter on MariaDB (its JSON is text kept as Doctrine wrote it); CI now runs the functional suite on
+  MariaDB 11.4 too.
 - **Lock-conflict answer (audit SU2-I3).** The Task API reads the request's commit watermark before it logs the
   conflict, so a host log handler that writes to the database no longer turns `CONFLICT_001` into `CONFLICT_002`.
 - **Docs (audits SU2-I2, SU2-I4).** SECURITY and UPGRADING say the commit ledger sees only DBAL writes on DoctrineBundle

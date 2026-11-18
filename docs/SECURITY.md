@@ -330,7 +330,8 @@ record the rollback removed. The answer names no table, SQL or parameter; the lo
 
 - **Off by default.** With `task_questions.enabled: false` there is no table, route, service or output.
 - **Every write is checked on the server.** The page routes (`task_question_ask`, `…_answer`, `…_withdraw`, `…_publish`)
-  are POST with their own CSRF token (the form's: `task_question`, `qa_<id>`, `qw_<id>`, `task_board_question_publish`;
+  are POST with their own CSRF token (`task_board_question_ask`, `task_board_question_answer_<id>`,
+  `task_board_question_withdraw_<id>`, `task_board_question_publish_<id>`;
   a missing or wrong token or extra fields: 403), load the task through the tenant context and view access (404 for
   another tenant's or an unseen task), take the question **on that task only** (compared exactly; another task's
   question: 404) and let `TaskQuestionManager` check the right again (`canAskQuestion()`, `canAnswerQuestion()`,
@@ -340,21 +341,35 @@ record the rollback removed. The answer names no table, SQL or parameter; the lo
   resolver offers for that task and asker, compared byte for byte (binary NO PAD collation on MySQL / MariaDB,
   `TaskBoardMetadataListener::KEY_FIELDS`; rows read back are compared with `===`). A look-alike id is refused, never
   matched. Ids the resolver returns that cannot be matched exactly are dropped and logged.
+- **The host's listeners may only narrow the question rights (audit TE-M2).** On `TASK_ACCESS_CHECK` the question
+  actions (`ask_question`, `answer_question`, `withdraw_question`) honour `deny()` only; a `grant()` there never makes a
+  non-recipient an answerer or a non-asker a withdrawer. Widening goes through the dedicated
+  `TASK_QUESTION_ACCESS_CHECK` event, which a host registers on purpose. A host whose `TASK_ACCESS_CHECK` listener
+  grants every action (as many written before 2.23 do) keeps the bundle's rules for questions.
 - **External answers trust the host's signed link.** `TaskQuestionManager::answerAsSubject()` checks only that the
   subject is a recipient and that the question is not withdrawn: **the host must verify its link's signature, expiry and
-  binding to that question and subject before calling it.** The link from `TaskQuestionExternalAnswerInterface` is a
+  binding to that question and subject before calling it.** It accepts any recipient of the question, internal ones
+  (`external: false`) included, not only those the resolver marked external (audit TE-I4): the link is the permission,
+  so the host signs links only for the subjects it means to let answer that way. The link from `TaskQuestionExternalAnswerInterface` is a
   bearer secret: the bundle prints it on the card for the asker and the board's managers only (http / https only), and
   never stores or logs it.
 - **No lost answer.** Every answer carries the version read; the row is locked and compared, so a racing answer is
-  refused (409 `CONFLICT_002` in the API), never overwritten. Answers are never edited or deleted; a later one supersedes.
+  refused (409 `CONFLICT_002` in the API), never overwritten. Since the audit TE-M1 fix this holds inside a host's
+  outer transaction too: when the row locked is newer than what a REPEATABLE READ snapshot (MySQL / MariaDB) gives back,
+  the write is refused (a conflict, or *withdrawn*), never made from the stale copy. The task's open questions
+  (`max_open_per_task`) and a question's answers are counted again under the task's and the question's lock (TE-L1).
+  See [CONCURRENCY.md](CONCURRENCY.md). Answers are never edited or deleted; a later one supersedes.
 - **Text.** The Markdown context renders only through the host's `TaskTextRendererInterface` followed by
   `ReservedAttributeStripper` (2.22); the text, option labels and descriptions, recipient labels, the Other answer, the
   withdraw reason and the published label are plain text, escaped. The published URL must be http / https (else the
   publish is refused) and opens with `rel="noopener noreferrer"`. The API returns the raw Markdown, never HTML.
 - **Personal data.** Questions keep the asker's, answerer's and withdrawer's name snapshots and the recipients' labels.
-  `TaskQuestionManager::detachUser($user, $forgetName)` drops a user from them; `forgetSubject($subjectId)` turns an
-  external contact into `forgotten:<hash>` (recipient id and label, the answers' subject, the name on its answers and on
-  their activity entries). Answer contents stay (they are the decision).
+  `TaskQuestionManager::detachUser($user, $forgetName)` drops a user from them (in the id mode by exact id, audit
+  TE-L2), and with `$forgetName` also forgets the user's own subject ids (`user:<id>` and the resolver's): their
+  recipient rows and the answers given for them. `TaskSyncPeopleReassigner::detachUser()` (the account-erasure helper)
+  calls it. `forgetSubject($subjectId)` turns an external contact into `forgotten:<hash>` (recipient id and label, the
+  answers' subject, the name on its answers and on their activity entries). Answer contents stay (they are the
+  decision). The hash is a plain SHA-256 prefix of the id: pseudonymisation, not anonymisation, for guessable ids.
 - **Worker mode.** The manager, query, view, controller and API operations are `final readonly` and keep nothing between
   calls; a failed write rolls back to the entry level, drops its events, resets a closed manager and detaches what it
   added (FrankenPHP with the kernel not reset).

@@ -1663,9 +1663,13 @@ optional *Other* answer (always on for a question without options), one or more 
 force, and both are kept), or **withdrawn** with a reason (final; its answers stay readable). A due date never changes
 the state: an open question past it shows *Overdue*.
 
-**Who.** Through `TaskBoardResourceAccessChecker` and `TASK_ACCESS_CHECK` (new actions `ask_question`,
-`answer_question`, `withdraw_question`; `getQuestionId()` names the question), as `canTrackTime()`: a listener's
-`grant()` allows, `deny()` refuses and sticks, no answer keeps the default:
+**Who.** Through `TaskBoardResourceAccessChecker` (actions `ask_question`, `answer_question`, `withdraw_question`;
+`getQuestionId()` names the question). View access is always needed. On the generic `TASK_ACCESS_CHECK` a listener may
+only **refuse** a question action (`deny()`, which sticks): a `grant()` there is ignored, so a listener written before
+2.23 that grants every action never widens who may ask, answer or withdraw (audit TE-M2). To widen a rule (a manager
+answering on someone's behalf), listen to `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` (the same
+`TaskAccessCheckEvent`, question actions only): `grant()` allows, `deny()` refuses and sticks, no answer keeps the
+default:
 
 | Right | Default |
 |---|---|
