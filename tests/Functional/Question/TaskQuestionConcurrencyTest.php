@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
 
 use Closure;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Event\PostLoadEventArgs;
@@ -23,9 +24,19 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
 use Nowo\TaskBoardBundle\Question\TaskQuestionOptionInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionRefusedException;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
+use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use ReflectionClass;
 use ReflectionProperty;
 use Throwable;
+
+use function dirname;
+use function fgets;
+use function proc_close;
+use function proc_open;
+use function stream_get_contents;
+use function trim;
+
+use const PHP_BINARY;
 
 /**
  * Audit TE (REQ-RUNTIME-003): the question writes and the locked task revision against a second writer.
@@ -110,6 +121,33 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
         $em2->getConnection()->close();
         self::assertSame('refused(task_closed:open_questions)', $outcome);
         self::assertSame(2, (int) $this->em->getConnection()->fetchOne("SELECT COUNT(*) FROM task_board_task_questions WHERE task_id = ? AND state = 'open'", [$this->task->getId()]));
+    }
+
+    /**
+     * Audit TE-2 (lock order): an ask in another process holds the task's row and then wants the task's open questions,
+     * while an answer here runs. Every question write locks the task first (task, then question, then answers), so the
+     * answer waits for the ask and both finish; the old order (question first, task at the flush) deadlocked.
+     */
+    public function testAnAskAndAnAnswerOnOneTaskNeverDeadlock(): void
+    {
+        $this->needsAServer();
+        $url        = FunctionalKernel::databaseUrl();
+        $question   = $this->two();
+        $connection = $this->em->getConnection();
+        $connection->executeStatement($connection->getDatabasePlatform() instanceof PostgreSQLPlatform ? "SET lock_timeout = '10s'" : 'SET SESSION innodb_lock_wait_timeout = 10');
+        $process = proc_open([PHP_BINARY, dirname(__DIR__, 2) . '/Fixtures/Concurrency/ask_locks.php', $url, $this->task->getId(), '1500000'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        self::assertSame("locked\n", fgets($pipes[1]), 'the other process holds the task row');
+        $answer = 'accepted';
+        try {
+            $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()]));
+        } catch (Throwable $failure) {
+            $answer = $failure::class . ': ' . $failure->getMessage();
+        }
+        $ask = trim((string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]));
+        proc_close($process);
+        self::assertSame('accepted', $answer, 'the answer waited for the ask, no deadlock');
+        self::assertStringStartsWith('ask: counted', $ask, 'the ask finished, no deadlock');
     }
 
     /** TE-M1 for TaskApiTransaction::lockedRevision(): a stale copy of the task is never returned as locked. */

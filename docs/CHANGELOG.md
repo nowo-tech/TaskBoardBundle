@@ -143,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK` may `grant()` on purpose.
   - Concurrency (audit TE, REQ-RUNTIME-003): inside a host's REPEATABLE READ transaction a write never acts on a stale
     copy (TE-M1); `max_open_per_task` and the 50-answer cap are counted again under the task's and the question's lock
-    (TE-L1); see the new `docs/CONCURRENCY.md`.
+    (TE-L1); every question write locks the task's row first, then the question, then its answers, so an ask and an
+    answer on one task never deadlock (TE-2); see the new `docs/CONCURRENCY.md`.
   - Events `TaskBoardEvents::TASK_QUESTION_ASKED`, `TASK_QUESTION_ANSWERED`, `TASK_QUESTION_WITHDRAWN` (values only)
     for the host's notifications and reminders; immutable activity entries `question_asked`, `question_answered`,
     `question_withdrawn`, and `TaskChangeRecorder::recordAs()` for an actor without a user object.

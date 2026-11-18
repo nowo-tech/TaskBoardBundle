@@ -9,6 +9,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Databases tested](#databases-tested)
 - [Rules every write follows](#rules-every-write-follows)
 - [Writes inside a host's transaction](#writes-inside-a-hosts-transaction)
+- [Lock order](#lock-order)
 - [Questions on tasks (2.23)](#questions-on-tasks-223)
 - [Task API writes](#task-api-writes)
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
@@ -50,14 +51,31 @@ Since 2.23.0 (audit TE-M1) the bundle never writes from such a copy:
 The caller reads again in a new transaction. PostgreSQL (READ COMMITTED) reads the committed row on refresh and goes on.
 The bundle's own pages and Task API load outside a transaction, so they meet this only through a host's wrapper.
 
+## Lock order
+
+Every path takes its locks in one fixed order, so two writers on one task wait for each other instead of deadlocking
+(audit TE-2: an ask and an answer on the same task deadlocked when the answer locked the question first and the task
+only at its flush).
+
+| Path | Order |
+|---|---|
+| Ask | task, then the task's open questions |
+| Answer, supersede | task, question, then the question's answers |
+| Withdraw, publish decision | task, question |
+| Task API writes with `base_revision` (and bulk updates) | the columns the status enters, then the task rows (ascending id) |
+| Delete (task, Task API delete) | task, then the rows its cascade removes |
+
+The question paths take the task's row first in `TaskQuestionManager::lock()` (`lockTask()`), exactly as `ask()` does.
+The activity entry and the flush then touch the task again under a lock the transaction already holds.
+
 ## Questions on tasks (2.23)
 
 | Write | Locked | Decided under the lock | Loser |
 |---|---|---|---|
 | Ask | the task's row | open questions < `max_open_per_task` (counted with a locking read, TE-L1) | `TaskQuestionRefusedException` `task_closed` (API `QUESTION_005`) |
-| Answer / supersede | the question's row | version (or `open` without one), not withdrawn, answers < 50 (locking read) | conflict (API 409 `CONFLICT_002` + `current_version`), or *withdrawn* (`QUESTION_003`) |
-| Withdraw | the question's row | version, not withdrawn | conflict or *withdrawn* |
-| Publish decision | the question's row (after the host published, outside the transaction) | version | conflict |
+| Answer / supersede | the task's row, then the question's row | version (or `open` without one), not withdrawn, answers < 50 (locking read) | conflict (API 409 `CONFLICT_002` + `current_version`), or *withdrawn* (`QUESTION_003`) |
+| Withdraw | the task's row, then the question's row | version, not withdrawn | conflict or *withdrawn* |
+| Publish decision | the task's row, then the question's row (after the host published, outside the transaction) | version | conflict |
 
 The open-question count is a locking read counted in PHP: PostgreSQL refuses `FOR UPDATE` with an aggregate, and a
 locking read sees rows a concurrent ask committed after the snapshot.
@@ -80,7 +98,7 @@ committed (SU2-I1).
 
 | Test | What | Databases |
 |---|---|---|
-| `tests/Functional/Question/TaskQuestionConcurrencyTest.php` | two first answers, a stale version and an answer after a withdraw, each inside an outer transaction (two connections); the open-per-task cap against a concurrent ask; `lockedRevision()` against a stale snapshot; the stale refresh simulated | MySQL, MariaDB, PostgreSQL (two connections); SQLite (simulated) |
+| `tests/Functional/Question/TaskQuestionConcurrencyTest.php` | two first answers, a stale version and an answer after a withdraw, each inside an outer transaction (two connections); the open-per-task cap against a concurrent ask; `lockedRevision()` against a stale snapshot; an ask in another process against an answer (lock order, TE-2); the stale refresh simulated | MySQL, MariaDB, PostgreSQL (two connections); SQLite (simulated) |
 | `tests/Functional/Question/TaskQuestionManagerTest.php` | the racing first answer and stale versions on one connection | all |
 | `tests/Functional/Api/ApiTaskQuestionReplayTest.php`, `ApiWriteUnitReplayTest.php` | write-unit replays after a deadlock | all |
 | `tests/Functional/Api/ApiLockOrderTest.php`, `ApiLockConflictTest.php` | fixed lock order, conflict answers | all |

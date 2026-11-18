@@ -507,6 +507,8 @@ final readonly class TaskQuestionManager
      */
     private function lock(TaskQuestion $question, ?int $expected, bool $answering): void
     {
+        // Audit TE-2: the task first, as ask() does (fixed order task -> question), so an ask and an answer never deadlock.
+        $this->lockTask($question->getTask());
         /** @var array{version: int|string, state: string|TaskQuestionState}|null $row */
         $row = $this->entityManager->createQuery('SELECT q.version AS version, q.state AS state FROM ' . TaskQuestion::class . ' q WHERE q.id = :id')
             ->setParameter('id', $question->getId())
