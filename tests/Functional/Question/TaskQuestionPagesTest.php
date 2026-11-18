@@ -1,0 +1,245 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
+
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
+use Nowo\TaskBoardBundle\Question\TaskQuestionState;
+use Nowo\TaskBoardBundle\Question\TaskQuestionView;
+use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
+use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
+
+use function array_map;
+use function str_replace;
+
+/**
+ * Beacon spec 242: the Questions section of the task page and drawer, its forms (CSRF, 404 / 403, the version of a racing
+ * answer), the Waiting for answer badge and filter, the task menu entry and My open questions.
+ */
+final class TaskQuestionPagesTest extends QuestionTestCase
+{
+    public function testTheTaskPageShowsTheSectionAndAsksAQuestion(): void
+    {
+        $this->login($this->owner);
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId() . '?ask=1');
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-questions"]'));
+        self::assertCount(1, $crawler->filter('details#nowo-task-question-ask[open]'));
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-comment-ask-question"]'));
+        self::assertStringContainsString('bob@example.com', (string) $crawler->filter('[data-testid="nowo-task-question-form"]')->text());
+
+        $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question', ['task_question' => [
+            'text'               => 'Which hosting?',
+            'context'            => "We need it **today**.\n\n<a data-nowo-ui-context-menu-source=\"x\" href=\"#\">x</a>",
+            'option1'            => 'Hetzner',
+            'option1Description' => 'EU',
+            'option2'            => 'AWS',
+            'option3'            => '',
+            'option4'            => '',
+            'recommended'        => '1',
+            'choiceMode'         => 'single',
+            'recipients'         => [$this->subject($this->bob)],
+            '_token'             => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('ask')),
+        ]]);
+        self::assertResponseRedirects('/tools/task-board/task/' . $this->task->getId() . '#nowo-task-questions');
+        $question = $this->only();
+        self::assertSame(['Hetzner', 'AWS'], array_map(static fn ($o): string => $o->getLabel(), $question->getOptions()));
+        self::assertTrue($question->getOptions()[0]->isRecommended());
+        self::assertTrue($this->logged('task_question_ask'));
+
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertSame('open', $crawler->filter('[data-testid="nowo-task-question"]')->attr('data-question-state'));
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-recommended"]'));
+        $html = (string) $this->client->getResponse()->getContent();
+        self::assertStringNotContainsString('data-nowo-ui-context-menu-source="x"', $html, 'Context Markdown goes through the reserved-attribute stripper');
+        // The asker may withdraw; not a recipient, so no answer form.
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-answer-form"]'));
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-withdraw-form"]'));
+    }
+
+    public function testAnInvalidAskIsAFlashAndAForgedOneIsRefused(): void
+    {
+        $this->login($this->owner);
+        $path = '/tools/task-board/task/' . $this->task->getId() . '/question';
+        $this->client->request('POST', $path, ['task_question' => ['text' => '', 'recipients' => [$this->subject($this->bob)], 'choiceMode' => 'single', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('ask'))]]);
+        self::assertResponseRedirects();
+        self::assertSame([], $this->em->getRepository(TaskQuestion::class)->findAll());
+        // One option only: the form is valid, the manager refuses it.
+        $this->client->request('POST', $path, ['task_question' => ['text' => 'Q', 'option1' => 'Only', 'recipients' => [$this->subject($this->bob)], 'choiceMode' => 'single', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('ask'))]]);
+        self::assertResponseRedirects();
+        self::assertSame([], $this->em->getRepository(TaskQuestion::class)->findAll());
+        $this->client->request('POST', $path, ['task_question' => ['text' => 'Q', 'recipients' => [$this->subject($this->bob)], 'choiceMode' => 'single', '_token' => 'forged']]);
+        self::assertResponseStatusCodeSame(403);
+        $this->client->request('POST', $path, []);
+        self::assertResponseStatusCodeSame(403);
+        $this->client->request('POST', '/tools/task-board/task/missing/question', []);
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testTheRecipientAnswersAndALateAnswerIsAConflict(): void
+    {
+        $question = $this->ask();
+        $name     = 'qa_' . str_replace('-', '', $question->getId());
+        $path     = '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer';
+        $this->login($this->bob);
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-answer-form"]'));
+        self::assertCount(1, $crawler->filter('details.nowo-task-question__answer-box[open]'), 'Open for its recipient while open');
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-withdraw-form"]'));
+
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[1]->getId(), 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects();
+        $this->em->clear();
+        $loaded = $this->manager()->find($question->getId());
+        self::assertInstanceOf(TaskQuestion::class, $loaded);
+        self::assertSame(TaskQuestionState::Answered, $loaded->getState());
+
+        $this->flashes();
+        // The same version again: someone answered meanwhile.
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects();
+        self::assertSame(['error' => ['task_board.question.flash.conflict']], $this->flashes());
+
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertSame('answered', $crawler->filter('[data-testid="nowo-task-question"]')->attr('data-question-state'));
+        self::assertStringContainsString('AWS', $crawler->filter('[data-testid="nowo-task-question-answer"]')->text());
+
+        // A drawer's fetch comes back to the panel.
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '2', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        self::assertResponseRedirects('/tools/task-board/task/' . $this->task->getId() . '/panel');
+        $this->client->request('POST', $path . '?_target_path=/tools/task-board', [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '3', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects('/tools/task-board#nowo-task-questions');
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertStringContainsString('2 earlier answers', $crawler->filter('.nowo-task-question__history summary')->text());
+
+        // An invalid answer is a flash; a forged one 403; none submitted 403.
+        $this->client->request('POST', $path, [$name => ['options' => 'not-an-option', 'version' => '4', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects();
+        $this->client->request('POST', $path, [$name => ['version' => '4', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects();
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[0]->getId(), '_token' => 'forged']]);
+        self::assertResponseStatusCodeSame(403);
+        $this->client->request('POST', $path, []);
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testSomeoneWhoIsNotARecipientIsRefusedAndAnotherTasksQuestionIsNotFound(): void
+    {
+        $question = $this->ask();
+        $other    = $this->task($this->roadmap, 'Other');
+        $stranger = $this->user('stranger@example.com');
+        $name     = 'qa_' . str_replace('-', '', $question->getId());
+        $this->login($this->owner);
+        $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer', [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseStatusCodeSame(403);
+
+        $this->client->request('POST', '/tools/task-board/task/' . $other->getId() . '/question/' . $question->getId() . '/answer', []);
+        self::assertResponseStatusCodeSame(404);
+        $this->login($stranger);
+        $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer', []);
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testTheAskerWithdrawsWithAReason(): void
+    {
+        $question = $this->ask();
+        $name     = 'qw_' . str_replace('-', '', $question->getId());
+        $path     = '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/withdraw';
+        $this->login($this->owner);
+        $this->client->request('POST', $path, [$name => ['reason' => '', 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
+        self::assertResponseRedirects();
+        $this->client->request('POST', $path, [$name => ['reason' => 'Decided in the call', 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
+        self::assertResponseRedirects();
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertSame('withdrawn', $crawler->filter('[data-testid="nowo-task-question"]')->attr('data-question-state'));
+        self::assertStringContainsString('Decided in the call', $crawler->filter('[data-testid="nowo-task-question-withdrawn"]')->text());
+        // Withdrawn again: the form is gone, a forged post is refused.
+        $this->flashes();
+        $this->client->request('POST', $path, [$name => ['reason' => 'Again', 'version' => '2', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
+        self::assertResponseRedirects();
+        self::assertSame(['error' => ['task_board.question.flash.refused.withdrawn']], $this->flashes());
+        $this->client->request('POST', $path, [$name => ['reason' => 'Again', '_token' => 'forged']]);
+        self::assertResponseStatusCodeSame(403);
+        $this->client->request('POST', $path, []);
+        self::assertResponseStatusCodeSame(403);
+
+        $answer = 'qa_' . str_replace('-', '', $question->getId());
+        $this->login($this->bob);
+        $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer', [$answer => ['options' => $question->getOptions()[0]->getId(), 'version' => '2', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
+        self::assertResponseRedirects();
+        self::assertSame(['error' => ['task_board.question.flash.refused.withdrawn']], $this->flashes());
+    }
+
+    public function testTheBadgeTheFilterAndTheMenuEntry(): void
+    {
+        $this->ask();
+        $this->login($this->owner);
+        $crawler = $this->client->request('GET', '/tools/task-board/board/' . $this->roadmap->getId());
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-task-id="' . $this->task->getId() . '"][data-waiting="1"] [data-testid="nowo-task-waiting"]'));
+
+        $crawler = $this->client->request('GET', '/tools/task-board/board/' . $this->roadmap->getId() . '/list');
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('tr[data-task-id="' . $this->task->getId() . '"][data-waiting="1"]'));
+        self::assertCount(1, $crawler->filter('input[name="waitingForAnswer"]'));
+    }
+
+    public function testMyOpenQuestions(): void
+    {
+        $question = $this->ask();
+        $answered = $this->ask();
+        $this->manager()->answer($this->bob, $answered, new TaskQuestionAnswerInput([$answered->getOptions()[0]->getId()]));
+        $hidden = $this->board('Hidden', creator: $this->user('carol@example.com'));
+        $this->login($this->bob);
+        $crawler = $this->client->request('GET', '/tools/task-board/questions');
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
+        self::assertStringContainsString($question->getId(), (string) $crawler->filter('[data-testid="nowo-task-my-question-link"]')->attr('href'));
+
+        $crawler = $this->client->request('GET', '/tools/task-board/questions?tab=asked&per_page=7&page=0');
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
+
+        $this->login($this->owner);
+        $crawler = $this->client->request('GET', '/tools/task-board/questions?tab=asked');
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
+        self::assertNotNull($hidden->getId());
+    }
+
+    /** @return array<string, list<string>> */
+    private function flashes(): array
+    {
+        $session = $this->client->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        $flashes = $session->getFlashBag()->all();
+        $session->save();
+
+        return $flashes;
+    }
+
+    private function only(): TaskQuestion
+    {
+        $all = $this->em->getRepository(TaskQuestion::class)->findAll();
+        self::assertCount(1, $all);
+
+        return $all[0];
+    }
+
+    private function logged(string $action): bool
+    {
+        $logger = self::getContainer()->get('logger');
+        if (!$logger instanceof RecordingLogger) {
+            return true;
+        }
+        foreach ($logger->records as $record) {
+            if (($record['context']['action'] ?? null) === $action) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

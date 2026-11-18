@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\TaskBoardBundle\Api\Controller\TaskApiQuestionController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
 use Nowo\TaskBoardBundle\Api\Hook\AuthorOnlyTaskApiCommentEditPolicy;
@@ -28,6 +29,7 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
+use Nowo\TaskBoardBundle\Api\Operation\TaskApiQuestionOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTemplateOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
@@ -69,6 +71,7 @@ use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
 use Nowo\TaskBoardBundle\Member\MemberBadgeProviderInterface;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Member\NoMemberBadges;
+use Nowo\TaskBoardBundle\Menu\TaskMenuBuilder;
 use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
 use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
@@ -83,6 +86,11 @@ use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
 use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
+use Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver;
+use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
+use Nowo\TaskBoardBundle\Question\TaskQuestionQuery;
+use Nowo\TaskBoardBundle\Question\TaskQuestionRecipientResolverInterface;
+use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceBoardListener;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
@@ -355,6 +363,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerMoveAndCopy($container, $config, $emName);
         $this->registerRecurrence($container, $loader, $config, $emName);
         $this->registerTaskTemplates($container, $loader, $config, $emName);
+        $this->registerTaskQuestions($container, $loader, $config, $emName);
         $this->registerMultiBoard($container, $loader, $config, $emName);
         // Since 2.3.0 (spec 216): the host's label of a history row's cause.
         if (is_string($config['history']['cause_labeler']) && $config['history']['cause_labeler'] !== '') {
@@ -550,6 +559,49 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             // The API's template list and the in-process (MCP) operations; `template_id` is read by TaskApiTaskOperations.
             $container->register(TaskApiTemplateOperations::class, TaskApiTemplateOperations::class)->setAutowired(true)->setPublic(true);
             $container->register(TaskApiTemplateController::class, TaskApiTemplateController::class)->setAutowired(true)->setPublic(true)
+                ->addTag('controller.service_arguments');
+        }
+    }
+
+    /**
+     * Since 2.23.0 (Beacon spec 242): `task_questions.*`. With `enabled: false` nothing is registered: no route, service,
+     * mapping, menu entry or output change.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerTaskQuestions(ContainerBuilder $container, YamlFileLoader $loader, array $config, string $emName): void
+    {
+        $questions = $config['task_questions'];
+        $enabled   = (bool) $questions['enabled'];
+        $container->setParameter('nowo_task_board.task_questions.enabled', $enabled);
+        if (!$enabled) {
+            return;
+        }
+        $container->setParameter('nowo_task_board.task_questions.max_recipients', $questions['max_recipients']);
+        $container->setParameter('nowo_task_board.task_questions.max_open_per_task', $questions['max_open_per_task']);
+        $container->setParameter('nowo_task_board.task_questions.my_questions_per_page', $questions['my_questions_per_page']);
+        $loader->load('services_questions.yaml');
+        $container->setAlias(TaskQuestionRecipientResolverInterface::class, $this->serviceOr($questions['recipient_resolver'], DefaultTaskQuestionRecipientResolver::class));
+        $manager = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $container->getDefinition(TaskQuestionManager::class)
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$managerRegistry', new Reference('doctrine', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$recipients', new Reference(TaskQuestionRecipientResolverInterface::class));
+        $container->getDefinition(TaskQuestionQuery::class)->setArgument('$entityManager', $manager);
+        if (is_string($questions['decision_publisher']) && $questions['decision_publisher'] !== '') {
+            $container->getDefinition(TaskQuestionManager::class)->setArgument('$publisher', new Reference($questions['decision_publisher']));
+        }
+        if (is_string($questions['external_answers']) && $questions['external_answers'] !== '') {
+            $container->getDefinition(TaskQuestionView::class)->setArgument('$externalAnswers', new Reference($questions['external_answers']));
+        }
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$questionsEnabled', true);
+        $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$questions', new Reference(TaskQuestionView::class));
+        $container->getDefinition(TaskMenuBuilder::class)->setArgument('$questionsEnabled', true);
+        $container->getDefinition(TaskBoardManageController::class)->setArgument('$questionView', new Reference(TaskQuestionView::class));
+        if ($config['api']['enabled']) {
+            $container->register(TaskApiQuestionOperations::class, TaskApiQuestionOperations::class)->setAutowired(true)->setPublic(true);
+            $container->register(TaskApiQuestionController::class, TaskApiQuestionController::class)->setAutowired(true)->setPublic(true)
+                ->setArgument('$maxBodyBytes', $config['api']['max_body_bytes'])
                 ->addTag('controller.service_arguments');
         }
     }
@@ -1188,6 +1240,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ]);
         }
 
+        // Since 2.23.0 (Beacon spec 242): the question tables, only with task_questions.enabled.
+        if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_questions')) {
+            $container->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'TaskBoardQuestion' => $this->xmlMapping($container) ? $this->xmlMappingOf('question', 'Nowo\\TaskBoardBundle\\Question\\Entity') : [
+                            'type'      => 'attribute',
+                            'is_bundle' => false,
+                            'dir'       => __DIR__ . '/../Question/Entity',
+                            'prefix'    => 'Nowo\\TaskBoardBundle\\Question\\Entity',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
         // Since 2.1.0 (spec 214): the counter and the ledger are mapped only with task_numbers.enabled.
         if ($container->hasExtension('doctrine') && $this->optionEnabled($container, 'task_numbers')) {
             $container->prependExtensionConfig('doctrine', [
@@ -1463,7 +1531,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$eventDispatcher', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$manageRoles', $security['manage_roles'])
             // Demo/dev mode (allow_unauthenticated) keeps the historical "every board visible" behaviour.
-            ->setArgument('$scopingEnabled', $security['resource_scoping'] && !$security['allow_unauthenticated']));
+            ->setArgument('$scopingEnabled', $security['resource_scoping'] && !$security['allow_unauthenticated'])
+            // Since 2.23.0 (Beacon spec 242): the default of who may ask a question.
+            ->setArgument('$readersCanComment', '%nowo_task_board.comments.readers_can_comment%'));
     }
 
     /**

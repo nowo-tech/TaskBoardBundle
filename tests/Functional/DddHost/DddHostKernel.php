@@ -101,6 +101,8 @@ final class DddHostKernel extends Kernel
         $services->set('app.multi_scope', DddMultiBoardScope::class);
         // Since 2.18.0 (Beacon spec 234): used when a test sets member_badge_provider / write_provenance_provider.
         $services->set('app.ddd_provenance', DddProvenance::class);
+        // Since 2.23.0 (Beacon spec 242): the framework-free recipient resolver of the questions.
+        $services->set('app.ddd_question_recipients', DddQuestionRecipients::class);
         $container->extension('doctrine', [
             'dbal' => ['url' => FunctionalKernel::databaseUrl()],
             'orm'  => ['auto_mapping' => false] + $this->nativeLazyObjects(),

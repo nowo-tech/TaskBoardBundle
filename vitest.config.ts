@@ -26,6 +26,8 @@ export default defineConfig({
                 'src/Resources/assets/src/sync-utils.ts',
                 'src/Resources/assets/src/avatar-fallback.ts',
                 'src/Resources/assets/src/anchor-utils.ts',
+                // Since 2.23.0 (Beacon spec 242).
+                'src/Resources/assets/src/task-questions.ts',
             ],
             thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
             exclude: ['**/*.test.ts', '**/node_modules/**'],

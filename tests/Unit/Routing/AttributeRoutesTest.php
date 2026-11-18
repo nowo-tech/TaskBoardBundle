@@ -43,6 +43,7 @@ final class AttributeRoutesTest extends TestCase
             recurrenceEnabled: true,
             multiBoardPath: $config['multi_board']['path'],
             templatesEnabled: true,
+            questionsEnabled: true,
         );
 
         $declared = [];
@@ -79,6 +80,7 @@ final class AttributeRoutesTest extends TestCase
             'recurrence'     => ['enabled' => true],
             'multi_board'    => ['enabled' => true],
             'task_templates' => ['enabled' => true],
+            'task_questions' => ['enabled' => true],
         ]], $container);
 
         $controllers = [];

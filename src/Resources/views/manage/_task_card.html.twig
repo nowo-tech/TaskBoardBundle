@@ -19,6 +19,7 @@
     draggable="true"
     data-nowo-task-board-target="task"
     data-task-id="{{ task.id }}"
+    {% if ((openQuestions|default({}))[task.id] ?? 0) > 0 %}data-waiting="1"{% endif %}
     data-title="{{ task.title }}"
     data-nowo-task-title="{{ task.title }}"
     {% if task.column %}data-column-name="{{ task.column.name }}" data-nowo-task-column="{{ task.column.name }}"{% endif %}
@@ -49,6 +50,11 @@
             <span class="nowo-task-card__subtasks" title="{{ 'task_board.board.subtasks_count'|trans({'%done%': progress.done, '%total%': progress.total}, 'NowoTaskBoardBundle') }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'subtask'}) }}{{ progress.done }}/{{ progress.total }}
             </span>
+        {% endif %}
+        {#- Since 2.23.0 (Beacon spec 242): open questions on the task (openQuestions from the board page, one query). -#}
+        {% set _waiting = (openQuestions|default({}))[task.id] ?? 0 %}
+        {% if _waiting > 0 %}
+            <span class="nowo-task-card__waiting nowo-task-waiting" title="{{ 'task_board.question.waiting_n'|trans({'%count%': _waiting}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-waiting">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.question.state.waiting'|trans({}, 'NowoTaskBoardBundle') }}<span class="nowo-task-sr-only"> {{ 'task_board.question.waiting_n'|trans({'%count%': _waiting}, 'NowoTaskBoardBundle') }}</span></span>
         {% endif %}
         {# Since 1.16: the comment count (commentCounts from the board page, one query). #}
         {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}

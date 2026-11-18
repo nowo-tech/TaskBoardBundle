@@ -1,5 +1,5 @@
 {#
-    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts; since 2.19.0 customFields, customValues;
+    Since 2.0.0: the cells of one task of the list view, in a row of the kit's `table` partial. Variables: task, commentCounts; since 2.23.0 openQuestions; since 2.19.0 customFields, customValues;
     since 2.22.0 taskMenu (Menu\TaskMenu or null: the last cell holds the row's menu), taskMenuFormReady, taskContextMenu.
     The row's attributes (filter, sort, totals, panel) come from nowo_task_board_list_table().
 #}
@@ -9,6 +9,9 @@
     <span class="nowo-task-list__title">
         <span class="nowo-task-list__status-dot" aria-hidden="true"></span>
         <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id, from: 'list'}) }}">{{ task.title }}</a>
+        {#- Since 2.23.0 (Beacon spec 242): open questions on the task (openQuestions of the list page, one query). -#}
+        {% set _waiting = (openQuestions|default({}))[task.id] ?? 0 %}
+        {% if _waiting > 0 %}<span class="nowo-task-list__waiting nowo-task-waiting" title="{{ 'task_board.question.waiting_n'|trans({'%count%': _waiting}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-waiting">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}<span class="nowo-task-sr-only">{{ 'task_board.question.waiting_n'|trans({'%count%': _waiting}, 'NowoTaskBoardBundle') }}</span></span>{% endif %}
         {% set _comments = (commentCounts|default({}))[task.id] ?? 0 %}
         {% if _comments > 0 %}
             <span class="nowo-task-list__comments" title="{{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'message-circle'}) }}{{ _comments }}<span class="nowo-task-sr-only"> {{ 'task_board.comment.count_n'|trans({'%count%': _comments}, 'NowoTaskBoardBundle') }}</span></span>

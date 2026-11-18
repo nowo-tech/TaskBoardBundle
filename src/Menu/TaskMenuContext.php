@@ -28,7 +28,15 @@ final readonly class TaskMenuContext
         public Closure $canEditTask,
         public bool $copyEnabled,
         public bool $timerEnabled,
+        // Since 2.23.0 (Beacon spec 242): the board's TaskBoardResourceAccessChecker::askQuestionDecider(); null: questions off.
+        public ?Closure $canAskQuestion = null,
     ) {
+    }
+
+    /** Since 2.23.0: whether the menu offers *Ask a question…* for the task (false with questions off). */
+    public function canAskQuestion(Task $task): bool
+    {
+        return $this->canAskQuestion !== null && ($this->canAskQuestion)($task) === true;
     }
 
     public function canEditTask(Task $task): bool

@@ -4048,6 +4048,192 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
     align-items: center;
 }
 
+/* Since 2.23.0 (Beacon spec 242): questions on tasks — tokens only, no inline style (CSP). */
+.nowo-task-card__waiting,
+.nowo-task-list__waiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0 0.35rem;
+    border-radius: var(--nowo-ui-radius, 0.375rem);
+    background: var(--nowo-ui-warning-bg, transparent);
+    color: var(--nowo-ui-warning-text, var(--nowo-ui-text));
+    font-size: 0.75rem;
+}
+
+.nowo-task-questions__empty {
+    margin: 0 0 0.5rem;
+}
+
+.nowo-task-question {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--nowo-ui-border);
+    border-radius: var(--nowo-ui-radius, 0.375rem);
+    background: var(--nowo-ui-surface);
+    color: var(--nowo-ui-text);
+}
+
+.nowo-task-question--withdrawn {
+    background: var(--nowo-ui-surface-muted, var(--nowo-ui-surface));
+}
+
+.nowo-task-question.is-overdue {
+    border-color: var(--nowo-ui-warning-text, var(--nowo-ui-border));
+}
+
+.nowo-task-question__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nowo-task-question__text {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.nowo-task-question__meta,
+.nowo-task-question__recipients,
+.nowo-task-question__withdrawn,
+.nowo-task-question__published {
+    margin: 0;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.nowo-task-question__context {
+    overflow-wrap: anywhere;
+}
+
+.nowo-task-question__options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nowo-task-question__option {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--nowo-ui-border);
+    border-radius: var(--nowo-ui-radius, 0.375rem);
+}
+
+.nowo-task-question__option.is-picked {
+    border-color: var(--nowo-ui-primary);
+    background: var(--nowo-ui-info-bg, transparent);
+}
+
+.nowo-task-question__option-label {
+    font-weight: 600;
+}
+
+.nowo-task-question__option-description {
+    flex: 1 1 100%;
+    color: var(--nowo-ui-muted);
+    font-size: 0.875rem;
+}
+
+.nowo-task-question__answer {
+    padding: 0.5rem;
+    border-left: 3px solid var(--nowo-ui-success-text, var(--nowo-ui-primary));
+    background: var(--nowo-ui-success-bg, transparent);
+}
+
+.nowo-task-question__answer p {
+    margin: 0;
+}
+
+.nowo-task-question__answer-other {
+    overflow-wrap: anywhere;
+}
+
+.nowo-task-question__history-list {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+    font-size: 0.875rem;
+}
+
+.nowo-task-question__actions,
+.nowo-task-question-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.nowo-task-question__answer-box > summary,
+.nowo-task-question__withdraw > summary,
+.nowo-task-questions__ask > summary {
+    display: inline-flex;
+    cursor: pointer;
+    list-style: none;
+}
+
+.nowo-task-question__answer-box > summary::-webkit-details-marker,
+.nowo-task-question__withdraw > summary::-webkit-details-marker,
+.nowo-task-questions__ask > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nowo-task-question-form,
+.nowo-task-question-answer-form,
+.nowo-task-question-withdraw-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.nowo-task-question-form__options {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.nowo-task-question-form__option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 0.5rem;
+}
+
+.nowo-task-comment-box__ask {
+    margin-top: 0.25rem;
+}
+
+.nowo-task-my-questions__list {
+    margin: 0 0 0.5rem;
+    padding-left: 1.25rem;
+}
+
+/* Phone layout: everything stacks, nothing widens the page. */
+@media (max-width: 40rem) {
+    .nowo-task-question {
+        padding: 0.5rem;
+    }
+
+    .nowo-task-question-form__option {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nowo-task-question__actions > *,
+    .nowo-task-question-form__actions > * {
+        flex: 1 1 100%;
+    }
+}
+
+
 /*
  * Since 2.8.0 — phones (≤ 640px, host mobile UX audit MUX-70, MUX-73, MUX-74). Wider windows are unchanged.
  * Gantt: a 6rem (96px) title column (the title stays whole in its `title` and in the bar label) and the legend in at

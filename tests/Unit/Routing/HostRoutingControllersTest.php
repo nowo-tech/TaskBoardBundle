@@ -78,7 +78,7 @@ final class HostRoutingControllersTest extends TestCase
 
         self::assertNotSame([], $names);
         self::assertContains('nowo_task_board_task_menu', $names);
-        $featureRoutes = ['nowo_task_board_api_task', 'nowo_task_board_board_connection', 'nowo_task_board_calendar', 'nowo_task_board_task_by_number', 'nowo_task_board_task_duplicate', 'nowo_task_board_task_recurrence', 'nowo_task_board_tasks', 'nowo_task_board_api_task_templates'];
+        $featureRoutes = ['nowo_task_board_api_task', 'nowo_task_board_board_connection', 'nowo_task_board_calendar', 'nowo_task_board_task_by_number', 'nowo_task_board_task_duplicate', 'nowo_task_board_task_recurrence', 'nowo_task_board_tasks', 'nowo_task_board_api_task_templates', 'nowo_task_board_my_questions', 'nowo_task_board_task_question_ask', 'nowo_task_board_api_task_questions'];
         foreach ($featureRoutes as $route) {
             self::assertSame($allFeatures, in_array($route, $names, true), $route);
         }

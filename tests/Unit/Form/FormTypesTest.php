@@ -16,6 +16,9 @@ use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
+use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
+use Nowo\TaskBoardBundle\Dto\TaskQuestionFormData;
+use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -74,6 +77,18 @@ final class FormTypesTest extends TestCase
 
         self::assertInstanceOf(TiptapEditorType::class, $form->get('description')->getConfig()->getType()->getInnerType());
         self::assertInstanceOf(TagType::class, $form->get('tags')->getConfig()->getType()->getInnerType());
+    }
+
+    /** Since 2.23.0: the question's context is a plain textarea without Tiptap, the task profile's editor with it. */
+    public function testTheQuestionContextUsesTiptapWhenInstalled(): void
+    {
+        $plain = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['rich_context' => false]);
+        self::assertInstanceOf(TextareaType::class, $plain->get('context')->getConfig()->getType()->getInnerType());
+
+        require_once __DIR__ . '/../../Fixtures/OptionalFormTypes.php';
+        $rich = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['rich_context' => true]);
+        self::assertInstanceOf(TiptapEditorType::class, $rich->get('context')->getConfig()->getType()->getInnerType());
+        self::assertSame(TaskBoardExtension::TIPTAP_TASK_PROFILE, $rich->get('context')->getConfig()->getOption('config'));
     }
 
     public function testTagsTransformer(): void
@@ -252,7 +267,7 @@ final class FormTypesTest extends TestCase
             'field_types'        => [],
         ];
         $merger = new FormOptionsMerger(['default' => $profile, 'task_board' => $profile], 'default', new ConstraintDefinitionFactory());
-        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType()];
+        $types  = [new TaskFormType(), new TaskLinkFormType(), new BoardColumnFormType(), new TaskBoardFormType(), new TaskQuestionFormType()];
         foreach ($types as $type) {
             $type->setFormOptionsMerger($merger);
         }

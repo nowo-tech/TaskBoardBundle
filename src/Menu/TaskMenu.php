@@ -35,6 +35,8 @@ final readonly class TaskMenu
         public bool $copy,
         public bool $archive,
         public bool $delete,
+        // Since 2.23.0 (Beacon spec 242): the *Ask a question…* entry (a link to the task page's ask form).
+        public bool $askQuestion = false,
     ) {
     }
 

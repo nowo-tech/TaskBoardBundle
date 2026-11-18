@@ -42,6 +42,21 @@ final class TaskListFilterType extends AbstractType
         /** @var list<string> $columnNames */
         $columnNames = $options['column_names'];
 
+        // Since 2.23.0 (Beacon spec 242): only the tasks with an open question (task_questions.enabled).
+        if ($options['questions'] === true) {
+            $builder->add('waitingForAnswer', CheckboxType::class, [
+                'mapped'     => false,
+                'required'   => false,
+                'label'      => 'task_board.question.filter_waiting',
+                'label_attr' => ['class' => 'nowo-task-check__label'],
+                'row_attr'   => ['class' => 'nowo-task-check'],
+                'attr'       => [
+                    'data-' . self::STIMULUS . '-target' => 'waiting',
+                    'data-action'                        => 'change->' . self::STIMULUS . '#filter',
+                ],
+            ]);
+        }
+
         $builder
             ->add('search', SearchType::class, [
                 'mapped'   => false,
@@ -142,12 +157,15 @@ final class TaskListFilterType extends AbstractType
             'column_names'       => [],
             // Since 2.1.0 (spec 214): the list can sort by task number.
             'task_numbers' => false,
+            // Since 2.23.0 (Beacon spec 242): the "Waiting for answer" filter.
+            'questions' => false,
             // Since 1.13.1 no inline handler (strict CSP): the list filter controller stops the submit.
             'attr' => ['data-action' => 'submit->' . self::STIMULUS . '#prevent'],
         ]);
         $resolver->setAllowedTypes('priorities', 'string[]');
         $resolver->setAllowedTypes('column_names', 'string[]');
         $resolver->setAllowedTypes('task_numbers', 'bool');
+        $resolver->setAllowedTypes('questions', 'bool');
     }
 
     #[Override]

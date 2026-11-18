@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Question\Entity\TaskQuestion" table="task_board_task_questions">
+        <indexes>
+            <index name="idx_task_board_task_questions_task_state" columns="task_id,state"/>
+            <index name="idx_task_board_task_questions_state_due" columns="state,due_on"/>
+        </indexes>
+        <id name="id" type="string" length="36"/>
+        <field name="state" type="string" length="10" enum-type="Nowo\TaskBoardBundle\Question\TaskQuestionState"/>
+        <field name="askedByName" type="string" column="asked_by_name" length="180" nullable="true"/>
+        <field name="currentAnswerId" type="string" column="current_answer_id" length="36" nullable="true"/>
+        <field name="answeredAt" type="datetime_immutable" column="answered_at" nullable="true"/>
+        <field name="withdrawnByName" type="string" column="withdrawn_by_name" length="180" nullable="true"/>
+        <field name="withdrawnAt" type="datetime_immutable" column="withdrawn_at" nullable="true"/>
+        <field name="withdrawReason" type="string" column="withdraw_reason" length="500" nullable="true"/>
+        <field name="publishedUrl" type="string" column="published_url" length="2048" nullable="true"/>
+        <field name="publishedLabel" type="string" column="published_label" length="180" nullable="true"/>
+        <field name="publishedAt" type="datetime_immutable" column="published_at" nullable="true"/>
+        <field name="version" type="integer">
+            <options>
+                <option name="default">1</option>
+            </options>
+        </field>
+        <field name="text" type="string" column="question_text" length="500"/>
+        <field name="context" type="text" nullable="true"/>
+        <field name="choiceMode" type="string" column="choice_mode" length="8" enum-type="Nowo\TaskBoardBundle\Question\TaskQuestionChoiceMode"/>
+        <field name="allowOther" type="boolean" column="allow_other"/>
+        <field name="askedAt" type="datetime_immutable" column="asked_at"/>
+        <field name="dueOn" type="date_immutable" column="due_on" nullable="true"/>
+        <one-to-many field="options" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionOption" mapped-by="question">
+            <cascade>
+                <cascade-persist/>
+            </cascade>
+            <order-by>
+                <order-by-field name="position" direction="ASC"/>
+            </order-by>
+        </one-to-many>
+        <one-to-many field="recipients" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient" mapped-by="question">
+            <cascade>
+                <cascade-persist/>
+            </cascade>
+            <order-by>
+                <order-by-field name="position" direction="ASC"/>
+            </order-by>
+        </one-to-many>
+        <one-to-many field="answers" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer" mapped-by="question">
+            <cascade>
+                <cascade-persist/>
+            </cascade>
+            <order-by>
+                <order-by-field name="sequence" direction="ASC"/>
+            </order-by>
+        </one-to-many>
+        <many-to-one field="withdrawnBy" target-entity="App\Entity\User">
+            <join-column name="withdrawn_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+        <many-to-one field="task" target-entity="Nowo\TaskBoardBundle\Entity\Task">
+            <join-column name="task_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+        <many-to-one field="askedBy" target-entity="App\Entity\User">
+            <join-column name="asked_by_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

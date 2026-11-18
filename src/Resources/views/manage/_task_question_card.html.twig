@@ -1,0 +1,103 @@
+{#
+    Since 2.23.0 (Beacon spec 242): one question of a task. Variables: card (from Question\TaskQuestionView: question,
+    answer, superseded, overdue, answerForm, withdrawForm, publishForm, publishLabel, answerLinks, mine). The context is
+    Markdown through the host's text renderer and the reserved-attribute stripper (nowo_task_board_text); everything else is
+    plain text, escaped. The answer form carries the version read: a racing answer is refused, never overwritten.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+{% set q = card.question %}
+{% set _state = q.state.value %}
+<article class="nowo-task-question nowo-task-question--{{ _state }}{{ card.overdue ? ' is-overdue' : '' }}" id="nowo-task-question-{{ q.id }}" data-testid="nowo-task-question" data-question-state="{{ _state }}" data-question-version="{{ q.version }}">
+    <header class="nowo-task-question__header">
+        {% if q.open %}
+            <span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-question__state" data-testid="nowo-task-question-state">{{ 'task_board.question.state.waiting'|trans({}, _b) }}</span>
+        {% elseif q.answered %}
+            <span class="{{ nowo_ui_class('badge_success', _b) }} nowo-task-question__state" data-testid="nowo-task-question-state">{{ 'task_board.question.state.answered'|trans({}, _b) }}</span>
+        {% else %}
+            <span class="{{ nowo_ui_class('badge_neutral', _b) }} nowo-task-question__state" data-testid="nowo-task-question-state">{{ 'task_board.question.state.withdrawn'|trans({}, _b) }}</span>
+        {% endif %}
+        {% if card.overdue %}<span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-question__overdue">{{ 'task_board.question.overdue'|trans({}, _b) }}</span>{% endif %}
+        <h3 class="nowo-task-question__text">{{ q.text }}</h3>
+    </header>
+    <p class="{{ nowo_ui_class('muted', _b) }} nowo-task-question__meta">
+        {{ 'task_board.question.asked_by'|trans({'%name%': q.askedByName ?: 'task_board.history.former_user'|trans({}, _b)}, _b) }} · <time datetime="{{ q.askedAt|date('c') }}">{{ q.askedAt|date('Y-m-d H:i') }}</time>
+        {% if q.dueOn %} · {{ 'task_board.question.due'|trans({'%date%': q.dueOn|date('Y-m-d')}, _b) }}{% endif %}
+    </p>
+    {% if q.context %}
+        <div class="nowo-task-question__context nowo-task-markdown">{{ nowo_task_board_text(q.context) }}</div>
+    {% endif %}
+    {% if q.options is not empty %}
+        <ul class="nowo-task-question__options" aria-label="{{ 'task_board.question.options'|trans({}, _b) }}">
+            {% for option in q.options %}
+                <li class="nowo-task-question__option{{ card.answer and card.answer.selects(option.id) ? ' is-picked' : '' }}" data-testid="nowo-task-question-option">
+                    <span class="nowo-task-question__option-label">{{ option.label }}</span>
+                    {% if option.recommended %}<span class="{{ nowo_ui_class('badge_info', _b) }}" data-testid="nowo-task-question-recommended">{{ 'task_board.question.recommended'|trans({}, _b) }}</span>{% endif %}
+                    {% if card.answer and card.answer.selects(option.id) %}<span class="nowo-task-sr-only">{{ 'task_board.question.picked'|trans({}, _b) }}</span>{% endif %}
+                    {% if option.description %}<span class="nowo-task-question__option-description">{{ option.description }}</span>{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    <p class="nowo-task-question__recipients">
+        <span class="{{ nowo_ui_class('muted', _b) }}">{{ 'task_board.question.recipients'|trans({}, _b) }}</span>
+        {% for recipient in q.recipients %}
+            <span class="nowo-task-question__recipient" data-testid="nowo-task-question-recipient">{{ recipient.label }}{% if recipient.external %} <span class="{{ nowo_ui_class('badge_neutral', _b) }}">{{ 'task_board.question.external'|trans({}, _b) }}</span>{% endif %}{% if card.answerLinks[recipient.subjectId] is defined %} <button type="button" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_link', _b) }}" data-nowo-ui-clipboard data-nowo-ui-clipboard-text="{{ card.answerLinks[recipient.subjectId] }}" data-nowo-ui-clipboard-label="{{ 'task_board.question.copy_link'|trans({}, _b) }}" data-nowo-ui-clipboard-done-label="{{ 'task_board.menu.link_copied'|trans({}, _b) }}" data-testid="nowo-task-question-copy-link">{{ 'task_board.question.copy_link'|trans({}, _b) }}</button>{% endif %}</span>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+    {% if card.answer %}
+        {% set a = card.answer %}
+        <div class="nowo-task-question__answer" data-testid="nowo-task-question-answer">
+            <p class="nowo-task-question__answer-meta">{{ 'task_board.question.answered_by'|trans({'%name%': a.answeredByName ?: 'task_board.history.former_user'|trans({}, _b)}, _b) }}{% if a.external %} ({{ 'task_board.question.via_link'|trans({}, _b) }}){% endif %} · <time datetime="{{ a.answeredAt|date('c') }}">{{ a.answeredAt|date('Y-m-d H:i') }}</time></p>
+            {% if a.selectedOptions is not empty %}<p class="nowo-task-question__answer-options">{% for option in a.selectedOptions %}<strong>{{ option.label }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+            {% if a.otherText %}<p class="nowo-task-question__answer-other">{{ a.otherText|nl2br }}</p>{% endif %}
+        </div>
+    {% endif %}
+    {% if card.superseded is not empty %}
+        <details class="nowo-task-question__history">
+            <summary>{{ 'task_board.question.superseded'|trans({'%count%': card.superseded|length}, _b) }}</summary>
+            <ol class="nowo-task-question__history-list">
+                {% for old in card.superseded|reverse %}
+                    <li><span class="{{ nowo_ui_class('muted', _b) }}">{{ old.answeredByName }} · <time datetime="{{ old.answeredAt|date('c') }}">{{ old.answeredAt|date('Y-m-d H:i') }}</time></span> {% for option in old.selectedOptions %}{{ option.label }}{% if not loop.last %}, {% endif %}{% endfor %}{% if old.otherText %} {{ old.otherText }}{% endif %}</li>
+                {% endfor %}
+            </ol>
+        </details>
+    {% endif %}
+    {% if q.withdrawn %}
+        <p class="nowo-task-question__withdrawn" data-testid="nowo-task-question-withdrawn">{{ 'task_board.question.withdrawn_by'|trans({'%name%': q.withdrawnByName ?: 'task_board.history.former_user'|trans({}, _b), '%reason%': q.withdrawReason}, _b) }}</p>
+    {% endif %}
+    {% if q.publishedUrl %}
+        <p class="nowo-task-question__published"><a href="{{ q.publishedUrl }}" rel="noopener noreferrer" target="_blank" data-testid="nowo-task-question-published">{{ q.publishedLabel ?: 'task_board.question.published'|trans({}, _b) }}</a></p>
+    {% endif %}
+    {% if card.answerForm %}
+        {% set _af = card.answerForm %}
+        <details class="nowo-task-question__answer-box"{% if q.open and card.mine %} open{% endif %}>
+            <summary class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class(q.open ? 'btn_primary' : 'btn_secondary', _b) }}" data-testid="nowo-task-question-answer-toggle">{{ (q.open ? 'task_board.question.answer.give' : 'task_board.question.answer.change')|trans({}, _b) }}</summary>
+            {{ form_start(_af, {method: 'POST', attr: {class: 'nowo-task-question-answer-form', 'data-testid': 'nowo-task-question-answer-form'}}) }}
+                {% if _af.options is defined %}{{ form_row(_af.options) }}{% endif %}
+                {% if _af.otherText is defined %}{{ form_row(_af.otherText) }}{% endif %}
+                {% for child in _af %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-question-answer-submit">{{ 'task_board.question.answer.submit'|trans({}, _b) }}</button>
+            {{ form_end(_af, {render_rest: false}) }}
+        </details>
+    {% endif %}
+    {% if card.publishForm or card.withdrawForm %}
+        <div class="nowo-task-question__actions">
+            {% if card.publishForm %}
+                {{ form_start(card.publishForm, {method: 'POST', attr: {class: 'nowo-task-question__publish'}}) }}
+                    {% for child in card.publishForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                    <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-question-publish">{{ card.publishLabel }}</button>
+                {{ form_end(card.publishForm, {render_rest: false}) }}
+            {% endif %}
+            {% if card.withdrawForm %}
+                <details class="nowo-task-question__withdraw">
+                    <summary class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-question-withdraw-toggle">{{ 'task_board.question.withdraw.action'|trans({}, _b) }}</summary>
+                    {{ form_start(card.withdrawForm, {method: 'POST', attr: {class: 'nowo-task-question-withdraw-form', 'data-testid': 'nowo-task-question-withdraw-form'}}) }}
+                        {{ form_row(card.withdrawForm.reason) }}
+                        {% for child in card.withdrawForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                        <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_danger', _b) }}" data-testid="nowo-task-question-withdraw-submit">{{ 'task_board.question.withdraw.submit'|trans({}, _b) }}</button>
+                    {{ form_end(card.withdrawForm, {render_rest: false}) }}
+                </details>
+            {% endif %}
+        </div>
+    {% endif %}
+</article>

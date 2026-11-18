@@ -116,6 +116,11 @@ final class RouteCollectionFixtureTest extends TestCase
                 'tenancy'        => $tenancy,
                 'task_templates' => ['enabled' => true],
             ]]],
+            // Since 2.23.0 (Beacon spec 242): the question routes of the pages (with their tenant copies) and of the API.
+            'questions' => [ApiKernel::class, [[], [
+                'tenancy'        => $tenancy,
+                'task_questions' => ['enabled' => true],
+            ]]],
         ];
     }
 

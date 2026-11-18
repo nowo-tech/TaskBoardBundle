@@ -1,0 +1,15 @@
+{#
+    Since 2.23.0 (Beacon spec 242, web_ui.templates.my_questions): My open questions — the open questions addressed to the
+    viewer (tab to_answer) or asked by them (tab asked), on the boards they may see (inside a tenant URL, that tenant's
+    only), on the UiKit list scaffold. Variables: page (ListPage), tab, taskRoute. Every value is escaped.
+#}
+{% extends '@NowoUiKitBundle/page/list.html.twig' %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_list_row %}
+    {{ include('@NowoTaskBoardBundle/manage/_my_question_row.html.twig', {question: row, taskRoute: taskRoute}, with_context: false) }}
+{% endblock %}

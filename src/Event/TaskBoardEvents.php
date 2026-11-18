@@ -123,7 +123,12 @@ final class TaskBoardEvents
     /** Since 1.27.0: {@see PeopleMappingChangedEvent} — the People page saved mapping changes (one event per save, for the host's audit). */
     public const SYNC_PEOPLE_MAPPING_CHANGED = 'nowo_task_board.sync_people_mapping_changed';
 
-    /** {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). */
+    /**
+     * {@see TaskErasedEvent}, before the task's batch is flushed (since 1.25). Audit SU2-I4: it is dispatched **inside** the
+     * delete's transaction (since 2.22.0 one transaction for the whole API delete), which may still roll back after it (a
+     * later level failing): keep a listener to reversible work, and act on anything irreversible (deleting stored files)
+     * after the commit.
+     */
     public const TASK_ERASED = 'nowo_task_board.task_erased';
 
     /** {@see BoardErasedEvent}, once the board is empty (since 1.25). */
@@ -200,4 +205,13 @@ final class TaskBoardEvents
 
     /** Since 2.11.0 (DDD audit G3): {@see TaskMemberRemovedEvent}, ids only, after a member leaves a task. */
     public const TASK_MEMBER_REMOVED = 'nowo_task_board.task_member_removed';
+
+    /** Since 2.23.0 (Beacon spec 242): {@see TaskQuestionAskedEvent}, snapshots only, after a question is asked on a task. */
+    public const TASK_QUESTION_ASKED = 'nowo_task_board.task_question_asked';
+
+    /** Since 2.23.0 (Beacon spec 242): {@see TaskQuestionAnsweredEvent}, snapshots only, after an answer (also one that supersedes). */
+    public const TASK_QUESTION_ANSWERED = 'nowo_task_board.task_question_answered';
+
+    /** Since 2.23.0 (Beacon spec 242): {@see TaskQuestionWithdrawnEvent}, snapshots only, after a question is withdrawn. */
+    public const TASK_QUESTION_WITHDRAWN = 'nowo_task_board.task_question_withdrawn';
 }

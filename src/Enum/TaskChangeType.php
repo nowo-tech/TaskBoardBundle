@@ -50,4 +50,10 @@ enum TaskChangeType: string
     case MemberNotCopied = 'member_not_copied';
     /** Since 2.19.0 (FR-028): a native custom field's value; old and new values are as read, `context` "field:<id> <name>". */
     case CustomField = 'custom_field';
+    /** Since 2.23.0 (Beacon spec 242): a question was asked (new value: its text; `context` "question:<id>"). */
+    case QuestionAsked = 'question_asked';
+    /** Since 2.23.0: a question got an answer (old value: the answer it superseded, new value: the answer; summaries). */
+    case QuestionAnswered = 'question_answered';
+    /** Since 2.23.0: a question was withdrawn (new value: the reason). */
+    case QuestionWithdrawn = 'question_withdrawn';
 }

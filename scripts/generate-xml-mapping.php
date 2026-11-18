@@ -22,6 +22,7 @@ $groups = [
     'recurrence' => ['dir' => $root . '/src/Recurrence/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Recurrence\\Entity'],
     'number'     => ['dir' => $root . '/src/Number/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Number\\Entity'],
     'template'   => ['dir' => $root . '/src/Template/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Template\\Entity'],
+    'question'   => ['dir' => $root . '/src/Question/Entity', 'namespace' => 'Nowo\\TaskBoardBundle\\Question\\Entity'],
 ];
 
 /** @return list<object> */

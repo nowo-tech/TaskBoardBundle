@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 use Symfony\Contracts\EventDispatcher\Event;
 
+use function in_array;
+
 /**
  * Dispatched before granting or denying access to a task.
  *
@@ -31,6 +33,24 @@ final class TaskAccessCheckEvent extends Event
      */
     public const ACTION_TRACK_TIME = 'track_time';
 
+    /**
+     * Since 2.23.0 (Beacon spec 242): asking a question on the task. grant() allows it without the comment right, deny()
+     * refuses it and sticks (as {@see self::ACTION_TRACK_TIME}); no answer: the comment right decides.
+     */
+    public const ACTION_ASK_QUESTION = 'ask_question';
+
+    /**
+     * Since 2.23.0: answering the question {@see self::getQuestionId()}. grant() lets a viewer who is not a recipient answer
+     * (e.g. a manager on someone's behalf), deny() refuses a recipient; no answer: recipients only.
+     */
+    public const ACTION_ANSWER_QUESTION = 'answer_question';
+
+    /** Since 2.23.0: withdrawing the question {@see self::getQuestionId()}. No answer: its asker or a board manager. */
+    public const ACTION_WITHDRAW_QUESTION = 'withdraw_question';
+
+    /** The actions whose deny() sticks against a later grant(). */
+    private const STICKY_DENIALS = [self::ACTION_TRACK_TIME, self::ACTION_ASK_QUESTION, self::ACTION_ANSWER_QUESTION, self::ACTION_WITHDRAW_QUESTION];
+
     private bool $granted = false;
 
     private bool $denied = false;
@@ -42,7 +62,15 @@ final class TaskAccessCheckEvent extends Event
         private readonly Task $task,
         // Since 2.4.0.
         private readonly string $action = self::ACTION_VIEW,
+        // Since 2.23.0: the question of a question action (null for the others).
+        private readonly ?string $questionId = null,
     ) {
+    }
+
+    /** Since 2.23.0: the question an `*_question` action is about (null for asking and for the other actions). */
+    public function getQuestionId(): ?string
+    {
+        return $this->questionId;
     }
 
     /** Since 2.4.0: what is being decided ({@see self::ACTION_VIEW} or {@see self::ACTION_TRACK_TIME}). */
@@ -65,12 +93,13 @@ final class TaskAccessCheckEvent extends Event
     }
 
     /**
-     * For {@see self::ACTION_TRACK_TIME}, a grant after a deny() is ignored: the deny sticks (since 2.4.0, audit II-L1).
+     * For {@see self::ACTION_TRACK_TIME}, a grant after a deny() is ignored: the deny sticks (since 2.4.0, audit II-L1); since
+     * 2.23.0 for the question actions too.
      * For {@see self::ACTION_VIEW}, the last call wins, as before.
      */
     public function grant(): void
     {
-        if ($this->denied && $this->action === self::ACTION_TRACK_TIME) {
+        if ($this->denied && in_array($this->action, self::STICKY_DENIALS, true)) {
             return;
         }
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.

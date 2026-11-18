@@ -77,6 +77,7 @@ use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
+use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
@@ -270,6 +271,8 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?TaskTemplateManager $taskTemplates = null,
         // Since 2.18.0 (Beacon spec 234): the host's member badges, asked once for the task page.
         private readonly ?MemberBadges $memberBadges = null,
+        // Since 2.23.0 (Beacon spec 242): `task_questions.enabled` (null when off): the Waiting for answer badge and filter.
+        private readonly ?TaskQuestionView $questionView = null,
     ) {
     }
 
@@ -432,6 +435,8 @@ final class TaskBoardManageController extends AbstractController
             'inlineTaskForms'      => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
             // Since 1.16: comments per task (one query) for the card counters.
             'commentCounts' => $this->commentCounts($allTasks),
+            // Since 2.23.0 (Beacon spec 242): open questions per task (one query) for the Waiting for answer badge.
+            'openQuestions' => $this->questionView?->openCounts($allTasks) ?? [],
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
         ] + $templateView + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
@@ -946,6 +951,8 @@ final class TaskBoardManageController extends AbstractController
                 'priorities'   => $priorityNames,
                 'column_names' => $columnNames,
                 'task_numbers' => $this->taskNumbers instanceof TaskNumberLedger,
+                // Since 2.23.0 (Beacon spec 242).
+                'questions' => $this->questionView instanceof TaskQuestionView,
             ])->createView(),
             'dashboardRoute'  => $this->dashboardRoute,
             'panelTargetPath' => $this->currentRequestUri(),
@@ -953,6 +960,7 @@ final class TaskBoardManageController extends AbstractController
             'canEditBoard'    => $canEditBoard,
             'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $this->buildColumnChoices($board)) : [],
             'commentCounts'   => $this->commentCounts($tasks),
+            'openQuestions'   => $this->questionView?->openCounts($tasks) ?? [],
             'taskWindow'      => $taskWindow,
             // Since 1.23: the archived tasks of the board (most recent first) and their Restore form.
             'archivedTasks' => $archived,

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient" table="task_board_task_question_recipients">
+        <indexes>
+            <index name="idx_task_board_task_question_recipients_subject" columns="subject_id"/>
+        </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_task_question_recipients_subject" columns="question_id,subject_id"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="subjectId" type="string" column="subject_id" length="191"/>
+        <field name="label" type="string" length="180"/>
+        <field name="external" type="boolean"/>
+        <field name="position" type="smallint"/>
+        <many-to-one field="question" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestion" inversed-by="recipients">
+            <join-column name="question_id" nullable="false" on-delete="CASCADE"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

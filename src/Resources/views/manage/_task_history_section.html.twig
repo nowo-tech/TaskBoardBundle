@@ -154,5 +154,7 @@
     {% endif %}
     {% if commentForm|default(null) %}
         {{ include('@NowoTaskBoardBundle/manage/_task_comment_box.html.twig', {form: commentForm, submitLabel: 'task_board.comment.add'}) }}
+        {#- Since 2.23.0 (Beacon spec 242): Ask a question, next to the comment box (opens the Questions section's form). -#}
+        {% if nowo_task_board_questions_enabled() %}<a class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_link', 'NowoTaskBoardBundle') }} nowo-task-comment-box__ask" href="#nowo-task-question-ask" data-testid="nowo-task-comment-ask-question">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'help'}) }}{{ 'task_board.question.ask'|trans({}, 'NowoTaskBoardBundle') }}</a>{% endif %}
     {% endif %}
 </details>

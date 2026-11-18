@@ -25,6 +25,9 @@ use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Entity\TeamMember;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
@@ -63,6 +66,9 @@ final readonly class TaskBoardMetadataListener
         TaskBoardFolder::class => ['tenantKey'],
         // Since 2.19.0 (FR-028): a tenant custom field's tenant.
         TaskCustomField::class => ['tenantKey'],
+        // Since 2.23.0 (Beacon spec 242): the host's opaque recipient ids, mapped only with `task_questions.enabled`.
+        TaskQuestionRecipient::class => ['subjectId'],
+        TaskQuestionAnswer::class    => ['answeredBySubject'],
     ];
 
     public function __construct(
@@ -110,6 +116,9 @@ final readonly class TaskBoardMetadataListener
             TaskSyncPerson::class    => ['mappedUser', 'suggestedUser', 'mappedBy', 'reassignToUser'],
             // Since 2.3.0 (spec 215, mapped with recurrence.enabled).
             TaskRecurrence::class => ['author'],
+            // Since 2.23.0 (Beacon spec 242, mapped with task_questions.enabled).
+            TaskQuestion::class       => ['askedBy', 'withdrawnBy'],
+            TaskQuestionAnswer::class => ['answeredBy'],
         ];
 
         $userFields = $userFieldsByClass[$class] ?? [];

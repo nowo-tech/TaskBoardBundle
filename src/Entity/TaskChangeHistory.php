@@ -60,10 +60,12 @@ class TaskChangeHistory
         private ?string $cause = null,
         // Since 2.18.0 (Beacon spec 234): the write's provenance (null: the columns stay NULL).
         ?WriteProvenance $provenance = null,
+        // Since 2.23.0 (Beacon spec 242): the actor's name when there is no user object (an external answer).
+        ?string $actorName = null,
     ) {
         $this->id         = Uuid::generate()->toString();
         $this->createdAt  = new DateTimeImmutable();
-        $this->userName   = $user === null ? null : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        $this->userName   = $user === null ? Text::cutNullable($actorName, Task::USER_NAME_MAX) : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
         $this->channel    = $provenance?->channel->value;
         $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
     }

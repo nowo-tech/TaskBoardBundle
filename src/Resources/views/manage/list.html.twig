@@ -119,13 +119,13 @@
                     <p class="nowo-task-list__empty">{{ 'task_board.board.column_empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
                 {% else %}
                     {% embed nowo_ui_partial('table', 'NowoTaskBoardBundle') with {
-                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null), customFields|default([]), taskMenuContext is not null),
+                        table: nowo_task_board_list_table(group.tasks, panelTargetPath|default(null), customFields|default([]), taskMenuContext is not null, openQuestions|default({})),
                         label: group.column ? group.column.name : 'task_board.task.no_column'|trans({}, 'NowoTaskBoardBundle'),
                         foot_attr: {class: 'nowo-task-list__time-col', 'data-nowo-task-board-list-filter-target': 'totals'},
                         bundle: 'NowoTaskBoardBundle',
                     } %}
                         {% block nowo_ui_table_row %}
-                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row, customFields: customFields|default([]), customValues: customValues|default({}), taskMenu: taskMenuContext ? nowo_task_board_task_menu(row, taskMenuContext) : null, taskMenuFormReady: taskMenuFormReady, taskContextMenu: taskContextMenu}) }}
+                            {{ include('@NowoTaskBoardBundle/manage/_list_row_cells.html.twig', {task: row, openQuestions: openQuestions|default({}), customFields: customFields|default([]), customValues: customValues|default({}), taskMenu: taskMenuContext ? nowo_task_board_task_menu(row, taskMenuContext) : null, taskMenuFormReady: taskMenuFormReady, taskContextMenu: taskContextMenu}) }}
                         {% endblock %}
                         {# Since 1.15: the totals of the rows the filters show (kept up to date by the list filter controller). #}
                         {% block nowo_ui_table_foot %}

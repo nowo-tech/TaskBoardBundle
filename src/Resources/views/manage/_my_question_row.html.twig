@@ -1,0 +1,11 @@
+{#
+    Since 2.23.0 (Beacon spec 242): the cells of one row of My open questions. Variables: question (TaskQuestion),
+    taskRoute.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+{% set _task = question.task %}
+<td class="{{ nowo_ui_class('table_cell', _b) }}"><a href="{{ path(taskRoute, {taskId: _task.id, _fragment: 'nowo-task-question-' ~ question.id}) }}" data-testid="nowo-task-my-question-link">{{ question.text }}</a></td>
+<td class="{{ nowo_ui_class('table_cell', _b) }}">{{ _task.title }}</td>
+<td class="{{ nowo_ui_class('table_cell', _b) }}">{{ nowo_task_board_label(_task.board) }}</td>
+<td class="{{ nowo_ui_class('table_cell', _b) }}">{% if question.dueOn %}<time datetime="{{ question.dueOn|date('Y-m-d') }}">{{ question.dueOn|date('Y-m-d') }}</time>{% endif %}</td>
+<td class="{{ nowo_ui_class('table_cell', _b) }}"><time datetime="{{ question.askedAt|date('c') }}">{{ question.askedAt|date('Y-m-d') }}</time></td>
