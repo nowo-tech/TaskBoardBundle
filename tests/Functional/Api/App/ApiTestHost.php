@@ -84,6 +84,9 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
 
     public static bool $refuseUploads = false;
 
+    /** Since 2.23.0 (audit SU2-I1): true, the store writes a row through the bundle's connection (as Beacon's store does). */
+    public static bool $storeWritesRow = false;
+
     /** @var array<string, list<TaskApiMember>> since 2.16.0: the members of each team */
     public static array $members = [];
 
@@ -115,6 +118,7 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
         self::$logged             = [];
         self::$stored             = [];
         self::$refuseUploads      = false;
+        self::$storeWritesRow     = false;
         self::$members            = [];
         self::$membersAsked       = [];
         RecordingTransitionPolicy::reset();
@@ -219,6 +223,10 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
             throw new TaskApiRefusal(403, 'FILE_002', 'Over the plan storage');
         }
         self::$stored[] = [$task->getId(), $file->getClientOriginalName(), (string) file_get_contents($file->getPathname())];
+        if (self::$storeWritesRow) {
+            // A write of the store's own record: committed at once outside a transaction, rolled back with the request's one.
+            $this->entityManager->getConnection()->executeStatement('UPDATE task_board_tasks SET title = title WHERE id = ?', [$task->getId()]);
+        }
 
         return new TaskApiAttachment('file-' . count(self::$stored), $file->getClientOriginalName(), '/files/file-' . count(self::$stored), (int) $file->getSize());
     }
