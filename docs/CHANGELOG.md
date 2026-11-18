@@ -177,6 +177,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connections (Messenger to other transports, HTTP, mail or raw PDO still answer `CONFLICT_001`); `TASK_ERASED` is
   documented as dispatched inside the delete's transaction (it may still roll back: act after the commit).
 
+### Documentation
+
+- [ROADMAP.md](ROADMAP.md): new roadmap from a feature gap review (current state by area, then Next, Later, Considering and Decided), linked from the README.
+- USAGE, CONFIGURATION, the spec-driven development goal and the comments of the Twig templates, CSS, a Stimulus controller and an enum describe the views and options in their own words instead of comparing them with another tool (the USAGE anchor `#look-and-feel-views-theming-and-icons-since-112` replaces the old one).
+
 ## [2.22.0] - 2026-11-18
 
 ### Added
@@ -2539,7 +2544,7 @@ Column editor, dialogs and Gantt on the host-neutral look of 1.12. No schema cha
 
 ## [1.12.0] - 2026-10-28
 
-ClickUp-like views on a host-neutral look (see [USAGE](USAGE.md#look-and-feel-clickup-like-views-theming-and-icons-since-112)).
+ClickUp-like views on a host-neutral look (see [USAGE](USAGE.md#look-and-feel-views-theming-and-icons-since-112)).
 No schema change.
 
 ### Added

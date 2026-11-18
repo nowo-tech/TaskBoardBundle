@@ -1646,7 +1646,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     comments?: array{ // Task comments and @mentions (since 1.16).
  *         cause_labeler?: scalar|Param|null, // Since 2.10.0 (spec 216): service id of a Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface: how a comment shows why it was written (TaskChangeContext, e.g. an automation rule). null = the cause is not shown. // Default: null
- *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment, like ClickUp guests with comment rights. false = only editors comment. // Default: true
+ *         readers_can_comment?: bool|Param, // People who may read a task but not edit it (read-only boards) may still comment (comment-only access). false = only editors comment. // Default: true
  *         mention_resolver?: scalar|Param|null, // Service id of a Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface: who may be @mentioned (the people who can read the task). null = the board's assignable users, else its creator and task members. // Default: null
  *     },
  *     gantt?: array{ // Gantt view (since 1.15).

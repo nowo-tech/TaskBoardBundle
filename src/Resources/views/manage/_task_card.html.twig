@@ -29,7 +29,7 @@
     {% if _menu %}{{ include('@NowoTaskBoardBundle/manage/_task_menu.html.twig', {menu: _menu, taskMenuFormReady: taskMenuFormReady ?? false, taskContextMenu: taskContextMenu ?? false}, with_context: false) }}{% endif %}
     {% if nowo_task_board_number(task) %}<span class="nowo-task-number">{{ nowo_task_board_number(task) }}</span>{% endif %}<a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}" class="nowo-task-board__task-title nowo-task-card__title">{{ task.title }}</a>
     {{ include('@NowoTaskBoardBundle/manage/_task_tags.html.twig', {tags: task.tags, wrapper_class: 'nowo-task-card__tags'}) }}
-    {# Since 1.12 (ClickUp-like): priority flag, due date (late in the danger colour), estimate, subtasks and assignees. #}
+    {# Since 1.12: priority flag, due date (late in the danger colour), estimate, subtasks and assignees. #}
     <div class="nowo-task-card__meta">
         {# The default (normal) priority is not repeated on every card. #}
         {% if task.priority.value != 'normal' %}

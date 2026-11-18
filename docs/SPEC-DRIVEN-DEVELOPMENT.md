@@ -20,7 +20,7 @@
 
 ## Bundle functional scope
 
-**Goal:** ClickUp-style **team task management** for Symfony applications: boards, kanban/list/Gantt views, subtasks, dependencies, external imports (ClickUp/Jira/Trello), MR/PR links, time estimates, documentation pages, stakeholder assignment, and optional **TimeTrackBundle** integration — embeddable via Flex recipe, configurable routes, table prefix, and event-driven ACL.
+**Goal:** **team task management** for Symfony applications: boards, kanban/list/Gantt views, subtasks, dependencies, external imports (ClickUp/Jira/Trello), MR/PR links, time estimates, documentation pages, stakeholder assignment, and optional **TimeTrackBundle** integration — embeddable via Flex recipe, configurable routes, table prefix, and event-driven ACL.
 
 ## User stories
 
