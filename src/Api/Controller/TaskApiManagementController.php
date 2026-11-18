@@ -8,6 +8,7 @@ use LogicException;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiBoardOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiFolderOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
+use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiIdempotencyListener;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
@@ -34,6 +35,8 @@ final readonly class TaskApiManagementController
         private int $maxBodyBytes,
         // Since 2.19.0 (Beacon spec 234): folders.
         private ?TaskApiFolderOperations $folders = null,
+        // Since 2.22.0 (Beacon spec 241 T020): write-unit replay safety; null in a hand-built controller.
+        private ?TaskApiActors $actors = null,
     ) {
     }
 
@@ -189,6 +192,7 @@ final readonly class TaskApiManagementController
 
     private function principal(Request $request): TaskApiPrincipal
     {
-        return TaskApiRequestListener::principalOf($request);
+        // Since 2.22.0 (Beacon spec 241 T020): the user as the entity manager manages it in this attempt of a write unit.
+        return $this->actors?->principal($request) ?? TaskApiRequestListener::principalOf($request);
     }
 }

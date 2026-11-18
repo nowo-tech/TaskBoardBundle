@@ -133,6 +133,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Calendar on phones (Beacon): the calendar is the positioned ancestor of its screen-reader text and clips sideways overflow, so it never widens the page; its toolbar wraps (Previous / Today / Next, the period and the Month / Week / List tabs on one line, the tabs without their row margin). Beacon's host CSS for this can go.
 - Composer `config.process-timeout: 0` (audit SF4-I1): `composer igor` and the long suites are not cut at 300 s.
 
+### Fixed
+
+- **Task API writes survive a replay of a transaction-doctrine write unit** (Beacon spec 241 T020). The principal built at `kernel.request` kept the user object it loaded; a write unit clears or resets the entity manager between attempts, after which that object was detached and writing it as a task's creator, a comment's author or a history actor gave a 500 (`ORMInvalidArgumentException`) or wrote nothing — latent on `nowo_task_board_api_task_update`, which Beacon runs as a write unit. The write and management controllers now ask `Api\Security\TaskApiActors` for the principal per attempt: its user as the bundle's entity manager manages it (found again by its identifier; a plain object or an unmapped class is kept). `TaskApiPrincipal::withUser()` is new. The API path keeps no other entity between attempts (the guard and the operations load per call).
+- `POST /v2/task/{id}/attachment` asks the host's store once per request: a replayed attempt of the same request reuses the attachment it stored (same task, same content) instead of storing a second file.
+
 ### Security
 
 - User HTML (task descriptions, comment bodies, Markdown board descriptions) goes through `Text\ReservedAttributeStripper` after the host's text renderer: UiKit's `data-nowo-ui-context-menu*` attributes and `data-nowo-ui-card` are removed from every tag, then renamed anywhere they are left (fail closed, as ChatKit 1.33), so a user's content cannot open another element's kebab items on right-click (UiKit 2.54 SECURITY).

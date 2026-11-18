@@ -31,6 +31,9 @@ services:
         class: Nowo\TransactionDoctrine\WriteUnit\Dbal\CommitTrackingMiddleware
         arguments: ['@nowo_task_board.api.commit_ledger']
         tags: ['doctrine.middleware']
+    # Since 2.22.0 (Beacon spec 241 T020): the principal's user as the bundle's entity manager manages it, per attempt.
+    Nowo\TaskBoardBundle\Api\Security\TaskApiActors: ~
+
     Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark:
         arguments: ['@nowo_task_board.api.commit_ledger']
 

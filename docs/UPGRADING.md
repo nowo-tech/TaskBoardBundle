@@ -6,6 +6,7 @@
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 2.22.0](#to-2220)
   - [Lock conflicts: 409 + Retry-After (was 500 / 503)](#lock-conflicts-409--retry-after-was-500--503)
+  - [Write units (transaction-doctrine)](#write-units-transaction-doctrine)
   - [Task and column menus, focus mode](#task-and-column-menus-focus-mode)
 - [To 2.21.1](#to-2211)
 - [To 2.21.0](#to-2210)
@@ -265,6 +266,16 @@ nowo_transaction_doctrine:
   `App\Tasks\Api\TaskApiConflictResponseFormatter`) can be removed; its codes are the same.
 - `TaskApiRefusal` has a new optional last constructor argument, `array $headers = []`, and `lockConflict()`;
   existing callers are unchanged.
+
+### Write units (transaction-doctrine)
+
+- The Task API's write routes may run as transaction-doctrine write units (`controller_routes`): each attempt now writes
+  the principal's user as the bundle's entity manager manages it, so a replay no longer fails with
+  `ORMInvalidArgumentException` (Beacon spec 241 T020). If your `TaskApiAuthenticatorInterface` returns a principal
+  whose user is an entity, nothing changes for you; `TaskApiPrincipal::withUser()` is new.
+- **Your attachment store** (`api.hooks.attachments`) is asked once per request: a replay of the same request reuses
+  what it returned. A store that fails part-way (it wrote the file, then its record failed) may be asked again by a
+  replay: write the file and the record so that a failed call leaves nothing, or under a key the second call overwrites.
 
 ### Task and column menus, focus mode
 

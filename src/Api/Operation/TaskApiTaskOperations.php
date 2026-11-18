@@ -716,14 +716,16 @@ final readonly class TaskApiTaskOperations
      *
      * @return array{0: Task, 1: TaskApiAttachment}
      */
-    public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file): array
+    public function addAttachment(TaskApiPrincipal $principal, string $taskId, ?UploadedFile $file, ?TaskApiAttachment $stored = null): array
     {
         $this->audit->requireListener();
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
         if (!$file instanceof UploadedFile || !$file->isValid()) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid attachment');
         }
-        $attachment = $this->attachments->store($principal, $task, $file);
+        // Since 2.22.0 (Beacon spec 241 T020): `$stored`, what the host stored in an earlier attempt of the same request (a
+        // write unit's replay): it is not asked again, so a replay leaves one file.
+        $attachment = $stored ?? $this->attachments->store($principal, $task, $file);
         $this->audit->written($principal, 'attachment.create', $task->getBoard(), $taskId, ['attachment' => $attachment->id]);
 
         return [$task, $attachment];
