@@ -116,6 +116,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- [ROADMAP.md](ROADMAP.md): new roadmap from a feature gap review (current state by area, then Next, Later, Considering and Decided), linked from the README.
+
 ## [2.22.0] - 2026-11-18
 
 ### Added

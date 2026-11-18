@@ -78,6 +78,7 @@ board next to the timer when you want to try both bundles together.
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Upgrading](docs/UPGRADING.md)
+- [Roadmap](docs/ROADMAP.md)
 - [Release](docs/RELEASE.md)
 - [Security](docs/SECURITY.md)
 - [Engram](docs/ENGRAM.md)
