@@ -337,11 +337,20 @@ final readonly class TaskBoardResourceAccessChecker
         return $question->isAnswered() && $this->canEditTask($user, $question->getTask());
     }
 
-    /** TASK_ACCESS_CHECK for a question action: true granted, false denied, null when no listener answered. */
+    /**
+     * The host's decision on a question action: false denied, true granted, null when no listener answered (the bundle's
+     * rule holds). Audit TE-M2: on the generic TASK_ACCESS_CHECK only `deny()` counts — a listener that grants every
+     * action (written before 2.23) never widens the question rules; only TASK_QUESTION_ACCESS_CHECK may grant.
+     */
     private function questionDecision(object $user, Task $task, string $action, ?string $questionId): ?bool
     {
+        $generic = new TaskAccessCheckEvent($user, $task, $action, $questionId);
+        $this->eventDispatcher?->dispatch($generic, TaskBoardEvents::TASK_ACCESS_CHECK);
+        if ($generic->isDenied()) {
+            return false;
+        }
         $event = new TaskAccessCheckEvent($user, $task, $action, $questionId);
-        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ACCESS_CHECK);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_QUESTION_ACCESS_CHECK);
         if ($event->isDenied()) {
             return false;
         }

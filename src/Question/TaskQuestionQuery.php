@@ -103,7 +103,8 @@ final readonly class TaskQuestionQuery
             $builder->andWhere('q.answeredAt >= :since')->setParameter('since', $since);
         }
         $after = $afterId === null ? null : $this->entityManager->find(TaskQuestion::class, $afterId);
-        if ($after instanceof TaskQuestion && $after->getId() === $afterId && $after->getAnsweredAt() instanceof DateTimeImmutable) {
+        // Audit TE-L3: a cursor of another board (or tenant) is ignored, so its answer time never shows through the page.
+        if ($after instanceof TaskQuestion && $after->getId() === $afterId && $after->getTask()->getBoard()->getId() === $boardId && $after->getAnsweredAt() instanceof DateTimeImmutable) {
             $builder->andWhere('q.answeredAt > :afterAt OR (q.answeredAt = :afterAt AND q.id > :afterId)')
                 ->setParameter('afterAt', $after->getAnsweredAt())
                 ->setParameter('afterId', $after->getId());

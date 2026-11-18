@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\TaskBoardBundle;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use Override;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -25,6 +26,12 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\Count;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
+
+use function array_filter;
+use function array_map;
+use function array_values;
+use function is_array;
+use function is_string;
 
 /**
  * Since 2.23.0 (Beacon spec 242): *Ask a question* — the text, the Markdown context, four fixed option rows (label and
@@ -47,11 +54,11 @@ final class TaskQuestionFormType extends AbstractType
     {
         /** @var list<TaskQuestionRecipientCandidate> $candidates */
         $candidates = $options['recipients'];
-        $recipients = [];
-        $external   = [];
+        // Audit TE-L4: the candidates themselves are the choices (value: the id, label: the name), so two people with the
+        // same name stay two choices; the data stays the list of ids.
+        $byId = [];
         foreach ($candidates as $candidate) {
-            $recipients[$candidate->label] = $candidate->id;
-            $external[$candidate->id]      = $candidate->external;
+            $byId[$candidate->id] = $candidate;
         }
 
         $builder
@@ -110,9 +117,11 @@ final class TaskQuestionFormType extends AbstractType
                 'label'                     => 'task_board.question.form.recipients',
                 'expanded'                  => true,
                 'multiple'                  => true,
-                'choices'                   => $recipients,
+                'choices'                   => array_values($byId),
+                'choice_value'              => static fn (?TaskQuestionRecipientCandidate $candidate): string => $candidate === null ? '' : $candidate->id,
+                'choice_label'              => static fn (TaskQuestionRecipientCandidate $candidate): string => $candidate->label,
                 'choice_translation_domain' => false,
-                'choice_attr'               => static fn (string $id): array => ($external[$id] ?? false) ? ['data-nowo-task-question-external' => '1'] : [],
+                'choice_attr'               => static fn (TaskQuestionRecipientCandidate $candidate): array => $candidate->external ? ['data-nowo-task-question-external' => '1'] : [],
                 'constraints'               => [new Count(min: 1)],
             ])
             ->add('dueOn', DateType::class, [
@@ -121,6 +130,11 @@ final class TaskQuestionFormType extends AbstractType
                 'widget'   => 'single_text',
                 'input'    => 'datetime_immutable',
             ]);
+        $builder->get('recipients')->addModelTransformer(new CallbackTransformer(
+            // The ids of the data (a re-shown form) as the candidates they name; an id no longer offered is left out.
+            static fn (mixed $ids): array => array_values(array_filter(array_map(static fn (mixed $id): ?TaskQuestionRecipientCandidate => is_string($id) ? ($byId[$id] ?? null) : null, is_array($ids) ? $ids : []))),
+            static fn (mixed $picked): array => array_values(array_map(static fn (TaskQuestionRecipientCandidate $candidate): string => $candidate->id, is_array($picked) ? $picked : [])),
+        ));
     }
 
     #[Override]

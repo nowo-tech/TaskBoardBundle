@@ -39,6 +39,15 @@ final class TaskBoardEvents
 
     public const TASK_ACCESS_CHECK = 'nowo_task_board.task_access_check';
 
+    /**
+     * Since 2.23.0 (audit TE-M2): a {@see TaskAccessCheckEvent} for the question actions only (`ask_question`,
+     * `answer_question`, `withdraw_question`, {@see TaskAccessCheckEvent::getQuestionId()}). Its `grant()` widens the
+     * bundle's rules (a manager answering on someone's behalf), its `deny()` refuses. On {@see self::TASK_ACCESS_CHECK} the
+     * question actions honour `deny()` only: a listener written before 2.23 that grants every action never widens who may
+     * ask, answer or withdraw.
+     */
+    public const TASK_QUESTION_ACCESS_CHECK = 'nowo_task_board.task_question_access_check';
+
     /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
     public const TASK_READ_ONLY_RESOLVE = 'nowo_task_board.task_read_only_resolve';
 

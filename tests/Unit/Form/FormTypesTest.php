@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Form\TaskBoardFormType;
 use Nowo\TaskBoardBundle\Form\TaskFormType;
 use Nowo\TaskBoardBundle\Form\TaskLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
+use Nowo\TaskBoardBundle\Question\TaskQuestionRecipientCandidate;
 use Nowo\TiptapEditorBundle\Form\TiptapEditorType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -89,6 +90,23 @@ final class FormTypesTest extends TestCase
         $rich = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['rich_context' => true]);
         self::assertInstanceOf(TiptapEditorType::class, $rich->get('context')->getConfig()->getType()->getInnerType());
         self::assertSame(TaskBoardExtension::TIPTAP_TASK_PROFILE, $rich->get('context')->getConfig()->getOption('config'));
+    }
+
+    /** Audit TE-L4: two candidates with the same name stay two choices, each keyed by its id. */
+    public function testTheQuestionRecipientsAreKeyedByIdNotByName(): void
+    {
+        $candidates = [new TaskQuestionRecipientCandidate('user:1', 'Alex Kim'), new TaskQuestionRecipientCandidate('user:2', 'Alex Kim', true)];
+        $form       = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(recipients: ['user:2', 'user:9']), ['recipients' => $candidates]);
+        $view       = $form->createView();
+        self::assertSame(['user:1', 'user:2'], array_map(static fn ($choice): string => $choice->value, $view['recipients']->vars['choices']));
+        self::assertSame(['user:2'], array_map(static fn (TaskQuestionRecipientCandidate $c): string => $c->id, $form->get('recipients')->getNormData()), 'an id no longer offered is left out');
+        self::assertSame('1', $view['recipients']->children[1]->vars['attr']['data-nowo-task-question-external'] ?? null);
+
+        $form = $this->factory()->create(TaskQuestionFormType::class, new TaskQuestionFormData(), ['recipients' => $candidates]);
+        $form->submit(['text' => 'Q', 'choiceMode' => 'single', 'recipients' => ['user:1']]);
+        /** @var TaskQuestionFormData $data */
+        $data = $form->getData();
+        self::assertSame(['user:1'], $data->recipients);
     }
 
     public function testTagsTransformer(): void

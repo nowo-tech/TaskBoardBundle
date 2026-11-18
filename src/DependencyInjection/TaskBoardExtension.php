@@ -594,6 +594,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (is_string($questions['external_answers']) && $questions['external_answers'] !== '') {
             $container->getDefinition(TaskQuestionView::class)->setArgument('$externalAnswers', new Reference($questions['external_answers']));
         }
+        // Audit TE-L2: the account-erasure helper detaches the user from the questions too (with the sync's people).
+        if ($container->hasDefinition(TaskSyncPeopleReassigner::class)) {
+            $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$questions', new Reference(TaskQuestionManager::class));
+        }
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$questionsEnabled', true);
         $container->getDefinition(TaskBoardTwigExtension::class)->setArgument('$questions', new Reference(TaskQuestionView::class));
         $container->getDefinition(TaskMenuBuilder::class)->setArgument('$questionsEnabled', true);

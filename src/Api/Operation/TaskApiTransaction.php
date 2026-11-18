@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -80,13 +81,20 @@ final readonly class TaskApiTransaction
             ->setParameter('id', $task->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
             ->getSingleResult();
-        $revision = $row['revision'];
+        $revision = (int) $row['revision'];
+        $parent   = $row['parent'] === null ? null : (string) $row['parent'];
         // Since 2.20.0: also when only the parent differs (a write that bumped no revision), so `parent` compares as committed.
-        if ((int) $revision !== $task->getRevision() || ($row['parent'] === null ? null : (string) $row['parent']) !== $task->getParent()?->getId()) {
+        if ($revision !== $task->getRevision() || $parent !== $task->getParent()?->getId()) {
             $this->entityManager->refresh($task);
+            // Since 2.23.0 (audit TE-M1): inside an outer REPEATABLE READ transaction (MySQL / MariaDB) the refresh reads that
+            // transaction's snapshot, not the row just locked; a write from it would undo the other writer's change. Never
+            // write from a stale copy: 409 TASK_409 with the locked revision (read the task again).
+            if ($task->getRevision() !== $revision || $task->getParent()?->getId() !== $parent) {
+                throw TaskApiRefusal::stale($revision);
+            }
         }
 
-        return (int) $revision;
+        return $revision;
     }
 
     /**

@@ -38,6 +38,7 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Clock\NativeClock;
 use Throwable;
 
+use function array_chunk;
 use function array_filter;
 use function array_map;
 use function array_unique;
@@ -155,9 +156,7 @@ final readonly class TaskQuestionManager
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::FORBIDDEN);
         }
         [$text, $context, $options, $mode, $allowOther, $recipients, $dueOn] = $this->checkedQuestion($asker, $task, $input);
-        if ($this->openCount($task) >= $this->maxOpenPerTask) {
-            throw new TaskQuestionRefusedException(TaskQuestionRefusedException::TASK_CLOSED, 'open_questions');
-        }
+        // max_open_per_task is checked inside the write, under the task's lock (audit TE-L1): a count read here could be stale.
 
         $question = new TaskQuestion($task, $text, $context, $mode, $allowOther, $asker, $this->clock->now(), $dueOn);
         foreach ($options as $position => $option) {
@@ -168,6 +167,12 @@ final readonly class TaskQuestionManager
         }
 
         $this->write(function () use ($question, $task, $asker, $text): void {
+            // Audit TE-L1: the task's row locked, then the open questions counted again under that lock (a concurrent ask
+            // waits here), so two asks never pass max_open_per_task together.
+            $this->lockTask($task);
+            if ($this->lockedOpenCount($task) >= $this->maxOpenPerTask) {
+                throw new TaskQuestionRefusedException(TaskQuestionRefusedException::TASK_CLOSED, 'open_questions');
+            }
             $this->entityManager->persist($question);
             $this->recorder->record($task, $asker, TaskChangeType::QuestionAsked, null, $text, self::context($question));
         }, $question, true, static fn (): object => new TaskQuestionAskedEvent(TaskQuestionSnapshot::of($question), Snapshots::task($task), Snapshots::board($task->getBoard()), ActorId::of($asker)), TaskBoardEvents::TASK_QUESTION_ASKED);
@@ -331,17 +336,29 @@ final readonly class TaskQuestionManager
         }
         $changed = 0;
         foreach ([[TaskQuestion::class, 'askedBy', 'askedByName'], [TaskQuestion::class, 'withdrawnBy', 'withdrawnByName'], [TaskQuestionAnswer::class, 'answeredBy', 'answeredByName']] as [$class, $field, $name]) {
-            $builder = $this->entityManager->createQueryBuilder()->update($class, 'r')->set('r.' . $field, ':none');
-            if ($forgetName) {
-                $builder->set('r.' . $name, ':none');
+            // Audit TE-L2 (OC-M2, REQ-SEC-006): in the id mode the rows of exactly this id, by primary key (the database's
+            // collation may fold case or trailing spaces); with a relation, the user object itself.
+            [$where, $batches] = $this->users instanceof TaskBoardUsers && $this->users->idMode()
+                ? ['r.id IN (:match)', array_chunk(TaskBoardUsers::exactRowIds($this->entityManager, $class, $field, TaskBoardUsers::exactId($user)), ExactKey::CHUNK)]
+                : ['r.' . $field . ' = :match', [$user]];
+            foreach ($batches as $match) {
+                $builder = $this->entityManager->createQueryBuilder()->update($class, 'r')->set('r.' . $field, ':none');
+                if ($forgetName) {
+                    $builder->set('r.' . $name, ':none');
+                }
+                $changed += (int) $builder->where($where)
+                    ->setParameter('none', null)
+                    ->setParameter('match', $match)
+                    ->getQuery()
+                    ->execute();
             }
-            // Database.user_reference: the id column itself (id mode) or IDENTITY() of the relation, compared with the id.
-            $changed += (int) $builder
-                ->where(($this->users?->identity('r.' . $field) ?? 'IDENTITY(r.' . $field . ')') . ' = :user')
-                ->setParameter('none', null)
-                ->setParameter('user', $userId)
-                ->getQuery()
-                ->execute();
+        }
+        if ($forgetName) {
+            // Audit TE-L2: the user's own subject ids (the default `user:<id>` and what the resolver says) stop naming them
+            // on the recipient rows and on the answers given for them.
+            foreach (array_unique([DefaultTaskQuestionRecipientResolver::PREFIX . $userId, ...$this->subjectIdsOf($user, null)]) as $subjectId) {
+                $changed += $this->forgetSubject($subjectId);
+            }
         }
 
         return $changed;
@@ -424,13 +441,15 @@ final readonly class TaskQuestionManager
     private function give(TaskQuestion $question, TaskQuestionAnswerInput $input, ?int $version, string $subject, ?object $user, ?string $name, string $via): TaskQuestionAnswer
     {
         [$optionIds, $other] = $this->checkedAnswer($question, $input);
-        if (count($question->getAnswers()) >= self::MAX_ANSWERS) {
-            throw new TaskQuestionRefusedException(TaskQuestionRefusedException::INVALID_ANSWER, 'answers');
-        }
+        // MAX_ANSWERS is checked inside the write, under the question's lock (audit TE-L1).
         $task = $question->getTask();
         /** @var array{0: TaskQuestionAnswer, 1: TaskQuestionAnswer|null} $given */
         $given = $this->write(function () use ($question, $version, $optionIds, $other, $subject, $user, $name, $via, $task): array {
             $this->lock($question, $version, true);
+            // Audit TE-L1: the answers counted again under the question's lock (every answer takes it first).
+            if ($this->lockedAnswerCount($question) >= self::MAX_ANSWERS) {
+                throw new TaskQuestionRefusedException(TaskQuestionRefusedException::INVALID_ANSWER, 'answers');
+            }
             // Checked again on the row as locked: the options are immutable, the Other switch too.
             $this->checkedAnswer($question, new TaskQuestionAnswerInput($optionIds, $other));
             $superseded = $question->getCurrentAnswer();
@@ -451,22 +470,63 @@ final readonly class TaskQuestionManager
         return $given[0];
     }
 
+    /** Locks the task's row until the transaction ends (asks on one task wait for each other). */
+    private function lockTask(Task $task): void
+    {
+        $this->entityManager->createQuery('SELECT t.id FROM ' . Task::class . ' t WHERE t.id = :id')
+            ->setParameter('id', $task->getId())
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getScalarResult();
+    }
+
+    /**
+     * The open questions of the task as committed: a locking read, which sees the latest committed rows even inside a
+     * REPEATABLE READ transaction (MySQL / MariaDB), counted in PHP (PostgreSQL refuses FOR UPDATE with an aggregate).
+     */
+    private function lockedOpenCount(Task $task): int
+    {
+        return count($this->entityManager->createQuery('SELECT q.id FROM ' . TaskQuestion::class . ' q WHERE q.task = :task AND q.state = :open')
+            ->setParameter('task', $task->getId())
+            ->setParameter('open', TaskQuestionState::Open->value)
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getScalarResult());
+    }
+
+    /** The answers of the question as committed (a locking read, as {@see self::lockedOpenCount()}). */
+    private function lockedAnswerCount(TaskQuestion $question): int
+    {
+        return count($this->entityManager->createQuery('SELECT a.id FROM ' . TaskQuestionAnswer::class . ' a WHERE a.question = :question')
+            ->setParameter('question', $question->getId())
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getScalarResult());
+    }
+
     /**
      * Locks the question's row until the transaction ends, reloads it when another writer changed it, then compares the
      * version (`$expected` null: any — or, for an answer, the question must still be open).
      */
     private function lock(TaskQuestion $question, ?int $expected, bool $answering): void
     {
-        /** @var array{version: int|string}|null $row */
-        $row = $this->entityManager->createQuery('SELECT q.version AS version FROM ' . TaskQuestion::class . ' q WHERE q.id = :id')
+        /** @var array{version: int|string, state: string|TaskQuestionState}|null $row */
+        $row = $this->entityManager->createQuery('SELECT q.version AS version, q.state AS state FROM ' . TaskQuestion::class . ' q WHERE q.id = :id')
             ->setParameter('id', $question->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
             ->getOneOrNullResult();
         if ($row === null) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::FORBIDDEN);
         }
-        if ((int) $row['version'] !== $question->getVersion()) {
+        $locked = (int) $row['version'];
+        if ($locked !== $question->getVersion()) {
             $this->entityManager->refresh($question);
+        }
+        // Audit TE: inside an outer REPEATABLE READ transaction (MySQL / MariaDB) the refresh reads the transaction's
+        // snapshot, not the row just locked: never write from it.
+        if ($question->getVersion() !== $locked) {
+            $state = $row['state'] instanceof TaskQuestionState ? $row['state'] : TaskQuestionState::from((string) $row['state']);
+            if ($state === TaskQuestionState::Withdrawn) {
+                throw new TaskQuestionRefusedException(TaskQuestionRefusedException::WITHDRAWN);
+            }
+            throw new TaskQuestionConflictException($locked);
         }
         $current = $question->getVersion();
         if ($question->isWithdrawn()) {
