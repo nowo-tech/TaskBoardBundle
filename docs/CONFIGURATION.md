@@ -40,6 +40,7 @@
 - [Move and duplicate (since 2.3)](#move-and-duplicate-since-23)
 - [Recurring tasks (since 2.3)](#recurring-tasks-since-23)
 - [Task templates (since 2.16)](#task-templates-since-216)
+- [Questions on tasks (since 2.23)](#questions-on-tasks-since-223)
 - [Task numbers and calendar (since 2.1)](#task-numbers-and-calendar-since-21)
 - [New board (since 1.30)](#new-board-since-130)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
@@ -148,13 +149,13 @@ nowo_task_board:
 
 Since 2.21.1 (owner approval 2026-11-17) the routes are declared with `#[Route]` attributes on the controllers
 (`TaskBoardManageController`, `TaskCopyController`, `TaskRecurrenceController`, `TaskBoardConnectionController`,
-`TaskBoardMultiBoardController` and the `Api\Controller\TaskApi*Controller` classes): HTTP methods, requirements,
+`TaskBoardMultiBoardController`, `TaskQuestionController` (2.23) and the `Api\Controller\TaskApi*Controller` classes): HTTP methods, requirements,
 defaults, the default path and the default name of each action. `Routing\TaskBoardRouteLoader` (`type: nowo_task_board`)
 reads them through an internal `ControllerAttributeRouteLoader` and applies this configuration, as before:
 
 - **Names and paths stay configuration** (`routes.<key>.name`, `routes.<key>.path`, `route_prefix`, `multi_board.path`,
   `api.prefix`). The attributes hold the defaults only; hosts that rename or move routes keep doing it here.
-- **Feature switches** (`sync`, `task_numbers`, `calendar`, `move`, `recurrence`, `multi_board`, `api`,
+- **Feature switches** (`sync`, `task_numbers`, `calendar`, `move`, `recurrence`, `task_questions`, `multi_board`, `api`,
   `task_templates`) still decide which routes exist.
 - **Tenancy copies every manage route** once per `tenancy.tenant_paths` entry (`<name_prefix><name>`, `{tenantSlug}` in
   the path, a slug requirement per entry), as before.
@@ -871,6 +872,28 @@ Beacon spec 234, FR-061. Opt-in: with `enabled: false` nothing is mapped, regist
 | `task_templates.permission` | `null` | Service id of a `Template\TaskTemplatePermissionInterface` (`canManage`, `canUse`). null: `DefaultTaskTemplatePermission` — a board's templates are managed with the right to manage the board (`canManageBoard`), a tenant's with `security.manage_roles` (anyone with `security.resource_scoping: false`), and a template is used with the right to add tasks to the board (`canEditBoard`) |
 
 The schema change is additive (one new table): see [UPGRADING "To 2.16.0"](UPGRADING.md#to-2160). Both mapping types are shipped (`database.mapping_type: attribute` or `xml`, group `template`), and the private entity manager (`database.private_entity_manager: true`) covers the table too.
+
+## Questions on tasks (since 2.23)
+
+Beacon spec 242. Opt-in: with `enabled: false` nothing is mapped, registered, routed or rendered.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `task_questions.enabled` | `false` | The tables `task_board_task_questions`, `…_question_options`, `…_question_recipients`, `…_question_answers`; `Question\TaskQuestionManager` and `Question\TaskQuestionQuery`; the *Questions* section of the task page and drawer; the *Waiting for answer* badge and list filter; *Ask a question…* in the task menus; the routes `task_question_ask`, `task_question_answer`, `task_question_withdraw`, `task_question_publish` and `my_questions`; with `api.enabled`, the question routes of the Task API |
+| `task_questions.recipient_resolver` | `null` | Service id of a `Question\TaskQuestionRecipientResolverInterface` (`candidates()`, `subjectIdsOf()`). null: `DefaultTaskQuestionRecipientResolver` — the task's @mention candidates as `user:<id>`, without the asker |
+| `task_questions.external_answers` | `null` | Service id of a `Question\TaskQuestionExternalAnswerInterface`: the host-signed link where an external recipient answers (*Copy answer link* for the asker and the board's managers). null: none |
+| `task_questions.decision_publisher` | `null` | Service id of a `Question\TaskQuestionDecisionPublisherInterface`: the *Publish decision* button of answered questions. null: none |
+| `task_questions.max_recipients` | `20` | 1 to 100 recipients per question |
+| `task_questions.max_open_per_task` | `20` | 1 to 200 open questions per task |
+| `task_questions.my_questions_per_page` | `25` | 10, 25, 50 or 100 rows per page of *My open questions* |
+
+Routes (`routes.*`, each `path` and `name`; copied under `tenancy.tenant_paths` like every manage route):
+`task_question_ask` (`/tools/task-board/task/{taskId}/question`), `task_question_answer`
+(`…/question/{questionId}/answer`), `task_question_withdraw` (`…/withdraw`), `task_question_publish` (`…/publish`),
+`my_questions` (`/tools/task-board/questions`). Template: `web_ui.templates.my_questions`. The schema change is additive
+(four new tables): see [UPGRADING "To 2.23.0"](UPGRADING.md#to-2230). Both mapping types are shipped (group `question`),
+user references by id work, and the private entity manager covers the tables too. See
+[USAGE — Questions on tasks](USAGE.md#questions-on-tasks-since-223).
 
 ## Task numbers and calendar (since 2.1)
 

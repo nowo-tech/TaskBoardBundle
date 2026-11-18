@@ -22,6 +22,7 @@
 - [Task menus, context menus and focus mode (2.22)](#task-menus-context-menus-and-focus-mode-222)
 - [Lock conflicts: 409 + Retry-After (2.22)](#lock-conflicts-409--retry-after-222)
 - [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
+- [Questions on tasks (2.23)](#questions-on-tasks-223)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
 - [Dependencies](#dependencies)
@@ -318,7 +319,46 @@ write outside a transaction on the connections, counted from the moment the API'
 (with their assignees) and deletes are one transaction; their events are dispatched after the commit and a failing
 listener is logged, not reported as a failed write. Limit: when transaction-doctrine's responder answers first
 (`controller_routes`), the `Retry-After` header is its own write unit's decision; the body still says `CONFLICT_002`.
-The answer names no table, SQL or parameter; the log line carries the exception class only.
+Limit (audit SU2-I2): the ledger sees only DBAL writes on DoctrineBundle connections. A side effect the request already
+made through Messenger to another transport, an HTTP call, a mail or a raw PDO outside DoctrineBundle is not counted and
+still answers `CONFLICT_001`; keep such side effects after the commit (an event listener) or idempotent. Since 2.23.0
+(audit SU2-I1) a replayed attachment upload reuses the host's stored file only when its `store()` moved the ledger (its
+work is committed); a store that writes its record in the request's transaction is asked again, never answered with a
+record the rollback removed. The answer names no table, SQL or parameter; the log line carries the exception class only.
+
+## Questions on tasks (2.23)
+
+- **Off by default.** With `task_questions.enabled: false` there is no table, route, service or output.
+- **Every write is checked on the server.** The page routes (`task_question_ask`, `…_answer`, `…_withdraw`, `…_publish`)
+  are POST with their own CSRF token (the form's: `task_question`, `qa_<id>`, `qw_<id>`, `task_board_question_publish`;
+  a missing or wrong token or extra fields: 403), load the task through the tenant context and view access (404 for
+  another tenant's or an unseen task), take the question **on that task only** (compared exactly; another task's
+  question: 404) and let `TaskQuestionManager` check the right again (`canAskQuestion()`, `canAnswerQuestion()`,
+  `canWithdrawQuestion()`, `canPublishDecision()`; refused: 403). The Task API goes through `TaskApiGuard` (reach,
+  tenant, plan, level) first: a question out of reach is `404 ACCESS_001` like an unknown one.
+- **Recipients are opaque ids from the host** (`TaskQuestionRecipientResolverInterface`); an ask may only name ids the
+  resolver offers for that task and asker, compared byte for byte (binary NO PAD collation on MySQL / MariaDB,
+  `TaskBoardMetadataListener::KEY_FIELDS`; rows read back are compared with `===`). A look-alike id is refused, never
+  matched. Ids the resolver returns that cannot be matched exactly are dropped and logged.
+- **External answers trust the host's signed link.** `TaskQuestionManager::answerAsSubject()` checks only that the
+  subject is a recipient and that the question is not withdrawn: **the host must verify its link's signature, expiry and
+  binding to that question and subject before calling it.** The link from `TaskQuestionExternalAnswerInterface` is a
+  bearer secret: the bundle prints it on the card for the asker and the board's managers only (http / https only), and
+  never stores or logs it.
+- **No lost answer.** Every answer carries the version read; the row is locked and compared, so a racing answer is
+  refused (409 `CONFLICT_002` in the API), never overwritten. Answers are never edited or deleted; a later one supersedes.
+- **Text.** The Markdown context renders only through the host's `TaskTextRendererInterface` followed by
+  `ReservedAttributeStripper` (2.22); the text, option labels and descriptions, recipient labels, the Other answer, the
+  withdraw reason and the published label are plain text, escaped. The published URL must be http / https (else the
+  publish is refused) and opens with `rel="noopener noreferrer"`. The API returns the raw Markdown, never HTML.
+- **Personal data.** Questions keep the asker's, answerer's and withdrawer's name snapshots and the recipients' labels.
+  `TaskQuestionManager::detachUser($user, $forgetName)` drops a user from them; `forgetSubject($subjectId)` turns an
+  external contact into `forgotten:<hash>` (recipient id and label, the answers' subject, the name on its answers and on
+  their activity entries). Answer contents stay (they are the decision).
+- **Worker mode.** The manager, query, view, controller and API operations are `final readonly` and keep nothing between
+  calls; a failed write rolls back to the entry level, drops its events, resets a closed manager and detaches what it
+  added (FrankenPHP with the kernel not reset).
+- **The task's status never changes** through a question.
 
 ## Logging and personal data
 

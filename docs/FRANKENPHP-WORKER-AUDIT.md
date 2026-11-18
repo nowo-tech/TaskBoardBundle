@@ -230,6 +230,7 @@ No other findings. The bundle holds no per-user state in services, so there is n
 | `Api/TaskApiInput::take()` | mutation of `read` | `TaskApiInput` is a per-request value object built by `fromRequest()`; not a service. |
 | `Api/Operation/TaskApiTimeOperations::updateTime()` (2.12.0) | mutation of the injected time store | `setBillable()` writes through `TaskTimeBillableService` (Doctrine); `ManualTaskApiTimeEntries` is `final readonly` and keeps nothing. The new billable service, ports and TimeTrack bridges are `final readonly` (or have no properties) and are asked per call. |
 | `Api/Doctrine/JsonTextFunction::parse()` | mutation of `field` | A DQL function node: Doctrine creates one per parsed query; it is not a service. |
+| `Question/*` (2.23.0) | entity field writes in `TaskQuestion`, `TaskQuestionAnswer` | Doctrine entities of one request (`@igor-ignore` on each write). `TaskQuestionManager`, `TaskQuestionQuery`, `TaskQuestionView`, `TaskQuestionController` and `TaskApiQuestionOperations` are `final readonly` (or keep no property) and read what they need per call; a failed write rolls back, resets a closed manager and detaches what it added. |
 
 ## Usage recommendations in worker mode
 
