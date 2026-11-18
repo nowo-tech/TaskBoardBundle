@@ -28,7 +28,7 @@ and must work in FrankenPHP worker mode with the kernel not reset between reques
 | Links and files | External links, merge and pull request links, host object links (1.0, 1.10); attachments through the host store in the Task API (2.2) |
 | Dependencies | Blocks, blocked by, related, duplicates, with cycle checks (1.15) and dependents (2.16) |
 | Recurrence and templates | Recurring tasks with fixed dates or after completion (2.3), task templates (2.16), column sets |
-| Views | Board with drag and drop, list with groups, sorting and time columns (1.12–1.15), read-only Gantt in hours to months (1.13, 1.15), calendar in month / week / list with drag to reschedule (2.1), working days and leave (2.14), all tasks across boards with workload per person (2.13), default view per user (1.24), focus mode and context menus (2.22) |
+| Views | Board with drag and drop and subtask progress on cards (1.12), list with groups, sorting and time columns (1.12–1.15), read-only Gantt in hours to months (1.13, 1.15), calendar in month / week / list with drag to reschedule (2.1), working days and leave (2.14), all tasks across boards with workload per person (2.13), default view per user (1.24), focus mode and context menus (2.22) |
 | Filters and search | Client-side list filters (text, priority, column, over estimate), calendar and cross-board filters in the URL, text search in the Task API (2.16) |
 | Bulk work | Atomic bulk update in the Task API (2.16), move and duplicate a task tree to another board (2.3) |
 | Import and export | CSV / JSON import from three file formats and the bundle's own format (1.2, 1.18), a read-only provider sync (1.23–1.29), CSV / XLSX export of the cross-board list (2.13) |
@@ -48,6 +48,9 @@ High value for a team board, and built mostly on what the bundle already has.
   opens the same slice every day without rebuilding it.
 - **Swimlanes.** Group the board's rows by assignee, priority, tag or parent task; shows who holds what and where work
   piles up.
+- **Live board refresh.** The board, list and task panel update when someone else changes a card (moved, edited,
+  added or archived), without a page reload; a team working on one board sees the same state and stops overwriting
+  each other's moves.
 
 ### Flow
 
@@ -81,7 +84,7 @@ Larger pieces that need a design pass or a new table.
 
 ### Planning
 
-- **Iterations.** Time-boxed cycles with a start, an end and a goal; tasks join an iteration and unfinished ones roll to
+- **Iterations.** Time-boxed cycles with a start, an end and an objective; tasks join an iteration and unfinished ones roll to
   the next; gives a team a steady planning rhythm.
 - **Relative size estimates.** A numeric size per task, summed per column, iteration and person, next to the time
   estimate; teams that plan by size rather than hours can use the board.
@@ -139,17 +142,11 @@ Ideas that need more feedback before they are planned.
   dialog; faster for heavy users and better for accessibility.
 - **Initiatives above tasks.** A grouping of tasks across boards with a rolled-up progress and dates; links daily work
   to larger outcomes.
-- **Goals.** Measurable targets with key results linked to tasks or initiatives, progress from their completion; shows
-  why the work matters.
 - **Approval step.** A column or a task state that needs a named reviewer's approval before it moves on, using the
   reviewer role and the transition policy; formalises sign-off.
 - **Comment reactions.** Quick reactions on comments; acknowledges without adding noise.
-- **Subtask progress on cards.** A done / total count and bar for subtasks and checklists on the card; progress shows
-  without opening the task.
 - **Formula fields.** A number field computed from other fields of the task; covers scoring and simple cost models.
 - **Offline reading.** Cache the last board and task pages for reading without a connection; useful on the move.
-- **In-app notification feed.** A host-rendered list of the events a user follows (mentions, assignments, watched
-  tasks), built on the existing events; complements the host's own notifications.
 
 ## Decided
 
@@ -160,6 +157,10 @@ Already settled; not planned in another form.
 - **Tracked time:** never deleted through the Task API (`DELETE` of a time entry is always 403), and never deleted by a
   move, a re-sync or an erasure.
 - **E-mail notifications:** the host's responsibility; the bundle dispatches events and sends nothing itself.
+- **In-app notifications:** the host shows notifications from the bundle's events; the bundle keeps no notification
+  feed of its own.
+- **Goals and key results:** not in TaskBoard; they belong to the host or a separate bundle.
 - **Native mobile clients:** not planned; the web UI covers phones.
-- **Real-time multi-user cursors on the board (server push):** not planned.
+- **Real-time multi-user cursors on the board:** not planned (the board does refresh on other people's changes, see
+  [Next](#next)).
 - **Provider sync:** read-only; the bundle never writes to the provider and never stores a token.

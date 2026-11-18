@@ -41,7 +41,7 @@
   - [Previous / next task (since 1.20)](#previous--next-task-since-120)
   - [Task page hook (since 1.25.1)](#task-page-hook-since-1251)
   - [No inline styles](#no-inline-styles)
-- [Look and feel: ClickUp-like views, theming and icons (since 1.12)](#look-and-feel-clickup-like-views-theming-and-icons-since-112)
+- [Look and feel: views, theming and icons (since 1.12)](#look-and-feel-views-theming-and-icons-since-112)
   - [Theming with design tokens](#theming-with-design-tokens)
   - [Icons](#icons)
   - [Inline new task](#inline-new-task)
@@ -957,9 +957,9 @@ inserted later). The subtask progress is a native `<progress>`. New semantic cla
 `nowo-task-column-sets` (`__item`, `__delete`, `__empty`), `nowo-task-dialog` (`--native`, `__header`, `__body`,
 `__actions`, `__footer` since 1.26, `__danger` up to 1.25), `nowo-task-progress`, `nowo-task-list__row`, `nowo-task-panel-fragment`.
 
-## Look and feel: ClickUp-like views, theming and icons (since 1.12)
+## Look and feel: views, theming and icons (since 1.12)
 
-The views follow ClickUp's way of working; their look is the host's:
+The views share one way of working; their look is the host's:
 
 - **Task detail** (page and panel): a status pill in the column's colour (its menu moves the task; the arrows step to the
   previous / next column, the check completes it), the priority flag, the title edited in place, then one grid of

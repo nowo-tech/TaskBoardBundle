@@ -1,7 +1,7 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * ClickUp-style status picker: toggle column dropdown, close on outside click.
+ * Status picker: toggle column dropdown, close on outside click.
  */
 export default class TaskStatusController extends Controller<HTMLElement> {
     static targets = ['menu', 'toggle'];

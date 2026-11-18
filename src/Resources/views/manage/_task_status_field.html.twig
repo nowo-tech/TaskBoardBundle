@@ -17,7 +17,7 @@
         </button>
 
         <div class="nowo-task-detail__status-picker">
-            {# Since 1.12: a status pill in the column's colour (ClickUp-like); the arrows step to the previous / next column. #}
+            {# Since 1.12: a status pill in the column's colour; the arrows step to the previous / next column. #}
             {% set _statusColor = task.column ? task.column.color|nowo_task_board_safe_color : null %}
             <button
                 type="button"
