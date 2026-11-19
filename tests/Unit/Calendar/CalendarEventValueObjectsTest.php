@@ -58,6 +58,16 @@ final class CalendarEventValueObjectsTest extends TestCase
         yield 'zero-width space in title' => [['title' => "Ca\u{200B}ll"]];
         yield 'zero-width no-break space in version' => [['version' => "\u{FEFF}v1"]];
         yield 'word joiner in id' => [['id' => "m\u{2060}1"]];
+        // Since 2.25.0 (audit UW2-2): every format character, line and paragraph separators and the Hangul fillers.
+        yield 'Arabic letter mark in title' => [['title' => "Call\u{061C}"]];
+        yield 'line separator in title' => [['title' => "Call\u{2028}now"]];
+        yield 'paragraph separator in id' => [['id' => "m\u{2029}1"]];
+        yield 'soft hyphen in id' => [['id' => "m\u{00AD}1"]];
+        yield 'tag character in title' => [['title' => "Call\u{E0041}"]];
+        yield 'Hangul choseong filler in title' => [['title' => "\u{115F}Call"]];
+        yield 'Hangul jungseong filler in id' => [['id' => "m\u{1160}1"]];
+        yield 'Hangul filler in title' => [['title' => "Call\u{3164}"]];
+        yield 'halfwidth Hangul filler in version' => [['version' => "v\u{FFA0}"]];
         yield 'invalid UTF-8 title' => [['title' => "Call \xC3\x28"]];
         yield 'long title' => [['title' => str_repeat('t', 201)]];
         yield 'end before start' => [['end' => new DateTimeImmutable('2030-03-04 09:00')]];
@@ -180,7 +190,7 @@ final class CalendarEventValueObjectsTest extends TestCase
         self::assertNull(CalendarEventRescheduleResult::ok()->version);
         self::assertSame([CalendarEventRescheduleStatus::Conflict, 'CALENDAR_EVENT_CHANGED'], [CalendarEventRescheduleResult::conflict()->status, CalendarEventRescheduleResult::conflict()->code]);
         self::assertSame('MEETING_LOCKED', CalendarEventRescheduleResult::conflict('MEETING_LOCKED')->code);
-        self::assertSame('CONFLICT_RULE', CalendarEventRescheduleResult::conflict('CONFLICT_RULE')->code, 'only CONFLICT_<digits> is reserved');
+        self::assertSame('CONFLICTS_SEEN', CalendarEventRescheduleResult::conflict('CONFLICTS_SEEN')->code, 'only CONFLICT and CONFLICT_* are reserved');
         self::assertSame([CalendarEventRescheduleStatus::Forbidden, 'CALENDAR_EVENT_FORBIDDEN'], [CalendarEventRescheduleResult::forbidden()->status, CalendarEventRescheduleResult::forbidden()->code]);
         self::assertSame([CalendarEventRescheduleStatus::NotFound, 'CALENDAR_EVENT_NOT_FOUND'], [CalendarEventRescheduleResult::notFound()->status, CalendarEventRescheduleResult::notFound()->code]);
         $lock = CalendarEventRescheduleResult::lockConflict(true, 4);
@@ -195,6 +205,9 @@ final class CalendarEventValueObjectsTest extends TestCase
     {
         yield 'a lock-conflict code as a domain code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::conflict('CONFLICT_001')];
         yield 'another lock-conflict code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::forbidden('CONFLICT_17')];
+        // Since 2.25.0 (audit UW2-3): the whole CONFLICT family.
+        yield 'a CONFLICT_ code with letters' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::conflict('CONFLICT_RULE')];
+        yield 'CONFLICT alone' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::forbidden('CONFLICT')];
         yield 'bidi in version' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::ok("v\u{202E}")];
         yield 'lowercase code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::conflict('changed')];
         yield 'header injection' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::forbidden("NO\r\nX-Evil: 1")];

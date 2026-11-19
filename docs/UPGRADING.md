@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.25.0](#to-2250)
+  - [Header search (additive)](#header-search-additive)
+  - [Calendar event follow-ups](#calendar-event-follow-ups)
 - [To 2.24.0](#to-2240)
   - [Calendar event sources (additive)](#calendar-event-sources-additive)
 - [To 2.23.1](#to-2231)
@@ -217,6 +220,36 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.25.0
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+A minor release. No schema change.
+
+### Header search (additive)
+
+New services for a site-wide search box (`Search\Header\*`) and the event `TaskBoardEvents::SEARCH_SCOPE`. Nothing runs
+until a provider calls them. **With `tenancy.enabled`**, a search outside a tenant page finds nothing unless a
+`SEARCH_SCOPE` listener names the viewer's tenants (`onlyTenants()`): add one when the search box is on every page. See
+[USAGE](USAGE.md#header-search-since-225).
+
+### Calendar event follow-ups
+
+Three checks of the 2.24 calendar event sources are stricter:
+
+- Event ids, titles and versions refuse every format character (`\p{Cf}`: U+061C, U+00AD, tag characters...), U+2028,
+  U+2029 and the Hangul fillers U+115F, U+1160, U+3164, U+FFA0. A source that returns one now throws
+  `InvalidArgumentException` when it builds the `CalendarEvent`; strip them in the source.
+- A reschedule result may not use `CONFLICT` or any `CONFLICT_…` code (before: only `CONFLICT_<digits>`). Rename such a domain
+  code.
+- A lock conflict thrown by `events()` while a move reads the event again always answers `CONFLICT_001` with `Retry-After`.
+
+Sources should filter by `CalendarEventRange` in their query; the move re-read no longer counts events outside the day toward
+the drop cap.
 
 ## To 2.24.0
 

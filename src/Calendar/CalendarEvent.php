@@ -96,12 +96,13 @@ final readonly class CalendarEvent
 
     /**
      * Since 2.24.0 (audit UW-TB-6): 1 to `$max` characters of valid UTF-8 with no control character (C0 and C1, `\p{Cc}`),
-     * no bidirectional mark, override or isolate (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) and no zero-width or
-     * invisible format character (U+200B to U+200D, U+2060 to U+2064, U+FEFF). Used for ids, titles and versions.
+     * no format character (`\p{Cf}`: bidirectional marks, overrides and isolates, the Arabic letter mark U+061C, zero-width
+     * characters, the soft hyphen U+00AD, tag characters...), no line or paragraph separator (U+2028, U+2029) and no Hangul
+     * filler (U+115F, U+1160, U+3164, U+FFA0; since 2.25.0, audit UW2-2). Used for ids, titles and versions.
      */
     public static function isPrintable(string $value, int $max): bool
     {
-        return $value !== '' && mb_strlen($value) <= $max && preg_match('/[\p{Cc}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}]/u', $value) === 0;
+        return $value !== '' && mb_strlen($value) <= $max && preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\x{115F}\x{1160}\x{3164}\x{FFA0}]/u', $value) === 0;
     }
 
     private function isSafeUrl(string $url): bool
