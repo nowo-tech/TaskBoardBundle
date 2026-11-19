@@ -228,6 +228,10 @@ php bin/console assets:install
 
 A minor release. Additive: no schema change, no BC break, nothing changes for a host without a calendar event source.
 
+**Dependency floor.** `nowo-tech/transaction-doctrine` is now required at `^1.6` (was `^1.3`): the calendar event move uses
+`ConflictResponsePolicy::CODE_HEADER`, added in 1.6.0. A host on 1.3 to 1.5 updates it together with the bundle:
+`composer update nowo-tech/task-board-bundle nowo-tech/transaction-doctrine`.
+
 ### Calendar event sources (additive)
 
 - New ports `Calendar\CalendarEventSourceInterface` (timed events of another part of the application on a board's calendar)

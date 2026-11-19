@@ -141,6 +141,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Options `calendar.events.timezone`, `calendar.events.max_per_source` and `routes.calendar_event_reschedule`; translations of
   the event texts in the seven locales.
 
+### Changed
+
+- **`nowo-tech/transaction-doctrine` requirement raised from `^1.3` to `^1.6`.** The calendar event move answers lock
+  conflicts with `ConflictResponsePolicy::CODE_HEADER` (`X-Conflict-Code`), which transaction-doctrine defines since 1.6.0.
+
 ## [2.23.1] - 2026-11-19
 
 ### Fixed
