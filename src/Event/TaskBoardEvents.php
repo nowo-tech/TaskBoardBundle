@@ -223,4 +223,11 @@ final class TaskBoardEvents
 
     /** Since 2.23.0 (Beacon spec 242): {@see TaskQuestionWithdrawnEvent}, snapshots only, after a question is withdrawn. */
     public const TASK_QUESTION_WITHDRAWN = 'nowo_task_board.task_question_withdrawn';
+
+    /**
+     * Since 2.25.0 (header search): {@see SearchScopeEvent}, before the header search reads boards or tasks. A listener
+     * narrows the boards and tenants searched for the viewer (only these tenants or boards, not those, or nothing); the
+     * bundle applies every restriction in SQL, before the rows are cut, and can only narrow.
+     */
+    public const SEARCH_SCOPE = 'nowo_task_board.search_scope';
 }

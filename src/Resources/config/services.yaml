@@ -386,6 +386,15 @@ services:
             $enabled: '%nowo_task_board.tenancy.enabled%'
             $singleBoard: '%nowo_task_board.tenancy.single_board%'
 
+    # Since 2.25.0 (header search): the services a SearchKit provider calls (boards and tasks the viewer may open).
+    Nowo\TaskBoardBundle\Search\Header\SearchHitMapper:
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+
+    Nowo\TaskBoardBundle\Search\Header\SearchBoardScope:
+        arguments:
+            $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
+
     Nowo\TaskBoardBundle\Routing\TenantPaths:
         arguments:
             $tenantPaths: '%nowo_task_board.tenancy.tenant_paths%'

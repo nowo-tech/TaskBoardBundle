@@ -256,6 +256,90 @@ final readonly class TaskBoardResourceAccessChecker
     }
 
     /**
+     * Since 2.25.0 (header search): {@see self::canViewBoard()} for many boards at once. The returned closure answers
+     * exactly what canViewBoard() answers (creator, team, `security.manage_roles`, then BOARD_ACCESS_CHECK), but the
+     * user's teams and manage roles are read once, on the first board that needs them, instead of once per board: each
+     * further board costs its BOARD_ACCESS_CHECK event and no query. Build it per call; it holds nothing beyond it.
+     *
+     * @param bool $manageRoles false leaves `security.manage_roles` out (see {@see self::canViewBoard()})
+     *
+     * @return Closure(TaskBoard): bool
+     */
+    public function boardViewDecider(object $user, bool $manageRoles = true): Closure
+    {
+        $managed = null;
+        $teamIds = null;
+
+        return function (TaskBoard $board) use ($user, $manageRoles, &$managed, &$teamIds): bool {
+            $default = !$this->scopingEnabled || $this->sameUser($user, $board->getCreator());
+            if (!$default && $manageRoles) {
+                $managed ??= $this->hasManageRole();
+                $default = $managed;
+            }
+            $team = $board->getTeam();
+            if (!$default && $team instanceof Team) {
+                $teamIds ??= $this->teamIdsOf($user);
+                $default = isset($teamIds[$team->getId()]);
+            }
+            $event = new BoardAccessCheckEvent($user, $board, $default);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
+            return $this->isBoardViewable($event);
+        };
+    }
+
+    /**
+     * Since 2.25.0 (header search): {@see self::canViewTask()} for many tasks at once. TASK_ACCESS_CHECK is dispatched
+     * for each task (a deny hides it, a grant shows it); with no answer the task is visible when its board is, by
+     * `$boardViewable` (for instance {@see self::boardViewDecider()}), or when the user takes part in it. Each board is
+     * asked once. Build it per call; it holds nothing beyond it.
+     *
+     * @param Closure(TaskBoard): bool $boardViewable
+     *
+     * @return Closure(Task): bool
+     */
+    public function taskViewDecider(object $user, Closure $boardViewable): Closure
+    {
+        $boards = [];
+
+        return function (Task $task) use ($user, $boardViewable, &$boards): bool {
+            $event = new TaskAccessCheckEvent($user, $task);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ACCESS_CHECK);
+            if ($event->isDenied()) {
+                return false;
+            }
+            if ($event->isGranted()) {
+                return true;
+            }
+            $board = $task->getBoard();
+            $boards[$board->getId()] ??= $boardViewable($board);
+
+            return $boards[$board->getId()] || $this->isTaskParticipant($user, $task);
+        };
+    }
+
+    /**
+     * The ids of the user's teams (membership resolver and TeamMember rows), as keys.
+     *
+     * @return array<string, true>
+     */
+    private function teamIdsOf(object $user): array
+    {
+        $ids = [];
+        foreach ($this->teamMembershipResolver->resolveTeamIds($user) as $resolvedId) {
+            $ids[(string) $resolvedId] = true;
+        }
+        $userId = $this->userId($user);
+        if ($userId !== null) {
+            foreach ($this->teamMemberRepository->findByUserId($userId) as $membership) {
+                $ids[$membership->getTeam()->getId()] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Since 2.23.0 (Beacon spec 242): whether the user may ask a question on the task. View access is required and an
      * archived task gets none. The {@see TaskAccessCheckEvent::ACTION_ASK_QUESTION} decision of TASK_ACCESS_CHECK: grant()
      * allows it, deny() refuses it (and sticks); with no answer it is the comment right — every viewer with
