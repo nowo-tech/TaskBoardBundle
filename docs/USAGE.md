@@ -2047,7 +2047,7 @@ the viewer (`getSubject()`, `getSubjectId()`), the group (`getGroup()`: `tasks` 
 
 ### SearchKit groups: tasks and boards
 
-With `nowo-tech/search-kit-bundle` 1.9 or later installed (PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
+With `nowo-tech/search-kit-bundle` installed (1.9 or later, suggested and tested ^1.10.1; PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
 the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDefinition`:
 
 | Group | Searches | Row |

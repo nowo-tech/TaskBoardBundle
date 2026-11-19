@@ -995,7 +995,7 @@ nowo_task_board:
 ```
 
 The header search services (`Search\Header\*`) are always registered. The SearchKit groups `tasks` and `boards` are
-registered only when `nowo-tech/search-kit-bundle` 1.9 or later is installed (it needs PHP 8.3; it is a `suggest`) and
+registered only when `nowo-tech/search-kit-bundle` 1.9 or later is installed (suggested and tested: ^1.10.1; it needs PHP 8.3; it is a `suggest`) and
 `enabled` is true. SearchKit's own `nowo_search_kit.groups.tasks` / `.boards` (`enabled`, `priority`) switch or reorder
 them as well. With `tenancy.enabled`, a search outside a tenant page (SearchKit's own route, for instance) finds nothing
 until a `TaskBoardEvents::SEARCH_SCOPE` listener names the viewer's current tenant (see

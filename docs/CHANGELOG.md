@@ -120,6 +120,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Header search: every team of the viewer counts** (audit VL2-1). Without a BOARD_ACCESS_CHECK listener the default
+  rule filters boards in SQL, and only the first 500 team ids reached it: boards of further teams were left out silently.
+  The team ids now go in IN lists of at most 500 ids each, up to 5,000 (`SearchBoardScope::MAX_TEAMS`); past that the
+  search is partial and logs a warning (`TaskBoard header search team list cut`).
+
+### Changed
+
+- **SearchKit `^1.10.1`** is the suggested and CI-tested version of the optional SearchKit groups (1.9 still works).
+
 ## [2.25.0] - 2026-11-19
 
 ### Added

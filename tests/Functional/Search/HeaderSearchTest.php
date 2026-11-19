@@ -4,22 +4,27 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Search;
 
+use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHits;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
+use function array_keys;
 use function array_map;
 use function range;
 use function sprintf;
@@ -328,6 +333,63 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         $found = array_values($scope->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_BOARDS)->boards);
         self::assertCount(1, $found);
         self::assertSame('acme', $found[0]->tenant?->key);
+    }
+
+    /**
+     * Audit VL2-1: more than 500 team ids reach SQL in several IN lists (no listener: the default rule filters in SQL), so
+     * the board of the 551st team is found; past MAX_TEAMS the search says it is partial.
+     */
+    public function testMoreThanFiveHundredTeamsAreAllSearched(): void
+    {
+        $bob  = $this->user('bob@example.com');
+        $team = new Team('Team 551');
+        $this->em->persist($team);
+        $board = $this->board('Far team board', creator: $bob);
+        $board->setTeam($team);
+        $this->em->flush();
+        $this->described($board, 'Far task', null);
+        $this->described($this->board('Bob alone', creator: $bob), 'Far task', null);
+        $ids      = array_map(static fn (int $i): string => sprintf('00000000-0000-4000-8000-%012d', $i), range(1, 600));
+        $ids[550] = $team->getId();
+
+        $found = $this->scopeWithTeams($ids)->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_TASKS);
+        self::assertSame([$board->getId()], array_keys($found->boards));
+        self::assertFalse($found->capped);
+
+        $many = array_map(static fn (int $i): string => sprintf('00000000-0000-4000-8000-%012d', $i), range(1, SearchBoardScope::MAX_TEAMS + 1));
+        $cut  = $this->scopeWithTeams($many)->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_TASKS);
+        self::assertSame([], $cut->boards);
+        self::assertTrue($cut->capped, 'teams past the cap: partial');
+        self::assertTrue($this->warned('TaskBoard header search team list cut'));
+    }
+
+    /**
+     * A scope whose access checker resolves the viewer's teams to `$teamIds` (a membership resolver), on the kernel's
+     * dispatcher (no BOARD_ACCESS_CHECK listener: the default rule filters in SQL).
+     *
+     * @param list<string> $teamIds
+     */
+    private function scopeWithTeams(array $teamIds): SearchBoardScope
+    {
+        $container = self::getContainer();
+        $members   = $container->get(TeamMemberRepositoryInterface::class);
+        $users     = $container->get(TaskBoardUsers::class);
+        self::assertInstanceOf(TeamMemberRepositoryInterface::class, $members);
+        self::assertInstanceOf(TaskBoardUsers::class, $users);
+        $resolver = new class($teamIds) implements TaskBoardTeamMembershipResolverInterface {
+            /** @param list<string> $ids */
+            public function __construct(private readonly array $ids)
+            {
+            }
+
+            public function resolveTeamIds(object $user): array
+            {
+                return $this->ids;
+            }
+        };
+        $checker = new TaskBoardResourceAccessChecker($members, $resolver, null, $this->dispatcher());
+
+        return new SearchBoardScope($this->em, $checker, $this->dispatcher(), null, $this->logger(), users: $users);
     }
 
     public function testTheScopeEventDenies(): void
