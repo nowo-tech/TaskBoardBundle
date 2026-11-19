@@ -136,16 +136,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   questions addressed to or asked by the viewer on every board the access checks let through; with a host whose
   `TASK_ACCESS_CHECK` listener grants view access by its own rules, a non-member got a 200 with questions of boards they
   cannot open. Now (deny by default):
-  - the tenant page answers 404 when the tenant does not resolve, or when a tenant-aware access checker's
-    `canListBoards()` refuses it; a host widget (`nowo_task_board_my_questions()`) on such a request shows no rows;
+  - the tenant page answers 404 when the tenant does not resolve for the viewer; a host widget
+    (`nowo_task_board_my_questions()`) on such a request shows no rows. A tenant that resolves lists its rows the viewer
+    may see; the board-list decision (`canListBoards()`) is not asked, so a sharee of one board in a tenant whose board
+    list they may not see keeps their questions (audit UG-1);
   - outside a tenant URL with tenancy on, a row counts only when its board's tenant is one the resolver opens to the
-    viewer (`tenantOfKey()`, as the Task API already did) and the checker lets them list; a board without a tenant never
+    viewer by key (`tenantOfKey()`) and `canViewTask()` allows it — the Task API's rule; a board without a tenant never
     counts there;
-  - every row still needs `canViewTask()`; `TASK_QUESTION_ACCESS_CHECK` decides the question actions only, never a list;
-  - the Questions section (`nowo_task_board_questions()`) is empty for a viewer who may not see the task, whoever
-    renders it.
+  - `TASK_QUESTION_ACCESS_CHECK` decides the question actions only, never a list;
+  - the Questions section (`nowo_task_board_questions()`) is empty for a viewer who may not see the task or, with
+    tenancy, open its tenant (UG-3), whoever renders it.
   The Task API (`GET /v2/user/question`) already checked each board's tenant and is unchanged. Affected: 2.23.0 only,
-  with `task_questions.enabled` and `tenancy.enabled`. New `TaskBoardTenantContext::isTenantRequest()`.
+  with `task_questions.enabled` and `tenancy.enabled`. New `TaskBoardTenantContext::isTenantRequest()`;
+  `tenantOfKey()` answers null when the resolver throws `InvalidArgumentException` for the key, as for a slug (UG-2).
 
 ## [2.23.0] - 2026-11-19
 

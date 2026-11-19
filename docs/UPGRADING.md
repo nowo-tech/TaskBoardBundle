@@ -257,17 +257,21 @@ ALTER TABLE task_board_task_question_recipients ADD CONSTRAINT FK_CB24A4371E27F6
 Security fix (see CHANGELOG). With `tenancy.enabled`, *My open questions* now denies by default:
 
 - a tenant copy of the page (`<tenant path>/questions`) whose `{tenantSlug}` your tenant resolver does not resolve for
-  the user answers **404** (2.23.0: a 200 listing every board's questions the access checks let through), and so does a
-  tenant your tenant-aware checker's `canListBoards()` refuses; `nowo_task_board_my_questions()` on such a request
-  returns no rows;
+  the user answers **404** (2.23.0: a 200 listing every board's questions the access checks let through);
+  `nowo_task_board_my_questions()` on such a request returns no rows;
+- a tenant that resolves lists that tenant's rows the user may see (`canViewTask()`). Your checker's `canListBoards()`
+  is **not** asked there: it decides the board index, and a sharee of one board in a tenant whose board list they may not
+  see still sees their questions;
 - outside a tenant URL, a row counts only when its board's tenant is one your resolver opens to the user when asked by
-  key (`TaskBoardTenantContext::tenantOfKey()`, as the Task API) and `canListBoards()` allows; a board without a tenant
-  is never listed there. If your tenants' slugs differ from their keys, the global page lists nothing under tenancy
-  (as the Task API's `GET /v2/user/question`): link to the tenant pages instead.
+  key (`TaskBoardTenantContext::tenantOfKey()`) and `canViewTask()` allows it — the Task API's rule. A board without a
+  tenant is never listed there. If your tenants' slugs differ from their keys, the global page lists nothing under
+  tenancy (as the Task API's `GET /v2/user/question`): link to the tenant pages instead;
+- the Questions section is empty for a user who may not see the task or, with tenancy, open its tenant.
 
-What to check: your resolver returns null for a user who is not a member of the tenant (that is its contract), and a
-`TASK_ACCESS_CHECK` listener that grants view access does so only for tasks the user may really see.
-`TASK_QUESTION_ACCESS_CHECK` widens the question actions only, never a list.
+What to check: your resolver returns null for a user who may not open the tenant (that is its contract: it is the
+membership check here), and a `TASK_ACCESS_CHECK` listener that grants view access does so only for tasks the user may
+really see. `TASK_QUESTION_ACCESS_CHECK` widens the question actions only, never a list. A resolver that throws
+`InvalidArgumentException` for a key now means "no tenant" in `tenantOfKey()` too.
 
 ## To 2.23.0
 

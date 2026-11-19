@@ -21,8 +21,6 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
-use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
-use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\View\Column;
@@ -181,14 +179,12 @@ final class TaskQuestionController extends AbstractController
     public function mine(Request $request): Response
     {
         $user = $this->requireUser();
-        // Since 2.23.1 (Beacon request): a tenant copy of this page whose tenant does not resolve for the user (unknown, or
-        // one they are not a member of), or whose boards the tenant-aware access checker does not let them list, is 404.
-        // 2.23.0 read it as "no tenant" and listed the questions of every board.
+        // Since 2.23.1 (Beacon request, audit UG): a tenant copy of this page whose tenant does not resolve for the user
+        // (unknown, or one the resolver does not open to them) is 404; 2.23.0 read it as "no tenant" and listed the
+        // questions of every board. A tenant that resolves lists its rows the user may see, whether or not the user may
+        // list that tenant's boards (canListBoards() is the index's decision; a sharee of one board is not refused here).
         if ($this->tenantContext?->isTenantRequest() === true) {
-            $tenant = $this->tenantContext->require($user);
-            if ($tenant instanceof TaskBoardTenant && $this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface && !$this->accessChecker->canListBoards($user, $tenant->key)) {
-                throw new NotFoundHttpException('Tenant not found.');
-            }
+            $this->tenantContext->require($user);
         }
         $tab     = $request->query->get('tab') === TaskQuestionView::TAB_ASKED ? TaskQuestionView::TAB_ASKED : TaskQuestionView::TAB_TO_ANSWER;
         $rows    = $this->view->mine($tab);

@@ -1689,8 +1689,8 @@ right-click menu); each question card shows its options, the answer form for its
 the list filter has *Waiting for answer*, and **My open questions** (`routes.my_questions`, default
 `/tools/task-board/questions`) lists, in two tabs, the open questions addressed to the viewer and the ones they asked,
 on every board they may see (inside a tenant URL: that tenant's boards). Since 2.23.1 it denies by default under
-tenancy: a tenant URL whose tenant does not resolve for the viewer (or that `canListBoards()` refuses) answers 404, and
-outside a tenant URL only boards of tenants the resolver opens to the viewer by key count ([SECURITY](SECURITY.md)).
+tenancy: a tenant URL whose tenant does not resolve for the viewer answers 404, and outside a tenant URL only boards of
+tenants the resolver opens to the viewer by key count; every row needs `canViewTask()` ([SECURITY](SECURITY.md)).
 A dashboard includes the same list:
 
 ```twig

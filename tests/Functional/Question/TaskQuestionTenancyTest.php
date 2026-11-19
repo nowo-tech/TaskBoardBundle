@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
@@ -33,8 +35,8 @@ use function sort;
  * open questions of every board their access checks let through: with a host that grants view access by its own rules, a
  * non-member of a project got a 200 listing that project's questions.
  *
- * Tenants: `acme` (owner and bob), `globex` (bob), `hidden` (bob; refused by the tenant-aware checker's list decision in
- * {@see self::testATenantTheCheckerDoesNotListIs404()}), `other` (nobody). dave is a member of none.
+ * Tenants: `acme` (owner and bob), `globex` (bob), `hidden` (bob; refused by the tenant-aware checker's board list in
+ * {@see self::testAShareeSeesTheirQuestionsInATenantTheyMayNotList()}), `other` (nobody). dave is a member of none.
  */
 final class TaskQuestionTenancyTest extends QuestionTestCase
 {
@@ -124,20 +126,46 @@ final class TaskQuestionTenancyTest extends QuestionTestCase
         self::assertSame([$roadmap->getId()], array_map(static fn (TaskQuestion $q): string => $q->getId(), $this->mineAt($this->bob, 'acme')));
         // The Questions section of a task the viewer may not see, rendered by a host template: none.
         self::assertNull($this->atRequest(null, fn (): ?array => $this->viewAs($this->bob)->section($hidden->getTask())));
+        // With tenancy, a board without a tenant is in no tenant the viewer may open, even their own board.
+        self::assertNull($this->atRequest(null, fn (): ?array => $this->viewAs($this->bob)->section($global->getTask())));
+        // On the tenant's page, the request's own tenant.
+        self::assertNotNull($this->atRequest('acme', fn (): ?array => $this->viewAs($this->bob)->section($this->task)));
     }
 
-    public function testATenantTheCheckerDoesNotListIs404(): void
+    /**
+     * Audit UG-1: a sharee — a participant of a task on a board of a tenant the resolver opens to them but whose board list
+     * the tenant-aware checker refuses (Beacon: someone else's general tenant) — sees their question on the global page,
+     * in the widget and on that tenant's page; `canListBoards()` decides the board index only. A non-member still gets
+     * nothing, even with a host that grants everything.
+     */
+    public function testAShareeSeesTheirQuestionsInATenantTheyMayNotList(): void
     {
         self::$taskBoardConfig = self::config() + ['security' => ['access_checker' => 'app.tenant_create_checker']];
         self::ensureKernelShutdown();
         $this->setUp();
-        $this->direct($this->task($this->board('Hidden tenant', creator: $this->bob, tenantKey: TenantCreateChecker::UNLISTED_TENANT), 'Hidden task'), $this->bob, $this->owner);
+        $carol  = $this->user('carol@example.com');
+        $shared = $this->task($this->board('Shared', creator: $carol, tenantKey: TenantCreateChecker::UNLISTED_TENANT), 'Shared task');
+        $shared->addMember(new TaskMember($shared, $this->bob, TaskMemberRole::Assignee));
+        $this->em->flush();
+        $question = $this->direct($shared, $this->bob, $carol);
+        // dave: a recipient of the same board, member of no tenant.
+        $dave = $this->user('dave@example.com');
+        $this->direct($shared, $dave, $carol);
         $this->login($this->bob);
 
+        self::assertContains($question->getId(), $this->rows('/tools/task-board/questions'));
+        self::assertSame([$question->getId()], $this->rows('/t/' . TenantCreateChecker::UNLISTED_TENANT . '/questions'));
+        self::assertContains($question->getId(), array_map(static fn (TaskQuestion $q): string => $q->getId(), $this->mineAt($this->bob, null)));
+        self::assertSame([$question->getId()], array_map(static fn (TaskQuestion $q): string => $q->getId(), $this->mineAt($this->bob, TenantCreateChecker::UNLISTED_TENANT)));
+        self::assertNotNull($this->atRequest(null, fn (): ?array => $this->viewAs($this->bob)->section($shared)));
+
+        $this->grantEverything();
+        $this->login($dave);
         $this->client->request('GET', '/t/' . TenantCreateChecker::UNLISTED_TENANT . '/questions');
         self::assertResponseStatusCodeSame(404);
         self::assertSame([], $this->rows('/tools/task-board/questions'));
-        self::assertSame([], $this->mineAt($this->bob, TenantCreateChecker::UNLISTED_TENANT));
+        self::assertSame([], $this->mineAt($dave, null));
+        self::assertNull($this->atRequest(null, fn (): ?array => $this->viewAs($dave)->section($shared)));
     }
 
     /** @return array<string, mixed> */

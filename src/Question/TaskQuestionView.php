@@ -14,9 +14,7 @@ use Nowo\TaskBoardBundle\Form\TaskQuestionAnswerFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionWithdrawFormType;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
-use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
-use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -75,14 +73,12 @@ final readonly class TaskQuestionView
         private ?TaskQuestionExternalAnswerInterface $externalAnswers = null,
         private ?TaskBoardTenantContext $tenantContext = null,
         private ClockInterface $clock = new NativeClock(),
-        // Since 2.23.1: the tenant list decision of a tenant-aware checker ({@see self::mine()}).
-        private ?TaskBoardAccessCheckerInterface $accessChecker = null,
     ) {
     }
 
     /**
      * The *Questions* section of `$task` for the signed-in viewer; null without one, or (since 2.23.1) when they may not
-     * see the task.
+     * see the task or, with tenancy, open its tenant.
      *
      * @param array<string, string> $routeExtra extra route parameters of the page (`_target_path` of a drawer)
      *
@@ -91,8 +87,9 @@ final readonly class TaskQuestionView
     public function section(Task $task, array $routeExtra = []): ?array
     {
         $user = $this->user();
-        // Since 2.23.1: a viewer who may not see the task gets no section, whoever renders it (a host template too).
-        if (!$user instanceof UserInterface || !$this->access->canViewTask($user, $task)) {
+        // Since 2.23.1: a viewer who may not see the task, or (with tenancy) whose tenant is not one they may open, gets no
+        // section, whoever renders it (a host template too).
+        if (!$user instanceof UserInterface || !$this->inOpenTenant($user, $task) || !$this->access->canViewTask($user, $task)) {
             return null;
         }
         $questions = $this->query->forTask($task);
@@ -141,14 +138,16 @@ final readonly class TaskQuestionView
      * they may see — inside a tenant URL that tenant's only — re-checked row by row, so a row the viewer may not see never
      * counts.
      *
-     * Since 2.23.1 (Beacon request; 2.23.0 widened to every board): deny by default.
+     * Since 2.23.1 (Beacon request, audit UG; 2.23.0 widened to every board): with tenancy, deny by default.
      * - A request that names a tenant ({@see TaskBoardTenantContext::isTenantRequest()}) which does not resolve for the
-     *   viewer (unknown, or one they are not a member of) gives no rows; the page answers 404 before asking. A tenant the
-     *   host's tenant-aware access checker does not let the viewer list gives none either.
-     * - Outside a tenant URL with tenancy on, a row counts only when its board's tenant is one the viewer may open
-     *   ({@see TaskBoardTenantContext::tenantOfKey()}, as the Task API) and list; a board without a tenant never counts.
+     *   viewer (unknown, or one the resolver does not open to them) gives no rows; the page answers 404 before asking.
+     * - A request whose tenant resolves lists that tenant's rows only.
+     * - Outside a tenant URL, a row counts only when its board's tenant is one the resolver opens to the viewer
+     *   ({@see TaskBoardTenantContext::tenantOfKey()}, the Task API's rule); a board without a tenant never counts.
      * - Every row also needs the view access of its task ({@see TaskBoardResourceAccessChecker::canViewTask()}).
-     *   TASK_QUESTION_ACCESS_CHECK is not asked here: it decides the question actions, never what is listed.
+     *   The board-list decision (`canListBoards()`) is not asked: a user who may open a shared board of a tenant whose
+     *   board list they may not see (a sharee) still sees their questions there. TASK_QUESTION_ACCESS_CHECK is not asked
+     *   either: it decides the question actions, never what is listed.
      *
      * @return list<TaskQuestion>
      */
@@ -160,7 +159,7 @@ final readonly class TaskQuestionView
         }
         $context = $this->tenantContext?->isEnabled() === true ? $this->tenantContext : null;
         $tenant  = $context?->current($user);
-        if ($context instanceof TaskBoardTenantContext && $context->isTenantRequest() && (!$tenant instanceof TaskBoardTenant || !$this->mayListTenant($user, $tenant->key))) {
+        if ($context instanceof TaskBoardTenantContext && $context->isTenantRequest() && !$tenant instanceof TaskBoardTenant) {
             return [];
         }
         $candidates = $tab === self::TAB_ASKED
@@ -179,7 +178,7 @@ final readonly class TaskQuestionView
                 if ($key === null) {
                     return false;
                 }
-                $tenants[$key] ??= $context->tenantOfKey($key, $user) instanceof TaskBoardTenant && $this->mayListTenant($user, $key);
+                $tenants[$key] ??= $context->tenantOfKey($key, $user) instanceof TaskBoardTenant;
                 if (!$tenants[$key]) {
                     return false;
                 }
@@ -192,12 +191,21 @@ final readonly class TaskQuestionView
     }
 
     /**
-     * Since 2.23.1: the tenant list decision of a {@see TenantAwareTaskBoardAccessCheckerInterface} (true for another
-     * checker, which knows no tenant).
+     * Since 2.23.1 (audit UG-3): with tenancy, whether the task's tenant is one the viewer may open — the request's own
+     * tenant, or one the resolver opens to them by key. A board without a tenant is in none.
      */
-    private function mayListTenant(UserInterface $user, string $tenantKey): bool
+    private function inOpenTenant(UserInterface $user, Task $task): bool
     {
-        return !$this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface || $this->accessChecker->canListBoards($user, $tenantKey);
+        $context = $this->tenantContext;
+        if ($context?->isEnabled() !== true) {
+            return true;
+        }
+        $key = $task->getBoard()->getTenantKey();
+        if ($key === null) {
+            return false;
+        }
+
+        return $context->current($user)?->key === $key || $context->tenantOfKey($key, $user) instanceof TaskBoardTenant;
     }
 
     /**

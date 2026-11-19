@@ -132,14 +132,20 @@ final readonly class TaskBoardTenantContext
 
     /**
      * Since 2.1.0 (spec 214): the tenant whose key is `$key`, when `$user` may open it. The resolver works by slug, so this
-     * knows a tenant whose slug equals its key; any other answers null.
+     * knows a tenant whose slug equals its key; any other answers null, and so does a key the resolver refuses with
+     * an InvalidArgumentException (since 2.23.1).
      */
     public function tenantOfKey(string $key, object $user): ?TaskBoardTenant
     {
         if (!$this->enabled || !ExactKey::isUsable($key)) {
             return null;
         }
-        $tenant = $this->resolver->resolve($key, $user);
+        // Since 2.23.1 (audit UG-2): a resolver that refuses the key answers none, as for a slug (resolveExactly()).
+        try {
+            $tenant = $this->resolver->resolve($key, $user);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
 
         return $tenant instanceof TaskBoardTenant && $tenant->key === $key ? $tenant : null;
     }
