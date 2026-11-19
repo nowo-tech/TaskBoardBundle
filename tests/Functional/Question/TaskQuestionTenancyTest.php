@@ -86,7 +86,7 @@ final class TaskQuestionTenancyTest extends QuestionTestCase
 
         $this->client->request('GET', '/t/acme/questions');
         self::assertResponseStatusCodeSame(404);
-        self::assertStringNotContainsString('Direct question', (string) $this->client->getResponse()->getContent());
+        self::assertSelectorNotExists('[data-testid="nowo-task-my-questions"]');
 
         $crawler = $this->client->request('GET', '/tools/task-board/questions');
         self::assertResponseIsSuccessful();
