@@ -21,6 +21,8 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\View\Column;
@@ -178,7 +180,16 @@ final class TaskQuestionController extends AbstractController
     #[Route('/tools/task-board/questions', name: 'nowo_task_board_my_questions', methods: ['GET'])]
     public function mine(Request $request): Response
     {
-        $this->requireUser();
+        $user = $this->requireUser();
+        // Since 2.23.1 (Beacon request): a tenant copy of this page whose tenant does not resolve for the user (unknown, or
+        // one they are not a member of), or whose boards the tenant-aware access checker does not let them list, is 404.
+        // 2.23.0 read it as "no tenant" and listed the questions of every board.
+        if ($this->tenantContext?->isTenantRequest() === true) {
+            $tenant = $this->tenantContext->require($user);
+            if ($tenant instanceof TaskBoardTenant && $this->accessChecker instanceof TenantAwareTaskBoardAccessCheckerInterface && !$this->accessChecker->canListBoards($user, $tenant->key)) {
+                throw new NotFoundHttpException('Tenant not found.');
+            }
+        }
         $tab     = $request->query->get('tab') === TaskQuestionView::TAB_ASKED ? TaskQuestionView::TAB_ASKED : TaskQuestionView::TAB_TO_ANSWER;
         $rows    = $this->view->mine($tab);
         $perPage = (int) $request->query->get('per_page', (string) $this->perPage);

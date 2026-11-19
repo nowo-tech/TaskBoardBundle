@@ -4,6 +4,9 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.23.1](#to-2231)
+  - [MySQL 9: the recipients table](#mysql-9-the-recipients-table)
+  - [My open questions under tenancy](#my-open-questions-under-tenancy)
 - [To 2.23.0](#to-2230)
   - [Questions on tasks (opt-in)](#questions-on-tasks-opt-in)
   - [API conflicts and replays (audit SU-2)](#api-conflicts-and-replays-audit-su-2)
@@ -213,6 +216,59 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
+## To 2.23.1
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+A patch for **questions on tasks** (`task_questions.enabled`). Nothing changes with the feature off. No new option.
+
+### MySQL 9: the recipients table
+
+`EXTERNAL` is a reserved word in MySQL 9.x. 2.23.0 mapped `task_board_task_question_recipients.external` without
+quotes, so on MySQL 9 the table could not be created and every query on it failed. 2.23.1 quotes the column in the
+mapping. Its name stays `external` on every platform.
+
+- **MySQL 8.x, MariaDB, PostgreSQL, SQLite: nothing to do.** The table you created with 2.23.0 is the same, and
+  `doctrine:schema:validate` / `doctrine:migrations:diff` show no change.
+- **MySQL 9, where the 2.23.0 migration failed.** MySQL does not roll back DDL, so a failed run of the generated
+  migration usually left `task_board_task_question_answers` and `task_board_task_question_options` (empty) and created
+  neither `task_board_task_question_recipients` nor `task_board_task_questions`. Doctrine Migrations did not record the
+  migration as executed. Either:
+  1. drop the tables it left (`SHOW TABLES LIKE 'task_board_task_question%'`; they hold no rows), put backticks around
+     `external` in your migration's `CREATE TABLE task_board_task_question_recipients` (or delete the migration and
+     generate it again with 2.23.1: `doctrine:migrations:diff`), then run `doctrine:migrations:migrate`; or
+  2. run the statements that did not run yourself, from the MySQL block in [To 2.23.0](#to-2230) (now quoted), and mark
+     the migration as executed (`doctrine:migrations:version --add <version>`). The statement that failed is, for MySQL 9:
+
+```sql
+CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, label VARCHAR(180) NOT NULL, `external` TINYINT NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, INDEX idx_task_board_task_question_recipients_subject (subject_id), UNIQUE INDEX uniq_task_board_task_question_recipients_subject (question_id, subject_id), INDEX IDX_CB24A4371E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_task_question_recipients ADD CONSTRAINT FK_CB24A4371E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE;
+```
+
+  (The foreign key needs `task_board_task_questions` first; with `table_prefix` other than `task_board_`, the names
+  follow it.) A hand-written query on this table must quote the column too: `` `external` `` on MySQL / MariaDB,
+  `"external"` on PostgreSQL (or `$connection->quoteIdentifier('external')`).
+
+### My open questions under tenancy
+
+Security fix (see CHANGELOG). With `tenancy.enabled`, *My open questions* now denies by default:
+
+- a tenant copy of the page (`<tenant path>/questions`) whose `{tenantSlug}` your tenant resolver does not resolve for
+  the user answers **404** (2.23.0: a 200 listing every board's questions the access checks let through), and so does a
+  tenant your tenant-aware checker's `canListBoards()` refuses; `nowo_task_board_my_questions()` on such a request
+  returns no rows;
+- outside a tenant URL, a row counts only when its board's tenant is one your resolver opens to the user when asked by
+  key (`TaskBoardTenantContext::tenantOfKey()`, as the Task API) and `canListBoards()` allows; a board without a tenant
+  is never listed there. If your tenants' slugs differ from their keys, the global page lists nothing under tenancy
+  (as the Task API's `GET /v2/user/question`): link to the tenant pages instead.
+
+What to check: your resolver returns null for a user who is not a member of the tenant (that is its contract), and a
+`TASK_ACCESS_CHECK` listener that grants view access does so only for tasks the user may really see.
+`TASK_QUESTION_ACCESS_CHECK` widens the question actions only, never a list.
+
 ## To 2.23.0
 
 ```bash
@@ -247,7 +303,7 @@ MySQL / MariaDB (the subject ids are compared byte for byte, so they get the bin
 ```sql
 CREATE TABLE task_board_task_question_answers (id VARCHAR(36) NOT NULL, answered_by_name VARCHAR(180) DEFAULT NULL, superseded_at DATETIME DEFAULT NULL, superseded_by_id VARCHAR(36) DEFAULT NULL, answer_number INT NOT NULL, selected_option_ids JSON NOT NULL, other_text LONGTEXT DEFAULT NULL, answered_by_subject VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, via VARCHAR(8) NOT NULL, answered_at DATETIME NOT NULL, question_id VARCHAR(36) NOT NULL, answered_by_id INT DEFAULT NULL, INDEX idx_task_board_task_question_answers_question (question_id, answer_number), INDEX IDX_C7EEDECC1E27F6BF (question_id), INDEX IDX_C7EEDECC2FC55A77 (answered_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
 CREATE TABLE task_board_task_question_options (id VARCHAR(36) NOT NULL, position SMALLINT NOT NULL, label VARCHAR(120) NOT NULL, description VARCHAR(500) DEFAULT NULL, recommended TINYINT NOT NULL, question_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_task_question_options_position (question_id, position), INDEX IDX_470BE24D1E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
-CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, label VARCHAR(180) NOT NULL, external TINYINT NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, INDEX idx_task_board_task_question_recipients_subject (subject_id), UNIQUE INDEX uniq_task_board_task_question_recipients_subject (question_id, subject_id), INDEX IDX_CB24A4371E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, label VARCHAR(180) NOT NULL, `external` TINYINT NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, INDEX idx_task_board_task_question_recipients_subject (subject_id), UNIQUE INDEX uniq_task_board_task_question_recipients_subject (question_id, subject_id), INDEX IDX_CB24A4371E27F6BF (question_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
 CREATE TABLE task_board_task_questions (id VARCHAR(36) NOT NULL, state VARCHAR(10) NOT NULL, asked_by_name VARCHAR(180) DEFAULT NULL, current_answer_id VARCHAR(36) DEFAULT NULL, answered_at DATETIME DEFAULT NULL, withdrawn_by_name VARCHAR(180) DEFAULT NULL, withdrawn_at DATETIME DEFAULT NULL, withdraw_reason VARCHAR(500) DEFAULT NULL, published_url VARCHAR(2048) DEFAULT NULL, published_label VARCHAR(180) DEFAULT NULL, published_at DATETIME DEFAULT NULL, version INT DEFAULT 1 NOT NULL, question_text VARCHAR(500) NOT NULL, context LONGTEXT DEFAULT NULL, choice_mode VARCHAR(8) NOT NULL, allow_other TINYINT NOT NULL, asked_at DATETIME NOT NULL, due_on DATE DEFAULT NULL, task_id VARCHAR(36) NOT NULL, asked_by_id INT DEFAULT NULL, withdrawn_by_id INT DEFAULT NULL, INDEX idx_task_board_task_questions_task_state (task_id, state), INDEX idx_task_board_task_questions_state_due (state, due_on), INDEX IDX_3FEF3BF38DB60186 (task_id), INDEX IDX_3FEF3BF34F7A72E4 (asked_by_id), INDEX IDX_3FEF3BF389BE4D2E (withdrawn_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
 ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC1E27F6BF FOREIGN KEY (question_id) REFERENCES task_board_task_questions (id) ON DELETE CASCADE;
 ALTER TABLE task_board_task_question_answers ADD CONSTRAINT FK_C7EEDECC2FC55A77 FOREIGN KEY (answered_by_id) REFERENCES <user table> (id) ON DELETE SET NULL;
@@ -268,7 +324,7 @@ CREATE INDEX IDX_C7EEDECC2FC55A77 ON task_board_task_question_answers (answered_
 CREATE TABLE task_board_task_question_options (id VARCHAR(36) NOT NULL, position SMALLINT NOT NULL, label VARCHAR(120) NOT NULL, description VARCHAR(500) DEFAULT NULL, recommended BOOLEAN NOT NULL, question_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
 CREATE UNIQUE INDEX uniq_task_board_task_question_options_position ON task_board_task_question_options (question_id, position);
 CREATE INDEX IDX_470BE24D1E27F6BF ON task_board_task_question_options (question_id);
-CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL, label VARCHAR(180) NOT NULL, external BOOLEAN NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE TABLE task_board_task_question_recipients (id VARCHAR(36) NOT NULL, subject_id VARCHAR(191) NOT NULL, label VARCHAR(180) NOT NULL, "external" BOOLEAN NOT NULL, position SMALLINT NOT NULL, question_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
 CREATE INDEX idx_task_board_task_question_recipients_subject ON task_board_task_question_recipients (subject_id);
 CREATE UNIQUE INDEX uniq_task_board_task_question_recipients_subject ON task_board_task_question_recipients (question_id, subject_id);
 CREATE INDEX IDX_CB24A4371E27F6BF ON task_board_task_question_recipients (question_id);

@@ -117,6 +117,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **MySQL 9: the question recipients table could not be created or read.** `EXTERNAL` is a reserved word in MySQL 9.x,
+  and `task_board_task_question_recipients.external` was not quoted, so `CREATE TABLE` and every query on recipients
+  failed there. The column is now quoted in the mapping (attributes and XML: `` `external` ``) and in the documented DDL
+  and the demo migration. Its name does not change on any platform (lowercase, so PostgreSQL's quoted identifier is the
+  same column; SQLite and MariaDB alike): tables created on MySQL 8.x, MariaDB or PostgreSQL keep working and need no
+  migration. A host on MySQL 9 whose 2.23.0 migration failed creates the table with the reference SQL in UPGRADING.
+  No other column of the bundle is a MySQL 9 reserved word (checked against `information_schema.KEYWORDS` of 9.7).
+  CI runs the functional suite on MySQL 9.7 too.
+
+### Security
+
+- **My open questions under tenancy: an unresolved tenant no longer widens to every board.** On a tenant copy of the
+  page (e.g. `/projects/{uuid}/tasks/questions`) whose `{tenantSlug}` the tenant resolver does not resolve for the
+  viewer (unknown, or a tenant they are not a member of), 2.23.0 read the request as "no tenant" and listed the open
+  questions addressed to or asked by the viewer on every board the access checks let through; with a host whose
+  `TASK_ACCESS_CHECK` listener grants view access by its own rules, a non-member got a 200 with questions of boards they
+  cannot open. Now (deny by default):
+  - the tenant page answers 404 when the tenant does not resolve, or when a tenant-aware access checker's
+    `canListBoards()` refuses it; a host widget (`nowo_task_board_my_questions()`) on such a request shows no rows;
+  - outside a tenant URL with tenancy on, a row counts only when its board's tenant is one the resolver opens to the
+    viewer (`tenantOfKey()`, as the Task API already did) and the checker lets them list; a board without a tenant never
+    counts there;
+  - every row still needs `canViewTask()`; `TASK_QUESTION_ACCESS_CHECK` decides the question actions only, never a list;
+  - the Questions section (`nowo_task_board_questions()`) is empty for a viewer who may not see the task, whoever
+    renders it.
+  The Task API (`GET /v2/user/question`) already checked each board's tenant and is unchanged. Affected: 2.23.0 only,
+  with `task_questions.enabled` and `tenancy.enabled`. New `TaskBoardTenantContext::isTenantRequest()`.
+
 ## [2.23.0] - 2026-11-19
 
 ### Added

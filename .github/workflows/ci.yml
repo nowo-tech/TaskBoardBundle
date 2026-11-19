@@ -146,6 +146,47 @@ jobs:
           SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
         run: composer test -- --testsuite functional
 
+  # Since 2.23.1: MySQL 9 (EXTERNAL and LIBRARY became reserved words in 9.x). The whole functional suite, so the schema
+  # creation and the task questions run there, beside MySQL 8.4 LTS.
+  mysql9:
+    name: Functional + repository tests on MySQL 9
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:9.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: task_board_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - name: Checkout TaskBoardBundle
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json, pdo_mysql
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies (Symfony 7.4)
+        run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      - name: Run the functional suite against MySQL 9
+        env:
+          TASK_BOARD_TEST_DATABASE_URL: mysql://root:root@127.0.0.1:3306/task_board_test?serverVersion=9.7.0&charset=utf8mb4
+          SYMFONY_DEPRECATIONS_HELPER: max[direct]=0
+        run: composer test -- --testsuite functional
+
   mariadb:
     name: Functional + repository tests on MariaDB
     runs-on: ubuntu-latest

@@ -53,6 +53,19 @@ final readonly class TaskBoardTenantContext
     }
 
     /**
+     * Since 2.23.1 (Beacon request, audit of 2.23.0): whether the current request names a tenant (a `{tenantSlug}` route
+     * attribute) with tenancy on, whether or not that slug resolves for the user. A caller that scopes a list to the
+     * request's tenant checks this first: a request that names a tenant which does not resolve must be refused (404),
+     * never read as "no tenant" (every board).
+     */
+    public function isTenantRequest(): bool
+    {
+        $request = $this->requestStack->getCurrentRequest();
+
+        return $this->enabled && $request instanceof Request && is_string($request->attributes->get('tenantSlug'));
+    }
+
+    /**
      * The tenant of the current request for `$user`; null without tenancy, outside a tenant URL or for a slug the
      * resolver refuses.
      */

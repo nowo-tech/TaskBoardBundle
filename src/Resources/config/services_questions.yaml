@@ -28,6 +28,8 @@ services:
             $routes: '%nowo_task_board.routes%'
             $tokenStorage: '@?security.token_storage'
             $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
+            # Since 2.23.1: the tenant list decision of a tenant-aware checker (My open questions).
+            $accessChecker: '@Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface'
 
     Nowo\TaskBoardBundle\Controller\TaskQuestionController:
         public: true

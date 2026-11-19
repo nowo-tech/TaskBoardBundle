@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
+use Nowo\TaskBoardBundle\Question\TaskQuestionChoiceMode;
 use Nowo\TaskBoardBundle\Question\TaskQuestionState;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
@@ -207,6 +210,28 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         $crawler = $this->client->request('GET', '/tools/task-board/questions?tab=asked');
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
         self::assertNotNull($hidden->getId());
+    }
+
+    /**
+     * Since 2.23.1: without tenancy too, My open questions lists only the questions of tasks the viewer may see — a
+     * question addressed to bob on a board he may not open (carol's) never shows, to answer or as a count.
+     */
+    public function testMyOpenQuestionsLeaveOutTheBoardsTheViewerMayNotSee(): void
+    {
+        $visible = $this->ask();
+        $carol   = $this->user('carol@example.com');
+        $secret  = $this->task($this->board('Secret', creator: $carol), 'Secret task');
+        $hidden  = new TaskQuestion($secret, 'Secret question', null, TaskQuestionChoiceMode::Single, true, $carol, new DateTimeImmutable());
+        $hidden->addRecipient(new TaskQuestionRecipient($hidden, $this->subject($this->bob), 'bob', false, 0));
+        $this->em->persist($hidden);
+        $this->em->flush();
+        $this->login($this->bob);
+
+        $crawler = $this->client->request('GET', '/tools/task-board/questions');
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
+        self::assertStringContainsString($visible->getId(), (string) $crawler->filter('[data-testid="nowo-task-my-question-link"]')->attr('href'));
+        self::assertStringNotContainsString('Secret question', (string) $this->client->getResponse()->getContent());
     }
 
     /** @return array<string, list<string>> */

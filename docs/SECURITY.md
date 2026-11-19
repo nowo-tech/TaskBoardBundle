@@ -337,6 +337,15 @@ record the rollback removed. The answer names no table, SQL or parameter; the lo
   question: 404) and let `TaskQuestionManager` check the right again (`canAskQuestion()`, `canAnswerQuestion()`,
   `canWithdrawQuestion()`, `canPublishDecision()`; refused: 403). The Task API goes through `TaskApiGuard` (reach,
   tenant, plan, level) first: a question out of reach is `404 ACCESS_001` like an unknown one.
+- **My open questions deny by default (since 2.23.1).** A tenant copy of the page (or of a host widget calling
+  `nowo_task_board_my_questions()`) whose `{tenantSlug}` does not resolve for the viewer — unknown, or a tenant the
+  resolver does not open to them — answers 404 (the widget: no rows); a tenant the tenant-aware checker's
+  `canListBoards()` refuses answers 404 too. Outside a tenant URL with tenancy on, a row counts only when its board's
+  tenant is one `tenantOfKey()` opens to the viewer (as the Task API) and the checker lets them list; a board without a
+  tenant never counts. Every row needs `canViewTask()` as well. 2.23.0 read an unresolved tenant as "no tenant" and listed
+  the questions of every board the access checks let through (CHANGELOG, Security).
+  `TASK_QUESTION_ACCESS_CHECK` decides the question actions only, never what a list shows. The Questions section
+  (`nowo_task_board_questions()`) is empty for a viewer who may not see the task, whoever renders it.
 - **Recipients are opaque ids from the host** (`TaskQuestionRecipientResolverInterface`); an ask may only name ids the
   resolver offers for that task and asker, compared byte for byte (binary NO PAD collation on MySQL / MariaDB,
   `TaskBoardMetadataListener::KEY_FIELDS`; rows read back are compared with `===`). A look-alike id is refused, never

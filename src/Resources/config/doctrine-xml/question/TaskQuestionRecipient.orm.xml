@@ -13,7 +13,7 @@
         <id name="id" type="string" length="36"/>
         <field name="subjectId" type="string" column="subject_id" length="191"/>
         <field name="label" type="string" length="180"/>
-        <field name="external" type="boolean"/>
+        <field name="external" type="boolean" column="`external`"/>
         <field name="position" type="smallint"/>
         <many-to-one field="question" target-entity="Nowo\TaskBoardBundle\Question\Entity\TaskQuestion" inversed-by="recipients">
             <join-column name="question_id" nullable="false" on-delete="CASCADE"/>

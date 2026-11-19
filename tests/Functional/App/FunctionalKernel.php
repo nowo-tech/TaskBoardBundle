@@ -126,6 +126,8 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.question_links', ScriptedQuestionLinks::class)->public();
         $container->services()->set('app.question_recipients', ScriptedQuestionRecipients::class)->autowire()->public();
         $container->services()->set('app.switchable_provenance', SwitchableWriteProvenance::class);
+        // Since 2.23.1: a tenant resolver that opens a tenant to its members only (My open questions under tenancy).
+        $container->services()->set('app.member_tenant_resolver', MemberTenantResolver::class);
         // Since 2.5.0 (TB-17): the help link's URL from the host.
         $container->services()->set('app.help_link_urls', ManualHelpLinkUrls::class);
         // Since 2.12.0: the host's billable default and period lock of manual entries (none until a test sets them).

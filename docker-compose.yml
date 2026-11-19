@@ -23,6 +23,19 @@ services:
       timeout: 5s
       retries: 30
 
+  # Since 2.23.1: MySQL 9 (EXTERNAL and LIBRARY are reserved words there).
+  mysql9:
+    profiles: ["db"]
+    image: mysql:9.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: task_board_test
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   postgres:
     profiles: ["db"]
     image: postgres:16-alpine
