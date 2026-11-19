@@ -167,6 +167,7 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertTrue($tasks->sensitive(), 'tasks are sensitive by default');
         self::assertFalse($boards->sensitive());
         self::assertTrue($tasks->applyScope($tasks->baseQuery('*', $query), 'board:1', '*', $query));
+        self::assertTrue($boards->applyScope($boards->baseQuery('*', $query), 'board:1', '*', $query));
 
         self::assertSame('0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b', $tasks->referenceId(new SearchReference('/tools/task-board/task/x', 'tasks', 'nowo_task_board_task', ['taskId' => '0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b'])));
         self::assertNull($tasks->referenceId(new SearchReference('/x', 'tasks', 'other_route', ['taskId' => 't1'])));

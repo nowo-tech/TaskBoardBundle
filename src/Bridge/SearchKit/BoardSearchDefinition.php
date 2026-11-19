@@ -8,6 +8,7 @@ use Doctrine\ORM\QueryBuilder;
 use LogicException;
 use Nowo\SearchKitBundle\Model\SearchItem;
 use Nowo\SearchKitBundle\Model\SearchQuery;
+use Nowo\SearchKitBundle\Provider\Entity\SearchCandidateContext;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
@@ -53,6 +54,17 @@ final class BoardSearchDefinition extends TaskBoardSearchDefinition
 
     public function baseQuery(int|string $tenant, SearchQuery $query): QueryBuilder
     {
+        return $this->query($query, null);
+    }
+
+    /** SearchKit >= 1.11: the same query; a board scan that stopped at its bound marks the search partial (an inexact total). */
+    public function candidateQuery(int|string $tenant, SearchQuery $query, SearchCandidateContext $context): QueryBuilder
+    {
+        return $this->query($query, $context);
+    }
+
+    private function query(SearchQuery $query, ?SearchCandidateContext $context): QueryBuilder
+    {
         $qb = $this->entityManager->createQueryBuilder()
             ->select('b')
             ->from(TaskBoard::class, 'b')
@@ -60,7 +72,11 @@ final class BoardSearchDefinition extends TaskBoardSearchDefinition
             ->orderBy('b.updatedAt', 'DESC')
             ->addOrderBy('b.id', 'ASC');
         $viewer = $this->viewer($query);
-        $boards = $viewer instanceof SearchViewer ? $this->scope->boards($viewer, SearchScopeEvent::GROUP_BOARDS, SearchText::words($query->text))->ids() : [];
+        $scope  = $viewer instanceof SearchViewer ? $this->scope->boards($viewer, SearchScopeEvent::GROUP_BOARDS, SearchText::words($query->text)) : null;
+        if ($scope?->capped === true) {
+            $context?->markPartial();
+        }
+        $boards = $scope?->ids() ?? [];
 
         return $boards === [] ? $qb->andWhere('1 = 0') : $qb->andWhere('b.id IN (:taskBoardIds)')->setParameter('taskBoardIds', $boards);
     }

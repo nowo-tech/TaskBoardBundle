@@ -8,6 +8,7 @@ use Nowo\SearchKitBundle\Model\SearchReference;
 use Nowo\SearchKitBundle\Provider\Entity\EntitySearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 
 /**
  * Since 2.25.0: SearchKit's provider contract for the `tasks` group. Hidden rows are tasks TASK_ACCESS_CHECK denies;
@@ -23,6 +24,29 @@ final class TaskSearchContractTest extends TaskBoardSearchKitTestCase
     /** Audit Q2: task titles and excerpts may hold personal data (`search_kit.tasks.sensitive`, default true). */
     protected function sensitiveTitles(): bool
     {
+        return true;
+    }
+
+    /** The board bound of these searches: three visible boards (`search_kit.max_boards`), so seedBeyondTheBound() can pass it. */
+    protected function kernelConfig(): array
+    {
+        return ['search_kit' => ['max_boards' => 3]];
+    }
+
+    /**
+     * SearchKit >= 1.11: four more boards of the tenant, each with a matching task, pass the three-board bound of the scope:
+     * the search is partial (markPartial()). The other contract tests use one board per tenant.
+     */
+    protected function seedBeyondTheBound(int|string $tenant, string $text): bool
+    {
+        for ($i = 0; $i < 4; ++$i) {
+            $board = new TaskBoard('Bound ' . $i, 'bound-' . $i, $this->users[self::VIEWER_A]);
+            $board->setTenantKey((string) $tenant);
+            $this->em->persist($board);
+            $this->em->persist(new Task($board, $text . 'b' . $i, $this->users[self::VIEWER_A]));
+        }
+        $this->em->flush();
+
         return true;
     }
 
