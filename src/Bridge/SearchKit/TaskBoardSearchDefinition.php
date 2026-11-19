@@ -28,6 +28,7 @@ use function implode;
 use function is_string;
 use function max;
 use function min;
+use function preg_match;
 
 /**
  * Since 2.25.0: what the SearchKit groups `tasks` and `boards` share (SearchKit >= 1.9, {@see EntitySearchDefinition}).
@@ -46,6 +47,9 @@ abstract class TaskBoardSearchDefinition extends EntitySearchDefinition
 {
     /** The SearchKit tenant outside a tenant page: the scope is the viewer's boards the SEARCH_SCOPE event allows. */
     public const ANY_TENANT = '*';
+
+    /** The shape of a task or board id (a lower-case UUID). */
+    private const ID_PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/';
 
     /**
      * @param array<string, array{name?: string}> $routes `routes`
@@ -108,7 +112,8 @@ abstract class TaskBoardSearchDefinition extends EntitySearchDefinition
         $id                  = $reference->routeParameters[$parameter] ?? null;
         $bundleRoute         = $this->tenantPaths?->bundleRoute($reference->route) ?? $reference->route;
 
-        return is_string($name) && $bundleRoute === $name && is_string($id) && $id !== '' ? $id : null;
+        // Client input: the route must be the group's and the id a lower-case UUID, as the bundle generates them.
+        return is_string($name) && $bundleRoute === $name && is_string($id) && preg_match(self::ID_PATTERN, $id) === 1 ? $id : null;
     }
 
     /**

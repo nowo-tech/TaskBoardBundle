@@ -6,16 +6,22 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Search\SearchKit;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Nowo\SearchKitBundle\Model\SearchReference;
 use Nowo\SearchKitBundle\Provider\Entity\EntitySearchDefinition;
 use Nowo\SearchKitBundle\Test\EntitySearchProviderTestCase;
 use Nowo\SearchKitBundle\Test\QueryCounter;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 
@@ -53,6 +59,12 @@ abstract class TaskBoardSearchKitTestCase extends EntitySearchProviderTestCase
 
     protected int $seeded = 0;
 
+    /** @var array<string, true> ids the bundle's own access events deny (TASK_ACCESS_CHECK, BOARD_ACCESS_CHECK) */
+    protected array $denied = [];
+
+    /** @var array<string, string> row id => tenant key */
+    protected array $tenantOfRow = [];
+
     /**
      * @param array<string, mixed> $config
      */
@@ -78,6 +90,32 @@ abstract class TaskBoardSearchKitTestCase extends EntitySearchProviderTestCase
         }
         $this->em->flush();
         MemberTenantResolver::$members = [self::TENANT_A => [self::VIEWER_A, self::VIEWER_B], self::TENANT_B => [self::VIEWER_A, self::VIEWER_B]];
+        $this->denied                  = [];
+        $this->tenantOfRow             = [];
+        // The per-row check of the contract's hidden rows: the bundle's own access events, as a host listener answers them.
+        $dispatcher = $this->container()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, function (TaskAccessCheckEvent $event): void {
+            if (isset($this->denied[$event->getTaskId()])) {
+                $event->deny();
+            }
+        });
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, function (BoardAccessCheckEvent $event): void {
+            if (isset($this->denied[$event->getBoardId()])) {
+                $event->deny();
+            }
+        });
+    }
+
+    /** The recent the browser would keep for a seeded row: its page under its tenant, the group, the tenant route. */
+    protected function referenceFor(string $route, string $parameter, int|string $id): SearchReference
+    {
+        $tenant = $this->tenantOfRow[(string) $id];
+        $router = $this->container()->get('router');
+        self::assertInstanceOf(UrlGeneratorInterface::class, $router);
+        $parameters = [$parameter => (string) $id, 'tenantSlug' => $tenant];
+
+        return new SearchReference($router->generate($route, $parameters), $this->definition()->group(), 't_' . $route, $parameters);
     }
 
     protected function setUp(): void

@@ -150,7 +150,7 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertNull($definition->tenant($this->query('tenant')));
         $stack->pop();
 
-        self::assertSame('t1', $definition->referenceId(new SearchReference('/t/acme/task/t1', 'tasks', 't_nowo_task_board_task', ['taskId' => 't1'])));
+        self::assertSame('0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b', $definition->referenceId(new SearchReference('/x', 'tasks', 't_nowo_task_board_task', ['taskId' => '0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b'])));
     }
 
     public function testDescribesItsGroupsAndRecents(): void
@@ -166,10 +166,12 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertSame(100, $tasks->maxCandidates());
         self::assertTrue($tasks->applyScope($tasks->baseQuery('*', $query), 'board:1', '*', $query));
 
-        self::assertSame('t1', $tasks->referenceId(new SearchReference('/tools/task-board/task/t1', 'tasks', 'nowo_task_board_task', ['taskId' => 't1'])));
+        self::assertSame('0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b', $tasks->referenceId(new SearchReference('/tools/task-board/task/x', 'tasks', 'nowo_task_board_task', ['taskId' => '0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b'])));
         self::assertNull($tasks->referenceId(new SearchReference('/x', 'tasks', 'other_route', ['taskId' => 't1'])));
         self::assertNull($tasks->referenceId(new SearchReference('/x', 'tasks', 'nowo_task_board_task', ['taskId' => ''])));
-        self::assertSame('b1', $boards->referenceId(new SearchReference('/tools/task-board/board/b1', 'boards', 'nowo_task_board_board', ['boardId' => 'b1'])));
+        self::assertNull($tasks->referenceId(new SearchReference('/x', 'tasks', 'nowo_task_board_task', ['taskId' => strtoupper('0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b')])));
+        self::assertNull($tasks->referenceId(new SearchReference('/x', 'tasks', 'nowo_task_board_task', ['taskId' => '0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b' . "\n"])));
+        self::assertSame('1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d', $boards->referenceId(new SearchReference('/x', 'boards', 'nowo_task_board_board', ['boardId' => '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'])));
     }
 
     public function testRecentsAreResolvedThroughEveryCheck(): void
