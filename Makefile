@@ -73,17 +73,19 @@ test-coverage: ensure-up
 test-coverage-100: ensure-up
 	$(COMPOSE) exec -T $(SERVICE_PHP) composer test-coverage-100
 
-# REQ-TEST-005: the functional suite (which includes the repository tests) against real MySQL 8.4 and PostgreSQL 16
+# REQ-TEST-005: the functional suite (which includes the repository tests) against real MySQL 8.4, MySQL 9.7 (since 2.23.1) and PostgreSQL 16
 # containers of the root compose file (profile "db"), through TASK_BOARD_TEST_DATABASE_URL like the CI jobs.
 DB_URL_MYSQL    ?= mysql://root:root@mysql:3306/task_board_test?serverVersion=8.4.0&charset=utf8mb4
+DB_URL_MYSQL9   ?= mysql://root:root@mysql9:3306/task_board_test?serverVersion=9.7.0&charset=utf8mb4
 DB_URL_POSTGRES ?= postgresql://postgres:root@postgres:5432/task_board_test?serverVersion=16&charset=utf8
 
 test-with-db: ensure-up
-	$(COMPOSE) --profile db up -d --wait mysql postgres
+	$(COMPOSE) --profile db up -d --wait mysql mysql9 postgres
 	@status=0; \
 	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_MYSQL)' $(SERVICE_PHP) vendor/bin/phpunit --testsuite functional --no-coverage || status=$$?; \
+	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_MYSQL9)' $(SERVICE_PHP) vendor/bin/phpunit --testsuite functional --no-coverage || status=$$?; \
 	$(COMPOSE) exec -T -e TASK_BOARD_TEST_DATABASE_URL='$(DB_URL_POSTGRES)' $(SERVICE_PHP) vendor/bin/phpunit --testsuite functional --no-coverage || status=$$?; \
-	$(COMPOSE) --profile db stop mysql postgres; exit $$status
+	$(COMPOSE) --profile db stop mysql mysql9 postgres; exit $$status
 
 test-coverage-with-db: ensure-up
 	$(COMPOSE) --profile db up -d --wait mysql

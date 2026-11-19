@@ -53,6 +53,19 @@ final readonly class TaskBoardTenantContext
     }
 
     /**
+     * Since 2.23.1 (Beacon request, audit of 2.23.0): whether the current request names a tenant (a `{tenantSlug}` route
+     * attribute) with tenancy on, whether or not that slug resolves for the user. A caller that scopes a list to the
+     * request's tenant checks this first: a request that names a tenant which does not resolve must be refused (404),
+     * never read as "no tenant" (every board).
+     */
+    public function isTenantRequest(): bool
+    {
+        $request = $this->requestStack->getCurrentRequest();
+
+        return $this->enabled && $request instanceof Request && is_string($request->attributes->get('tenantSlug'));
+    }
+
+    /**
      * The tenant of the current request for `$user`; null without tenancy, outside a tenant URL or for a slug the
      * resolver refuses.
      */
@@ -119,14 +132,20 @@ final readonly class TaskBoardTenantContext
 
     /**
      * Since 2.1.0 (spec 214): the tenant whose key is `$key`, when `$user` may open it. The resolver works by slug, so this
-     * knows a tenant whose slug equals its key; any other answers null.
+     * knows a tenant whose slug equals its key; any other answers null, and so does a key the resolver refuses with
+     * an InvalidArgumentException (since 2.23.1).
      */
     public function tenantOfKey(string $key, object $user): ?TaskBoardTenant
     {
         if (!$this->enabled || !ExactKey::isUsable($key)) {
             return null;
         }
-        $tenant = $this->resolver->resolve($key, $user);
+        // Since 2.23.1 (audit UG-2): a resolver that refuses the key answers none, as for a slug (resolveExactly()).
+        try {
+            $tenant = $this->resolver->resolve($key, $user);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
 
         return $tenant instanceof TaskBoardTenant && $tenant->key === $key ? $tenant : null;
     }

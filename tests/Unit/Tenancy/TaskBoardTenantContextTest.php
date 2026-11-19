@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Tenancy;
 
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -95,6 +96,21 @@ final class TaskBoardTenantContextTest extends TestCase
         self::assertNull($context->current($user));
         $this->expectException(NotFoundHttpException::class);
         $context->require($user);
+    }
+
+    /** Since 2.23.1 (audit UG-2): a resolver that refuses a key answers none by key too, never an error. */
+    public function testAKeyTheResolverRefusesIsNoTenant(): void
+    {
+        $refusing = $this->createStub(TaskBoardTenantResolverInterface::class);
+        $refusing->method('resolve')->willThrowException(new InvalidArgumentException('refused'));
+        $context = new TaskBoardTenantContext($this->stack(null), $refusing, true);
+        self::assertNull($context->tenantOfKey('acme', new stdClass()));
+        self::assertFalse($context->isTenantRequest());
+
+        $open = new TaskBoardTenantContext($this->stack('acme'), new SlugTaskBoardTenantResolver(), true);
+        self::assertSame('acme', $open->tenantOfKey('acme', new stdClass())?->key);
+        self::assertTrue($open->isTenantRequest());
+        self::assertFalse((new TaskBoardTenantContext($this->stack('acme'), new SlugTaskBoardTenantResolver()))->isTenantRequest());
     }
 
     private function stack(?string $slug): RequestStack

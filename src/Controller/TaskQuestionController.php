@@ -178,7 +178,14 @@ final class TaskQuestionController extends AbstractController
     #[Route('/tools/task-board/questions', name: 'nowo_task_board_my_questions', methods: ['GET'])]
     public function mine(Request $request): Response
     {
-        $this->requireUser();
+        $user = $this->requireUser();
+        // Since 2.23.1 (Beacon request, audit UG): a tenant copy of this page whose tenant does not resolve for the user
+        // (unknown, or one the resolver does not open to them) is 404; 2.23.0 read it as "no tenant" and listed the
+        // questions of every board. A tenant that resolves lists its rows the user may see, whether or not the user may
+        // list that tenant's boards (canListBoards() is the index's decision; a sharee of one board is not refused here).
+        if ($this->tenantContext?->isTenantRequest() === true) {
+            $this->tenantContext->require($user);
+        }
         $tab     = $request->query->get('tab') === TaskQuestionView::TAB_ASKED ? TaskQuestionView::TAB_ASKED : TaskQuestionView::TAB_TO_ANSWER;
         $rows    = $this->view->mine($tab);
         $perPage = (int) $request->query->get('per_page', (string) $this->perPage);

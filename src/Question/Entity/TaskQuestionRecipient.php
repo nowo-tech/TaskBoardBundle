@@ -36,7 +36,9 @@ class TaskQuestionRecipient
         private string $subjectId,
         #[ORM\Column(type: 'string', length: 180)]
         private string $label,
-        #[ORM\Column(type: 'boolean')]
+        // Since 2.23.1: quoted — EXTERNAL is a reserved word on MySQL 9 (CREATE TABLE and every query failed). The column
+        // keeps its name `external` on every platform (lowercase, so PostgreSQL's quoted identifier is the same column).
+        #[ORM\Column(name: '`external`', type: 'boolean')]
         private bool $external = false,
         #[ORM\Column(type: 'smallint')]
         private int $position = 0,
