@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarTaskWarning;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarChip;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarDay;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarEntry;
+use Nowo\TaskBoardBundle\Dto\TaskCalendarEventEntry;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarView;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\CalendarMode;
@@ -18,8 +19,11 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
 use function array_chunk;
+use function array_filter;
 use function array_keys;
 use function array_map;
+use function array_slice;
+use function array_values;
 use function count;
 use function in_array;
 use function is_string;
@@ -29,12 +33,16 @@ use function usort;
 
 /**
  * Since 2.1.0 (spec 214, FR-018 to FR-020): the days of a calendar and where each task goes: start and due are a bar across the
- * days, one date is that day, no date is not on the calendar. Only days: a time of day is never shown.
+ * days, one date is that day, no date is not on the calendar. Only days: a time of day is never shown for a task. Since 2.24.0
+ * the events of the calendar event sources go on the days they cover, with their times.
  */
 final readonly class TaskCalendarBuilder
 {
     /** Bars per week in the month grid; the rest of a day is a "+n more" link. */
     private const MONTH_LANES = 4;
+
+    /** Since 2.24.0: events per day in the month grid; the rest count in the "+n more" link. */
+    private const MONTH_EVENTS = 3;
 
     /** Far enough for any plan; a URL cannot ask for a page around year 9999. */
     private const MIN_YEAR = 1970;
@@ -89,8 +97,9 @@ final readonly class TaskCalendarBuilder
      * @param list<Task> $tasks the dated tasks overlapping the range
      * @param array<string, bool> $editable task id => whether the user may change it
      * @param CalendarAnnotations|null $annotations since 2.14.0: the host's day annotations of the page (null: none, the 2.13 page)
+     * @param list<TaskCalendarEventEntry> $events since 2.24.0: the events of the calendar event sources, sorted
      */
-    public function build(CalendarMode $mode, DateTimeImmutable $date, WeekStart $weekStart, array $tasks, array $editable = [], ?CalendarAnnotations $annotations = null): TaskCalendarView
+    public function build(CalendarMode $mode, DateTimeImmutable $date, WeekStart $weekStart, array $tasks, array $editable = [], ?CalendarAnnotations $annotations = null, array $events = []): TaskCalendarView
     {
         $today       = $this->clock->now()->format('Y-m-d');
         [$from, $to] = $this->range($mode, $date, $weekStart);
@@ -111,16 +120,17 @@ final readonly class TaskCalendarBuilder
         }
 
         $weeks = $mode === CalendarMode::List ? [] : array_map(
-            fn (array $week): array => $this->week($week, $entries, $mode === CalendarMode::Month ? self::MONTH_LANES : null, $today, $period, $annotations),
+            fn (array $week): array => $this->week($week, $entries, $mode === CalendarMode::Month ? self::MONTH_LANES : null, $today, $period, $annotations, $events, $mode === CalendarMode::Month ? self::MONTH_EVENTS : null),
             array_chunk($dates, 7),
         );
 
         $days = [];
         if ($mode === CalendarMode::List) {
             foreach ($dates as $key) {
-                $covering = $this->covering($entries, $key);
-                if ($covering !== []) {
-                    $days[] = $this->calendarDay($key, [], $covering, 0, $today, null, $annotations);
+                $covering  = $this->covering($entries, $key);
+                $happening = $this->eventsOn($events, $key);
+                if ($covering !== [] || $happening !== []) {
+                    $days[] = $this->calendarDay($key, [], $covering, 0, $today, null, $annotations, $happening);
                 }
             }
         }
@@ -141,6 +151,8 @@ final readonly class TaskCalendarBuilder
             weekdays: array_map(static fn (int $offset): int => ($weekStart->isoDay() - 1 + $offset) % 7 + 1, [0, 1, 2, 3, 4, 5, 6]),
             placed: count($entries),
             anyEditable: in_array(true, array_map(static fn (TaskCalendarEntry $entry): bool => $entry->editable, $entries), true),
+            events: count($events),
+            anyMovableEvent: in_array(true, array_map(static fn (TaskCalendarEventEntry $event): bool => $event->movable, $events), true),
         );
     }
 
@@ -178,10 +190,11 @@ final readonly class TaskCalendarBuilder
     /**
      * @param list<string> $dates the seven days of the week
      * @param list<TaskCalendarEntry> $entries
+     * @param list<TaskCalendarEventEntry> $events
      *
      * @return list<TaskCalendarDay>
      */
-    private function week(array $dates, array $entries, ?int $maxLanes, string $today, ?string $period, ?CalendarAnnotations $annotations): array
+    private function week(array $dates, array $entries, ?int $maxLanes, string $today, ?string $period, ?CalendarAnnotations $annotations, array $events, ?int $maxEvents): array
     {
         $segments = [];
         foreach ($entries as $entry) {
@@ -223,7 +236,9 @@ final readonly class TaskCalendarBuilder
 
         $days = [];
         foreach ($dates as $index => $key) {
-            $days[] = $this->calendarDay($key, $chips[$index] ?? [], $this->covering($entries, $key), $more[$index] ?? 0, $today, $period, $annotations);
+            $happening = $this->eventsOn($events, $key);
+            $shown     = $maxEvents !== null ? array_slice($happening, 0, $maxEvents) : $happening;
+            $days[]    = $this->calendarDay($key, $chips[$index] ?? [], $this->covering($entries, $key), $more[$index] ?? 0, $today, $period, $annotations, $shown, count($happening) - count($shown));
         }
 
         return $days;
@@ -267,10 +282,23 @@ final readonly class TaskCalendarBuilder
     }
 
     /**
+     * Since 2.24.0: the events on a day.
+     *
+     * @param list<TaskCalendarEventEntry> $events
+     *
+     * @return list<TaskCalendarEventEntry>
+     */
+    private function eventsOn(array $events, string $date): array
+    {
+        return array_values(array_filter($events, static fn (TaskCalendarEventEntry $event): bool => $event->first <= $date && $event->last >= $date));
+    }
+
+    /**
      * @param list<TaskCalendarChip> $chips
      * @param list<TaskCalendarEntry> $entries
+     * @param list<TaskCalendarEventEntry> $events
      */
-    private function calendarDay(string $key, array $chips, array $entries, int $more, string $today, ?string $period, ?CalendarAnnotations $annotations): TaskCalendarDay
+    private function calendarDay(string $key, array $chips, array $entries, int $more, string $today, ?string $period, ?CalendarAnnotations $annotations, array $events = [], int $moreEvents = 0): TaskCalendarDay
     {
         $day = new DateTimeImmutable($key);
 
@@ -286,6 +314,8 @@ final readonly class TaskCalendarBuilder
             entries: $entries,
             more: $more,
             annotation: $annotations?->days->for($key),
+            events: $events,
+            moreEvents: $moreEvents,
         );
     }
 }

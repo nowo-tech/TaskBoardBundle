@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Controller;
 
 use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
 use InvalidArgumentException;
 use LogicException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
@@ -12,10 +14,17 @@ use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarDateRange;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
+use Nowo\TaskBoardBundle\Calendar\CalendarEvent;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventCollector;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedule;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleResult;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedulerInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleStatus;
 use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
+use Nowo\TaskBoardBundle\Doctrine\LockConflictChain;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetFormData;
@@ -53,6 +62,7 @@ use Nowo\TaskBoardBundle\Field\TaskCustomFieldForm;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldListView;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
+use Nowo\TaskBoardBundle\Form\CalendarEventMoveFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetApplyFormType;
 use Nowo\TaskBoardBundle\Form\ColumnSetFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
@@ -118,6 +128,7 @@ use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Nowo\UiKitBundle\View\Action;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\Crumb;
@@ -163,6 +174,7 @@ use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
+use function mb_strlen;
 use function mb_substr;
 use function parse_url;
 use function preg_match;
@@ -179,6 +191,16 @@ use const PHP_QUERY_RFC3986;
  */
 final class TaskBoardManageController extends AbstractController
 {
+    /** Since 2.24.0: the header of a refused calendar event move's domain code. */
+    public const ERROR_CODE_HEADER = 'X-Error-Code';
+
+    /** Since 2.24.0 (REQ-RUNTIME-003 rule 6): the codes of a lock conflict, nothing written / part written. */
+    public const CONFLICT         = 'CONFLICT_001';
+    public const CONFLICT_PARTIAL = 'CONFLICT_002';
+
+    /** Since 2.24.0: a calendar event move with a missing or malformed value. */
+    public const EVENT_INVALID = 'CALENDAR_EVENT_INVALID';
+
     /** Route variables never forwarded from the query by the default-view redirect (audit EX-L1). */
     private const DEFAULT_VIEW_DROPPED_KEYS = ['boardId', 'board', 'tenantSlug', 'taskId'];
 
@@ -273,6 +295,10 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?MemberBadges $memberBadges = null,
         // Since 2.23.0 (Beacon spec 242): `task_questions.enabled` (null when off): the Waiting for answer badge and filter.
         private readonly ?TaskQuestionView $questionView = null,
+        // Since 2.24.0: the calendar event sources (with calendar.enabled) and the shared lock-conflict answer
+        // (transaction-doctrine's `conflict_response`; 409 + Retry-After 1 without it).
+        private readonly ?CalendarEventCollector $eventCollector = null,
+        private readonly ?ConflictResponsePolicy $conflictPolicy = null,
     ) {
     }
 
@@ -1071,6 +1097,11 @@ final class TaskBoardManageController extends AbstractController
             $this->logger->warning('TaskBoard calendar day annotations failed: {message}', ['bundle' => 'nowo_task_board', 'exception' => $exception, 'message' => $exception->getMessage()]);
         }
 
+        // Since 2.24.0: the events of the calendar event sources for this viewer and the board's tenant (none without a
+        // source; a failing source is left out and logged by the collector).
+        $viewer = new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey());
+        $events = $this->eventCollector?->collect($viewer, new CalendarDateRange($from->format('Y-m-d'), $to->modify('-1 day')->format('Y-m-d'))) ?? [];
+
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         $filterForm   = $this->formFactory()->createNamed('', TaskCalendarFilterType::class, [
             'mode'      => $mode->value,
@@ -1085,7 +1116,7 @@ final class TaskBoardManageController extends AbstractController
 
         return $this->render($this->templates['calendar'], [
             'board'    => $board,
-            'calendar' => $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable, $annotations),
+            'calendar' => $calendar = $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable, $annotations, $events),
             // Since 2.14.0: a drag snaps to the next working day of the viewer (with a provider only).
             'skipNonWorkingDays' => $this->skipNonWorkingDays && $annotations !== null,
             'calendarModes'      => CalendarMode::cases(),
@@ -1099,6 +1130,8 @@ final class TaskBoardManageController extends AbstractController
             'canEditBoard'       => $canEditBoard,
             'taskForm'           => $canEditBoard ? $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columns === [] ? null : reset($columns)), ['column_choices' => $columns])->createView() : null,
             'scheduleForm'       => in_array(true, $editable, true) ? $this->formFactory()->createNamed('', TaskScheduleFormType::class)->createView() : null,
+            // Since 2.24.0: the Move event dialog, when the viewer may try to move an event of the page.
+            'eventMoveForm' => $calendar->anyMovableEvent ? $this->formFactory()->createNamed('', CalendarEventMoveFormType::class)->createView() : null,
         ]);
     }
 
@@ -1149,6 +1182,131 @@ final class TaskBoardManageController extends AbstractController
         $target = $this->safeTargetPath($request);
 
         return $target !== null ? $this->redirect($target) : $this->redirectToRoute($this->routes['calendar']['name'], ['boardId' => $task->getBoard()->getId()]);
+    }
+
+    /**
+     * Since 2.24.0: moves an event of a calendar event source to another day (a drag or the Move event dialog), for a viewer who
+     * may open the board. The body: `source`, `id`, `date` (the new first day, `Y-m-d`), `expected_start` / `expected_end` (as
+     * the page showed them), `all_day`, `version` (optional) and `_token`. The source decides the rest
+     * ({@see CalendarEventReschedulerInterface}): 200 moved, 404 no such event (or a source that cannot move events), 403 not
+     * allowed, 409 changed meanwhile (`X-Error-Code`), 409 / 503 lock conflict (`X-Conflict-Code`, REQ-RUNTIME-003 rule 6),
+     * 400 a malformed request. Always JSON: `{message, code}`, plus `start`, `end` and `version` when moved.
+     */
+    #[Route('/tools/task-board/board/{boardId}/calendar/event-reschedule', name: 'nowo_task_board_calendar_event_reschedule', methods: ['POST'])]
+    public function rescheduleCalendarEvent(string $boardId, Request $request): JsonResponse
+    {
+        $user = $this->requireUser();
+        $this->denyUnlessValidCsrf($request, CalendarEventMoveFormType::CSRF_TOKEN_ID);
+        $board     = $this->findBoard($boardId, $user);
+        $collector = $this->eventCollector;
+        $source    = $collector?->rescheduler($request->request->getString('source'));
+        if (!$collector instanceof CalendarEventCollector || !$source instanceof CalendarEventReschedulerInterface) {
+            return $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND);
+        }
+
+        $zone = $collector->timezone();
+
+        try {
+            $change = $this->eventChange($request, $zone);
+        } catch (InvalidArgumentException) {
+            return $this->eventAnswer(Response::HTTP_BAD_REQUEST, 'task_board.calendar.failed', self::EVENT_INVALID);
+        }
+
+        $viewer = new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey());
+
+        try {
+            $result = $source->reschedule($viewer, $change);
+        } catch (Throwable $failure) {
+            if (!LockConflictChain::isConflict($failure)) {
+                throw $failure;
+            }
+            $result = CalendarEventRescheduleResult::lockConflict(LockConflictChain::committed($failure), LockConflictChain::retryAfterHint($failure));
+        }
+
+        return match ($result->status) {
+            CalendarEventRescheduleStatus::Ok           => $this->eventMoved($change, $result, $request->request->getString('source')),
+            CalendarEventRescheduleStatus::Conflict     => $this->eventAnswer(Response::HTTP_CONFLICT, 'task_board.calendar.event_changed', (string) $result->code),
+            CalendarEventRescheduleStatus::Forbidden    => $this->eventAnswer(Response::HTTP_FORBIDDEN, 'task_board.calendar.event_forbidden', (string) $result->code),
+            CalendarEventRescheduleStatus::NotFound     => $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND),
+            CalendarEventRescheduleStatus::LockConflict => $this->eventLockConflict($result),
+        };
+    }
+
+    /** Since 2.24.0: the move a reschedule request asks for; InvalidArgumentException when a value is missing or malformed. */
+    private function eventChange(Request $request, DateTimeZone $zone): CalendarEventReschedule
+    {
+        $body    = $request->request;
+        $id      = $body->getString('id');
+        $allDay  = $body->getString('all_day') === '1';
+        $version = $body->getString('version');
+        $start   = $this->eventInstant($body->getString('expected_start'), $allDay, $zone);
+        $end     = $this->eventInstant($body->getString('expected_end'), $allDay, $zone);
+        if ($id === '' || mb_strlen($id) > CalendarEvent::MAX_ID_LENGTH || mb_strlen($version) > CalendarEvent::MAX_VERSION_LENGTH || preg_match('/[\x00-\x1F\x7F]/u', $id . $version) !== 0) {
+            throw new InvalidArgumentException('Not an event.');
+        }
+        $change = CalendarEventReschedule::toDay($id, $start, $end, $version !== '' ? $version : null, $allDay, $body->getString('date'), $zone);
+        // Audit HY-L1: only the years the calendar shows.
+        if (!$this->calendarBuilder->isInRange($change->start) || !$this->calendarBuilder->isInRange($change->end)) {
+            throw new InvalidArgumentException('Not a day of the calendar.');
+        }
+
+        return $change;
+    }
+
+    /** Since 2.24.0: an expected start or end as the page sent it: `Y-m-d` for an all-day event, ISO 8601 with an offset otherwise. */
+    private function eventInstant(string $value, bool $allDay, DateTimeZone $zone): DateTimeImmutable
+    {
+        $instant = $allDay ? DateTimeImmutable::createFromFormat('!Y-m-d', $value, $zone) : DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $value);
+        if (!$instant instanceof DateTimeImmutable || $instant->format($allDay ? 'Y-m-d' : DateTimeInterface::ATOM) !== $value) {
+            throw new InvalidArgumentException('Not an instant.');
+        }
+
+        return $instant;
+    }
+
+    private function eventMoved(CalendarEventReschedule $change, CalendarEventRescheduleResult $result, string $source): JsonResponse
+    {
+        $this->logWrite('calendar_event_reschedule', ['source' => $source, 'event_id' => $change->eventId]);
+        $format = $change->allDay ? 'Y-m-d' : DateTimeInterface::ATOM;
+
+        return new JsonResponse([
+            'message' => $this->translator->trans('task_board.calendar.event_moved', ['%date%' => $change->start->format('Y-m-d')], 'NowoTaskBoardBundle'),
+            'start'   => $change->start->format($format),
+            'end'     => $change->end->format($format),
+            'version' => $result->version,
+        ]);
+    }
+
+    /**
+     * Since 2.24.0 (REQ-RUNTIME-003 rule 6): a lock conflict: the shared policy's status (409 by default) with
+     * `X-Conflict-Code: CONFLICT_001` and `Retry-After` when nothing was written, `CONFLICT_002` and no `Retry-After` when
+     * part of it was.
+     */
+    private function eventLockConflict(CalendarEventRescheduleResult $result): JsonResponse
+    {
+        $policy  = $this->conflictPolicy ?? new ConflictResponsePolicy();
+        $code    = $result->committed ? self::CONFLICT_PARTIAL : self::CONFLICT;
+        $headers = [ConflictResponsePolicy::CODE_HEADER => $code];
+        if (!$result->committed) {
+            $headers['Retry-After'] = (string) $policy->retryAfter($result->retryAfterSeconds);
+        }
+
+        return $this->eventAnswer($policy->status, $result->committed ? 'task_board.calendar.event_partial' : 'task_board.calendar.event_busy', $code, $headers, false);
+    }
+
+    /**
+     * Since 2.24.0: a refused move: `{message, code}`, with the code in `X-Error-Code` (a domain code) unless it is a lock
+     * conflict, whose code goes in `X-Conflict-Code` only.
+     *
+     * @param array<string, string> $headers
+     */
+    private function eventAnswer(int $status, string $message, string $code, array $headers = [], bool $domainCode = true): JsonResponse
+    {
+        if ($domainCode) {
+            $headers[self::ERROR_CODE_HEADER] = $code;
+        }
+
+        return new JsonResponse(['message' => $this->translator->trans($message, [], 'NowoTaskBoardBundle'), 'code' => $code], $status, $headers);
     }
 
     /**

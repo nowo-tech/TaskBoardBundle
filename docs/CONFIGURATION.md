@@ -904,11 +904,18 @@ user references by id work, and the private entity manager covers the tables too
 | `calendar.enabled` | `false` | The route `calendar` and `task_schedule`, and the Calendar tab |
 | `calendar.day_annotation_provider` | `null` | Since 2.14.0: service id of a `Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface` (working days, holidays, leave; see [USAGE](USAGE.md#calendar-working-days-holidays-and-leave-since-214)). `null`: the 2.13 calendar |
 | `calendar.skip_non_working_days` | `false` | Since 2.14.0, with a provider: a dragged task lands on the next working day of the viewer |
+| `calendar.events.timezone` | `null` | Since 2.24.0: the timezone the calendar shows the times of the calendar event sources in, and moves events by (an IANA name, e.g. `Europe/Madrid`). `null`: the PHP default timezone, read per request. See [USAGE](USAGE.md#calendar-events-of-other-sources-since-224) |
+| `calendar.events.max_per_source` | `500` | Since 2.24.0: the most events one source draws on a page (1 to 5000); the rest are left out and logged |
 | `routes.task_by_number` | `/tools/task-board/n/{number}` | With `task_numbers.enabled`. A tenant copy is `<tenant path>/n/{number}` |
 | `routes.calendar` | `/tools/task-board/board/{boardId}/calendar` | With `calendar.enabled` |
 | `routes.task_schedule` | `/tools/task-board/task/{taskId}/schedule` | With `calendar.enabled`. POST |
+| `routes.calendar_event_reschedule` | `/tools/task-board/board/{boardId}/calendar/event-reschedule` | Since 2.24.0, with `calendar.enabled`. POST, JSON: moves an event of a calendar event source |
 | `web_ui.templates.calendar` | `@NowoTaskBoardBundle/manage/calendar.html.twig` | The calendar page |
 | `board.default_view_resolver` | `null` | May answer `calendar`, honoured with `calendar.enabled` |
+
+**Calendar event sources (since 2.24.0).** A service implementing `Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface`
+(optionally `CalendarEventReschedulerInterface`) is tagged `nowo_task_board.calendar_event_source` by autoconfiguration; no
+option names it. Without a source nothing changes. See [USAGE](USAGE.md#calendar-events-of-other-sources-since-224).
 
 ## New board (since 1.30)
 

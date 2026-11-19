@@ -24,6 +24,7 @@ This bundle is **FrankenPHP worker mode friendly** (worker mode with kernel not 
 - **Multi-board task list (2.13, opt-in):** "All tasks" over the boards a host lets the viewer read (deny by default, every board re-checked), with a Board / Project column, filters, server-side pagination, the workload per person and a formula-safe CSV / XLSX export — see [Usage](docs/USAGE.md#multi-board-task-list-since-213)
 - **Standard Symfony and DDD hosts (2.15):** framework-free twins of every entity-, request- and upload-typed host port, id and snapshot accessors on the events — see [Architecture](docs/ARCHITECTURE.md)
 - **Calendar working days, holidays and leave (2.14, opt-in):** a host provider shades the viewer's non-working days, warns on a task whose assignee is off, and can make a drag snap to the next working day — see [Usage](docs/USAGE.md#calendar-working-days-holidays-and-leave-since-214)
+- **Calendar event sources (2.24):** timed events of other parts of the application (meetings, calls, bookings) on a board's calendar next to its tasks, tenant-scoped and filtered by the source per viewer, with drag or keyboard moves to another day and optimistic concurrency — see [Usage](docs/USAGE.md#calendar-events-of-other-sources-since-224)
 - **Optional TimeTrack integration** — task provider, team context, and automatic `total_time_seconds` aggregation when TimeTrack is installed
 
 ## Installation

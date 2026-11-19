@@ -45,6 +45,8 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimerStarter;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventCollector;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -191,6 +193,7 @@ use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
+use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
@@ -673,6 +676,18 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->getDefinition(TaskBoardManageController::class)
                 ->setArgument('$dayAnnotator', new Reference(CalendarDayAnnotator::class))
                 ->setArgument('$skipNonWorkingDays', (bool) $config['calendar']['skip_non_working_days']);
+        }
+        // Since 2.24.0: timed events of the calendar event sources (tagged, autoconfigured), with the calendar only.
+        $container->registerForAutoconfiguration(CalendarEventSourceInterface::class)->addTag(CalendarEventCollector::TAG);
+        if ($calendar) {
+            $container->setDefinition(CalendarEventCollector::class, (new Definition(CalendarEventCollector::class))
+                ->setArgument('$sources', new TaggedIteratorArgument(CalendarEventCollector::TAG))
+                ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$timezone', $config['calendar']['events']['timezone'])
+                ->setArgument('$maxPerSource', $config['calendar']['events']['max_per_source']));
+            $container->getDefinition(TaskBoardManageController::class)
+                ->setArgument('$eventCollector', new Reference(CalendarEventCollector::class))
+                ->setArgument('$conflictPolicy', new Reference('nowo_transaction_doctrine.conflict_response_policy', ContainerInterface::NULL_ON_INVALID_REFERENCE));
         }
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$taskNumbersEnabled', $numbers)

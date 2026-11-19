@@ -1,0 +1,41 @@
+{#
+    Since 2.24.0: an event of a calendar event source on a day (month and week grid, list). Not a task: its own list, its own
+    look (`nowo-task-cal__event`), "Event" for screen readers, its times and its title as the source gave them (escaped). A
+    movable event is dragged to another day (pointer) or moved with its Move button (keyboard, touch): both post to
+    `calendar_event_reschedule`. Variables: event (Dto\TaskCalendarEventEntry), day (Y-m-d of the cell).
+#}
+{% set _event = event.event %}
+{% set _continued = event.first < day %}
+{% set _continues = event.last > day %}
+<li
+    class="nowo-task-cal__event{{ _event.category ? ' nowo-task-cal__event--' ~ _event.category : '' }}{{ _event.allDay ? ' is-all-day' : '' }}{{ _continued ? ' is-continued' : '' }}{{ _continues ? ' is-continuing' : '' }}{{ _event.color ? ' nowo-task-cal__event--colored' : '' }}{{ event.movable ? ' is-movable' : '' }}"
+    data-testid="nowo-task-cal-event"
+    data-event-source="{{ event.source }}"
+    data-event-id="{{ _event.id }}"
+    data-nowo-ui-sortable-ignore
+    {% if _event.color %}data-nowo-task-vars="{{ {'--nowo-task-cal-event-color': _event.color}|json_encode }}"{% endif %}
+    {% if event.movable %}
+    data-event-movable
+    data-event-title="{{ _event.title }}"
+    data-first="{{ event.first }}"
+    data-last="{{ event.last }}"
+    data-start="{{ event.startValue }}"
+    data-end="{{ event.endValue }}"
+    data-all-day="{{ _event.allDay ? '1' : '0' }}"
+    {% if _event.version is not null %}data-version="{{ _event.version }}"{% endif %}
+    {% endif %}
+>
+    <span class="nowo-task-sr-only">{{ 'task_board.calendar.event'|trans({}, 'NowoTaskBoardBundle') }}: </span>
+    {% if _event.allDay %}
+        <span class="nowo-task-cal__event-time">{{ 'task_board.calendar.event_all_day'|trans({}, 'NowoTaskBoardBundle') }}</span>
+    {% else %}
+        <span class="nowo-task-cal__event-time"><time datetime="{{ event.startValue }}">{{ event.first == day ? event.startTime : '…' }}</time>–<time datetime="{{ event.endValue }}">{{ event.last == day ? event.endTime : '…' }}</time></span>
+    {% endif %}
+    {% if _event.url %}
+        <a class="nowo-task-cal__event-title" href="{{ _event.url }}" title="{{ _event.title }}" draggable="false">{{ _event.title }}</a>
+    {% else %}
+        <span class="nowo-task-cal__event-title" title="{{ _event.title }}">{{ _event.title }}</span>
+    {% endif %}
+    {% if not event.movable %}<span class="nowo-task-sr-only"> ({{ 'task_board.calendar.event_read_only'|trans({}, 'NowoTaskBoardBundle') }})</span>{% endif %}
+    {% if event.movable %}<button type="button" class="nowo-task-cal__event-move" data-testid="nowo-task-cal-event-move" data-action="nowo-task-board-calendar#openEventMove" aria-label="{{ 'task_board.calendar.event_move_named'|trans({'%title%': _event.title}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.event_move'|trans({}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'calendar'}) }}</button>{% endif %}
+</li>

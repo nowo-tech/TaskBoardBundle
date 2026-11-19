@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayDiff, dragEdge, grabOffset, gridStep, movedDates, phoneListUrl, sameDates, shiftDates, snapDates, snapToWorkingDay } from './calendar-utils';
+import { addDays, dayDiff, dragEdge, eventDropDay, eventMoveFields, grabOffset, gridStep, movedDates, movedEvent, phoneListUrl, readEventMove, sameDates, shiftDates, snapDates, snapToWorkingDay } from './calendar-utils';
 
 describe('calendar date maths', () => {
     it('counts days across months, years and a daylight-saving change', () => {
@@ -82,5 +82,47 @@ describe('movedDates (2.14.1, audit NN-L2)', () => {
         expect(movedDates({ start: '2030-03-11', due: '2030-03-11' }, -1, weekend)).toBeNull();
         expect(movedDates({ start: '', due: '2030-03-11' }, -2, weekend)).toBeNull();
         expect(movedDates({ start: '2030-03-04', due: '2030-03-04' }, 0, new Set())).toBeNull();
+    });
+});
+
+describe('calendar events (2.24.0)', () => {
+    const event = { source: 'meetings', id: 'm-1', first: '2030-03-04', start: '2030-03-04T09:30:00+01:00', end: '2030-03-04T10:00:00+01:00', allDay: false, version: 'v3' };
+
+    it('reads a movable event from its dataset', () => {
+        const el = document.createElement('li');
+        el.dataset.eventSource = 'meetings';
+        el.dataset.eventId = 'm-1';
+        el.dataset.first = '2030-03-04';
+        el.dataset.start = event.start;
+        el.dataset.end = event.end;
+        el.dataset.allDay = '0';
+        el.dataset.version = 'v3';
+        expect(readEventMove(el.dataset)).toEqual(event);
+        delete el.dataset.version;
+        el.dataset.allDay = '1';
+        expect(readEventMove(el.dataset)).toEqual({ ...event, allDay: true, version: '' });
+        for (const key of ['eventSource', 'eventId', 'first', 'start', 'end']) {
+            const copy = { ...el.dataset, version: 'v3' } as DOMStringMap;
+            delete copy[key];
+            expect(readEventMove(copy)).toBeNull();
+        }
+    });
+
+    it('moves the first day by the days the pointer moved, and not at all on the same day', () => {
+        expect(eventDropDay('2030-03-04', '2030-03-05', '2030-03-08')).toBe('2030-03-07');
+        expect(eventDropDay('2030-03-31', '2030-03-31', '2030-03-30')).toBe('2030-03-30');
+        expect(eventDropDay('2030-03-04', '2030-03-05', '2030-03-05')).toBeNull();
+    });
+
+    it('builds the reschedule body', () => {
+        expect(eventMoveFields(event, '2030-03-06', 'tok')).toEqual({
+            source: 'meetings', id: 'm-1', date: '2030-03-06', expected_start: event.start, expected_end: event.end, all_day: '0', version: 'v3', _token: 'tok',
+        });
+        expect(eventMoveFields({ ...event, allDay: true }, '2030-03-06', 'tok').all_day).toBe('1');
+    });
+
+    it('keeps the answer of a move for Undo', () => {
+        expect(movedEvent(event, '2030-03-06', { start: 'S', end: 'E', version: 'v4' })).toEqual({ ...event, first: '2030-03-06', start: 'S', end: 'E', version: 'v4' });
+        expect(movedEvent(event, '2030-03-06', { version: null })).toEqual({ ...event, first: '2030-03-06', version: '' });
     });
 });

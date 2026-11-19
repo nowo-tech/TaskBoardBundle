@@ -244,6 +244,8 @@ final class TaskBoardRouteLoader extends Loader
         if ($this->calendarEnabled) {
             $this->addRoute($collection, $attributes, 'calendar', TaskBoardManageController::class . '::calendarView');
             $this->addRoute($collection, $attributes, 'task_schedule', TaskBoardManageController::class . '::scheduleTask');
+            // Since 2.24.0: moves an event of a calendar event source.
+            $this->addRoute($collection, $attributes, 'calendar_event_reschedule', TaskBoardManageController::class . '::rescheduleCalendarEvent');
         }
         if ($this->moveEnabled) {
             $this->addRoute($collection, $attributes, 'task_move_board', TaskCopyController::class . '::move');

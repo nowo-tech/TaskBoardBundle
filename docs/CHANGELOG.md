@@ -118,6 +118,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Calendar event sources: timed events of other parts of the application on a board's calendar.** A service implementing
+  `Calendar\CalendarEventSourceInterface` (autoconfigured, tag `nowo_task_board.calendar_event_source`) returns
+  `CalendarEvent` values (id, title, start and end as instants, all-day flag, optional URL, colour, category, read-only flag,
+  version and tenant key) for the viewer and the page's days, once per page. The month and week grids and the list draw them
+  above the tasks of each day, in a style of their own, with their times in `calendar.events.timezone` (the PHP default when
+  not set), "Event:" for screen readers, three a day in the month grid and the rest in "+n more". The source decides what the
+  viewer sees; the bundle also drops values that are not events, events of another tenant (byte for byte), events outside the
+  page and repeated ids, caps each source at `calendar.events.max_per_source` (500), and leaves out (and logs) a source that
+  throws or has an invalid or repeated key.
+- **Moving an event.** A source that also implements `Calendar\CalendarEventReschedulerInterface` lets the viewer drag its
+  events that are not read-only to another day (month and week grids, mouse or pen) or move them with the Move event dialog
+  (keyboard, touch, every mode), with Undo. The new route `calendar_event_reschedule` (POST, JSON, CSRF, with
+  `calendar.enabled`) keeps the time of day and the duration (an all-day event its days), across daylight-saving changes, and
+  asks the source with the expected start, end and version (optimistic concurrency). Answers: 200; 409 with `X-Error-Code`
+  (`CALENDAR_EVENT_CHANGED` by default) when the event changed meanwhile; 409 (or the shared `conflict_response` status) with
+  `X-Conflict-Code: CONFLICT_001` and `Retry-After`, or `CONFLICT_002` without it after a partial commit, for a lock conflict
+  returned or thrown (REQ-RUNTIME-003 rule 6); 403 `CALENDAR_EVENT_FORBIDDEN`; 404 `CALENDAR_EVENT_NOT_FOUND` (also for an
+  unknown or read-only source); 400 `CALENDAR_EVENT_INVALID`.
+- Options `calendar.events.timezone`, `calendar.events.max_per_source` and `routes.calendar_event_reschedule`; translations of
+  the event texts in the seven locales.
+
 ## [2.23.1] - 2026-11-19
 
 ### Fixed
