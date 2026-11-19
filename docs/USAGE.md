@@ -2047,8 +2047,8 @@ nothing, so `searchFor()` finds nothing either. The tenant SearchKit sees is the
 elsewhere. Outside a tenant page, the tenants that are searched are the ones `SEARCH_SCOPE` allows. A tenant page whose slug
 does not resolve for the viewer has no tenant, and SearchKit answers nothing. The feature gate is the access checker's
 `canAccess()`. Boards are checked with `BOARD_ACCESS_CHECK` before the tasks are read. Each candidate task then passes
-`TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board.task` and
-`task_board.board`). Recents are revalidated by id (`t.id`, `b.id`) when SearchKit's `recent.revalidate` is on. There is no
+`TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board_task` and
+`task_board_board`). Recents are revalidated by id (`t.id`, `b.id`) when SearchKit's `recent.revalidate` is on. There is no
 "see all" link, because no list page searches across boards by text.
 
 Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).

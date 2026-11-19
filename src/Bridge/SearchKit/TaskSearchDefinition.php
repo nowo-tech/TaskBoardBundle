@@ -45,7 +45,7 @@ final class TaskSearchDefinition extends TaskBoardSearchDefinition
 
     public function subjectType(): string
     {
-        return 'task_board.task';
+        return 'task_board_task';
     }
 
     public function searchableFields(): array

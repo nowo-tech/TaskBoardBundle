@@ -162,11 +162,11 @@ final class FunctionalKernel extends Kernel
         // Since 1.25: host-facing services no bundle code calls (the host does), kept public for the tests.
         $container->services()->alias('app.board_eraser', TaskBoardEraser::class)->public();
         $container->services()->alias('app.snapshot_purger', TaskTimeEntrySnapshotPurger::class)->public();
-        // Since 2.25.0: the header search services, public for the tests; with SearchKit (PHP >= 8.3) the query counter of
-        // its contract kit on the bundle's connection.
+        // Since 2.25.0: the header search services, public for the tests; with `__search_kit_counter: true` (SearchKit,
+        // PHP >= 8.3) the query counter of its contract kit on the connection (only there: it keeps every statement).
         $container->services()->alias('app.task_header_search', TaskHeaderSearch::class)->public();
         $container->services()->alias('app.board_header_search', BoardHeaderSearch::class)->public();
-        if (class_exists(QueryCountingMiddleware::class)) {
+        if (($this->taskBoard['__search_kit_counter'] ?? false) === true && class_exists(QueryCountingMiddleware::class)) {
             $container->services()->set('app.search_kit_query_counter', QueryCounter::class)->public();
             $container->services()->set('app.search_kit_query_middleware', QueryCountingMiddleware::class)
                 ->args([new ReferenceConfigurator('app.search_kit_query_counter')])
@@ -212,7 +212,7 @@ final class FunctionalKernel extends Kernel
             $container->services()->set('app.timer', ScriptedTimerStarter::class);
             $container->services()->alias(TaskTimerStarterInterface::class, 'app.timer');
         }
-        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true]));
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true]));
         PrivateEntityManagerReplay::alias($container, $taskBoard);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));

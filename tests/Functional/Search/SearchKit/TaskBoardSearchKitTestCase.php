@@ -59,8 +59,9 @@ abstract class TaskBoardSearchKitTestCase extends EntitySearchProviderTestCase
     protected function bootKernel(array $config = []): void
     {
         $this->kernel = new FunctionalKernel($config + [
-            'tenancy'  => ['enabled' => true, 'resolver' => 'app.member_tenant_resolver', 'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']]],
-            'security' => ['resource_scoping' => false],
+            'tenancy'              => ['enabled' => true, 'resolver' => 'app.member_tenant_resolver', 'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']]],
+            'security'             => ['resource_scoping' => false],
+            '__search_kit_counter' => true,
         ]);
         $this->kernel->boot();
         $em = $this->container()->get('doctrine.orm.entity_manager');

@@ -159,8 +159,8 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         $boards = $this->boardsDefinition();
         $query  = $this->query('x');
 
-        self::assertSame(['tasks', 'Tasks', 'tabler:checkbox', 'task_board.task', ['t.title', 't.description'], 't.id'], [$tasks->group(), $tasks->label($query), $tasks->icon(), $tasks->subjectType(), $tasks->searchableFields(), $tasks->idField()]);
-        self::assertSame(['boards', 'Boards', 'tabler:layout-kanban', 'task_board.board', ['b.name'], 'b.id'], [$boards->group(), $boards->label($query), $boards->icon(), $boards->subjectType(), $boards->searchableFields(), $boards->idField()]);
+        self::assertSame(['tasks', 'Tasks', 'tabler:checkbox', 'task_board_task', ['t.title', 't.description'], 't.id'], [$tasks->group(), $tasks->label($query), $tasks->icon(), $tasks->subjectType(), $tasks->searchableFields(), $tasks->idField()]);
+        self::assertSame(['boards', 'Boards', 'tabler:layout-kanban', 'task_board_board', ['b.name'], 'b.id'], [$boards->group(), $boards->label($query), $boards->icon(), $boards->subjectType(), $boards->searchableFields(), $boards->idField()]);
         self::assertNull($tasks->seeAllUrl($query));
         self::assertNull($boards->seeAllUrl($query));
         self::assertSame(100, $tasks->maxCandidates());
