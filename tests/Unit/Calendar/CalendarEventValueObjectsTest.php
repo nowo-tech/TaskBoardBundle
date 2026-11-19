@@ -161,6 +161,8 @@ final class CalendarEventValueObjectsTest extends TestCase
         $shown = static fn (string $start, string $end, bool $allDay = false, ?string $version = 'v1'): CalendarEventShown => new CalendarEventShown('m', new DateTimeImmutable($start), new DateTimeImmutable($end), $allDay, $version, '2030-03-05');
 
         self::assertTrue($shown('2030-03-04T11:30:00+02:00', '2030-03-04T10:15:00+00:00')->matches($timed), 'the same instants, to the second');
+        self::assertSame('2030-03-05', $shown('2030-03-04T23:30:00+00:00', '2030-03-05T00:30:00+00:00')->firstDay(new DateTimeZone('Europe/Madrid')));
+        self::assertSame('2030-03-04', $shown('2030-03-04', '2030-03-04', true)->firstDay(new DateTimeZone('Pacific/Kiritimati')));
         self::assertFalse($shown('2030-03-04T09:30:00+00:00', '2030-03-04T11:00:00+00:00')->matches($timed), 'another end');
         self::assertFalse($shown('2030-03-04T09:31:00+00:00', '2030-03-04T10:15:00+00:00')->matches($timed), 'another start');
         self::assertFalse($shown('2030-03-04T09:30:00+00:00', '2030-03-04T10:15:00+00:00', version: null)->matches($timed), 'another version');

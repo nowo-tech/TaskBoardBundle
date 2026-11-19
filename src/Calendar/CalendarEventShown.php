@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Calendar;
 
 use DateTimeImmutable;
+use DateTimeZone;
 
 /**
  * Since 2.24.0 (audit UW-TB-1): what a calendar page showed of an event when the viewer moved it, as the browser sent it
@@ -22,6 +23,18 @@ final readonly class CalendarEventShown
         public ?string $version,
         public string $date,
     ) {
+    }
+
+    /** The day the page showed the event on: its date when all-day, else the day of its start in the calendar's timezone. */
+    public function firstDay(DateTimeZone $zone): string
+    {
+        if ($this->allDay) {
+            return $this->start->format('Y-m-d');
+        }
+        // A new value in the zone (DateTimeImmutable never changes; built apart so no property is touched).
+        $local = new DateTimeImmutable('@' . $this->start->getTimestamp());
+
+        return $local->setTimezone($zone)->format('Y-m-d');
     }
 
     /**

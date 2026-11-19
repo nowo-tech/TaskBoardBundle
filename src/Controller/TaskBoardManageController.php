@@ -1220,7 +1220,7 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $viewer = new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey());
-        $day    = $shown->allDay ? $shown->start->format('Y-m-d') : $shown->start->setTimezone($zone)->format('Y-m-d');
+        $day    = $shown->firstDay($zone);
 
         try {
             $stored = $collector->find($viewer, $sourceKey, $shown->id, new CalendarDateRange($day, $day));
