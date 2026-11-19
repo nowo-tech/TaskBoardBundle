@@ -7,10 +7,16 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as DoctrineConfiguration;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
+use Nowo\SearchKitBundle\Test\QueryCounter;
+use Nowo\SearchKitBundle\Test\QueryCountingMiddleware;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatarResolverInterface;
+use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
+use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
+use Nowo\TaskBoardBundle\Search\Header\BoardHeaderSearch;
+use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeEntrySnapshotPurger;
@@ -29,11 +35,15 @@ use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
 use Symfony\Component\Config\Definition\ArrayNode;
 use Symfony\Component\Config\Definition\BaseNode;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use Twig\Extra\TwigExtraBundle\TwigExtraBundle;
 
+use function class_exists;
 use function getenv;
 use function is_string;
 use function md5;
@@ -73,6 +83,21 @@ final class FunctionalKernel extends Kernel
         yield new NowoUiKitBundle();
         yield new NowoFormKitBundle();
         yield new TaskBoardBundle();
+    }
+
+    /** Since 2.25.0: the SearchKit groups (when registered) are public for the tests; nothing consumes them without SearchKit's bundle. */
+    protected function build(ContainerBuilder $container): void
+    {
+        $container->addCompilerPass(new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+                foreach ([TaskSearchDefinition::class, BoardSearchDefinition::class] as $id) {
+                    if ($container->hasDefinition($id)) {
+                        $container->getDefinition($id)->setPublic(true);
+                    }
+                }
+            }
+        });
     }
 
     public function getProjectDir(): string
@@ -137,6 +162,16 @@ final class FunctionalKernel extends Kernel
         // Since 1.25: host-facing services no bundle code calls (the host does), kept public for the tests.
         $container->services()->alias('app.board_eraser', TaskBoardEraser::class)->public();
         $container->services()->alias('app.snapshot_purger', TaskTimeEntrySnapshotPurger::class)->public();
+        // Since 2.25.0: the header search services, public for the tests; with `__search_kit_counter: true` (SearchKit,
+        // PHP >= 8.3) the query counter of its contract kit on the connection (only there: it keeps every statement).
+        $container->services()->alias('app.task_header_search', TaskHeaderSearch::class)->public();
+        $container->services()->alias('app.board_header_search', BoardHeaderSearch::class)->public();
+        if (($this->taskBoard['__search_kit_counter'] ?? false) === true && class_exists(QueryCountingMiddleware::class)) {
+            $container->services()->set('app.search_kit_query_counter', QueryCounter::class)->public();
+            $container->services()->set('app.search_kit_query_middleware', QueryCountingMiddleware::class)
+                ->args([new ReferenceConfigurator('app.search_kit_query_counter')])
+                ->tag('doctrine.middleware');
+        }
         $container->extension('doctrine', [
             'dbal' => ['url' => self::databaseUrl()],
             'orm'  => [
@@ -177,7 +212,7 @@ final class FunctionalKernel extends Kernel
             $container->services()->set('app.timer', ScriptedTimerStarter::class);
             $container->services()->alias(TaskTimerStarterInterface::class, 'app.timer');
         }
-        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true]));
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true]));
         PrivateEntityManagerReplay::alias($container, $taskBoard);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));

@@ -138,6 +138,28 @@ final class CalendarEventCollectorTest extends TestCase
     }
 
     /**
+     * Since 2.25.0 (audit UW2-4): a source that ignores the range returns other days first; on the move re-read they do not
+     * count toward the drop cap, so the event is still found, while the page keeps counting them.
+     */
+    public function testFindSkipsOutOfRangeEventsWithoutCountingThemAsDrops(): void
+    {
+        $events = [];
+        for ($i = 0; $i < 15; ++$i) {
+            $events[] = new CalendarEvent('other-' . $i, 'Other', new DateTimeImmutable('2030-03-20 09:00'), new DateTimeImmutable('2030-03-20 10:00'));
+        }
+        $events[]  = new CalendarEvent('m-1', 'Meeting', new DateTimeImmutable('2030-03-04 09:00'), new DateTimeImmutable('2030-03-04 10:00'));
+        $logger    = new RecordingLogger();
+        $collector = new CalendarEventCollector([$this->source('crm', $events, true)], $logger, 'UTC', 10);
+        $range     = new CalendarDateRange('2030-03-04', '2030-03-04');
+        $viewer    = new CalendarViewer('u1', 'b1');
+
+        self::assertSame('m-1', $collector->find($viewer, 'crm', 'm-1', $range)?->id);
+        self::assertSame([], $logger->records, 'skipped, not dropped');
+        self::assertSame([], $collector->collect($viewer, $range), 'the page stops after ten drops');
+        self::assertContains('TaskBoard calendar event source {source} returned too many values; the rest are not read', array_column($logger->records, 'message'));
+    }
+
+    /**
      * @param callable(): mixed $make
      */
     private function endless(string $key, callable $make): CalendarEventSourceInterface

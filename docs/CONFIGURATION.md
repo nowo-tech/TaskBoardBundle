@@ -46,6 +46,7 @@
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
   - [DDD / hexagonal host](#ddd--hexagonal-host)
+- [Header search and SearchKit groups (since 2.25)](#header-search-and-searchkit-groups-since-225)
 
 ## Required
 
@@ -978,3 +979,24 @@ call `Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskListInterface` (autowirable 
 area), `scope_provider` = an adapter that returns, for the organisation in the URL, the task boards of the projects where
 the user holds the tasks-view permission, each with the project name as `label` and the project slug as `tenantSlug`.
 
+## Header search and SearchKit groups (since 2.25)
+
+```yaml
+nowo_task_board:
+    search_kit:
+        enabled: true          # false = no SearchKit group of this bundle
+        tasks:                 # the "tasks" group (task title and description); false = off
+            sensitive: true    # titles and excerpts may hold personal data: off while SearchKit recents keep titles unrevalidated
+        boards: true           # the "boards" group (board name); false = off
+        priority: 40           # tag priority among the SearchKit providers (boards: one less)
+        max_boards: 200        # 1-500: the most visible boards one search keeps, most recently changed first
+        max_scanned_boards: 1000  # 1-10000: the most boards one search reads, in batches, to find them (at least max_boards)
+        max_candidates: 100    # 1-1000: the most matching rows one search reads and checks (TASK_ACCESS_CHECK)
+```
+
+The header search services (`Search\Header\*`) are always registered. The SearchKit groups `tasks` and `boards` are
+registered only when `nowo-tech/search-kit-bundle` 1.9 or later is installed (it needs PHP 8.3; it is a `suggest`) and
+`enabled` is true. SearchKit's own `nowo_search_kit.groups.tasks` / `.boards` (`enabled`, `priority`) switch or reorder
+them as well. With `tenancy.enabled`, a search outside a tenant page (SearchKit's own route, for instance) finds nothing
+until a `TaskBoardEvents::SEARCH_SCOPE` listener names the viewer's current tenant (see
+[USAGE](USAGE.md#header-search-since-225)). A search that stops at `max_boards` or `max_scanned_boards` is partial.

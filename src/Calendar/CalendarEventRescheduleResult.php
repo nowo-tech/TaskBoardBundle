@@ -21,7 +21,7 @@ use function preg_match;
  * - `forbidden()`: 403 with the code (`CALENDAR_EVENT_FORBIDDEN` by default) in `X-Error-Code`.
  * - `notFound()`: 404, the same answer as an unknown event: never tell an event of someone else exists.
  *
- * A code is 1 to 64 of `A-Z`, `0-9` and `_`, starting with a letter; `CONFLICT_<n>` is reserved for lock conflicts.
+ * A code is 1 to 64 of `A-Z`, `0-9` and `_`, starting with a letter; `CONFLICT` and every `CONFLICT_…` code are reserved for lock conflicts (since 2.25.0, audit UW2-3).
  */
 final readonly class CalendarEventRescheduleResult
 {
@@ -36,8 +36,8 @@ final readonly class CalendarEventRescheduleResult
         public bool $committed = false,
         public ?int $retryAfterSeconds = null,
     ) {
-        // Audit UW-TB-5: CONFLICT_<n> are the platform's lock-conflict codes (X-Conflict-Code), never a domain code.
-        if ($code !== null && (preg_match('/^[A-Z][A-Z0-9_]{0,63}$/D', $code) !== 1 || preg_match('/^CONFLICT_\d+$/D', $code) === 1)) {
+        // Audit UW-TB-5 / UW2-3: CONFLICT and CONFLICT_* belong to the platform's lock-conflict codes (X-Conflict-Code), never a domain code.
+        if ($code !== null && (preg_match('/^[A-Z][A-Z0-9_]{0,63}$/D', $code) !== 1 || preg_match('/^CONFLICT(_|$)/D', $code) === 1)) {
             throw new InvalidArgumentException('A calendar event error code is 1 to 64 of A-Z, 0-9 and "_", starting with a letter.');
         }
         if ($retryAfterSeconds !== null && $retryAfterSeconds < 0) {

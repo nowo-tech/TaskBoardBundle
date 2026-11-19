@@ -20,9 +20,13 @@ use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Stringable;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface as SymfonyEventDispatcherInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function array_keys;
+use function array_map;
+use function in_array;
 use function is_scalar;
 
 /**
@@ -253,6 +257,102 @@ final readonly class TaskBoardResourceAccessChecker
 
             return ($this->isTaskParticipant($user, $task) || $this->isBoardViewable($boardAccess)) && !$boardAccess->isReadOnly();
         };
+    }
+
+    /**
+     * Since 2.25.0 (header search): the default board rule for `$user`, read once ({@see BoardViewReach}): whether it opens
+     * every board, the user's team ids, and whether a BOARD_ACCESS_CHECK listener could open more (true unless the
+     * dispatcher says it has none). A search may filter on it in SQL only when no listener may grant.
+     *
+     * @param bool $manageRoles false leaves `security.manage_roles` out (see {@see self::canViewBoard()})
+     */
+    public function defaultBoardReach(object $user, bool $manageRoles = true): BoardViewReach
+    {
+        $dispatcher = $this->eventDispatcher;
+        $listeners  = $dispatcher !== null && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::BOARD_ACCESS_CHECK));
+        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole())) {
+            return new BoardViewReach(true, [], $listeners);
+        }
+
+        return new BoardViewReach(false, array_map('strval', array_keys($this->teamIdsOf($user))), $listeners);
+    }
+
+    /**
+     * Since 2.25.0 (header search): {@see self::canViewBoard()} for many boards at once. The returned closure answers
+     * exactly what canViewBoard() answers (creator, team, `security.manage_roles`, then BOARD_ACCESS_CHECK), but the
+     * user's teams and manage roles are read once ({@see self::defaultBoardReach()}, or `$reach` when the caller already
+     * has it) instead of once per board: each board costs its BOARD_ACCESS_CHECK event and no query. Build it per call;
+     * it holds nothing beyond it.
+     *
+     * @param bool $manageRoles false leaves `security.manage_roles` out (see {@see self::canViewBoard()})
+     *
+     * @return Closure(TaskBoard): bool
+     */
+    public function boardViewDecider(object $user, bool $manageRoles = true, ?BoardViewReach $reach = null): Closure
+    {
+        return function (TaskBoard $board) use ($user, $manageRoles, &$reach): bool {
+            $default = $this->sameUser($user, $board->getCreator());
+            if (!$default) {
+                $reach ??= $this->defaultBoardReach($user, $manageRoles);
+                $team    = $board->getTeam();
+                $default = $reach->all || ($team instanceof Team && in_array($team->getId(), $reach->teamIds, true));
+            }
+            $event = new BoardAccessCheckEvent($user, $board, $default);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
+
+            return $this->isBoardViewable($event);
+        };
+    }
+
+    /**
+     * Since 2.25.0 (header search): {@see self::canViewTask()} for many tasks at once. TASK_ACCESS_CHECK is dispatched
+     * for each task (a deny hides it, a grant shows it); with no answer the task is visible when its board is, by
+     * `$boardViewable` (for instance {@see self::boardViewDecider()}), or when the user takes part in it. Each board is
+     * asked once. Build it per call; it holds nothing beyond it.
+     *
+     * @param Closure(TaskBoard): bool $boardViewable
+     *
+     * @return Closure(Task): bool
+     */
+    public function taskViewDecider(object $user, Closure $boardViewable): Closure
+    {
+        $boards = [];
+
+        return function (Task $task) use ($user, $boardViewable, &$boards): bool {
+            $event = new TaskAccessCheckEvent($user, $task);
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ACCESS_CHECK);
+            if ($event->isDenied()) {
+                return false;
+            }
+            if ($event->isGranted()) {
+                return true;
+            }
+            $board = $task->getBoard();
+            $boards[$board->getId()] ??= $boardViewable($board);
+
+            return $boards[$board->getId()] || $this->isTaskParticipant($user, $task);
+        };
+    }
+
+    /**
+     * The ids of the user's teams (membership resolver and TeamMember rows), as keys.
+     *
+     * @return array<string, true>
+     */
+    private function teamIdsOf(object $user): array
+    {
+        $ids = [];
+        foreach ($this->teamMembershipResolver->resolveTeamIds($user) as $resolvedId) {
+            $ids[(string) $resolvedId] = true;
+        }
+        $userId = $this->userId($user);
+        if ($userId !== null) {
+            foreach ($this->teamMemberRepository->findByUserId($userId) as $membership) {
+                $ids[$membership->getTeam()->getId()] = true;
+            }
+        }
+
+        return $ids;
     }
 
     /**

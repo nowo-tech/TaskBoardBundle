@@ -75,6 +75,9 @@
 - [Questions on tasks (since 2.23)](#questions-on-tasks-since-223)
   - [Questions: Standard Symfony host](#questions-standard-symfony-host)
   - [Questions: DDD / hexagonal host](#questions-ddd--hexagonal-host)
+- [Header search (since 2.25)](#header-search-since-225)
+  - [Narrowing the scope: the search scope event](#narrowing-the-scope-the-search-scope-event)
+  - [SearchKit groups: tasks and boards](#searchkit-groups-tasks-and-boards)
 - [Translations](#translations)
 
 ## Manage UI
@@ -1403,7 +1406,8 @@ the calendar is the 2.23 calendar.
 - **Once per page and source.** `events(CalendarViewer $viewer, CalendarEventRange $range)` gets the viewer (user id, board
   id and the board's tenant key, from the board the viewer opened) and the page's days: `range.days` (`Y-m-d`, both
   included) and the same span as instants, `range.from` (included) to `range.to` (excluded), in the calendar's timezone
-  (`range.timezone`). It returns `CalendarEvent` values.
+  (`range.timezone`). It returns `CalendarEvent` values. Filter by `CalendarEventRange` in the source (in its query): the
+  bundle drops events outside the range, but reading them costs the source's time and counts toward the drop cap of the page.
 - **The source decides who sees what.** Return only the events this viewer may read, in this tenant. The bundle never adds an
   event the source did not return for this viewer. On top of that it drops, and logs as one notice per page and source: a value
   that is not a `CalendarEvent`, an event whose `tenantKey` is not the viewer's (compared byte for byte; `null` without
@@ -1428,8 +1432,8 @@ the calendar is the 2.23 calendar.
 
 | Argument | Meaning |
 | --- | --- |
-| `id` | The source's id, 1 to 128 printable characters (no control, bidirectional or zero-width character), unique within the source |
-| `title` | 1 to 200 printable characters (trimmed; no control, bidirectional or zero-width character) |
+| `id` | The source's id, 1 to 128 printable characters (no control or format character — bidirectional, zero-width, soft hyphen, tag —, no line or paragraph separator, no Hangul filler), unique within the source |
+| `title` | 1 to 200 printable characters after cleaning: format characters (bidirectional, zero-width, soft hyphen, tag), line and paragraph separators and Hangul fillers are removed, tabs and line breaks become spaces, the edges are trimmed; any other control character is refused |
 | `start`, `end` | `DateTimeImmutable`; `end >= start` (an all-day event compares dates) |
 | `allDay` | `false` (default): timed; `true`: whole days |
 | `url` | `https://`, `http://` or a local path (`/...`, not `//...`); `null`: no link |
@@ -1452,7 +1456,8 @@ events that are not `readOnly`:
   route `calendar_event_reschedule` (a form-encoded POST, JSON answer) computes the new `start` and `end` from the stored event; the browser never does.
 - **The browser's values are only compared.** The bundle checks the CSRF token, the signed-in user and that the viewer may open
   the board (else 403 or 404). Then it reads the event again through `events()`, for this viewer, on the day the page showed
-  it: not returned answers 404, `readOnly` answers 403 (`CALENDAR_EVENT_FORBIDDEN`), and a start, end, all-day flag or version
+  it (a target day outside the calendar's years answers 400 first, and the source is not read; on this re-read an event
+  outside that day does not count toward the drop cap): not returned answers 404, `readOnly` answers 403 (`CALENDAR_EVENT_FORBIDDEN`), and a start, end, all-day flag or version
   other than what the page showed answers 409 (`CALENDAR_EVENT_CHANGED`). In those cases `reschedule()` is never called and
   nothing is written. The new start and end are computed from the stored event, so a request cannot stretch an event or turn
   it into an all-day one.
@@ -1475,8 +1480,10 @@ events that are not `readOnly`:
   A malformed request answers 400 `CALENDAR_EVENT_INVALID`; an unknown source key, or a source without the reschedule
   interface, 404. An exception thrown by `reschedule()` whose chain holds a lock conflict (a write unit's
   `ConcurrencyConflict`, a `TransientStorageFailure`, a DBAL deadlock or lock wait timeout) answers like `lockConflict()`
-  (REQ-RUNTIME-003 rule 6); any other exception is not caught. Codes are 1 to 64 of `A-Z`, `0-9`, `_`, never `CONFLICT_<n>` (reserved for lock
-  conflicts); `Retry-After` is at least 1 second.
+  (REQ-RUNTIME-003 rule 6); any other exception is not caught. A lock conflict thrown by `events()` while the event is read
+  again answers `CONFLICT_001` with `Retry-After` (nothing was written yet); any other exception from `events()` during that
+  re-read is not caught either, so a non-conflict failure answers 500. Codes are 1 to 64 of `A-Z`, `0-9`, `_`, never
+  `CONFLICT` or `CONFLICT_…` (reserved for lock conflicts); `Retry-After` is at least 1 second.
 
 ### Implementing a source: Standard Symfony host
 
@@ -1946,6 +1953,123 @@ The three ports take and return only values (`TaskSnapshot`, `TaskBoardSnapshot`
 the adapters live in your infrastructure layer. With `database.mapping_type: xml` the tables come from
 `Resources/config/doctrine-xml/question/`; with `database.user_reference: id` the asker, answerer and withdrawer are
 user ids. With `database.private_entity_manager: true` every question write goes through the bundle's private manager.
+
+## Header search (since 2.25)
+
+The bundle ships the parts a site-wide search box (a SearchKit palette, for instance) needs to find tasks and boards. They are
+services a provider calls; they never answer HTTP themselves.
+
+| Service | What it does |
+| --- | --- |
+| `Search\Header\TaskHeaderSearch::search(SearchViewer, string $text, int $limit)` | Tasks whose title or description holds every word of `$text`, on the boards the viewer may open |
+| `Search\Header\BoardHeaderSearch::search(SearchViewer, string $text, int $limit)` | Boards whose name holds every word of `$text`, among the boards the viewer may open |
+| `Search\Header\SearchBoardScope::boards(SearchViewer, string $group)` | The boards the viewer may open for a group (`tasks` or `boards`), used by both |
+| `Search\Header\SearchViewers::forIdentifier(string $userIdentifier)` | The signed-in user as a `SearchViewer` when the identifier is theirs, else null |
+
+Both searches answer `SearchHits`: at most `$limit` rows (1 to 50) of `SearchHit` (kind, id, title, URL of the task or board
+page, a subtitle with the task's `#number`, board and tenant, a plain-text excerpt of the description, the last change), the number of visible
+matches and whether the search is partial (a scan stopped at its bound, so there may be more visible matches than the
+total; this holds for an empty result too). Every text is plain (control and format characters removed; script and style
+contents, HTML tags, entities and Markdown marks stripped from excerpts); the search box escapes it.
+
+How a search runs, and why it never hints at a hidden row:
+
+1. `TaskBoardEvents::SEARCH_SCOPE` (`SearchScopeEvent`) lets the host narrow the scope, or deny it.
+2. `BOARD_LIST_QUERY` overrides apply: when the host lists other boards on a tenant's index (`overrideList()`), only those
+   boards of that tenant are searched (one event per searched tenant, or one without tenancy).
+3. The boards of that scope that are not archived are read in batches (tenants, boards, exclusions, the host's lists and, for
+   boards, the words of the name, all in SQL), the most recently changed first, until `search_kit.max_boards` visible boards
+   are kept (configurable, default 200) or `search_kit.max_scanned_boards` are read (configurable, default 1000); a search
+   that stops there is partial. The default rule (the viewer's own boards and their teams' boards; every board for
+   `security.manage_roles`) filters in SQL when no `BOARD_ACCESS_CHECK` listener is registered, and otherwise only puts
+   those boards first, so a listener's grant still counts. Keys are then compared exactly, with tenancy each board's tenant
+   must resolve for the viewer, and each board passes the bundle's view check: creator, team, `security.manage_roles` when
+   the viewer is the signed-in user, then `BOARD_ACCESS_CHECK`. The viewer's teams and roles are read once per search
+   (`TaskBoardResourceAccessChecker::defaultBoardReach()`, `boardViewDecider()`).
+4. For tasks, one query reads the matching tasks of those boards that are not archived, at most `search_kit.max_candidates`
+   (configurable, default 100), newest change first. Each one then passes `TASK_ACCESS_CHECK` (`taskViewDecider()`): a deny
+   hides it.
+5. The rows are cut to the limit after these checks, and the total counts only rows that passed them. A refused scope, a
+   denied board or a denied task looks exactly like no match: empty rows, no count.
+
+Words are lower-cased, at most eight, and only ever reach `LIKE … ESCAPE '!'` with `!`, `%` and `_` escaped. A search costs a
+fixed number of queries whatever the number of boards or tasks (three for tasks, two for boards; one more per batch of boards
+only when boards the viewer cannot open fill a batch). That budget does not count the host's tenant resolver and listeners;
+the resolver is asked once per distinct tenant key and viewer within one request (`Search\Header\SearchTenants`), however
+many boards and rows the tenant has. The services keep nothing between calls (FrankenPHP worker mode).
+
+### Narrowing the scope: the search scope event
+
+```php
+use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: TaskBoardEvents::SEARCH_SCOPE)]
+final class TaskSearchScope
+{
+    public function __construct(private ProjectFeatures $features)
+    {
+    }
+
+    public function __invoke(SearchScopeEvent $event): void
+    {
+        // The viewer's projects whose task feature is on: the only tenants searched.
+        $event->onlyTenants($this->features->projectsWithTasks($event->getSubjectId()));
+    }
+}
+```
+
+| Method | Effect |
+| --- | --- |
+| `onlyTenants(list<string>)` | Only these tenant keys; a second call keeps the keys both name |
+| `excludeTenants(list<string>)` | Leaves these tenants out |
+| `onlyBoards(list<string>)` | Only these board ids; a second call keeps the ids both name |
+| `excludeBoards(list<string>)` | Leaves these boards out |
+| `deny()` | Nothing for this viewer |
+
+The event can only narrow: nothing in it grants access, and every board and task found is still checked as above. It carries
+the viewer (`getSubject()`, `getSubjectId()`), the group (`getGroup()`: `tasks` or `boards`), the scope id the search box sent
+(`getScope()`: client input, never a permission) and, on a tenant page, the request's tenant key (`getRequestTenantKey()`).
+
+- **With `tenancy.enabled`** and no `onlyTenants()` answer, only the current request's tenant is searched, and nothing outside a
+  tenant page (deny by default). A tenant page whose slug does not resolve for the viewer finds nothing. A host whose search
+  palette runs on SearchKit's own route (no tenant page) must add a listener that names the viewer's current tenant (for
+  instance the organisation or project in the session); a list of every tenant the viewer belongs to makes the palette
+  search across tenants.
+- **Scopes of the search box.** The bundle applies its own: `board:<board id>` (one board, as `onlyBoards()`) and
+  `tenant:<tenant key>` (one tenant, intersected with the tenants the listeners or the request allow: it never widens them,
+  so `tenant:globex` on an `acme` page finds nothing). A host scope (a project chip, for instance) counts only when a listener
+  narrows the event for it and calls `acceptScope()`; any other scope finds nothing.
+- **Bounds.** An allow list longer than 500 entries keeps its first 500 (logged as a warning). An exclusion list longer than
+  500 cannot be applied in one SQL list, so the search finds nothing (fail closed, logged as a warning). A search that
+  stops at `max_boards` visible boards or `max_scanned_boards` read boards reports a partial result (logged as a warning).
+
+### SearchKit groups: tasks and boards
+
+With `nowo-tech/search-kit-bundle` 1.9 or later installed (PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
+the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDefinition`:
+
+| Group | Searches | Row |
+| --- | --- | --- |
+| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description | the title; the `#number`, board and tenant, and an excerpt of the description; the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
+| `boards` (`Bridge\SearchKit\BoardSearchDefinition`) | board name | the name; the tenant and an excerpt of the description; the board page |
+
+They follow the rules above. The viewer is the signed-in user whose identifier the query carries; any other identifier gets
+nothing, so `searchFor()` finds nothing either. The tenant SearchKit sees is the key of the current tenant page, or `*`
+elsewhere. Outside a tenant page, the tenants that are searched are the ones `SEARCH_SCOPE` allows. A tenant page whose slug
+does not resolve for the viewer has no tenant, and SearchKit answers nothing. The feature gate is the access checker's
+`canAccess()`. Boards are checked with `BOARD_ACCESS_CHECK` before the tasks are read. Each candidate task then passes
+`TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board_task` and
+`task_board_board`). Recents are revalidated by id (`t.id`, `b.id`, UUIDs only) when SearchKit's `recent.revalidate` is on.
+There is no "see all" link, because no list page searches across boards by text. Everything the bundle
+decides itself is filtered in SQL (the boards the viewer may open, archived tasks, the scope); a host's `TASK_ACCESS_CHECK`
+veto runs in PHP on the candidates, so vetoed tasks still take slots of SearchKit's candidate window
+(`search_kit.max_candidates`) and can make its total a lower bound. SearchKit computes the total within its
+candidate window; a scope that stopped at `max_boards` / `max_scanned_boards` is not visible to it, so its total counts the
+boards that were read (SearchKit marks a full window inexact on its own).
+
+Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).
 
 ## Translations
 

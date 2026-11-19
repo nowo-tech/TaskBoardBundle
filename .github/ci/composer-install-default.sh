@@ -25,4 +25,6 @@ jq '
 ' composer.json > composer.json.tmp
 mv composer.json.tmp composer.json
 
+bash "$(dirname "$0")/search-kit.sh"
+
 composer update --with-all-dependencies --no-interaction --prefer-dist --no-progress

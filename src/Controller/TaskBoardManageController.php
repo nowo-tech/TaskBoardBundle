@@ -1221,11 +1221,17 @@ final class TaskBoardManageController extends AbstractController
 
         $viewer = new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey());
         $day    = $shown->firstDay($zone);
+        // Audit UW2-5: a target day outside the calendar's years is refused before the source is read.
+        $target = DateTimeImmutable::createFromFormat('!Y-m-d', $shown->date, $zone);
+        if (!$target instanceof DateTimeImmutable || !$this->calendarBuilder->isInRange($target)) {
+            return $this->eventAnswer(Response::HTTP_BAD_REQUEST, 'task_board.calendar.failed', self::EVENT_INVALID);
+        }
 
         try {
             $stored = $collector->find($viewer, $sourceKey, $shown->id, new CalendarDateRange($day, $day));
         } catch (Throwable $failure) {
-            return $this->eventFailure($failure);
+            // Audit UW2-1: nothing was written yet, so a lock conflict of the re-read is always CONFLICT_001 (retry is safe).
+            return $this->eventFailure($failure, false);
         }
         if (!$stored instanceof CalendarEvent) {
             return $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND);
@@ -1292,14 +1298,18 @@ final class TaskBoardManageController extends AbstractController
         return $instant;
     }
 
-    /** Since 2.24.0: a source that threw: a lock conflict in the chain answers per REQ-RUNTIME-003 rule 6; anything else is rethrown. */
-    private function eventFailure(Throwable $failure): JsonResponse
+    /**
+     * Since 2.24.0: a source that threw: a lock conflict in the chain answers per REQ-RUNTIME-003 rule 6; anything else is
+     * rethrown. Since 2.25.0 (audit UW2-1) `$committed` false (the re-read before `reschedule()`) answers CONFLICT_001 whatever
+     * the chain says; null (the `reschedule()` call) reads it from the chain.
+     */
+    private function eventFailure(Throwable $failure, ?bool $committed = null): JsonResponse
     {
         if (!LockConflictChain::isConflict($failure)) {
             throw $failure;
         }
 
-        return $this->eventLockConflict(CalendarEventRescheduleResult::lockConflict(LockConflictChain::committed($failure), LockConflictChain::retryAfterHint($failure)));
+        return $this->eventLockConflict(CalendarEventRescheduleResult::lockConflict($committed ?? LockConflictChain::committed($failure), LockConflictChain::retryAfterHint($failure)));
     }
 
     private function eventMoved(CalendarEventReschedule $change, CalendarEventRescheduleResult $result, string $source): JsonResponse

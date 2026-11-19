@@ -119,6 +119,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Header search services for tasks and boards.** `Search\Header\TaskHeaderSearch` (title and description) and
+  `Search\Header\BoardHeaderSearch` (board name) find what the viewer may open, for a site-wide search box such as a SearchKit
+  provider. The scope (tenants, boards, archived rows, words) is applied in SQL before the cut; each board passes the view
+  check (`BOARD_ACCESS_CHECK`) and each task `TASK_ACCESS_CHECK`; the total counts only visible rows, and a refusal looks
+  like no match. Words reach only escaped `LIKE`. The number of queries does not grow with boards or tasks. See
+  [USAGE](USAGE.md#header-search-since-225).
+- **SearchKit groups `tasks` and `boards`** (with `nowo-tech/search-kit-bundle` >= 1.9, a `suggest`; PHP >= 8.3).
+  `Bridge\SearchKit\TaskSearchDefinition` and `BoardSearchDefinition` are SearchKit `EntitySearchDefinition`s on top of the
+  header search services: the signed-in viewer only, the boards in SQL before the cut, TASK_ACCESS_CHECK batched per page,
+  SearchKit's contract (tenant, feature gate, scopes, escaped LIKE, bounded limit, visible total, host event, recents by
+  id). New options `search_kit.*` ([CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225)) and the
+  labels `task_board.search.group.tasks` / `.boards` in the seven locales. The `tasks` group is sensitive by default
+  (`search_kit.tasks.sensitive`). Boards the viewer cannot open never push out the ones they can: boards are read in
+  batches up to `search_kit.max_scanned_boards`, the default-visible ones first (filtered in SQL when no
+  BOARD_ACCESS_CHECK listener may grant), and a search that stops at a bound is partial, also when it found nothing.
+  BOARD_LIST_QUERY overrides bound the search as they bound the index. The host's tenant resolver is asked once per
+  tenant key and viewer within a request.
+- **`TaskBoardEvents::SEARCH_SCOPE` (`SearchScopeEvent`).** A host narrows the boards and tenants searched for a viewer
+  (`onlyTenants()`, `excludeTenants()`, `onlyBoards()`, `excludeBoards()`, `deny()`), for instance to leave out projects whose
+  task feature is off. It never grants. With tenancy and no answer, only the request's tenant is searched. The bundle's own
+  scopes are `board:<id>` (as `onlyBoards()`) and `tenant:<key>`, which is intersected with the allowed tenants and never
+  widens them. A host scope needs a listener that calls `acceptScope()`, else nothing is found.
+- **`TaskBoardResourceAccessChecker::boardViewDecider()` and `taskViewDecider()`.** `canViewBoard()` and `canViewTask()` for
+  many boards and tasks at once: the viewer's teams and manage roles are read once, then one event per board or task.
+
+### Fixed
+
+- **Calendar event move: a lock conflict while the event is read again is always `CONFLICT_001`** (audit UW2-1). Nothing is
+  written before `reschedule()`, so a conflict thrown by `events()` during the re-read answers `CONFLICT_001` with
+  `Retry-After`, even when the exception reports a partial commit; only the `reschedule()` call reads that from the chain.
+- **Calendar event ids and versions refuse every format character; titles lose them** (audits UW2-2, VL-5): `\p{Cf}` (the
+  Arabic letter mark U+061C, the soft hyphen U+00AD, tag characters, besides the bidirectional and zero-width ones), the
+  line and paragraph separators U+2028 / U+2029 and the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0 are refused in
+  ids and versions and removed from titles (`CalendarEvent::cleanTitle()`; tabs and line breaks become spaces). Any other
+  control character in a title is still refused.
+- **Reschedule domain codes may not be `CONFLICT` or start with `CONFLICT_`** (audit UW2-3), not only `CONFLICT_<digits>`.
+- **The move re-read finds an event behind other days** (audit UW2-4): there, events outside the requested day do not count
+  toward the drop cap (the pulled cap still bounds the read). The docs ask sources to filter by `CalendarEventRange`.
+- **A target day outside the calendar's years answers 400 before the source is read** (audit UW2-5), and the docs say that a
+  non-conflict exception from `events()` during the move re-read is not caught (500).
+
 ## [2.24.0] - 2026-11-19
 
 ### Added

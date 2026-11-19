@@ -27,6 +27,9 @@ services:
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
+            # Since 2.25.0: registered by TaskBoardExtension (registerHeaderSearch(); the SearchKit groups only with SearchKit >= 1.9).
+            - '../../Bridge/SearchKit/'
+            - '../../Search/Header/'
             # Since 2.22.0: values of the task menu (the builder is a service).
             - '../../Menu/TaskMenu.php'
             - '../../Menu/TaskMenuContext.php'

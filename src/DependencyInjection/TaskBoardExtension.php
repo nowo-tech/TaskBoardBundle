@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
+use Nowo\SearchKitBundle\Provider\Entity\EntitySearchDefinition;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiQuestionController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Doctrine\JsonTextFunction;
@@ -37,6 +38,8 @@ use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
+use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
@@ -125,6 +128,12 @@ use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Routing\TenantPaths;
 use Nowo\TaskBoardBundle\Routing\TenantPathUrlGenerator;
 use Nowo\TaskBoardBundle\Search\DoctrineTaskTextSearch;
+use Nowo\TaskBoardBundle\Search\Header\BoardHeaderSearch;
+use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
+use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
+use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
+use Nowo\TaskBoardBundle\Search\Header\SearchViewers;
+use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchMetadataListener;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
@@ -173,6 +182,7 @@ use Nowo\TaskBoardBundle\Template\DefaultTaskTemplatePermission;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Template\TaskTemplatePermissionInterface;
 use Nowo\TaskBoardBundle\Tenancy\SlugTaskBoardTenantResolver;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Transition\AllowAllColumnTransitionPolicy;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
@@ -219,6 +229,9 @@ use function trigger_deprecation;
 final class TaskBoardExtension extends Extension implements PrependExtensionInterface
 {
     private const TIPTAP_EXTENSION = 'nowo_tiptap_editor';
+
+    /** Since 2.25.0: SearchKit's `EntitySearchDefinition::TAG` (a literal: SearchKit is optional). */
+    public const SEARCH_KIT_DEFINITION_TAG = 'nowo_search_kit.entity_definition';
 
     /** Tiptap profile used by {@see TaskFormType} for the description. */
     public const TIPTAP_TASK_PROFILE = 'task';
@@ -351,6 +364,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
         $this->registerTextSearch($container, $config['search'], $emName);
+        $this->registerHeaderSearch($container, $config['search_kit'], $emName);
         $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
@@ -978,6 +992,73 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->setDefinition(TaskTextSearchMetadataListener::class, (new Definition(TaskTextSearchMetadataListener::class))
                 ->setArgument('$comments', $search['comments'])
                 ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
+        }
+    }
+
+    /**
+     * Since 2.25.0: the header search services ({@see SearchBoardScope}, {@see TaskHeaderSearch}, {@see BoardHeaderSearch})
+     * on the bundle's manager, and, when SearchKit >= 1.9 is installed and `search_kit.enabled`, the SearchKit groups `tasks`
+     * and `boards` ({@see TaskSearchDefinition}, {@see BoardSearchDefinition}, tagged for SearchKit's provider pass).
+     *
+     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int} $searchKit
+     */
+    private function registerHeaderSearch(ContainerBuilder $container, array $searchKit, string $emName): void
+    {
+        $em = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $container->setDefinition(SearchViewers::class, (new Definition(SearchViewers::class))
+            ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+        $container->setDefinition(SearchHitMapper::class, (new Definition(SearchHitMapper::class))
+            ->setArgument('$urls', new Reference('router'))
+            ->setArgument('$routes', '%nowo_task_board.routes%'));
+        $container->setDefinition(SearchTenants::class, (new Definition(SearchTenants::class))
+            ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$requestStack', new Reference('request_stack', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+        $container->setDefinition(SearchBoardScope::class, (new Definition(SearchBoardScope::class))
+            ->setArgument('$entityManager', $em)
+            ->setArgument('$accessChecker', new Reference(TaskBoardResourceAccessChecker::class))
+            ->setArgument('$eventDispatcher', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::IGNORE_ON_INVALID_REFERENCE))
+            ->setArgument('$maxBoards', $searchKit['max_boards'])
+            ->setArgument('$tenants', new Reference(SearchTenants::class))
+            ->setArgument('$users', new Reference(TaskBoardUsers::class))
+            ->setArgument('$maxScannedBoards', $searchKit['max_scanned_boards']));
+        $container->setDefinition(TaskHeaderSearch::class, (new Definition(TaskHeaderSearch::class))
+            ->setArgument('$scope', new Reference(SearchBoardScope::class))
+            ->setArgument('$entityManager', $em)
+            ->setArgument('$accessChecker', new Reference(TaskBoardResourceAccessChecker::class))
+            ->setArgument('$mapper', new Reference(SearchHitMapper::class))
+            ->setArgument('$scanRows', $searchKit['max_candidates']));
+        $container->setDefinition(BoardHeaderSearch::class, (new Definition(BoardHeaderSearch::class))
+            ->setArgument('$scope', new Reference(SearchBoardScope::class))
+            ->setArgument('$mapper', new Reference(SearchHitMapper::class)));
+
+        if (!$searchKit['enabled'] || !class_exists(EntitySearchDefinition::class)) {
+            return;
+        }
+        $definitions = [
+            TaskSearchDefinition::class  => [$searchKit['tasks']['enabled'], $searchKit['priority'], $searchKit['tasks']['sensitive']],
+            BoardSearchDefinition::class => [$searchKit['boards']['enabled'], $searchKit['priority'] - 1, false],
+        ];
+        foreach ($definitions as $class => [$on, $priority, $sensitive]) {
+            if (!$on) {
+                continue;
+            }
+            $container->setDefinition($class, (new Definition($class))
+                ->setArgument('$viewers', new Reference(SearchViewers::class))
+                ->setArgument('$scope', new Reference(SearchBoardScope::class))
+                ->setArgument('$entityManager', $em)
+                ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class))
+                ->setArgument('$access', new Reference(TaskBoardAccessCheckerInterface::class))
+                ->setArgument('$mapper', new Reference(SearchHitMapper::class))
+                ->setArgument('$translator', new Reference('translator', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$tenantPaths', new Reference(TenantPaths::class))
+                ->setArgument('$routes', '%nowo_task_board.routes%')
+                ->setArgument('$maxCandidates', $searchKit['max_candidates'])
+                ->setArgument('$tenants', new Reference(SearchTenants::class))
+                ->setArgument('$sensitive', $sensitive)
+                ->addTag(self::SEARCH_KIT_DEFINITION_TAG, ['priority' => $priority]));
         }
     }
 

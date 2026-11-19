@@ -86,6 +86,9 @@ final readonly class CalendarEventCollector
      * after the same checks as the page (tenant, range, a real event); null when the source does not return it. The move
      * route reads the stored start, end, all-day flag, version and read-only flag here instead of trusting the browser.
      * An exception of the source reaches the caller.
+     *
+     * Since 2.25.0 (audit UW2-4): events outside `$days` do not count toward the drop cap here (a source that ignores the
+     * range must not hide the event behind its other days); the pulled cap still bounds the read.
      */
     public function find(CalendarViewer $viewer, string $key, string $eventId, CalendarDateRange $days): ?CalendarEvent
     {
@@ -93,7 +96,7 @@ final readonly class CalendarEventCollector
             if ($sourceKey !== $key) {
                 continue;
             }
-            foreach ($this->accepted($key, $source, $viewer, new CalendarEventRange($days, $this->timezone()->getName())) as $event) {
+            foreach ($this->accepted($key, $source, $viewer, new CalendarEventRange($days, $this->timezone()->getName()), false) as $event) {
                 if ($event->id === $eventId) {
                     return $event;
                 }
@@ -106,11 +109,13 @@ final readonly class CalendarEventCollector
     /**
      * The events of one source that are safe to draw: real events of the viewer's tenant (byte for byte), on the page, one per
      * id, at most `maxPerSource`. Audit UW-TB-3: at most `maxPerSource * 4` values are pulled, and the source stops after
-     * `maxPerSource` dropped ones, so an endless generator never holds the request (or a worker).
+     * `maxPerSource` dropped ones, so an endless generator never holds the request (or a worker). With
+     * `$countOutOfRange` false (the move re-read, audit UW2-4) an event outside the range is skipped without counting as a
+     * drop.
      *
      * @return Generator<int, CalendarEvent>
      */
-    private function accepted(string $key, CalendarEventSourceInterface $source, CalendarViewer $viewer, CalendarEventRange $range): Generator
+    private function accepted(string $key, CalendarEventSourceInterface $source, CalendarViewer $viewer, CalendarEventRange $range, bool $countOutOfRange = true): Generator
     {
         $seen    = [];
         $dropped = 0;
@@ -120,6 +125,9 @@ final readonly class CalendarEventCollector
                 $this->logger->warning('TaskBoard calendar event source {source} returned too many values; the rest are not read', ['bundle' => 'nowo_task_board', 'source' => $key, 'max' => $this->maxPerSource]);
 
                 break;
+            }
+            if ($event instanceof CalendarEvent && !$countOutOfRange && !$range->overlaps($event)) {
+                continue;
             }
             if (!$event instanceof CalendarEvent || $event->tenantKey !== $viewer->tenantKey || !$range->overlaps($event) || isset($seen["\0" . $event->id])) {
                 ++$dropped;

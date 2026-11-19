@@ -1080,3 +1080,5 @@ task_board.question.mine.column.asked: "Chiesta"
 task_board.question.mine.empty.to_answer: "Nessuna domanda attende la tua risposta."
 task_board.question.mine.empty.asked: "Nessuna delle tue domande attende risposta."
 task_board.question.mine.see_all: "Vedi tutte"
+task_board.search.group.tasks: Attività
+task_board.search.group.boards: Bacheche

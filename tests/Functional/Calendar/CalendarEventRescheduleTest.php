@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 
 use function array_column;
+use function count;
 use function json_decode;
 use function str_repeat;
 
@@ -168,6 +169,45 @@ final class CalendarEventRescheduleTest extends CalendarTestCase
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('X-Conflict-Code', 'CONFLICT_001');
+        self::assertSame([], $this->events()->moves);
+    }
+
+    /**
+     * Since 2.25.0 (audit UW2-1): nothing was written before reschedule(), so a lock conflict of the re-read is CONFLICT_001
+     * with Retry-After even when the exception says part of a write unit was committed.
+     */
+    public function testALockConflictWhileReadingTheEventAgainIsNeverAPartialCommit(): void
+    {
+        $this->events()->failure = new ConcurrencyConflict(3, TransientFailureKind::Deadlock, null, new RuntimeException('lock'), true);
+        $answer                  = $this->validMove();
+
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('CONFLICT_001', $answer['code'] ?? null);
+        self::assertResponseHeaderSame('X-Conflict-Code', 'CONFLICT_001');
+        self::assertTrue($this->client->getResponse()->headers->has('Retry-After'));
+        self::assertSame([], $this->events()->moves);
+    }
+
+    /** Since 2.25.0 (audit UW2-5): a target day outside the calendar's years never reads the source. */
+    public function testATargetDayOutOfRangeNeverReadsTheSource(): void
+    {
+        $before = count($this->events()->calls);
+        $answer = $this->move(['id' => 'm-1', 'date' => '2300-01-01', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-04 10:15'), 'version' => '3']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('CALENDAR_EVENT_INVALID', $answer['code'] ?? null);
+        self::assertCount($before, $this->events()->calls);
+    }
+
+    /** A target day in range whose computed end falls after the calendar's last year is refused, nothing written. */
+    public function testAMoveWhoseEndLeavesTheCalendarYearsIsABadRequest(): void
+    {
+        $row                             = $this->events()->store['m-1'];
+        $this->events()->store['m-long'] = ['end' => new DateTimeImmutable('2030-03-08 10:15')] + $row;
+        $answer                          = $this->move(['id' => 'm-long', 'date' => '2200-12-30', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-08 10:15'), 'version' => '3']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('CALENDAR_EVENT_INVALID', $answer['code'] ?? null);
         self::assertSame([], $this->events()->moves);
     }
 

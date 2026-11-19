@@ -1080,3 +1080,5 @@ task_board.question.mine.column.asked: "Feita"
 task_board.question.mine.empty.to_answer: "Nenhuma pergunta aguarda a sua resposta."
 task_board.question.mine.empty.asked: "Nenhuma das suas perguntas aguarda resposta."
 task_board.question.mine.see_all: "Ver todas"
+task_board.search.group.tasks: Tarefas
+task_board.search.group.boards: Quadros
