@@ -1,0 +1,11 @@
+{#
+    Since 2.24.0: the events of a day, before its tasks; nothing without events. Variables: events (list of
+    Dto\TaskCalendarEventEntry), day (Y-m-d).
+#}
+{% if events is not empty %}
+    <ul class="nowo-task-cal__events nowo-task-plain-list" aria-label="{{ 'task_board.calendar.events_of_day'|trans({'%date%': day}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-cal-events">
+        {% for event in events %}
+            {{ include('@NowoTaskBoardBundle/manage/_calendar_event.html.twig', {event: event, day: day}, with_context: false) }}
+        {% endfor %}
+    </ul>
+{% endif %}

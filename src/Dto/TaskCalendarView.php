@@ -30,6 +30,9 @@ final readonly class TaskCalendarView
         public array $weekdays,
         public int $placed,
         public bool $anyEditable,
+        // Since 2.24.0: how many events of the calendar event sources the page has, and whether the viewer may move one.
+        public int $events = 0,
+        public bool $anyMovableEvent = false,
     ) {
     }
 }

@@ -29,6 +29,11 @@ final readonly class TaskCalendarDay
         public int $more,
         // Since 2.14.0 (calendar.day_annotation_provider): the viewer's annotation of the day; null without one.
         public ?CalendarDayAnnotation $annotation = null,
+        // Since 2.24.0: the events of the calendar event sources on this day (in the month grid, the first three), and how many
+        // more there are (counted in the "+n more" link).
+        /** @var list<TaskCalendarEventEntry> */
+        public array $events = [],
+        public int $moreEvents = 0,
     ) {
     }
 }

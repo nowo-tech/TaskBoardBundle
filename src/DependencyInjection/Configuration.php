@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
+use DateTimeZone;
 use Nowo\TaskBoardBundle\Import\Support\DelimitedTableParser;
 use Nowo\TaskBoardBundle\Import\Support\JsonImportGuard;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
@@ -16,6 +17,7 @@ use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 use function array_map;
+use function in_array;
 use function is_bool;
 use function is_string;
 use function preg_match;
@@ -454,6 +456,14 @@ final class Configuration implements ConfigurationInterface
                             ->children()
                                 ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/schedule')->end()
                                 ->scalarNode('name')->defaultValue('nowo_task_board_task_schedule')->end()
+                            ->end()
+                        ->end()
+                        // Since 2.24.0: with calendar.enabled; moves an event of a calendar event source (form-encoded POST, JSON answer).
+                        ->arrayNode('calendar_event_reschedule')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/calendar/event-reschedule')->end()
+                                ->scalarNode('name')->defaultValue('nowo_task_board_calendar_event_reschedule')->end()
                             ->end()
                         ->end()
                         // Since 2.3.0 (spec 217): only with move.enabled.
@@ -989,6 +999,26 @@ final class Configuration implements ConfigurationInterface
                         ->booleanNode('skip_non_working_days')
                             ->defaultFalse()
                             ->info('Since 2.14.0: with day_annotation_provider, a dragged task (body or edge) lands on the next working day of the viewer when dropped on a non-working one. false = drops land where they fall, as before.')
+                        ->end()
+                        ->arrayNode('events')
+                            ->addDefaultsIfNotSet()
+                            ->info('Since 2.24.0: timed events of the calendar event sources (services implementing Nowo\\TaskBoardBundle\\Calendar\\CalendarEventSourceInterface, tag nowo_task_board.calendar_event_source; autoconfigured). Without a source nothing changes.')
+                            ->children()
+                                ->scalarNode('timezone')
+                                    ->defaultNull()
+                                    ->info('The timezone the calendar shows event times in and moves events by (an IANA name such as Europe/Madrid). null = the PHP default timezone (date.timezone), read per request.')
+                                    ->validate()
+                                        ->ifTrue(static fn (mixed $value): bool => $value !== null && (!is_string($value) || !in_array($value, DateTimeZone::listIdentifiers(), true)))
+                                        ->thenInvalid('calendar.events.timezone must be null or an IANA timezone identifier, %s given.')
+                                    ->end()
+                                ->end()
+                                ->integerNode('max_per_source')
+                                    ->defaultValue(500)
+                                    ->min(1)
+                                    ->max(5000)
+                                    ->info('The most events one source draws on a calendar page; the rest are left out and logged.')
+                                ->end()
+                            ->end()
                         ->end()
                     ->end()
                 ->end()

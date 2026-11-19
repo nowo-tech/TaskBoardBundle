@@ -4,6 +4,8 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.24.0](#to-2240)
+  - [Calendar event sources (additive)](#calendar-event-sources-additive)
 - [To 2.23.1](#to-2231)
   - [MySQL 9: the recipients table](#mysql-9-the-recipients-table)
   - [My open questions under tenancy](#my-open-questions-under-tenancy)
@@ -215,6 +217,43 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.24.0
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+php bin/console assets:install
+```
+
+A minor release. Additive: no schema change, no BC break, nothing changes for a host without a calendar event source.
+
+**Dependency floor.** `nowo-tech/transaction-doctrine` is now required at `^1.6` (was `^1.3`): the calendar event move uses
+`ConflictResponsePolicy::CODE_HEADER`, added in 1.6.0. A host on 1.3 to 1.5 updates it together with the bundle:
+`composer update nowo-tech/task-board-bundle nowo-tech/transaction-doctrine`.
+
+### Calendar event sources (additive)
+
+- New ports `Calendar\CalendarEventSourceInterface` (timed events of another part of the application on a board's calendar)
+  and `Calendar\CalendarEventReschedulerInterface` (move them to another day), with the values `CalendarEvent`,
+  `CalendarEventRange`, `CalendarEventReschedule`, `CalendarEventRescheduleResult` and the enum
+  `CalendarEventRescheduleStatus`. A service that implements the source interface is tagged
+  `nowo_task_board.calendar_event_source` by autoconfiguration. See
+  [USAGE](USAGE.md#calendar-events-of-other-sources-since-224).
+- New options `calendar.events.timezone` (`null`: the PHP default timezone) and `calendar.events.max_per_source` (`500`),
+  and the route `routes.calendar_event_reschedule` (form-encoded POST, JSON answer), registered with `calendar.enabled` like `task_schedule`.
+  A host that imports the routes with `type: nowo_task_board` gets it; nothing to do.
+- **A service already implementing an interface named like these?** Only a class implementing
+  `Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface` is picked up; existing services are untouched.
+- **Overridden calendar templates.** `manage/calendar.html.twig`, `_calendar_grid.html.twig` and `_calendar_list.html.twig`
+  draw the events through the new `_calendar_events.html.twig`, `_calendar_event.html.twig` and
+  `_calendar_event_move_dialog.html.twig`. A host that overrides one of the three keeps its own markup and shows no events
+  until it includes the new partials (see the bundle's templates). `TaskCalendarDay` has two new properties (`events`,
+  `moreEvents`) and `TaskCalendarView` two more (`events`, `anyMovableEvent`), all with defaults; `TaskCalendarBuilder::build()`
+  takes an optional last argument `$events`.
+- **Assets.** `task-board.js` and `task-board.css` changed (the event list, drag and the Move event dialog): run
+  `assets:install` (or your asset pipeline).
+- **Worker mode.** The collector is stateless; a source must resolve the viewer and its data per call.
 
 ## To 2.23.1
 

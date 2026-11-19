@@ -55,7 +55,7 @@ internal gate (`Port\*Gate`, built by `Port\Ports`). `TaskBoardPortsPass` stops 
 service implements neither (a factory service, whose class the build cannot know, fails closed when it is built).
 
 The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInterface`, `TaskObjectLinkResolverInterface`,
-`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, `Template\TaskTemplatePermissionInterface` (2.16: `TaskTemplateScope`, `TaskBoardSnapshot`, `TaskTemplateSnapshot`), the API users / workspace / plan gate /
+`MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, `CalendarEventSourceInterface` / `CalendarEventReschedulerInterface` (2.24: `CalendarEvent`, `CalendarEventRange`, `CalendarEventReschedule`, `CalendarEventRescheduleResult`), `Template\TaskTemplatePermissionInterface` (2.16: `TaskTemplateScope`, `TaskBoardSnapshot`, `TaskTemplateSnapshot`), the API users / workspace / plan gate /
 rate limiter / idempotency store, the providers, ...) already take values only.
 
 **Since 2.16 (Beacon spec 234), new ports are framework-free from the start** (no deprecated twin):

@@ -1,0 +1,30 @@
+{#
+    Since 2.24.0: the new first day of one event, for keyboards and touch screens: no move needs a pointer. The controller fills
+    it from the event and posts it to calendar_event_reschedule, like a drag. Variables: eventMoveForm.
+#}
+{% set _body %}
+    {{ form_start(eventMoveForm, {attr: {id: 'nowo-task-cal-event-move-form', class: 'nowo-task-dialog__body', 'data-nowo-task-board-calendar-target': 'eventForm', 'data-action': 'nowo-task-board-calendar#submitEventMove', novalidate: 'novalidate'}}) }}
+        <p class="{{ nowo_ui_class('flash_error', 'NowoTaskBoardBundle') }}" role="alert" data-nowo-task-board-calendar-target="eventDialogError" hidden></p>
+        <p class="nowo-task-cal__event-move-title" data-nowo-task-board-calendar-target="eventDialogTitle"></p>
+        <div class="nowo-task-field">{{ form_row(eventMoveForm.date) }}</div>
+        {% for child in eventMoveForm %}
+            {% if not child.rendered %}
+                {{ form_row(child) }}
+            {% endif %}
+        {% endfor %}
+    {{ form_end(eventMoveForm) }}
+{% endset %}
+{% set _footer %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <button type="submit" form="nowo-task-cal-event-move-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: 'nowo-task-cal-event-move',
+    title: 'task_board.calendar.event_move'|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native',
+    attr: {'data-nowo-task-board-calendar-target': 'eventDialog', 'data-testid': 'nowo-task-cal-event-move-dialog'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+}, false) }}

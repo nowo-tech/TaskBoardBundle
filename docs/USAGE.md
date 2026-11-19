@@ -60,6 +60,11 @@
 - [Calendar: working days, holidays and leave (since 2.14)](#calendar-working-days-holidays-and-leave-since-214)
   - [Calendar annotations: Standard Symfony host](#calendar-annotations-standard-symfony-host)
   - [Calendar annotations: DDD / hexagonal host](#calendar-annotations-ddd--hexagonal-host)
+- [Calendar: events of other sources (since 2.24)](#calendar-events-of-other-sources-since-224)
+  - [What the calendar shows](#what-the-calendar-shows)
+  - [Moving an event](#moving-an-event)
+  - [Implementing a source: Standard Symfony host](#implementing-a-source-standard-symfony-host)
+  - [Implementing a source: DDD / hexagonal host](#implementing-a-source-ddd--hexagonal-host)
 - [Multi-board task list (since 2.13)](#multi-board-task-list-since-213)
   - [Standard Symfony host](#standard-symfony-host)
   - [DDD / hexagonal host](#ddd--hexagonal-host)
@@ -1382,6 +1387,173 @@ The port and its values carry no framework type (REQ-ARCH-001): the adapter gets
 its tenant key (`CalendarViewer`), the visible days as `Y-m-d` strings (`CalendarDateRange`) and assignee ids as strings,
 and returns `CalendarDayAnnotations`. Keep it in your infrastructure layer and map your own leave and holiday read models;
 nothing in it needs a bundle entity. Resolve per call (FrankenPHP worker mode): no viewer in a property.
+
+## Calendar: events of other sources (since 2.24)
+
+A board's calendar (`calendar.enabled`) can show **timed events** that live elsewhere in the application (meetings, calls,
+bookings, visits) next to the board's tasks, and let the viewer move them to another day. Each kind of event comes from a
+**calendar event source**: a service of the host or of another bundle that implements
+`Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface`. With `autoconfigure` (the Symfony default) the service is
+tagged `nowo_task_board.calendar_event_source`; without it, add the tag. Several sources can exist; each has its own `key()`.
+Options (timezone, limit per source): [CONFIGURATION](CONFIGURATION.md#task-numbers-and-calendar-since-21). Without a source
+the calendar is the 2.23 calendar.
+
+### What the calendar shows
+
+- **Once per page and source.** `events(CalendarViewer $viewer, CalendarEventRange $range)` gets the viewer (user id, board
+  id and the board's tenant key, from the board the viewer opened) and the page's days: `range.days` (`Y-m-d`, both
+  included) and the same span as instants, `range.from` (included) to `range.to` (excluded), in the calendar's timezone
+  (`range.timezone`). It returns `CalendarEvent` values.
+- **The source decides who sees what.** Return only the events this viewer may read, in this tenant. The bundle never adds an
+  event the source did not return for this viewer. On top of that it drops, and logs as one notice per page and source: a value
+  that is not a `CalendarEvent`, an event whose `tenantKey` is not the viewer's (compared byte for byte; `null` without
+  tenancy), an event outside the page, and a repeated id. At most `calendar.events.max_per_source` events (500) per source are
+  drawn; the rest are logged as a warning. A source is read for at most four times that many values, and stops after that
+  many dropped ones (an endless generator never holds the request or a worker).
+- **A failing source never breaks the page.** An exception from `events()` leaves that source out (warning `TaskBoard calendar
+  event source {source} failed: {class}` with the exception class; the message is logged at debug only); the other sources and the tasks still render. A source whose key is invalid or already taken
+  by an earlier source is ignored (error log).
+- **How an event looks.** In the month and week grids and in the list, each day has a list of its events above its tasks
+  (`_calendar_events.html.twig`, `_calendar_event.html.twig`): the time range (or *All day*), the title (a link with `url`),
+  a dashed accent in the event's `color` (or the neutral border colour), the class `nowo-task-cal__event--{category}`,
+  `is-continued` / `is-continuing` on an event of several days. Screen readers hear "Event:" before it, and "(read-only)" when
+  it cannot move. The month grid draws three events a day and counts the rest in "+n more" (the link opens the day in the
+  list); on a phone the month shows only the counts of tasks, as before, and the list shows the events. Titles are printed as
+  given, escaped by Twig; the JavaScript never writes one.
+- **Timezones.** `start` and `end` are instants in any timezone; the calendar shows them in `calendar.events.timezone` (the PHP
+  default when not set). A timed event that ends at midnight is on its own day only. An all-day event (`allDay: true`) is the
+  days from the date of `start` to the date of `end`, both included, read as given (never converted).
+
+`CalendarEvent` values (all validated; a bad value throws `InvalidArgumentException` in the source):
+
+| Argument | Meaning |
+| --- | --- |
+| `id` | The source's id, 1 to 128 printable characters (no control, bidirectional or zero-width character), unique within the source |
+| `title` | 1 to 200 printable characters (trimmed; no control, bidirectional or zero-width character) |
+| `start`, `end` | `DateTimeImmutable`; `end >= start` (an all-day event compares dates) |
+| `allDay` | `false` (default): timed; `true`: whole days |
+| `url` | `https://`, `http://` or a local path (`/...`, not `//...`); `null`: no link |
+| `color` | `#rgb` or `#rrggbb`; `null`: the default accent |
+| `category` | 1 to 32 of `a-z`, `0-9`, `_`, `-`: a CSS class for the host's own styles |
+| `readOnly` | `true` (default): never moves. `false`: movable when the source can reschedule |
+| `version` | An opaque concurrency token sent back with a move; `null`: none |
+| `tenantKey` | The event's tenant; must be the viewer's, or the event is dropped |
+
+### Moving an event
+
+A source that also implements `CalendarEventReschedulerInterface` (it extends the source interface) lets the viewer move its
+events that are not `readOnly`:
+
+- **Drag** an event to another day in the month or week grid (mouse or pen; not on a phone or a touch screen), or press its
+  **Move** button (keyboard, touch, any mode) and pick the new first day in the dialog: no move needs a pointer
+  (WCAG 2.5.7). Escape cancels a drag. After a move a toast offers **Undo** for a few seconds, and the days are drawn again.
+- **What changes.** The calendar moves an event by whole days: a timed event keeps its time of day (in the calendar's
+  timezone) and its duration in seconds, across a daylight-saving change too; an all-day event keeps its number of days. The
+  route `calendar_event_reschedule` (a form-encoded POST, JSON answer) computes the new `start` and `end` from the stored event; the browser never does.
+- **The browser's values are only compared.** The bundle checks the CSRF token, the signed-in user and that the viewer may open
+  the board (else 403 or 404). Then it reads the event again through `events()`, for this viewer, on the day the page showed
+  it: not returned answers 404, `readOnly` answers 403 (`CALENDAR_EVENT_FORBIDDEN`), and a start, end, all-day flag or version
+  other than what the page showed answers 409 (`CALENDAR_EVENT_CHANGED`). In those cases `reschedule()` is never called and
+  nothing is written. The new start and end are computed from the stored event, so a request cannot stretch an event or turn
+  it into an all-day one.
+- **Who decides.** Then the bundle calls `reschedule(CalendarViewer $viewer, CalendarEventReschedule $change)`, with the stored
+  values as `expectedStart` / `expectedEnd` / `expectedVersion`. The event may change between that read and the write, so
+  the source looks the event up again within the viewer's tenant, repeats its own permission check (do not rely on
+  `readOnly` alone), and compares the expected values with what it has, inside its own transaction (optimistic concurrency).
+- **Answers.** The source returns a `CalendarEventRescheduleResult`, and the route answers `{message, code}` (plus `start`,
+  `end`, `version` when moved):
+
+| Result | HTTP | Headers |
+| --- | --- | --- |
+| `ok(?string $version)` | 200 | |
+| `conflict(string $code = 'CALENDAR_EVENT_CHANGED')`: changed meanwhile, nothing written | 409 | `X-Error-Code: <code>` |
+| `lockConflict(committed: false, ?int $retryAfterSeconds)`: a database lock conflict, nothing written | 409 (or the shared `conflict_response` status, 503) | `X-Conflict-Code: CONFLICT_001`, `Retry-After` |
+| `lockConflict(committed: true)`: part of the work was saved | the same | `X-Conflict-Code: CONFLICT_002`, no `Retry-After` |
+| `forbidden(string $code = 'CALENDAR_EVENT_FORBIDDEN')` | 403 | `X-Error-Code: <code>` |
+| `notFound()`: unknown, of another tenant, or not this viewer's | 404 | `X-Error-Code: CALENDAR_EVENT_NOT_FOUND` |
+
+  A malformed request answers 400 `CALENDAR_EVENT_INVALID`; an unknown source key, or a source without the reschedule
+  interface, 404. An exception thrown by `reschedule()` whose chain holds a lock conflict (a write unit's
+  `ConcurrencyConflict`, a `TransientStorageFailure`, a DBAL deadlock or lock wait timeout) answers like `lockConflict()`
+  (REQ-RUNTIME-003 rule 6); any other exception is not caught. Codes are 1 to 64 of `A-Z`, `0-9`, `_`, never `CONFLICT_<n>` (reserved for lock
+  conflicts); `Retry-After` is at least 1 second.
+
+### Implementing a source: Standard Symfony host
+
+```php
+use App\Agenda\MeetingRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\OptimisticLockException;
+use Nowo\TaskBoardBundle\Calendar\CalendarEvent;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventRange;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedule;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedulerInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleResult;
+use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
+
+final readonly class MeetingCalendarSource implements CalendarEventReschedulerInterface
+{
+    public function __construct(private MeetingRepository $meetings, private EntityManagerInterface $em) {}
+
+    public function key(): string
+    {
+        return 'meetings';
+    }
+
+    public function events(CalendarViewer $viewer, CalendarEventRange $range): iterable
+    {
+        // One query: the viewer's meetings of this tenant that overlap the page.
+        foreach ($this->meetings->visibleTo($viewer->userId, $viewer->tenantKey, $range->from, $range->to) as $meeting) {
+            yield new CalendarEvent(
+                id: $meeting->getId(),
+                title: $meeting->getSubject(),
+                start: $meeting->getStartsAt(),
+                end: $meeting->getEndsAt(),
+                url: '/agenda/meetings/' . $meeting->getId(),
+                category: 'meeting',
+                readOnly: !$meeting->isOrganisedBy($viewer->userId),
+                version: (string) $meeting->getVersion(),
+                tenantKey: $meeting->getTenantKey(),
+            );
+        }
+    }
+
+    public function reschedule(CalendarViewer $viewer, CalendarEventReschedule $change): CalendarEventRescheduleResult
+    {
+        return $this->em->wrapInTransaction(function () use ($viewer, $change): CalendarEventRescheduleResult {
+            // Within the viewer's tenant, with a row lock.
+            $meeting = $this->meetings->findForUpdate($change->eventId, $viewer->tenantKey);
+            if ($meeting === null || !$meeting->isVisibleTo($viewer->userId)) {
+                return CalendarEventRescheduleResult::notFound();
+            }
+            if (!$meeting->isOrganisedBy($viewer->userId)) {
+                return CalendarEventRescheduleResult::forbidden();
+            }
+            if ($meeting->getStartsAt() != $change->expectedStart || $meeting->getEndsAt() != $change->expectedEnd
+                || (string) $meeting->getVersion() !== $change->expectedVersion) {
+                return CalendarEventRescheduleResult::conflict();
+            }
+            $meeting->moveTo($change->start, $change->end);
+
+            return CalendarEventRescheduleResult::ok((string) ($meeting->getVersion() + 1));
+        });
+    }
+}
+```
+
+No configuration is needed with `autoconfigure`. A read-only source implements `CalendarEventSourceInterface` only.
+
+### Implementing a source: DDD / hexagonal host
+
+The ports and their values carry no framework type (REQ-ARCH-001): the adapter gets the viewer's user id, the board id and its
+tenant key (`CalendarViewer`), the range as `Y-m-d` days and `DateTimeImmutable` instants (`CalendarEventRange`) and the move
+as plain values (`CalendarEventReschedule`); it returns `CalendarEvent` and `CalendarEventRescheduleResult`. Keep the adapter in
+the infrastructure layer: `events()` maps your read model, `reschedule()` dispatches your own command (move the meeting) and
+maps its outcome: a stale version or start to `conflict()`, a policy refusal to `forbidden()`, a missing aggregate to
+`notFound()`, a lock conflict to `lockConflict()` (or let it be thrown). Nothing in it needs a bundle entity.
+
+**Worker mode (FrankenPHP, kernel kept between requests).** The bundle's collector is stateless; the source must be too:
+resolve the viewer, the tenant and the data per call, and keep no result in a property.
 
 ## Multi-board task list (since 2.13)
 

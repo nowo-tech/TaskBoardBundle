@@ -708,6 +708,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_calendar_event_reschedule",
+                "path": "/tools/task-board/board/{boardId}/calendar/event-reschedule",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::rescheduleCalendarEvent"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_task_move_board",
                 "path": "/tools/task-board/task/{taskId}/move-board",
                 "host": "",

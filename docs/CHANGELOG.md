@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.24.0] - 2026-11-19](#2240---2026-11-19)
 - [[2.23.1] - 2026-11-19](#2231---2026-11-19)
 - [[2.23.0] - 2026-11-19](#2230---2026-11-19)
 - [[2.22.0] - 2026-11-18](#2220---2026-11-18)
@@ -117,6 +118,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [[1.0.0] - 2026-07-06](#100---2026-07-06)
 
 ## [Unreleased]
+
+## [2.24.0] - 2026-11-19
+
+### Added
+
+- **Calendar event sources: timed events of other parts of the application on a board's calendar.** A service implementing
+  `Calendar\CalendarEventSourceInterface` (autoconfigured, tag `nowo_task_board.calendar_event_source`) returns
+  `CalendarEvent` values (id, title, start and end as instants, all-day flag, optional URL, colour, category, read-only flag,
+  version and tenant key) for the viewer and the page's days, once per page. The month and week grids and the list draw them
+  above the tasks of each day, in a style of their own, with their times in `calendar.events.timezone` (the PHP default when
+  not set), "Event:" for screen readers, three a day in the month grid and the rest in "+n more". The source decides what the
+  viewer sees; the bundle also drops values that are not events, events of another tenant (byte for byte), events outside the
+  page and repeated ids, caps each source at `calendar.events.max_per_source` (500; at most four times that many values
+  are read), and leaves out (and logs, the exception class at warning level) a source that throws or has an invalid or
+  repeated key. Ids, titles and versions refuse control, bidirectional and zero-width characters.
+- **Moving an event.** A source that also implements `Calendar\CalendarEventReschedulerInterface` lets the viewer drag its
+  events that are not read-only to another day (month and week grids, mouse or pen) or move them with the Move event dialog
+  (keyboard, touch, every mode), with Undo. The new route `calendar_event_reschedule` (form-encoded POST with CSRF, JSON answer, with
+  `calendar.enabled`) keeps the time of day and the duration (an all-day event its days), across daylight-saving changes, and
+  asks the source with the expected start, end and version (optimistic concurrency). The browser's values are only
+  compared: the route reads the event again through the source for the viewer, refuses a read-only event (403) and a start,
+  end, all-day flag or version other than what the page showed (409), and computes the move from the stored event. Answers: 200; 409 with `X-Error-Code`
+  (`CALENDAR_EVENT_CHANGED` by default) when the event changed meanwhile; 409 (or the shared `conflict_response` status) with
+  `X-Conflict-Code: CONFLICT_001` and `Retry-After`, or `CONFLICT_002` without it after a partial commit, for a lock conflict
+  returned or thrown (REQ-RUNTIME-003 rule 6); 403 `CALENDAR_EVENT_FORBIDDEN`; 404 `CALENDAR_EVENT_NOT_FOUND` (also for an
+  unknown or read-only source); 400 `CALENDAR_EVENT_INVALID`.
+- Options `calendar.events.timezone`, `calendar.events.max_per_source` and `routes.calendar_event_reschedule`; translations of
+  the event texts in the seven locales.
+
+### Changed
+
+- **`nowo-tech/transaction-doctrine` requirement raised from `^1.3` to `^1.6`.** The calendar event move answers lock
+  conflicts with `ConflictResponsePolicy::CODE_HEADER` (`X-Conflict-Code`), which transaction-doctrine defines since 1.6.0.
 
 ## [2.23.1] - 2026-11-19
 
@@ -3112,7 +3146,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.23.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.24.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
