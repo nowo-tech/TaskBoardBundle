@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Routing\TenantPaths;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
+use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewers;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -67,7 +68,17 @@ abstract class TaskBoardSearchDefinition extends EntitySearchDefinition
         protected readonly ?TenantPaths $tenantPaths = null,
         protected readonly array $routes = [],
         private readonly int $maxCandidates = self::DEFAULT_MAX_CANDIDATES,
+        // Audit VL-3: the tenant of each distinct key once per request.
+        protected readonly ?SearchTenants $tenants = null,
+        // Audit Q2: whether titles and excerpts may hold personal data (`search_kit.tasks.sensitive`).
+        private readonly bool $sensitive = false,
     ) {
+    }
+
+    /** `search_kit.tasks.sensitive` for tasks (default true); false for boards. */
+    public function sensitive(): bool
+    {
+        return $this->sensitive;
     }
 
     public function tenant(SearchQuery $query): int|string|null
@@ -140,7 +151,11 @@ abstract class TaskBoardSearchDefinition extends EntitySearchDefinition
     {
         $key = $board->getTenantKey();
 
-        return $key !== null && $this->tenantContext?->isEnabled() === true ? $this->tenantContext->tenantOfKey($key, $viewer->user) : null;
+        if ($key === null || $this->tenantContext?->isEnabled() !== true) {
+            return null;
+        }
+
+        return $this->tenants instanceof SearchTenants ? $this->tenants->tenantOfKey($key, $viewer->user) : $this->tenantContext->tenantOfKey($key, $viewer->user);
     }
 
     /**

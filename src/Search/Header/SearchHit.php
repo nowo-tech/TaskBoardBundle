@@ -21,9 +21,9 @@ final readonly class SearchHit
     /**
      * @param string $kind {@see self::KIND_TASK} or {@see self::KIND_BOARD}
      * @param string $id The task or board id
-     * @param string $title The task title (with its `#number` when numbering is on) or the board name
+     * @param string $title The task title or the board name (one line, plain text)
      * @param string $url The task or board page (a path)
-     * @param string $subtitle Board and tenant of a task, tenant of a board ('' without one)
+     * @param string $subtitle Of a task: its `#number` (when numbering is on), board and tenant; of a board: its tenant ('' without one)
      * @param string|null $excerpt A plain-text cut of the description around the first matched word, or null
      * @param DateTimeImmutable $updatedAt Last change of the task or board
      * @param string|null $boardId The task's board (null for a board row)

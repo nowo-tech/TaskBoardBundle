@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\BoardViewReach;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Since 2.25.0: boardViewDecider() and taskViewDecider() answer what canViewBoard() and canViewTask() answer, with the
@@ -118,6 +120,29 @@ final class SearchDecidersTest extends TestCase
 
         self::assertSame([false, true, true, false, true], array_map($decide, [$denied, $plain, $granted, $foreign, $assigned]));
         self::assertSame(2, $asked, 'each board once');
+    }
+
+    public function testTheDefaultReachSaysWhetherAListenerMayGrant(): void
+    {
+        $user       = new TestUser('2', 'member@example.com');
+        $team       = new Team('Eng');
+        $repository = $this->createMock(TeamMemberRepositoryInterface::class);
+        $repository->method('findByUserId')->willReturn([new TeamMember($team, $user, TeamRole::Member)]);
+        $dispatcher = new EventDispatcher();
+
+        $quiet = (new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $dispatcher))->defaultBoardReach($user);
+        self::assertEquals(new BoardViewReach(false, [$team->getId()], false), $quiet);
+
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (): void {
+        });
+        self::assertTrue((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $dispatcher))->defaultBoardReach($user)->listenersMayGrant);
+        self::assertTrue((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $this->createMock(EventDispatcherInterface::class)))->defaultBoardReach($user)->listenersMayGrant, 'a dispatcher that cannot say: assume a listener');
+        self::assertFalse((new TaskBoardResourceAccessChecker($repository, $this->noResolver()))->defaultBoardReach($user)->listenersMayGrant);
+        self::assertEquals(new BoardViewReach(true, [], false), (new TaskBoardResourceAccessChecker($repository, $this->noResolver(), scopingEnabled: false))->defaultBoardReach($user));
+
+        $reach  = new BoardViewReach(false, [$team->getId()], false);
+        $decide = (new TaskBoardResourceAccessChecker($this->createMock(TeamMemberRepositoryInterface::class), $this->noResolver()))->boardViewDecider($user, true, $reach);
+        self::assertTrue($decide(new TaskBoard('Team', 'team', new TestUser('1', 'o@example.com'), team: $team)), 'the given reach, no query');
     }
 
     private function noTeams(): TeamMemberRepositoryInterface

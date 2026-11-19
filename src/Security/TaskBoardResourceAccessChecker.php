@@ -20,9 +20,13 @@ use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Stringable;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface as SymfonyEventDispatcherInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function array_keys;
+use function array_map;
+use function in_array;
 use function is_scalar;
 
 /**
@@ -256,30 +260,42 @@ final readonly class TaskBoardResourceAccessChecker
     }
 
     /**
+     * Since 2.25.0 (header search): the default board rule for `$user`, read once ({@see BoardViewReach}): whether it opens
+     * every board, the user's team ids, and whether a BOARD_ACCESS_CHECK listener could open more (true unless the
+     * dispatcher says it has none). A search may filter on it in SQL only when no listener may grant.
+     *
+     * @param bool $manageRoles false leaves `security.manage_roles` out (see {@see self::canViewBoard()})
+     */
+    public function defaultBoardReach(object $user, bool $manageRoles = true): BoardViewReach
+    {
+        $dispatcher = $this->eventDispatcher;
+        $listeners  = $dispatcher !== null && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::BOARD_ACCESS_CHECK));
+        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole())) {
+            return new BoardViewReach(true, [], $listeners);
+        }
+
+        return new BoardViewReach(false, array_map('strval', array_keys($this->teamIdsOf($user))), $listeners);
+    }
+
+    /**
      * Since 2.25.0 (header search): {@see self::canViewBoard()} for many boards at once. The returned closure answers
      * exactly what canViewBoard() answers (creator, team, `security.manage_roles`, then BOARD_ACCESS_CHECK), but the
-     * user's teams and manage roles are read once, on the first board that needs them, instead of once per board: each
-     * further board costs its BOARD_ACCESS_CHECK event and no query. Build it per call; it holds nothing beyond it.
+     * user's teams and manage roles are read once ({@see self::defaultBoardReach()}, or `$reach` when the caller already
+     * has it) instead of once per board: each board costs its BOARD_ACCESS_CHECK event and no query. Build it per call;
+     * it holds nothing beyond it.
      *
      * @param bool $manageRoles false leaves `security.manage_roles` out (see {@see self::canViewBoard()})
      *
      * @return Closure(TaskBoard): bool
      */
-    public function boardViewDecider(object $user, bool $manageRoles = true): Closure
+    public function boardViewDecider(object $user, bool $manageRoles = true, ?BoardViewReach $reach = null): Closure
     {
-        $managed = null;
-        $teamIds = null;
-
-        return function (TaskBoard $board) use ($user, $manageRoles, &$managed, &$teamIds): bool {
-            $default = !$this->scopingEnabled || $this->sameUser($user, $board->getCreator());
-            if (!$default && $manageRoles) {
-                $managed ??= $this->hasManageRole();
-                $default = $managed;
-            }
-            $team = $board->getTeam();
-            if (!$default && $team instanceof Team) {
-                $teamIds ??= $this->teamIdsOf($user);
-                $default = isset($teamIds[$team->getId()]);
+        return function (TaskBoard $board) use ($user, $manageRoles, &$reach): bool {
+            $default = $this->sameUser($user, $board->getCreator());
+            if (!$default) {
+                $reach ??= $this->defaultBoardReach($user, $manageRoles);
+                $team    = $board->getTeam();
+                $default = $reach->all || ($team instanceof Team && in_array($team->getId(), $reach->teamIds, true));
             }
             $event = new BoardAccessCheckEvent($user, $board, $default);
             $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);

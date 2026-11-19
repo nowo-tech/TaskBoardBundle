@@ -131,6 +131,7 @@ use Nowo\TaskBoardBundle\Search\DoctrineTaskTextSearch;
 use Nowo\TaskBoardBundle\Search\Header\BoardHeaderSearch;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
+use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewers;
 use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
@@ -999,7 +1000,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * on the bundle's manager, and, when SearchKit >= 1.9 is installed and `search_kit.enabled`, the SearchKit groups `tasks`
      * and `boards` ({@see TaskSearchDefinition}, {@see BoardSearchDefinition}, tagged for SearchKit's provider pass).
      *
-     * @param array{enabled: bool, tasks: bool, boards: bool, priority: int, max_boards: int, max_candidates: int} $searchKit
+     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int} $searchKit
      */
     private function registerHeaderSearch(ContainerBuilder $container, array $searchKit, string $emName): void
     {
@@ -1009,13 +1010,19 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setDefinition(SearchHitMapper::class, (new Definition(SearchHitMapper::class))
             ->setArgument('$urls', new Reference('router'))
             ->setArgument('$routes', '%nowo_task_board.routes%'));
+        $container->setDefinition(SearchTenants::class, (new Definition(SearchTenants::class))
+            ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$requestStack', new Reference('request_stack', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
         $container->setDefinition(SearchBoardScope::class, (new Definition(SearchBoardScope::class))
             ->setArgument('$entityManager', $em)
             ->setArgument('$accessChecker', new Reference(TaskBoardResourceAccessChecker::class))
             ->setArgument('$eventDispatcher', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::IGNORE_ON_INVALID_REFERENCE))
-            ->setArgument('$maxBoards', $searchKit['max_boards']));
+            ->setArgument('$maxBoards', $searchKit['max_boards'])
+            ->setArgument('$tenants', new Reference(SearchTenants::class))
+            ->setArgument('$users', new Reference(TaskBoardUsers::class))
+            ->setArgument('$maxScannedBoards', $searchKit['max_scanned_boards']));
         $container->setDefinition(TaskHeaderSearch::class, (new Definition(TaskHeaderSearch::class))
             ->setArgument('$scope', new Reference(SearchBoardScope::class))
             ->setArgument('$entityManager', $em)
@@ -1030,10 +1037,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             return;
         }
         $definitions = [
-            TaskSearchDefinition::class  => [$searchKit['tasks'], $searchKit['priority']],
-            BoardSearchDefinition::class => [$searchKit['boards'], $searchKit['priority'] - 1],
+            TaskSearchDefinition::class  => [$searchKit['tasks']['enabled'], $searchKit['priority'], $searchKit['tasks']['sensitive']],
+            BoardSearchDefinition::class => [$searchKit['boards']['enabled'], $searchKit['priority'] - 1, false],
         ];
-        foreach ($definitions as $class => [$on, $priority]) {
+        foreach ($definitions as $class => [$on, $priority, $sensitive]) {
             if (!$on) {
                 continue;
             }
@@ -1049,6 +1056,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$tenantPaths', new Reference(TenantPaths::class))
                 ->setArgument('$routes', '%nowo_task_board.routes%')
                 ->setArgument('$maxCandidates', $searchKit['max_candidates'])
+                ->setArgument('$tenants', new Reference(SearchTenants::class))
+                ->setArgument('$sensitive', $sensitive)
                 ->addTag(self::SEARCH_KIT_DEFINITION_TAG, ['priority' => $priority]));
         }
     }

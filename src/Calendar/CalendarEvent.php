@@ -8,9 +8,11 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 
 use function is_array;
+use function is_string;
 use function mb_strlen;
 use function parse_url;
 use function preg_match;
+use function preg_replace;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -60,7 +62,7 @@ final readonly class CalendarEvent
         if (!self::isPrintable($id, self::MAX_ID_LENGTH)) {
             throw new InvalidArgumentException(sprintf('A calendar event needs an id of 1 to %d printable characters.', self::MAX_ID_LENGTH));
         }
-        $title = trim($title);
+        $title = self::cleanTitle($title);
         if (!self::isPrintable($title, self::MAX_TITLE_LENGTH)) {
             throw new InvalidArgumentException(sprintf('A calendar event needs a title of 1 to %d printable characters.', self::MAX_TITLE_LENGTH));
         }
@@ -103,6 +105,23 @@ final readonly class CalendarEvent
     public static function isPrintable(string $value, int $max): bool
     {
         return $value !== '' && mb_strlen($value) <= $max && preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\x{115F}\x{1160}\x{3164}\x{FFA0}]/u', $value) === 0;
+    }
+
+    /**
+     * Since 2.25.0 (audit VL-5): a title as the calendar prints it. Format characters (`\p{Cf}`: bidirectional marks,
+     * zero-width characters, the soft hyphen, tag characters...), U+2028 / U+2029 and the Hangul fillers are removed;
+     * tabs and line breaks become spaces; runs of spaces fold to one and the edges are trimmed. Any other control
+     * character is kept, so isPrintable() still refuses it. Invalid UTF-8 is returned as given (and refused).
+     */
+    public static function cleanTitle(string $title): string
+    {
+        $clean = preg_replace('/[\p{Cf}\p{Zl}\p{Zp}\x{115F}\x{1160}\x{3164}\x{FFA0}]+/u', '', $title);
+        if (!is_string($clean)) {
+            return $title;
+        }
+        $clean = (string) preg_replace('/[\t\n\r]+/', ' ', $clean);
+
+        return trim((string) preg_replace('/ {2,}/', ' ', $clean));
     }
 
     private function isSafeUrl(string $url): bool

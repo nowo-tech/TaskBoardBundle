@@ -46,6 +46,15 @@ final class SearchTextTest extends TestCase
         self::assertStringEndsWith('needle', $end);
     }
 
+    /** Audit VL-4: no script or style text, no tag that comes back after decoding, links with parentheses. */
+    public function testExcerptDropsScriptsEncodedTagsAndTidiesLinks(): void
+    {
+        self::assertSame('Before after', SearchText::excerpt('Before <script>alert(1)</script><style>p{}</style>after', []));
+        self::assertSame('Unclosed', SearchText::excerpt('Unclosed<script>alert(1)', []));
+        self::assertSame('Bold here', SearchText::excerpt('&lt;b&gt;Bold&lt;/b&gt; here', []));
+        self::assertSame('See the docs now', SearchText::excerpt('See [the docs](https://example.com/a_(b) "Title") now', []));
+    }
+
     public function testLine(): void
     {
         self::assertSame('Two words', SearchText::line("  Two \u{200B}\n words "));

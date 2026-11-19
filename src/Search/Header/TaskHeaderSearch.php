@@ -48,7 +48,8 @@ final readonly class TaskHeaderSearch
         }
         $boards = $this->scope->boards($viewer, SearchScopeEvent::GROUP_TASKS);
         if ($boards->isEmpty()) {
-            return new SearchHits();
+            // Audit VL-1 (c): a scan that stopped at its bound says so, even when it kept no board.
+            return new SearchHits([], 0, $boards->capped);
         }
         $limit = max(1, min($limit, self::MAX_LIMIT));
         $scan  = max($limit, $this->scanRows);

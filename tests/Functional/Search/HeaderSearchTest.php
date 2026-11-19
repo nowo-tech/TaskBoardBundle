@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Search;
 
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHits;
+use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
+use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -166,6 +172,162 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'project:7'), 'scoped', 10)->hits, 'a host scope nobody accepts');
         self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'board:'), 'scoped', 10)->hits);
         self::assertSame([], $this->boards()->search($this->viewer($this->owner, 'tenant:acme'), 'board', 10)->hits, 'no board has that tenant');
+    }
+
+    /**
+     * Audit VL-1: boards the viewer cannot open, newer than the one they can, never push it out of the scope — the
+     * default rule filters in SQL when no listener may grant.
+     */
+    public function testHiddenNewerBoardsNeverPushOutAVisibleOne(): void
+    {
+        $bob = $this->user('bob@example.com');
+        $this->described($this->board('Mine'), 'Needle task', null);
+        for ($i = 0; $i < 4; ++$i) {
+            $this->described($this->board('Bob ' . $i, creator: $bob), 'Needle task', null);
+        }
+
+        $found = $this->tasks(maxBoards: 1, maxScannedBoards: 1)->search($this->viewer($this->owner), 'needle', 10);
+
+        self::assertSame(1, $found->total);
+        self::assertFalse($found->partial);
+    }
+
+    /**
+     * Audit VL-1: with a BOARD_ACCESS_CHECK listener (which may grant) the default-visible boards come first, a granted
+     * board of someone else is still found, and a scan that stops at its bound says so even when it kept nothing.
+     */
+    public function testWithAListenerTheDefaultBoardsComeFirstAndABoundScanIsPartial(): void
+    {
+        $bob = $this->user('bob@example.com');
+        $this->described($this->board('Mine'), 'Needle task', null);
+        $granted = $this->board('Granted', creator: $bob);
+        $this->described($granted, 'Needle task', null);
+        for ($i = 0; $i < 4; ++$i) {
+            $this->described($this->board('Bob ' . $i, creator: $bob), 'Needle task', null);
+        }
+        $owner = $this->owner;
+        $this->listen(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($granted, $owner): void {
+            if ($event->getBoardId() === $granted->getId() && $event->getSubjectId() === (string) $owner->getId()) {
+                $event->grant();
+            }
+        });
+
+        $first = $this->tasks(maxBoards: 1, maxScannedBoards: 1)->search($this->viewer($this->owner), 'needle', 10);
+        self::assertSame(1, $first->total, 'the creator\'s board is read first');
+        self::assertSame('Mine', $first->hits[0]->subtitle);
+        self::assertTrue($first->partial);
+
+        $all = $this->tasks()->search($this->viewer($this->owner), 'needle', 10);
+        self::assertSame(2, $all->total, 'the granted board is searched too');
+        self::assertFalse($all->partial);
+
+        $alice = $this->user('alice@example.com');
+        $none  = $this->tasks(maxBoards: 1, maxScannedBoards: 2)->search($this->viewer($alice), 'needle', 10);
+        self::assertEquals(new SearchHits([], 0, true), $none, 'nothing visible within the bound: empty, but partial');
+        self::assertEquals(new SearchHits([], 0, false), $this->tasks()->search($this->viewer($alice), 'needle', 10));
+    }
+
+    /** Audit Q3: a BOARD_LIST_QUERY override (the host's index) bounds the search. */
+    public function testTheBoardListOverrideBoundsTheSearch(): void
+    {
+        $listed = $this->board('Listed');
+        $this->described($listed, 'Index task', null);
+        $this->described($this->board('Unlisted'), 'Index task', null);
+        $this->listen(TaskBoardEvents::BOARD_LIST_QUERY, static function (BoardListQueryEvent $event) use ($listed): void {
+            $event->overrideList([$listed]);
+        });
+
+        $found = $this->tasks()->search($this->viewer($this->owner), 'index', 10);
+        self::assertSame(1, $found->total);
+        self::assertSame($listed->getId(), $found->hits[0]->boardId);
+        self::assertSame(['Listed'], self::titles($this->boards()->search($this->viewer($this->owner), 'listed', 10)->hits));
+        self::assertSame([], $this->boards()->search($this->viewer($this->owner), 'unlisted', 10)->hits);
+    }
+
+    public function testAnEmptyBoardListOverrideFindsNothing(): void
+    {
+        $this->described($this->board(), 'Index task', null);
+        $this->listen(TaskBoardEvents::BOARD_LIST_QUERY, static function (BoardListQueryEvent $event): void {
+            $event->overrideList([]);
+        });
+
+        self::assertEquals(new SearchHits(), $this->tasks()->search($this->viewer($this->owner), 'index', 10));
+    }
+
+    /** Audit Q3 with tenancy: each tenant's override applies to that tenant only. */
+    public function testWithTenancyEachTenantsListOverrideApplies(): void
+    {
+        $this->boot(self::TENANCY);
+        MemberTenantResolver::$members = ['acme' => ['owner@example.com'], 'globex' => ['owner@example.com']];
+        $listed                        = $this->board('Acme listed', tenantKey: 'acme');
+        $this->described($listed, 'Index task', null);
+        $this->described($this->board('Acme unlisted', tenantKey: 'acme'), 'Index task', null);
+        $this->described($this->board('Globex board', tenantKey: 'globex'), 'Index task', null);
+        $this->listen(TaskBoardEvents::SEARCH_SCOPE, static function (SearchScopeEvent $event): void {
+            $event->onlyTenants(['acme', 'globex']);
+        });
+        $this->listen(TaskBoardEvents::BOARD_LIST_QUERY, static function (BoardListQueryEvent $event) use ($listed): void {
+            if ($event->getTenantKey() === 'acme') {
+                $event->overrideList([$listed]);
+            }
+        });
+
+        $found = $this->tasks()->search($this->viewer($this->owner), 'index', 10);
+        self::assertSame(2, $found->total);
+        self::assertSame(['Acme listed · acme', 'Globex board · globex'], self::subtitles($found->hits));
+    }
+
+    /** Audit VL-2: `tenant:<key>` narrows the request's tenant, never widens past it. */
+    public function testATenantScopeNeverWidensPastTheRequestTenant(): void
+    {
+        $this->boot(self::TENANCY);
+        MemberTenantResolver::$members = ['acme' => ['owner@example.com'], 'globex' => ['owner@example.com']];
+        $this->described($this->board('Acme board', tenantKey: 'acme'), 'Tenant task', null);
+        $this->described($this->board('Globex board', tenantKey: 'globex'), 'Tenant task', null);
+        $stack = self::getContainer()->get('request_stack');
+        self::assertInstanceOf(RequestStack::class, $stack);
+
+        $stack->push(new Request(attributes: ['tenantSlug' => 'acme']));
+        self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'tenant:globex'), 'tenant', 10)->hits);
+        self::assertSame(1, $this->tasks()->search($this->viewer($this->owner, 'tenant:acme'), 'tenant', 10)->total);
+        $stack->pop();
+
+        self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'tenant:globex'), 'tenant', 10)->hits, 'no tenant page: nothing');
+    }
+
+    /** The scope without a dispatcher, a tenant cache or the user references: the default rule in SQL, on the user object. */
+    public function testAScopeWithoutOptionalCollaborators(): void
+    {
+        $bob = $this->user('bob@example.com');
+        $this->board('Mine');
+        $this->board('Bob board', creator: $bob);
+        $checker = self::getContainer()->get(TaskBoardResourceAccessChecker::class);
+        self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
+        $scope = new SearchBoardScope($this->em, $checker);
+
+        self::assertSame(['Mine'], array_map(static fn ($board): string => $board->board->getName(), array_values($scope->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_BOARDS)->boards)));
+        self::assertTrue($scope->boards(new SearchViewer(new stdClass()), SearchScopeEvent::GROUP_BOARDS)->isEmpty(), 'no id, no team: the default rule opens nothing');
+    }
+
+    /** With tenancy and no tenant cache the tenant context answers directly. */
+    public function testWithTenancyAScopeWithoutTheTenantCache(): void
+    {
+        $this->boot(self::TENANCY);
+        MemberTenantResolver::$members = ['acme' => ['owner@example.com']];
+        $this->board('Acme board', tenantKey: 'acme');
+        $container = self::getContainer();
+        $checker   = $container->get(TaskBoardResourceAccessChecker::class);
+        $tenants   = $container->get(TaskBoardTenantContext::class);
+        self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
+        self::assertInstanceOf(TaskBoardTenantContext::class, $tenants);
+        $this->listen(TaskBoardEvents::SEARCH_SCOPE, static function (SearchScopeEvent $event): void {
+            $event->onlyTenants(['acme']);
+        });
+        $scope = new SearchBoardScope($this->em, $checker, $this->dispatcher(), $tenants);
+
+        $found = array_values($scope->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_BOARDS)->boards);
+        self::assertCount(1, $found);
+        self::assertSame('acme', $found[0]->tenant?->key);
     }
 
     public function testTheScopeEventDenies(): void

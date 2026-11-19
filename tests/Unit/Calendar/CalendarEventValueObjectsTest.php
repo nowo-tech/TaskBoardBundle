@@ -53,20 +53,15 @@ final class CalendarEventValueObjectsTest extends TestCase
         yield 'control character in id' => [['id' => "m\n1"]];
         yield 'blank title' => [['title' => '   ']];
         yield 'C1 control in title' => [['title' => "Call\u{0085}"]];
-        yield 'bidi override in title' => [['title' => "Call \u{202E}gnp.exe"]];
+        yield 'a title of format characters only' => [['title' => "\u{200B}\u{202E}\u{3164}"]];
+        yield 'a backspace in title' => [['title' => "Call\u{0008}"]];
         yield 'bidi isolate in id' => [['id' => "m\u{2066}1"]];
-        yield 'zero-width space in title' => [['title' => "Ca\u{200B}ll"]];
         yield 'zero-width no-break space in version' => [['version' => "\u{FEFF}v1"]];
         yield 'word joiner in id' => [['id' => "m\u{2060}1"]];
         // Since 2.25.0 (audit UW2-2): every format character, line and paragraph separators and the Hangul fillers.
-        yield 'Arabic letter mark in title' => [['title' => "Call\u{061C}"]];
-        yield 'line separator in title' => [['title' => "Call\u{2028}now"]];
         yield 'paragraph separator in id' => [['id' => "m\u{2029}1"]];
         yield 'soft hyphen in id' => [['id' => "m\u{00AD}1"]];
-        yield 'tag character in title' => [['title' => "Call\u{E0041}"]];
-        yield 'Hangul choseong filler in title' => [['title' => "\u{115F}Call"]];
         yield 'Hangul jungseong filler in id' => [['id' => "m\u{1160}1"]];
-        yield 'Hangul filler in title' => [['title' => "Call\u{3164}"]];
         yield 'halfwidth Hangul filler in version' => [['version' => "v\u{FFA0}"]];
         yield 'invalid UTF-8 title' => [['title' => "Call \xC3\x28"]];
         yield 'long title' => [['title' => str_repeat('t', 201)]];
@@ -86,6 +81,31 @@ final class CalendarEventValueObjectsTest extends TestCase
         yield 'long category' => [['category' => str_repeat('c', 33)]];
         yield 'empty version' => [['version' => '']];
         yield 'long version' => [['version' => str_repeat('v', 129)]];
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function cleanedTitles(): iterable
+    {
+        yield 'bidi override' => ["Call \u{202E}gnp.exe", 'Call gnp.exe'];
+        yield 'zero-width space' => ["Ca\u{200B}ll", 'Call'];
+        yield 'Arabic letter mark' => ["Call\u{061C}", 'Call'];
+        yield 'soft hyphen' => ["Re\u{00AD}view", 'Review'];
+        yield 'line separator' => ["Call\u{2028}now", 'Callnow'];
+        yield 'tag character' => ["Call\u{E0041}", 'Call'];
+        yield 'Hangul fillers' => ["\u{115F}Call\u{1160}\u{3164}\u{FFA0}", 'Call'];
+        yield 'tabs and line breaks' => ["Weekly\tsync\r\nwith  team", 'Weekly sync with team'];
+    }
+
+    /** Since 2.25.0 (audit VL-5): a title loses its invisible characters instead of refusing the event. */
+    #[DataProvider('cleanedTitles')]
+    public function testATitleIsCleaned(string $given, string $shown): void
+    {
+        $event = new CalendarEvent('m-1', $given, new DateTimeImmutable('2030-03-04 09:30'), new DateTimeImmutable('2030-03-04 10:00'));
+
+        self::assertSame($shown, $event->title);
+        self::assertSame("Call \xC3\x28", CalendarEvent::cleanTitle("Call \xC3\x28"), 'invalid UTF-8 stays as given');
     }
 
     /**

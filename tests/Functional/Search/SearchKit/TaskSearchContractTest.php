@@ -20,6 +20,12 @@ final class TaskSearchContractTest extends TaskBoardSearchKitTestCase
         return $this->definitionService(TaskSearchDefinition::class);
     }
 
+    /** Audit Q2: task titles and excerpts may hold personal data (`search_kit.tasks.sensitive`, default true). */
+    protected function sensitiveTitles(): bool
+    {
+        return true;
+    }
+
     protected function seed(int|string $tenant, string $text): int|string
     {
         return $this->task($tenant, $text)->getId();

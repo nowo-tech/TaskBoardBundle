@@ -132,12 +132,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header search services: the signed-in viewer only, the boards in SQL before the cut, TASK_ACCESS_CHECK batched per page,
   SearchKit's contract (tenant, feature gate, scopes, escaped LIKE, bounded limit, visible total, host event, recents by
   id). New options `search_kit.*` ([CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225)) and the
-  labels `task_board.search.group.tasks` / `.boards` in the seven locales.
+  labels `task_board.search.group.tasks` / `.boards` in the seven locales. The `tasks` group is sensitive by default
+  (`search_kit.tasks.sensitive`). Boards the viewer cannot open never push out the ones they can: boards are read in
+  batches up to `search_kit.max_scanned_boards`, the default-visible ones first (filtered in SQL when no
+  BOARD_ACCESS_CHECK listener may grant), and a search that stops at a bound is partial, also when it found nothing.
+  BOARD_LIST_QUERY overrides bound the search as they bound the index. The host's tenant resolver is asked once per
+  tenant key and viewer within a request.
 - **`TaskBoardEvents::SEARCH_SCOPE` (`SearchScopeEvent`).** A host narrows the boards and tenants searched for a viewer
   (`onlyTenants()`, `excludeTenants()`, `onlyBoards()`, `excludeBoards()`, `deny()`), for instance to leave out projects whose
   task feature is off. It never grants. With tenancy and no answer, only the request's tenant is searched. The bundle's own
-  scopes `board:<id>` and `tenant:<key>` apply as `onlyBoards()` / `onlyTenants()`; a host scope needs a listener that
-  calls `acceptScope()`, else nothing is found.
+  scopes are `board:<id>` (as `onlyBoards()`) and `tenant:<key>`, which is intersected with the allowed tenants and never
+  widens them. A host scope needs a listener that calls `acceptScope()`, else nothing is found.
 - **`TaskBoardResourceAccessChecker::boardViewDecider()` and `taskViewDecider()`.** `canViewBoard()` and `canViewTask()` for
   many boards and tasks at once: the viewer's teams and manage roles are read once, then one event per board or task.
 
@@ -146,9 +151,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Calendar event move: a lock conflict while the event is read again is always `CONFLICT_001`** (audit UW2-1). Nothing is
   written before `reschedule()`, so a conflict thrown by `events()` during the re-read answers `CONFLICT_001` with
   `Retry-After`, even when the exception reports a partial commit; only the `reschedule()` call reads that from the chain.
-- **Calendar event ids, titles and versions refuse every format character** (audit UW2-2): `\p{Cf}` (the Arabic letter mark
-  U+061C, the soft hyphen U+00AD, tag characters, besides the bidirectional and zero-width ones), the line and paragraph
-  separators U+2028 / U+2029 and the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0.
+- **Calendar event ids and versions refuse every format character; titles lose them** (audits UW2-2, VL-5): `\p{Cf}` (the
+  Arabic letter mark U+061C, the soft hyphen U+00AD, tag characters, besides the bidirectional and zero-width ones), the
+  line and paragraph separators U+2028 / U+2029 and the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0 are refused in
+  ids and versions and removed from titles (`CalendarEvent::cleanTitle()`; tabs and line breaks become spaces). Any other
+  control character in a title is still refused.
 - **Reschedule domain codes may not be `CONFLICT` or start with `CONFLICT_`** (audit UW2-3), not only `CONFLICT_<digits>`.
 - **The move re-read finds an event behind other days** (audit UW2-4): there, events outside the requested day do not count
   toward the drop cap (the pulled cap still bounds the read). The docs ask sources to filter by `CalendarEventRange`.

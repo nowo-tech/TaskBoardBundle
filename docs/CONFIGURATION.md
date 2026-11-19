@@ -985,15 +985,18 @@ the user holds the tasks-view permission, each with the project name as `label` 
 nowo_task_board:
     search_kit:
         enabled: true          # false = no SearchKit group of this bundle
-        tasks: true            # the "tasks" group (task title and description)
-        boards: true           # the "boards" group (board name)
+        tasks:                 # the "tasks" group (task title and description); false = off
+            sensitive: true    # titles and excerpts may hold personal data: off while SearchKit recents keep titles unrevalidated
+        boards: true           # the "boards" group (board name); false = off
         priority: 40           # tag priority among the SearchKit providers (boards: one less)
-        max_boards: 200        # 1-500: the most boards one search reads, most recently changed first (the rest is logged)
+        max_boards: 200        # 1-500: the most visible boards one search keeps, most recently changed first
+        max_scanned_boards: 1000  # 1-10000: the most boards one search reads, in batches, to find them (at least max_boards)
         max_candidates: 100    # 1-1000: the most matching rows one search reads and checks (TASK_ACCESS_CHECK)
 ```
 
 The header search services (`Search\Header\*`) are always registered. The SearchKit groups `tasks` and `boards` are
 registered only when `nowo-tech/search-kit-bundle` 1.9 or later is installed (it needs PHP 8.3; it is a `suggest`) and
 `enabled` is true. SearchKit's own `nowo_search_kit.groups.tasks` / `.boards` (`enabled`, `priority`) switch or reorder
-them as well. With `tenancy.enabled`, add a `TaskBoardEvents::SEARCH_SCOPE` listener that names the viewer's tenants
-(see [USAGE](USAGE.md#header-search-since-225)); without one, a search outside a tenant page finds nothing.
+them as well. With `tenancy.enabled`, a search outside a tenant page (SearchKit's own route, for instance) finds nothing
+until a `TaskBoardEvents::SEARCH_SCOPE` listener names the viewer's current tenant (see
+[USAGE](USAGE.md#header-search-since-225)). A search that stops at `max_boards` or `max_scanned_boards` is partial.

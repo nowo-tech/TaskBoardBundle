@@ -1433,7 +1433,7 @@ the calendar is the 2.23 calendar.
 | Argument | Meaning |
 | --- | --- |
 | `id` | The source's id, 1 to 128 printable characters (no control or format character — bidirectional, zero-width, soft hyphen, tag —, no line or paragraph separator, no Hangul filler), unique within the source |
-| `title` | 1 to 200 printable characters (trimmed; the same characters refused as for `id`) |
+| `title` | 1 to 200 printable characters after cleaning: format characters (bidirectional, zero-width, soft hyphen, tag), line and paragraph separators and Hangul fillers are removed, tabs and line breaks become spaces, the edges are trimmed; any other control character is refused |
 | `start`, `end` | `DateTimeImmutable`; `end >= start` (an all-day event compares dates) |
 | `allDay` | `false` (default): timed; `true`: whole days |
 | `url` | `https://`, `http://` or a local path (`/...`, not `//...`); `null`: no link |
@@ -1967,26 +1967,36 @@ services a provider calls; they never answer HTTP themselves.
 | `Search\Header\SearchViewers::forIdentifier(string $userIdentifier)` | The signed-in user as a `SearchViewer` when the identifier is theirs, else null |
 
 Both searches answer `SearchHits`: at most `$limit` rows (1 to 50) of `SearchHit` (kind, id, title, URL of the task or board
-page, a subtitle with the board and tenant, a plain-text excerpt of the description, the last change), the number of visible
-matches and whether the scan stopped at its bound. Every text is plain (control and format characters removed, HTML and
-Markdown marks stripped from excerpts); the search box escapes it.
+page, a subtitle with the task's `#number`, board and tenant, a plain-text excerpt of the description, the last change), the number of visible
+matches and whether the search is partial (a scan stopped at its bound, so there may be more visible matches than the
+total; this holds for an empty result too). Every text is plain (control and format characters removed; script and style
+contents, HTML tags, entities and Markdown marks stripped from excerpts); the search box escapes it.
 
 How a search runs, and why it never hints at a hidden row:
 
 1. `TaskBoardEvents::SEARCH_SCOPE` (`SearchScopeEvent`) lets the host narrow the scope, or deny it.
-2. One query reads the boards of that scope that are not archived (tenants, boards, exclusions and, for boards, the words of the
-   name, all in SQL), at most 200, the most recently changed first. Keys are then compared exactly, with tenancy each board's
-   tenant must resolve for the viewer (once per tenant), and each board passes the bundle's view check: creator, team,
-   `security.manage_roles` when the viewer is the signed-in user, then `BOARD_ACCESS_CHECK`. The viewer's teams and roles are
-   read once per search (`TaskBoardResourceAccessChecker::boardViewDecider()`).
-3. For tasks, one query reads the matching tasks of those boards that are not archived, at most 100, newest change first. Each
-   one then passes `TASK_ACCESS_CHECK` (`taskViewDecider()`): a deny hides it.
-4. The rows are cut to the limit after these checks, and the total counts only rows that passed them. A refused scope, a
+2. `BOARD_LIST_QUERY` overrides apply: when the host lists other boards on a tenant's index (`overrideList()`), only those
+   boards of that tenant are searched (one event per searched tenant, or one without tenancy).
+3. The boards of that scope that are not archived are read in batches (tenants, boards, exclusions, the host's lists and, for
+   boards, the words of the name, all in SQL), the most recently changed first, until `search_kit.max_boards` visible boards
+   are kept (configurable, default 200) or `search_kit.max_scanned_boards` are read (configurable, default 1000); a search
+   that stops there is partial. The default rule (the viewer's own boards and their teams' boards; every board for
+   `security.manage_roles`) filters in SQL when no `BOARD_ACCESS_CHECK` listener is registered, and otherwise only puts
+   those boards first, so a listener's grant still counts. Keys are then compared exactly, with tenancy each board's tenant
+   must resolve for the viewer, and each board passes the bundle's view check: creator, team, `security.manage_roles` when
+   the viewer is the signed-in user, then `BOARD_ACCESS_CHECK`. The viewer's teams and roles are read once per search
+   (`TaskBoardResourceAccessChecker::defaultBoardReach()`, `boardViewDecider()`).
+4. For tasks, one query reads the matching tasks of those boards that are not archived, at most `search_kit.max_candidates`
+   (configurable, default 100), newest change first. Each one then passes `TASK_ACCESS_CHECK` (`taskViewDecider()`): a deny
+   hides it.
+5. The rows are cut to the limit after these checks, and the total counts only rows that passed them. A refused scope, a
    denied board or a denied task looks exactly like no match: empty rows, no count.
 
 Words are lower-cased, at most eight, and only ever reach `LIKE … ESCAPE '!'` with `!`, `%` and `_` escaped. A search costs a
-fixed number of queries whatever the number of boards or tasks (three for tasks, two for boards, plus what the host's tenant
-resolver and listeners do). The services keep nothing between calls (FrankenPHP worker mode).
+fixed number of queries whatever the number of boards or tasks (three for tasks, two for boards; one more per batch of boards
+only when boards the viewer cannot open fill a batch). That budget does not count the host's tenant resolver and listeners;
+the resolver is asked once per distinct tenant key and viewer within one request (`Search\Header\SearchTenants`), however
+many boards and rows the tenant has. The services keep nothing between calls (FrankenPHP worker mode).
 
 ### Narrowing the scope: the search scope event
 
@@ -2023,14 +2033,17 @@ the viewer (`getSubject()`, `getSubjectId()`), the group (`getGroup()`: `tasks` 
 (`getScope()`: client input, never a permission) and, on a tenant page, the request's tenant key (`getRequestTenantKey()`).
 
 - **With `tenancy.enabled`** and no `onlyTenants()` answer, only the current request's tenant is searched, and nothing outside a
-  tenant page (deny by default). A host whose search box is on every page names the viewer's tenants here. A tenant page
-  whose slug does not resolve for the viewer finds nothing.
-- **Scopes of the search box.** The bundle applies its own: `board:<board id>` (one board) and `tenant:<tenant key>` (one
-  tenant), as `onlyBoards()` / `onlyTenants()`. A host scope (a project chip, for instance) counts only when a listener
+  tenant page (deny by default). A tenant page whose slug does not resolve for the viewer finds nothing. A host whose search
+  palette runs on SearchKit's own route (no tenant page) must add a listener that names the viewer's current tenant (for
+  instance the organisation or project in the session); a list of every tenant the viewer belongs to makes the palette
+  search across tenants.
+- **Scopes of the search box.** The bundle applies its own: `board:<board id>` (one board, as `onlyBoards()`) and
+  `tenant:<tenant key>` (one tenant, intersected with the tenants the listeners or the request allow: it never widens them,
+  so `tenant:globex` on an `acme` page finds nothing). A host scope (a project chip, for instance) counts only when a listener
   narrows the event for it and calls `acceptScope()`; any other scope finds nothing.
 - **Bounds.** An allow list longer than 500 entries keeps its first 500 (logged as a warning). An exclusion list longer than
-  500 cannot be applied in one SQL list, so the search finds nothing (fail closed, logged as a warning). A scope with more
-  than 200 boards reads the 200 most recently changed and reports a partial result.
+  500 cannot be applied in one SQL list, so the search finds nothing (fail closed, logged as a warning). A search that
+  stops at `max_boards` visible boards or `max_scanned_boards` read boards reports a partial result (logged as a warning).
 
 ### SearchKit groups: tasks and boards
 
@@ -2039,7 +2052,7 @@ the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDef
 
 | Group | Searches | Row |
 | --- | --- | --- |
-| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description | the title; the `#number`, board and tenant, and an excerpt of the description; the task page |
+| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description | the title; the `#number`, board and tenant, and an excerpt of the description; the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
 | `boards` (`Bridge\SearchKit\BoardSearchDefinition`) | board name | the name; the tenant and an excerpt of the description; the board page |
 
 They follow the rules above. The viewer is the signed-in user whose identifier the query carries; any other identifier gets
@@ -2048,8 +2061,10 @@ elsewhere. Outside a tenant page, the tenants that are searched are the ones `SE
 does not resolve for the viewer has no tenant, and SearchKit answers nothing. The feature gate is the access checker's
 `canAccess()`. Boards are checked with `BOARD_ACCESS_CHECK` before the tasks are read. Each candidate task then passes
 `TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board_task` and
-`task_board_board`). Recents are revalidated by id (`t.id`, `b.id`) when SearchKit's `recent.revalidate` is on. There is no
-"see all" link, because no list page searches across boards by text.
+`task_board_board`). Recents are revalidated by id (`t.id`, `b.id`, UUIDs only) when SearchKit's `recent.revalidate` is on.
+There is no "see all" link, because no list page searches across boards by text. SearchKit computes the total within its
+candidate window; a scope that stopped at `max_boards` / `max_scanned_boards` is not visible to it, so its total counts the
+boards that were read (SearchKit marks a full window inexact on its own).
 
 Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).
 

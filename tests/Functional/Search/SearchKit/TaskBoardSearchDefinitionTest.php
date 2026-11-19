@@ -164,6 +164,8 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertNull($tasks->seeAllUrl($query));
         self::assertNull($boards->seeAllUrl($query));
         self::assertSame(100, $tasks->maxCandidates());
+        self::assertTrue($tasks->sensitive(), 'tasks are sensitive by default');
+        self::assertFalse($boards->sensitive());
         self::assertTrue($tasks->applyScope($tasks->baseQuery('*', $query), 'board:1', '*', $query));
 
         self::assertSame('0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b', $tasks->referenceId(new SearchReference('/tools/task-board/task/x', 'tasks', 'nowo_task_board_task', ['taskId' => '0f8e2a3c-1b4d-4e5f-8a6b-7c8d9e0f1a2b'])));
@@ -208,11 +210,12 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertInstanceOf(TaskSearchDefinition::class, self::getContainer()->get(TaskSearchDefinition::class));
         self::assertInstanceOf(BoardSearchDefinition::class, self::getContainer()->get(BoardSearchDefinition::class));
 
-        $this->boot(['search_kit' => ['boards' => false, 'max_candidates' => 1000, 'priority' => 7]]);
+        $this->boot(['search_kit' => ['boards' => false, 'tasks' => ['sensitive' => false], 'max_candidates' => 1000, 'priority' => 7]]);
         self::assertFalse(self::getContainer()->has(BoardSearchDefinition::class));
         $tasks = self::getContainer()->get(TaskSearchDefinition::class);
         self::assertInstanceOf(TaskSearchDefinition::class, $tasks);
         self::assertSame(1000, $tasks->maxCandidates());
+        self::assertFalse($tasks->sensitive());
 
         $this->boot(['search_kit' => ['enabled' => false]]);
         self::assertFalse(self::getContainer()->has(TaskSearchDefinition::class));

@@ -234,7 +234,10 @@ A minor release. No schema change.
 
 New services for a site-wide search box (`Search\Header\*`), the event `TaskBoardEvents::SEARCH_SCOPE` and, with
 `nowo-tech/search-kit-bundle` >= 1.9 installed, the SearchKit groups `tasks` and `boards` (on by default; turn them off with
-`search_kit.enabled: false`, or per group with `search_kit.tasks` / `search_kit.boards`). A host that had its own task
+`search_kit.enabled: false`, or per group with `search_kit.tasks: false` / `search_kit.boards: false`). The `tasks` group is
+sensitive (`search_kit.tasks.sensitive: true`): with SearchKit recents kept in the browser without revalidation it stays
+off; turn on `nowo_search_kit.recent.revalidate`, or set `sensitive: false` if task titles hold no personal data. A
+BOARD_LIST_QUERY listener that overrides the index list also bounds the search. A host that had its own task
 search provider can drop it; a host scope chip needs a `SEARCH_SCOPE` listener that calls `acceptScope()`. **With `tenancy.enabled`**, a search outside a tenant page finds nothing unless a
 `SEARCH_SCOPE` listener names the viewer's tenants (`onlyTenants()`): add one when the search box is on every page. See
 [USAGE](USAGE.md#header-search-since-225).
@@ -243,9 +246,11 @@ search provider can drop it; a host scope chip needs a `SEARCH_SCOPE` listener t
 
 Three checks of the 2.24 calendar event sources are stricter:
 
-- Event ids, titles and versions refuse every format character (`\p{Cf}`: U+061C, U+00AD, tag characters...), U+2028,
-  U+2029 and the Hangul fillers U+115F, U+1160, U+3164, U+FFA0. A source that returns one now throws
-  `InvalidArgumentException` when it builds the `CalendarEvent`; strip them in the source.
+- Event ids and versions refuse every format character (`\p{Cf}`: U+061C, U+00AD, tag characters...), U+2028, U+2029
+  and the Hangul fillers U+115F, U+1160, U+3164, U+FFA0: a source that puts one there now throws
+  `InvalidArgumentException` when it builds the `CalendarEvent`. Titles are cleaned instead: those characters are removed
+  and tabs and line breaks become spaces (`CalendarEvent::cleanTitle()`), so a title with them still shows; any other
+  control character in a title is still refused.
 - A reschedule result may not use `CONFLICT` or any `CONFLICT_…` code (before: only `CONFLICT_<digits>`). Rename such a domain
   code.
 - A lock conflict thrown by `events()` while a move reads the event again always answers `CONFLICT_001` with `Retry-After`.

@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Search\Header\BoardHeaderSearch;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
+use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
 use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -20,8 +21,10 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 use function array_map;
@@ -64,15 +67,19 @@ abstract class HeaderSearchTestCase extends FunctionalTestCase
         $this->setUp();
     }
 
-    protected function scope(int $maxBoards = 200): SearchBoardScope
+    protected function scope(int $maxBoards = 200, int $maxScannedBoards = 1000): SearchBoardScope
     {
         $container = self::getContainer();
         $checker   = $container->get(TaskBoardResourceAccessChecker::class);
         $tenants   = $container->get(TaskBoardTenantContext::class);
+        $users     = $container->get(TaskBoardUsers::class);
+        $requests  = $container->get('request_stack');
         self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
         self::assertInstanceOf(TaskBoardTenantContext::class, $tenants);
+        self::assertInstanceOf(TaskBoardUsers::class, $users);
+        self::assertInstanceOf(RequestStack::class, $requests);
 
-        return new SearchBoardScope($this->em, $checker, $this->dispatcher(), $tenants, $this->logger(), $maxBoards);
+        return new SearchBoardScope($this->em, $checker, $this->dispatcher(), $tenants, $this->logger(), $maxBoards, new SearchTenants($tenants, $requests), $users, $maxScannedBoards);
     }
 
     protected function mapper(): SearchHitMapper
@@ -86,12 +93,12 @@ abstract class HeaderSearchTestCase extends FunctionalTestCase
         return new SearchHitMapper($router, $routes);
     }
 
-    protected function tasks(int $scanRows = 100, int $maxBoards = 200): TaskHeaderSearch
+    protected function tasks(int $scanRows = 100, int $maxBoards = 200, int $maxScannedBoards = 1000): TaskHeaderSearch
     {
         $checker = self::getContainer()->get(TaskBoardResourceAccessChecker::class);
         self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
 
-        return new TaskHeaderSearch($this->scope($maxBoards), $this->em, $checker, $this->mapper(), $scanRows);
+        return new TaskHeaderSearch($this->scope($maxBoards, $maxScannedBoards), $this->em, $checker, $this->mapper(), $scanRows);
     }
 
     protected function boards(int $maxBoards = 200): BoardHeaderSearch
@@ -170,6 +177,19 @@ abstract class HeaderSearchTestCase extends FunctionalTestCase
         }
 
         return false;
+    }
+
+    /**
+     * @param list<SearchHit> $hits
+     *
+     * @return list<string>
+     */
+    protected static function subtitles(array $hits): array
+    {
+        $subtitles = array_map(static fn (SearchHit $hit): string => $hit->subtitle, $hits);
+        sort($subtitles);
+
+        return $subtitles;
     }
 
     /** The queries `$run` makes, every connection included. */
