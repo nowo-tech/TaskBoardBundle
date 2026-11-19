@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventRange;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedule;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleResult;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleStatus;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventShown;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +30,7 @@ use const DATE_ATOM;
 #[CoversClass(CalendarEventRange::class)]
 #[CoversClass(CalendarEventReschedule::class)]
 #[CoversClass(CalendarEventRescheduleResult::class)]
+#[CoversClass(CalendarEventShown::class)]
 final class CalendarEventValueObjectsTest extends TestCase
 {
     public function testAnEventKeepsWhatTheSourceGave(): void
@@ -50,6 +52,13 @@ final class CalendarEventValueObjectsTest extends TestCase
         yield 'long id' => [['id' => str_repeat('i', 129)]];
         yield 'control character in id' => [['id' => "m\n1"]];
         yield 'blank title' => [['title' => '   ']];
+        yield 'C1 control in title' => [['title' => "Call\u{0085}"]];
+        yield 'bidi override in title' => [['title' => "Call \u{202E}gnp.exe"]];
+        yield 'bidi isolate in id' => [['id' => "m\u{2066}1"]];
+        yield 'zero-width space in title' => [['title' => "Ca\u{200B}ll"]];
+        yield 'zero-width no-break space in version' => [['version' => "\u{FEFF}v1"]];
+        yield 'word joiner in id' => [['id' => "m\u{2060}1"]];
+        yield 'invalid UTF-8 title' => [['title' => "Call \xC3\x28"]];
         yield 'long title' => [['title' => str_repeat('t', 201)]];
         yield 'end before start' => [['end' => new DateTimeImmutable('2030-03-04 09:00')]];
         yield 'all-day end before start' => [['allDay' => true, 'start' => new DateTimeImmutable('2030-03-05'), 'end' => new DateTimeImmutable('2030-03-04')]];
@@ -146,6 +155,22 @@ final class CalendarEventValueObjectsTest extends TestCase
         CalendarEventReschedule::toDay('m', new DateTimeImmutable($start), new DateTimeImmutable($end), null, $allDay, $day, new DateTimeZone('UTC'));
     }
 
+    public function testWhatThePageShowedMatchesTheStoredEventOnlyExactly(): void
+    {
+        $timed = new CalendarEvent('m', 'T', new DateTimeImmutable('2030-03-04T09:30:00.250+00:00'), new DateTimeImmutable('2030-03-04T10:15:00+00:00'), version: 'v1');
+        $shown = static fn (string $start, string $end, bool $allDay = false, ?string $version = 'v1'): CalendarEventShown => new CalendarEventShown('m', new DateTimeImmutable($start), new DateTimeImmutable($end), $allDay, $version, '2030-03-05');
+
+        self::assertTrue($shown('2030-03-04T11:30:00+02:00', '2030-03-04T10:15:00+00:00')->matches($timed), 'the same instants, to the second');
+        self::assertFalse($shown('2030-03-04T09:30:00+00:00', '2030-03-04T11:00:00+00:00')->matches($timed), 'another end');
+        self::assertFalse($shown('2030-03-04T09:31:00+00:00', '2030-03-04T10:15:00+00:00')->matches($timed), 'another start');
+        self::assertFalse($shown('2030-03-04T09:30:00+00:00', '2030-03-04T10:15:00+00:00', version: null)->matches($timed), 'another version');
+        self::assertFalse($shown('2030-03-04', '2030-03-04', true)->matches($timed), 'all-day against timed');
+        $allDay = new CalendarEvent('d', 'D', new DateTimeImmutable('2030-03-05'), new DateTimeImmutable('2030-03-06'), allDay: true);
+        self::assertTrue($shown('2030-03-05', '2030-03-06', true, null)->matches($allDay));
+        self::assertFalse($shown('2030-03-05', '2030-03-09', true, null)->matches($allDay), 'another last day');
+        self::assertFalse($shown('2030-03-04', '2030-03-06', true, null)->matches($allDay), 'another first day');
+    }
+
     public function testTheResultsOfAReschedule(): void
     {
         $ok = CalendarEventRescheduleResult::ok('v2');
@@ -153,6 +178,7 @@ final class CalendarEventValueObjectsTest extends TestCase
         self::assertNull(CalendarEventRescheduleResult::ok()->version);
         self::assertSame([CalendarEventRescheduleStatus::Conflict, 'CALENDAR_EVENT_CHANGED'], [CalendarEventRescheduleResult::conflict()->status, CalendarEventRescheduleResult::conflict()->code]);
         self::assertSame('MEETING_LOCKED', CalendarEventRescheduleResult::conflict('MEETING_LOCKED')->code);
+        self::assertSame('CONFLICT_RULE', CalendarEventRescheduleResult::conflict('CONFLICT_RULE')->code, 'only CONFLICT_<digits> is reserved');
         self::assertSame([CalendarEventRescheduleStatus::Forbidden, 'CALENDAR_EVENT_FORBIDDEN'], [CalendarEventRescheduleResult::forbidden()->status, CalendarEventRescheduleResult::forbidden()->code]);
         self::assertSame([CalendarEventRescheduleStatus::NotFound, 'CALENDAR_EVENT_NOT_FOUND'], [CalendarEventRescheduleResult::notFound()->status, CalendarEventRescheduleResult::notFound()->code]);
         $lock = CalendarEventRescheduleResult::lockConflict(true, 4);
@@ -165,6 +191,9 @@ final class CalendarEventValueObjectsTest extends TestCase
      */
     public static function badResults(): iterable
     {
+        yield 'a lock-conflict code as a domain code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::conflict('CONFLICT_001')];
+        yield 'another lock-conflict code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::forbidden('CONFLICT_17')];
+        yield 'bidi in version' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::ok("v\u{202E}")];
         yield 'lowercase code' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::conflict('changed')];
         yield 'header injection' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::forbidden("NO\r\nX-Evil: 1")];
         yield 'negative retry' => [static fn (): CalendarEventRescheduleResult => CalendarEventRescheduleResult::lockConflict(false, -1)];

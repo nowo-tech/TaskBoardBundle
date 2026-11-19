@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedule;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleResult;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedulerInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleStatus;
+use Nowo\TaskBoardBundle\Calendar\CalendarEventShown;
 use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
@@ -174,7 +175,7 @@ use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
-use function mb_strlen;
+use function max;
 use function mb_substr;
 use function parse_url;
 use function preg_match;
@@ -1186,11 +1187,16 @@ final class TaskBoardManageController extends AbstractController
 
     /**
      * Since 2.24.0: moves an event of a calendar event source to another day (a drag or the Move event dialog), for a viewer who
-     * may open the board. The body: `source`, `id`, `date` (the new first day, `Y-m-d`), `expected_start` / `expected_end` (as
-     * the page showed them), `all_day`, `version` (optional) and `_token`. The source decides the rest
-     * ({@see CalendarEventReschedulerInterface}): 200 moved, 404 no such event (or a source that cannot move events), 403 not
-     * allowed, 409 changed meanwhile (`X-Error-Code`), 409 / 503 lock conflict (`X-Conflict-Code`, REQ-RUNTIME-003 rule 6),
-     * 400 a malformed request. Always JSON: `{message, code}`, plus `start`, `end` and `version` when moved.
+     * may open the board. The body (form-encoded): `source`, `id`, `date` (the new first day, `Y-m-d`), `expected_start` /
+     * `expected_end` / `all_day` / `version` (as the page showed them) and `_token`.
+     *
+     * Audit UW-TB-1 / UW-TB-2: the browser's values are only compared, never used. The route reads the event again through
+     * the source for this viewer (as the page did) and answers 404 when the source does not return it, 403 when it is
+     * read-only and 409 (`X-Error-Code: CALENDAR_EVENT_CHANGED`) when its start, end, all-day flag or version differ from what
+     * the page showed; nothing is written in those cases. The new start and end are computed from the stored values (same
+     * time of day and duration, whole days). Then the source decides ({@see CalendarEventReschedulerInterface}): 200 moved,
+     * 404, 403, 409 changed meanwhile (`X-Error-Code`), 409 / 503 lock conflict (`X-Conflict-Code`, REQ-RUNTIME-003 rule 6).
+     * 400 a malformed request. The answer is JSON: `{message, code}`, plus `start`, `end` and `version` when moved.
      */
     #[Route('/tools/task-board/board/{boardId}/calendar/event-reschedule', name: 'nowo_task_board_calendar_event_reschedule', methods: ['POST'])]
     public function rescheduleCalendarEvent(string $boardId, Request $request): JsonResponse
@@ -1198,8 +1204,9 @@ final class TaskBoardManageController extends AbstractController
         $user = $this->requireUser();
         $this->denyUnlessValidCsrf($request, CalendarEventMoveFormType::CSRF_TOKEN_ID);
         $board     = $this->findBoard($boardId, $user);
+        $sourceKey = $request->request->getString('source');
         $collector = $this->eventCollector;
-        $source    = $collector?->rescheduler($request->request->getString('source'));
+        $source    = $collector?->rescheduler($sourceKey);
         if (!$collector instanceof CalendarEventCollector || !$source instanceof CalendarEventReschedulerInterface) {
             return $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND);
         }
@@ -1207,24 +1214,47 @@ final class TaskBoardManageController extends AbstractController
         $zone = $collector->timezone();
 
         try {
-            $change = $this->eventChange($request, $zone);
+            $shown = $this->eventShown($request, $zone);
         } catch (InvalidArgumentException) {
             return $this->eventAnswer(Response::HTTP_BAD_REQUEST, 'task_board.calendar.failed', self::EVENT_INVALID);
         }
 
         $viewer = new CalendarViewer(UserIdResolver::getId($user), $board->getId(), $board->getTenantKey());
+        $day    = $shown->allDay ? $shown->start->format('Y-m-d') : $shown->start->setTimezone($zone)->format('Y-m-d');
+
+        try {
+            $stored = $collector->find($viewer, $sourceKey, $shown->id, new CalendarDateRange($day, $day));
+        } catch (Throwable $failure) {
+            return $this->eventFailure($failure);
+        }
+        if (!$stored instanceof CalendarEvent) {
+            return $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND);
+        }
+        if ($stored->readOnly) {
+            return $this->eventAnswer(Response::HTTP_FORBIDDEN, 'task_board.calendar.event_forbidden', CalendarEventRescheduleResult::CODE_FORBIDDEN);
+        }
+        if (!$shown->matches($stored)) {
+            return $this->eventAnswer(Response::HTTP_CONFLICT, 'task_board.calendar.event_changed', CalendarEventRescheduleResult::CODE_CHANGED);
+        }
+
+        try {
+            $change = CalendarEventReschedule::toDay($stored->id, $stored->start, $stored->end, $stored->version, $stored->allDay, $shown->date, $zone);
+            // Audit HY-L1: only the years the calendar shows.
+            if (!$this->calendarBuilder->isInRange($change->start) || !$this->calendarBuilder->isInRange($change->end)) {
+                throw new InvalidArgumentException('Not a day of the calendar.');
+            }
+        } catch (InvalidArgumentException) {
+            return $this->eventAnswer(Response::HTTP_BAD_REQUEST, 'task_board.calendar.failed', self::EVENT_INVALID);
+        }
 
         try {
             $result = $source->reschedule($viewer, $change);
         } catch (Throwable $failure) {
-            if (!LockConflictChain::isConflict($failure)) {
-                throw $failure;
-            }
-            $result = CalendarEventRescheduleResult::lockConflict(LockConflictChain::committed($failure), LockConflictChain::retryAfterHint($failure));
+            return $this->eventFailure($failure);
         }
 
         return match ($result->status) {
-            CalendarEventRescheduleStatus::Ok           => $this->eventMoved($change, $result, $request->request->getString('source')),
+            CalendarEventRescheduleStatus::Ok           => $this->eventMoved($change, $result, $sourceKey),
             CalendarEventRescheduleStatus::Conflict     => $this->eventAnswer(Response::HTTP_CONFLICT, 'task_board.calendar.event_changed', (string) $result->code),
             CalendarEventRescheduleStatus::Forbidden    => $this->eventAnswer(Response::HTTP_FORBIDDEN, 'task_board.calendar.event_forbidden', (string) $result->code),
             CalendarEventRescheduleStatus::NotFound     => $this->eventAnswer(Response::HTTP_NOT_FOUND, 'task_board.calendar.event_not_found', CalendarEventRescheduleResult::CODE_NOT_FOUND),
@@ -1232,25 +1262,23 @@ final class TaskBoardManageController extends AbstractController
         };
     }
 
-    /** Since 2.24.0: the move a reschedule request asks for; InvalidArgumentException when a value is missing or malformed. */
-    private function eventChange(Request $request, DateTimeZone $zone): CalendarEventReschedule
+    /** Since 2.24.0: what the page showed of the event, and the new day; InvalidArgumentException when a value is missing or malformed. */
+    private function eventShown(Request $request, DateTimeZone $zone): CalendarEventShown
     {
         $body    = $request->request;
         $id      = $body->getString('id');
         $allDay  = $body->getString('all_day') === '1';
         $version = $body->getString('version');
+        $date    = $body->getString('date');
         $start   = $this->eventInstant($body->getString('expected_start'), $allDay, $zone);
         $end     = $this->eventInstant($body->getString('expected_end'), $allDay, $zone);
-        if ($id === '' || mb_strlen($id) > CalendarEvent::MAX_ID_LENGTH || mb_strlen($version) > CalendarEvent::MAX_VERSION_LENGTH || preg_match('/[\x00-\x1F\x7F]/u', $id . $version) !== 0) {
-            throw new InvalidArgumentException('Not an event.');
-        }
-        $change = CalendarEventReschedule::toDay($id, $start, $end, $version !== '' ? $version : null, $allDay, $body->getString('date'), $zone);
-        // Audit HY-L1: only the years the calendar shows.
-        if (!$this->calendarBuilder->isInRange($change->start) || !$this->calendarBuilder->isInRange($change->end)) {
-            throw new InvalidArgumentException('Not a day of the calendar.');
+        $day     = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        if (!CalendarEvent::isPrintable($id, CalendarEvent::MAX_ID_LENGTH) || ($version !== '' && !CalendarEvent::isPrintable($version, CalendarEvent::MAX_VERSION_LENGTH))
+            || !$day instanceof DateTimeImmutable || $day->format('Y-m-d') !== $date || $end < $start) {
+            throw new InvalidArgumentException('Not an event move.');
         }
 
-        return $change;
+        return new CalendarEventShown($id, $start, $end, $allDay, $version !== '' ? $version : null, $date);
     }
 
     /** Since 2.24.0: an expected start or end as the page sent it: `Y-m-d` for an all-day event, ISO 8601 with an offset otherwise. */
@@ -1262,6 +1290,16 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $instant;
+    }
+
+    /** Since 2.24.0: a source that threw: a lock conflict in the chain answers per REQ-RUNTIME-003 rule 6; anything else is rethrown. */
+    private function eventFailure(Throwable $failure): JsonResponse
+    {
+        if (!LockConflictChain::isConflict($failure)) {
+            throw $failure;
+        }
+
+        return $this->eventLockConflict(CalendarEventRescheduleResult::lockConflict(LockConflictChain::committed($failure), LockConflictChain::retryAfterHint($failure)));
     }
 
     private function eventMoved(CalendarEventReschedule $change, CalendarEventRescheduleResult $result, string $source): JsonResponse
@@ -1288,7 +1326,8 @@ final class TaskBoardManageController extends AbstractController
         $code    = $result->committed ? self::CONFLICT_PARTIAL : self::CONFLICT;
         $headers = [ConflictResponsePolicy::CODE_HEADER => $code];
         if (!$result->committed) {
-            $headers['Retry-After'] = (string) $policy->retryAfter($result->retryAfterSeconds);
+            // Audit UW-TB-4: at least one second, as LockConflictChain::retryAfterHint() (Retry-After: 0 invites a hot loop).
+            $headers['Retry-After'] = (string) max(1, $policy->retryAfter($result->retryAfterSeconds));
         }
 
         return $this->eventAnswer($policy->status, $result->committed ? 'task_board.calendar.event_partial' : 'task_board.calendar.event_busy', $code, $headers, false);

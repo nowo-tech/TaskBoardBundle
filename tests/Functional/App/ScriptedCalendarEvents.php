@@ -19,7 +19,7 @@ use function in_array;
  * Since 2.24.0: a calendar event source of the functional tests (autoconfigured), with a store as a real source keeps one.
  * `events()` returns the rows a viewer may read (`viewers`) and, to prove the bundle's own filters, does NOT filter by tenant
  * or range; `extra` is yielded as given (values that are not events, repeats). `reschedule()` behaves as a careful source:
- * other tenant or unknown id = not found, not a mover = forbidden, another start or version = conflict, else the move.
+ * other tenant or unknown id = not found, not a mover = forbidden, another start, end or version = conflict, else the move.
  */
 final class ScriptedCalendarEvents implements CalendarEventReschedulerInterface
 {
@@ -97,7 +97,9 @@ final class ScriptedCalendarEvents implements CalendarEventReschedulerInterface
             return CalendarEventRescheduleResult::forbidden();
         }
         $version = $row['version'] ?? 1;
-        $same    = $row['allDay'] ?? false ? $row['start']->format('Y-m-d') === $change->expectedStart->format('Y-m-d') : $row['start'] == $change->expectedStart;
+        $same    = $row['allDay'] ?? false
+            ? $row['start']->format('Y-m-d') === $change->expectedStart->format('Y-m-d') && $row['end']->format('Y-m-d') === $change->expectedEnd->format('Y-m-d')
+            : $row['start'] == $change->expectedStart && $row['end'] == $change->expectedEnd;
         if (!$same || (string) $version !== $change->expectedVersion) {
             return CalendarEventRescheduleResult::conflict();
         }

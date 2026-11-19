@@ -14,9 +14,9 @@ use function sprintf;
  * Since 2.24.0: a move of one event to another day, as {@see CalendarEventReschedulerInterface::reschedule()} gets it.
  *
  * - `eventId`: the event's id, as the source returned it (look it up within the viewer's tenant).
- * - `expectedStart` / `expectedEnd` / `expectedVersion`: what the calendar showed (optimistic concurrency). Compare them
- *   with what is stored, as instants (`==`, seconds precision; an all-day event by its dates), and answer `conflict()`
- *   without writing when they differ.
+ * - `expectedStart` / `expectedEnd` / `expectedVersion`: the event as the source returned it to the bundle just before this
+ *   call (the browser's values were only compared with them). Compare them with what is stored, inside the transaction, as
+ *   instants (seconds precision; an all-day event by its dates), and answer `conflict()` without writing when they differ.
  * - `start` / `end`: the new values. The calendar moves an event by whole days: a timed event keeps its time of day in the
  *   calendar's timezone and its duration in seconds (across a daylight-saving change too); an all-day event keeps its
  *   number of days. Both are in the calendar's timezone.

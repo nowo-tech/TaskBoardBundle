@@ -185,9 +185,13 @@ final class CalendarEventSourceTest extends CalendarTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame(['b-1'], $crawler->filter('[data-testid="nowo-task-cal-event"]')->each(static fn ($node): string => (string) $node->attr('data-event-id')));
-        $warnings = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['message'] === 'TaskBoard calendar event source {source} failed: {message}'));
+        // Audit UW-TB-8: the class at warning level, the message only at debug.
+        $warnings = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['level'] === 'warning' && $record['message'] === 'TaskBoard calendar event source {source} failed: {class}'));
         self::assertCount(1, $warnings);
-        self::assertSame('meetings', $warnings[0]['context']['source']);
+        self::assertSame(['meetings', RuntimeException::class], [$warnings[0]['context']['source'], $warnings[0]['context']['class']]);
+        self::assertArrayNotHasKey('message', $warnings[0]['context']);
+        $debug = array_values(array_filter($this->logger()->records, static fn (array $record): bool => $record['level'] === 'debug' && ($record['context']['message'] ?? null) === 'backend down'));
+        self::assertCount(1, $debug);
     }
 
     public function testASourceWithABadOrTakenKeyIsIgnored(): void

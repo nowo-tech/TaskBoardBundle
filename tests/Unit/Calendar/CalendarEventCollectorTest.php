@@ -16,9 +16,11 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventReschedulerInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
 use Nowo\TaskBoardBundle\Dto\TaskCalendarEventEntry;
+use Nowo\TaskBoardBundle\Tests\Stub\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_column;
 use function array_map;
 use function date_default_timezone_get;
 use function date_default_timezone_set;
@@ -90,6 +92,77 @@ final class CalendarEventCollectorTest extends TestCase
         self::assertNull($collector->rescheduler('CRM'));
         self::assertNull($collector->rescheduler('crm '));
         self::assertNull($collector->rescheduler(''));
+    }
+
+    /** Audit UW-TB-3: an endless source of dropped values (or of events) never holds the request. */
+    public function testAnEndlessSourceIsCut(): void
+    {
+        $range  = new CalendarDateRange('2030-03-04', '2030-03-10');
+        $viewer = new CalendarViewer('u1', 'b1', 'acme');
+        foreach ([
+            'other tenant, forever' => static fn (): CalendarEvent => new CalendarEvent('e', 'T', new DateTimeImmutable('2030-03-04 09:00'), new DateTimeImmutable('2030-03-04 10:00'), tenantKey: 'globex'),
+            'not events, forever'   => static fn (): string => 'junk',
+        ] as $case => $make) {
+            $logger    = new RecordingLogger();
+            $collector = new CalendarEventCollector([$this->endless('crm', $make)], $logger, 'UTC', 10);
+
+            self::assertSame([], $collector->collect($viewer, $range), $case);
+            self::assertContains('TaskBoard calendar event source {source} returned too many values; the rest are not read', array_column($logger->records, 'message'), $case);
+            self::assertNull($collector->find($viewer, 'crm', 'e', $range), $case);
+        }
+
+        // Valid events, one id each: the kept limit cuts first, and at most four times the limit is ever pulled.
+        $count     = 0;
+        $logger    = new RecordingLogger();
+        $collector = new CalendarEventCollector([$this->endless('crm', static function () use (&$count): CalendarEvent {
+            ++$count;
+
+            return new CalendarEvent('e' . $count, 'T', new DateTimeImmutable('2030-03-04 09:00'), new DateTimeImmutable('2030-03-04 10:00'), tenantKey: 'acme');
+        })], $logger, 'UTC', 10);
+        self::assertCount(10, $collector->collect($viewer, $range));
+        self::assertLessThanOrEqual(40, $count);
+        self::assertContains('TaskBoard calendar event source {source} returned more than {max} events; the rest are not shown', array_column($logger->records, 'message'));
+    }
+
+    public function testFindReturnsTheEventOfThatSourceAndIdOnly(): void
+    {
+        $event     = new CalendarEvent('m-1', 'Meeting', new DateTimeImmutable('2030-03-04 09:00'), new DateTimeImmutable('2030-03-04 10:00'));
+        $collector = new CalendarEventCollector([$this->source('bookings', [$event], false), $this->source('crm', [$event], true)], timezone: 'UTC');
+        $range     = new CalendarDateRange('2030-03-04', '2030-03-04');
+        $viewer    = new CalendarViewer('u1', 'b1');
+
+        self::assertSame($event, $collector->find($viewer, 'crm', 'm-1', $range));
+        self::assertNull($collector->find($viewer, 'crm', 'm-2', $range));
+        self::assertNull($collector->find($viewer, 'nope', 'm-1', $range));
+        self::assertNull($collector->find($viewer, 'crm', 'm-1', new CalendarDateRange('2030-03-05', '2030-03-05')), 'not on that day');
+    }
+
+    /**
+     * @param callable(): mixed $make
+     */
+    private function endless(string $key, callable $make): CalendarEventSourceInterface
+    {
+        return new class($key, $make) implements CalendarEventSourceInterface {
+            /** @var callable(): mixed */
+            private $make;
+
+            public function __construct(private readonly string $key, callable $make)
+            {
+                $this->make = $make;
+            }
+
+            public function key(): string
+            {
+                return $this->key;
+            }
+
+            public function events(CalendarViewer $viewer, CalendarEventRange $range): iterable
+            {
+                while (true) {
+                    yield ($this->make)();
+                }
+            }
+        };
     }
 
     /**

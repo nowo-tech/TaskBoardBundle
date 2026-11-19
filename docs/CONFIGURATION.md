@@ -909,7 +909,7 @@ user references by id work, and the private entity manager covers the tables too
 | `routes.task_by_number` | `/tools/task-board/n/{number}` | With `task_numbers.enabled`. A tenant copy is `<tenant path>/n/{number}` |
 | `routes.calendar` | `/tools/task-board/board/{boardId}/calendar` | With `calendar.enabled` |
 | `routes.task_schedule` | `/tools/task-board/task/{taskId}/schedule` | With `calendar.enabled`. POST |
-| `routes.calendar_event_reschedule` | `/tools/task-board/board/{boardId}/calendar/event-reschedule` | Since 2.24.0, with `calendar.enabled`. POST, JSON: moves an event of a calendar event source |
+| `routes.calendar_event_reschedule` | `/tools/task-board/board/{boardId}/calendar/event-reschedule` | Since 2.24.0, with `calendar.enabled`. A form-encoded POST, JSON answer: moves an event of a calendar event source |
 | `web_ui.templates.calendar` | `@NowoTaskBoardBundle/manage/calendar.html.twig` | The calendar page |
 | `board.default_view_resolver` | `null` | May answer `calendar`, honoured with `calendar.enabled` |
 

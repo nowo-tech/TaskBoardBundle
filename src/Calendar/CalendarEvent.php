@@ -57,11 +57,11 @@ final readonly class CalendarEvent
         public ?string $version = null,
         public ?string $tenantKey = null,
     ) {
-        if (!$this->isToken($id, self::MAX_ID_LENGTH)) {
+        if (!self::isPrintable($id, self::MAX_ID_LENGTH)) {
             throw new InvalidArgumentException(sprintf('A calendar event needs an id of 1 to %d printable characters.', self::MAX_ID_LENGTH));
         }
         $title = trim($title);
-        if (!$this->isToken($title, self::MAX_TITLE_LENGTH)) {
+        if (!self::isPrintable($title, self::MAX_TITLE_LENGTH)) {
             throw new InvalidArgumentException(sprintf('A calendar event needs a title of 1 to %d printable characters.', self::MAX_TITLE_LENGTH));
         }
         $this->title = $title;
@@ -77,7 +77,7 @@ final readonly class CalendarEvent
         if ($category !== null && preg_match('/^[a-z0-9][a-z0-9_-]{0,31}$/D', $category) !== 1) {
             throw new InvalidArgumentException('A calendar event category is 1 to 32 of a-z, 0-9, "_" and "-".');
         }
-        if ($version !== null && !$this->isToken($version, self::MAX_VERSION_LENGTH)) {
+        if ($version !== null && !self::isPrintable($version, self::MAX_VERSION_LENGTH)) {
             throw new InvalidArgumentException(sprintf('A calendar event version is 1 to %d printable characters.', self::MAX_VERSION_LENGTH));
         }
     }
@@ -94,9 +94,14 @@ final readonly class CalendarEvent
         return $this->end->format('Y-m-d');
     }
 
-    private function isToken(string $value, int $max): bool
+    /**
+     * Since 2.24.0 (audit UW-TB-6): 1 to `$max` characters of valid UTF-8 with no control character (C0 and C1, `\p{Cc}`),
+     * no bidirectional mark, override or isolate (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) and no zero-width or
+     * invisible format character (U+200B to U+200D, U+2060 to U+2064, U+FEFF). Used for ids, titles and versions.
+     */
+    public static function isPrintable(string $value, int $max): bool
     {
-        return $value !== '' && mb_strlen($value) <= $max && preg_match('/[\x00-\x1F\x7F]/u', $value) === 0;
+        return $value !== '' && mb_strlen($value) <= $max && preg_match('/[\p{Cc}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}]/u', $value) === 0;
     }
 
     private function isSafeUrl(string $url): bool

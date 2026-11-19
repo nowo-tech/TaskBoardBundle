@@ -105,6 +105,78 @@ final class CalendarEventRescheduleTest extends CalendarTestCase
         self::assertResponseStatusCodeSame(403);
         self::assertSame(['message' => 'You may not move this event.', 'code' => 'CALENDAR_EVENT_FORBIDDEN'], $answer);
         self::assertResponseHeaderSame('X-Error-Code', 'CALENDAR_EVENT_FORBIDDEN');
+        // Audit UW-TB-2: a read-only event never reaches reschedule().
+        self::assertSame([], $this->events()->moves);
+    }
+
+    /** Audit UW-TB-1: the browser cannot choose the duration or the all-day flag; its values are only compared. */
+    public function testAForgedEndOrAllDayFlagChangesNothing(): void
+    {
+        foreach ([
+            'a forged end'          => ['expected_end' => $this->atom('2030-03-10 18:00')],
+            'a forged all-day flag' => ['all_day' => '1', 'expected_start' => '2030-03-04', 'expected_end' => '2030-03-10'],
+            'a forged start'        => ['expected_start' => $this->atom('2030-03-04 09:30:01')],
+        ] as $case => $forged) {
+            $answer = $this->move($forged + ['id' => 'm-1', 'date' => '2030-03-07', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-04 10:15'), 'version' => '3']);
+
+            self::assertResponseStatusCodeSame(409, $case);
+            self::assertSame('CALENDAR_EVENT_CHANGED', $answer['code'] ?? null, $case);
+            self::assertResponseNotHasHeader('X-Conflict-Code');
+        }
+        self::assertSame([], $this->events()->moves, 'reschedule() never called');
+        $row = $this->events()->store['m-1'];
+        self::assertEquals([new DateTimeImmutable('2030-03-04 09:30'), new DateTimeImmutable('2030-03-04 10:15'), 3], [$row['start'], $row['end'], $row['version'] ?? null]);
+    }
+
+    /** The move is computed from the stored event, and the source gets the stored values as expected ones. */
+    public function testTheSourceGetsTheStoredValues(): void
+    {
+        $this->move(['id' => 'm-1', 'date' => '2030-03-05', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-04 10:15'), 'version' => '3']);
+
+        self::assertResponseIsSuccessful();
+        $change = $this->events()->moves[0][1];
+        self::assertEquals([new DateTimeImmutable('2030-03-04 09:30'), new DateTimeImmutable('2030-03-04 10:15'), '3'], [$change->expectedStart, $change->expectedEnd, $change->expectedVersion]);
+        self::assertEquals([new DateTimeImmutable('2030-03-05 09:30'), new DateTimeImmutable('2030-03-05 10:15')], [$change->start, $change->end]);
+    }
+
+    /**
+     * @return iterable<string, array{CalendarEventRescheduleResult, int, string}>
+     */
+    public static function sourceRefusals(): iterable
+    {
+        yield 'changed in the transaction' => [CalendarEventRescheduleResult::conflict('MEETING_LOCKED'), 409, 'MEETING_LOCKED'];
+        yield 'forbidden by the source' => [CalendarEventRescheduleResult::forbidden(), 403, 'CALENDAR_EVENT_FORBIDDEN'];
+        yield 'gone in the transaction' => [CalendarEventRescheduleResult::notFound(), 404, 'CALENDAR_EVENT_NOT_FOUND'];
+    }
+
+    #[DataProvider('sourceRefusals')]
+    public function testTheSourcesRefusalIsAnswered(CalendarEventRescheduleResult $refusal, int $status, string $code): void
+    {
+        $this->events()->answer = $refusal;
+        $answer                 = $this->validMove();
+
+        self::assertResponseStatusCodeSame($status);
+        self::assertSame($code, $answer['code'] ?? null);
+        self::assertResponseHeaderSame('X-Error-Code', $code);
+        self::assertResponseNotHasHeader('X-Conflict-Code');
+    }
+
+    public function testALockConflictWhileReadingTheEventAgainIsAConflict001(): void
+    {
+        $this->events()->failure = new TransientStorageFailure();
+        $this->validMove();
+
+        self::assertResponseStatusCodeSame(409);
+        self::assertResponseHeaderSame('X-Conflict-Code', 'CONFLICT_001');
+        self::assertSame([], $this->events()->moves);
+    }
+
+    public function testRetryAfterIsAtLeastOneSecond(): void
+    {
+        $this->events()->answer = CalendarEventRescheduleResult::lockConflict(retryAfterSeconds: 0);
+        $this->validMove();
+
+        self::assertResponseHeaderSame('Retry-After', '1');
     }
 
     /**
@@ -142,7 +214,8 @@ final class CalendarEventRescheduleTest extends CalendarTestCase
         yield 'out of the calendar years' => [['date' => '2300-01-01']];
         yield 'no expected start' => [['expected_start' => '']];
         yield 'an expected start without offset' => [['expected_start' => '2030-03-04T09:30:00']];
-        yield 'an end before the start' => [['expected_end' => '2030-03-04T08:00:00+00:00']];
+        yield 'an end before the start' => [['expected_end' => (new DateTimeImmutable('2030-03-04 08:00'))->format(DateTimeInterface::ATOM)]];
+        yield 'a version with a bidi override' => [['version' => "3\u{202E}"]];
         yield 'an all-day end before the start' => [['all_day' => '1', 'expected_start' => '2030-03-05', 'expected_end' => '2030-03-04']];
         yield 'no id' => [['id' => '']];
         yield 'a control character' => [['id' => "m-1\n"]];
@@ -155,7 +228,7 @@ final class CalendarEventRescheduleTest extends CalendarTestCase
     #[DataProvider('malformed')]
     public function testAMalformedMoveIsABadRequest(array $fields): void
     {
-        $answer = $this->move($fields + ['id' => 'm-1', 'date' => '2030-03-07', 'expected_start' => '2030-03-04T09:30:00+00:00', 'expected_end' => '2030-03-04T10:15:00+00:00', 'version' => '3']);
+        $answer = $this->move($fields + ['id' => 'm-1', 'date' => '2030-03-07', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-04 10:15'), 'version' => '3']);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('CALENDAR_EVENT_INVALID', $answer['code'] ?? null);

@@ -127,13 +127,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above the tasks of each day, in a style of their own, with their times in `calendar.events.timezone` (the PHP default when
   not set), "Event:" for screen readers, three a day in the month grid and the rest in "+n more". The source decides what the
   viewer sees; the bundle also drops values that are not events, events of another tenant (byte for byte), events outside the
-  page and repeated ids, caps each source at `calendar.events.max_per_source` (500), and leaves out (and logs) a source that
-  throws or has an invalid or repeated key.
+  page and repeated ids, caps each source at `calendar.events.max_per_source` (500; at most four times that many values
+  are read), and leaves out (and logs, the exception class at warning level) a source that throws or has an invalid or
+  repeated key. Ids, titles and versions refuse control, bidirectional and zero-width characters.
 - **Moving an event.** A source that also implements `Calendar\CalendarEventReschedulerInterface` lets the viewer drag its
   events that are not read-only to another day (month and week grids, mouse or pen) or move them with the Move event dialog
-  (keyboard, touch, every mode), with Undo. The new route `calendar_event_reschedule` (POST, JSON, CSRF, with
+  (keyboard, touch, every mode), with Undo. The new route `calendar_event_reschedule` (form-encoded POST with CSRF, JSON answer, with
   `calendar.enabled`) keeps the time of day and the duration (an all-day event its days), across daylight-saving changes, and
-  asks the source with the expected start, end and version (optimistic concurrency). Answers: 200; 409 with `X-Error-Code`
+  asks the source with the expected start, end and version (optimistic concurrency). The browser's values are only
+  compared: the route reads the event again through the source for the viewer, refuses a read-only event (403) and a start,
+  end, all-day flag or version other than what the page showed (409), and computes the move from the stored event. Answers: 200; 409 with `X-Error-Code`
   (`CALENDAR_EVENT_CHANGED` by default) when the event changed meanwhile; 409 (or the shared `conflict_response` status) with
   `X-Conflict-Code: CONFLICT_001` and `Retry-After`, or `CONFLICT_002` without it after a partial commit, for a lock conflict
   returned or thrown (REQ-RUNTIME-003 rule 6); 403 `CALENDAR_EVENT_FORBIDDEN`; 404 `CALENDAR_EVENT_NOT_FOUND` (also for an

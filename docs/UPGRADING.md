@@ -241,7 +241,7 @@ A minor release. Additive: no schema change, no BC break, nothing changes for a 
   `nowo_task_board.calendar_event_source` by autoconfiguration. See
   [USAGE](USAGE.md#calendar-events-of-other-sources-since-224).
 - New options `calendar.events.timezone` (`null`: the PHP default timezone) and `calendar.events.max_per_source` (`500`),
-  and the route `routes.calendar_event_reschedule` (POST, JSON), registered with `calendar.enabled` like `task_schedule`.
+  and the route `routes.calendar_event_reschedule` (form-encoded POST, JSON answer), registered with `calendar.enabled` like `task_schedule`.
   A host that imports the routes with `type: nowo_task_board` gets it; nothing to do.
 - **A service already implementing an interface named like these?** Only a class implementing
   `Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface` is picked up; existing services are untouched.

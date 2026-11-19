@@ -458,7 +458,7 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('name')->defaultValue('nowo_task_board_task_schedule')->end()
                             ->end()
                         ->end()
-                        // Since 2.24.0: with calendar.enabled; moves an event of a calendar event source (POST, JSON).
+                        // Since 2.24.0: with calendar.enabled; moves an event of a calendar event source (form-encoded POST, JSON answer).
                         ->arrayNode('calendar_event_reschedule')
                             ->addDefaultsIfNotSet()
                             ->children()

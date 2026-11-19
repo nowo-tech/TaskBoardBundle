@@ -1408,9 +1408,10 @@ the calendar is the 2.23 calendar.
   event the source did not return for this viewer. On top of that it drops, and logs as one notice per page and source: a value
   that is not a `CalendarEvent`, an event whose `tenantKey` is not the viewer's (compared byte for byte; `null` without
   tenancy), an event outside the page, and a repeated id. At most `calendar.events.max_per_source` events (500) per source are
-  drawn; the rest are logged as a warning.
+  drawn; the rest are logged as a warning. A source is read for at most four times that many values, and stops after that
+  many dropped ones (an endless generator never holds the request or a worker).
 - **A failing source never breaks the page.** An exception from `events()` leaves that source out (warning `TaskBoard calendar
-  event source {source} failed`); the other sources and the tasks still render. A source whose key is invalid or already taken
+  event source {source} failed: {class}` with the exception class; the message is logged at debug only); the other sources and the tasks still render. A source whose key is invalid or already taken
   by an earlier source is ignored (error log).
 - **How an event looks.** In the month and week grids and in the list, each day has a list of its events above its tasks
   (`_calendar_events.html.twig`, `_calendar_event.html.twig`): the time range (or *All day*), the title (a link with `url`),
@@ -1427,8 +1428,8 @@ the calendar is the 2.23 calendar.
 
 | Argument | Meaning |
 | --- | --- |
-| `id` | The source's id, 1 to 128 printable characters, unique within the source |
-| `title` | 1 to 200 printable characters (trimmed) |
+| `id` | The source's id, 1 to 128 printable characters (no control, bidirectional or zero-width character), unique within the source |
+| `title` | 1 to 200 printable characters (trimmed; no control, bidirectional or zero-width character) |
 | `start`, `end` | `DateTimeImmutable`; `end >= start` (an all-day event compares dates) |
 | `allDay` | `false` (default): timed; `true`: whole days |
 | `url` | `https://`, `http://` or a local path (`/...`, not `//...`); `null`: no link |
@@ -1448,11 +1449,17 @@ events that are not `readOnly`:
   (WCAG 2.5.7). Escape cancels a drag. After a move a toast offers **Undo** for a few seconds, and the days are drawn again.
 - **What changes.** The calendar moves an event by whole days: a timed event keeps its time of day (in the calendar's
   timezone) and its duration in seconds, across a daylight-saving change too; an all-day event keeps its number of days. The
-  route `calendar_event_reschedule` (POST, JSON) computes the new `start` and `end`; the browser never does.
-- **Who decides.** The bundle checks the CSRF token, the signed-in user and that the viewer may open the board (else 403 or
-  404), then calls `reschedule(CalendarViewer $viewer, CalendarEventReschedule $change)`. The source looks the event up within
-  the viewer's tenant, checks the viewer may move it, and compares `expectedStart` / `expectedEnd` / `expectedVersion` (what
-  the page showed) with what it has, inside its own transaction (optimistic concurrency).
+  route `calendar_event_reschedule` (a form-encoded POST, JSON answer) computes the new `start` and `end` from the stored event; the browser never does.
+- **The browser's values are only compared.** The bundle checks the CSRF token, the signed-in user and that the viewer may open
+  the board (else 403 or 404). Then it reads the event again through `events()`, for this viewer, on the day the page showed
+  it: not returned answers 404, `readOnly` answers 403 (`CALENDAR_EVENT_FORBIDDEN`), and a start, end, all-day flag or version
+  other than what the page showed answers 409 (`CALENDAR_EVENT_CHANGED`). In those cases `reschedule()` is never called and
+  nothing is written. The new start and end are computed from the stored event, so a request cannot stretch an event or turn
+  it into an all-day one.
+- **Who decides.** Then the bundle calls `reschedule(CalendarViewer $viewer, CalendarEventReschedule $change)`, with the stored
+  values as `expectedStart` / `expectedEnd` / `expectedVersion`. The event may change between that read and the write, so
+  the source looks the event up again within the viewer's tenant, repeats its own permission check (do not rely on
+  `readOnly` alone), and compares the expected values with what it has, inside its own transaction (optimistic concurrency).
 - **Answers.** The source returns a `CalendarEventRescheduleResult`, and the route answers `{message, code}` (plus `start`,
   `end`, `version` when moved):
 
@@ -1468,7 +1475,8 @@ events that are not `readOnly`:
   A malformed request answers 400 `CALENDAR_EVENT_INVALID`; an unknown source key, or a source without the reschedule
   interface, 404. An exception thrown by `reschedule()` whose chain holds a lock conflict (a write unit's
   `ConcurrencyConflict`, a `TransientStorageFailure`, a DBAL deadlock or lock wait timeout) answers like `lockConflict()`
-  (REQ-RUNTIME-003 rule 6); any other exception is not caught. Codes are 1 to 64 of `A-Z`, `0-9`, `_`.
+  (REQ-RUNTIME-003 rule 6); any other exception is not caught. Codes are 1 to 64 of `A-Z`, `0-9`, `_`, never `CONFLICT_<n>` (reserved for lock
+  conflicts); `Retry-After` is at least 1 second.
 
 ### Implementing a source: Standard Symfony host
 
@@ -1521,7 +1529,8 @@ final readonly class MeetingCalendarSource implements CalendarEventReschedulerIn
             if (!$meeting->isOrganisedBy($viewer->userId)) {
                 return CalendarEventRescheduleResult::forbidden();
             }
-            if ($meeting->getStartsAt() != $change->expectedStart || (string) $meeting->getVersion() !== $change->expectedVersion) {
+            if ($meeting->getStartsAt() != $change->expectedStart || $meeting->getEndsAt() != $change->expectedEnd
+                || (string) $meeting->getVersion() !== $change->expectedVersion) {
                 return CalendarEventRescheduleResult::conflict();
             }
             $meeting->moveTo($change->start, $change->end);
