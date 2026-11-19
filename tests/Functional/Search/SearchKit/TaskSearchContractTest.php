@@ -26,6 +26,16 @@ final class TaskSearchContractTest extends TaskBoardSearchKitTestCase
         return true;
     }
 
+    /**
+     * SearchKit >= 1.10.1: a sensitive group is expected to filter hidden rows in SQL. The bundle does so for everything it
+     * decides itself (the boards the viewer may open — creator, team, BOARD_ACCESS_CHECK —, archived tasks, the scope), but a
+     * host's TASK_ACCESS_CHECK veto is a PHP event, so the contract's hidden rows (vetoed tasks) are filtered after the query.
+     */
+    protected function hiddenRowsFilteredInSql(): bool
+    {
+        return false;
+    }
+
     protected function seed(int|string $tenant, string $text): int|string
     {
         return $this->task($tenant, $text)->getId();

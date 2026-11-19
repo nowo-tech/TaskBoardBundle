@@ -2062,7 +2062,10 @@ does not resolve for the viewer has no tenant, and SearchKit answers nothing. Th
 `canAccess()`. Boards are checked with `BOARD_ACCESS_CHECK` before the tasks are read. Each candidate task then passes
 `TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board_task` and
 `task_board_board`). Recents are revalidated by id (`t.id`, `b.id`, UUIDs only) when SearchKit's `recent.revalidate` is on.
-There is no "see all" link, because no list page searches across boards by text. SearchKit computes the total within its
+There is no "see all" link, because no list page searches across boards by text. Everything the bundle
+decides itself is filtered in SQL (the boards the viewer may open, archived tasks, the scope); a host's `TASK_ACCESS_CHECK`
+veto runs in PHP on the candidates, so vetoed tasks still take slots of SearchKit's candidate window
+(`search_kit.max_candidates`) and can make its total a lower bound. SearchKit computes the total within its
 candidate window; a scope that stopped at `max_boards` / `max_scanned_boards` is not visible to it, so its total counts the
 boards that were read (SearchKit marks a full window inexact on its own).
 
