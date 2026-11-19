@@ -118,3 +118,51 @@ export function movedDates(dates: TaskDates, days: number, nonWorking: ReadonlyS
 
     return sameDates(next, dates) ? null : next;
 }
+
+/** Since 2.24.0: an event of a calendar event source, as its markup holds it (`data-*` of a movable event). */
+export type CalendarEventMove = { source: string; id: string; first: string; start: string; end: string; allDay: boolean; version: string };
+
+/** Since 2.24.0: the movable event of an element's dataset; null when a value is missing. */
+export function readEventMove(data: DOMStringMap): CalendarEventMove | null {
+    const { eventSource, eventId, first, start, end } = data;
+    if (!eventSource || !eventId || !first || !start || !end) {
+        return null;
+    }
+
+    return { source: eventSource, id: eventId, first, start, end, allDay: data.allDay === '1', version: data.version ?? '' };
+}
+
+/**
+ * Since 2.24.0: the new first day of an event dragged from the day it was grabbed on to another one: it moves by the days the
+ * pointer moved, like a task's bar. Null when it is dropped where it was grabbed (nothing to write).
+ */
+export function eventDropDay(first: string, grabbedOn: string, droppedOn: string): string | null {
+    const days = dayDiff(grabbedOn, droppedOn);
+
+    return days === 0 ? null : addDays(first, days);
+}
+
+/** Since 2.24.0: the body of `calendar_event_reschedule`: the event, what the page showed, and the new first day. */
+export function eventMoveFields(event: CalendarEventMove, date: string, token: string): Record<string, string> {
+    return {
+        source: event.source,
+        id: event.id,
+        date,
+        expected_start: event.start,
+        expected_end: event.end,
+        all_day: event.allDay ? '1' : '0',
+        version: event.version,
+        _token: token,
+    };
+}
+
+/** Since 2.24.0: the event after a move answered `{start, end, version}`, for Undo. */
+export function movedEvent(event: CalendarEventMove, date: string, answer: { start?: unknown; end?: unknown; version?: unknown }): CalendarEventMove {
+    return {
+        ...event,
+        first: date,
+        start: typeof answer.start === 'string' ? answer.start : event.start,
+        end: typeof answer.end === 'string' ? answer.end : event.end,
+        version: typeof answer.version === 'string' ? answer.version : '',
+    };
+}

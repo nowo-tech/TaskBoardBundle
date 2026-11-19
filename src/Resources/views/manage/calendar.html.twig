@@ -2,7 +2,8 @@
     Since 2.1.0 (spec 214): a board's dated tasks on a calendar (`calendar.enabled`). Month, week and list modes; everything it
     shows is in the URL. Drag uses UiKit's `sortable`, with the routes that need no pointer (Reschedule, keyboard). Variables: board,
     calendar (Dto\TaskCalendarView), calendarModes, calendarQuery, calendarFiltered, filterForm, undatedCount, taskWindow,
-    canEditBoard, taskForm, scheduleForm, panelTargetPath, dashboardRoute.
+    canEditBoard, taskForm, scheduleForm, panelTargetPath, dashboardRoute; since 2.24.0 eventMoveForm (null: no movable
+    event on the page). The events of the calendar event sources are drawn by _calendar_events.html.twig.
 #}
 {% extends nowo_task_board_page_layout() ?? nowo_ui_layout.admin %}
 {% set nowo_ui_bundle = 'NowoTaskBoardBundle' %}
@@ -57,7 +58,7 @@
         data-nowo-task-board-calendar-failed-value="{{ 'task_board.calendar.failed'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undo-value="{{ 'task_board.calendar.undo'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undone-value="{{ 'task_board.calendar.undone'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
-        data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"{% if skipNonWorkingDays|default(false) %} data-nowo-task-board-calendar-skip-non-working-value="true"{% endif %}
+        data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"{% if skipNonWorkingDays|default(false) %} data-nowo-task-board-calendar-skip-non-working-value="true"{% endif %}{% if eventMoveForm|default(null) %} data-nowo-task-board-calendar-event-url-value="{{ path(nowo_task_board_route('calendar_event_reschedule'), {boardId: board.id}) }}" data-nowo-task-board-calendar-event-csrf-token-value="{{ csrf_token('task_board_calendar_event_reschedule') }}"{% endif %}
         data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.calendar.add_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
         {% block nowo_task_board_calendar_filters %}
@@ -109,6 +110,7 @@
         <template data-nowo-task-board-calendar-target="toastError">{{ include(nowo_ui_partial('toasts', 'NowoTaskBoardBundle'), {flashes: {error: ['-']}, bundle: 'NowoTaskBoardBundle'}, false) }}</template>
 
         {% if scheduleForm %}{{ include('@NowoTaskBoardBundle/manage/_calendar_reschedule_dialog.html.twig') }}{% endif %}
+        {% if eventMoveForm|default(null) %}{{ include('@NowoTaskBoardBundle/manage/_calendar_event_move_dialog.html.twig') }}{% endif %}
         {% if canEditBoard and taskForm %}
             {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig', {addTaskQuery: {calendar: 1, _target_path: panelTargetPath}}) }}
         {% endif %}

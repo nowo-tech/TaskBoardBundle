@@ -4356,6 +4356,100 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
     outline-offset: -1px;
 }
 
+/* Since 2.24.0: events of the calendar event sources, a list of their own above the tasks of a day. Not a bar: a dashed
+   accent, the time first, so an event never reads as a task. The accent is the event's colour (CSP-safe CSS variable) or
+   the neutral border colour. */
+.nowo-task-cal__events {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 2px;
+    padding: 0;
+    list-style: none;
+}
+
+.nowo-task-cal__event {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    margin-inline: 0.25rem;
+    padding-inline: 0.4rem 0.15rem;
+    font-size: 0.8rem;
+    color: var(--nowo-ui-text);
+    background: var(--nowo-ui-surface);
+    border: 1px dashed var(--nowo-task-cal-event-color, var(--nowo-ui-border));
+    border-inline-start: 3px solid var(--nowo-task-cal-event-color, var(--nowo-ui-muted));
+    border-radius: 0.3rem;
+}
+
+.nowo-task-cal__event.is-movable {
+    cursor: grab;
+}
+
+.nowo-task-cal__event.is-dragging {
+    opacity: 0.6;
+    cursor: grabbing;
+}
+
+.nowo-task-cal__event.is-continued {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+}
+
+.nowo-task-cal__event.is-continuing {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+}
+
+.nowo-task-cal__event-time {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--nowo-task-muted, var(--nowo-ui-muted));
+}
+
+.nowo-task-cal__event-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nowo-task-cal__event-move {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    opacity: 0;
+}
+
+.nowo-task-cal__event:hover .nowo-task-cal__event-move,
+.nowo-task-cal__event-move:focus-visible {
+    opacity: 1;
+}
+
+.nowo-task-cal__list-day .nowo-task-cal__events {
+    margin-block-end: 0.5rem;
+}
+
+@media (max-width: 40rem) {
+    .nowo-task-cal--month .nowo-task-cal__events {
+        display: none;
+    }
+
+    .nowo-task-cal__event-move {
+        min-width: 2rem;
+        min-height: 2rem;
+        opacity: 1;
+    }
+}
+
+@media (pointer: coarse) {
+    .nowo-task-cal__event-move {
+        opacity: 1;
+    }
+}
+
 /* Since 2.22.0 (UiKit 2.55 focus mode): the toggle at the end of the view's first line (not rendered while focus mode is off). */
 .nowo-task-focus-toggle {
     display: flex;

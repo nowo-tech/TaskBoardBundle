@@ -194,6 +194,9 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.domain_scope', DomainProjectBoardScope::class)->public();
         // Since 2.14.0: the host's calendar days (used when a test sets calendar.day_annotation_provider).
         $container->services()->set('app.calendar_days', ScriptedCalendarDays::class)->public();
+        // Since 2.24.0: calendar event sources, one autoconfigured (it can reschedule), one tagged by hand (read-only).
+        $container->services()->set('app.calendar_events', ScriptedCalendarEvents::class)->public()->autoconfigure();
+        $container->services()->set('app.calendar_bookings', ReadOnlyCalendarEvents::class)->public()->tag('nowo_task_board.calendar_event_source');
         // Since 2.3.0 (audit IC-I1): a move.targets hook that offers every board (used when a test sets move.targets).
         $container->services()->set('app.all_targets', AllBoardsTargets::class)->autowire()->public();
         // Since 2.18.0 (Beacon spec 234): member badges and write provenance (used when a test sets member_badge_provider /
