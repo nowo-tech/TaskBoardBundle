@@ -199,6 +199,18 @@ final class CalendarEventRescheduleTest extends CalendarTestCase
         self::assertCount($before, $this->events()->calls);
     }
 
+    /** A target day in range whose computed end falls after the calendar's last year is refused, nothing written. */
+    public function testAMoveWhoseEndLeavesTheCalendarYearsIsABadRequest(): void
+    {
+        $row                             = $this->events()->store['m-1'];
+        $this->events()->store['m-long'] = ['end' => new DateTimeImmutable('2030-03-08 10:15')] + $row;
+        $answer                          = $this->move(['id' => 'm-long', 'date' => '2200-12-30', 'expected_start' => $this->atom('2030-03-04 09:30'), 'expected_end' => $this->atom('2030-03-08 10:15'), 'version' => '3']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('CALENDAR_EVENT_INVALID', $answer['code'] ?? null);
+        self::assertSame([], $this->events()->moves);
+    }
+
     public function testRetryAfterIsAtLeastOneSecond(): void
     {
         $this->events()->answer = CalendarEventRescheduleResult::lockConflict(retryAfterSeconds: 0);

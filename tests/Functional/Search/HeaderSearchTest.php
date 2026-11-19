@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHits;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 use function array_map;
 use function range;
@@ -138,6 +140,9 @@ final class HeaderSearchTest extends HeaderSearchTestCase
             $seen[] = [$event->getGroup(), $event->getScope(), $event->getRequestTenantKey(), $event->getSubjectId()];
             $event->onlyBoards([$first->getId(), $second->getId(), $third->getId()]);
             $event->excludeBoards([$second->getId()]);
+            if ($event->getScope() === 'scope-1') {
+                $event->acceptScope();
+            }
         });
 
         // Limit 1: the excluded board never takes the first row.
@@ -146,6 +151,21 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         self::assertSame(2, $found->total);
         self::assertSame(['First board', 'Third board'], self::titles($this->boards()->search($this->viewer($this->owner), 'board', 10)->hits));
         self::assertSame([[SearchScopeEvent::GROUP_TASKS, 'scope-1', null, (string) $this->owner->getId()], [SearchScopeEvent::GROUP_BOARDS, null, null, (string) $this->owner->getId()]], $seen);
+    }
+
+    public function testTheBundlesOwnScopesAndUnacceptedHostScopes(): void
+    {
+        $first  = $this->board('First board');
+        $second = $this->board('Second board');
+        $this->described($first, 'Scoped task', null);
+        $this->described($second, 'Scoped task', null);
+
+        $found = $this->tasks()->search($this->viewer($this->owner, 'board:' . $first->getId()), 'scoped', 10);
+        self::assertSame(1, $found->total);
+        self::assertSame($first->getId(), $found->hits[0]->boardId);
+        self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'project:7'), 'scoped', 10)->hits, 'a host scope nobody accepts');
+        self::assertSame([], $this->tasks()->search($this->viewer($this->owner, 'board:'), 'scoped', 10)->hits);
+        self::assertSame([], $this->boards()->search($this->viewer($this->owner, 'tenant:acme'), 'board', 10)->hits, 'no board has that tenant');
     }
 
     public function testTheScopeEventDenies(): void
@@ -245,6 +265,41 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         self::assertSame(['Acme board'], self::titles($boards->hits));
         self::assertSame('acme', $boards->hits[0]->subtitle);
         self::assertStringStartsWith('/t/acme/', $boards->hits[0]->url);
+    }
+
+    public function testWithTenancyATenantPageSearchesItsTenantAndAnUnknownSlugNothing(): void
+    {
+        $this->boot(self::TENANCY);
+        MemberTenantResolver::$members = ['acme' => ['owner@example.com'], 'globex' => ['owner@example.com']];
+        $this->described($this->board('Acme board', tenantKey: 'acme'), 'Tenant task', null);
+        $this->described($this->board('Globex board', tenantKey: 'globex'), 'Tenant task', null);
+        $keys = [];
+        $this->listen(TaskBoardEvents::SEARCH_SCOPE, static function (SearchScopeEvent $event) use (&$keys): void {
+            $keys[] = $event->getRequestTenantKey();
+        });
+        $stack = self::getContainer()->get('request_stack');
+        self::assertInstanceOf(RequestStack::class, $stack);
+
+        $stack->push(new Request(attributes: ['tenantSlug' => 'acme']));
+        self::assertSame(['Acme board'], self::titles($this->boards()->search($this->viewer($this->owner), 'board', 10)->hits));
+        $stack->pop();
+
+        $stack->push(new Request(attributes: ['tenantSlug' => 'initech']));
+        self::assertEquals(new SearchHits(), $this->tasks()->search($this->viewer($this->owner), 'tenant', 10));
+        $stack->pop();
+
+        self::assertSame(['acme'], $keys, 'an unknown slug never reaches the listeners');
+    }
+
+    public function testAnEmptyAllowListFindsNothing(): void
+    {
+        $this->described($this->board(), 'Anything', null);
+        $this->listen(TaskBoardEvents::SEARCH_SCOPE, static function (SearchScopeEvent $event): void {
+            $event->onlyBoards([]);
+        });
+
+        self::assertSame([], $this->tasks()->search($this->viewer($this->owner), 'anything', 10)->hits);
+        self::assertEquals(new SearchHits(), $this->boards()->search($this->viewer($this->owner), ' ', 10));
     }
 
     public function testWithTenancyExclusionsAndUnusableKeys(): void

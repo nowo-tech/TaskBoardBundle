@@ -27,6 +27,9 @@ services:
             - '../../Repository/'
             - '../../Doctrine/'
             - '../../Bridge/TimeTrack/'
+            # Since 2.25.0: registered by TaskBoardExtension (registerHeaderSearch(); the SearchKit groups only with SearchKit >= 1.9).
+            - '../../Bridge/SearchKit/'
+            - '../../Search/Header/'
             # Since 2.22.0: values of the task menu (the builder is a service).
             - '../../Menu/TaskMenu.php'
             - '../../Menu/TaskMenuContext.php'
@@ -385,15 +388,6 @@ services:
         arguments:
             $enabled: '%nowo_task_board.tenancy.enabled%'
             $singleBoard: '%nowo_task_board.tenancy.single_board%'
-
-    # Since 2.25.0 (header search): the services a SearchKit provider calls (boards and tasks the viewer may open).
-    Nowo\TaskBoardBundle\Search\Header\SearchHitMapper:
-        arguments:
-            $routes: '%nowo_task_board.routes%'
-
-    Nowo\TaskBoardBundle\Search\Header\SearchBoardScope:
-        arguments:
-            $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
 
     Nowo\TaskBoardBundle\Routing\TenantPaths:
         arguments:

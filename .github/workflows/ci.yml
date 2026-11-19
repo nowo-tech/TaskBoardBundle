@@ -396,7 +396,8 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          # Since 2.25.0: 8.4, so SearchKit (PHP >= 8.3) is installed and the SearchKit groups count (.github/ci/search-kit.sh).
+          php-version: '8.4'
           extensions: json
           coverage: pcov
           tools: composer:v2
@@ -435,7 +436,8 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          # Since 2.25.0: 8.4, so the SearchKit groups are analysed (the floor job still runs PHPStan on 8.2).
+          php-version: '8.4'
           extensions: json
           tools: composer:v2
 

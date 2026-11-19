@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Search\Header;
 
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
+use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -41,8 +42,22 @@ final class SearchScopeEventTest extends TestCase
         $event->excludeBoards(['b9']);
         self::assertSame(['b9'], $event->getExcludedBoards());
 
+        self::assertFalse($event->isScopeAccepted());
+        $event->acceptScope();
+        self::assertTrue($event->isScopeAccepted());
+
         $event->deny();
         self::assertTrue($event->isDenied());
+    }
+
+    public function testTheBundlesOwnScopes(): void
+    {
+        self::assertSame(['board', 'b-1'], SearchBoardScope::nativeScope('board:b-1'));
+        self::assertSame(['tenant', 'acme:eu'], SearchBoardScope::nativeScope('tenant:acme:eu'));
+        self::assertNull(SearchBoardScope::nativeScope(null));
+        self::assertNull(SearchBoardScope::nativeScope('board:'));
+        self::assertNull(SearchBoardScope::nativeScope('tenant: acme'));
+        self::assertNull(SearchBoardScope::nativeScope('project:7'));
     }
 
     public function testDefaults(): void

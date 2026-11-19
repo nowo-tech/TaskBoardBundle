@@ -77,6 +77,7 @@
   - [Questions: DDD / hexagonal host](#questions-ddd--hexagonal-host)
 - [Header search (since 2.25)](#header-search-since-225)
   - [Narrowing the scope: the search scope event](#narrowing-the-scope-the-search-scope-event)
+  - [SearchKit groups: tasks and boards](#searchkit-groups-tasks-and-boards)
 - [Translations](#translations)
 
 ## Manage UI
@@ -2024,9 +2025,33 @@ the viewer (`getSubject()`, `getSubjectId()`), the group (`getGroup()`: `tasks` 
 - **With `tenancy.enabled`** and no `onlyTenants()` answer, only the current request's tenant is searched, and nothing outside a
   tenant page (deny by default). A host whose search box is on every page names the viewer's tenants here. A tenant page
   whose slug does not resolve for the viewer finds nothing.
+- **Scopes of the search box.** The bundle applies its own: `board:<board id>` (one board) and `tenant:<tenant key>` (one
+  tenant), as `onlyBoards()` / `onlyTenants()`. A host scope (a project chip, for instance) counts only when a listener
+  narrows the event for it and calls `acceptScope()`; any other scope finds nothing.
 - **Bounds.** An allow list longer than 500 entries keeps its first 500 (logged as a warning). An exclusion list longer than
   500 cannot be applied in one SQL list, so the search finds nothing (fail closed, logged as a warning). A scope with more
   than 200 boards reads the 200 most recently changed and reports a partial result.
+
+### SearchKit groups: tasks and boards
+
+With `nowo-tech/search-kit-bundle` 1.9 or later installed (PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
+the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDefinition`:
+
+| Group | Searches | Row |
+| --- | --- | --- |
+| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description | the title; the `#number`, board and tenant, and an excerpt of the description; the task page |
+| `boards` (`Bridge\SearchKit\BoardSearchDefinition`) | board name | the name; the tenant and an excerpt of the description; the board page |
+
+They follow the rules above. The viewer is the signed-in user whose identifier the query carries; any other identifier gets
+nothing, so `searchFor()` finds nothing either. The tenant SearchKit sees is the key of the current tenant page, or `*`
+elsewhere. Outside a tenant page, the tenants that are searched are the ones `SEARCH_SCOPE` allows. A tenant page whose slug
+does not resolve for the viewer has no tenant, and SearchKit answers nothing. The feature gate is the access checker's
+`canAccess()`. Boards are checked with `BOARD_ACCESS_CHECK` before the tasks are read. Each candidate task then passes
+`TASK_ACCESS_CHECK`, and SearchKit's own `ITEM_VISIBILITY` event follows (subject types `task_board.task` and
+`task_board.board`). Recents are revalidated by id (`t.id`, `b.id`) when SearchKit's `recent.revalidate` is on. There is no
+"see all" link, because no list page searches across boards by text.
+
+Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).
 
 ## Translations
 

@@ -27,6 +27,10 @@ use function array_values;
  * With `tenancy.enabled` and no onlyTenants() answer, only the tenant of the current request (a `{tenantSlug}` page)
  * is searched, and nothing outside one: a host whose search box is on every page names the viewer's tenants here.
  *
+ * The scope id of the search box ({@see self::getScope()}) is client input. The bundle applies its own scopes itself —
+ * `board:<id>` (one board) and `tenant:<key>` (one tenant) — as onlyBoards() / onlyTenants(); a host scope counts only
+ * when a listener narrows the event for it and calls {@see self::acceptScope()}, else the search finds nothing.
+ *
  * The event lives for one search; nothing is kept between requests (FrankenPHP worker mode).
  */
 final class SearchScopeEvent extends Event
@@ -50,6 +54,8 @@ final class SearchScopeEvent extends Event
     private array $excludedBoards = [];
 
     private bool $denied = false;
+
+    private bool $scopeAccepted = false;
 
     /**
      * @param object $subject The viewer (the host's user object)
@@ -137,6 +143,23 @@ final class SearchScopeEvent extends Event
     {
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
         $this->excludedBoards += self::set($boardIds);
+    }
+
+    /**
+     * Says that this listener applied the scope of the search box ({@see self::getScope()}) by narrowing the event (for
+     * instance `onlyTenants()` for a project chip). A scope that is not the bundle's own (`board:<id>`, `tenant:<key>`) and
+     * that no listener accepts finds nothing.
+     */
+    public function acceptScope(): void
+    {
+        // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
+        $this->scopeAccepted = true;
+    }
+
+    /** Whether a listener accepted the scope. */
+    public function isScopeAccepted(): bool
+    {
+        return $this->scopeAccepted;
     }
 
     /** Searches nothing for this viewer: the group is empty, as when nothing matches. */

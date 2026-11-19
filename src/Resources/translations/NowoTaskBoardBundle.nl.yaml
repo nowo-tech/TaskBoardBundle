@@ -1080,3 +1080,5 @@ task_board.question.mine.column.asked: "Gesteld"
 task_board.question.mine.empty.to_answer: "Geen vragen wachten op je antwoord."
 task_board.question.mine.empty.asked: "Geen van je vragen wacht op antwoord."
 task_board.question.mine.see_all: "Alles bekijken"
+task_board.search.group.tasks: Taken
+task_board.search.group.boards: Borden

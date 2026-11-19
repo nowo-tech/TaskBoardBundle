@@ -127,9 +127,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check (`BOARD_ACCESS_CHECK`) and each task `TASK_ACCESS_CHECK`; the total counts only visible rows, and a refusal looks
   like no match. Words reach only escaped `LIKE`. The number of queries does not grow with boards or tasks. See
   [USAGE](USAGE.md#header-search-since-225).
+- **SearchKit groups `tasks` and `boards`** (with `nowo-tech/search-kit-bundle` >= 1.9, a `suggest`; PHP >= 8.3).
+  `Bridge\SearchKit\TaskSearchDefinition` and `BoardSearchDefinition` are SearchKit `EntitySearchDefinition`s on top of the
+  header search services: the signed-in viewer only, the boards in SQL before the cut, TASK_ACCESS_CHECK batched per page,
+  SearchKit's contract (tenant, feature gate, scopes, escaped LIKE, bounded limit, visible total, host event, recents by
+  id). New options `search_kit.*` ([CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225)) and the
+  labels `task_board.search.group.tasks` / `.boards` in the seven locales.
 - **`TaskBoardEvents::SEARCH_SCOPE` (`SearchScopeEvent`).** A host narrows the boards and tenants searched for a viewer
   (`onlyTenants()`, `excludeTenants()`, `onlyBoards()`, `excludeBoards()`, `deny()`), for instance to leave out projects whose
-  task feature is off. It never grants. With tenancy and no answer, only the request's tenant is searched.
+  task feature is off. It never grants. With tenancy and no answer, only the request's tenant is searched. The bundle's own
+  scopes `board:<id>` and `tenant:<key>` apply as `onlyBoards()` / `onlyTenants()`; a host scope needs a listener that
+  calls `acceptScope()`, else nothing is found.
 - **`TaskBoardResourceAccessChecker::boardViewDecider()` and `taskViewDecider()`.** `canViewBoard()` and `canViewTask()` for
   many boards and tasks at once: the viewer's teams and manage roles are read once, then one event per board or task.
 

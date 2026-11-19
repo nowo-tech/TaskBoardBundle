@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Search\Header\SearchableBoard;
 use Nowo\TaskBoardBundle\Search\Header\SearchableBoards;
+use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
 use Nowo\TaskBoardBundle\Search\Header\SearchHits;
@@ -38,6 +39,25 @@ final class SearchHeaderValuesTest extends TestCase
         $viewer = new SearchViewer($board);
         self::assertFalse($viewer->manageRoles);
         self::assertNull($viewer->scope);
+    }
+
+    /** A collation may fold `Acme` to `acme` or one id to another: PHP keeps only exact matches. */
+    public function testTheScopeKeepsOnlyExactMatches(): void
+    {
+        $board = new TaskBoard('Board', 'board', new stdClass());
+        $board->setTenantKey('Acme');
+        $id = $board->getId();
+
+        self::assertTrue(SearchBoardScope::inScope($board, null, null, [], []));
+        self::assertTrue(SearchBoardScope::inScope($board, ['Acme'], [$id], ['acme'], [strtoupper($id)]));
+        self::assertFalse(SearchBoardScope::inScope($board, ['acme'], null, [], []));
+        self::assertFalse(SearchBoardScope::inScope($board, null, null, ['Acme'], []));
+        self::assertFalse(SearchBoardScope::inScope($board, null, [strtoupper($id)], [], []));
+        self::assertFalse(SearchBoardScope::inScope($board, null, null, [], [$id]));
+
+        $none = new TaskBoard('No tenant', 'none', new stdClass());
+        self::assertTrue(SearchBoardScope::inScope($none, null, null, ['Acme'], []));
+        self::assertFalse(SearchBoardScope::inScope($none, ['Acme'], null, [], []));
     }
 
     public function testViewersAreOnlyTheSignedInUser(): void

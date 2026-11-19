@@ -1080,3 +1080,5 @@ task_board.question.mine.column.asked: "Posée"
 task_board.question.mine.empty.to_answer: "Aucune question n’attend votre réponse."
 task_board.question.mine.empty.asked: "Aucune de vos questions n’attend de réponse."
 task_board.question.mine.see_all: "Tout voir"
+task_board.search.group.tasks: Tâches
+task_board.search.group.boards: Tableaux

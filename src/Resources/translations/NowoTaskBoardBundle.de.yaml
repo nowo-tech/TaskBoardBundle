@@ -1080,3 +1080,5 @@ task_board.question.mine.column.asked: "Gefragt"
 task_board.question.mine.empty.to_answer: "Keine Fragen warten auf deine Antwort."
 task_board.question.mine.empty.asked: "Keine deiner Fragen wartet auf Antwort."
 task_board.question.mine.see_all: "Alle anzeigen"
+task_board.search.group.tasks: Aufgaben
+task_board.search.group.boards: Boards

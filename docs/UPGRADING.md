@@ -232,8 +232,10 @@ A minor release. No schema change.
 
 ### Header search (additive)
 
-New services for a site-wide search box (`Search\Header\*`) and the event `TaskBoardEvents::SEARCH_SCOPE`. Nothing runs
-until a provider calls them. **With `tenancy.enabled`**, a search outside a tenant page finds nothing unless a
+New services for a site-wide search box (`Search\Header\*`), the event `TaskBoardEvents::SEARCH_SCOPE` and, with
+`nowo-tech/search-kit-bundle` >= 1.9 installed, the SearchKit groups `tasks` and `boards` (on by default; turn them off with
+`search_kit.enabled: false`, or per group with `search_kit.tasks` / `search_kit.boards`). A host that had its own task
+search provider can drop it; a host scope chip needs a `SEARCH_SCOPE` listener that calls `acceptScope()`. **With `tenancy.enabled`**, a search outside a tenant page finds nothing unless a
 `SEARCH_SCOPE` listener names the viewer's tenants (`onlyTenants()`): add one when the search box is on every page. See
 [USAGE](USAGE.md#header-search-since-225).
 

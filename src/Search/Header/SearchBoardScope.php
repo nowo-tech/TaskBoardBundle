@@ -21,6 +21,9 @@ use function array_key_exists;
 use function array_slice;
 use function count;
 use function in_array;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Since 2.25.0 (header search): the boards a viewer may open, within the scope the host allows.
@@ -36,6 +39,12 @@ use function in_array;
  */
 final readonly class SearchBoardScope
 {
+    /** The scope prefix of one board (`board:<board id>`). */
+    public const SCOPE_BOARD = 'board';
+
+    /** The scope prefix of one tenant (`tenant:<tenant key>`). */
+    public const SCOPE_TENANT = 'tenant';
+
     /** Upper bound of `search_kit.max_boards` (one `IN (...)` list of {@see ExactKey::CHUNK} ids). */
     public const MAX_BOARDS = ExactKey::CHUNK;
 
@@ -72,8 +81,13 @@ final readonly class SearchBoardScope
         }
 
         $scope = new SearchScopeEvent($user, $group, $viewer->scope, $requested);
+        // The bundle's own scopes (client input: they only narrow, and every board found is still checked).
+        $native = self::nativeScope($viewer->scope);
+        if ($native !== null) {
+            $native[0] === self::SCOPE_BOARD ? $scope->onlyBoards([$native[1]]) : $scope->onlyTenants([$native[1]]);
+        }
         $this->eventDispatcher?->dispatch($scope, TaskBoardEvents::SEARCH_SCOPE);
-        if ($scope->isDenied()) {
+        if ($scope->isDenied() || ($viewer->scope !== null && $native === null && !$scope->isScopeAccepted())) {
             return new SearchableBoards([]);
         }
 
@@ -114,8 +128,9 @@ final readonly class SearchBoardScope
         $resolved = [];
         $found    = [];
         foreach ($rows as $board) {
-            if (!$this->inScope($board, $tenants, $boards, $excludedTenants, $excludedBoards)) {
-                continue;
+            // Only a folding collation (MySQL / MariaDB `*_ci`) returns such a row; inScope() itself is unit-tested.
+            if (!self::inScope($board, $tenants, $boards, $excludedTenants, $excludedBoards)) {
+                continue; // @codeCoverageIgnore
             }
             $tenant = null;
             if ($tenancy) {
@@ -174,14 +189,36 @@ final readonly class SearchBoardScope
     }
 
     /**
-     * Exact checks of what SQL matched (a collation may fold keys and ids).
+     * The bundle's own scope (`board:<id>` or `tenant:<key>`) as [prefix, value], or null for any other (or no) scope.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public static function nativeScope(?string $scope): ?array
+    {
+        if ($scope === null) {
+            return null;
+        }
+        foreach ([self::SCOPE_BOARD, self::SCOPE_TENANT] as $prefix) {
+            $value = str_starts_with($scope, $prefix . ':') ? substr($scope, strlen($prefix) + 1) : '';
+            if ($value !== '' && ExactKey::isUsable($value)) {
+                return [$prefix, $value];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Exact checks of what SQL matched (a collation may fold keys and ids): whether the board is in the scope, byte for byte.
+     *
+     * @internal
      *
      * @param list<string>|null $tenants
      * @param list<string>|null $boards
      * @param list<string> $excludedTenants
      * @param list<string> $excludedBoards
      */
-    private function inScope(TaskBoard $board, ?array $tenants, ?array $boards, array $excludedTenants, array $excludedBoards): bool
+    public static function inScope(TaskBoard $board, ?array $tenants, ?array $boards, array $excludedTenants, array $excludedBoards): bool
     {
         $key = $board->getTenantKey();
         if ($tenants !== null && !ExactKey::oneOf($key, $tenants)) {
