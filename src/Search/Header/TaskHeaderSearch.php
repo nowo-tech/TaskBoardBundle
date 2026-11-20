@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 
+use function array_map;
 use function count;
 use function max;
 use function min;
@@ -18,8 +19,10 @@ use function min;
  * Since 2.25.0 (header search): the tasks whose title or description holds every word of the query, on the boards the
  * viewer may open ({@see SearchBoardScope}).
  *
- * One query reads the matching tasks of those boards that are not archived (boards, archive and words in SQL, escaped
- * `LIKE`), the most recently changed first, at most `search_kit.scan_rows`. Each one then passes TASK_ACCESS_CHECK
+ * One query reads the matching tasks of those boards that are not archived (boards, archive and the text condition of
+ * {@see TaskTextMatch} in SQL: title words, description words of `search_kit.description_min_length` characters or more,
+ * FULLTEXT where enabled, and since 2.26.0 a task number, key or external id, ranked first), the most recently changed
+ * first, at most `search_kit.max_candidates`; one more query loads the assignees of the shown rows. Each one then passes TASK_ACCESS_CHECK
  * ({@see TaskBoardResourceAccessChecker::taskViewDecider()}): a deny hides it. The rows are cut to the limit after
  * that check, and the total counts only the tasks that passed it. Stateless (FrankenPHP worker mode).
  */
@@ -37,6 +40,9 @@ final readonly class TaskHeaderSearch
         private TaskBoardResourceAccessChecker $accessChecker,
         private SearchHitMapper $mapper,
         private int $scanRows = 100,
+        // Since 2.26.0: the text condition (words, description length, FULLTEXT, references) and the rows' extras.
+        private TaskTextMatch $match = new TaskTextMatch(),
+        private ?TaskSearchExtras $extras = null,
     ) {
     }
 
@@ -55,23 +61,21 @@ final readonly class TaskHeaderSearch
         $scan  = max($limit, $this->scanRows);
 
         $qb = $this->entityManager->createQueryBuilder()
-            ->select('t')
+            ->select('t', 'searchColumn')
             ->from(Task::class, 't')
+            ->leftJoin('t.column', 'searchColumn')
             ->where('IDENTITY(t.board) IN (:boards)')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('boards', $boards->ids())
             ->orderBy('t.updatedAt', 'DESC')
             ->addOrderBy('t.id', 'ASC')
             ->setMaxResults($scan);
-        foreach ($words as $index => $word) {
-            $qb->andWhere("(LOWER(t.title) LIKE :word{$index} ESCAPE '!' OR LOWER(t.description) LIKE :word{$index} ESCAPE '!')")
-                ->setParameter('word' . $index, SearchText::contains($word));
-        }
+        $reference = $this->match->apply($qb, $text);
         /** @var list<Task> $tasks */
         $tasks = $qb->getQuery()->getResult();
 
         $visible = $this->accessChecker->taskViewDecider($viewer->user, static fn (TaskBoard $board): bool => $boards->has($board->getId()));
-        $hits    = [];
+        $shown   = [];
         $total   = 0;
         foreach ($tasks as $task) {
             $board = $boards->boards[$task->getBoard()->getId()] ?? null;
@@ -80,10 +84,13 @@ final readonly class TaskHeaderSearch
                 continue;
             }
             ++$total;
-            if (count($hits) < $limit) {
-                $hits[] = $this->mapper->task($task, $board->tenant, $words);
+            if (count($shown) < $limit) {
+                $shown[] = [$task, $board->tenant];
             }
         }
+        // Since 2.26.0: the assignees of the shown rows, in one query.
+        $initials = $this->extras?->assigneeInitials(array_map(static fn (array $row): Task => $row[0], $shown)) ?? [];
+        $hits     = array_map(fn (array $row): SearchHit => $this->mapper->task($row[0], $row[1], $words, $initials[$row[0]->getId()] ?? [], $reference), $shown);
 
         return new SearchHits($hits, $total, count($tasks) >= $scan || $boards->capped);
     }

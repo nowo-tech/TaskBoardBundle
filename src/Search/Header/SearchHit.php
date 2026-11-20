@@ -27,6 +27,10 @@ final readonly class SearchHit
      * @param string|null $excerpt A plain-text cut of the description around the first matched word, or null
      * @param DateTimeImmutable $updatedAt Last change of the task or board
      * @param string|null $boardId The task's board (null for a board row)
+     * @param string|null $status Since 2.26.0: a task's column name (its status on the board); null for a board row
+     * @param bool $done Since 2.26.0: the task is completed
+     * @param list<string> $assignees Since 2.26.0: the initials of the task's assignees (at most three, then "+n")
+     * @param bool $byNumber Since 2.26.0: the query named the task by its number or key (`#123`, `DEV-123`): ranked first
      */
     public function __construct(
         public string $kind,
@@ -37,6 +41,10 @@ final readonly class SearchHit
         public ?string $excerpt,
         public DateTimeImmutable $updatedAt,
         public ?string $boardId = null,
+        public ?string $status = null,
+        public bool $done = false,
+        public array $assignees = [],
+        public bool $byNumber = false,
     ) {
     }
 }

@@ -121,6 +121,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Header search finds a task by number, key or external id** (the `tasks` group and `TaskHeaderSearch`). A query of
+  one token also matches `#123` / `123` (the task number), `DEV-123` (the board's numbering prefix and the number, any
+  case) and an external id an import or a provider sync stored on the task (a task link with an import source, e.g. a
+  ClickUp id): exact matches on bound parameters, within the same visible boards and access checks. Number and key
+  matches come first (`TaskSearchDefinition::NUMBER_MATCH_SCORE` in the SearchKit group). New `Search\Header\TaskReference`
+  and `TaskTextMatch`.
+- **Richer task rows.** `SearchHit` carries the column name (`$status`), `$done` and the assignee initials
+  (`$assignees`), loaded once per search for the shown rows (`Search\Header\TaskSearchExtras`). The SearchKit `tasks`
+  group shows "Done" (tone `success`) or the column name as the badge and the initials in the subtitle, batched in
+  `prepareItems()` (SearchKit >= 1.10). The subtitle shows a prefixed number as `DEV-12`, like the task pages.
+
+### Changed
+
+- **Description matching is bounded.** Query words shorter than `search_kit.description_min_length` (new option,
+  default 3) match task titles only, never descriptions. With `search.fulltext` on MySQL / MariaDB, longer description
+  words use the existing FULLTEXT index (`NOWO_TB_FULLTEXT`, `+word*` of letters and digits); PostgreSQL and SQLite keep
+  an escaped `LIKE`. Titles match as before.
+  **Hosts with `search.fulltext: true`:** description matching changes from a substring `LIKE` to a word-prefix match
+  (`+word*` in boolean mode): `port` no longer finds `support`, and words shorter than the server's
+  `innodb_ft_min_token_size` / `ft_min_word_len`, or InnoDB stopwords, never match descriptions (titles still use `LIKE`).
+  To keep the substring behaviour, set `search.fulltext: false` (this also turns FULLTEXT off for the Task API search);
+  raising `description_min_length` only narrows which words reach descriptions.
+
 ## [2.25.1] - 2026-11-20
 
 ### Fixed

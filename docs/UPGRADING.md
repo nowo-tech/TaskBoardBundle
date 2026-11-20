@@ -4,6 +4,7 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [To 2.26.0](#to-2260)
 - [To 2.25.0](#to-2250)
   - [Header search (additive)](#header-search-additive)
   - [Calendar event follow-ups](#calendar-event-follow-ups)
@@ -220,6 +221,36 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## To 2.26.0
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+A minor release. No schema change.
+
+- **Header search.** A one- or two-letter query word no longer matches task descriptions, only titles
+  (`search_kit.description_min_length`, default 3; set 1 for the 2.25 behaviour). A query of one token also finds a task
+  by number, board key or stored external id. Task rows carry the column, the done flag and the assignee initials; the
+  SearchKit `tasks` group shows them as its badge and in its subtitle (SearchKit >= 1.10 for the initials).
+- **FULLTEXT (optional, MySQL / MariaDB).** With `search.fulltext: true` the header search matches description words
+  through the FULLTEXT index the Task API search already uses. Hosts that turn the option on create it first (the same
+  DDL as for 2.16.0; skip it if it exists):
+
+  ```sql
+  CREATE FULLTEXT INDEX task_board_tasks_text_idx ON task_board_tasks (title, description);
+  ```
+
+  PostgreSQL and SQLite need nothing: they keep an escaped `LIKE` for description words.
+
+  **Behaviour change with `search.fulltext: true`:** description words are matched as word prefixes (`+word*` in
+  boolean mode), no longer as substrings: `port` no longer finds `support`. Words shorter than the server's
+  `innodb_ft_min_token_size` (InnoDB) / `ft_min_word_len` (MyISAM), and InnoDB stopwords, never match descriptions;
+  titles still use `LIKE`. To keep substring matching in descriptions, set `search.fulltext: false` (which also turns
+  FULLTEXT off for the Task API search). Raising `search_kit.description_min_length` does not bring substring matching
+  back; it only keeps more words to titles.
 
 ## To 2.25.0
 

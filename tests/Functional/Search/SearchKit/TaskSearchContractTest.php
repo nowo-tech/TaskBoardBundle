@@ -27,6 +27,12 @@ final class TaskSearchContractTest extends TaskBoardSearchKitTestCase
         return true;
     }
 
+    /** The boards of the scope, the tasks, and (2.26.0) the assignees of the shown rows in prepareItems(). */
+    protected function queryBudget(): int
+    {
+        return 3;
+    }
+
     /** The board bound of these searches: three visible boards (`search_kit.max_boards`), so seedBeyondTheBound() can pass it. */
     protected function kernelConfig(): array
     {

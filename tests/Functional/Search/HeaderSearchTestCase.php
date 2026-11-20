@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
 use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
 use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
+use Nowo\TaskBoardBundle\Search\Header\TaskSearchExtras;
+use Nowo\TaskBoardBundle\Search\Header\TaskTextMatch;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
@@ -98,7 +100,10 @@ abstract class HeaderSearchTestCase extends FunctionalTestCase
         $checker = self::getContainer()->get(TaskBoardResourceAccessChecker::class);
         self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
 
-        return new TaskHeaderSearch($this->scope($maxBoards, $maxScannedBoards), $this->em, $checker, $this->mapper(), $scanRows);
+        $users = self::getContainer()->get(TaskBoardUsers::class);
+        self::assertInstanceOf(TaskBoardUsers::class, $users);
+
+        return new TaskHeaderSearch($this->scope($maxBoards, $maxScannedBoards), $this->em, $checker, $this->mapper(), $scanRows, new TaskTextMatch(), new TaskSearchExtras($this->em, $users));
     }
 
     protected function boards(int $maxBoards = 200): BoardHeaderSearch

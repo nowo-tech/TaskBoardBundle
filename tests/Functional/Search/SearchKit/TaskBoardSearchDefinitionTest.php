@@ -13,6 +13,8 @@ use Nowo\SearchKitBundle\Provider\Entity\EntitySearchProvider;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskBoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -64,6 +66,40 @@ final class TaskBoardSearchDefinitionTest extends HeaderSearchTestCase
         self::assertSame('Mine — With details here', $group->items[0]->subtitle);
         self::assertStringStartsWith('/tools/task-board/task/', $group->items[0]->url);
         self::assertNull($this->provider($this->tasksDefinition())->search($this->query('report hidden')), 'a denied task is a missing one');
+    }
+
+    /** Since 2.26.0: a number match scores first; rows carry the column or "Done" as their badge and the assignee initials. */
+    public function testTaskRowsThroughTheProviderCarryBadgesAssigneesAndNumberScores(): void
+    {
+        $this->boot(['task_numbers' => ['enabled' => true]]);
+        $board = $this->board('Ops', ['To do', 'Doing']);
+        $board->setNumberPrefix('OPS');
+        $ada  = $this->user('ada.lovelace@example.com');
+        $open = $this->task($board, 'Deploy script', 1);
+        $open->addMember(new TaskMember($open, $ada, TaskMemberRole::Assignee));
+        $done = $this->task($board, 'Deploy notes');
+        $done->markCompleted();
+        $this->em->flush();
+        $this->signIn($this->owner);
+        $provider = $this->provider($this->tasksDefinition());
+
+        $group = $provider->search($this->query('deploy'));
+        self::assertInstanceOf(SearchGroup::class, $group);
+        $rows = [];
+        foreach ($group->items as $item) {
+            $rows[$item->title] = [$item->subtitle, $item->badge?->label, $item->badge?->tone, $item->score];
+        }
+        self::assertSame(['OPS-' . $open->getNumber() . ' · Ops — AL', 'Doing', 'neutral', null], $rows['Deploy script']);
+        self::assertSame(['OPS-' . $done->getNumber() . ' · Ops', 'Done', 'success', null], $rows['Deploy notes']);
+
+        $byKey = $provider->search($this->query('ops-' . $open->getNumber()));
+        self::assertInstanceOf(SearchGroup::class, $byKey);
+        self::assertSame('Deploy script', $byKey->items[0]->title);
+        self::assertSame(TaskSearchDefinition::NUMBER_MATCH_SCORE, $byKey->items[0]->score);
+
+        $plain = $this->tasksDefinition()->toItem($open, $this->query('deploy'));
+        self::assertSame('OPS-' . $open->getNumber() . ' · Ops', $plain->subtitle, 'toItem() without prepareItems(): no assignees');
+        self::assertFalse($this->tasksDefinition()->applyFullText($this->em->getConnection()->createQueryBuilder(), [], $this->query('x')), 'a DBAL builder: the LIKE of SearchKit');
     }
 
     public function testBoardsThroughTheProvider(): void

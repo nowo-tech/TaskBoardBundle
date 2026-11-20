@@ -992,6 +992,7 @@ nowo_task_board:
         max_boards: 200        # 1-500: the most visible boards one search keeps, most recently changed first
         max_scanned_boards: 1000  # 1-10000: the most boards one search reads, in batches, to find them (at least max_boards)
         max_candidates: 100    # 1-1000: the most matching rows one search reads and checks (TASK_ACCESS_CHECK)
+        description_min_length: 3  # 1-32 (2.26): shorter words match task titles only, never descriptions
 ```
 
 The header search services (`Search\Header\*`) are always registered. The SearchKit groups `tasks` and `boards` are
@@ -999,4 +1000,6 @@ registered only when `nowo-tech/search-kit-bundle` 1.9 or later is installed (su
 `enabled` is true. SearchKit's own `nowo_search_kit.groups.tasks` / `.boards` (`enabled`, `priority`) switch or reorder
 them as well. With `tenancy.enabled`, a search outside a tenant page (SearchKit's own route, for instance) finds nothing
 until a `TaskBoardEvents::SEARCH_SCOPE` listener names the viewer's current tenant (see
-[USAGE](USAGE.md#header-search-since-225)). A search that stops at `max_boards` or `max_scanned_boards` is partial.
+[USAGE](USAGE.md#header-search-since-225)). A search that stops at `max_boards` or `max_scanned_boards` is partial. Since 2.26, with `search.fulltext` on MySQL /
+MariaDB the task search matches description words through the FULLTEXT index (`search.min_token_length` applies); the
+other platforms keep an escaped `LIKE`.

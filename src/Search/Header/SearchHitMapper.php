@@ -30,21 +30,28 @@ final readonly class SearchHitMapper
 
     /**
      * @param list<string> $words The query words (the excerpt is cut around the first one found)
+     * @param list<string> $assignees Since 2.26.0: the assignee initials ({@see TaskSearchExtras})
+     * @param TaskReference|null $reference Since 2.26.0: the reference the query names ({@see TaskTextMatch})
      */
-    public function task(Task $task, ?TaskBoardTenant $tenant, array $words): SearchHit
+    public function task(Task $task, ?TaskBoardTenant $tenant, array $words, array $assignees = [], ?TaskReference $reference = null): SearchHit
     {
         $board  = $task->getBoard();
         $number = $task->getNumber();
+        $column = $task->getColumn();
 
         return new SearchHit(
             SearchHit::KIND_TASK,
             $task->getId(),
             SearchText::line($task->getTitle()),
             $this->urls->generate($this->routes['task']['name'] ?? 'nowo_task_board_task', ['taskId' => $task->getId()] + $this->tenantParameter($tenant)),
-            $this->join([$number !== null ? '#' . $number : null, SearchText::line($board->getName()), $tenant !== null ? SearchText::line($tenant->label) : null]),
+            $this->join([$number !== null ? ($board->getNumberPrefix() !== null ? $board->getNumberPrefix() . '-' : '#') . $number : null, SearchText::line($board->getName()), $tenant !== null ? SearchText::line($tenant->label) : null]),
             SearchText::excerpt($task->getDescription(), $words),
             $task->getUpdatedAt(),
             $board->getId(),
+            $column !== null ? SearchText::line($column->getName()) : null,
+            $task->isCompleted(),
+            $assignees,
+            $reference?->namesByNumber($task) === true,
         );
     }
 

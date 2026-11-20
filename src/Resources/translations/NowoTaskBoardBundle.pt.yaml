@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Nenhuma das suas perguntas aguarda respos
 task_board.question.mine.see_all: "Ver todas"
 task_board.search.group.tasks: Tarefas
 task_board.search.group.boards: Quadros
+task_board.search.done: Concluída
