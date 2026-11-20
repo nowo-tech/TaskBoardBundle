@@ -245,6 +245,13 @@ A minor release. No schema change.
 
   PostgreSQL and SQLite need nothing: they keep an escaped `LIKE` for description words.
 
+  **Behaviour change with `search.fulltext: true`:** description words are matched as word prefixes (`+word*` in
+  boolean mode), no longer as substrings: `port` no longer finds `support`. Words shorter than the server's
+  `innodb_ft_min_token_size` (InnoDB) / `ft_min_word_len` (MyISAM), and InnoDB stopwords, never match descriptions;
+  titles still use `LIKE`. To keep substring matching in descriptions, set `search.fulltext: false` (which also turns
+  FULLTEXT off for the Task API search). Raising `search_kit.description_min_length` does not bring substring matching
+  back; it only keeps more words to titles.
+
 ## To 2.25.0
 
 ```bash

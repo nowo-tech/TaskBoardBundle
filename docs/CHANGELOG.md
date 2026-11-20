@@ -140,6 +140,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default 3) match task titles only, never descriptions. With `search.fulltext` on MySQL / MariaDB, longer description
   words use the existing FULLTEXT index (`NOWO_TB_FULLTEXT`, `+word*` of letters and digits); PostgreSQL and SQLite keep
   an escaped `LIKE`. Titles match as before.
+  **Hosts with `search.fulltext: true`:** description matching changes from a substring `LIKE` to a word-prefix match
+  (`+word*` in boolean mode): `port` no longer finds `support`, and words shorter than the server's
+  `innodb_ft_min_token_size` / `ft_min_word_len`, or InnoDB stopwords, never match descriptions (titles still use `LIKE`).
+  To keep the substring behaviour, set `search.fulltext: false` (this also turns FULLTEXT off for the Task API search);
+  raising `description_min_length` only narrows which words reach descriptions.
 
 ## [2.25.1] - 2026-11-20
 

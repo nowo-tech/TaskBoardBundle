@@ -2003,8 +2003,10 @@ Since 2.26 the text condition of a task search (`Search\Header\TaskTextMatch`) i
 - **References**: a query of one token also finds, by exact match on bound parameters and within the same visible
   boards, the task it names by number (`#123` or `123`), by board key (`DEV-123`: the board's numbering prefix, typed in
   any case, and the number; needs `task_numbers.enabled`), or by an external id an import or a provider sync stored on
-  the task (a task link with an import source, e.g. a ClickUp id). Number and key matches come first; an external id
-  matches exactly, though a case-folding collation may also match it in another case.
+  the task (a task link with an import source, e.g. a ClickUp id). Number and key matches come first. An external id
+  matches exactly on PostgreSQL and SQLite; on MySQL / MariaDB the column's collation decides: a `_ci` collation also
+  matches another letter case, an `_ai_ci` one also ignores accents, and a PAD SPACE collation ignores trailing spaces.
+  Either way only tasks of boards the viewer may open, that pass `TASK_ACCESS_CHECK`, are found.
 
 Each task row also carries its column name (`SearchHit::$status`), whether it is done (`$done`) and the initials of its
 assignees (`$assignees`, at most three, then `+n`). The task page shows a task's assignees to every viewer of the task,
@@ -2013,7 +2015,9 @@ loaded once per search for the shown rows.
 
 Words only ever reach `LIKE … ESCAPE '!'` with `!`, `%` and `_` escaped, or FULLTEXT as `+word*` of letters and digits. A search costs a
 fixed number of queries whatever the number of boards or tasks (three for tasks plus one for the assignees of the shown rows, two for boards; one more per batch of boards
-only when boards the viewer cannot open fill a batch). That budget does not count the host's tenant resolver and listeners;
+only when boards the viewer cannot open fill a batch). With `database.user_reference: id`, the assignee initials also cost one
+host user-directory lookup per distinct assignee (memoised per unit of work); an assignee the directory does not know
+shows as `#`. That budget does not count the host's tenant resolver and listeners;
 the resolver is asked once per distinct tenant key and viewer within one request (`Search\Header\SearchTenants`), however
 many boards and rows the tenant has. The services keep nothing between calls (FrankenPHP worker mode).
 
@@ -2071,7 +2075,7 @@ the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDef
 
 | Group | Searches | Row |
 | --- | --- | --- |
-| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description, number, key and external id (2.26) | the title; the number (`#12`, or `DEV-12` with a prefix), board and tenant, an excerpt of the description and the assignee initials in the subtitle; the column name, or "Done" (tone `success`), as the badge (2.26); a number or key match scores first; the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
+| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description, number, key and external id (2.26) | the title; the number (`#12`, or `DEV-12` with a prefix), board and tenant, an excerpt of the description and the assignee initials in the subtitle; the column name, or "Done" (tone `success`), as the badge (2.26); a number or key match scores first (see below); the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
 | `boards` (`Bridge\SearchKit\BoardSearchDefinition`) | board name | the name; the tenant and an excerpt of the description; the board page |
 
 They follow the rules above. The viewer is the signed-in user whose identifier the query carries; any other identifier gets
@@ -2088,6 +2092,11 @@ veto runs in PHP on the candidates, so vetoed tasks still take slots of SearchKi
 candidate window. With SearchKit 1.11 or later, a scope that stopped at `max_boards` / `max_scanned_boards` (or at the team
 cap) marks the search partial (`SearchCandidateContext::markPartial()`), so the group's total is shown as inexact; with
 1.9 or 1.10 its total counts only the boards that were read.
+
+A task the query names exactly by number or key gets `TaskSearchDefinition::NUMBER_MATCH_SCORE` (10.0). That keeps it
+first in its group, and also places it above every other group's rows in SearchKit's cross-group top results: an exact
+reference is the best hit, by design. It stays above SearchKit's recency boost only while `recency_weight` is below
+about 9 (the boost is at most `recency_weight`).
 
 Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).
 
