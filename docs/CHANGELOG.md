@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.27.1] - 2026-11-21](#2271---2026-11-21)
 - [[2.27.0] - 2026-11-20](#2270---2026-11-20)
 - [[2.26.1] - 2026-11-20](#2261---2026-11-20)
 - [[2.26.0] - 2026-11-20](#2260---2026-11-20)
@@ -175,11 +176,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flush, then wrote them after the rollback. They now leave the manager as after a dry run (`BundleEntityDetacher`; the
   application's entities and their pending changes stay, and so do the TaskBoard rows an application entity
   references, read again).
-- **No more Doctrine ORM sort-direction deprecations** (https://github.com/doctrine/orm/issues/11313). The
-  `#[ORM\OrderBy]` of `TaskQuestion::$options`, `$recipients` and `$answers`, and the query builders' `orderBy()` /
-  `addOrderBy()` calls (task API, header search, SearchKit groups, sync, questions, recurrence, erasure, moves, row
-  locks) passed the strings `'ASC'` / `'DESC'`; they pass `SortDirection` values now, as the rest of the bundle does
-  since 1.5.7. Same SQL.
+- **No more Doctrine ORM sort-direction deprecations in queries** (https://github.com/doctrine/orm/issues/11313). The
+  query builders' `orderBy()` / `addOrderBy()` calls (task API, header search, SearchKit groups, sync, questions,
+  recurrence, erasure, moves, row locks) passed the strings `'ASC'` / `'DESC'`; they pass `SortDirection` values now,
+  as the rest of the bundle does since 1.5.7 (the `TaskQuestion` mapping was fixed in 2.27.1). Same SQL.
+
+## [2.27.1] - 2026-11-21
+
+### Fixed
+
+- No more ORM deprecation (doctrine/orm issue 11313): the `options`, `recipients` and `answers` associations of `TaskQuestion` declared their `#[ORM\OrderBy]` direction as the string `'ASC'`; they now pass `SortDirection::Ascending`, as the other ordered associations of the bundle already do. The XML mapping already produced the enum, so both mappings load without a deprecation and keep the same order. A test loads the question metadata through both drivers and asserts no deprecation and the order.
 
 ## [2.27.0] - 2026-11-20
 
@@ -3340,7 +3346,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.27.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.27.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
