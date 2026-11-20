@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
+use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -643,13 +644,17 @@ final readonly class TaskBoardSyncService
         }
     }
 
-    /** Clears the entity manager (memory stays flat) and loads the run's board, connection and actor again. */
+    /**
+     * Detaches the TaskBoard rows no application entity holds (memory stays flat; since 2.27.0 the application's entities
+     * and the TaskBoard rows they reference stay managed, REQ-RUNTIME-003 rule 2, audit WA-1) and loads the run's board,
+     * connection and actor again (the same instances when they stayed managed).
+     */
     private function reload(SyncRunContext $ctx): void
     {
         $boardId      = $ctx->board->getId();
         $connectionId = $ctx->connection->getId();
         $actor        = $this->identity($ctx->actor);
-        $this->entityManager->clear();
+        BundleEntityDetacher::detach($this->entityManager, $this->logger);
         $board      = $this->entityManager->find(TaskBoard::class, $boardId);
         $connection = $this->entityManager->find(TaskBoardConnection::class, $connectionId);
         if (!$board instanceof TaskBoard || !$connection instanceof TaskBoardConnection) {

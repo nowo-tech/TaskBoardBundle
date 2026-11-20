@@ -22,6 +22,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `DependencyInjection/Configuration.php` | Config tree (`import.*` since 1.22) | FR-CFG-001, FR-IMPORT-015 |
 | `DependencyInjection/TaskBoardExtension.php` | DI extension | FR-CFG-002, FR-IMPORT-015 |
 | `Doctrine/RecoveringFlusher.php` | FrankenPHP worker flush recovery | FR-DOCTRINE-002 |
+| `Doctrine/BundleEntityDetacher.php` | Detach only TaskBoard rows from a shared manager (REQ-RUNTIME-003 rule 2, 2.27.0) | FR-DOCTRINE-002 |
 | `Doctrine/TaskBoardMetadataListener.php` | Table prefix | FR-DOCTRINE-001 |
 | `Dto/BoardColumnFormData.php` | Form/API DTO | FR-DTO-001 |
 | `Dto/ColumnSetApplyFormData.php` | Column set form DTO (since 1.11) | FR-DTO-001, FR-COLSET-001 |

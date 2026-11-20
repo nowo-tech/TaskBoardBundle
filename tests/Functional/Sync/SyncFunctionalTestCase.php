@@ -149,7 +149,7 @@ abstract class SyncFunctionalTestCase extends FunctionalTestCase
         return $report;
     }
 
-    /** A sync clears the entity manager: the test's users are loaded again. */
+    /** A sync detaches the TaskBoard rows (the private manager is cleared): the test's users are loaded again. */
     protected function refreshOwner(): void
     {
         $owner = $this->em->find(AppUser::class, $this->owner->getId());
