@@ -142,6 +142,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Not changed: changes the application left pending on **TaskBoard** rows are still dropped by the backfill and by a
     sync page, unless an application entity references those rows. A TaskBoard row that no application entity references
     is still detached after a page: load it again by id.
+- **A task the application added to a collection it had not loaded stays managed** (audit WA-6). `add()` and `set()`
+  do not load a many-to-many collection, so the TaskBoard rows added to it were not seen as referenced and were detached
+  by a sync page or a backfill batch on the application's entity manager; the application's next flush then failed with
+  an `ORMInvalidArgumentException`. The elements added to an unloaded collection are now kept too, read without any
+  database access.
+- **A dry run also forgets the application rows written through a decorated entity manager** (audit WA-7). The rows a
+  rolled-back dry-run page wrote were recorded only when the event's manager was the same object as the sync's manager,
+  so with an application `EntityManagerDecorator` they stayed managed. The managers are now matched by their unit of
+  work.
 
 ### Documentation
 

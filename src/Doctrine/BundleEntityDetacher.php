@@ -22,10 +22,11 @@ use function spl_object_id;
  *   it holds only what TaskBoard loaded.
  * - Any other manager is the application's (`database.entity_manager`). Only the TaskBoard rows leave it, and only those
  *   that no managed application entity still reaches (audit WA-1). A TaskBoard row an application entity references
- *   (a to-one value, or an element of an initialized collection) stays managed, and so does every TaskBoard row it
- *   reaches in turn through initialized TaskBoard associations (a kept task keeps its board and column). Otherwise the
- *   application's next flush would take the detached row for a new entity. Uninitialized proxies are kept but never
- *   loaded, and uninitialized collections are not walked.
+ *   (a to-one value, or an element of a collection) stays managed, and so does every TaskBoard row it reaches in turn
+ *   through its TaskBoard associations (a kept task keeps its board and column). Otherwise the application's next flush
+ *   would take the detached row for a new entity. Uninitialized proxies are kept but never loaded; of an uninitialized
+ *   collection only the elements added to it since it was loaded are walked (audit WA-6: `add()` and `set()` do not
+ *   initialize it), without reading the database.
  *
  * The application's entities are never detached, and the manager is never cleared, closed or reset. When the rows to
  * keep cannot be worked out (a mapping or a property that cannot be read), nothing is detached and a warning is
@@ -121,8 +122,8 @@ final class BundleEntityDetacher
     }
 
     /**
-     * Adds the TaskBoard objects an entity holds in its TaskBoard associations: to-one values and the elements of
-     * initialized collections.
+     * Adds the TaskBoard objects an entity holds in its TaskBoard associations: to-one values, the elements of
+     * initialized collections and the elements added to uninitialized ones.
      *
      * @param list<object> $pending
      */
@@ -135,7 +136,9 @@ final class BundleEntityDetacher
             }
             $value = $metadata->getFieldValue($entity, $field);
             if ($value instanceof PersistentCollection && !$value->isInitialized()) {
-                continue;
+                // Since 2.27.0 (audit WA-6): add() and set() do not initialize the collection; the elements added since it
+                // was loaded are in the wrapped collection, read without any database access.
+                $value = $value->unwrap();
             }
             foreach ($mapping->isToOne() || !is_iterable($value) ? [$value] : $value as $related) {
                 if (is_object($related)) {

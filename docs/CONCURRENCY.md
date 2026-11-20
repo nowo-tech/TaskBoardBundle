@@ -122,14 +122,16 @@ page, after a dry-run rollback and after each backfill batch, and never clears, 
 
 - The application's entities stay managed, with their pending changes. This includes the application entities the sync
   loaded itself, such as assignee users.
-- A TaskBoard row that a managed application entity references stays managed: a to-one value, or an element of an
-  initialized collection. So does every TaskBoard row it reaches through initialized TaskBoard associations: a kept
-  task keeps its board and its column. The sync then finds the same instances again.
+- A TaskBoard row that a managed application entity references stays managed: a to-one value, an element of an
+  initialized collection, or an element added to a collection that was never loaded (`add()` and `set()` do not load
+  it; read without any database access, audit WA-6). So does every TaskBoard row it reaches through its TaskBoard
+  associations: a kept task keeps its board and its column. The sync then finds the same instances again.
 - Every other TaskBoard row is detached. If the rows to keep cannot be worked out, nothing is detached for that batch
   and a warning is logged.
 - After a dry-run rollback, the kept TaskBoard rows are read again from the database. Application rows that the
   rolled-back page inserted (for example from an application `onFlush` listener) are detached, and the ones it updated
-  are read again.
+  are read again. The rows are matched by the manager's unit of work, so an application `EntityManagerDecorator` is
+  covered too (audit WA-7).
 
 A manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
 classes only (1.22.2).

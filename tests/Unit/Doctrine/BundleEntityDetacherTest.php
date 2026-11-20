@@ -8,6 +8,7 @@ use Doctrine\Common\EventManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
+use Doctrine\ORM\UnitOfWork;
 use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RolledBackHostRows;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
@@ -52,6 +53,9 @@ final class BundleEntityDetacherTest extends TestCase
         $manager  = $this->createMock(EntityManagerInterface::class);
         $events   = new EventManager();
         $gone     = new stdClass();
+        // Since 2.27.0 (audit WA-7): managers are matched by their unit of work.
+        $other->method('getUnitOfWork')->willReturn($this->createMock(UnitOfWork::class));
+        $manager->method('getUnitOfWork')->willReturn($this->createMock(UnitOfWork::class));
         $manager->method('getEventManager')->willReturn($events);
         $manager->method('contains')->willReturnCallback(static fn (object $entity): bool => $entity !== $gone);
         $manager->method('refresh')->willThrowException(new RuntimeException('gone'));

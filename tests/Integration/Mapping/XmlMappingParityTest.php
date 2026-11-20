@@ -75,7 +75,7 @@ final class XmlMappingParityTest extends TestCase
         foreach ($attributes->getMetadataFactory()->getAllMetadata() as $metadata) {
             if (str_starts_with($metadata->getName(), 'Nowo\\TaskBoardBundle\\Tests\\')) {
                 // The test host's entities: its user (the target of the user relations) and, since 2.27.0, the entities
-                // that reference TaskBoard rows (audit WA-1).
+                // that reference TaskBoard rows (audits WA-1, WA-6).
                 ++$host;
 
                 continue;
@@ -84,7 +84,7 @@ final class XmlMappingParityTest extends TestCase
             self::assertSame($this->normalize($metadata), $this->normalize($xml->getClassMetadata($metadata->getName())), $metadata->getName());
         }
         self::assertCount(36, $classes, 'every TaskBoard entity has an XML mapping');
-        self::assertSame(3, $host, 'AppUser, HostProject, HostCascadeLink');
+        self::assertSame(4, $host, 'AppUser, HostProject, HostCascadeLink, HostTaskList');
         self::assertCount(36 + $host, $xml->getMetadataFactory()->getAllMetadata(), 'and nothing else (plus the test host\'s entities)');
 
         self::assertSame($this->schema($attributes), $this->schema($xml), 'the same tables, columns, indexes and foreign keys');

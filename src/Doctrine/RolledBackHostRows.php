@@ -102,8 +102,13 @@ final class RolledBackHostRows
         $this->updated = [];
     }
 
-    private function recorded(object $manager, object $entity): bool
+    /**
+     * Since 2.27.0 (audit WA-7): the manager is matched by its unit of work, so an application that decorates its entity
+     * manager (the events carry the inner manager) is recorded too.
+     */
+    private function recorded(EntityManagerInterface $manager, object $entity): bool
     {
-        return $manager === $this->entityManager && !TaskBoardManagerRegistry::isBundleEntity($entity::class);
+        return $manager->getUnitOfWork() === $this->entityManager->getUnitOfWork()
+            && !TaskBoardManagerRegistry::isBundleEntity($entity::class);
     }
 }

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use DateTimeImmutable;
+use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
+use Doctrine\ORM\PersistentCollection;
+use Nowo\TaskBoardBundle\Doctrine\RolledBackHostRows;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -17,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostCascadeLink;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostProject;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostTaskList;
 use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 
 use function array_map;
@@ -186,6 +190,59 @@ final class SyncHostReferencesTest extends SyncFunctionalTestCase
         $kept->setDisplayName('edited later');
         $this->em->flush();
         self::assertSame('edited later', $this->em->getConnection()->fetchOne('SELECT display_name FROM app_user WHERE email = ?', ['kept@example.com']));
+    }
+
+    /**
+     * Probe J (audit WA-6): the application added a task to a many-to-many collection it never loaded (add() does not
+     * initialize it); the task stays managed across the sync and the application's next flush writes the link.
+     */
+    public function testATaskAddedToAnUninitializedApplicationCollection(): void
+    {
+        $board = $this->board('Remote');
+        $local = $this->task($board, 'Local');
+        $list  = new HostTaskList();
+        $this->em->persist($list);
+        $this->em->flush();
+        $this->em->detach($list);
+        $list = $this->em->find(HostTaskList::class, $list->id);
+        self::assertInstanceOf(HostTaskList::class, $list);
+        $list->tasks->add($local);
+        self::assertInstanceOf(PersistentCollection::class, $list->tasks);
+        self::assertFalse($list->tasks->isInitialized(), 'add() leaves the collection uninitialized');
+        $this->put($this->remote('r1', 'One'));
+
+        $report = $this->sync($board);
+
+        self::assertSame(SyncStatus::Succeeded, $report->status);
+        self::assertTrue($this->em->contains($local), 'the added task stays managed');
+        self::assertTrue($this->em->contains($local->getBoard()), 'and keeps its board');
+        $list->name = 'changed after the sync';
+        $this->em->flush();
+        self::assertTrue($this->em->isOpen());
+        self::assertSame(1, $this->rows(Task::class, 'title = ?', ['Local']), 'the task is never inserted again');
+        self::assertSame(1, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM app_host_task_list_task'));
+        self::assertSame('changed after the sync', $this->em->getConnection()->fetchOne('SELECT name FROM app_host_task_list WHERE id = ?', [$list->id]));
+    }
+
+    /**
+     * Probe N (audit WA-7): the application decorates its entity manager. The rows a rolled-back write inserted through
+     * the decorator still leave the manager (the events carry the inner manager).
+     */
+    public function testARolledBackWriteThroughADecoratedManagerIsForgotten(): void
+    {
+        $decorated = new class($this->em) extends EntityManagerDecorator {};
+        $recorder  = RolledBackHostRows::start($decorated);
+        self::assertInstanceOf(RolledBackHostRows::class, $recorder);
+        $connection = $this->em->getConnection();
+        $connection->beginTransaction();
+        $user = new AppUser('decorated@example.com');
+        $decorated->persist($user);
+        $decorated->flush();
+        $connection->rollBack();
+        $recorder->forget();
+
+        self::assertFalse($this->em->contains($user), 'the rolled-back row leaves the manager');
+        self::assertSame(0, $this->rows(AppUser::class, 'email = ?', ['decorated@example.com']));
     }
 
     private function project(?TaskBoard $board = null, ?Task $task = null): HostProject
