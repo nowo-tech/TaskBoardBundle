@@ -9,7 +9,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\RolledBackHostRows;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -73,6 +75,7 @@ use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Psr\Clock\ClockInterface;
+use Psr\Log\LoggerInterface;
 use Stringable;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -185,6 +188,8 @@ final readonly class SyncTaskWriter
         private ?TaskReparenterInterface $reparenter = null,
         // Since 2.21.1 (REQ-DI-001): the time a task was archived remotely.
         private ClockInterface $clock = new NativeClock(),
+        // Since 2.27.0 (audit WA-1): told when the TaskBoard rows of a dry run cannot be detached safely.
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -306,6 +311,8 @@ final readonly class SyncTaskWriter
         $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
+        // Since 2.27.0 (audit WA-2): a dry run records the application rows the page writes, to forget them after the rollback.
+        $hostRows = $ctx->options->dryRun ? RolledBackHostRows::start($this->entityManager) : null;
         try {
             $columns   = $this->columns($ctx, $plan);
             $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $ctx->board);
@@ -339,7 +346,10 @@ final readonly class SyncTaskWriter
                 $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
-                $this->entityManager->clear();
+                // Since 2.27.0 (REQ-RUNTIME-003 rule 2, audits WA-1/WA-2): the application rows the page wrote are forgotten,
+                // the TaskBoard rows an application entity still holds are read again, and the others leave the manager.
+                $hostRows?->forget();
+                BundleEntityDetacher::detach($this->entityManager, $this->logger, refreshKept: true);
                 $this->closeSession($ctx, $session);
 
                 return;
@@ -353,6 +363,8 @@ final readonly class SyncTaskWriter
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
 
             throw $exception;
+        } finally {
+            $hostRows?->stop();
         }
         // Audit JY-L1: after the commit, outside the try: a failing host listener never reports the saved page as failed.
         $this->events?->commit(false);

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.27.0] - 2026-11-20](#2270---2026-11-20)
 - [[2.26.1] - 2026-11-20](#2261---2026-11-20)
 - [[2.26.0] - 2026-11-20](#2260---2026-11-20)
 - [[2.25.1] - 2026-11-20](#2251---2026-11-20)
@@ -126,6 +127,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Demo: runs in UiKit's demo platform shell (`nowo-tech/ui-kit-bundle` ^2.60; shared top bar, aside, page header and section cards; no demo stylesheet or `<style>`). Demo only, no bundle change.
+
+### Fixed
+
+- No more ORM deprecation (doctrine/orm issue 11313): the `options`, `recipients` and `answers` associations of `TaskQuestion` declared their `#[ORM\OrderBy]` direction as the string `'ASC'`; they now pass `SortDirection::Ascending`, as the other ordered associations of the bundle already do. The XML mapping already produced the enum, so both mappings load without a deprecation and keep the same order. A test loads the question metadata through both drivers and asserts no deprecation and the order.
+
+## [2.27.0] - 2026-11-20
+
+### Fixed
+
+- **A remote sync and the number backfill no longer clear the application's entity manager** (REQ-RUNTIME-003 rule 2).
+  Without `database.private_entity_manager`, they write through `database.entity_manager`, which is the application's
+  manager. Up to 2.26.1 they called `clear()` on it after each sync page, after a dry-run rollback and after each
+  backfill batch. That detached every application entity, so the application's later edits to them were silently not
+  written, and it dropped the changes the application had left pending on them.
+  - They now detach only the TaskBoard rows that no managed application entity references (new internal
+    `Doctrine\BundleEntityDetacher`). A TaskBoard row an application entity holds stays managed, together with the
+    TaskBoard rows it reaches (a kept task keeps its board and column), so the run finishes and the application's next
+    flush works. If those rows cannot be worked out, nothing is detached for that batch and a warning is logged.
+  - After a dry-run rollback, the kept TaskBoard rows are read again. Application rows the rolled-back page wrote (for
+    example from an application `onFlush` listener) leave the manager when they were inserted, or are read again when
+    they were updated.
+  - The application entities the sync loads (assignee users, for example) now stay in the manager after a page.
+  - The private manager is still cleared as before (it is the bundle's own).
+  - Not changed: changes the application left pending on **TaskBoard** rows are still dropped by the backfill and by a
+    sync page, unless an application entity references those rows. A TaskBoard row that no application entity references
+    is still detached after a page: load it again by id.
+- **A task the application added to a collection it had not loaded stays managed** (audit WA-6). `add()` and `set()`
+  do not load a many-to-many collection, so the TaskBoard rows added to it were not seen as referenced and were detached
+  by a sync page or a backfill batch on the application's entity manager; the application's next flush then failed with
+  an `ORMInvalidArgumentException`. The elements added to an unloaded collection are now kept too, read without any
+  database access.
+- **A dry run also forgets the application rows written through a decorated entity manager** (audit WA-7). The rows a
+  rolled-back dry-run page wrote were recorded only when the event's manager was the same object as the sync's manager,
+  so with an application `EntityManagerDecorator` they stayed managed. The managers are now matched by their unit of
+  work.
+
+### Documentation
+
+- `docs/CONCURRENCY.md`: the remote sync, import and number-backfill writes (transactions, run lock, conflicts), the
+  application's entity manager, and the accepted residual risks.
 
 ## [2.26.1] - 2026-11-20
 
@@ -3250,7 +3291,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.26.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.27.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
