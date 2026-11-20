@@ -13,6 +13,12 @@ use Nowo\TimeTrackBundle\Dto\TaskReference;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
+/**
+ * TimeTrack's 1.x task provider port, asked with the Symfony user.
+ *
+ * @deprecated since 2.28.0, TimeTrack asks {@see TaskBoardTaskDirectory} (its framework-free 1.23 twin, the service
+ *             `nowo_task_board.task_provider`); removed in 3.0 together with TimeTrack's 1.x interface
+ */
 final readonly class TaskBoardTaskProvider implements TaskProviderInterface
 {
     public function __construct(

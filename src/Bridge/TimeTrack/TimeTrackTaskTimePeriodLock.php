@@ -10,8 +10,8 @@ use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TimeTrackBundle\Repository\LockingGuardTimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * Since 2.12.0 (TimeTrackBundle >= 1.13): a manual entry follows TimeTrack's period lock — locked when a timesheet of its
@@ -27,7 +27,8 @@ final readonly class TimeTrackTaskTimePeriodLock implements TaskTimePeriodLockIn
 {
     public function __construct(
         private ?PeriodLockGuard $guard = null,
-        private ?TimesheetScopeProviderInterface $scopes = null,
+        // Since 2.28.0 also TimeTrack's framework-free scope policy.
+        private TimesheetScopeProviderInterface|TimesheetScopePolicyInterface|null $scopes = null,
         private ?TimesheetRepositoryInterface $timesheets = null,
     ) {
     }
@@ -41,7 +42,7 @@ final readonly class TimeTrackTaskTimePeriodLock implements TaskTimePeriodLockIn
         if ($userId === null) {
             return true;
         }
-        $scopeKey = $user instanceof UserInterface ? $this->scopes?->scopeKeyForTask($user, $taskId, $boardId) : null;
+        $scopeKey = TimeTrackScopeKeys::forTask($this->scopes, $user, $taskId, $boardId);
         $day      = $loggedAt->format('Y-m-d');
         $guarding = $this->timesheets instanceof LockingGuardTimesheetRepositoryInterface
             ? $this->timesheets->findGuardingForMove($userId, $scopeKey, $day, $day)
