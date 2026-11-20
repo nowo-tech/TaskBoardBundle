@@ -123,6 +123,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- No more ORM deprecation (doctrine/orm issue 11313): the `options`, `recipients` and `answers` associations of `TaskQuestion` declared their `#[ORM\OrderBy]` direction as the string `'ASC'`; they now pass `SortDirection::Ascending`, as the other ordered associations of the bundle already do. The XML mapping already produced the enum, so both mappings load without a deprecation and keep the same order. A test loads the question metadata through both drivers and asserts no deprecation and the order.
+
 ## [2.26.1] - 2026-11-20
 
 ### Fixed
