@@ -17,6 +17,8 @@ use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
 use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewers;
+use Nowo\TaskBoardBundle\Search\Header\TaskSearchExtras;
+use Nowo\TaskBoardBundle\Search\Header\TaskTextMatch;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
@@ -72,6 +74,9 @@ abstract class TaskBoardSearchDefinition extends EntitySearchDefinition
         protected readonly ?SearchTenants $tenants = null,
         // Audit Q2: whether titles and excerpts may hold personal data (`search_kit.tasks.sensitive`).
         private readonly bool $sensitive = false,
+        // Since 2.26.0 (tasks): the text condition and the rows' extras.
+        protected readonly TaskTextMatch $match = new TaskTextMatch(),
+        protected readonly ?TaskSearchExtras $extras = null,
     ) {
     }
 

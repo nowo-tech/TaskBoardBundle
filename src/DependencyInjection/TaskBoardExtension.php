@@ -134,6 +134,9 @@ use Nowo\TaskBoardBundle\Search\Header\SearchHitMapper;
 use Nowo\TaskBoardBundle\Search\Header\SearchTenants;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewers;
 use Nowo\TaskBoardBundle\Search\Header\TaskHeaderSearch;
+use Nowo\TaskBoardBundle\Search\Header\TaskSearchExtras;
+use Nowo\TaskBoardBundle\Search\Header\TaskTextMatch;
+use Nowo\TaskBoardBundle\Search\Header\TaskTextMatchFunction;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchInterface;
 use Nowo\TaskBoardBundle\Search\TaskTextSearchMetadataListener;
 use Nowo\TaskBoardBundle\Security\AllowAllTaskBoardAccessChecker;
@@ -364,7 +367,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
         $this->registerTextSearch($container, $config['search'], $emName);
-        $this->registerHeaderSearch($container, $config['search_kit'], $emName);
+        $this->registerHeaderSearch($container, $config['search_kit'], $emName, $config['search']);
         $container->getDefinition(HumansOnlyColumnTransitionPolicy::class)->setArgument('$allowChecklist', $config['humans_only_policy']['allow_checklist']);
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
@@ -1000,11 +1003,20 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * on the bundle's manager, and, when SearchKit >= 1.9 is installed and `search_kit.enabled`, the SearchKit groups `tasks`
      * and `boards` ({@see TaskSearchDefinition}, {@see BoardSearchDefinition}, tagged for SearchKit's provider pass).
      *
-     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int} $searchKit
+     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int, description_min_length: int} $searchKit
+     * @param array{provider: string|null, fulltext: bool, comments: bool, min_token_length: int, max_matches: int} $search
      */
-    private function registerHeaderSearch(ContainerBuilder $container, array $searchKit, string $emName): void
+    private function registerHeaderSearch(ContainerBuilder $container, array $searchKit, string $emName, array $search): void
     {
         $em = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        // Since 2.26.0: the text condition (description length, FULLTEXT with search.fulltext) and the rows' extras.
+        $container->setDefinition(TaskTextMatch::class, (new Definition(TaskTextMatch::class))
+            ->setArgument('$descriptionMinLength', $searchKit['description_min_length'])
+            ->setArgument('$fulltext', $search['fulltext'])
+            ->setArgument('$minTokenLength', $search['min_token_length']));
+        $container->setDefinition(TaskSearchExtras::class, (new Definition(TaskSearchExtras::class))
+            ->setArgument('$entityManager', $em)
+            ->setArgument('$users', new Reference(TaskBoardUsers::class)));
         $container->setDefinition(SearchViewers::class, (new Definition(SearchViewers::class))
             ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
         $container->setDefinition(SearchHitMapper::class, (new Definition(SearchHitMapper::class))
@@ -1028,7 +1040,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$entityManager', $em)
             ->setArgument('$accessChecker', new Reference(TaskBoardResourceAccessChecker::class))
             ->setArgument('$mapper', new Reference(SearchHitMapper::class))
-            ->setArgument('$scanRows', $searchKit['max_candidates']));
+            ->setArgument('$scanRows', $searchKit['max_candidates'])
+            ->setArgument('$match', new Reference(TaskTextMatch::class))
+            ->setArgument('$extras', new Reference(TaskSearchExtras::class)));
         $container->setDefinition(BoardHeaderSearch::class, (new Definition(BoardHeaderSearch::class))
             ->setArgument('$scope', new Reference(SearchBoardScope::class))
             ->setArgument('$mapper', new Reference(SearchHitMapper::class)));
@@ -1058,6 +1072,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$maxCandidates', $searchKit['max_candidates'])
                 ->setArgument('$tenants', new Reference(SearchTenants::class))
                 ->setArgument('$sensitive', $sensitive)
+                ->setArgument('$match', new Reference(TaskTextMatch::class))
+                ->setArgument('$extras', new Reference(TaskSearchExtras::class))
                 ->addTag(self::SEARCH_KIT_DEFINITION_TAG, ['priority' => $priority]));
         }
     }
@@ -1285,6 +1301,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.15.0 (database.user_reference: id): the column type of the user fields.
         if ($container->hasExtension('doctrine') && $this->userReferencesById($container)) {
             $container->prependExtensionConfig('doctrine', ['dbal' => ['types' => [TaskBoardUserRefType::NAME => TaskBoardUserRefType::class]]]);
+        }
+
+        // Since 2.26.0: the FULLTEXT function of the header search (used only on MySQL / MariaDB with search.fulltext).
+        if ($container->hasExtension('doctrine')) {
+            $container->prependExtensionConfig('doctrine', ['orm' => ['dql' => ['string_functions' => [TaskTextMatchFunction::NAME => TaskTextMatchFunction::class]]]]);
         }
 
         // Since 2.2.0 (spec 213, audit IA-L3): the JSON-as-text function of the API's tag filter, only with api.enabled.

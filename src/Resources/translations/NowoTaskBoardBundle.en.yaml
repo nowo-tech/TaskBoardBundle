@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "None of your questions is waiting for an 
 task_board.question.mine.see_all: "See all"
 task_board.search.group.tasks: Tasks
 task_board.search.group.boards: Boards
+task_board.search.done: Done

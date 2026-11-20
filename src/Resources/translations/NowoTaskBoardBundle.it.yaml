@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Nessuna delle tue domande attende rispost
 task_board.question.mine.see_all: "Vedi tutte"
 task_board.search.group.tasks: Attività
 task_board.search.group.boards: Bacheche
+task_board.search.done: Completata

@@ -586,7 +586,7 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         $large = $this->budgetFor(12, 5);
 
         self::assertSame($small, $large, 'no query per board or task');
-        self::assertLessThanOrEqual(3, $large['tasks']);
+        self::assertLessThanOrEqual(4, $large['tasks'], 'teams, boards, tasks and the assignees of the shown rows');
         self::assertLessThanOrEqual(2, $large['boards']);
         fwrite(STDERR, sprintf("\n[budget] header search: tasks %d, boards %d queries\n", $large['tasks'], $large['boards']));
     }

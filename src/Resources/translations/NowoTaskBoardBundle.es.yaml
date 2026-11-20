@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Ninguna de tus preguntas espera respuesta
 task_board.question.mine.see_all: "Ver todas"
 task_board.search.group.tasks: Tareas
 task_board.search.group.boards: Tableros
+task_board.search.done: Hecha

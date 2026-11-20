@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Keine deiner Fragen wartet auf Antwort."
 task_board.question.mine.see_all: "Alle anzeigen"
 task_board.search.group.tasks: Aufgaben
 task_board.search.group.boards: Boards
+task_board.search.done: Erledigt

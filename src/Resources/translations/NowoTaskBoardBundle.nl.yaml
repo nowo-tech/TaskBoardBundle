@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Geen van je vragen wacht op antwoord."
 task_board.question.mine.see_all: "Alles bekijken"
 task_board.search.group.tasks: Taken
 task_board.search.group.boards: Borden
+task_board.search.done: Klaar

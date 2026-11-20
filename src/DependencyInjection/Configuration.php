@@ -805,6 +805,7 @@ final class Configuration implements ConfigurationInterface
                         ->integerNode('priority')->defaultValue(40)->info('Tag priority of the groups among the SearchKit providers (the boards group gets one less).')->end()
                         ->integerNode('max_boards')->defaultValue(200)->min(1)->max(500)->info('The most visible boards one search keeps (the most recently changed first; a search that stops there is partial and logged as a warning). Bounds the IN-list of the task query.')->end()
                         ->integerNode('max_scanned_boards')->defaultValue(1000)->min(1)->max(10000)->info('The most boards one search reads, in batches of max_boards, to find the visible ones (boards the viewer cannot open count too): bounds the queries and the per-board access checks. Below max_boards it counts as max_boards.')->end()
+                        ->integerNode('description_min_length')->defaultValue(3)->min(1)->max(32)->info('Since 2.26.0: the shortest query word matched in task descriptions (shorter words match titles only, so a one- or two-letter query never scans descriptions). With search.fulltext on MySQL / MariaDB, longer words of letters and digits use the FULLTEXT index.')->end()
                         ->integerNode('max_candidates')->defaultValue(100)->min(1)->max(1000)->info('The most matching rows one search reads and checks (TASK_ACCESS_CHECK): bounds the checks, the visible total and the deepest results page.')->end()
                     ->end()
                 ->end()

@@ -1082,3 +1082,4 @@ task_board.question.mine.empty.asked: "Aucune de vos questions n’attend de ré
 task_board.question.mine.see_all: "Tout voir"
 task_board.search.group.tasks: Tâches
 task_board.search.group.boards: Tableaux
+task_board.search.done: Terminée

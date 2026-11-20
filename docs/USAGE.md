@@ -1961,7 +1961,7 @@ services a provider calls; they never answer HTTP themselves.
 
 | Service | What it does |
 | --- | --- |
-| `Search\Header\TaskHeaderSearch::search(SearchViewer, string $text, int $limit)` | Tasks whose title or description holds every word of `$text`, on the boards the viewer may open |
+| `Search\Header\TaskHeaderSearch::search(SearchViewer, string $text, int $limit)` | Tasks whose title or description holds every word of `$text`, or (since 2.26) that `$text` names by number, key or external id, on the boards the viewer may open |
 | `Search\Header\BoardHeaderSearch::search(SearchViewer, string $text, int $limit)` | Boards whose name holds every word of `$text`, among the boards the viewer may open |
 | `Search\Header\SearchBoardScope::boards(SearchViewer, string $group)` | The boards the viewer may open for a group (`tasks` or `boards`), used by both |
 | `Search\Header\SearchViewers::forIdentifier(string $userIdentifier)` | The signed-in user as a `SearchViewer` when the identifier is theirs, else null |
@@ -1992,8 +1992,27 @@ How a search runs, and why it never hints at a hidden row:
 5. The rows are cut to the limit after these checks, and the total counts only rows that passed them. A refused scope, a
    denied board or a denied task looks exactly like no match: empty rows, no count.
 
-Words are lower-cased, at most eight, and only ever reach `LIKE … ESCAPE '!'` with `!`, `%` and `_` escaped. A search costs a
-fixed number of queries whatever the number of boards or tasks (three for tasks, two for boards; one more per batch of boards
+Since 2.26 the text condition of a task search (`Search\Header\TaskTextMatch`) is:
+
+- **Title words**: every word of the query (lower case, at most eight) must be in the title or, below, in the description.
+- **Description words**: only words of at least `search_kit.description_min_length` characters (configurable, default 3)
+  are matched in descriptions, so a one- or two-letter query never scans descriptions. With `search.fulltext` on MySQL /
+  MariaDB (the FULLTEXT index of [UPGRADING](UPGRADING.md)), a description word of letters and digits at least
+  `search.min_token_length` long uses that index (`MATCH … AGAINST ('+word*' IN BOOLEAN MODE)`); every other word, and
+  every word on PostgreSQL and SQLite, is an escaped `LIKE`.
+- **References**: a query of one token also finds, by exact match on bound parameters and within the same visible
+  boards, the task it names by number (`#123` or `123`), by board key (`DEV-123`: the board's numbering prefix, typed in
+  any case, and the number; needs `task_numbers.enabled`), or by an external id an import or a provider sync stored on
+  the task (a task link with an import source, e.g. a ClickUp id). Number and key matches come first; an external id
+  matches exactly, though a case-folding collation may also match it in another case.
+
+Each task row also carries its column name (`SearchHit::$status`), whether it is done (`$done`) and the initials of its
+assignees (`$assignees`, at most three, then `+n`). The task page shows a task's assignees to every viewer of the task,
+so a row the viewer may see shows them too; only initials are given (a user label may be an e-mail address). They are
+loaded once per search for the shown rows.
+
+Words only ever reach `LIKE … ESCAPE '!'` with `!`, `%` and `_` escaped, or FULLTEXT as `+word*` of letters and digits. A search costs a
+fixed number of queries whatever the number of boards or tasks (three for tasks plus one for the assignees of the shown rows, two for boards; one more per batch of boards
 only when boards the viewer cannot open fill a batch). That budget does not count the host's tenant resolver and listeners;
 the resolver is asked once per distinct tenant key and viewer within one request (`Search\Header\SearchTenants`), however
 many boards and rows the tenant has. The services keep nothing between calls (FrankenPHP worker mode).
@@ -2052,7 +2071,7 @@ the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDef
 
 | Group | Searches | Row |
 | --- | --- | --- |
-| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description | the title; the `#number`, board and tenant, and an excerpt of the description; the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
+| `tasks` (`Bridge\SearchKit\TaskSearchDefinition`) | task title and description, number, key and external id (2.26) | the title; the number (`#12`, or `DEV-12` with a prefix), board and tenant, an excerpt of the description and the assignee initials in the subtitle; the column name, or "Done" (tone `success`), as the badge (2.26); a number or key match scores first; the task page. Sensitive by default (`search_kit.tasks.sensitive`): SearchKit keeps it off while its recents keep titles in the browser without revalidation |
 | `boards` (`Bridge\SearchKit\BoardSearchDefinition`) | board name | the name; the tenant and an excerpt of the description; the board page |
 
 They follow the rules above. The viewer is the signed-in user whose identifier the query carries; any other identifier gets
