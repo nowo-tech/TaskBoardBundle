@@ -52,6 +52,7 @@ final class RolledBackHostRows
     {
         $entity = $args->getObject();
         if ($this->recorded($args->getObjectManager(), $entity)) {
+            // @igor-ignore - Per-page recorder created by start() for one dry-run page (never a shared service).
             $this->inserted[spl_object_id($entity)] = $entity;
         }
     }
@@ -60,6 +61,7 @@ final class RolledBackHostRows
     {
         $entity = $args->getObject();
         if ($this->recorded($args->getObjectManager(), $entity) && !isset($this->inserted[spl_object_id($entity)])) {
+            // @igor-ignore - Per-page recorder created by start() for one dry-run page (never a shared service).
             $this->updated[spl_object_id($entity)] = $entity;
         }
     }
@@ -94,8 +96,10 @@ final class RolledBackHostRows
                 $this->entityManager->detach($entity);
             }
         }
+        // @igor-ignore - Per-page recorder created by start() for one dry-run page (never a shared service).
         $this->inserted = [];
-        $this->updated  = [];
+        // @igor-ignore - Per-page recorder created by start() for one dry-run page (never a shared service).
+        $this->updated = [];
     }
 
     private function recorded(object $manager, object $entity): bool
