@@ -63,7 +63,7 @@
 | `database.mapping_type` | `attribute` | Since 2.15.0 (REQ-ARCH-001 rule 2). `xml`: the TaskBoard entities are mapped from `Resources/config/doctrine-xml` (same tables) instead of the ORM attributes. |
 | `database.user_reference` | `entity` | Since 2.15.0 (REQ-ARCH-001 rule 2). `id`: the rows keep the host user's id in a string column instead of a relation to `user_class` (which then need not be a Doctrine entity); needs `user_directory`. Changes the schema of the user columns. |
 | `user_directory` | `null` | Since 2.15.0: service id of a `User\\TaskBoardUserDirectoryInterface` (finds a host user by id). Required with `database.user_reference: id`. |
-| `database.private_entity_manager` | `null` | Since 2.15.0 (REQ-ARCH-001 rule 6). `true`: the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `null` keeps the 2.14 behaviour; `false` too, deprecated: `true` becomes the only mode in 3.0. |
+| `database.private_entity_manager` | `null` | Since 2.15.0 (REQ-ARCH-001 rule 6). `true`: the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `null` keeps the 2.14 behaviour, deprecated since 2.28.0 (a notice when the container is built, and the host-flush probe: one notice per application entity class whose pending changes a TaskBoard flush writes, see [UPGRADING "To 2.28.0"](UPGRADING.md#to-2280)); `false` too, deprecated since 2.15: `true` becomes the only mode in 3.0. |
 
 Tables created by the bundle (with default prefix):
 
@@ -562,8 +562,12 @@ When [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) is install
 
 | Alias | Service |
 |-------|---------|
-| `nowo_task_board.task_provider` | `TaskBoardTaskProvider` |
-| `nowo_task_board.team_context_provider` | `TaskBoardTeamContextProvider` |
+| `nowo_task_board.task_provider` | `TaskBoardTaskDirectory` (since 2.28.0; TimeTrack's framework-free `TaskDirectoryInterface`) |
+| `nowo_task_board.team_context_provider` | `TaskBoardTeamDirectory` (since 2.28.0; TimeTrack's framework-free `TeamDirectoryInterface`) |
+
+Since 2.28.0 TaskBoard needs TimeTrack 1.23 or later (`^1.23 || ^2.0`). The 1.x classes `TaskBoardTaskProvider` and
+`TaskBoardTeamContextProvider` stay registered under their class while TimeTrack has its 1.x interfaces (deprecated,
+removed in 3.0).
 
 Wire them in `nowo_time_track` config — see [INSTALLATION.md](INSTALLATION.md).
 
